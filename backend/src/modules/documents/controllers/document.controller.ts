@@ -1,0 +1,196 @@
+import {
+  Controller,
+  Post,
+  Get,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  Res,
+  HttpStatus,
+  StreamableFile,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { UserRole } from '../../users/entities/user.entity';
+import { DocumentService, UploadDocumentDto } from '../services/document.service';
+import { VersionService, CreateVersionDto } from '../services/version.service';
+import { Document, DocumentStatus } from '../entities/document.entity';
+
+@Controller('documents')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class DocumentController {
+  constructor(
+    private documentService: DocumentService,
+    private versionService: VersionService,
+  ) {}
+
+  /**
+   * Upload a new document
+   * POST /documents
+   */
+  @Post()
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.REVIEWER,
+    UserRole.FOCAL,
+    UserRole.TECHNICIAN,
+  )
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 50 * 1024 * 1024, // 50MB limit
+      },
+    }),
+  )
+  async uploadDocument(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: Omit<UploadDocumentDto, 'file' | 'uploaded_by'>,
+    @CurrentUser() user: any,
+  ): Promise<Document> {
+    const dto: UploadDocumentDto = {
+      ...body,
+      file,
+      uploaded_by: user.id,
+    };
+
+    return this.documentService.uploadDocument(dto);
+  }
+
+  /**
+   * List documents with filters
+   * GET /documents
+   */
+  @Get()
+  async listDocuments(
+    @Query('unit_id') unit_id?: string,
+    @Query('document_type') document_type?: string,
+    @Query('period') period?: string,
+    @Query('year') year?: string,
+    @Query('status') status?: DocumentStatus,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.documentService.listDocuments({
+      unit_id,
+      document_type,
+      period,
+      year,
+      status,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 20,
+    });
+  }
+
+  /**
+   * Get document by ID
+   * GET /documents/:id
+   */
+  @Get(':id')
+  async getDocument(@Param('id') id: string): Promise<Document> {
+    return this.documentService.getDocumentById(id);
+  }
+
+  /**
+   * Get version history
+   * GET /documents/:id/versions
+   */
+  @Get(':id/versions')
+  async getVersionHistory(@Param('id') id: string) {
+    return this.documentService.getVersionHistory(id);
+  }
+
+  /**
+   * Create a new version of a document
+   * POST /documents/:id/versions
+   */
+  @Post(':id/versions')
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.REVIEWER,
+    UserRole.FOCAL,
+    UserRole.TECHNICIAN,
+  )
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 50 * 1024 * 1024, // 50MB limit
+      },
+    }),
+  )
+  async createVersion(
+    @Param('id') document_id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('change_notes') change_notes: string,
+    @CurrentUser() user: any,
+  ) {
+    const dto: CreateVersionDto = {
+      document_id,
+      file,
+      change_notes,
+      uploaded_by: user.id,
+    };
+
+    return this.versionService.createVersion(dto);
+  }
+
+  /**
+   * Download a specific version
+   * GET /documents/:id/versions/:vid/download
+   */
+  @Get(':id/versions/:vid/download')
+  async downloadVersion(
+    @Param('vid') versionId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const { buffer, fileName, mimeType } =
+      await this.versionService.downloadVersion(versionId);
+
+    res.set({
+      'Content-Type': mimeType,
+      'Content-Disposition': `attachment; filename="${fileName}"`,
+      'Content-Length': buffer.length,
+    });
+
+    return new StreamableFile(buffer);
+  }
+
+  /**
+   * Get preview (PDF) of a specific version
+   * GET /documents/:id/versions/:vid/preview
+   */
+  @Get(':id/versions/:vid/preview')
+  async getPreview(
+    @Param('vid') versionId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const { buffer, mimeType } =
+      await this.versionService.getPreview(versionId);
+
+    res.set({
+      'Content-Type': mimeType,
+      'Content-Disposition': 'inline',
+      'Content-Length': buffer.length,
+    });
+
+    return new StreamableFile(buffer);
+  }
+
+  /**
+   * Soft delete a document
+   * DELETE /documents/:id
+   */
+  @Delete(':id')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER)
+  async deleteDocument(@Param('id') id: string) {
+    await this.documentService.deleteDocument(id);
+    return { message: 'Document deleted successfully' };
+  }
+}
