@@ -12,6 +12,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Complete implementation of the RICTMS Compliance Hub system with all core features operational. The system includes document management, automated compliance checking, regulatory reference tracking, collaborative reviews, and issue management.
 
+### Fixed - 2026-02-24 (Post-release stabilization)
+
+- Fixed upload queue Redis retry incompatibility by setting Bull Redis client `maxRetriesPerRequest` to `null`.
+- Fixed missing extraction persistence by storing extracted text in both `documents.extracted_text` and `document_versions.extracted_text`.
+- Fixed automated metric-failure escalation by creating/updating internal review records with `needs_revision` and captured failed-check remarks.
+
+### Added - 2026-02-24 (Assignment-governed submissions)
+
+- Added focal submission assignment model (`document_assignments`) with user/unit/document-type scope.
+- Added one-submission-per-cycle enforcement for focal uploads (per user + unit + type + period + year).
+- Added filename policy enforcement using assignment prefixes and frequency-aware suffix validation (monthly/quarterly/annual/custom).
+- Added upload option endpoints for focal users and assignment CRUD endpoints for super admins.
+
+### Changed - 2026-02-24 (Metrics and UX alignment)
+
+- Number Extraction now supports multiple keywords and expected numbers from comma/newline inputs.
+- Date/Deadline custom period handling now supports regex + capture-group + fallback month configuration.
+- Metrics template document type input now uses pre-defined options from backend.
+- Ticket-facing labels in dashboard UI are aligned to issue terminology.
+
 ### Fixed - 2026-02-23
 
 - Fixed frontend compile error in `AppBar.tsx` caused by malformed MUI `sx` object.

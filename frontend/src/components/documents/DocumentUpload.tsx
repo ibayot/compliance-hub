@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Button,
@@ -16,23 +16,20 @@ import {
 } from '@mui/material';
 import { CloudUpload as UploadIcon } from '@mui/icons-material';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { documentsApi, UploadDocumentRequest } from '@/lib/api/documents';
+import {
+  documentsApi,
+  UploadDocumentRequest,
+  UploadOption,
+} from '@/lib/api/documents';
 import { unitsApi } from '@/lib/api/units';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DocumentUploadProps {
   onSuccess?: () => void;
 }
 
-const documentTypes = [
-  'Policy',
-  'Procedure',
-  'Guidelines',
-  'Manual',
-  'Report',
-  'Other',
-];
-
 export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     title: '',
     document_type: '',
@@ -42,12 +39,70 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
   });
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [uploadOptions, setUploadOptions] = useState<UploadOption[]>([]);
+  const [expectedFileName, setExpectedFileName] = useState<string | undefined>();
+
+  const isFocal = user?.role === 'focal';
 
   // Fetch units for dropdown
   const { data: unitsResponse } = useQuery({
     queryKey: ['units'],
     queryFn: () => unitsApi.listUnits({ page: 1, limit: 100 }),
   });
+
+  const { data: documentTypes } = useQuery({
+    queryKey: ['document-types'],
+    queryFn: () => documentsApi.listDocumentTypes(),
+  });
+
+  const { data: focalUploadOptions = [] } = useQuery({
+    queryKey: ['upload-options', formData.period, formData.year, isFocal],
+    queryFn: async () => {
+      if (!isFocal || !formData.period || !formData.year) {
+        return [] as UploadOption[];
+      }
+      return documentsApi.getUploadOptions(formData.period, formData.year);
+    },
+    enabled: isFocal,
+  });
+
+  useEffect(() => {
+    if (!isFocal) {
+      return;
+    }
+
+    setUploadOptions(focalUploadOptions);
+
+    if (focalUploadOptions.length === 0) {
+      setFormData((prev) => ({
+        ...prev,
+        document_type: '',
+        unit_id: '',
+      }));
+      setExpectedFileName(undefined);
+      return;
+    }
+
+    const current = focalUploadOptions.find(
+      (option) =>
+        option.document_type === formData.document_type &&
+        String(option.unit_id) === formData.unit_id,
+    );
+
+    const selected = current || focalUploadOptions[0];
+    const nextUnitId = String(selected.unit_id);
+    if (
+      formData.document_type !== selected.document_type ||
+      formData.unit_id !== nextUnitId
+    ) {
+      setFormData((prev) => ({
+        ...prev,
+        document_type: selected.document_type,
+        unit_id: nextUnitId,
+      }));
+    }
+    setExpectedFileName(selected.expected_file_name);
+  }, [focalUploadOptions, formData.document_type, formData.unit_id, isFocal]);
 
   // Upload mutation
   const uploadMutation = useMutation({
@@ -62,6 +117,7 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
         year: new Date().getFullYear().toString(),
         unit_id: '',
       });
+      setExpectedFileName(undefined);
       setFile(null);
       setError(null);
       onSuccess?.();
@@ -119,7 +175,26 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+
+    if (isFocal && field === 'period') {
+      setExpectedFileName(undefined);
+    }
+
+    if (isFocal && field === 'document_type') {
+      const selected = uploadOptions.find(
+        (option) => option.document_type === value,
+      );
+      if (selected) {
+        setFormData((prev) => ({ ...prev, unit_id: String(selected.unit_id), document_type: selected.document_type }));
+        setExpectedFileName(selected.expected_file_name);
+      }
+    }
   };
+
+  const focalTypeOptions = uploadOptions.map((option) => option.document_type);
+  const typeOptions = isFocal
+    ? Array.from(new Set(focalTypeOptions))
+    : documentTypes || [];
 
   return (
     <Paper elevation={3} sx={{ p: 4, maxWidth: 600, mx: 'auto' }}>
@@ -169,6 +244,7 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
               value={formData.unit_id}
               onChange={(e) => handleInputChange('unit_id', e.target.value)}
               label="Unit"
+              disabled={isFocal}
             >
               {unitsResponse?.data?.map((unit) => (
                 <MenuItem key={unit.id} value={unit.id}>
@@ -186,13 +262,25 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
               onChange={(e) => handleInputChange('document_type', e.target.value)}
               label="Document Type"
             >
-              {documentTypes.map((type) => (
+              {typeOptions.map((type) => (
                 <MenuItem key={type} value={type}>
                   {type}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
+
+          {isFocal && expectedFileName && (
+            <Alert severity="info">
+              Expected filename for this cycle: <strong>{expectedFileName}</strong>
+            </Alert>
+          )}
+
+          {isFocal && formData.period && formData.year && uploadOptions.length === 0 && (
+            <Alert severity="warning">
+              No available report assignments for the selected cycle. Existing assigned report types may already be submitted.
+            </Alert>
+          )}
 
           {/* Year */}
           <TextField

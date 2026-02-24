@@ -13,6 +13,7 @@ import { KeywordCheckEngine } from './engines/keyword-check.engine';
 import { PropertyCheckEngine } from './engines/property-check.engine';
 import { DateCheckEngine } from './engines/date-check.engine';
 import { MetricsProcessor } from './processors/metrics.processor';
+import { ManualReview } from '../reviews/entities/manual-review.entity';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { MetricsProcessor } from './processors/metrics.processor';
       MetricResult,
       DocumentVersion,
       Document,
+      ManualReview,
     ]),
     BullModule.registerQueue({
       name: 'document-processing',

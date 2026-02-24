@@ -53,8 +53,42 @@ export interface UploadDocumentRequest {
   document_type: string;
   period: string;
   year: string;
-  unit_id: string;
+  unit_id?: string;
   file: File;
+}
+
+export interface UploadOption {
+  assignment_id: string;
+  unit_id: number;
+  unit_name?: string;
+  document_type: string;
+  report_name?: string;
+  submission_frequency: 'monthly' | 'quarterly' | 'annual' | 'custom';
+  expected_file_name?: string;
+}
+
+export interface DocumentAssignment {
+  id: string;
+  user_id: number;
+  unit_id: number;
+  document_type: string;
+  report_name?: string;
+  filename_prefix?: string;
+  submission_frequency: 'monthly' | 'quarterly' | 'annual' | 'custom';
+  submission_month?: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  user?: {
+    id: number;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+  };
+  unit?: {
+    id: number;
+    name: string;
+  };
 }
 
 export interface ListDocumentsParams {
@@ -84,7 +118,9 @@ export const documentsApi = {
     formData.append('document_type', data.document_type);
     formData.append('period', data.period);
     formData.append('year', data.year);
-    formData.append('unit_id', data.unit_id);
+    if (data.unit_id) {
+      formData.append('unit_id', data.unit_id);
+    }
     formData.append('file', data.file);
 
     const response = await apiClient.post('/documents', formData, {
@@ -179,5 +215,60 @@ export const documentsApi = {
    */
   deleteDocument: async (id: string): Promise<void> => {
     await apiClient.delete(`/documents/${id}`);
+  },
+
+  listDocumentTypes: async (): Promise<string[]> => {
+    const response = await apiClient.get('/documents/types');
+    return response.data;
+  },
+
+  getUploadOptions: async (period: string, year: string): Promise<UploadOption[]> => {
+    const response = await apiClient.get('/documents/upload-options', {
+      params: { period, year },
+    });
+    return response.data;
+  },
+
+  listAssignments: async (params?: {
+    user_id?: number;
+    unit_id?: number;
+    active_only?: boolean;
+  }): Promise<DocumentAssignment[]> => {
+    const response = await apiClient.get('/documents/assignments', { params });
+    return response.data;
+  },
+
+  createAssignment: async (payload: {
+    user_id: number;
+    unit_id: number;
+    document_type: string;
+    report_name?: string;
+    filename_prefix?: string;
+    submission_frequency?: 'monthly' | 'quarterly' | 'annual' | 'custom';
+    submission_month?: number;
+    is_active?: boolean;
+  }): Promise<DocumentAssignment> => {
+    const response = await apiClient.post('/documents/assignments', payload);
+    return response.data;
+  },
+
+  updateAssignment: async (
+    id: string,
+    payload: Partial<{
+      unit_id: number;
+      document_type: string;
+      report_name?: string;
+      filename_prefix?: string;
+      submission_frequency?: 'monthly' | 'quarterly' | 'annual' | 'custom';
+      submission_month?: number;
+      is_active?: boolean;
+    }>,
+  ): Promise<DocumentAssignment> => {
+    const response = await apiClient.patch(`/documents/assignments/${id}`, payload);
+    return response.data;
+  },
+
+  deleteAssignment: async (id: string): Promise<void> => {
+    await apiClient.delete(`/documents/assignments/${id}`);
   },
 };

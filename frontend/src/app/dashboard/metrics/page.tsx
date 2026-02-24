@@ -29,6 +29,7 @@ import {
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { metricsApi, MetricTemplate } from '@/lib/api/metrics';
 import { unitsApi, Unit } from '@/lib/api/units';
+import { documentsApi } from '@/lib/api/documents';
 
 type MetricType = 'section_check' | 'keyword_check' | 'property_check' | 'date_check';
 
@@ -46,6 +47,7 @@ export default function MetricsPage() {
   const [open, setOpen] = useState(false);
   const [templates, setTemplates] = useState<MetricTemplate[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
+  const [documentTypeOptions, setDocumentTypeOptions] = useState<string[]>([]);
   const [editing, setEditing] = useState<MetricTemplate | null>(null);
 
   const [name, setName] = useState('');
@@ -61,22 +63,31 @@ export default function MetricsPage() {
   const [keywordCaseSensitive, setKeywordCaseSensitive] = useState(false);
   const [keywordWordBoundary, setKeywordWordBoundary] = useState(false);
 
-  const [extractKeyword, setExtractKeyword] = useState('total incidents');
+  const [extractKeywordsText, setExtractKeywordsText] = useState('total incidents');
   const [extractComparison, setExtractComparison] = useState<'gte' | 'lte' | 'eq' | 'gt' | 'lt'>('gte');
-  const [extractExpectedNumber, setExtractExpectedNumber] = useState(1);
+  const [extractExpectedNumbersText, setExtractExpectedNumbersText] = useState('1');
 
   const [deadlineDay, setDeadlineDay] = useState(5);
   const [deadlineMonthOffset, setDeadlineMonthOffset] = useState(1);
   const [maxDaysLate, setMaxDaysLate] = useState(0);
   const [submissionFrequency, setSubmissionFrequency] = useState<'monthly' | 'quarterly' | 'annual' | 'custom'>('monthly');
   const [submissionMonth, setSubmissionMonth] = useState(12);
+  const [customPeriodRegex, setCustomPeriodRegex] = useState('^(\\d{4})(\\d{2})$');
+  const [customPeriodYearGroup, setCustomPeriodYearGroup] = useState(1);
+  const [customPeriodMonthGroup, setCustomPeriodMonthGroup] = useState(2);
+  const [customFallbackMonth, setCustomFallbackMonth] = useState(12);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [metrics, unitList] = await Promise.all([metricsApi.listTemplates(), unitsApi.listAll()]);
+      const [metrics, unitList, docTypes] = await Promise.all([
+        metricsApi.listTemplates(),
+        unitsApi.listAll(),
+        documentsApi.listDocumentTypes(),
+      ]);
       setTemplates(metrics);
       setUnits(unitList);
+      setDocumentTypeOptions(docTypes);
     } finally {
       setLoading(false);
     }
@@ -101,15 +112,19 @@ export default function MetricsPage() {
     setKeywordCaseSensitive(false);
     setKeywordWordBoundary(false);
 
-    setExtractKeyword('total incidents');
+    setExtractKeywordsText('total incidents');
     setExtractComparison('gte');
-    setExtractExpectedNumber(1);
+    setExtractExpectedNumbersText('1');
 
     setDeadlineDay(5);
     setDeadlineMonthOffset(1);
     setMaxDaysLate(0);
     setSubmissionFrequency('monthly');
     setSubmissionMonth(12);
+    setCustomPeriodRegex('^(\\d{4})(\\d{2})$');
+    setCustomPeriodYearGroup(1);
+    setCustomPeriodMonthGroup(2);
+    setCustomFallbackMonth(12);
   };
 
   const parseListText = (value: string): string[] => {
@@ -149,9 +164,19 @@ export default function MetricsPage() {
     }
 
     if (template.metric_type === 'property_check') {
-      setExtractKeyword(String(ruleConfig.keyword || ''));
+      const existingKeywords = Array.isArray(ruleConfig.keywords)
+        ? ruleConfig.keywords
+        : ruleConfig.keyword
+          ? [ruleConfig.keyword]
+          : [];
+      const existingExpectedNumbers = Array.isArray(ruleConfig.expected_numbers)
+        ? ruleConfig.expected_numbers
+        : Number.isFinite(Number(ruleConfig.expected_number))
+          ? [ruleConfig.expected_number]
+          : [];
+      setExtractKeywordsText(existingKeywords.join('\n'));
       setExtractComparison((ruleConfig.comparison as any) || 'gte');
-      setExtractExpectedNumber(Number(ruleConfig.expected_number ?? 1));
+      setExtractExpectedNumbersText(existingExpectedNumbers.join('\n') || '1');
     }
 
     if (template.metric_type === 'date_check') {
@@ -160,6 +185,10 @@ export default function MetricsPage() {
       setMaxDaysLate(Number(ruleConfig.max_days_late ?? 0));
       setSubmissionFrequency((ruleConfig.submission_frequency as any) || 'monthly');
       setSubmissionMonth(Number(ruleConfig.submission_month ?? 12));
+      setCustomPeriodRegex(String(ruleConfig.custom_period_regex ?? '^(\\d{4})(\\d{2})$'));
+      setCustomPeriodYearGroup(Number(ruleConfig.custom_period_year_group ?? 1));
+      setCustomPeriodMonthGroup(Number(ruleConfig.custom_period_month_group ?? 2));
+      setCustomFallbackMonth(Number(ruleConfig.custom_period_fallback_month ?? 12));
     }
 
     setOpen(true);
@@ -193,13 +222,20 @@ export default function MetricsPage() {
     }
 
     if (metricType === 'property_check') {
+      const keywords = parseListText(extractKeywordsText);
+      const expectedNumbers = parseListText(extractExpectedNumbersText)
+        .map((item) => Number(item))
+        .filter((item) => Number.isFinite(item));
+
       return {
         rule_config: {
           mode: 'number_extraction',
           field: 'extracted_text',
-          keyword: extractKeyword,
+          keywords,
+          keyword: keywords[0],
           comparison: extractComparison,
-          expected_number: extractExpectedNumber,
+          expected_number: expectedNumbers[0],
+          expected_numbers: expectedNumbers,
           window_chars: 120,
         },
         pass_criteria: {
@@ -215,6 +251,10 @@ export default function MetricsPage() {
         deadline_day: deadlineDay,
         deadline_month_offset: deadlineMonthOffset,
         max_days_late: maxDaysLate,
+        custom_period_regex: customPeriodRegex,
+        custom_period_year_group: customPeriodYearGroup,
+        custom_period_month_group: customPeriodMonthGroup,
+        custom_period_fallback_month: customFallbackMonth,
       },
       pass_criteria: {
         within_deadline: true,
@@ -236,11 +276,14 @@ export default function MetricsPage() {
     }
 
     if (metricType === 'property_check') {
-      if (!extractKeyword.trim()) {
-        return 'Keyword is required for number extraction.';
+      if (parseListText(extractKeywordsText).length === 0) {
+        return 'At least one keyword is required for number extraction.';
       }
-      if (!Number.isFinite(extractExpectedNumber)) {
-        return 'Expected number must be valid.';
+      const expectedNumbers = parseListText(extractExpectedNumbersText)
+        .map((item) => Number(item))
+        .filter((item) => Number.isFinite(item));
+      if (expectedNumbers.length === 0) {
+        return 'At least one expected number must be provided.';
       }
     }
 
@@ -253,6 +296,9 @@ export default function MetricsPage() {
       }
       if (submissionFrequency === 'annual' && (submissionMonth < 1 || submissionMonth > 12)) {
         return 'Submission month for annual frequency must be between 1 and 12.';
+      }
+      if (submissionFrequency === 'custom' && !customPeriodRegex.trim()) {
+        return 'Custom period regex is required for custom frequency.';
       }
     }
 
@@ -429,7 +475,21 @@ export default function MetricsPage() {
             </TextField>
           </Box>
 
-          <TextField margin="dense" label="Document Type (optional)" fullWidth value={documentType} onChange={(event) => setDocumentType(event.target.value)} />
+          <TextField
+            margin="dense"
+            select
+            label="Document Type (optional)"
+            fullWidth
+            value={documentType}
+            onChange={(event) => setDocumentType(event.target.value)}
+          >
+            <MenuItem value="">All Document Types</MenuItem>
+            {documentTypeOptions.map((option) => (
+              <MenuItem key={option} value={option}>
+                {option}
+              </MenuItem>
+            ))}
+          </TextField>
 
           {metricType === 'section_check' && (
             <TextField
@@ -478,9 +538,11 @@ export default function MetricsPage() {
           {metricType === 'property_check' && (
             <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr 1fr' }} gap={2} mt={1}>
               <TextField
-                label="Keyword Near Number"
-                value={extractKeyword}
-                onChange={(event) => setExtractKeyword(event.target.value)}
+                label="Keywords (comma or newline separated)"
+                value={extractKeywordsText}
+                multiline
+                minRows={3}
+                onChange={(event) => setExtractKeywordsText(event.target.value)}
               />
               <TextField
                 select
@@ -495,10 +557,11 @@ export default function MetricsPage() {
                 <MenuItem value="eq">=</MenuItem>
               </TextField>
               <TextField
-                type="number"
-                label="Expected Number"
-                value={extractExpectedNumber}
-                onChange={(event) => setExtractExpectedNumber(Number(event.target.value) || 0)}
+                label="Expected Numbers (comma or newline separated)"
+                value={extractExpectedNumbersText}
+                multiline
+                minRows={3}
+                onChange={(event) => setExtractExpectedNumbersText(event.target.value)}
               />
             </Box>
           )}
@@ -545,6 +608,33 @@ export default function MetricsPage() {
                 value={maxDaysLate}
                 onChange={(event) => setMaxDaysLate(Math.max(Number(event.target.value) || 0, 0))}
               />
+              {submissionFrequency === 'custom' && (
+                <>
+                  <TextField
+                    label="Custom Period Regex"
+                    value={customPeriodRegex}
+                    onChange={(event) => setCustomPeriodRegex(event.target.value)}
+                  />
+                  <TextField
+                    type="number"
+                    label="Year Group Index"
+                    value={customPeriodYearGroup}
+                    onChange={(event) => setCustomPeriodYearGroup(Number(event.target.value) || 1)}
+                  />
+                  <TextField
+                    type="number"
+                    label="Month Group Index"
+                    value={customPeriodMonthGroup}
+                    onChange={(event) => setCustomPeriodMonthGroup(Number(event.target.value) || 2)}
+                  />
+                  <TextField
+                    type="number"
+                    label="Fallback Month (1-12)"
+                    value={customFallbackMonth}
+                    onChange={(event) => setCustomFallbackMonth(Number(event.target.value) || 12)}
+                  />
+                </>
+              )}
             </Box>
           )}
         </DialogContent>

@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Delete,
   Body,
   Param,
@@ -23,6 +24,7 @@ import { UserRole } from '../../users/entities/user.entity';
 import { DocumentService, UploadDocumentDto } from '../services/document.service';
 import { VersionService, CreateVersionDto } from '../services/version.service';
 import { Document, DocumentStatus } from '../entities/document.entity';
+import { SubmissionFrequency } from '../entities/document-assignment.entity';
 
 @Controller('documents')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -59,6 +61,7 @@ export class DocumentController {
       ...body,
       file,
       uploaded_by: user.id,
+      user_role: user.role,
     };
 
     return this.documentService.uploadDocument(dto);
@@ -87,6 +90,90 @@ export class DocumentController {
       page: page ? Number(page) : 1,
       limit: limit ? Number(limit) : 20,
     });
+  }
+
+  @Get('types')
+  async listDocumentTypes() {
+    return this.documentService.listDocumentTypes();
+  }
+
+  @Get('upload-options')
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.REVIEWER,
+    UserRole.FOCAL,
+    UserRole.TECHNICIAN,
+  )
+  async getUploadOptions(
+    @CurrentUser() user: any,
+    @Query('period') period: string,
+    @Query('year') year: string,
+  ) {
+    return this.documentService.getAvailableUploadOptions(user.id, period, year);
+  }
+
+  @Get('assignments')
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.REVIEWER,
+    UserRole.FOCAL,
+    UserRole.TECHNICIAN,
+  )
+  async listAssignments(
+    @CurrentUser() user: any,
+    @Query('user_id') userId?: string,
+    @Query('unit_id') unitId?: string,
+    @Query('active_only') activeOnly?: string,
+  ) {
+    const isPrivileged = user.role === UserRole.SUPER_ADMIN || user.role === UserRole.REVIEWER;
+    return this.documentService.listAssignments({
+      user_id: isPrivileged && userId ? Number(userId) : user.id,
+      unit_id: unitId ? Number(unitId) : undefined,
+      active_only: activeOnly === 'true',
+    });
+  }
+
+  @Post('assignments')
+  @Roles(UserRole.SUPER_ADMIN)
+  async createAssignment(
+    @Body()
+    body: {
+      user_id: number;
+      unit_id: number;
+      document_type: string;
+      report_name?: string;
+      filename_prefix?: string;
+      submission_frequency?: SubmissionFrequency;
+      submission_month?: number;
+      is_active?: boolean;
+    },
+  ) {
+    return this.documentService.createAssignment(body);
+  }
+
+  @Patch('assignments/:id')
+  @Roles(UserRole.SUPER_ADMIN)
+  async updateAssignment(
+    @Param('id') id: string,
+    @Body()
+    body: Partial<{
+      unit_id: number;
+      document_type: string;
+      report_name?: string;
+      filename_prefix?: string;
+      submission_frequency?: SubmissionFrequency;
+      submission_month?: number;
+      is_active?: boolean;
+    }>,
+  ) {
+    return this.documentService.updateAssignment(id, body);
+  }
+
+  @Delete('assignments/:id')
+  @Roles(UserRole.SUPER_ADMIN)
+  async deleteAssignment(@Param('id') id: string) {
+    await this.documentService.deleteAssignment(id);
+    return { message: 'Assignment deleted successfully' };
   }
 
   /**

@@ -9,10 +9,11 @@ import { VersionService } from './services/version.service';
 import { StorageService } from './services/storage.service';
 import { DocumentProcessor } from './processors/document.processor';
 import { PreviewGenerator } from './processors/preview.processor';
+import { DocumentAssignment } from './entities/document-assignment.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Document, DocumentVersion]),
+    TypeOrmModule.forFeature([Document, DocumentVersion, DocumentAssignment]),
     BullModule.registerQueue({
       name: 'document-processing',
     }),

@@ -7,8 +7,10 @@ export interface PropertyCheckConfig {
   pattern?: string; // regex pattern
   expected_value?: string; // exact value
   keyword?: string;
+  keywords?: string[];
   comparison?: 'gte' | 'lte' | 'eq' | 'gt' | 'lt';
   expected_number?: number;
+  expected_numbers?: number[];
   window_chars?: number;
 }
 
@@ -52,12 +54,23 @@ export class PropertyCheckEngine {
     let extractedNumber: number | null = null;
 
     if (mode === 'number_extraction') {
+      const configuredKeywords = Array.isArray(ruleConfig.keywords)
+        ? ruleConfig.keywords.map((item) => String(item).trim()).filter(Boolean)
+        : [];
       const keyword = (ruleConfig.keyword || '').trim();
+      const keywords = configuredKeywords.length > 0
+        ? configuredKeywords
+        : keyword
+          ? [keyword]
+          : [];
       const comparison = ruleConfig.comparison || 'gte';
       const expectedNumber = Number(ruleConfig.expected_number);
+      const expectedNumbers = Array.isArray(ruleConfig.expected_numbers)
+        ? ruleConfig.expected_numbers.map((item) => Number(item))
+        : [];
       const windowChars = Number(ruleConfig.window_chars || 120);
 
-      if (!keyword || !Number.isFinite(expectedNumber)) {
+      if (keywords.length === 0) {
         return {
           status: MetricStatus.ERROR,
           evidence: {
@@ -69,47 +82,67 @@ export class PropertyCheckEngine {
             extracted_number: null,
             matches: false,
           },
-          message: 'Invalid number_extraction rule: keyword and expected_number are required',
+          message: 'Invalid number_extraction rule: at least one keyword is required',
           score: 0,
         };
       }
 
-      const keywordIndex = extractedText.toLowerCase().indexOf(keyword.toLowerCase());
-      if (keywordIndex >= 0) {
-        const contextStart = Math.max(0, keywordIndex - Math.floor(windowChars / 2));
-        const contextEnd = Math.min(extractedText.length, keywordIndex + keyword.length + Math.floor(windowChars / 2));
-        const context = extractedText.slice(contextStart, contextEnd);
+      const keywordExtraction = keywords.map((keywordValue, index) => {
+        const keywordIndex = extractedText.toLowerCase().indexOf(keywordValue.toLowerCase());
+        let extracted: number | null = null;
 
-        const numberMatch = context.match(/-?\d+(?:\.\d+)?/);
-        if (numberMatch) {
-          extractedNumber = Number(numberMatch[0]);
-        }
-      }
+        if (keywordIndex >= 0) {
+          const contextStart = Math.max(0, keywordIndex - Math.floor(windowChars / 2));
+          const contextEnd = Math.min(
+            extractedText.length,
+            keywordIndex + keywordValue.length + Math.floor(windowChars / 2),
+          );
+          const context = extractedText.slice(contextStart, contextEnd);
 
-      if (extractedNumber === null || !Number.isFinite(extractedNumber)) {
-        matches = false;
-      } else {
-        switch (comparison) {
-          case 'gte':
-            matches = extractedNumber >= expectedNumber;
-            break;
-          case 'lte':
-            matches = extractedNumber <= expectedNumber;
-            break;
-          case 'gt':
-            matches = extractedNumber > expectedNumber;
-            break;
-          case 'lt':
-            matches = extractedNumber < expectedNumber;
-            break;
-          case 'eq':
-            matches = extractedNumber === expectedNumber;
-            break;
-          default:
-            matches = false;
-            break;
+          const numberMatch = context.match(/-?\d+(?:\.\d+)?/);
+          if (numberMatch) {
+            extracted = Number(numberMatch[0]);
+          }
         }
-      }
+
+        const expectedForKeyword = Number.isFinite(expectedNumbers[index])
+          ? expectedNumbers[index]
+          : expectedNumber;
+
+        let keywordMatches = false;
+        if (extracted !== null && Number.isFinite(extracted) && Number.isFinite(expectedForKeyword)) {
+          switch (comparison) {
+            case 'gte':
+              keywordMatches = extracted >= expectedForKeyword;
+              break;
+            case 'lte':
+              keywordMatches = extracted <= expectedForKeyword;
+              break;
+            case 'gt':
+              keywordMatches = extracted > expectedForKeyword;
+              break;
+            case 'lt':
+              keywordMatches = extracted < expectedForKeyword;
+              break;
+            case 'eq':
+              keywordMatches = extracted === expectedForKeyword;
+              break;
+            default:
+              keywordMatches = false;
+              break;
+          }
+        }
+
+        return {
+          keyword: keywordValue,
+          extracted,
+          expected: Number.isFinite(expectedForKeyword) ? expectedForKeyword : undefined,
+          matches: keywordMatches,
+        };
+      });
+
+      extractedNumber = keywordExtraction[0]?.extracted ?? null;
+      matches = keywordExtraction.length > 0 && keywordExtraction.every((item) => item.matches);
     } else {
       if (pattern) {
         const regex = new RegExp(pattern);
@@ -132,12 +165,12 @@ export class PropertyCheckEngine {
     let message: string;
     if (mode === 'number_extraction') {
       if (matches) {
-        message = `Extracted number ${extractedNumber} near keyword "${ruleConfig.keyword}" matches ${ruleConfig.comparison} ${ruleConfig.expected_number}`;
+        message = 'All configured keyword-number checks passed.';
       } else {
         if (extractedNumber === null) {
-          message = `No number found near keyword "${ruleConfig.keyword}"`;
+          message = 'One or more keywords were not found with a valid nearby number.';
         } else {
-          message = `Extracted number ${extractedNumber} near keyword "${ruleConfig.keyword}" does not match ${ruleConfig.comparison} ${ruleConfig.expected_number}`;
+          message = 'One or more extracted numbers did not satisfy the configured comparison rule.';
         }
       }
     } else {

@@ -70,6 +70,11 @@ export class DocumentProcessor {
         status: DocumentStatus.READY,
       });
 
+      // Keep extracted text on the processed version as well
+      await this.versionRepo.update(versionId, {
+        extracted_text: extractedText,
+      });
+
       this.logger.log(`Document processed successfully: ${documentId}`);
 
       // Queue metrics computation

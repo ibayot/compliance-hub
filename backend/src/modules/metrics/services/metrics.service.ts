@@ -341,6 +341,43 @@ export class MetricsService {
       };
     }
 
+    if (submissionFrequency === 'custom') {
+      const regexPattern = String(ruleConfig?.custom_period_regex || '').trim();
+      const yearGroupRaw = Number(ruleConfig?.custom_period_year_group);
+      const monthGroupRaw = Number(ruleConfig?.custom_period_month_group);
+      const fallbackMonthRaw = Number(ruleConfig?.custom_period_fallback_month);
+
+      const fallbackMonthIndex = Number.isFinite(fallbackMonthRaw)
+        ? Math.min(Math.max(Math.floor(fallbackMonthRaw) - 1, 0), 11)
+        : 11;
+
+      if (regexPattern) {
+        try {
+          const periodRegex = new RegExp(regexPattern);
+          const match = normalized.match(periodRegex);
+          if (match) {
+            const yearGroup = Number.isFinite(yearGroupRaw) ? Math.floor(yearGroupRaw) : 1;
+            const monthGroup = Number.isFinite(monthGroupRaw) ? Math.floor(monthGroupRaw) : 2;
+
+            const parsedYear = Number.parseInt(match[yearGroup] || String(fallbackYear), 10);
+            const parsedMonth = Number.parseInt(match[monthGroup] || String(fallbackMonthIndex + 1), 10) - 1;
+
+            return {
+              baseYear: Number.isFinite(parsedYear) ? parsedYear : fallbackYear,
+              baseMonthIndex: Math.min(Math.max(parsedMonth, 0), 11),
+            };
+          }
+        } catch {
+          // Ignore invalid regex and continue to fallback behavior
+        }
+      }
+
+      return {
+        baseYear: fallbackYear,
+        baseMonthIndex: fallbackMonthIndex,
+      };
+    }
+
     return null;
   }
 

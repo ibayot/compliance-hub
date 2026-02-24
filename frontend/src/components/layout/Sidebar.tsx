@@ -54,7 +54,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     { label: 'Dashboard', icon: DashboardIcon, path: '/dashboard', roles: ['all'] },
     { label: 'Documents', icon: DocumentsIcon, path: '/dashboard/documents', roles: ['all'] },
     { label: 'Issuances', icon: IssuancesIcon, path: '/dashboard/issuances', roles: ['all'] },
-    { label: 'Tickets', icon: TicketsIcon, path: '/dashboard/tickets', roles: ['all'] },
+    { label: 'Issues', icon: TicketsIcon, path: '/dashboard/tickets', roles: ['all'] },
   ];
 
   const adminNavItems: NavItem[] = [

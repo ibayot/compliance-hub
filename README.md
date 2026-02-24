@@ -19,23 +19,23 @@ The **Regional ICT Management System (RICTMS) Compliance Hub** is an enterprise-
 
 ### Key Features
 
-- 📄 **Document Management**: Upload, version, and organize compliance documents
-- 🔍 **Automated Analysis**: AI-powered document processing and compliance checking
-- ✅ **Compliance Metrics**: Automated scoring against regulatory requirements
-- ⏱️ **Deadline-Based Date Checks**: Unit/report-specific deadline rules for date compliance validation
-- 📚 **Reference Library**: Comprehensive database of laws and regulations
+- 🧭 **Assignment-Governed Focal Uploads**: Super admins assign report types to focal users and enforce one submission per cycle
+- 🏷️ **Filename Policy Enforcement**: Uploads can be validated with assignment prefix + frequency-aware suffix conventions
 - 👥 **Collaborative Reviews**: Multi-user review and approval workflows
 - 👁️ **Inline Review Viewer**: Digital document viewing inside the review workspace with direct decision tagging
-- 🎫 **Issue Tracking**: Built-in ticketing system for compliance issues
-- 🧾 **Issue Documentation Fields**: `issue_type`, `resolution_steps`, and `resolution_date` tracking
-- 🚨 **Cybersecurity Incident Posture**: Daily/weekly/monthly/quarterly/yearly incident rollups
+- Automatic `Needs Revision` auto-review tagging when automated checks fail or error
 - 📊 **Dashboard & Reports**: Real-time analytics and compliance reporting
 - 🔐 **Role-based Access**: Secure access control for different user roles
+- Metrics templates are managed from **Administration → Metrics** in the sidebar.
+- Number Extraction rules support comma/newline keyword and expected-number lists.
+- Date/Deadline checks support monthly, quarterly, annual, and custom frequencies (with regex/group fallback for custom periods).
 - 🧩 **Admin Operations UI**: Working Units, Metrics Template, and Reviews pages
 - 🛡️ **Security Hardening Baseline**: API rate limiting + config validation + privileged action audit logs
-- 🔁 **CI Baseline**: GitHub Actions build pipeline with dependency audit checks
 
 ## Quick Start
+- `super_admin` users can create/update/delete focal report assignments.
+- Focal upload options are filtered by active assignments for the selected cycle.
+- Assigned report types are shown in the upload module with expected filename guidance.
 
 ### Prerequisites
 
