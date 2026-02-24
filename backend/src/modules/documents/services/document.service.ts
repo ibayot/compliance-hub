@@ -40,6 +40,8 @@ export interface ListDocumentsDto {
   status?: DocumentStatus;
   page?: number;
   limit?: number;
+  actor_role?: UserRole;
+  actor_id?: number;
 }
 
 @Injectable()
@@ -402,6 +404,8 @@ export class DocumentService implements OnModuleInit {
       status,
       page = 1,
       limit = 20,
+      actor_role,
+      actor_id,
     } = dto;
 
     const query = this.documentRepo
@@ -425,6 +429,22 @@ export class DocumentService implements OnModuleInit {
     }
     if (status) {
       query.andWhere('doc.status = :status', { status });
+    }
+
+    if (actor_role === UserRole.FOCAL && actor_id) {
+      query.andWhere('doc.uploaded_by = :actorId', { actorId: actor_id });
+    }
+
+    if (actor_role === UserRole.SUPER_ADMIN || actor_role === UserRole.REVIEWER) {
+      query.andWhere(`
+        COALESCE((
+          SELECT mr.decision
+          FROM manual_reviews mr
+          WHERE mr.document_id = doc.id
+          ORDER BY mr.reviewed_at DESC
+          LIMIT 1
+        ), 'pending') NOT IN ('needs_revision', 'non_compliant')
+      `);
     }
 
     query.orderBy('doc.created_at', 'DESC');
@@ -762,5 +782,64 @@ export class DocumentService implements OnModuleInit {
     document.is_deleted = true;
     await this.documentRepo.save(document);
     this.logger.log(`Document soft deleted: ${id}`);
+  }
+
+  async returnDocumentForRevision(payload: {
+    document_id: string;
+    remarks: string;
+    returned_by: number;
+  }): Promise<ManualReview> {
+    const remarks = payload.remarks?.trim();
+    if (!remarks) {
+      throw new BadRequestException('Return remarks are required.');
+    }
+
+    const document = await this.documentRepo.findOne({
+      where: { id: payload.document_id, is_deleted: false },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    if (document.status !== DocumentStatus.PENDING) {
+      throw new BadRequestException('Only pending documents can be returned.');
+    }
+
+    const version = await this.versionRepo.findOne({
+      where: {
+        document_id: payload.document_id,
+        version_number: document.current_version,
+      },
+    });
+
+    if (!version) {
+      throw new NotFoundException('Current version not found');
+    }
+
+    const review = this.reviewRepo.create({
+      document_id: payload.document_id,
+      version_id: version.id,
+      decision: ReviewDecision.NEEDS_REVISION,
+      remarks,
+      reviewer_id: payload.returned_by,
+    });
+
+    await this.reviewRepo.save(review);
+
+    await this.documentRepo.update(payload.document_id, {
+      status: DocumentStatus.PENDING,
+    });
+
+    this.logger.log(
+      JSON.stringify({
+        action: 'document.return',
+        documentId: payload.document_id,
+        returnedBy: payload.returned_by,
+        reviewId: review.id,
+      }),
+    );
+
+    return review;
   }
 }

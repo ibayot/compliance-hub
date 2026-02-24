@@ -95,6 +95,7 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 - **Decision-driven Status Routing**:
   - `compliant` → document becomes `ready`
   - `non_compliant` / `needs_revision` → document returns to `pending` for focal action
+- **Return-to-Focal Control**: Super-admin/compliance can return pending documents with mandatory remarks (no hard delete in workflow).
 
 #### Version Comparison
 - **Automated Diff Analysis**: Compare document versions automatically
@@ -106,6 +107,7 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 
 #### Ticket System
 - **Multi-category Tickets**: Compliance, content, format, technical, and general tickets
+- **Dynamic Issue Types/Categories**: Super admins can create, update, activate/deactivate, and soft-delete issue metadata.
 - **Priority Management**: Low, medium, high, and urgent priority levels
 - **Status Workflow**: Open → In Progress → Resolved → Closed
 - **Document Linking**: Link tickets to specific documents
@@ -178,7 +180,7 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 - **Storage Options**: Switch between local and cloud storage
 - **Database Management**: Migration and seeding scripts
 - **Performance Tuning**: Configurable queue workers and processing limits
-- **Safe Delete Guardrails**: Delete is blocked when a document is linked or not compliant.
+- **Safe Workflow Preservation**: Document workflow uses return-for-revision actions with audit trail instead of destructive deletion.
 
 ### 10. User Manual Module
 

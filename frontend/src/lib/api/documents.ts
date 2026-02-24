@@ -236,6 +236,10 @@ export const documentsApi = {
     await apiClient.delete(`/documents/${id}`);
   },
 
+  returnDocument: async (id: string, remarks: string): Promise<void> => {
+    await apiClient.post(`/documents/${id}/return`, { remarks });
+  },
+
   getDocumentReferences: async (documentId: string): Promise<DocumentReferenceResponse> => {
     const response = await apiClient.get(`/documents/${documentId}/references`);
     return response.data;

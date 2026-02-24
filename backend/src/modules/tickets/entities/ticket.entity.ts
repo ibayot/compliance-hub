@@ -11,6 +11,8 @@ import {
 import { User } from '../../users/entities/user.entity';
 import { Unit } from '../../units/entities/unit.entity';
 import { TicketComment } from './ticket-comment.entity';
+import { TicketIssueType } from './ticket-issue-type.entity';
+import { TicketCategoryConfig } from './ticket-category.entity';
 
 export enum TicketCategory {
   DOCUMENT_RELATED = 'document_related',
@@ -57,6 +59,13 @@ export class Ticket {
   @Column({ type: 'text' })
   description: string;
 
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  issue_type_id: string | null;
+
+  @ManyToOne(() => TicketIssueType, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'issue_type_id' })
+  issue_type_config: TicketIssueType;
+
   @Column({
     type: 'enum',
     enum: IssueType,
@@ -70,6 +79,13 @@ export class Ticket {
     default: TicketCategory.OTHER,
   })
   category: TicketCategory;
+
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  category_id: string | null;
+
+  @ManyToOne(() => TicketCategoryConfig, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'category_id' })
+  category_config: TicketCategoryConfig;
 
   @Column({
     type: 'enum',

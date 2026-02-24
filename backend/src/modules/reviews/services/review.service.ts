@@ -52,6 +52,26 @@ export class ReviewService {
       throw new NotFoundException('Document not found');
     }
 
+    if (
+      (dto.decision === ReviewDecision.NEEDS_REVISION ||
+        dto.decision === ReviewDecision.NON_COMPLIANT) &&
+      !dto.remarks?.trim()
+    ) {
+      throw new BadRequestException(
+        'Remarks are required when returning or marking a document as non-compliant.',
+      );
+    }
+
+    if (
+      (dto.decision === ReviewDecision.NEEDS_REVISION ||
+        dto.decision === ReviewDecision.NON_COMPLIANT) &&
+      document.status !== DocumentStatus.PENDING
+    ) {
+      throw new BadRequestException(
+        'Only pending documents can be returned for revision.',
+      );
+    }
+
     // Get the current version
     const version = await this.versionRepo.findOne({
       where: {

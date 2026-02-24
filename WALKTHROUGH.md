@@ -164,6 +164,8 @@ For assignment-governed focal uploads:
 Workflow clarification:
 - `Ready` indicates compliance-approved and linkable documents.
 - `Pending` includes newly extracted documents awaiting manual review and documents returned after non-compliant/needs-revision decisions.
+- Super Admin/Compliance view: `Pending` and `Compliant` (returned items are hidden from their list).
+- Focal view: `Submitted` → `Under Review` → `Returned/Compliant`.
 
 #### Filtering Documents
 
@@ -776,7 +778,7 @@ Expected behavior:
 A: Usually 2-5 minutes for standard PDFs. Large or scanned documents may take up to 15 minutes.
 
 **Q: Can I delete a document?**
-A: Deletion is restricted. Documents must be compliance-approved and not linked to issuances or other documents before delete is allowed.
+A: Operational workflow uses **Return** instead of delete. Super admin/compliance can return only pending documents to focal users with mandatory remarks; records are preserved for audit.
 
 **Q: What happens to old versions?**
 A: All versions are retained for audit purposes. You can view any historical version anytime.

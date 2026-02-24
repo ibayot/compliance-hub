@@ -19,7 +19,7 @@ import {
 } from '@mui/material';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { ticketsApi, Ticket } from '@/app/api/references';
+import { ticketsApi, Ticket, TicketConfigOption } from '@/app/api/references';
 
 export default function TicketDetailPage() {
   const params = useParams();
@@ -33,11 +33,16 @@ export default function TicketDetailPage() {
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [issueType, setIssueType] = useState<Ticket['issue_type']>('other');
+  const [issueTypeId, setIssueTypeId] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [issueTypes, setIssueTypes] = useState<TicketConfigOption[]>([]);
+  const [categories, setCategories] = useState<TicketConfigOption[]>([]);
   const [resolutionSteps, setResolutionSteps] = useState('');
   const [resolutionDate, setResolutionDate] = useState('');
 
   useEffect(() => {
     fetchTicket();
+    fetchConfigs();
   }, [ticketId]);
 
   const fetchTicket = async () => {
@@ -46,12 +51,27 @@ export default function TicketDetailPage() {
       const data = await ticketsApi.getById(ticketId);
       setTicket(data);
       setIssueType((data.issue_type || 'other') as Ticket['issue_type']);
+      setIssueTypeId(data.issue_type_id || '');
+      setCategoryId(data.category_id || '');
       setResolutionSteps(data.resolution_steps || '');
       setResolutionDate(data.resolution_date ? new Date(data.resolution_date).toISOString().slice(0, 10) : '');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch ticket');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchConfigs = async () => {
+    try {
+      const [issueTypeData, categoryData] = await Promise.all([
+        ticketsApi.listIssueTypes(true),
+        ticketsApi.listCategories(true),
+      ]);
+      setIssueTypes(issueTypeData || []);
+      setCategories(categoryData || []);
+    } catch {
+      // non-blocking for detail view
     }
   };
 
@@ -81,6 +101,8 @@ export default function TicketDetailPage() {
   const handleSaveIssueDetails = async () => {
     try {
       await ticketsApi.update(ticketId, {
+        issue_type_id: issueTypeId || undefined,
+        category_id: categoryId || undefined,
         issue_type: issueType,
         resolution_steps: resolutionSteps || undefined,
         resolution_date: resolutionDate || undefined,
@@ -165,11 +187,11 @@ export default function TicketDetailPage() {
               size="small"
             />
             <Chip
-              label={`Category: ${ticket.category.replace('_', ' ')}`}
+              label={`Category: ${(ticket.category_config?.name || ticket.category).replace('_', ' ')}`}
               size="small"
             />
             <Chip
-              label={`Issue Type: ${(ticket.issue_type || 'other').replace('_', ' ')}`}
+              label={`Issue Type: ${(ticket.issue_type_config?.name || ticket.issue_type || 'other').replace('_', ' ')}`}
               size="small"
             />
             <Chip
@@ -244,16 +266,34 @@ export default function TicketDetailPage() {
                     select
                     fullWidth
                     label="Issue Type"
-                    value={issueType}
-                    onChange={(event) => setIssueType(event.target.value as Ticket['issue_type'])}
+                    value={issueTypeId || issueType}
+                    onChange={(event) => {
+                      setIssueTypeId(event.target.value);
+                      setIssueType('other');
+                    }}
                     size="small"
                   >
-                    <MenuItem value="policy_gap">Policy Gap</MenuItem>
-                    <MenuItem value="missing_evidence">Missing Evidence</MenuItem>
-                    <MenuItem value="data_inconsistency">Data Inconsistency</MenuItem>
-                    <MenuItem value="late_submission">Late Submission</MenuItem>
-                    <MenuItem value="security_incident">Security Incident</MenuItem>
-                    <MenuItem value="other">Other</MenuItem>
+                    {issueTypes
+                      .filter((item) => item.is_active)
+                      .map((item) => (
+                        <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>
+                      ))}
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Category"
+                    value={categoryId || ticket.category}
+                    onChange={(event) => setCategoryId(event.target.value)}
+                    size="small"
+                  >
+                    {categories
+                      .filter((item) => item.is_active)
+                      .map((item) => (
+                        <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>
+                      ))}
                   </TextField>
                 </Grid>
                 <Grid item xs={12} md={4}>
