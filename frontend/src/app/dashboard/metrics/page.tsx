@@ -57,15 +57,15 @@ export default function MetricsPage() {
   const [documentType, setDocumentType] = useState('');
   const [unitId, setUnitId] = useState('');
 
-  const [requiredSectionsText, setRequiredSectionsText] = useState('Introduction\nMethodology\nFindings');
-  const [keywordText, setKeywordText] = useState('compliance, report');
+  const [requiredSectionsText, setRequiredSectionsText] = useState('Introduction\nMethodology\nFindings\nRecommendations\nAction Plan');
+  const [keywordText, setKeywordText] = useState('compliance, report, memorandum, issuance, implementation');
   const [keywordMinMatches, setKeywordMinMatches] = useState(1);
   const [keywordCaseSensitive, setKeywordCaseSensitive] = useState(false);
   const [keywordWordBoundary, setKeywordWordBoundary] = useState(false);
 
-  const [extractKeywordsText, setExtractKeywordsText] = useState('total incidents');
+  const [extractKeywordsText, setExtractKeywordsText] = useState('total incidents\nresolved incidents\nopen incidents\nusers trained\naction items closed');
   const [extractComparison, setExtractComparison] = useState<'gte' | 'lte' | 'eq' | 'gt' | 'lt'>('gte');
-  const [extractExpectedNumbersText, setExtractExpectedNumbersText] = useState('1');
+  const [extractExpectedNumbersText, setExtractExpectedNumbersText] = useState('1\n1\n0\n10\n1');
 
   const [deadlineDay, setDeadlineDay] = useState(5);
   const [deadlineMonthOffset, setDeadlineMonthOffset] = useState(1);
@@ -106,15 +106,15 @@ export default function MetricsPage() {
     setDocumentType('');
     setUnitId('');
 
-    setRequiredSectionsText('Introduction\nMethodology\nFindings');
-    setKeywordText('compliance, report');
+    setRequiredSectionsText('Introduction\nMethodology\nFindings\nRecommendations\nAction Plan');
+    setKeywordText('compliance, report, memorandum, issuance, implementation');
     setKeywordMinMatches(1);
     setKeywordCaseSensitive(false);
     setKeywordWordBoundary(false);
 
-    setExtractKeywordsText('total incidents');
+    setExtractKeywordsText('total incidents\nresolved incidents\nopen incidents\nusers trained\naction items closed');
     setExtractComparison('gte');
-    setExtractExpectedNumbersText('1');
+    setExtractExpectedNumbersText('1\n1\n0\n10\n1');
 
     setDeadlineDay(5);
     setDeadlineMonthOffset(1);
@@ -492,15 +492,20 @@ export default function MetricsPage() {
           </TextField>
 
           {metricType === 'section_check' && (
-            <TextField
-              margin="dense"
-              label="Required Sections (comma or newline separated)"
-              fullWidth
-              multiline
-              minRows={4}
-              value={requiredSectionsText}
-              onChange={(event) => setRequiredSectionsText(event.target.value)}
-            />
+            <>
+              <TextField
+                margin="dense"
+                label="Required Sections (comma or newline separated)"
+                fullWidth
+                multiline
+                minRows={4}
+                value={requiredSectionsText}
+                onChange={(event) => setRequiredSectionsText(event.target.value)}
+              />
+              <Typography variant="caption" color="text.secondary">
+                Sample set (5): Introduction, Methodology, Findings, Recommendations, Action Plan
+              </Typography>
+            </>
           )}
 
           {metricType === 'keyword_check' && (
@@ -532,41 +537,50 @@ export default function MetricsPage() {
                   />
                 </Box>
               </Box>
+              <Typography variant="caption" color="text.secondary">
+                Sample set (5): compliance, report, memorandum, issuance, implementation
+              </Typography>
             </>
           )}
 
           {metricType === 'property_check' && (
-            <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr 1fr' }} gap={2} mt={1}>
-              <TextField
-                label="Keywords (comma or newline separated)"
-                value={extractKeywordsText}
-                multiline
-                minRows={3}
-                onChange={(event) => setExtractKeywordsText(event.target.value)}
-              />
-              <TextField
-                select
-                label="Comparison"
-                value={extractComparison}
-                onChange={(event) => setExtractComparison(event.target.value as any)}
-              >
-                <MenuItem value="gte">&gt;=</MenuItem>
-                <MenuItem value="lte">&lt;=</MenuItem>
-                <MenuItem value="gt">&gt;</MenuItem>
-                <MenuItem value="lt">&lt;</MenuItem>
-                <MenuItem value="eq">=</MenuItem>
-              </TextField>
-              <TextField
-                label="Expected Numbers (comma or newline separated)"
-                value={extractExpectedNumbersText}
-                multiline
-                minRows={3}
-                onChange={(event) => setExtractExpectedNumbersText(event.target.value)}
-              />
-            </Box>
+            <>
+              <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr 1fr' }} gap={2} mt={1}>
+                <TextField
+                  label="Keywords (comma or newline separated)"
+                  value={extractKeywordsText}
+                  multiline
+                  minRows={3}
+                  onChange={(event) => setExtractKeywordsText(event.target.value)}
+                />
+                <TextField
+                  select
+                  label="Comparison"
+                  value={extractComparison}
+                  onChange={(event) => setExtractComparison(event.target.value as any)}
+                >
+                  <MenuItem value="gte">&gt;=</MenuItem>
+                  <MenuItem value="lte">&lt;=</MenuItem>
+                  <MenuItem value="gt">&gt;</MenuItem>
+                  <MenuItem value="lt">&lt;</MenuItem>
+                  <MenuItem value="eq">=</MenuItem>
+                </TextField>
+                <TextField
+                  label="Expected Numbers (comma or newline separated)"
+                  value={extractExpectedNumbersText}
+                  multiline
+                  minRows={3}
+                  onChange={(event) => setExtractExpectedNumbersText(event.target.value)}
+                />
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                Sample pairs (5): total incidents=1, resolved incidents=1, open incidents=0, users trained=10, action items closed=1
+              </Typography>
+            </>
           )}
 
           {metricType === 'date_check' && (
+            <>
             <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr 1fr' }} gap={2} mt={1}>
               <TextField
                 select
@@ -636,6 +650,10 @@ export default function MetricsPage() {
                 </>
               )}
             </Box>
+            <Typography variant="caption" color="text.secondary">
+              Sample scenarios (5): Monthly-5th+1 month, Quarterly-10th+1 month, Annual-month12 day15, Custom YYYYMM regex, Custom fallback month 12
+            </Typography>
+            </>
           )}
         </DialogContent>
         <DialogActions>

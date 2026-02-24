@@ -98,7 +98,7 @@ export default function ReviewsPage() {
     setOpen(true);
 
     const document = documents.find((item) => item.id === documentId);
-    if (!document || document.status !== 'ready') {
+    if (!document || (document.status !== 'ready' && document.status !== 'pending')) {
       releasePreviewBlob();
       setPreviewError('Preview is not available yet. The document may still be processing.');
       return;

@@ -25,6 +25,7 @@ import {
   Assessment as MetricsIcon,
   Settings as SettingsIcon,
   Security as SecurityIcon,
+  MenuBook as ManualIcon,
 } from '@mui/icons-material';
 import type { ElementType } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -64,6 +65,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   ];
 
   const settingsNavItems: NavItem[] = [
+    { label: 'User Manual', icon: ManualIcon, path: '/dashboard/user-manual', roles: ['all'] },
     { label: 'Settings', icon: SettingsIcon, path: '/dashboard/settings', roles: ['all'] },
   ];
 

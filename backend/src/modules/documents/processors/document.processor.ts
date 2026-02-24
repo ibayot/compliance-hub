@@ -67,7 +67,7 @@ export class DocumentProcessor {
       // Update document with extracted text
       await this.documentRepo.update(documentId, {
         extracted_text: extractedText,
-        status: DocumentStatus.READY,
+        status: DocumentStatus.PENDING,
       });
 
       // Keep extracted text on the processed version as well

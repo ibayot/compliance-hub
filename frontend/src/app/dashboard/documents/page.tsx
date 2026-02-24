@@ -14,9 +14,10 @@ import {
 import { Add as AddIcon, FilterList as FilterIcon } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { documentsApi, ListDocumentsParams } from '@/lib/api/documents';
+import { documentsApi, Document, ListDocumentsParams } from '@/lib/api/documents';
 import { unitsApi } from '@/lib/api/units';
 import DocumentList from '@/components/documents/DocumentList';
+import { useAuth } from '@/contexts/AuthContext';
 
 const documentTypes = ['Policy', 'Procedure', 'Guidelines', 'Manual', 'Report', 'Other'];
 const statusOptions = [
@@ -28,6 +29,7 @@ const statusOptions = [
 ];
 
 export default function DocumentsPage() {
+  const { user } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -88,6 +90,47 @@ export default function DocumentsPage() {
     if (confirm('Are you sure you want to delete this document?')) {
       deleteMutation.mutate(id);
     }
+  };
+
+  const getWorkflowStatus = (document: Document) => {
+    const complianceStatus = document.compliance_status || 'pending';
+    const isSuperOrCompliance = user?.role === 'super_admin' || user?.role === 'reviewer';
+
+    if (isSuperOrCompliance) {
+      if (complianceStatus === 'compliant') {
+        return { label: 'COMPLIANT', color: 'success' as const };
+      }
+      return { label: 'PENDING', color: 'warning' as const };
+    }
+
+    if (complianceStatus === 'compliant') {
+      return { label: 'COMPLIANT', color: 'success' as const };
+    }
+    if (complianceStatus === 'non_compliant') {
+      return { label: 'NON-COMPLIANT', color: 'error' as const };
+    }
+    if (complianceStatus === 'needs_revision') {
+      return { label: 'NEEDS REVISION', color: 'warning' as const };
+    }
+
+    return { label: 'PENDING', color: 'warning' as const };
+  };
+
+  const canDeleteDocument = (document: Document) => {
+    const isSuperOrCompliance = user?.role === 'super_admin' || user?.role === 'reviewer';
+    if (!isSuperOrCompliance) {
+      return { allowed: false, reason: 'Only super admin and compliance roles can delete documents.' };
+    }
+
+    if (document.is_linked) {
+      return { allowed: false, reason: 'Document is linked. Unlink all mappings before deleting.' };
+    }
+
+    if (document.compliance_status !== 'compliant') {
+      return { allowed: false, reason: 'Only compliant documents can be deleted.' };
+    }
+
+    return { allowed: true };
   };
 
   const handleClearFilters = () => {
@@ -225,6 +268,8 @@ export default function DocumentsPage() {
           onPageChange={handlePageChange}
           onLimitChange={handleLimitChange}
           onDelete={handleDelete}
+          statusFormatter={getWorkflowStatus}
+          canDeleteDocument={canDeleteDocument}
         />
       </Box>
     </Container>

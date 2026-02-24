@@ -448,6 +448,25 @@ Or let the application create them automatically on first upload.
 2. Re-login to refresh JWT role claims in frontend context.
 3. Verify backend authorization for issuance endpoints is reachable at `/api/issuances`.
 
+### Issue: Link button is not shown for a document in mapping dialogs
+
+**Symptom**: A document appears in lists but cannot be linked to issuance or to another document.
+
+**Resolution**:
+1. Verify document status is `ready` (compliant).
+2. If document is still `pending`, complete manual review and mark it `compliant`.
+3. Reopen mapping dialog after status update.
+
+### Issue: Delete button is disabled for document records
+
+**Expected Behavior**:
+- Delete is disabled when a document has active links (issuance mapping or document-reference mapping).
+- Delete is disabled when document is not compliant.
+
+**Resolution**:
+1. Unlink document from issuances/references.
+2. Ensure latest review decision is `compliant` (`ready`).
+
 ### Backend Won't Start
 
 #### Error: "Cannot connect to database"

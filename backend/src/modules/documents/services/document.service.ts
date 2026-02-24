@@ -18,6 +18,8 @@ import {
   SubmissionFrequency,
 } from '../entities/document-assignment.entity';
 import { UserRole } from '../../users/entities/user.entity';
+import { ManualReview, ReviewDecision } from '../../reviews/entities/manual-review.entity';
+import { DocumentReference } from '../entities/document-reference.entity';
 
 export interface UploadDocumentDto {
   title: string;
@@ -51,6 +53,10 @@ export class DocumentService implements OnModuleInit {
     private versionRepo: Repository<DocumentVersion>,
     @InjectRepository(DocumentAssignment)
     private assignmentRepo: Repository<DocumentAssignment>,
+    @InjectRepository(ManualReview)
+    private reviewRepo: Repository<ManualReview>,
+    @InjectRepository(DocumentReference)
+    private referenceRepo: Repository<DocumentReference>,
     private storageService: StorageService,
     @InjectQueue('document-processing') private documentQueue: Queue,
     private dataSource: DataSource,
@@ -78,6 +84,107 @@ export class DocumentService implements OnModuleInit {
         CONSTRAINT fk_assignment_unit FOREIGN KEY (unit_id) REFERENCES units (id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
+
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS document_references (
+        id varchar(36) NOT NULL,
+        source_document_id varchar(36) NOT NULL,
+        target_document_id varchar(36) NOT NULL,
+        relationship_type varchar(50) NOT NULL DEFAULT 'references',
+        created_by int DEFAULT NULL,
+        created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_document_reference_pair (source_document_id, target_document_id),
+        KEY idx_doc_ref_source (source_document_id),
+        KEY idx_doc_ref_target (target_document_id),
+        CONSTRAINT fk_doc_ref_source FOREIGN KEY (source_document_id) REFERENCES documents (id) ON DELETE CASCADE,
+        CONSTRAINT fk_doc_ref_target FOREIGN KEY (target_document_id) REFERENCES documents (id) ON DELETE CASCADE,
+        CONSTRAINT fk_doc_ref_creator FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+  }
+
+  private async getLatestReviewDecisionMap(
+    documentIds: string[],
+  ): Promise<Map<string, ReviewDecision | 'pending'>> {
+    if (documentIds.length === 0) {
+      return new Map();
+    }
+
+    const reviews = await this.reviewRepo
+      .createQueryBuilder('review')
+      .where('review.document_id IN (:...documentIds)', { documentIds })
+      .orderBy('review.document_id', 'ASC')
+      .addOrderBy('review.reviewed_at', 'DESC')
+      .getMany();
+
+    const latestMap = new Map<string, ReviewDecision | 'pending'>();
+    for (const review of reviews) {
+      if (!latestMap.has(review.document_id)) {
+        latestMap.set(review.document_id, review.decision);
+      }
+    }
+
+    for (const documentId of documentIds) {
+      if (!latestMap.has(documentId)) {
+        latestMap.set(documentId, 'pending');
+      }
+    }
+
+    return latestMap;
+  }
+
+  private async getReferenceCountMap(documentIds: string[]): Promise<Map<string, number>> {
+    const map = new Map<string, number>();
+    if (documentIds.length === 0) {
+      return map;
+    }
+
+    const outgoing = await this.referenceRepo
+      .createQueryBuilder('ref')
+      .select('ref.source_document_id', 'document_id')
+      .addSelect('COUNT(*)', 'count')
+      .where('ref.source_document_id IN (:...documentIds)', { documentIds })
+      .groupBy('ref.source_document_id')
+      .getRawMany<{ document_id: string; count: string }>();
+
+    const incoming = await this.referenceRepo
+      .createQueryBuilder('ref')
+      .select('ref.target_document_id', 'document_id')
+      .addSelect('COUNT(*)', 'count')
+      .where('ref.target_document_id IN (:...documentIds)', { documentIds })
+      .groupBy('ref.target_document_id')
+      .getRawMany<{ document_id: string; count: string }>();
+
+    for (const row of [...outgoing, ...incoming]) {
+      map.set(row.document_id, (map.get(row.document_id) || 0) + Number(row.count || 0));
+    }
+
+    return map;
+  }
+
+  private async enrichDocumentsForWorkflow(documents: Document[]): Promise<Document[]> {
+    const documentIds = documents.map((document) => document.id);
+    const [reviewMap, referenceCountMap] = await Promise.all([
+      this.getLatestReviewDecisionMap(documentIds),
+      this.getReferenceCountMap(documentIds),
+    ]);
+
+    return documents.map((document) => {
+      const complianceStatus = reviewMap.get(document.id) || 'pending';
+      const issuanceLinks = Array.isArray((document as any).issuances)
+        ? (document as any).issuances.length
+        : 0;
+      const documentLinks = referenceCountMap.get(document.id) || 0;
+      const linkCount = issuanceLinks + documentLinks;
+
+      return {
+        ...document,
+        compliance_status: complianceStatus,
+        is_linked: linkCount > 0,
+        linked_count: linkCount,
+      } as Document;
+    });
   }
 
   private normalizeDocumentType(documentType: string): string {
@@ -267,14 +374,15 @@ export class DocumentService implements OnModuleInit {
   async getDocumentById(id: string): Promise<Document> {
     const document = await this.documentRepo.findOne({
       where: { id, is_deleted: false },
-      relations: ['unit', 'uploader', 'versions', 'versions.uploader'],
+      relations: ['unit', 'uploader', 'versions', 'versions.uploader', 'issuances'],
     });
 
     if (!document) {
       throw new NotFoundException(`Document with ID ${id} not found`);
     }
 
-    return document;
+    const [enriched] = await this.enrichDocumentsForWorkflow([document]);
+    return enriched;
   }
 
   /**
@@ -300,6 +408,7 @@ export class DocumentService implements OnModuleInit {
       .createQueryBuilder('doc')
       .leftJoinAndSelect('doc.unit', 'unit')
       .leftJoinAndSelect('doc.uploader', 'uploader')
+      .leftJoinAndSelect('doc.issuances', 'issuances')
       .where('doc.is_deleted = :isDeleted', { isDeleted: false });
 
     if (unit_id) {
@@ -319,11 +428,102 @@ export class DocumentService implements OnModuleInit {
     }
 
     query.orderBy('doc.created_at', 'DESC');
+    query.distinct(true);
     query.skip((page - 1) * limit).take(limit);
 
     const [data, total] = await query.getManyAndCount();
+    const enriched = await this.enrichDocumentsForWorkflow(data);
 
-    return { data, total, page, limit };
+    return { data: enriched, total, page, limit };
+  }
+
+  async listDocumentReferences(documentId: string): Promise<{
+    outgoing: DocumentReference[];
+    incoming: DocumentReference[];
+  }> {
+    const document = await this.documentRepo.findOne({
+      where: { id: documentId, is_deleted: false },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    const [outgoing, incoming] = await Promise.all([
+      this.referenceRepo.find({
+        where: { source_document_id: documentId },
+        relations: ['target_document'],
+        order: { created_at: 'DESC' },
+      }),
+      this.referenceRepo.find({
+        where: { target_document_id: documentId },
+        relations: ['source_document'],
+        order: { created_at: 'DESC' },
+      }),
+    ]);
+
+    return { outgoing, incoming };
+  }
+
+  async linkDocumentReference(payload: {
+    source_document_id: string;
+    target_document_id: string;
+    created_by?: number;
+    relationship_type?: string;
+  }): Promise<DocumentReference> {
+    if (payload.source_document_id === payload.target_document_id) {
+      throw new BadRequestException('A document cannot reference itself.');
+    }
+
+    const [sourceDocument, targetDocument] = await Promise.all([
+      this.documentRepo.findOne({ where: { id: payload.source_document_id, is_deleted: false } }),
+      this.documentRepo.findOne({ where: { id: payload.target_document_id, is_deleted: false } }),
+    ]);
+
+    if (!sourceDocument || !targetDocument) {
+      throw new NotFoundException('Source or target document not found');
+    }
+
+    if (
+      sourceDocument.status !== DocumentStatus.READY ||
+      targetDocument.status !== DocumentStatus.READY
+    ) {
+      throw new BadRequestException('Only ready/compliant documents can be linked.');
+    }
+
+    const existing = await this.referenceRepo.findOne({
+      where: {
+        source_document_id: payload.source_document_id,
+        target_document_id: payload.target_document_id,
+      },
+    });
+
+    if (existing) {
+      throw new ConflictException('Document reference already exists.');
+    }
+
+    const reference = this.referenceRepo.create({
+      source_document_id: payload.source_document_id,
+      target_document_id: payload.target_document_id,
+      relationship_type: payload.relationship_type?.trim() || 'references',
+      created_by: payload.created_by || null,
+    });
+
+    return this.referenceRepo.save(reference);
+  }
+
+  async unlinkDocumentReference(
+    sourceDocumentId: string,
+    targetDocumentId: string,
+  ): Promise<void> {
+    const result = await this.referenceRepo.delete({
+      source_document_id: sourceDocumentId,
+      target_document_id: targetDocumentId,
+    });
+
+    if (!result.affected) {
+      throw new NotFoundException('Document reference not found');
+    }
   }
 
   async listDocumentTypes(): Promise<string[]> {
@@ -550,6 +750,15 @@ export class DocumentService implements OnModuleInit {
    */
   async deleteDocument(id: string): Promise<void> {
     const document = await this.getDocumentById(id);
+
+    if ((document as any).is_linked) {
+      throw new BadRequestException('Cannot delete a linked document. Unlink mappings first.');
+    }
+
+    if ((document as any).compliance_status !== ReviewDecision.COMPLIANT) {
+      throw new BadRequestException('Only compliant documents can be deleted.');
+    }
+
     document.is_deleted = true;
     await this.documentRepo.save(document);
     this.logger.log(`Document soft deleted: ${id}`);

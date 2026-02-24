@@ -10,10 +10,18 @@ import { StorageService } from './services/storage.service';
 import { DocumentProcessor } from './processors/document.processor';
 import { PreviewGenerator } from './processors/preview.processor';
 import { DocumentAssignment } from './entities/document-assignment.entity';
+import { DocumentReference } from './entities/document-reference.entity';
+import { ManualReview } from '../reviews/entities/manual-review.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Document, DocumentVersion, DocumentAssignment]),
+    TypeOrmModule.forFeature([
+      Document,
+      DocumentVersion,
+      DocumentAssignment,
+      DocumentReference,
+      ManualReview,
+    ]),
     BullModule.registerQueue({
       name: 'document-processing',
     }),

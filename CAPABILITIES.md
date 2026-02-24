@@ -15,6 +15,7 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 - **Assignment-Governed Upload Control**: Focal uploads can be restricted to super-admin-assigned report types
 - **One Submission Per Cycle Enforcement**: Prevent duplicate focal submissions for the same assigned report cycle
 - **Filename Convention Validation**: Optional prefix + period/year suffix checks per assignment frequency
+- **Compliance-driven Readiness**: Documents remain pending until compliance review marks them compliant/ready
 - **File Storage**: Flexible storage system supporting local filesystem and AWS S3
 - **Checksum Verification**: Automatic integrity checking for all uploaded documents
 
@@ -77,6 +78,11 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 - **Mapping Manager UI**: Issuance page supports explicit link/unlink operations for `document_issuances` records
 - **Role-aware Actions**: Compliance and super-admin roles can manage links, while other roles retain read-only access
 
+#### Document-to-Document Linking
+- **Cross-Document References**: Documents can reference other ready/compliant documents (e.g., report references memorandum).
+- **Bidirectional Context View**: View outgoing references and incoming references from document details.
+- **Ready-only Link Policy**: Only ready/compliant documents are eligible for linking.
+
 ### 4. Manual Review & Collaboration
 
 #### Review Workflow
@@ -86,6 +92,9 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 - **Detailed Comments**: Comprehensive feedback on documents
 - **Review History**: Complete audit trail of all reviews
 - **Inline Digital Review Viewer**: Reviewers can open document previews in-app and submit decisions without downloading
+- **Decision-driven Status Routing**:
+  - `compliant` → document becomes `ready`
+  - `non_compliant` / `needs_revision` → document returns to `pending` for focal action
 
 #### Version Comparison
 - **Automated Diff Analysis**: Compare document versions automatically
@@ -169,6 +178,12 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 - **Storage Options**: Switch between local and cloud storage
 - **Database Management**: Migration and seeding scripts
 - **Performance Tuning**: Configurable queue workers and processing limits
+- **Safe Delete Guardrails**: Delete is blocked when a document is linked or not compliant.
+
+### 10. User Manual Module
+
+- **Visual In-App Manual**: Dashboard user manual page with role-filtered feature guides.
+- **Role-aware Content**: Users only see workflows they are authorized to access.
 
 #### Monitoring & Logging
 - **Application Logging**: Comprehensive logging system
