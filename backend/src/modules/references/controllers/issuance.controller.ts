@@ -48,10 +48,13 @@ export class IssuanceController {
     @Query('search') search?: string,
     @Query('is_active') is_active?: string,
   ) {
+    const parsedIsActive =
+      typeof is_active === 'string' ? is_active.toLowerCase() === 'true' : undefined;
+
     return this.issuanceService.getIssuances({
       authority,
       search,
-      is_active: is_active === 'true',
+      is_active: parsedIsActive,
     });
   }
 

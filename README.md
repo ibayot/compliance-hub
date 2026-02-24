@@ -21,6 +21,7 @@ The **Regional ICT Management System (RICTMS) Compliance Hub** is an enterprise-
 
 - 🧭 **Assignment-Governed Focal Uploads**: Super admins assign report types to focal users and enforce one submission per cycle
 - 🏷️ **Filename Policy Enforcement**: Uploads can be validated with assignment prefix + frequency-aware suffix conventions
+- 🔗 **Issuance Mapping Manager**: Super admin and compliance roles can link/unlink documents to issuances
 - 👥 **Collaborative Reviews**: Multi-user review and approval workflows
 - 👁️ **Inline Review Viewer**: Digital document viewing inside the review workspace with direct decision tagging
 - Automatic `Needs Revision` auto-review tagging when automated checks fail or error
@@ -266,6 +267,7 @@ rictms-compliance-hub/
 - Document-to-issuance linking
 - Compliance requirement mapping
 - Citation verification
+- Role-aware mapping controls for compliance/super-admin users
 
 ### 4. Review Workflows
 - Multi-user review assignments

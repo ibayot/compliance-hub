@@ -74,6 +74,8 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 - **Applicability Rules**: Define which metrics apply to which issuances
 - **Compliance Mapping**: Automatic identification of compliance requirements
 - **Citation Verification**: Check if required issuances are cited in documents
+- **Mapping Manager UI**: Issuance page supports explicit link/unlink operations for `document_issuances` records
+- **Role-aware Actions**: Compliance and super-admin roles can manage links, while other roles retain read-only access
 
 ### 4. Manual Review & Collaboration
 

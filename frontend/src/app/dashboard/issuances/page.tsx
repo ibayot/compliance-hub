@@ -28,17 +28,25 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Link as LinkIcon,
+  LinkOff as UnlinkIcon,
 } from '@mui/icons-material';
 import { useAuth } from '@/contexts/AuthContext';
 import { issuancesApi, Issuance, CreateIssuanceDto } from '@/app/api/references';
+import { documentsApi, Document } from '@/lib/api/documents';
 
 export default function IssuancesPage() {
-  const {} = useAuth();
+  const { user } = useAuth();
   const [issuances, setIssuances] = useState<Issuance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingIssuance, setEditingIssuance] = useState<Issuance | null>(null);
+  const [mappingOpen, setMappingOpen] = useState(false);
+  const [mappingLoading, setMappingLoading] = useState(false);
+  const [mappingSearch, setMappingSearch] = useState('');
+  const [selectedIssuance, setSelectedIssuance] = useState<Issuance | null>(null);
+  const [mappedDocuments, setMappedDocuments] = useState<Document[]>([]);
+  const [availableDocuments, setAvailableDocuments] = useState<Document[]>([]);
   const [formData, setFormData] = useState<CreateIssuanceDto>({
     issuance_number: '',
     title: '',
@@ -49,6 +57,7 @@ export default function IssuancesPage() {
     source_url: '',
   });
   const [filterAuthority, setFilterAuthority] = useState('');
+  const canManageIssuances = user?.role === 'super_admin' || user?.role === 'reviewer';
 
   useEffect(() => {
     fetchIssuances();
@@ -70,6 +79,10 @@ export default function IssuancesPage() {
   };
 
   const handleOpenDialog = (issuance?: Issuance) => {
+    if (!canManageIssuances) {
+      return;
+    }
+
     if (issuance) {
       setEditingIssuance(issuance);
       setFormData({
@@ -104,6 +117,10 @@ export default function IssuancesPage() {
   };
 
   const handleSubmit = async () => {
+    if (!canManageIssuances) {
+      return;
+    }
+
     try {
       if (editingIssuance) {
         await issuancesApi.update(editingIssuance.id, formData);
@@ -118,6 +135,10 @@ export default function IssuancesPage() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!canManageIssuances) {
+      return;
+    }
+
     if (!confirm('Are you sure you want to delete this issuance?'))
       return;
     try {
@@ -130,18 +151,99 @@ export default function IssuancesPage() {
 
   const authorities = ['CHED', 'DBM', 'CSC', 'COA', 'DOH', 'Other'];
 
+  const openMappingDialog = async (issuance: Issuance) => {
+    try {
+      setMappingOpen(true);
+      setMappingLoading(true);
+      setMappingSearch('');
+      setSelectedIssuance(issuance);
+
+      const [issuanceDetails, docs] = await Promise.all([
+        issuancesApi.getById(issuance.id),
+        documentsApi.listDocuments({ page: 1, limit: 200 }),
+      ]);
+
+      const linkedDocs = (issuanceDetails.documents || []) as Document[];
+      setMappedDocuments(linkedDocs);
+      setAvailableDocuments(docs.data || []);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load mapping details');
+    } finally {
+      setMappingLoading(false);
+    }
+  };
+
+  const closeMappingDialog = () => {
+    setMappingOpen(false);
+    setMappingLoading(false);
+    setMappingSearch('');
+    setSelectedIssuance(null);
+    setMappedDocuments([]);
+    setAvailableDocuments([]);
+  };
+
+  const handleLinkDocument = async (documentId: string) => {
+    if (!selectedIssuance || !canManageIssuances) {
+      return;
+    }
+
+    try {
+      await issuancesApi.linkDocument(selectedIssuance.id, documentId);
+      await openMappingDialog(selectedIssuance);
+      await fetchIssuances();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to link document');
+    }
+  };
+
+  const handleUnlinkDocument = async (documentId: string) => {
+    if (!selectedIssuance || !canManageIssuances) {
+      return;
+    }
+
+    try {
+      await issuancesApi.unlinkDocument(selectedIssuance.id, documentId);
+      await openMappingDialog(selectedIssuance);
+      await fetchIssuances();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to unlink document');
+    }
+  };
+
+  const mappedDocumentIds = new Set(mappedDocuments.map((document) => document.id));
+  const filteredDocuments = availableDocuments.filter((document) => {
+    const normalizedSearch = mappingSearch.trim().toLowerCase();
+    if (!normalizedSearch) {
+      return true;
+    }
+
+    return (
+      document.title.toLowerCase().includes(normalizedSearch) ||
+      document.document_type.toLowerCase().includes(normalizedSearch) ||
+      (document.unit?.name || '').toLowerCase().includes(normalizedSearch)
+    );
+  });
+
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">Reference Issuances</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Add Issuance
-        </Button>
+        {canManageIssuances && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+          >
+            Add Issuance
+          </Button>
+        )}
       </Box>
+
+      {!canManageIssuances && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Read-only view. Issuance CRUD and document mapping actions are available to compliance and super admin roles.
+        </Alert>
+      )}
 
       {error && (
         <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
@@ -178,19 +280,20 @@ export default function IssuancesPage() {
               <TableCell>Authority</TableCell>
               <TableCell>Issue Date</TableCell>
               <TableCell>Status</TableCell>
+                  <TableCell>Mapped Docs</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} align="center">
+                    <TableCell colSpan={7} align="center">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : issuances.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} align="center">
+                    <TableCell colSpan={7} align="center">
                   No issuances found
                 </TableCell>
               </TableRow>
@@ -210,20 +313,39 @@ export default function IssuancesPage() {
                       size="small"
                     />
                   </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={`${issuance.documents?.length || 0} linked`}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                    />
+                  </TableCell>
                   <TableCell align="right">
                     <IconButton
                       size="small"
-                      onClick={() => handleOpenDialog(issuance)}
+                      color="primary"
+                      onClick={() => openMappingDialog(issuance)}
                     >
-                      <EditIcon fontSize="small" />
+                      <LinkIcon fontSize="small" />
                     </IconButton>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => handleDelete(issuance.id)}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    {canManageIssuances && (
+                      <>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenDialog(issuance)}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDelete(issuance.id)}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </>
+                    )}
                   </TableCell>
                 </TableRow>
               ))
@@ -318,6 +440,126 @@ export default function IssuancesPage() {
           <Button onClick={handleSubmit} variant="contained">
             {editingIssuance ? 'Save' : 'Create'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={mappingOpen} onClose={closeMappingDialog} maxWidth="lg" fullWidth>
+        <DialogTitle>
+          Document Mapping {selectedIssuance ? `• ${selectedIssuance.issuance_number}` : ''}
+        </DialogTitle>
+        <DialogContent>
+          {mappingLoading ? (
+            <Box display="flex" justifyContent="center" py={4}>
+              <Typography>Loading mapping data...</Typography>
+            </Box>
+          ) : (
+            <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                label="Search Documents"
+                value={mappingSearch}
+                onChange={(e) => setMappingSearch(e.target.value)}
+                placeholder="Search by title, type, or unit"
+                fullWidth
+                size="small"
+              />
+
+              <Typography variant="subtitle1" fontWeight={600}>
+                Linked Documents ({mappedDocuments.length})
+              </Typography>
+              {mappedDocuments.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No documents currently linked.
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {mappedDocuments.map((document) => (
+                    <Box
+                      key={`linked-${document.id}`}
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        p: 1,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                      }}
+                    >
+                      <Box>
+                        <Typography fontWeight={600}>{document.title}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {document.document_type} • {document.year}-{document.period} • {document.unit?.name || 'No Unit'}
+                        </Typography>
+                      </Box>
+                      {canManageIssuances && (
+                        <Button
+                          size="small"
+                          color="warning"
+                          startIcon={<UnlinkIcon />}
+                          onClick={() => handleUnlinkDocument(document.id)}
+                        >
+                          Unlink
+                        </Button>
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              )}
+
+              <Typography variant="subtitle1" fontWeight={600}>
+                Available Documents
+              </Typography>
+              {filteredDocuments.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No documents matched your search.
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 320, overflowY: 'auto' }}>
+                  {filteredDocuments.map((document) => {
+                    const isLinked = mappedDocumentIds.has(document.id);
+                    return (
+                      <Box
+                        key={`available-${document.id}`}
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          p: 1,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          borderRadius: 1,
+                          bgcolor: isLinked ? 'action.hover' : 'inherit',
+                        }}
+                      >
+                        <Box>
+                          <Typography fontWeight={600}>{document.title}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {document.document_type} • {document.year}-{document.period} • {document.unit?.name || 'No Unit'}
+                          </Typography>
+                        </Box>
+                        {isLinked ? (
+                          <Chip label="Linked" size="small" color="success" />
+                        ) : canManageIssuances ? (
+                          <Button
+                            size="small"
+                            startIcon={<LinkIcon />}
+                            onClick={() => handleLinkDocument(document.id)}
+                          >
+                            Link
+                          </Button>
+                        ) : (
+                          <Chip label="Not Linked" size="small" variant="outlined" />
+                        )}
+                      </Box>
+                    );
+                  })}
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeMappingDialog}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>
