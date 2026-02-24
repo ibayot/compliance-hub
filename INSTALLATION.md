@@ -439,6 +439,15 @@ Or let the application create them automatically on first upload.
 2. Confirm extraction is now persisted to both `documents.extracted_text` and `document_versions.extracted_text`.
 3. If needed, trigger reprocessing for previously uploaded documents.
 
+### Issue: Issuance mapping actions are missing in UI
+
+**Symptom**: User can open Issuances but cannot see `Add/Edit/Delete` or link/unlink mapping actions.
+
+**Resolution**:
+1. Confirm account role is `super_admin` or `reviewer` (compliance role).
+2. Re-login to refresh JWT role claims in frontend context.
+3. Verify backend authorization for issuance endpoints is reachable at `/api/issuances`.
+
 ### Backend Won't Start
 
 #### Error: "Cannot connect to database"

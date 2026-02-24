@@ -331,6 +331,19 @@ For a detailed QA checklist, use [QA-USER-MANUAL.md](QA-USER-MANUAL.md).
 
 The Issuances module maintains a library of regulatory references (laws, executive orders, memoranda, etc.).
 
+### Document Mapping (Compliance/Super Admin)
+
+1. Open **Issuances** from the sidebar.
+2. Click the **link** icon on an issuance row to open the mapping manager.
+3. Review currently linked documents under **Linked Documents**.
+4. Use **Search Documents** to find a document by title/type/unit.
+5. Click **Link** to create a mapping or **Unlink** to remove one.
+
+Expected behavior:
+- Mapping writes to the `document_issuances` link table.
+- Compliance and super-admin roles can perform link/unlink operations.
+- Other roles can view issuance data in read-only mode.
+
 ### Viewing Issuances
 
 1. Click **"Issuances"** in the sidebar

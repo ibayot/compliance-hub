@@ -31,6 +31,9 @@ Complete implementation of the RICTMS Compliance Hub system with all core featur
 - Date/Deadline custom period handling now supports regex + capture-group + fallback month configuration.
 - Metrics template document type input now uses pre-defined options from backend.
 - Ticket-facing labels in dashboard UI are aligned to issue terminology.
+- Issuance module now includes a document mapping manager dialog for linking/unlinking `document_issuances` entries.
+- Issuance CRUD and mapping actions are now explicitly visible to compliance/super-admin roles with read-only fallback messaging for other roles.
+- Fixed issuance `is_active` filter parsing to avoid unintended false filtering when query parameter is omitted.
 
 ### Fixed - 2026-02-23
 

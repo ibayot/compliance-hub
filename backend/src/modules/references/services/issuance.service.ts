@@ -69,7 +69,9 @@ export class IssuanceService {
     search?: string;
     is_active?: boolean;
   }): Promise<Issuance[]> {
-    const query = this.issuanceRepo.createQueryBuilder('issuance');
+    const query = this.issuanceRepo
+      .createQueryBuilder('issuance')
+      .leftJoinAndSelect('issuance.documents', 'documents');
 
     if (filters?.authority) {
       query.andWhere('issuance.issuing_authority = :authority', {
