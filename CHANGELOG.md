@@ -39,6 +39,10 @@ Complete implementation of the RICTMS Compliance Hub system with all core featur
 
 - Added document-to-document mapping endpoints and UI manager (`/documents/:id/references`) for cross-document references.
 - Added role-based in-app User Manual module under dashboard navigation.
+- Added explicit `POST /documents/:id/return` endpoint for non-destructive return-to-focal workflow with mandatory remarks.
+- Added dynamic ticket issue metadata management endpoints for super admins:
+  - `GET/POST/PUT/DELETE /tickets/issue-types`
+  - `GET/POST/PUT/DELETE /tickets/categories`
 
 ### Changed - 2026-02-24 (Compliance Status Workflow)
 
@@ -47,7 +51,8 @@ Complete implementation of the RICTMS Compliance Hub system with all core featur
   - `compliant` sets document status to `ready`
   - `non_compliant` / `needs_revision` sets document status to `pending`
 - Linking policies now allow only `ready` documents for issuance and document-reference mapping.
-- Deletion policy now blocks linked documents and non-compliant/non-ready documents (only compliant, unlinked documents can be deleted).
+- Corrected workflow semantics: reviewer/super-admin document action is now **Return** (audit-preserving), not deletion.
+- Returned/non-compliant documents are hidden from super-admin/compliance list views and remain visible to focal users for revision/update.
 
 ### Fixed - 2026-02-23
 

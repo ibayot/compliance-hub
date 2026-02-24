@@ -10,6 +10,10 @@ import {
   TextField,
   MenuItem,
   Grid,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import { Add as AddIcon, FilterList as FilterIcon } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
@@ -44,6 +48,9 @@ export default function DocumentsPage() {
   });
 
   const [showFilters, setShowFilters] = useState(false);
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [returnRemarks, setReturnRemarks] = useState('');
+  const [targetDocument, setTargetDocument] = useState<Document | null>(null);
 
   // Fetch documents
   const { data, isLoading, refetch } = useQuery({
@@ -66,11 +73,14 @@ export default function DocumentsPage() {
     queryFn: () => unitsApi.listUnits({ page: 1, limit: 100 }),
   });
 
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => documentsApi.deleteDocument(id),
+  const returnMutation = useMutation({
+    mutationFn: ({ id, remarks }: { id: string; remarks: string }) =>
+      documentsApi.returnDocument(id, remarks),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
+      setReturnDialogOpen(false);
+      setReturnRemarks('');
+      setTargetDocument(null);
     },
   });
 
@@ -86,10 +96,26 @@ export default function DocumentsPage() {
     setFilters((prev) => ({ ...prev, limit, page: 1 }));
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this document?')) {
-      deleteMutation.mutate(id);
+  const openReturnDialog = (document: Document) => {
+    setTargetDocument(document);
+    setReturnRemarks('');
+    setReturnDialogOpen(true);
+  };
+
+  const handleSubmitReturn = () => {
+    if (!targetDocument) {
+      return;
     }
+
+    const remarks = returnRemarks.trim();
+    if (!remarks) {
+      return;
+    }
+
+    returnMutation.mutate({
+      id: targetDocument.id,
+      remarks,
+    });
   };
 
   const getWorkflowStatus = (document: Document) => {
@@ -103,31 +129,36 @@ export default function DocumentsPage() {
       return { label: 'PENDING', color: 'warning' as const };
     }
 
+    if (document.status === 'processing') {
+      return { label: 'UNDER REVIEW', color: 'info' as const };
+    }
+
     if (complianceStatus === 'compliant') {
       return { label: 'COMPLIANT', color: 'success' as const };
     }
-    if (complianceStatus === 'non_compliant') {
-      return { label: 'NON-COMPLIANT', color: 'error' as const };
-    }
-    if (complianceStatus === 'needs_revision') {
-      return { label: 'NEEDS REVISION', color: 'warning' as const };
+
+    if (
+      complianceStatus === 'non_compliant' ||
+      complianceStatus === 'needs_revision'
+    ) {
+      return { label: 'RETURNED', color: 'error' as const };
     }
 
-    return { label: 'PENDING', color: 'warning' as const };
+    return { label: 'SUBMITTED', color: 'warning' as const };
   };
 
-  const canDeleteDocument = (document: Document) => {
+  const canReturnDocument = (document: Document) => {
     const isSuperOrCompliance = user?.role === 'super_admin' || user?.role === 'reviewer';
     if (!isSuperOrCompliance) {
-      return { allowed: false, reason: 'Only super admin and compliance roles can delete documents.' };
+      return { allowed: false, reason: 'Only super admin and compliance roles can return documents.' };
     }
 
-    if (document.is_linked) {
-      return { allowed: false, reason: 'Document is linked. Unlink all mappings before deleting.' };
+    if (document.status !== 'pending') {
+      return { allowed: false, reason: 'Only pending documents can be returned.' };
     }
 
-    if (document.compliance_status !== 'compliant') {
-      return { allowed: false, reason: 'Only compliant documents can be deleted.' };
+    if (document.compliance_status === 'compliant') {
+      return { allowed: false, reason: 'Compliant documents cannot be returned.' };
     }
 
     return { allowed: true };
@@ -267,11 +298,40 @@ export default function DocumentsPage() {
           loading={isLoading}
           onPageChange={handlePageChange}
           onLimitChange={handleLimitChange}
-          onDelete={handleDelete}
+          onReturn={openReturnDialog}
           statusFormatter={getWorkflowStatus}
-          canDeleteDocument={canDeleteDocument}
+          canReturnDocument={canReturnDocument}
         />
       </Box>
+
+      <Dialog open={returnDialogOpen} onClose={() => setReturnDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Return Document to Focal</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Returning requires mandatory remarks. The document record is preserved for audit.
+          </Typography>
+          <TextField
+            label="Return Remarks"
+            value={returnRemarks}
+            onChange={(event) => setReturnRemarks(event.target.value)}
+            fullWidth
+            multiline
+            minRows={4}
+            required
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReturnDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={!returnRemarks.trim() || returnMutation.isPending}
+            onClick={handleSubmitReturn}
+          >
+            Return to Focal
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

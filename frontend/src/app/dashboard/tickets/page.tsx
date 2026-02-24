@@ -22,6 +22,7 @@ import {
   DialogContent,
   DialogActions,
   Alert,
+  Stack,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -29,7 +30,12 @@ import {
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { ticketsApi, Ticket, CreateTicketDto } from '@/app/api/references';
+import {
+  ticketsApi,
+  Ticket,
+  CreateTicketDto,
+  TicketConfigOption,
+} from '@/app/api/references';
 
 const priorityColors = {
   low: 'info',
@@ -47,11 +53,20 @@ const statusColors = {
 
 export default function TicketsPage() {
   const router = useRouter();
-  const {} = useAuth();
+  const { user } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [issueTypes, setIssueTypes] = useState<TicketConfigOption[]>([]);
+  const [categories, setCategories] = useState<TicketConfigOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const [configType, setConfigType] = useState<'issue_type' | 'category'>('issue_type');
+  const [editingConfig, setEditingConfig] = useState<TicketConfigOption | null>(null);
+  const [configName, setConfigName] = useState('');
+  const [configKey, setConfigKey] = useState('');
+  const [configDescription, setConfigDescription] = useState('');
+  const [configActive, setConfigActive] = useState(true);
   const [formData, setFormData] = useState<CreateTicketDto>({
     subject: '',
     description: '',
@@ -61,10 +76,15 @@ export default function TicketsPage() {
   });
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
+  const isSuperAdmin = user?.role === 'super_admin';
 
   useEffect(() => {
     fetchTickets();
   }, [filterStatus, filterPriority]);
+
+  useEffect(() => {
+    fetchConfigs();
+  }, [isSuperAdmin]);
 
   const fetchTickets = async () => {
     try {
@@ -81,6 +101,20 @@ export default function TicketsPage() {
     }
   };
 
+  const fetchConfigs = async () => {
+    try {
+      const [issueTypeData, categoryData] = await Promise.all([
+        ticketsApi.listIssueTypes(!isSuperAdmin),
+        ticketsApi.listCategories(!isSuperAdmin),
+      ]);
+
+      setIssueTypes(issueTypeData || []);
+      setCategories(categoryData || []);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load issue metadata');
+    }
+  };
+
   const handleOpenDialog = () => {
     setFormData({
       subject: '',
@@ -88,6 +122,8 @@ export default function TicketsPage() {
       issue_type: 'other',
       category: 'other',
       priority: 'medium',
+      issue_type_id: undefined,
+      category_id: undefined,
     });
     setDialogOpen(true);
   };
@@ -98,7 +134,12 @@ export default function TicketsPage() {
 
   const handleSubmit = async () => {
     try {
-      await ticketsApi.create(formData);
+      const payload: CreateTicketDto = {
+        ...formData,
+        issue_type: formData.issue_type_id ? 'other' : formData.issue_type,
+        category: formData.category_id ? 'other' : formData.category,
+      };
+      await ticketsApi.create(payload);
       handleCloseDialog();
       fetchTickets();
     } catch (err: any) {
@@ -108,6 +149,86 @@ export default function TicketsPage() {
 
   const handleViewTicket = (id: string) => {
     router.push(`/dashboard/tickets/${id}`);
+  };
+
+  const openConfigDialog = (
+    type: 'issue_type' | 'category',
+    item?: TicketConfigOption,
+  ) => {
+    setConfigType(type);
+    setEditingConfig(item || null);
+    setConfigName(item?.name || '');
+    setConfigKey(item?.key || '');
+    setConfigDescription(item?.description || '');
+    setConfigActive(item?.is_active ?? true);
+    setConfigDialogOpen(true);
+  };
+
+  const handleSaveConfig = async () => {
+    try {
+      const payload = {
+        key: configKey,
+        name: configName,
+        description: configDescription,
+        is_active: configActive,
+      };
+
+      if (configType === 'issue_type') {
+        if (editingConfig) {
+          await ticketsApi.updateIssueType(editingConfig.id, payload);
+        } else {
+          await ticketsApi.createIssueType(payload);
+        }
+      } else {
+        if (editingConfig) {
+          await ticketsApi.updateCategory(editingConfig.id, payload);
+        } else {
+          await ticketsApi.createCategory(payload);
+        }
+      }
+
+      setConfigDialogOpen(false);
+      setEditingConfig(null);
+      fetchConfigs();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to save metadata configuration');
+    }
+  };
+
+  const handleToggleConfig = async (
+    type: 'issue_type' | 'category',
+    item: TicketConfigOption,
+  ) => {
+    try {
+      if (type === 'issue_type') {
+        await ticketsApi.updateIssueType(item.id, { is_active: !item.is_active });
+      } else {
+        await ticketsApi.updateCategory(item.id, { is_active: !item.is_active });
+      }
+      fetchConfigs();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to toggle metadata status');
+    }
+  };
+
+  const handleDeleteConfig = async (
+    type: 'issue_type' | 'category',
+    item: TicketConfigOption,
+  ) => {
+    if (!confirm(`Delete ${item.name}? This performs a soft delete and is blocked when in use.`)) {
+      return;
+    }
+
+    try {
+      if (type === 'issue_type') {
+        await ticketsApi.deleteIssueType(item.id);
+      } else {
+        await ticketsApi.deleteCategory(item.id);
+      }
+      fetchConfigs();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to delete metadata option');
+    }
   };
 
   return (
@@ -164,6 +285,58 @@ export default function TicketsPage() {
         </CardContent>
       </Card>
 
+      {isSuperAdmin && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Issue Metadata Management (Super Admin)
+            </Typography>
+            <Stack spacing={2}>
+              <Box>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                  <Typography variant="subtitle1">Issue Types</Typography>
+                  <Button size="small" variant="outlined" onClick={() => openConfigDialog('issue_type')}>
+                    Add Issue Type
+                  </Button>
+                </Box>
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  {issueTypes.map((item) => (
+                    <Chip
+                      key={item.id}
+                      label={`${item.name}${item.is_active ? '' : ' (inactive)'}`}
+                      onClick={() => openConfigDialog('issue_type', item)}
+                      onDelete={() => handleDeleteConfig('issue_type', item)}
+                      color={item.is_active ? 'default' : 'warning'}
+                      variant="outlined"
+                    />
+                  ))}
+                </Stack>
+              </Box>
+              <Box>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                  <Typography variant="subtitle1">Categories</Typography>
+                  <Button size="small" variant="outlined" onClick={() => openConfigDialog('category')}>
+                    Add Category
+                  </Button>
+                </Box>
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  {categories.map((item) => (
+                    <Chip
+                      key={item.id}
+                      label={`${item.name}${item.is_active ? '' : ' (inactive)'}`}
+                      onClick={() => openConfigDialog('category', item)}
+                      onDelete={() => handleDeleteConfig('category', item)}
+                      color={item.is_active ? 'default' : 'warning'}
+                      variant="outlined"
+                    />
+                  ))}
+                </Stack>
+              </Box>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+
       <TableContainer component={Card}>
         <Table>
           <TableHead>
@@ -196,9 +369,11 @@ export default function TicketsPage() {
                 <TableRow key={ticket.id} hover>
                   <TableCell>{ticket.ticket_number}</TableCell>
                   <TableCell>{ticket.subject}</TableCell>
-                  <TableCell>{(ticket.issue_type || 'other').replace('_', ' ')}</TableCell>
                   <TableCell>
-                    {ticket.category.replace('_', ' ')}
+                    {(ticket.issue_type_config?.name || ticket.issue_type || 'other').replace('_', ' ')}
+                  </TableCell>
+                  <TableCell>
+                    {(ticket.category_config?.name || ticket.category).replace('_', ' ')}
                   </TableCell>
                   <TableCell>
                     <Chip
@@ -259,41 +434,46 @@ export default function TicketsPage() {
             <TextField
               select
               label="Issue Type"
-              value={formData.issue_type || 'other'}
+              value={formData.issue_type_id || formData.issue_type || 'other'}
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  issue_type: e.target.value as any,
+                  issue_type_id: e.target.value,
+                  issue_type: 'other',
                 })
               }
               required
               fullWidth
             >
-              <MenuItem value="policy_gap">Policy Gap</MenuItem>
-              <MenuItem value="missing_evidence">Missing Evidence</MenuItem>
-              <MenuItem value="data_inconsistency">Data Inconsistency</MenuItem>
-              <MenuItem value="late_submission">Late Submission</MenuItem>
-              <MenuItem value="security_incident">Security Incident</MenuItem>
-              <MenuItem value="other">Other</MenuItem>
+              {issueTypes
+                .filter((item) => item.is_active)
+                .map((item) => (
+                  <MenuItem key={item.id} value={item.id}>
+                    {item.name}
+                  </MenuItem>
+                ))}
             </TextField>
             <TextField
               select
               label="Category"
-              value={formData.category}
+              value={formData.category_id || formData.category}
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  category: e.target.value as any,
+                  category_id: e.target.value,
+                  category: 'other',
                 })
               }
               required
               fullWidth
             >
-              <MenuItem value="document_related">Document Related</MenuItem>
-              <MenuItem value="system_issue">System Issue</MenuItem>
-              <MenuItem value="compliance_query">Compliance Query</MenuItem>
-              <MenuItem value="training_request">Training Request</MenuItem>
-              <MenuItem value="other">Other</MenuItem>
+              {categories
+                .filter((item) => item.is_active)
+                .map((item) => (
+                  <MenuItem key={item.id} value={item.id}>
+                    {item.name}
+                  </MenuItem>
+                ))}
             </TextField>
             <TextField
               select
@@ -332,6 +512,60 @@ export default function TicketsPage() {
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button onClick={handleSubmit} variant="contained">
             Create Ticket
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={configDialogOpen} onClose={() => setConfigDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {editingConfig ? 'Edit' : 'Create'} {configType === 'issue_type' ? 'Issue Type' : 'Category'}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              label="Key"
+              value={configKey}
+              onChange={(e) => setConfigKey(e.target.value)}
+              required
+              fullWidth
+            />
+            <TextField
+              label="Name"
+              value={configName}
+              onChange={(e) => setConfigName(e.target.value)}
+              required
+              fullWidth
+            />
+            <TextField
+              label="Description"
+              value={configDescription}
+              onChange={(e) => setConfigDescription(e.target.value)}
+              multiline
+              rows={3}
+              fullWidth
+            />
+            {editingConfig && (
+              <Button
+                variant="outlined"
+                color={configActive ? 'warning' : 'success'}
+                onClick={() => {
+                  handleToggleConfig(configType, editingConfig);
+                  setConfigActive(!configActive);
+                }}
+              >
+                {configActive ? 'Deactivate' : 'Activate'}
+              </Button>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfigDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={handleSaveConfig}
+            variant="contained"
+            disabled={!configName.trim() || !configKey.trim()}
+          >
+            Save
           </Button>
         </DialogActions>
       </Dialog>

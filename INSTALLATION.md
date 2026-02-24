@@ -457,15 +457,24 @@ Or let the application create them automatically on first upload.
 2. If document is still `pending`, complete manual review and mark it `compliant`.
 3. Reopen mapping dialog after status update.
 
-### Issue: Delete button is disabled for document records
+### Issue: Return button is disabled for document records
 
 **Expected Behavior**:
-- Delete is disabled when a document has active links (issuance mapping or document-reference mapping).
-- Delete is disabled when document is not compliant.
+- Return is available only for pending documents.
+- Return requires remarks and creates an auditable manual-review entry.
 
 **Resolution**:
-1. Unlink document from issuances/references.
-2. Ensure latest review decision is `compliant` (`ready`).
+1. Ensure document is in `pending` status.
+2. Provide mandatory return remarks in the return dialog.
+
+### Issue: User Manual page shows 404 or does not open
+
+**Symptom**: Sidebar displays `User Manual` but navigation fails.
+
+**Resolution**:
+1. Verify frontend route registration includes `/dashboard/user-manual`.
+2. Confirm role is authenticated and sidebar access includes `roles: ['all']`.
+3. Rebuild frontend after route changes and clear browser cache.
 
 ### Backend Won't Start
 

@@ -22,6 +22,7 @@ import {
   CreateTicketDto,
   UpdateTicketDto,
   AddCommentDto,
+  UpsertTicketConfigDto,
 } from '../services/ticket.service';
 import {
   TicketCategory,
@@ -94,6 +95,64 @@ export class TicketController {
   @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
   async getStatistics() {
     return this.ticketService.getStatistics();
+  }
+
+  @Get('issue-types')
+  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  async listIssueTypes(@Query('active_only') activeOnly?: string) {
+    return this.ticketService.listIssueTypes(activeOnly !== 'true');
+  }
+
+  @Post('issue-types')
+  @Roles(UserRole.SUPER_ADMIN)
+  async createIssueType(@Body() dto: UpsertTicketConfigDto, @Request() req: any) {
+    return this.ticketService.createIssueType(dto, req.user?.id ?? req.user?.userId);
+  }
+
+  @Put('issue-types/:id')
+  @Roles(UserRole.SUPER_ADMIN)
+  async updateIssueType(
+    @Param('id') id: string,
+    @Body() dto: Partial<UpsertTicketConfigDto>,
+    @Request() req: any,
+  ) {
+    return this.ticketService.updateIssueType(id, dto, req.user?.id ?? req.user?.userId);
+  }
+
+  @Delete('issue-types/:id')
+  @Roles(UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteIssueType(@Param('id') id: string, @Request() req: any) {
+    await this.ticketService.softDeleteIssueType(id, req.user?.id ?? req.user?.userId);
+  }
+
+  @Get('categories')
+  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  async listCategories(@Query('active_only') activeOnly?: string) {
+    return this.ticketService.listCategories(activeOnly !== 'true');
+  }
+
+  @Post('categories')
+  @Roles(UserRole.SUPER_ADMIN)
+  async createCategory(@Body() dto: UpsertTicketConfigDto, @Request() req: any) {
+    return this.ticketService.createCategory(dto, req.user?.id ?? req.user?.userId);
+  }
+
+  @Put('categories/:id')
+  @Roles(UserRole.SUPER_ADMIN)
+  async updateCategory(
+    @Param('id') id: string,
+    @Body() dto: Partial<UpsertTicketConfigDto>,
+    @Request() req: any,
+  ) {
+    return this.ticketService.updateCategory(id, dto, req.user?.id ?? req.user?.userId);
+  }
+
+  @Delete('categories/:id')
+  @Roles(UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteCategory(@Param('id') id: string, @Request() req: any) {
+    await this.ticketService.softDeleteCategory(id, req.user?.id ?? req.user?.userId);
   }
 
   /**

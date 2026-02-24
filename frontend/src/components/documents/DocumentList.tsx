@@ -19,8 +19,7 @@ import {
 } from '@mui/material';
 import {
   Visibility as ViewIcon,
-  Download as DownloadIcon,
-  Delete as DeleteIcon,
+  Undo as ReturnIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { Document } from '@/lib/api/documents';
@@ -34,9 +33,9 @@ interface DocumentListProps {
   loading?: boolean;
   onPageChange: (page: number) => void;
   onLimitChange: (limit: number) => void;
-  onDelete?: (id: string) => void;
+  onReturn?: (document: Document) => void;
   statusFormatter?: (document: Document) => { label: string; color: 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' };
-  canDeleteDocument?: (document: Document) => { allowed: boolean; reason?: string };
+  canReturnDocument?: (document: Document) => { allowed: boolean; reason?: string };
 }
 
 const getStatusColor = (
@@ -64,9 +63,9 @@ export default function DocumentList({
   loading = false,
   onPageChange,
   onLimitChange,
-  onDelete,
+  onReturn,
   statusFormatter,
-  canDeleteDocument,
+  canReturnDocument,
 }: DocumentListProps) {
   const router = useRouter();
 
@@ -176,22 +175,22 @@ export default function DocumentList({
                       <ViewIcon />
                     </IconButton>
                   </Tooltip>
-                  {onDelete && (
+                  {onReturn && (
                     (() => {
-                      const permission = canDeleteDocument
-                        ? canDeleteDocument(doc)
+                      const permission = canReturnDocument
+                        ? canReturnDocument(doc)
                         : { allowed: true };
 
                       return (
-                        <Tooltip title={permission.allowed ? 'Delete' : permission.reason || 'Delete is not allowed'}>
+                        <Tooltip title={permission.allowed ? 'Return to Focal' : permission.reason || 'Return is not allowed'}>
                           <span>
                             <IconButton
                               size="small"
-                              onClick={() => permission.allowed && onDelete(doc.id)}
-                              color="error"
+                              onClick={() => permission.allowed && onReturn(doc)}
+                              color="warning"
                               disabled={!permission.allowed}
                             >
-                              <DeleteIcon />
+                              <ReturnIcon />
                             </IconButton>
                           </span>
                         </Tooltip>

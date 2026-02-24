@@ -80,6 +80,7 @@ export class DocumentController {
     @Query('status') status?: DocumentStatus,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @CurrentUser() user?: any,
   ) {
     return this.documentService.listDocuments({
       unit_id,
@@ -89,6 +90,8 @@ export class DocumentController {
       status,
       page: page ? Number(page) : 1,
       limit: limit ? Number(limit) : 20,
+      actor_role: user?.role,
+      actor_id: user?.id,
     });
   }
 
@@ -324,6 +327,29 @@ export class DocumentController {
     });
 
     return new StreamableFile(buffer);
+  }
+
+  /**
+   * Return document for focal revision (non-destructive)
+   * POST /documents/:id/return
+   */
+  @Post(':id/return')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER)
+  async returnDocument(
+    @Param('id') id: string,
+    @Body() body: { remarks: string },
+    @CurrentUser() user: any,
+  ) {
+    const review = await this.documentService.returnDocumentForRevision({
+      document_id: id,
+      remarks: body.remarks,
+      returned_by: user.id,
+    });
+
+    return {
+      message: 'Document returned to focal for revision.',
+      review_id: review.id,
+    };
   }
 
   /**

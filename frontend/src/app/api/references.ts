@@ -31,7 +31,11 @@ export interface Ticket {
   subject: string;
   description: string;
   issue_type: 'policy_gap' | 'missing_evidence' | 'data_inconsistency' | 'late_submission' | 'security_incident' | 'other';
+  issue_type_id?: string;
+  issue_type_config?: TicketConfigOption;
   category: 'document_related' | 'system_issue' | 'compliance_query' | 'training_request' | 'other';
+  category_id?: string;
+  category_config?: TicketConfigOption;
   status: 'open' | 'in_progress' | 'resolved' | 'closed';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   reported_by_id: string;
@@ -61,11 +65,29 @@ export interface CreateTicketDto {
   subject: string;
   description: string;
   issue_type?: Ticket['issue_type'];
+  issue_type_id?: string;
   category: Ticket['category'];
+  category_id?: string;
   priority: Ticket['priority'];
   resolution_steps?: string;
   resolution_date?: string;
   unit_id?: string;
+}
+
+export interface TicketConfigOption {
+  id: string;
+  key: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  is_deleted?: boolean;
+}
+
+export interface UpsertTicketConfigDto {
+  key: string;
+  name: string;
+  description?: string;
+  is_active?: boolean;
 }
 
 // Issuances API
@@ -176,5 +198,53 @@ export const ticketsApi = {
   getStatistics: async (): Promise<any> => {
     const response = await apiClient.get(`/tickets/statistics`);
     return response.data;
+  },
+
+  listIssueTypes: async (activeOnly = true): Promise<TicketConfigOption[]> => {
+    const response = await apiClient.get(`/tickets/issue-types`, {
+      params: { active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  createIssueType: async (data: UpsertTicketConfigDto): Promise<TicketConfigOption> => {
+    const response = await apiClient.post(`/tickets/issue-types`, data);
+    return response.data;
+  },
+
+  updateIssueType: async (
+    id: string,
+    data: Partial<UpsertTicketConfigDto>,
+  ): Promise<TicketConfigOption> => {
+    const response = await apiClient.put(`/tickets/issue-types/${id}`, data);
+    return response.data;
+  },
+
+  deleteIssueType: async (id: string): Promise<void> => {
+    await apiClient.delete(`/tickets/issue-types/${id}`);
+  },
+
+  listCategories: async (activeOnly = true): Promise<TicketConfigOption[]> => {
+    const response = await apiClient.get(`/tickets/categories`, {
+      params: { active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  createCategory: async (data: UpsertTicketConfigDto): Promise<TicketConfigOption> => {
+    const response = await apiClient.post(`/tickets/categories`, data);
+    return response.data;
+  },
+
+  updateCategory: async (
+    id: string,
+    data: Partial<UpsertTicketConfigDto>,
+  ): Promise<TicketConfigOption> => {
+    const response = await apiClient.put(`/tickets/categories/${id}`, data);
+    return response.data;
+  },
+
+  deleteCategory: async (id: string): Promise<void> => {
+    await apiClient.delete(`/tickets/categories/${id}`);
   },
 };
