@@ -3,10 +3,12 @@ import {
   NotFoundException,
   ConflictException,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
 import { Issuance } from '../entities/issuance.entity';
+import { Document, DocumentStatus } from '../../documents/entities/document.entity';
 
 export interface CreateIssuanceDto {
   issuance_number: string;
@@ -39,6 +41,8 @@ export class IssuanceService {
   constructor(
     @InjectRepository(Issuance)
     private issuanceRepo: Repository<Issuance>,
+    @InjectRepository(Document)
+    private documentRepo: Repository<Document>,
   ) {}
 
   /**
@@ -157,6 +161,18 @@ export class IssuanceService {
 
     if (!issuance) {
       throw new NotFoundException('Issuance not found');
+    }
+
+    const document = await this.documentRepo.findOne({
+      where: { id: documentId, is_deleted: false },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    if (document.status !== DocumentStatus.READY) {
+      throw new BadRequestException('Only ready/compliant documents can be linked to issuances.');
     }
 
     // Add document if not already linked

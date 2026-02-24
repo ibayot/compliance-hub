@@ -9,8 +9,9 @@
 6. [QA Testing Workflow](#qa-testing-workflow)
 7. [Issuances & References](#issuances--references)
 8. [Tickets & Issues](#tickets--issues)
-9. [User Roles & Permissions](#user-roles--permissions)
-10. [Tips & Best Practices](#tips--best-practices)
+9. [User Manual Module](#user-manual-module)
+10. [User Roles & Permissions](#user-roles--permissions)
+11. [Tips & Best Practices](#tips--best-practices)
 
 ---
 
@@ -159,6 +160,10 @@ For assignment-governed focal uploads:
 | **Processing** | Blue | Currently being analyzed |
 | **Ready** | Green | Processed and available |
 | **Failed** | Red | Processing error occurred |
+
+Workflow clarification:
+- `Ready` indicates compliance-approved and linkable documents.
+- `Pending` includes newly extracted documents awaiting manual review and documents returned after non-compliant/needs-revision decisions.
 
 #### Filtering Documents
 
@@ -342,7 +347,21 @@ The Issuances module maintains a library of regulatory references (laws, executi
 Expected behavior:
 - Mapping writes to the `document_issuances` link table.
 - Compliance and super-admin roles can perform link/unlink operations.
+- Only `ready` documents can be linked to issuances.
 - Other roles can view issuance data in read-only mode.
+
+### Document-to-Document Mapping
+
+1. Open **Documents** and select a document.
+2. In the document details page, open **Map References**.
+3. Select a target document from the ready/compliant list.
+4. Create or remove links as needed.
+
+Expected behavior:
+- Mapping writes to the `document_references` link table.
+- Both source and target documents must be `ready`.
+- Incoming and outgoing references are shown in the mapping dialog.
+- Linked documents cannot be deleted until references are removed.
 
 ### Viewing Issuances
 
@@ -505,6 +524,22 @@ Use the filter controls to find tickets:
 - **Category Filter**: Show specific types
 - **Unit Filter**: Show tickets for specific units
 - **Search**: Search by subject or description
+
+---
+
+## User Manual Module
+
+The system includes an in-app visual user manual that is role-aware.
+
+### Accessing the Module
+
+1. Click **User Manual** in the sidebar.
+2. Review the role-specific cards and quick guidance.
+3. Use the referenced module paths to navigate to allowed features.
+
+Expected behavior:
+- Content visibility aligns with your role permissions.
+- Guidance is presented in-app for operational onboarding.
 
 ---
 
@@ -741,7 +776,7 @@ Use the filter controls to find tickets:
 A: Usually 2-5 minutes for standard PDFs. Large or scanned documents may take up to 15 minutes.
 
 **Q: Can I delete a document?**
-A: Admins can delete documents. Contact your administrator if a document needs to be removed.
+A: Deletion is restricted. Documents must be compliance-approved and not linked to issuances or other documents before delete is allowed.
 
 **Q: What happens to old versions?**
 A: All versions are retained for audit purposes. You can view any historical version anytime.

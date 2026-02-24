@@ -35,6 +35,8 @@ interface DocumentListProps {
   onPageChange: (page: number) => void;
   onLimitChange: (limit: number) => void;
   onDelete?: (id: string) => void;
+  statusFormatter?: (document: Document) => { label: string; color: 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' };
+  canDeleteDocument?: (document: Document) => { allowed: boolean; reason?: string };
 }
 
 const getStatusColor = (
@@ -63,6 +65,8 @@ export default function DocumentList({
   onPageChange,
   onLimitChange,
   onDelete,
+  statusFormatter,
+  canDeleteDocument,
 }: DocumentListProps) {
   const router = useRouter();
 
@@ -143,11 +147,19 @@ export default function DocumentList({
                   {doc.year}-{doc.period}
                 </TableCell>
                 <TableCell>
-                  <Chip
-                    label={doc.status.toUpperCase()}
-                    color={getStatusColor(doc.status)}
-                    size="small"
-                  />
+                  {(() => {
+                    const statusView = statusFormatter
+                      ? statusFormatter(doc)
+                      : { label: doc.status.toUpperCase(), color: getStatusColor(doc.status) };
+
+                    return (
+                      <Chip
+                        label={statusView.label}
+                        color={statusView.color}
+                        size="small"
+                      />
+                    );
+                  })()}
                 </TableCell>
                 <TableCell>v{doc.current_version}</TableCell>
                 <TableCell>{doc.uploader?.username || 'N/A'}</TableCell>
@@ -165,15 +177,26 @@ export default function DocumentList({
                     </IconButton>
                   </Tooltip>
                   {onDelete && (
-                    <Tooltip title="Delete">
-                      <IconButton
-                        size="small"
-                        onClick={() => onDelete(doc.id)}
-                        color="error"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
+                    (() => {
+                      const permission = canDeleteDocument
+                        ? canDeleteDocument(doc)
+                        : { allowed: true };
+
+                      return (
+                        <Tooltip title={permission.allowed ? 'Delete' : permission.reason || 'Delete is not allowed'}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={() => permission.allowed && onDelete(doc.id)}
+                              color="error"
+                              disabled={!permission.allowed}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      );
+                    })()
                   )}
                 </TableCell>
               </TableRow>

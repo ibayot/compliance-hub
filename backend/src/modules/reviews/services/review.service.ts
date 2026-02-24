@@ -7,7 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ManualReview, ReviewDecision } from '../entities/manual-review.entity';
-import { Document } from '../../documents/entities/document.entity';
+import { Document, DocumentStatus } from '../../documents/entities/document.entity';
 import { DocumentVersion } from '../../documents/entities/document-version.entity';
 import { MetricsService } from '../../metrics/services/metrics.service';
 
@@ -75,6 +75,13 @@ export class ReviewService {
     });
 
     await this.reviewRepo.save(review);
+
+    await this.documentRepo.update(documentId, {
+      status:
+        dto.decision === ReviewDecision.COMPLIANT
+          ? DocumentStatus.READY
+          : DocumentStatus.PENDING,
+    });
 
     this.logger.log(
       `Review submitted for document ${documentId}: ${dto.decision}`,

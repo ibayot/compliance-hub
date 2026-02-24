@@ -20,12 +20,21 @@ import {
   Download as DownloadIcon,
   Upload as UploadIcon,
   Refresh as RefreshIcon,
+  Link as LinkIcon,
+  LinkOff as UnlinkIcon,
 } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { documentsApi } from '@/lib/api/documents';
+import { documentsApi, Document } from '@/lib/api/documents';
 import { format } from 'date-fns';
 import VersionTimeline from '@/components/documents/VersionTimeline';
 import DocumentViewer from '@/components/documents/DocumentViewer';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+} from '@mui/material';
 
 export default function DocumentDetailsPage() {
   const params = useParams();
@@ -35,6 +44,12 @@ export default function DocumentDetailsPage() {
 
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [referenceDialogOpen, setReferenceDialogOpen] = useState(false);
+  const [referenceLoading, setReferenceLoading] = useState(false);
+  const [referenceSearch, setReferenceSearch] = useState('');
+  const [outgoingRefs, setOutgoingRefs] = useState<any[]>([]);
+  const [incomingRefs, setIncomingRefs] = useState<any[]>([]);
+  const [allDocuments, setAllDocuments] = useState<Document[]>([]);
 
   // Fetch document details
   const { data: document, isLoading } = useQuery({
@@ -79,6 +94,39 @@ export default function DocumentDetailsPage() {
     }
   };
 
+  const openReferenceDialog = async () => {
+    try {
+      setReferenceDialogOpen(true);
+      setReferenceLoading(true);
+      const [refs, docs] = await Promise.all([
+        documentsApi.getDocumentReferences(documentId),
+        documentsApi.listDocuments({ page: 1, limit: 200 }),
+      ]);
+      setOutgoingRefs(refs.outgoing || []);
+      setIncomingRefs(refs.incoming || []);
+      setAllDocuments((docs.data || []).filter((doc) => doc.id !== documentId));
+    } finally {
+      setReferenceLoading(false);
+    }
+  };
+
+  const closeReferenceDialog = () => {
+    setReferenceDialogOpen(false);
+    setReferenceSearch('');
+  };
+
+  const handleLinkReference = async (targetDocumentId: string) => {
+    await documentsApi.linkDocumentReference(documentId, targetDocumentId);
+    await openReferenceDialog();
+    handleRefresh();
+  };
+
+  const handleUnlinkReference = async (targetDocumentId: string) => {
+    await documentsApi.unlinkDocumentReference(documentId, targetDocumentId);
+    await openReferenceDialog();
+    handleRefresh();
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
@@ -121,7 +169,7 @@ export default function DocumentDetailsPage() {
   useEffect(() => {
     const loadPreview = async () => {
       const targetVersionId = selectedVersionId || currentVersion?.id;
-      if (!targetVersionId || document.status !== 'ready') {
+      if (!targetVersionId || (document.status !== 'ready' && document.status !== 'pending')) {
         setPreviewBlobUrl(null);
         return;
       }
@@ -177,6 +225,9 @@ export default function DocumentDetailsPage() {
             onClick={handleDownloadCurrent}
           >
             Download Current
+          </Button>
+          <Button variant="outlined" startIcon={<LinkIcon />} onClick={openReferenceDialog}>
+            Map References
           </Button>
         </Box>
 
@@ -257,7 +308,7 @@ export default function DocumentDetailsPage() {
                   Document processing failed. Please try uploading again.
                 </Alert>
               )}
-              {previewBlobUrl && document.status === 'ready' ? (
+              {previewBlobUrl && (document.status === 'ready' || document.status === 'pending') ? (
                 <DocumentViewer pdfUrl={previewBlobUrl} />
               ) : (
                 <Box
@@ -301,6 +352,92 @@ export default function DocumentDetailsPage() {
           </Grid>
         </Grid>
       </Box>
+
+      <Dialog open={referenceDialogOpen} onClose={closeReferenceDialog} maxWidth="lg" fullWidth>
+        <DialogTitle>Document-to-Document Mapping</DialogTitle>
+        <DialogContent>
+          {referenceLoading ? (
+            <Box py={4} textAlign="center">
+              <Typography>Loading references...</Typography>
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+              <TextField
+                label="Search ready documents"
+                value={referenceSearch}
+                onChange={(event) => setReferenceSearch(event.target.value)}
+                fullWidth
+                size="small"
+              />
+
+              <Typography variant="subtitle1" fontWeight={600}>Outgoing References</Typography>
+              {outgoingRefs.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">No outgoing references.</Typography>
+              ) : (
+                outgoingRefs.map((ref) => (
+                  <Box key={ref.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                    <Box>
+                      <Typography fontWeight={600}>{ref.target_document?.title || ref.target_document_id}</Typography>
+                      <Typography variant="caption" color="text.secondary">{ref.relationship_type}</Typography>
+                    </Box>
+                    <Button size="small" color="warning" startIcon={<UnlinkIcon />} onClick={() => handleUnlinkReference(ref.target_document_id)}>
+                      Unlink
+                    </Button>
+                  </Box>
+                ))
+              )}
+
+              <Typography variant="subtitle1" fontWeight={600}>Incoming References</Typography>
+              {incomingRefs.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">No incoming references.</Typography>
+              ) : (
+                incomingRefs.map((ref) => (
+                  <Box key={ref.id} sx={{ p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                    <Typography fontWeight={600}>{ref.source_document?.title || ref.source_document_id}</Typography>
+                    <Typography variant="caption" color="text.secondary">{ref.relationship_type}</Typography>
+                  </Box>
+                ))
+              )}
+
+              <Typography variant="subtitle1" fontWeight={600}>Available Ready Documents</Typography>
+              {allDocuments
+                .filter((doc) => doc.status === 'ready')
+                .filter((doc) => {
+                  const searchValue = referenceSearch.trim().toLowerCase();
+                  if (!searchValue) {
+                    return true;
+                  }
+                  return (
+                    doc.title.toLowerCase().includes(searchValue) ||
+                    doc.document_type.toLowerCase().includes(searchValue) ||
+                    (doc.unit?.name || '').toLowerCase().includes(searchValue)
+                  );
+                })
+                .map((doc) => {
+                  const linked = outgoingRefs.some((ref) => ref.target_document_id === doc.id);
+                  return (
+                    <Box key={doc.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                      <Box>
+                        <Typography fontWeight={600}>{doc.title}</Typography>
+                        <Typography variant="caption" color="text.secondary">{doc.document_type} • {doc.year}-{doc.period}</Typography>
+                      </Box>
+                      {linked ? (
+                        <Chip size="small" color="success" label="Linked" />
+                      ) : (
+                        <Button size="small" startIcon={<LinkIcon />} onClick={() => handleLinkReference(doc.id)}>
+                          Link
+                        </Button>
+                      )}
+                    </Box>
+                  );
+                })}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeReferenceDialog}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

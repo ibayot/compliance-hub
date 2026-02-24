@@ -165,7 +165,7 @@ export default function IssuancesPage() {
 
       const linkedDocs = (issuanceDetails.documents || []) as Document[];
       setMappedDocuments(linkedDocs);
-      setAvailableDocuments(docs.data || []);
+      setAvailableDocuments((docs.data || []).filter((document) => document.status === 'ready'));
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to load mapping details');
     } finally {
@@ -507,7 +507,7 @@ export default function IssuancesPage() {
               )}
 
               <Typography variant="subtitle1" fontWeight={600}>
-                Available Documents
+                Available Ready/Compliant Documents
               </Typography>
               {filteredDocuments.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">

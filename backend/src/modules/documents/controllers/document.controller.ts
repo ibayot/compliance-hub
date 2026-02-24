@@ -194,6 +194,62 @@ export class DocumentController {
     return this.documentService.getVersionHistory(id);
   }
 
+  @Get(':id/references')
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.REVIEWER,
+    UserRole.FOCAL,
+    UserRole.TECHNICIAN,
+    UserRole.AUDITOR,
+  )
+  async getDocumentReferences(@Param('id') id: string) {
+    return this.documentService.listDocumentReferences(id);
+  }
+
+  @Post(':id/references')
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.REVIEWER,
+    UserRole.FOCAL,
+    UserRole.TECHNICIAN,
+    UserRole.AUDITOR,
+  )
+  async linkDocumentReference(
+    @Param('id') sourceDocumentId: string,
+    @Body()
+    body: {
+      target_document_id: string;
+      relationship_type?: string;
+    },
+    @CurrentUser() user: any,
+  ) {
+    return this.documentService.linkDocumentReference({
+      source_document_id: sourceDocumentId,
+      target_document_id: body.target_document_id,
+      relationship_type: body.relationship_type,
+      created_by: user.id,
+    });
+  }
+
+  @Delete(':id/references/:targetId')
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.REVIEWER,
+    UserRole.FOCAL,
+    UserRole.TECHNICIAN,
+    UserRole.AUDITOR,
+  )
+  async unlinkDocumentReference(
+    @Param('id') sourceDocumentId: string,
+    @Param('targetId') targetDocumentId: string,
+  ) {
+    await this.documentService.unlinkDocumentReference(
+      sourceDocumentId,
+      targetDocumentId,
+    );
+    return { message: 'Document reference removed successfully' };
+  }
+
   /**
    * Create a new version of a document
    * POST /documents/:id/versions

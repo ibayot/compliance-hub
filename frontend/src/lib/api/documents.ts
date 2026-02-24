@@ -9,6 +9,9 @@ export interface Document {
   period: string;
   year: string;
   status: 'pending' | 'processing' | 'ready' | 'failed';
+  compliance_status?: 'pending' | 'compliant' | 'non_compliant' | 'needs_revision';
+  is_linked?: boolean;
+  linked_count?: number;
   current_version: number;
   extracted_text?: string;
   unit_id: string;
@@ -24,8 +27,24 @@ export interface Document {
     email: string;
   };
   versions?: DocumentVersion[];
+  issuances?: Array<{ id: string; issuance_number: string; title: string }>;
   created_at: string;
   updated_at: string;
+}
+
+export interface DocumentReference {
+  id: string;
+  source_document_id: string;
+  target_document_id: string;
+  relationship_type: string;
+  created_at: string;
+  source_document?: Document;
+  target_document?: Document;
+}
+
+export interface DocumentReferenceResponse {
+  outgoing: DocumentReference[];
+  incoming: DocumentReference[];
 }
 
 export interface DocumentVersion {
@@ -215,6 +234,30 @@ export const documentsApi = {
    */
   deleteDocument: async (id: string): Promise<void> => {
     await apiClient.delete(`/documents/${id}`);
+  },
+
+  getDocumentReferences: async (documentId: string): Promise<DocumentReferenceResponse> => {
+    const response = await apiClient.get(`/documents/${documentId}/references`);
+    return response.data;
+  },
+
+  linkDocumentReference: async (
+    documentId: string,
+    targetDocumentId: string,
+    relationshipType?: string,
+  ): Promise<DocumentReference> => {
+    const response = await apiClient.post(`/documents/${documentId}/references`, {
+      target_document_id: targetDocumentId,
+      relationship_type: relationshipType,
+    });
+    return response.data;
+  },
+
+  unlinkDocumentReference: async (
+    documentId: string,
+    targetDocumentId: string,
+  ): Promise<void> => {
+    await apiClient.delete(`/documents/${documentId}/references/${targetDocumentId}`);
   },
 
   listDocumentTypes: async (): Promise<string[]> => {

@@ -22,6 +22,7 @@ The **Regional ICT Management System (RICTMS) Compliance Hub** is an enterprise-
 - 🧭 **Assignment-Governed Focal Uploads**: Super admins assign report types to focal users and enforce one submission per cycle
 - 🏷️ **Filename Policy Enforcement**: Uploads can be validated with assignment prefix + frequency-aware suffix conventions
 - 🔗 **Issuance Mapping Manager**: Super admin and compliance roles can link/unlink documents to issuances
+- 🔁 **Document-to-Document Mapping**: Users can map one document to another (e.g., report ↔ memorandum) using ready/compliant-only linking
 - 👥 **Collaborative Reviews**: Multi-user review and approval workflows
 - 👁️ **Inline Review Viewer**: Digital document viewing inside the review workspace with direct decision tagging
 - Automatic `Needs Revision` auto-review tagging when automated checks fail or error
@@ -265,6 +266,7 @@ rictms-compliance-hub/
 - Comprehensive issuance database
 - Authority and effectivity tracking
 - Document-to-issuance linking
+- Document-to-document reference linking
 - Compliance requirement mapping
 - Citation verification
 - Role-aware mapping controls for compliance/super-admin users
@@ -276,6 +278,9 @@ rictms-compliance-hub/
 - Comment and feedback system
 - Version comparison with diff analysis
 - Audit trail maintenance
+- Review outcome controls workflow status:
+  - `compliant` → document is marked `ready`
+  - `non_compliant` / `needs_revision` → document returns to `pending`
 
 ### 5. Issue & Ticket Management
 - Categorized ticket system
@@ -299,6 +304,11 @@ rictms-compliance-hub/
 - Password hashing (BCrypt)
 - Secure session management
 - API authentication for all endpoints
+
+### 8. In-App User Manual
+- Visual user manual module is available in the dashboard.
+- Content is role-based; users only see guides for features their role can access.
+- Includes guidance for documents, metrics, reviews, issuances mapping, and issues workflow.
 
 ## API Documentation
 
