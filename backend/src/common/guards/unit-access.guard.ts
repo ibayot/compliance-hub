@@ -1,0 +1,30 @@
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+
+@Injectable()
+export class UnitAccessGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest();
+    const user = request.user;
+    const unitId = request.params.unitId || request.query.unitId || request.body.unitId;
+
+    // Admin and reviewers have access to all units
+    if (user.role === 'super_admin' || user.role === 'reviewer') {
+      return true;
+    }
+
+    // Focal users and technicians can only access their assigned units
+    if (user.role === 'focal' || user.role === 'technician') {
+      if (!unitId) {
+        return true; // Let controller handle missing unitId
+      }
+
+      // Check if user has access to this unit (via user.units relationship)
+      const hasAccess = user.units?.some((unit: any) => unit.id === parseInt(unitId));
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this unit');
+      }
+    }
+
+    return true;
+  }
+}

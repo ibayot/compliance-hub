@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  mariadb:
+    image: mariadb:11
+    container_name: ricms_mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: ricms_password
+      MYSQL_DATABASE: ricms_compliance
+      MYSQL_USER: ricms_user
+      MYSQL_PASSWORD: ricms_password
+    ports:
+      - '3306:3306'
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - ricms-network
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodbtempstatus']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ricms_redis
+    ports:
+      - '6379:6379'
+    networks:
+      - ricms-network
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: ricms_backend
+    ports:
+      - '4000:4000'
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./backend/storage:/app/storage
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - DB_USERNAME=ricms_user
+      - DB_PASSWORD=ricms_password
+      - DB_DATABASE=ricms_compliance
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=dev-jwt-secret-change-in-production
+      - JWT_REFRESH_SECRET=dev-refresh-secret-change-in-production
+      - CORS_ORIGIN=http://localhost:3000
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ricms-network
+    command: npm run start:dev
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: ricms_frontend
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:4000/api
+    depends_on:
+      - backend
+    networks:
+      - ricms-network
+    command: npm run dev
+
+volumes:
+  mariadb_data:
+
+networks:
+  ricms-network:
+    driver: bridge

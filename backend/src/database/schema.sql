@@ -1,0 +1,254 @@
+-- RICTMS Compliance Hub Database Schema
+-- MariaDB 11.x
+-- Database: rictms_compliance
+
+-- =============================================
+-- USERS AND AUTHENTICATION
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS `users` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `email` varchar(255) NOT NULL UNIQUE,
+  `passwordHash` varchar(255) NOT NULL,
+  `first_name` varchar(255) DEFAULT NULL,
+  `last_name` varchar(255) DEFAULT NULL,
+  `role` enum('super_admin','reviewer','focal','technician','auditor') NOT NULL DEFAULT 'focal',
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `idx_email` (`email`),
+  KEY `idx_role` (`role`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- ORGANIZATIONAL UNITS
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS `units` (
+  `id` varchar(36) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `abbreviation` varchar(50) NOT NULL,
+  `parent_id` varchar(36) DEFAULT NULL,
+  `head_id` int(11) DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `fk_unit_parent` (`parent_id`),
+  KEY `fk_unit_head` (`head_id`),
+  CONSTRAINT `fk_unit_parent` FOREIGN KEY (`parent_id`) REFERENCES `units` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_unit_head` FOREIGN KEY (`head_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- DOCUMENTS
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS `documents` (
+  `id` varchar(36) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `document_type` varchar(100) NOT NULL,
+  `period` varchar(20) NOT NULL,
+  `year` varchar(4) NOT NULL,
+  `status` enum('pending','processing','ready','failed') NOT NULL DEFAULT 'pending',
+  `current_version` int(11) NOT NULL DEFAULT 1,
+  `extracted_text` longtext DEFAULT NULL,
+  `unit_id` varchar(36) NOT NULL,
+  `uploaded_by` varchar(36) NOT NULL,
+  `is_deleted` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `fk_document_unit` (`unit_id`),
+  KEY `fk_document_uploader` (`uploaded_by`),
+  KEY `idx_document_type` (`document_type`),
+  KEY `idx_period` (`period`),
+  KEY `idx_status` (`status`),
+  CONSTRAINT `fk_document_unit` FOREIGN KEY (`unit_id`) REFERENCES `units` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `document_versions` (
+  `id` varchar(36) NOT NULL,
+  `document_id` varchar(36) NOT NULL,
+  `version_number` int(11) NOT NULL,
+  `file_name` varchar(255) NOT NULL,
+  `file_path` varchar(255) NOT NULL,
+  `mime_type` varchar(50) NOT NULL,
+  `file_size` bigint(20) NOT NULL,
+  `checksum` varchar(64) NOT NULL,
+  `preview_path` varchar(255) DEFAULT NULL,
+  `extracted_text` longtext DEFAULT NULL,
+  `change_notes` text DEFAULT NULL,
+  `uploaded_by` varchar(36) NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `fk_version_document` (`document_id`),
+  KEY `idx_version_number` (`document_id`, `version_number`),
+  CONSTRAINT `fk_version_document` FOREIGN KEY (`document_id`) REFERENCES `documents` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- COMPLIANCE METRICS
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS `metric_templates` (
+  `id` varchar(36) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `metric_type` enum('section_check','keyword_check','property_check','date_check') NOT NULL,
+  `rule_config` json NOT NULL,
+  `pass_criteria` json NOT NULL,
+  `weight` decimal(5,2) NOT NULL DEFAULT 1.00,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `idx_metric_type` (`metric_type`),
+  KEY `idx_is_active` (`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `metric_applicability` (
+  `id` varchar(36) NOT NULL,
+  `metric_id` varchar(36) NOT NULL,
+  `unit_id` varchar(36) DEFAULT NULL,
+  `document_type` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_applicability_metric` (`metric_id`),
+  KEY `fk_applicability_unit` (`unit_id`),
+  KEY `idx_document_type` (`document_type`),
+  CONSTRAINT `fk_applicability_metric` FOREIGN KEY (`metric_id`) REFERENCES `metric_templates` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_applicability_unit` FOREIGN KEY (`unit_id`) REFERENCES `units` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `metric_results` (
+  `id` varchar(36) NOT NULL,
+  `version_id` varchar(36) NOT NULL,
+  `metric_id` varchar(36) NOT NULL,
+  `score` decimal(5,2) NOT NULL,
+  `passed` tinyint(1) NOT NULL,
+  `evidence` json DEFAULT NULL,
+  `computed_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `fk_result_version` (`version_id`),
+  KEY `fk_result_metric` (`metric_id`),
+  KEY `idx_passed` (`passed`),
+  CONSTRAINT `fk_result_version` FOREIGN KEY (`version_id`) REFERENCES `document_versions` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_result_metric` FOREIGN KEY (`metric_id`) REFERENCES `metric_templates` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- REVIEWS AND COMPARISONS
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS `manual_reviews` (
+  `id` varchar(36) NOT NULL,
+  `document_id` varchar(36) NOT NULL,
+  `version_id` varchar(36) NOT NULL,
+  `decision` enum('compliant','non_compliant','needs_revision') NOT NULL,
+  `remarks` text DEFAULT NULL,
+  `findings` json DEFAULT NULL,
+  `reviewer_id` varchar(36) NOT NULL,
+  `reviewed_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `fk_review_document` (`document_id`),
+  KEY `fk_review_version` (`version_id`),
+  KEY `idx_decision` (`decision`),
+  CONSTRAINT `fk_review_document` FOREIGN KEY (`document_id`) REFERENCES `documents` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_review_version` FOREIGN KEY (`version_id`) REFERENCES `document_versions` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `version_comparisons` (
+  `id` varchar(36) NOT NULL,
+  `document_id` varchar(36) NOT NULL,
+  `version_a_id` varchar(36) NOT NULL,
+  `version_b_id` varchar(36) NOT NULL,
+  `compared_by_id` varchar(36) NOT NULL,
+  `diff_output` json NOT NULL,
+  `compared_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `fk_comparison_document` (`document_id`),
+  KEY `fk_comparison_version_a` (`version_a_id`),
+  KEY `fk_comparison_version_b` (`version_b_id`),
+  CONSTRAINT `fk_comparison_document` FOREIGN KEY (`document_id`) REFERENCES `documents` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_comparison_version_a` FOREIGN KEY (`version_a_id`) REFERENCES `document_versions` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_comparison_version_b` FOREIGN KEY (`version_b_id`) REFERENCES `document_versions` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- REFERENCES (ISSUANCES)
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS `issuances` (
+  `id` varchar(36) NOT NULL,
+  `issuance_number` varchar(100) NOT NULL UNIQUE,
+  `title` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `issuing_authority` varchar(100) NOT NULL,
+  `issue_date` date NOT NULL,
+  `effectivity_date` date DEFAULT NULL,
+  `source_url` varchar(500) DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `idx_issuance_number` (`issuance_number`),
+  KEY `idx_issuing_authority` (`issuing_authority`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `document_issuances` (
+  `issuance_id` varchar(36) NOT NULL,
+  `document_id` varchar(36) NOT NULL,
+  PRIMARY KEY (`issuance_id`, `document_id`),
+  KEY `fk_doc_issuance_document` (`document_id`),
+  CONSTRAINT `fk_doc_issuance_issuance` FOREIGN KEY (`issuance_id`) REFERENCES `issuances` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_doc_issuance_document` FOREIGN KEY (`document_id`) REFERENCES `documents` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- TICKETS
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS `tickets` (
+  `id` varchar(36) NOT NULL,
+  `ticket_number` varchar(50) NOT NULL UNIQUE,
+  `subject` varchar(255) NOT NULL,
+  `description` text NOT NULL,
+  `category` enum('document_related','system_issue','compliance_query','training_request','other') NOT NULL DEFAULT 'other',
+  `status` enum('open','in_progress','resolved','closed') NOT NULL DEFAULT 'open',
+  `priority` enum('low','medium','high','urgent') NOT NULL DEFAULT 'medium',
+  `reported_by_id` varchar(36) NOT NULL,
+  `assigned_to_id` varchar(36) DEFAULT NULL,
+  `unit_id` varchar(36) DEFAULT NULL,
+  `resolved_at` timestamp NULL DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `idx_ticket_number` (`ticket_number`),
+  KEY `idx_status` (`status`),
+  KEY `idx_priority` (`priority`),
+  KEY `fk_ticket_unit` (`unit_id`),
+  CONSTRAINT `fk_ticket_unit` FOREIGN KEY (`unit_id`) REFERENCES `units` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `ticket_comments` (
+  `id` varchar(36) NOT NULL,
+  `ticket_id` varchar(36) NOT NULL,
+  `comment` text NOT NULL,
+  `user_id` varchar(36) NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `fk_comment_ticket` (`ticket_id`),
+  CONSTRAINT `fk_comment_ticket` FOREIGN KEY (`ticket_id`) REFERENCES `tickets` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- INDEXES FOR PERFORMANCE
+-- =============================================
+
+-- Additional indexes for common queries
+CREATE INDEX idx_documents_unit_type ON documents(unit_id, document_type);
+CREATE INDEX idx_documents_year_period ON documents(year, period);
+CREATE INDEX idx_metric_results_version_metric ON metric_results(version_id, metric_id);
+CREATE INDEX idx_reviews_document_date ON manual_reviews(document_id, reviewed_at);
+CREATE INDEX idx_tickets_assigned ON tickets(assigned_to_id, status);

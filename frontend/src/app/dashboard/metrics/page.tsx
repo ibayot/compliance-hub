@@ -1,0 +1,560 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Box,
+  Typography,
+  Button,
+  Paper,
+  Tabs,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  MenuItem,
+  IconButton,
+  CircularProgress,
+  Chip,
+  FormControlLabel,
+  Checkbox,
+} from '@mui/material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { metricsApi, MetricTemplate } from '@/lib/api/metrics';
+import { unitsApi, Unit } from '@/lib/api/units';
+
+type MetricType = 'section_check' | 'keyword_check' | 'property_check' | 'date_check';
+
+const metricTypeLabels: Record<MetricType, string> = {
+  section_check: 'Section Rules',
+  keyword_check: 'Keyword Rules',
+  property_check: 'Number Extraction',
+  date_check: 'Date / Deadline Check',
+};
+
+export default function MetricsPage() {
+  const [tab, setTab] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [templates, setTemplates] = useState<MetricTemplate[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [editing, setEditing] = useState<MetricTemplate | null>(null);
+
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [metricType, setMetricType] = useState<MetricType>('keyword_check');
+  const [weight, setWeight] = useState(1);
+  const [documentType, setDocumentType] = useState('');
+  const [unitId, setUnitId] = useState('');
+
+  const [requiredSectionsText, setRequiredSectionsText] = useState('Introduction\nMethodology\nFindings');
+  const [keywordText, setKeywordText] = useState('compliance, report');
+  const [keywordMinMatches, setKeywordMinMatches] = useState(1);
+  const [keywordCaseSensitive, setKeywordCaseSensitive] = useState(false);
+  const [keywordWordBoundary, setKeywordWordBoundary] = useState(false);
+
+  const [extractKeyword, setExtractKeyword] = useState('total incidents');
+  const [extractComparison, setExtractComparison] = useState<'gte' | 'lte' | 'eq' | 'gt' | 'lt'>('gte');
+  const [extractExpectedNumber, setExtractExpectedNumber] = useState(1);
+
+  const [deadlineDay, setDeadlineDay] = useState(5);
+  const [deadlineMonthOffset, setDeadlineMonthOffset] = useState(1);
+  const [maxDaysLate, setMaxDaysLate] = useState(0);
+  const [submissionFrequency, setSubmissionFrequency] = useState<'monthly' | 'quarterly' | 'annual' | 'custom'>('monthly');
+  const [submissionMonth, setSubmissionMonth] = useState(12);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [metrics, unitList] = await Promise.all([metricsApi.listTemplates(), unitsApi.listAll()]);
+      setTemplates(metrics);
+      setUnits(unitList);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const resetForm = () => {
+    setEditing(null);
+    setName('');
+    setDescription('');
+    setMetricType('keyword_check');
+    setWeight(1);
+    setDocumentType('');
+    setUnitId('');
+
+    setRequiredSectionsText('Introduction\nMethodology\nFindings');
+    setKeywordText('compliance, report');
+    setKeywordMinMatches(1);
+    setKeywordCaseSensitive(false);
+    setKeywordWordBoundary(false);
+
+    setExtractKeyword('total incidents');
+    setExtractComparison('gte');
+    setExtractExpectedNumber(1);
+
+    setDeadlineDay(5);
+    setDeadlineMonthOffset(1);
+    setMaxDaysLate(0);
+    setSubmissionFrequency('monthly');
+    setSubmissionMonth(12);
+  };
+
+  const parseListText = (value: string): string[] => {
+    return value
+      .split(/[,\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  };
+
+  const openCreate = () => {
+    resetForm();
+    setOpen(true);
+  };
+
+  const openEdit = (template: MetricTemplate) => {
+    resetForm();
+    setEditing(template);
+    setName(template.name);
+    setDescription(template.description || '');
+    setMetricType(template.metric_type);
+    setWeight(template.weight || 1);
+    setDocumentType(template.applicability?.[0]?.document_type || '');
+    setUnitId(template.applicability?.[0]?.unit_id ? String(template.applicability[0].unit_id) : '');
+
+    const ruleConfig = template.rule_config || {};
+    const passCriteria = template.pass_criteria || {};
+
+    if (template.metric_type === 'section_check') {
+      setRequiredSectionsText((ruleConfig.required_sections || []).join('\n'));
+    }
+
+    if (template.metric_type === 'keyword_check') {
+      setKeywordText((ruleConfig.keywords || []).join(', '));
+      setKeywordMinMatches(Number(passCriteria.min_matches ?? ruleConfig.min_count ?? 1));
+      setKeywordCaseSensitive(Boolean(ruleConfig.case_sensitive));
+      setKeywordWordBoundary(Boolean(ruleConfig.use_word_boundary));
+    }
+
+    if (template.metric_type === 'property_check') {
+      setExtractKeyword(String(ruleConfig.keyword || ''));
+      setExtractComparison((ruleConfig.comparison as any) || 'gte');
+      setExtractExpectedNumber(Number(ruleConfig.expected_number ?? 1));
+    }
+
+    if (template.metric_type === 'date_check') {
+      setDeadlineDay(Number(ruleConfig.deadline_day ?? 5));
+      setDeadlineMonthOffset(Number(ruleConfig.deadline_month_offset ?? 1));
+      setMaxDaysLate(Number(ruleConfig.max_days_late ?? 0));
+      setSubmissionFrequency((ruleConfig.submission_frequency as any) || 'monthly');
+      setSubmissionMonth(Number(ruleConfig.submission_month ?? 12));
+    }
+
+    setOpen(true);
+  };
+
+  const buildMetricConfig = () => {
+    if (metricType === 'section_check') {
+      const sections = parseListText(requiredSectionsText);
+      return {
+        rule_config: {
+          required_sections: sections,
+        },
+        pass_criteria: {
+          all_present: true,
+        },
+      };
+    }
+
+    if (metricType === 'keyword_check') {
+      return {
+        rule_config: {
+          keywords: parseListText(keywordText),
+          min_count: keywordMinMatches,
+          case_sensitive: keywordCaseSensitive,
+          use_word_boundary: keywordWordBoundary,
+        },
+        pass_criteria: {
+          min_matches: keywordMinMatches,
+        },
+      };
+    }
+
+    if (metricType === 'property_check') {
+      return {
+        rule_config: {
+          mode: 'number_extraction',
+          field: 'extracted_text',
+          keyword: extractKeyword,
+          comparison: extractComparison,
+          expected_number: extractExpectedNumber,
+          window_chars: 120,
+        },
+        pass_criteria: {
+          matches_pattern: true,
+        },
+      };
+    }
+
+    return {
+      rule_config: {
+        submission_frequency: submissionFrequency,
+        submission_month: submissionMonth,
+        deadline_day: deadlineDay,
+        deadline_month_offset: deadlineMonthOffset,
+        max_days_late: maxDaysLate,
+      },
+      pass_criteria: {
+        within_deadline: true,
+      },
+    };
+  };
+
+  const validateForm = (): string | null => {
+    if (!name.trim()) {
+      return 'Template name is required.';
+    }
+
+    if (metricType === 'section_check' && parseListText(requiredSectionsText).length === 0) {
+      return 'At least one required section is needed.';
+    }
+
+    if (metricType === 'keyword_check' && parseListText(keywordText).length === 0) {
+      return 'At least one keyword is needed.';
+    }
+
+    if (metricType === 'property_check') {
+      if (!extractKeyword.trim()) {
+        return 'Keyword is required for number extraction.';
+      }
+      if (!Number.isFinite(extractExpectedNumber)) {
+        return 'Expected number must be valid.';
+      }
+    }
+
+    if (metricType === 'date_check') {
+      if (deadlineDay < 1 || deadlineDay > 28) {
+        return 'Deadline day must be between 1 and 28.';
+      }
+      if (maxDaysLate < 0) {
+        return 'Max days late cannot be negative.';
+      }
+      if (submissionFrequency === 'annual' && (submissionMonth < 1 || submissionMonth > 12)) {
+        return 'Submission month for annual frequency must be between 1 and 12.';
+      }
+    }
+
+    return null;
+  };
+
+  const handleSave = async () => {
+    const validationError = validateForm();
+    if (validationError) {
+      alert(validationError);
+      return;
+    }
+
+    const { rule_config, pass_criteria } = buildMetricConfig();
+
+    const payload = {
+      name: name.trim(),
+      description: description.trim() || undefined,
+      metric_type: metricType,
+      weight,
+      rule_config,
+      pass_criteria,
+      applicability: [
+        {
+          unit_id: unitId ? Number(unitId) : undefined,
+          document_type: documentType || undefined,
+        },
+      ],
+    };
+
+    try {
+      setSaving(true);
+      if (editing) {
+        await metricsApi.updateTemplate(editing.id, payload);
+      } else {
+        await metricsApi.createTemplate(payload);
+      }
+      setOpen(false);
+      await loadData();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    await metricsApi.deleteTemplate(id);
+    await loadData();
+  };
+
+  const filteredTemplates = useMemo(() => {
+    if (tab === 0) {
+      return templates;
+    }
+
+    const typeByTab: Record<number, MetricType> = {
+      1: 'section_check',
+      2: 'keyword_check',
+      3: 'property_check',
+      4: 'date_check',
+    };
+
+    const selectedType = typeByTab[tab];
+    return templates.filter((template) => template.metric_type === selectedType);
+  }, [tab, templates]);
+
+  return (
+    <Box>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+        <Box>
+          <Typography variant="h4" component="h1" gutterBottom>
+            Metrics Template Builder
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Configure section checks, keyword checks, number extraction, and deadlines per unit/report type
+          </Typography>
+        </Box>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+          Create Template
+        </Button>
+      </Box>
+
+      <Paper sx={{ mb: 3 }}>
+        <Tabs value={tab} onChange={(_, value) => setTab(value)}>
+          <Tab label="All Templates" />
+          <Tab label="Section Rules" />
+          <Tab label="Keyword Rules" />
+          <Tab label="Number Extraction" />
+          <Tab label="Date Check" />
+        </Tabs>
+      </Paper>
+
+      <Paper sx={{ p: 2 }}>
+        {loading ? (
+          <Box display="flex" justifyContent="center" py={6}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Weight</TableCell>
+                  <TableCell>Applicability</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredTemplates.map((template) => (
+                  <TableRow key={template.id} hover>
+                    <TableCell>
+                      <Typography fontWeight={600}>{template.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {template.description || '-'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{metricTypeLabels[template.metric_type]}</TableCell>
+                    <TableCell>{template.weight}</TableCell>
+                    <TableCell>
+                      {template.applicability?.length ? (
+                        <Chip
+                          size="small"
+                          label={`${template.applicability[0].unit?.name || 'All Units'} • ${template.applicability[0].document_type || 'All Docs'}`}
+                        />
+                      ) : (
+                        'Global'
+                      )}
+                    </TableCell>
+                    <TableCell align="right">
+                      <IconButton onClick={() => openEdit(template)}>
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton color="error" onClick={() => handleDelete(template.id)}>
+                        <DeleteIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {filteredTemplates.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      No metric templates found
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Paper>
+
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>{editing ? 'Edit Metric Template' : 'Create Metric Template'}</DialogTitle>
+        <DialogContent>
+          <TextField margin="dense" label="Template Name" fullWidth value={name} onChange={(event) => setName(event.target.value)} />
+          <TextField margin="dense" label="Description" fullWidth value={description} onChange={(event) => setDescription(event.target.value)} />
+
+          <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr 1fr' }} gap={2} mt={1}>
+            <TextField select label="Metric Type" value={metricType} onChange={(event) => setMetricType(event.target.value as MetricType)}>
+              <MenuItem value="section_check">Section Rules</MenuItem>
+              <MenuItem value="keyword_check">Keyword Rules</MenuItem>
+              <MenuItem value="property_check">Number Extraction</MenuItem>
+              <MenuItem value="date_check">Date / Deadline Check</MenuItem>
+            </TextField>
+            <TextField type="number" label="Weight" value={weight} onChange={(event) => setWeight(Math.max(Number(event.target.value) || 1, 1))} />
+            <TextField select label="Unit (optional)" value={unitId} onChange={(event) => setUnitId(event.target.value)}>
+              <MenuItem value="">All Units</MenuItem>
+              {units.map((unit) => (
+                <MenuItem key={unit.id} value={String(unit.id)}>
+                  {unit.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Box>
+
+          <TextField margin="dense" label="Document Type (optional)" fullWidth value={documentType} onChange={(event) => setDocumentType(event.target.value)} />
+
+          {metricType === 'section_check' && (
+            <TextField
+              margin="dense"
+              label="Required Sections (comma or newline separated)"
+              fullWidth
+              multiline
+              minRows={4}
+              value={requiredSectionsText}
+              onChange={(event) => setRequiredSectionsText(event.target.value)}
+            />
+          )}
+
+          {metricType === 'keyword_check' && (
+            <>
+              <TextField
+                margin="dense"
+                label="Keywords (comma or newline separated)"
+                fullWidth
+                multiline
+                minRows={3}
+                value={keywordText}
+                onChange={(event) => setKeywordText(event.target.value)}
+              />
+              <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={2} mt={1}>
+                <TextField
+                  type="number"
+                  label="Minimum Matches"
+                  value={keywordMinMatches}
+                  onChange={(event) => setKeywordMinMatches(Math.max(Number(event.target.value) || 1, 1))}
+                />
+                <Box>
+                  <FormControlLabel
+                    control={<Checkbox checked={keywordCaseSensitive} onChange={(event) => setKeywordCaseSensitive(event.target.checked)} />}
+                    label="Case sensitive"
+                  />
+                  <FormControlLabel
+                    control={<Checkbox checked={keywordWordBoundary} onChange={(event) => setKeywordWordBoundary(event.target.checked)} />}
+                    label="Match whole words only"
+                  />
+                </Box>
+              </Box>
+            </>
+          )}
+
+          {metricType === 'property_check' && (
+            <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr 1fr' }} gap={2} mt={1}>
+              <TextField
+                label="Keyword Near Number"
+                value={extractKeyword}
+                onChange={(event) => setExtractKeyword(event.target.value)}
+              />
+              <TextField
+                select
+                label="Comparison"
+                value={extractComparison}
+                onChange={(event) => setExtractComparison(event.target.value as any)}
+              >
+                <MenuItem value="gte">&gt;=</MenuItem>
+                <MenuItem value="lte">&lt;=</MenuItem>
+                <MenuItem value="gt">&gt;</MenuItem>
+                <MenuItem value="lt">&lt;</MenuItem>
+                <MenuItem value="eq">=</MenuItem>
+              </TextField>
+              <TextField
+                type="number"
+                label="Expected Number"
+                value={extractExpectedNumber}
+                onChange={(event) => setExtractExpectedNumber(Number(event.target.value) || 0)}
+              />
+            </Box>
+          )}
+
+          {metricType === 'date_check' && (
+            <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr 1fr' }} gap={2} mt={1}>
+              <TextField
+                select
+                label="Submission Frequency"
+                value={submissionFrequency}
+                onChange={(event) => setSubmissionFrequency(event.target.value as any)}
+              >
+                <MenuItem value="monthly">Monthly</MenuItem>
+                <MenuItem value="quarterly">Quarterly</MenuItem>
+                <MenuItem value="annual">Annual</MenuItem>
+                <MenuItem value="custom">Custom Period</MenuItem>
+              </TextField>
+              {submissionFrequency === 'annual' ? (
+                <TextField
+                  type="number"
+                  label="Submission Month (1-12)"
+                  value={submissionMonth}
+                  onChange={(event) => setSubmissionMonth(Number(event.target.value) || 12)}
+                />
+              ) : (
+                <Box />
+              )}
+              <Box />
+              <TextField
+                type="number"
+                label="Deadline Day (1-28)"
+                value={deadlineDay}
+                onChange={(event) => setDeadlineDay(Number(event.target.value) || 5)}
+              />
+              <TextField
+                type="number"
+                label="Deadline Month Offset"
+                value={deadlineMonthOffset}
+                onChange={(event) => setDeadlineMonthOffset(Number(event.target.value) || 1)}
+              />
+              <TextField
+                type="number"
+                label="Max Allowed Days Late"
+                value={maxDaysLate}
+                onChange={(event) => setMaxDaysLate(Math.max(Number(event.target.value) || 0, 0))}
+              />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleSave} disabled={saving || !name.trim()}>
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
