@@ -105,6 +105,8 @@ After logging in, you'll see the main dashboard with key information:
 
 ### Uploading Documents
 
+> For focal users, upload choices are assignment-driven. Only active assigned report types are available per cycle.
+
 #### Step 1: Navigate to Upload Page
 
 1. From the dashboard, click **"Documents"** in the sidebar
@@ -122,6 +124,11 @@ Complete the following fields:
 | **Year** | Document year | Yes | 2024 |
 | **Unit** | Organizational unit | Yes | IT Unit, Finance, HR, Legal, Operations |
 | **File** | PDF or DOCX file | Yes | Maximum 50MB |
+
+For assignment-governed focal uploads:
+- Document Type and Unit are filtered from active assignments.
+- One submission per assigned report type per period/year cycle is enforced.
+- If configured, expected filename format is shown before upload.
 
 #### Step 3: Submit
 
@@ -222,7 +229,7 @@ The Metrics module allows admins/reviewers to define automated compliance checks
 
 ### Create a metrics template
 
-1. Go to **Dashboard → Metrics**.
+1. Go to **Administration → Metrics**.
 2. Click **Create Template**.
 3. Fill in:
     - Template name
@@ -247,11 +254,11 @@ The Metrics module allows admins/reviewers to define automated compliance checks
    - Whole-word matching
 
 #### 3) Number Extraction
-- Use when a number near a keyword must satisfy a threshold.
+- Use when one or more numbers near one or more keywords must satisfy thresholds.
 - Example:
-   - Keyword: `total incidents`
+   - Keywords: `total incidents`, `resolved incidents`
    - Comparison: `>=`
-   - Expected Number: `1`
+   - Expected Numbers: `1`, `1`
 
 #### 4) Date / Deadline Check
 - Use to validate timeliness of submissions.
@@ -270,6 +277,12 @@ The Metrics module allows admins/reviewers to define automated compliance checks
 | Quarterly | `Q1` or `2026-Q1` | Quarter 1 period |
 | Annual | `2026` | Annual period |
 | Custom | Any custom period text | Uses configured fallback rules |
+
+For `custom` frequency templates, configure:
+- Custom regex pattern
+- Year capture group index
+- Month capture group index
+- Fallback month
 
 ---
 

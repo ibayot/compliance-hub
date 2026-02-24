@@ -220,6 +220,8 @@ RATE_LIMIT_MAX_REQUESTS=300
 QUEUE_CONCURRENCY=2
 ```
 
+Queue clients are configured to work with Bull processing defaults where Redis request retries are unbounded (`maxRetriesPerRequest: null`) to avoid upload-processing retry incompatibility.
+
 ### CI/CD Note
 
 The repository includes a GitHub Actions workflow at `.github/workflows/ci.yml` for:
@@ -418,6 +420,24 @@ Or let the application create them automatically on first upload.
 ---
 
 ## Troubleshooting
+
+### Issue: Upload fails with Redis `maxRetriesPerRequest` error
+
+**Symptom**: Upload completes but background processing fails with retry-related Redis client errors.
+
+**Resolution**:
+1. Ensure backend is running the latest configuration where Bull Redis sets `maxRetriesPerRequest: null`.
+2. Restart backend service after pulling latest changes.
+3. Verify Redis connectivity using your local Redis health checks.
+
+### Issue: Extracted text appears missing in one table
+
+**Symptom**: Extracted text is visible in document views but not in version-level inspection (or vice versa).
+
+**Resolution**:
+1. Reprocess/upload a DOCX with the current build.
+2. Confirm extraction is now persisted to both `documents.extracted_text` and `document_versions.extracted_text`.
+3. If needed, trigger reprocessing for previously uploaded documents.
 
 ### Backend Won't Start
 

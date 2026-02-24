@@ -52,7 +52,7 @@ export class ManualReview {
   }>;
 
   @Column({ type: 'int', nullable: true })
-  reviewer_id: number;
+  reviewer_id: number | null;
 
   @ManyToOne(() => User, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'reviewer_id' })

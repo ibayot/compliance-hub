@@ -12,6 +12,9 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 - **Multi-format Document Upload**: Support for PDF, DOCX, and other common document formats
 - **Automatic Version Control**: Track all document versions with complete history
 - **Metadata Management**: Capture title, type, period, year, and unit assignment
+- **Assignment-Governed Upload Control**: Focal uploads can be restricted to super-admin-assigned report types
+- **One Submission Per Cycle Enforcement**: Prevent duplicate focal submissions for the same assigned report cycle
+- **Filename Convention Validation**: Optional prefix + period/year suffix checks per assignment frequency
 - **File Storage**: Flexible storage system supporting local filesystem and AWS S3
 - **Checksum Verification**: Automatic integrity checking for all uploaded documents
 
@@ -35,6 +38,7 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 - **PDF Text Extraction**: Direct text extraction from digital documents
 - **Asynchronous Processing**: Background processing using Bull Queue system
 - **Processing Status Tracking**: Real-time status updates during processing
+- **Dual Extraction Persistence**: Extracted text retained at both document and document-version levels
 
 #### Compliance Metrics Engine
 - **Template-based Metrics**: Define reusable metric templates
@@ -52,6 +56,9 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 - **Historical Tracking**: Maintain metric scores across all versions
 - **Automated Calculation**: Metrics computed automatically on document upload
 - **Submission Frequency-Aware Date Checks**: Deadline checks now support monthly, quarterly, annual, and custom frequencies
+- **Custom Period Parsing Controls**: Custom period checks support regex and capture-group fallback configuration
+- **Multi-keyword Number Extraction**: Number extraction rules support multiple keywords and expected numbers
+- **Automatic Needs-Revision Escalation**: Failed/error automated checks create or update internal needs-revision review records
 
 ### 3. Reference & Issuance Management
 
@@ -100,6 +107,12 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 - **Automatic Notifications**: Alert relevant users on ticket updates
 - **Resolution Tracking**: Record resolution dates and outcomes
 - **Issue Documentation Fields**: Track `issue_type`, `resolution_steps`, and `resolution_date`
+
+### 5.1 Focal Assignment Administration
+
+- **Assignment CRUD**: Super admins can create, update, and delete focal report assignments.
+- **Cycle-specific Upload Options**: Focal users receive assignment-filtered upload options per period/year.
+- **Expected Filename Guidance**: Upload UI can display expected filenames derived from assignment rules.
 
 ### 6. Dashboard & Reporting
 

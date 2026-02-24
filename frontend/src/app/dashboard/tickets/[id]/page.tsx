@@ -94,7 +94,7 @@ export default function TicketDetailPage() {
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <Typography>Loading ticket...</Typography>
+        <Typography>Loading issue...</Typography>
       </Box>
     );
   }
@@ -102,9 +102,9 @@ export default function TicketDetailPage() {
   if (!ticket) {
     return (
       <Box>
-        <Alert severity="error">Ticket not found</Alert>
+        <Alert severity="error">Issue not found</Alert>
         <Button onClick={() => router.push('/dashboard/tickets')} sx={{ mt: 2 }}>
-          Back to Tickets
+          Back to Issues
         </Button>
       </Box>
     );
@@ -115,7 +115,7 @@ export default function TicketDetailPage() {
   return (
     <Box>
       <Button onClick={() => router.push('/dashboard/tickets')} sx={{ mb: 2 }}>
-        ← Back to Tickets
+        ← Back to Issues
       </Button>
 
       {error && (
@@ -132,7 +132,7 @@ export default function TicketDetailPage() {
                 {ticket.subject}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Ticket #{ticket.ticket_number}
+                Issue #{ticket.ticket_number}
               </Typography>
             </Box>
             {isReviewer && (

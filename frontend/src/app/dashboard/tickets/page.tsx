@@ -113,7 +113,7 @@ export default function TicketsPage() {
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">Support Tickets</Typography>
+        <Typography variant="h4">Issues</Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -233,7 +233,7 @@ export default function TicketsPage() {
       </TableContainer>
 
       <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-        <DialogTitle>Create Support Ticket</DialogTitle>
+        <DialogTitle>Create Issue</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField
