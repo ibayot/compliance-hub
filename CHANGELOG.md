@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.1.2.3] - 2026-02-25 — Hotfix: On-Demand DOCX Preview, Security Serializer, EADDRINUSE Docs
+
+### Fixed
+- **DOCX document preview returning 404 ("Preview not available")**: Uploaded DOCX files whose `generate-preview` Bull queue job failed silently (no `preview_blob` in DB) now generate an HTML preview on first request via mammoth. `getPreview()` in `version.service.ts` gained a "Priority 3" on-demand fallback: reads `file_blob`, invokes `mammoth.convertToHtml()`, wraps in styled HTML, and saves the result back to `preview_blob + preview_mime_type='text/html'` non-blocking for future caching. Real-world upload (DSWD FO II AIMS Policy.docx 1.7 MB) confirmed: endpoint returns `200 text/html` 38 KB.
+- **`passwordHash` exposed in all API responses**: `@Exclude()` on `User.passwordHash` was present on the entity class but had no effect because `ClassSerializerInterceptor` was never registered globally. Added `app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)))` in `main.ts`. Re-tested `/api/auth/me` and `/api/users` — `passwordHash` no longer appears in JSON responses.
+- **`Error: listen EADDRINUSE :::4000` on backend restart**: Documented resolution (kill existing PID before restart) in INSTALLATION.md. Caused by a stale `npm run start:dev` background process retaining the port across sessions.
+
+### Verified (Smoke Tests Passed)
+- **Login** (`POST /api/auth/login`): Returns valid JWT ✅
+- **Roles** (`GET /api/users/roles`): Returns 5 system role definitions ✅
+- **`passwordHash` in `/auth/me`**: Not exposed ✅
+- **`passwordHash` in `/users`**: Not exposed ✅
+- **Documents list** (`GET /api/documents`): Returns 3 documents (2 seeded + DSWD upload) ✅
+- **Seeded HTML preview** (`ver-001`): `Content-Type: text/html; charset=utf-8` ✅
+- **DSWD DOCX on-demand preview** (`750f3ff2-…`): `200 text/html` 38 KB generated live via mammoth ✅
+- **DSWD document download**: `200` `attachment; filename="DSWD FO II…Policy.docx"` 1.7 MB ✅
+- **Metrics** (`GET /api/metrics`): 4 templates (section_check, keyword_check, property_check, date_check) ✅
+- **Units** (`GET /api/units`): 2 seeded units ✅
+
+### Notes
+- Queue-based preview generation still runs in the background but is no longer the sole path to a working DOCX preview. The on-demand fallback ensures the viewer works immediately on first request.
+- The cached `preview_blob` is written asynchronously after the first preview request, so subsequent requests hit Priority 1 (blob exists) instead of running mammoth again.
+
+---
+
 ## [1.1.2.2] - 2026-02-25 — Startup Fix: UTF-8 BOM in package.json
 
 ### Fixed

@@ -9,6 +9,16 @@
 > $f = 'package.json'; $b = [IO.File]::ReadAllBytes($f); if ($b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) { [IO.File]::WriteAllBytes($f, $b[3..($b.Length-1)]); Write-Host 'BOM removed' }
 > ```
 
+> **Hotfix `v1.1.2.3` (2026-02-25):** If you encounter `Error: listen EADDRINUSE :::4000` when starting the backend, a previous `npm run start:dev` process is still holding the port. Find and kill it:
+> ```powershell
+> # Find the PID using port 4000
+> netstat -ano | findstr ":4000" | findstr "LISTENING"
+> # Kill the PID shown in the rightmost column (e.g., 39940)
+> Stop-Process -Id 39940 -Force
+> # Then restart the backend normally
+> npm run start:dev
+> ```
+
 > **Release `v1.1.2` (2026-02-25):** seed data updated — run `seed.sql` to load all 4 metric template types, HTML preview blobs, and correct column schema. A `preview_mime_type VARCHAR(50)` column is required on `document_versions` (auto-added by `ALTER TABLE` or TypeORM synchronize). No LibreOffice required — mammoth provides DOCX→HTML preview fallback on Windows.
 
 ## Table of Contents

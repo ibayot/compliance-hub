@@ -4,6 +4,8 @@
 
 > Patch update (`v1.1.1-dev`, 2026-02-25): settings now include password change + light/dark mode, and super-admins can provision focal users with extended profile fields.
 
+> **Hotfix `v1.1.2.3` (2026-02-25):** fixed DOCX document viewer returning 404 for uploaded DOCX files (on-demand mammoth fallback in `getPreview()`); fixed `passwordHash` being exposed in all API responses (`ClassSerializerInterceptor` now registered globally); documented EADDRINUSE port conflict resolution.
+
 > **Hotfix `v1.1.2.2` (2026-02-25):** fixed frontend dev server crash caused by UTF-8 BOM in `package.json` files. Vite's PostCSS loader threw `SyntaxError: Unexpected token '∩╗┐'` on BOM-prefixed JSON. All smoke tests pass: login, 5 roles, document preview (`text/html`), document download (`Content-Disposition: attachment`), units, metrics.
 
 > **Release `v1.1.2` (2026-02-25):** fixed document download filename, DOCX preview via mammoth HTML fallback, seeded 4 metric template types, dynamic Role Management in Settings with card layout, Document Viewer renamed, Reviews preview fix, and expanded User Manual field-level documentation.

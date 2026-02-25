@@ -12,6 +12,7 @@ import { StorageService } from './storage.service';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import * as mammoth from 'mammoth';
+import * as path from 'path';
 
 export interface CreateVersionDto {
   document_id: string;
@@ -216,6 +217,48 @@ export class VersionService {
         buffer,
         mimeType: 'application/pdf',
       };
+    }
+
+    // Priority 3: on-demand mammoth HTML for DOCX files (queue may not have run yet)
+    const ext = path.extname(version.file_name).toLowerCase();
+    const isDocx = ext === '.docx' ||
+      version.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if (isDocx) {
+      try {
+        const fileBuffer =
+          version.file_blob ??
+          (await this.storageService.readFile(version.file_path));
+
+        const result = await mammoth.convertToHtml({ buffer: fileBuffer });
+        const htmlBody = result.value || '<p><em>No content extracted.</em></p>';
+
+        const htmlContent = [
+          '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">',
+          '<style>body{font-family:Arial,sans-serif;padding:40px;max-width:800px;',
+          'margin:0 auto;line-height:1.7;color:#222;}',
+          'h1{color:#1a237e;border-bottom:2px solid #1a237e;padding-bottom:8px;}',
+          'h2{color:#283593;margin-top:24px;}h3{color:#3949ab;}',
+          'table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ccc;padding:8px;}',
+          'th{background:#e8eaf6;}p{margin:8px 0;}</style></head>',
+          `<body><h1>${version.file_name.replace(/</g, '&lt;')}</h1>`,
+          htmlBody,
+          '</body></html>',
+        ].join('');
+
+        const htmlBuffer = Buffer.from(htmlContent, 'utf-8');
+
+        // Cache the preview for future requests (non-blocking)
+        this.versionRepo.update(id, {
+          preview_blob: htmlBuffer,
+          preview_mime_type: 'text/html',
+          preview_path: null,
+        }).catch((err) => this.logger.warn(`Non-critical: failed to cache DOCX preview for ${id}: ${err?.message}`));
+
+        return { buffer: htmlBuffer, mimeType: 'text/html' };
+      } catch (err) {
+        this.logger.warn(`On-demand mammoth conversion failed for ${id}: ${(err as Error)?.message}`);
+        // Fall through to error
+      }
     }
 
     if (!version.preview_path) {
