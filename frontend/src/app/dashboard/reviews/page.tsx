@@ -39,6 +39,7 @@ export default function ReviewsPage() {
 
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [previewMimeType, setPreviewMimeType] = useState<string>('application/pdf');
   const [previewError, setPreviewError] = useState<string>('');
   const [submitError, setSubmitError] = useState<string>('');
 
@@ -122,7 +123,8 @@ export default function ReviewsPage() {
         return;
       }
 
-      const blobUrl = await documentsApi.getPreviewBlobUrl(documentId, currentVersion.id);
+      const { blobUrl, mimeType } = await documentsApi.getPreviewBlobUrl(documentId, currentVersion.id);
+      setPreviewMimeType(mimeType);
       setPreviewBlobUrl((previousUrl) => {
         if (previousUrl && previousUrl.startsWith('blob:')) {
           URL.revokeObjectURL(previousUrl);
@@ -286,7 +288,7 @@ export default function ReviewsPage() {
 
               {!previewLoading && previewError && <Alert severity="warning">{previewError}</Alert>}
 
-              {!previewLoading && !previewError && previewBlobUrl && <DocumentViewer pdfUrl={previewBlobUrl} />}
+              {!previewLoading && !previewError && previewBlobUrl && <DocumentViewer pdfUrl={previewBlobUrl} mimeType={previewMimeType} />}
             </Paper>
 
             <Paper variant="outlined" sx={{ p: 2 }}>

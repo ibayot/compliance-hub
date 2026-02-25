@@ -238,14 +238,21 @@ export const documentsApi = {
   },
 
   /**
-   * Get preview as authenticated blob URL for inline viewers
+   * Get preview as authenticated blob URL for inline viewers.
+   * Returns the blob URL and the content MIME type so viewers can render correctly.
    */
-  getPreviewBlobUrl: async (documentId: string, versionId: string): Promise<string> => {
+  getPreviewBlobUrl: async (
+    documentId: string,
+    versionId: string,
+  ): Promise<{ blobUrl: string; mimeType: string }> => {
     const response = await apiClient.get(
       `/documents/${documentId}/versions/${versionId}/preview`,
       { responseType: 'blob' },
     );
-    return URL.createObjectURL(response.data);
+    const mimeType: string =
+      (response.headers['content-type'] as string | undefined)?.split(';')[0]?.trim() ||
+      'application/pdf';
+    return { blobUrl: URL.createObjectURL(response.data as Blob), mimeType };
   },
 
   /**

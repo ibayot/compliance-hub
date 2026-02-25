@@ -4,6 +4,8 @@
 
 > Patch update (`v1.1.1-dev`, 2026-02-25): settings now include password change + light/dark mode, and super-admins can provision focal users with extended profile fields.
 
+> **Release `v1.1.2` (2026-02-25):** fixed document download filename, DOCX preview via mammoth HTML fallback, seeded 4 metric template types, dynamic Role Management in Settings with card layout, Document Viewer renamed, Reviews preview fix, and expanded User Manual field-level documentation.
+
 > A comprehensive document management and compliance tracking system for government agencies
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)

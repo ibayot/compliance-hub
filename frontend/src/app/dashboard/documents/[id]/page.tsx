@@ -44,6 +44,7 @@ export default function DocumentDetailsPage() {
 
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [previewMimeType, setPreviewMimeType] = useState<string>('application/pdf');
   const [referenceDialogOpen, setReferenceDialogOpen] = useState(false);
   const [referenceLoading, setReferenceLoading] = useState(false);
   const [referenceSearch, setReferenceSearch] = useState('');
@@ -170,7 +171,8 @@ export default function DocumentDetailsPage() {
       }
 
       try {
-        const blobUrl = await documentsApi.getPreviewBlobUrl(documentId, targetVersionId);
+        const { blobUrl, mimeType } = await documentsApi.getPreviewBlobUrl(documentId, targetVersionId);
+        setPreviewMimeType(mimeType);
         setPreviewBlobUrl((previousUrl) => {
           if (previousUrl && previousUrl.startsWith('blob:')) {
             URL.revokeObjectURL(previousUrl);
@@ -178,6 +180,7 @@ export default function DocumentDetailsPage() {
           return blobUrl;
         });
       } catch {
+        setPreviewMimeType('application/pdf');
         setPreviewBlobUrl((previousUrl) => {
           if (previousUrl && previousUrl.startsWith('blob:')) {
             URL.revokeObjectURL(previousUrl);
@@ -311,7 +314,7 @@ export default function DocumentDetailsPage() {
           <Grid item xs={12} lg={8}>
             <Paper elevation={2} sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom>
-                Document Preview
+                Document Viewer
               </Typography>
               {document.status === 'processing' && (
                 <Alert severity="info" sx={{ mb: 2 }}>
@@ -324,7 +327,7 @@ export default function DocumentDetailsPage() {
                 </Alert>
               )}
               {previewBlobUrl && (document.status === 'ready' || document.status === 'pending') ? (
-                <DocumentViewer pdfUrl={previewBlobUrl} />
+                <DocumentViewer pdfUrl={previewBlobUrl} mimeType={previewMimeType} />
               ) : (
                 <Box
                   sx={{

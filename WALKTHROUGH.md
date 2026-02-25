@@ -4,6 +4,8 @@
 
 > Patch (`v1.1.1-dev`, 2026-02-25): includes settings password/theme workflow, super-admin focal provisioning, and category-scoped issue-type behavior.
 
+> **Release `v1.1.2` (2026-02-25):** Document Viewer now renders DOCX files as styled HTML inline (renamed from "Document Preview"). Document downloads return proper filenames. Reviews digital preview works for both HTML and PDF content types. Settings page reorganized into cards: Account Info, Theme, Change Password, Role Definitions (dynamic from API), and Focal User Management with activate/deactivate and change-role actions. User Manual has per-field explanations for all 8 modules including the new Settings & Role Management section.
+
 ## Table of Contents
 1. [Getting Started](#getting-started)
 2. [Login & Authentication](#login--authentication)

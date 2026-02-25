@@ -45,10 +45,13 @@ export class DocumentVersion {
   checksum: string; // SHA-256 hash
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  preview_path: string; // PDF preview path
+  preview_path: string | null; // PDF/HTML preview path
 
   @Column({ type: 'longblob', nullable: true, select: false })
   preview_blob?: Buffer;
+
+  @Column({ type: 'varchar', length: 50, nullable: true, default: null })
+  preview_mime_type: string | null; // mime type of the preview blob (application/pdf or text/html)
 
   @Column({ type: 'text', nullable: true })
   extracted_text: string; // Extracted text content for compliance checking

@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.1.2] - 2026-02-25 — Document Viewer, Metrics Seed, Dynamic Roles, Settings Cards
+
+### Fixed
+- **Document Download "blob" issue**: Added `exposedHeaders: ['Content-Disposition', 'Content-Type', 'Content-Length']` to CORS configuration — browser can now read the `Content-Disposition` header to extract the proper filename and extension when downloading documents.
+- **Document Preview "not available" (DOCX on Windows)**: Replaced LibreOffice (`soffice`) dependency in the preview processor with a `mammoth` HTML fallback. DOCX files are now converted to styled HTML when LibreOffice is unavailable, and saved as `preview_blob` with `preview_mime_type: 'text/html'`.
+- **Seeded documents showing no preview**: Replaced the 15-byte fake PDF stub in seed data with full styled HTML preview content. Both seeded documents now render immediately in the Document Viewer without requiring re-processing.
+- **Reviews "Unable to load digital preview"**: Fixed by propagating `mimeType` through `getPreviewBlobUrl()` return value and passing it to `DocumentViewer` as a prop. The viewer now branches correctly: iframe for HTML, react-pdf for PDF.
+- **`getPreview()` priority bug**: Preview blob is now returned first (before falling back to raw PDF), so HTML previews generated for PDF source documents display correctly.
+- **`preview_path` TypeScript type**: Changed from `string` to `string | null` in entity to match the nullable DB column.
+
+### Added
+- **`preview_mime_type` column** on `document_versions` table: tracks the MIME type of the preview blob (`application/pdf` or `text/html`). Added via `ALTER TABLE` and entity sync.
+- **`GET /api/users/roles` endpoint**: Returns all 5 system role definitions with `value`, `label`, `description`, `assignable`, and `is_system` flags. Placed before the `/:id` wildcard route to avoid routing conflict.
+- **Role Management card in Settings**: Super admin can now view all system roles in a table with descriptions and assignability status. Opens a detail dialog per role.
+- **Dynamic role dropdown in Focal User Management**: Replaced hardcoded `focalRoleOptions` array with live `GET /users/roles` call. Role dropdown shows only assignable roles.
+- **Activate/Deactivate user buttons**: Existing users table now includes an activate/deactivate toggle per user.
+- **Change Role dialog**: Edit (pencil) icon opens a dialog to change an existing user's role, with purpose description shown per option.
+- **4 metric template types in seed**: Added `property_check` (incident count) and `date_check` (monthly submission deadline) templates alongside existing `section_check` and `keyword_check`. 6 metric results seeded.
+- **Settings page card-based layout**: Refactored from single `Paper` container to individual `Card` components — Account Information, Theme Preference, Change Password, Role Definitions, Focal User Management.
+- **"Document Viewer" label**: Renamed "Document Preview" to "Document Viewer" in the document detail page.
+- **DocumentViewer HTML iframe support**: New branch in `DocumentViewer.tsx` renders HTML previews in a sandboxed `<iframe>` with an "Open in Tab" button. PDF branch unchanged (react-pdf).
+- **User Manual expanded field explanations**: All 7 modules now have comprehensive per-field input and output descriptions. New "Settings and Role Management" module added. Close button added to detail dialog.
+
+### Changed
+- `getPreviewBlobUrl()` in `frontend/src/lib/api/documents.ts` now returns `{ blobUrl: string; mimeType: string }` instead of `string`.
+- `DocumentViewer` props: added `mimeType?: string` (defaults to `'application/pdf'`).
+- `usersApi` in `frontend/src/lib/api/users.ts`: added `RoleDefinition` interface, `getRoles()`, `updateRole()`, `deactivate()`, `activate()` methods.
+- Seed data column aligned to actual MariaDB schema (`active` not `is_active` for users, int unit IDs, correct metric_results columns).
+
+---
+
 ## [Unreleased] - Current Development Build
 
 ### Changed - 2026-02-25 (`v1.1.1-dev` UX + Governance Alignment)
