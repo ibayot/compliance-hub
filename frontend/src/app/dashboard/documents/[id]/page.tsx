@@ -25,6 +25,7 @@ import {
 } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { documentsApi, Document } from '@/lib/api/documents';
+import { usePageTitle } from '@/contexts/PageTitleContext';
 import { format } from 'date-fns';
 import VersionTimeline from '@/components/documents/VersionTimeline';
 import DocumentViewer from '@/components/documents/DocumentViewer';
@@ -42,6 +43,7 @@ export default function DocumentDetailsPage() {
   const queryClient = useQueryClient();
   const documentId = params.id as string;
 
+  const { setPageTitle } = usePageTitle();
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewMimeType, setPreviewMimeType] = useState<string>('application/pdf');
@@ -65,6 +67,14 @@ export default function DocumentDetailsPage() {
     queryFn: () => documentsApi.getVersionHistory(documentId),
     enabled: !!documentId,
   });
+
+  // Set page title for breadcrumb when document loads
+  useEffect(() => {
+    if (document?.title) {
+      setPageTitle(document.title);
+    }
+    return () => setPageTitle(null);
+  }, [document?.title, setPageTitle]);
 
   const handleBack = () => {
     if (typeof window !== 'undefined' && window.history.length > 1) {

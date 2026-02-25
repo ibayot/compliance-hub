@@ -6,6 +6,7 @@ import Sidebar from './Sidebar';
 import AppBar from './AppBar';
 import { SidebarProvider } from '@/contexts/SidebarContext';
 import { useSidebar } from '@/contexts/SidebarContext';
+import { PageTitleProvider } from '@/contexts/PageTitleContext';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -14,7 +15,9 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <SidebarProvider>
-      <DashboardLayoutContent>{children}</DashboardLayoutContent>
+      <PageTitleProvider>
+        <DashboardLayoutContent>{children}</DashboardLayoutContent>
+      </PageTitleProvider>
     </SidebarProvider>
   );
 }

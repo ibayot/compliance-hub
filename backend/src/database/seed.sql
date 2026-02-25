@@ -1,4 +1,4 @@
-﻿-- RICTMS Compliance Hub Seed Data (v1.1.2 Clean Baseline)
+﻿-- RICTMS Compliance Hub Seed Data (v1.2.0.1 Baseline)
 -- Aligned with actual MariaDB schema (auto-detected column names).
 
 USE rictms_compliance;
@@ -14,6 +14,7 @@ TRUNCATE TABLE metric_applicability;
 TRUNCATE TABLE metric_templates;
 TRUNCATE TABLE document_versions;
 TRUNCATE TABLE documents;
+TRUNCATE TABLE reportorial_document_types;
 TRUNCATE TABLE issuances;
 TRUNCATE TABLE user_unit_access;
 TRUNCATE TABLE units;
@@ -62,19 +63,54 @@ INSERT INTO document_issuances (issuance_id, document_id) VALUES
 ('issuance-001', 'doc-001'),
 ('issuance-001', 'doc-002');
 
--- Metric templates (all 4 types)
-INSERT INTO metric_templates (id, name, description, metric_type, rule_config, pass_criteria, weight, is_active, created_at, updated_at) VALUES
-('metric-001', 'Introduction Section Check', 'Verifies the document contains required section headings.', 'section_check', JSON_OBJECT('required_sections', JSON_ARRAY('Introduction', 'Findings', 'Recommendations')), JSON_OBJECT('all_present', TRUE), 2, 1, NOW(), NOW()),
-('metric-002', 'Compliance Keyword Presence', 'Verifies key compliance terms appear in the document body.', 'keyword_check', JSON_OBJECT('keywords', JSON_ARRAY('compliance', 'regulation', 'policy'), 'min_matches', 2, 'case_sensitive', FALSE, 'whole_word', FALSE), JSON_OBJECT('min_matches', 2), 1, 1, NOW(), NOW()),
-('metric-003', 'Incident Count Extraction', 'Extracts and validates the reported incident count meets the minimum threshold.', 'property_check', JSON_OBJECT('extraction_keywords', JSON_ARRAY('total incidents', 'reported incidents'), 'comparison', '>=', 'expected_values', JSON_ARRAY(1)), JSON_OBJECT('comparison', '>=', 'threshold', 1), 1, 1, NOW(), NOW()),
-('metric-004', 'Monthly Submission Deadline Check', 'Validates document submitted before the monthly deadline.', 'date_check', JSON_OBJECT('submission_frequency', 'monthly', 'deadline_day', 5, 'deadline_month_offset', 1, 'max_days_late', 0), JSON_OBJECT('on_time', TRUE), 2, 1, NOW(), NOW());
+-- Reportorial Document Types: per-unit document types with filename base and submission frequency
+INSERT INTO reportorial_document_types (unit_id, base_name, display_name, description, submission_frequency, active, created_at, updated_at) VALUES
+(1, 'ICT_Compliance_Narrative', 'ICT Compliance Narrative', 'Monthly narrative report on ICT compliance status.', 'monthly', 1, NOW(), NOW()),
+(1, 'ICT_Security_Report', 'ICT Security Incident Report', 'Quarterly report on security incidents and resolutions.', 'quarterly', 1, NOW(), NOW()),
+(2, 'Finance_Compliance_Memo', 'Finance Compliance Memo', 'Monthly compliance memo from the Finance Unit.', 'monthly', 1, NOW(), NOW()),
+(2, 'Annual_Financial_Report', 'Annual Financial Compliance Report', 'Annual report on financial regulatory compliance.', 'annual', 1, NOW(), NOW());
 
--- metric_applicability: unit_id is int nullable
+-- Metric templates: 4 examples per type (16 total)
+INSERT INTO metric_templates (id, name, description, metric_type, rule_config, pass_criteria, weight, is_active, created_at, updated_at) VALUES
+-- section_check (4)
+('metric-001', 'Introduction Section Check', 'Verifies the document contains required section headings.', 'section_check', JSON_OBJECT('required_sections', JSON_ARRAY('Introduction', 'Findings', 'Recommendations')), JSON_OBJECT('all_present', TRUE), 2, 1, NOW(), NOW()),
+('metric-005', 'Narrative Structure Check', 'Verifies key narrative headings are present.', 'section_check', JSON_OBJECT('required_sections', JSON_ARRAY('Executive Summary', 'Background', 'Analysis', 'Conclusion')), JSON_OBJECT('all_present', TRUE), 2, 1, NOW(), NOW()),
+('metric-006', 'Audit Report Sections Check', 'Validates audit report contains required sections.', 'section_check', JSON_OBJECT('required_sections', JSON_ARRAY('Scope', 'Observations', 'Management Response', 'Action Plan')), JSON_OBJECT('all_present', TRUE), 2, 1, NOW(), NOW()),
+('metric-007', 'Memo Format Check', 'Verifies a memo contains standard structural elements.', 'section_check', JSON_OBJECT('required_sections', JSON_ARRAY('Subject', 'Background', 'Action Needed')), JSON_OBJECT('all_present', TRUE), 1, 1, NOW(), NOW()),
+-- keyword_check (4)
+('metric-002', 'Compliance Keyword Presence', 'Verifies key compliance terms appear in the document body.', 'keyword_check', JSON_OBJECT('keywords', JSON_ARRAY('compliance', 'regulation', 'policy'), 'min_matches', 2, 'case_sensitive', FALSE, 'whole_word', FALSE), JSON_OBJECT('min_matches', 2), 1, 1, NOW(), NOW()),
+('metric-008', 'Data Privacy Keywords', 'Verifies data privacy terms are mentioned.', 'keyword_check', JSON_OBJECT('keywords', JSON_ARRAY('personal data', 'data subject', 'privacy notice', 'data controller'), 'min_matches', 2, 'case_sensitive', FALSE, 'whole_word', FALSE), JSON_OBJECT('min_matches', 2), 1, 1, NOW(), NOW()),
+('metric-009', 'Financial Accountability Keywords', 'Checks for financial accountability language.', 'keyword_check', JSON_OBJECT('keywords', JSON_ARRAY('appropriation', 'disbursement', 'liquidation', 'procurement'), 'min_matches', 3, 'case_sensitive', FALSE, 'whole_word', FALSE), JSON_OBJECT('min_matches', 3), 1, 1, NOW(), NOW()),
+('metric-010', 'ICT Security Keywords', 'Verifies ICT security terminology is present.', 'keyword_check', JSON_OBJECT('keywords', JSON_ARRAY('vulnerability', 'patch', 'access control', 'incident response'), 'min_matches', 2, 'case_sensitive', FALSE, 'whole_word', FALSE), JSON_OBJECT('min_matches', 2), 1, 1, NOW(), NOW()),
+-- property_check (4)
+('metric-003', 'Incident Count Extraction', 'Extracts and validates the reported incident count meets the minimum threshold.', 'property_check', JSON_OBJECT('extraction_keywords', JSON_ARRAY('total incidents', 'reported incidents'), 'comparison', '>=', 'expected_values', JSON_ARRAY(1)), JSON_OBJECT('comparison', '>=', 'threshold', 1), 1, 1, NOW(), NOW()),
+('metric-011', 'Budget Utilization Rate', 'Validates that reported budget utilization is within acceptable range.', 'property_check', JSON_OBJECT('extraction_keywords', JSON_ARRAY('budget utilization', 'utilization rate'), 'comparison', '>=', 'expected_values', JSON_ARRAY(80)), JSON_OBJECT('comparison', '>=', 'threshold', 80), 1, 1, NOW(), NOW()),
+('metric-012', 'System Uptime Percentage', 'Verifies critical system uptime meets SLA threshold.', 'property_check', JSON_OBJECT('extraction_keywords', JSON_ARRAY('uptime', 'system availability'), 'comparison', '>=', 'expected_values', JSON_ARRAY(99)), JSON_OBJECT('comparison', '>=', 'threshold', 99), 2, 1, NOW(), NOW()),
+('metric-013', 'Trained Personnel Count', 'Validates minimum number of personnel trained on compliance topics.', 'property_check', JSON_OBJECT('extraction_keywords', JSON_ARRAY('trained', 'personnel trained', 'staff trained'), 'comparison', '>=', 'expected_values', JSON_ARRAY(10)), JSON_OBJECT('comparison', '>=', 'threshold', 10), 1, 1, NOW(), NOW()),
+-- date_check (4)
+('metric-004', 'Monthly Submission Deadline Check', 'Validates document submitted before the monthly deadline.', 'date_check', JSON_OBJECT('submission_frequency', 'monthly', 'deadline_day', 5, 'deadline_month_offset', 1, 'max_days_late', 0), JSON_OBJECT('on_time', TRUE), 2, 1, NOW(), NOW()),
+('metric-014', 'Quarterly Report Deadline Check', 'Validates quarterly report is submitted within the first 10 days of the following month.', 'date_check', JSON_OBJECT('submission_frequency', 'quarterly', 'deadline_day', 10, 'deadline_month_offset', 1, 'max_days_late', 3), JSON_OBJECT('on_time', TRUE), 2, 1, NOW(), NOW()),
+('metric-015', 'Annual Report Submission Check', 'Verifies annual compliance report is submitted before January 15 of the following year.', 'date_check', JSON_OBJECT('submission_frequency', 'annual', 'submission_month', 1, 'deadline_day', 15, 'deadline_month_offset', 0, 'max_days_late', 0), JSON_OBJECT('on_time', TRUE), 3, 1, NOW(), NOW()),
+('metric-016', 'Incident Report 24-Hour Check', 'Validates incident report was filed within 24 hours.', 'date_check', JSON_OBJECT('submission_frequency', 'monthly', 'deadline_day', 1, 'deadline_month_offset', 0, 'max_days_late', 0), JSON_OBJECT('on_time', TRUE), 3, 1, NOW(), NOW());
+
+-- metric_applicability: global for seeded metrics
 INSERT INTO metric_applicability (id, metric_id, unit_id, document_type) VALUES
 ('map-001', 'metric-001', NULL, NULL),
 ('map-002', 'metric-002', NULL, NULL),
 ('map-003', 'metric-003', NULL, NULL),
-('map-004', 'metric-004', NULL, NULL);
+('map-004', 'metric-004', NULL, NULL),
+('map-005', 'metric-005', NULL, NULL),
+('map-006', 'metric-006', NULL, NULL),
+('map-007', 'metric-007', NULL, NULL),
+('map-008', 'metric-008', NULL, NULL),
+('map-009', 'metric-009', NULL, NULL),
+('map-010', 'metric-010', NULL, NULL),
+('map-011', 'metric-011', NULL, NULL),
+('map-012', 'metric-012', NULL, NULL),
+('map-013', 'metric-013', NULL, NULL),
+('map-014', 'metric-014', NULL, NULL),
+('map-015', 'metric-015', NULL, NULL),
+('map-016', 'metric-016', NULL, NULL);
 
 -- metric_results: columns are id, version_id, metric_template_id, status (enum pass/fail/warning/error), message, score, computed_at, evidence
 INSERT INTO metric_results (id, version_id, metric_template_id, status, score, message, evidence, computed_at) VALUES

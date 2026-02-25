@@ -26,6 +26,7 @@ export interface CreateUserPayload {
   role: UserRole;
   position?: string;
   designation?: string;
+  unitIds?: number[];
 }
 
 export interface RoleDefinition {
@@ -53,11 +54,11 @@ export const usersApi = {
   },
 
   deactivate: async (userId: number): Promise<void> => {
-    await apiClient.patch(`/users/${userId}`, { is_active: false });
+    await apiClient.patch(`/users/${userId}`, { active: false });
   },
 
   activate: async (userId: number): Promise<void> => {
-    await apiClient.patch(`/users/${userId}`, { is_active: true });
+    await apiClient.patch(`/users/${userId}`, { active: true });
   },
 
   getRoles: async (): Promise<RoleDefinition[]> => {

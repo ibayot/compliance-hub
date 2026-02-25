@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.2.0.1] - 2026-02-26 — Reportorial Document Types, Nav/UI Fixes, Metrics Linked to Documents
+
+### Added
+- **Reportorial Document Types system**: New `reportorial_document_types` table per-unit. Each type has a `base_name` (e.g., `Incident_Report`), `display_name`, `submission_frequency` (monthly/quarterly/annual), and auto-computed period suffix. Filename format: `{base_name}_{period_suffix}` (e.g., `Incident_Report_202602` for February 2026 monthly).
+- **Document upload filename validation**: Uploaded filename is validated against the expected `{base_name}_{period_suffix}` format on both client and server. Front-end shows a dynamic preview of the expected filename.
+- **Metrics linked to documents (not units)**: `metric_applicability` now has a `reportorial_doc_type_id` FK. The Metrics Template Builder UI replaced the "Unit + Document Type (free text)" selectors with a single "Reportorial Document Type" dropdown fetched from the new API.
+- **Units page — Reportorial Documents CRUD**: Each unit row is now an expandable accordion with a full in-page CRUD table for its `ReportorialDocumentType` records (display name, base name, frequency, sample filename, active toggle).
+- **User Management — Unit selector**: "Create New User" is now a button opening a dialog with a multi-select for "Assigned Units" (`unitIds[]`) sent to the backend `CreateUserDto`.
+- **4 metric template examples per type (16 total)**: Seed data expanded from 4 (1 per type) to 16 (4 per type): section_check, keyword_check, property_check, and date_check each have 4 distinct real-world templates.
+- **Seed data — Reportorial Document Types**: 4 examples seeded (2 per unit) including monthly ICT Narrative, quarterly ICT Security Report, monthly Finance Memo, and annual Finance Compliance Report.
+- **PageTitleContext**: New React context (`PageTitleProvider` / `usePageTitle()`) allows detail pages to set a human-readable breadcrumb title. Document detail page now sets the document's `title` so breadcrumbs show the document name instead of a raw UUID.
+
+### Fixed
+- **Deactivate/Activate user button fails ("Failed to update user status.")**: Frontend was sending `{ is_active: false }` but backend DTO uses `active`. Fixed `users.ts` to send `{ active: false/true }`. Also fixed `UpdateUserDto` to include `active?: boolean` and `users.service.ts` `update()` to handle it. `findAll()` now returns ALL users (including inactive) so the management table shows deactivated accounts.
+- **Dashboard nav item always highlighted**: `pathname?.startsWith('/dashboard/')` matched every page. Fixed to use exact match `pathname === '/dashboard'` for the Dashboard nav item only.
+- **Breadcrumbs show raw UUID**: AppBar now skips the `dashboard` segment when other segments exist, and for UUID/numeric-ID segments shows the `pageTitle` context value (e.g., the document title) or omits the segment entirely.
+- **Issuances visible to all roles**: Sidebar now restricts Issuances to `super_admin` and `reviewer` roles only (compliance officers).
+- **Version history layout breaks with long filenames**: `TimelineOppositeContent` now has a fixed `90px` width (`flex: 0 0 90px`) and the file name in `CardContent` has `wordBreak: break-word`.
+
+### Changed
+- **Document upload UI**: Completely overhauled. Removed free-text `document_type`, `period`, and `year` fields. Focal users have their unit auto-populated; all users select a Reportorial Document Type for their unit, which auto-computes the expected filename. `reportorial_doc_type_id` is now sent with every upload.
+- **User Management form layout**: "Create New User" inline form replaced with a dialog opened by a button in the card header.
+
+### Verified (Smoke Tests Passed)
+- Backend build: 0 TypeScript errors ✅
+- Frontend build: 0 TypeScript errors, clean Vite output ✅
+- `GET /api/document-types` → 200 with empty array (no seeded doc types via API in dev, seed via SQL) ✅
+- `GET /api/metrics` → 16 metric templates after seed ✅
+- `PATCH /api/users/:id { active: false }` → 200 (deactivate fix) ✅
+- Dashboard nav highlight: exact match only ✅
+- Breadcrumb on document detail page: shows document title ✅
+
+---
+
 ## [1.1.2.3] - 2026-02-25 — Hotfix: On-Demand DOCX Preview, Security Serializer, EADDRINUSE Docs
 
 ### Fixed

@@ -14,6 +14,7 @@ import { PropertyCheckEngine } from './engines/property-check.engine';
 import { DateCheckEngine } from './engines/date-check.engine';
 import { MetricsProcessor } from './processors/metrics.processor';
 import { ManualReview } from '../reviews/entities/manual-review.entity';
+import { ReportorialDocumentType } from '../documents/entities/reportorial-document-type.entity';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ManualReview } from '../reviews/entities/manual-review.entity';
       DocumentVersion,
       Document,
       ManualReview,
+      ReportorialDocumentType,
     ]),
     BullModule.registerQueue({
       name: 'document-processing',

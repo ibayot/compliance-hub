@@ -21,6 +21,8 @@ import { UserRole } from '../../users/entities/user.entity';
 import { ManualReview, ReviewDecision } from '../../reviews/entities/manual-review.entity';
 import { DocumentReference } from '../entities/document-reference.entity';
 import * as mammoth from 'mammoth';
+import { ReportorialDocumentType } from '../entities/reportorial-document-type.entity';
+import { ReportorialDocTypeService } from './reportorial-doc-type.service';
 
 export interface UploadDocumentDto {
   title: string;
@@ -31,6 +33,8 @@ export interface UploadDocumentDto {
   uploaded_by: number;
   user_role: UserRole;
   file: Express.Multer.File;
+  /** Optional: link to a ReportorialDocumentType record */
+  reportorial_doc_type_id?: number;
 }
 
 export interface ListDocumentsDto {
@@ -74,6 +78,8 @@ export class DocumentService implements OnModuleInit {
     private reviewRepo: Repository<ManualReview>,
     @InjectRepository(DocumentReference)
     private referenceRepo: Repository<DocumentReference>,
+    @InjectRepository(ReportorialDocumentType)
+    private reportorialDocTypeRepo: Repository<ReportorialDocumentType>,
     private storageService: StorageService,
     @InjectQueue('document-processing') private documentQueue: Queue,
     private dataSource: DataSource,
@@ -355,6 +361,32 @@ export class DocumentService implements OnModuleInit {
       );
     }
 
+    // Validate via reportorial document type (new system)
+    let reportorialDocType: ReportorialDocumentType | null = null;
+    let finalDocumentType = normalizedDocumentType;
+    let finalPeriod = metadata.period || '';
+    let finalYear = metadata.year || String(new Date().getFullYear());
+
+    if (metadata.reportorial_doc_type_id) {
+      reportorialDocType = await this.reportorialDocTypeRepo.findOne({
+        where: { id: Number(metadata.reportorial_doc_type_id) },
+      });
+      if (!reportorialDocType) {
+        throw new BadRequestException('Invalid reportorial document type ID');
+      }
+      const expectedFilename = ReportorialDocTypeService.computeExpectedFilename(reportorialDocType);
+      const uploadedBase = file.originalname.replace(/\.(docx|pdf)$/i, '');
+      if (uploadedBase !== expectedFilename) {
+        throw new BadRequestException(
+          `Invalid filename. Expected "${expectedFilename}.docx" or "${expectedFilename}.pdf" based on the document type and current period.`,
+        );
+      }
+      finalDocumentType = reportorialDocType.display_name;
+      const suffix = ReportorialDocTypeService.computePeriodSuffix(reportorialDocType.submission_frequency);
+      finalPeriod = suffix;
+      finalYear = String(new Date().getFullYear());
+    }
+
     // Calculate checksum
     const checksum = this.storageService.calculateChecksum(file.buffer);
 
@@ -367,14 +399,17 @@ export class DocumentService implements OnModuleInit {
 
     // Create document entity
     const extractedText = await this.extractInitialText(file);
-    const document = this.documentRepo.create({
+    const document: Document = this.documentRepo.create({
       ...persistedMetadata,
-      document_type: normalizedDocumentType,
+      document_type: finalDocumentType,
+      period: finalPeriod || persistedMetadata.period,
+      year: finalYear || persistedMetadata.year,
+      reportorial_doc_type_id: metadata.reportorial_doc_type_id ? Number(metadata.reportorial_doc_type_id) : null,
       status: DocumentStatus.READY,
       current_version: 1,
       extracted_text: extractedText,
       file_blob: file.buffer,
-    });
+    } as any) as unknown as Document;
     await this.documentRepo.save(document);
 
     // Create version entity

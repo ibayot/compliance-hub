@@ -1,0 +1,59 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+  ParseIntPipe,
+} from '@nestjs/common';
+import { ReportorialDocTypeService } from '../services/reportorial-doc-type.service';
+import { CreateReportorialDocTypeDto } from '../dto/create-reportorial-doc-type.dto';
+import { UpdateReportorialDocTypeDto } from '../dto/update-reportorial-doc-type.dto';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
+
+@Controller('document-types')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class ReportorialDocTypeController {
+  constructor(private readonly service: ReportorialDocTypeService) {}
+
+  /**
+   * GET /api/document-types?unitId=1
+   * Returns all (or filtered by unitId) reportorial document types.
+   */
+  @Get()
+  findAll(@Query('unitId') unitId?: string) {
+    if (unitId) {
+      return this.service.findByUnit(Number(unitId));
+    }
+    return this.service.findAll();
+  }
+
+  @Get(':id')
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.service.findOne(id);
+  }
+
+  @Post()
+  @Roles('super_admin')
+  create(@Body() dto: CreateReportorialDocTypeDto) {
+    return this.service.create(dto);
+  }
+
+  @Patch(':id')
+  @Roles('super_admin')
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateReportorialDocTypeDto) {
+    return this.service.update(id, dto);
+  }
+
+  @Delete(':id')
+  @Roles('super_admin')
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.service.remove(id);
+  }
+}

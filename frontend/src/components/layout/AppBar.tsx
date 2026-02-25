@@ -24,20 +24,28 @@ import {
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSidebar } from '@/contexts/SidebarContext';
+import { usePageTitle } from '@/contexts/PageTitleContext';
 import { useState } from 'react';
 
 interface AppBarProps {
   onMenuClick: () => void;
 }
 
+/** Detect UUID-like or numeric-id-like segments that shouldn't show verbatim in breadcrumbs */
+const isIdSegment = (s: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) ||
+  /^\d+$/.test(s);
+
 export default function AppBar({ onMenuClick }: AppBarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
   const { isCollapsed, toggleSidebar, drawerWidth } = useSidebar();
+  const { pageTitle } = usePageTitle();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   // Generate breadcrumbs from pathname
+  // Skip 'dashboard' segment — all pages are inside dashboard already
   const generateBreadcrumbs = () => {
     const paths: string[] = pathname?.split('/').filter(Boolean) || [];
     const breadcrumbs: { label: string; path: string }[] = [];
@@ -45,9 +53,12 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
     let currentPath = '';
     paths.forEach((segment: string, index: number) => {
       currentPath += `/${segment}`;
-      
-      // Skip dynamic route segments like [id]
+
+      // Skip [bracket] template segments
       if (segment.startsWith('[')) return;
+
+      // Skip the root 'dashboard' segment when there are other segments
+      if (segment === 'dashboard' && paths.length > 1) return;
 
       // Format label
       let label = segment
@@ -55,7 +66,18 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
         .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
 
-      // Special cases
+      // For UUID / numeric ID segments: replace with context title or generic label
+      if (isIdSegment(segment)) {
+        // Check if this is the last segment and we have a page title
+        const isLast = index === paths.length - 1;
+        if (isLast && pageTitle) {
+          label = pageTitle;
+        } else {
+          // Don't add ID-only breadcrumb if no label available
+          return;
+        }
+      }
+
       if (segment === 'dashboard') label = 'Dashboard';
 
       breadcrumbs.push({ label, path: currentPath });

@@ -5,6 +5,7 @@ export interface MetricApplicability {
   metric_id: string;
   unit_id?: number;
   document_type?: string;
+  reportorial_doc_type_id?: number;
   unit?: {
     id: number;
     name: string;
@@ -36,6 +37,7 @@ export interface CreateMetricTemplateRequest {
   applicability?: Array<{
     unit_id?: number;
     document_type?: string;
+    reportorial_doc_type_id?: number;
   }>;
 }
 

@@ -12,6 +12,9 @@ import { PreviewGenerator } from './processors/preview.processor';
 import { DocumentAssignment } from './entities/document-assignment.entity';
 import { DocumentReference } from './entities/document-reference.entity';
 import { ManualReview } from '../reviews/entities/manual-review.entity';
+import { ReportorialDocumentType } from './entities/reportorial-document-type.entity';
+import { ReportorialDocTypeService } from './services/reportorial-doc-type.service';
+import { ReportorialDocTypeController } from './controllers/reportorial-doc-type.controller';
 
 @Module({
   imports: [
@@ -21,23 +24,26 @@ import { ManualReview } from '../reviews/entities/manual-review.entity';
       DocumentAssignment,
       DocumentReference,
       ManualReview,
+      ReportorialDocumentType,
     ]),
     BullModule.registerQueue({
       name: 'document-processing',
     }),
   ],
-  controllers: [DocumentController],
+  controllers: [DocumentController, ReportorialDocTypeController],
   providers: [
     DocumentService,
     VersionService,
     StorageService,
     DocumentProcessor,
     PreviewGenerator,
+    ReportorialDocTypeService,
   ],
   exports: [
     DocumentService,
     VersionService,
     StorageService,
+    ReportorialDocTypeService,
     TypeOrmModule,
   ],
 })

@@ -9,6 +9,8 @@
 > $f = 'package.json'; $b = [IO.File]::ReadAllBytes($f); if ($b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) { [IO.File]::WriteAllBytes($f, $b[3..($b.Length-1)]); Write-Host 'BOM removed' }
 > ```
 
+> **Release `v1.2.0.1` (2026-02-26):** New `reportorial_document_types` table is auto-created by TypeORM `synchronize:true` on next backend start. Columns `documents.reportorial_doc_type_id` and `metric_applicability.reportorial_doc_type_id` (both nullable FK) are also added automatically. Run `seed.sql` after upgrading to populate 16 metric templates and 4 reportorial document type examples. No manual schema migration needed.
+
 > **Hotfix `v1.1.2.3` (2026-02-25):** If you encounter `Error: listen EADDRINUSE :::4000` when starting the backend, a previous `npm run start:dev` process is still holding the port. Find and kill it:
 > ```powershell
 > # Find the PID using port 4000

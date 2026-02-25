@@ -1,27 +1,24 @@
-'use client';
+﻿'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
-  TextField,
-  MenuItem,
+  CircularProgress,
   FormControl,
   InputLabel,
-  Select,
-  Typography,
-  Alert,
-  CircularProgress,
+  MenuItem,
   Paper,
+  Select,
+  TextField,
+  Typography,
 } from '@mui/material';
 import { CloudUpload as UploadIcon } from '@mui/icons-material';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import {
-  documentsApi,
-  UploadDocumentRequest,
-  UploadOption,
-} from '@/lib/api/documents';
+import { documentsApi, UploadDocumentRequest } from '@/lib/api/documents';
 import { unitsApi } from '@/lib/api/units';
+import { docTypesApi, computeExpectedFilename, ReportorialDocType } from '@/lib/api/document-types';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface DocumentUploadProps {
@@ -30,96 +27,58 @@ interface DocumentUploadProps {
 
 export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
   const { user } = useAuth();
-  const [formData, setFormData] = useState({
-    title: '',
-    document_type: '',
-    period: '',
-    year: new Date().getFullYear().toString(),
-    unit_id: '',
-  });
-  const [file, setFile] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [uploadOptions, setUploadOptions] = useState<UploadOption[]>([]);
-  const [expectedFileName, setExpectedFileName] = useState<string | undefined>();
-
   const isFocal = user?.role === 'focal';
 
-  // Fetch units for dropdown
+  const [title, setTitle] = useState('');
+  const [unitId, setUnitId] = useState('');
+  const [reportorialDocTypeId, setReportorialDocTypeId] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load units (admin can pick any)
   const { data: unitsResponse } = useQuery({
     queryKey: ['units'],
     queryFn: () => unitsApi.listUnits({ page: 1, limit: 100 }),
+    enabled: !isFocal,
   });
 
-  const { data: documentTypes } = useQuery({
-    queryKey: ['document-types'],
-    queryFn: () => documentsApi.listDocumentTypes(),
-  });
-
-  const { data: focalUploadOptions = [] } = useQuery({
-    queryKey: ['upload-options', formData.period, formData.year, isFocal],
-    queryFn: async () => {
-      if (!isFocal || !formData.period || !formData.year) {
-        return [] as UploadOption[];
-      }
-      return documentsApi.getUploadOptions(formData.period, formData.year);
-    },
-    enabled: isFocal,
-  });
-
+  // Auto-populate unit for focal users from their primary unit
   useEffect(() => {
-    if (!isFocal) {
-      return;
+    if (isFocal && user?.units?.length) {
+      setUnitId(String((user.units as any[])[0].id));
     }
+  }, [isFocal, user?.units]);
 
-    setUploadOptions(focalUploadOptions);
+  // Load reportorial doc types for selected unit
+  const { data: docTypes = [] } = useQuery<ReportorialDocType[]>({
+    queryKey: ['doc-types', unitId],
+    queryFn: () => docTypesApi.byUnit(Number(unitId)),
+    enabled: !!unitId,
+  });
 
-    if (focalUploadOptions.length === 0) {
-      setFormData((prev) => ({
-        ...prev,
-        document_type: '',
-        unit_id: '',
-      }));
-      setExpectedFileName(undefined);
-      return;
-    }
+  // Reset doc type when unit changes
+  useEffect(() => {
+    setReportorialDocTypeId('');
+  }, [unitId]);
 
-    const current = focalUploadOptions.find(
-      (option) =>
-        option.document_type === formData.document_type &&
-        String(option.unit_id) === formData.unit_id,
-    );
+  // Compute expected filename dynamically
+  const selectedDocType = useMemo(
+    () => docTypes.find((dt) => String(dt.id) === reportorialDocTypeId),
+    [docTypes, reportorialDocTypeId],
+  );
+  const expectedFilename = useMemo(
+    () => (selectedDocType ? computeExpectedFilename(selectedDocType) : null),
+    [selectedDocType],
+  );
 
-    const selected = current || focalUploadOptions[0];
-    const nextUnitId = String(selected.unit_id);
-    if (
-      formData.document_type !== selected.document_type ||
-      formData.unit_id !== nextUnitId
-    ) {
-      setFormData((prev) => ({
-        ...prev,
-        document_type: selected.document_type,
-        unit_id: nextUnitId,
-      }));
-    }
-    setExpectedFileName(selected.expected_file_name);
-  }, [focalUploadOptions, formData.document_type, formData.unit_id, isFocal]);
-
-  // Upload mutation
   const uploadMutation = useMutation({
-    mutationFn: (data: UploadDocumentRequest) =>
-      documentsApi.uploadDocument(data),
+    mutationFn: (data: UploadDocumentRequest) => documentsApi.uploadDocument(data),
     onSuccess: () => {
-      // Reset form
-      setFormData({
-        title: '',
-        document_type: '',
-        period: '',
-        year: new Date().getFullYear().toString(),
-        unit_id: '',
-      });
-      setExpectedFileName(undefined);
+      setTitle('');
+      setReportorialDocTypeId('');
       setFile(null);
       setError(null);
+      if (!isFocal) setUnitId('');
       onSuccess?.();
     },
     onError: (err: any) => {
@@ -129,78 +88,69 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      // Validate file type
-      const isDocx =
-        selectedFile.name.toLowerCase().endsWith('.docx') ||
-        selectedFile.type ===
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      const isPdf =
-        selectedFile.name.toLowerCase().endsWith('.pdf') ||
-        selectedFile.type === 'application/pdf';
+    if (!selectedFile) return;
 
-      if (
-        !isDocx && !isPdf
-      ) {
-        setError('Only DOCX and PDF files are allowed');
+    const isDocx =
+      selectedFile.name.toLowerCase().endsWith('.docx') ||
+      selectedFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    const isPdf =
+      selectedFile.name.toLowerCase().endsWith('.pdf') ||
+      selectedFile.type === 'application/pdf';
+
+    if (!isDocx && !isPdf) {
+      setError('Only DOCX and PDF files are allowed');
+      return;
+    }
+
+    if (selectedFile.size > 50 * 1024 * 1024) {
+      setError('File size must be less than 50 MB');
+      return;
+    }
+
+    // Client-side filename validation
+    if (expectedFilename) {
+      const fileBaseName = selectedFile.name.replace(/\.(docx|pdf)$/i, '');
+      if (fileBaseName !== expectedFilename) {
+        setError(
+          `Filename does not match expected pattern.\nExpected: "${expectedFilename}.docx" (or .pdf)\nGot: "${selectedFile.name}"`,
+        );
         return;
       }
+    }
 
-      // Validate file size (50MB)
-      if (selectedFile.size > 50 * 1024 * 1024) {
-        setError('File size must be less than 50MB');
-        return;
-      }
+    setFile(selectedFile);
+    setError(null);
 
-      setFile(selectedFile);
-      setError(null);
-
-      // Auto-fill title from filename if empty
-      if (!formData.title) {
-        const titleFromFile = selectedFile.name
-          .replace(/\.(docx|pdf)$/i, '')
-          .replace(/[-_]/g, ' ');
-        setFormData((prev) => ({ ...prev, title: titleFromFile }));
-      }
+    if (!title) {
+      const titleFromFile = selectedFile.name
+        .replace(/\.(docx|pdf)$/i, '')
+        .replace(/[_-]/g, ' ');
+      setTitle(titleFromFile);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!file) {
-      setError('Please select a file');
-      return;
-    }
+    if (!file) { setError('Please select a file'); return; }
+    if (!unitId) { setError('Please select a unit'); return; }
+    if (!reportorialDocTypeId) { setError('Please select a document type'); return; }
 
     uploadMutation.mutate({
-      ...formData,
+      title,
       file,
+      unit_id: unitId,
+      document_type: selectedDocType?.display_name || '',
+      reportorial_doc_type_id: Number(reportorialDocTypeId),
+      period: '',
+      year: String(new Date().getFullYear()),
     });
   };
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  const unitOptions: { id: number; name: string }[] = isFocal
+    ? ((user?.units ?? []) as any[])
+    : (unitsResponse?.data ?? []);
 
-    if (isFocal && field === 'period') {
-      setExpectedFileName(undefined);
-    }
-
-    if (isFocal && field === 'document_type') {
-      const selected = uploadOptions.find(
-        (option) => option.document_type === value,
-      );
-      if (selected) {
-        setFormData((prev) => ({ ...prev, unit_id: String(selected.unit_id), document_type: selected.document_type }));
-        setExpectedFileName(selected.expected_file_name);
-      }
-    }
-  };
-
-  const focalTypeOptions = uploadOptions.map((option) => option.document_type);
-  const typeOptions = isFocal
-    ? Array.from(new Set(focalTypeOptions))
-    : documentTypes || [];
+  const selectedUnitName = unitOptions.find((u) => String(u.id) === unitId)?.name;
 
   return (
     <Paper elevation={3} sx={{ p: 4, maxWidth: 600, mx: 'auto' }}>
@@ -210,7 +160,7 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
 
       <form onSubmit={handleSubmit}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 3 }}>
-          {/* File Upload */}
+          {/* File Picker */}
           <Box>
             <Button
               variant="outlined"
@@ -228,7 +178,7 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
               />
             </Button>
             {file && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
                 Size: {(file.size / 1024 / 1024).toFixed(2)} MB
               </Typography>
             )}
@@ -237,104 +187,83 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
           {/* Title */}
           <TextField
             label="Document Title"
-            value={formData.title}
-            onChange={(e) => handleInputChange('title', e.target.value)}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
             required
             fullWidth
           />
 
           {/* Unit */}
-          <FormControl fullWidth required>
-            <InputLabel>Unit</InputLabel>
-            <Select
-              value={formData.unit_id}
-              onChange={(e) => handleInputChange('unit_id', e.target.value)}
+          {isFocal ? (
+            <TextField
               label="Unit"
-              disabled={isFocal}
-            >
-              {unitsResponse?.data?.map((unit) => (
-                <MenuItem key={unit.id} value={unit.id}>
-                  {unit.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+              value={selectedUnitName ?? ''}
+              InputProps={{ readOnly: true }}
+              fullWidth
+              helperText="Auto-populated from your assigned unit"
+            />
+          ) : (
+            <FormControl fullWidth required>
+              <InputLabel>Unit</InputLabel>
+              <Select
+                value={unitId}
+                onChange={(e) => setUnitId(e.target.value)}
+                label="Unit"
+              >
+                {unitOptions.map((unit) => (
+                  <MenuItem key={unit.id} value={String(unit.id)}>
+                    {unit.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
 
-          {/* Document Type */}
-          <FormControl fullWidth required>
+          {/* Reportorial Document Type */}
+          <FormControl fullWidth required disabled={!unitId}>
             <InputLabel>Document Type</InputLabel>
             <Select
-              value={formData.document_type}
-              onChange={(e) => handleInputChange('document_type', e.target.value)}
+              value={reportorialDocTypeId}
+              onChange={(e) => setReportorialDocTypeId(e.target.value)}
               label="Document Type"
             >
-              {typeOptions.map((type) => (
-                <MenuItem key={type} value={type}>
-                  {type}
+              {docTypes.filter((dt) => dt.active).map((dt) => (
+                <MenuItem key={dt.id} value={String(dt.id)}>
+                  {dt.display_name}
                 </MenuItem>
               ))}
+              {docTypes.length === 0 && (
+                <MenuItem disabled value="">
+                  {unitId ? 'No document types for this unit' : 'Select a unit first'}
+                </MenuItem>
+              )}
             </Select>
           </FormControl>
 
-          {isFocal && expectedFileName && (
+          {expectedFilename && (
             <Alert severity="info">
-              Expected filename for this cycle: <strong>{expectedFileName}</strong>
+              Expected filename: <strong>{expectedFilename}.docx</strong> (or .pdf)
             </Alert>
           )}
 
-          {isFocal && formData.period && formData.year && uploadOptions.length === 0 && (
-            <Alert severity="warning">
-              No available report assignments for the selected cycle. Existing assigned report types may already be submitted.
-            </Alert>
-          )}
-
-          {/* Year */}
-          <TextField
-            label="Year"
-            value={formData.year}
-            onChange={(e) => handleInputChange('year', e.target.value)}
-            required
-            fullWidth
-            type="number"
-            inputProps={{ min: 2000, max: 2100 }}
-          />
-
-          {/* Period */}
-          <TextField
-            label="Period (e.g., Q1, 2024-01)"
-            value={formData.period}
-            onChange={(e) => handleInputChange('period', e.target.value)}
-            required
-            fullWidth
-            placeholder="Q1"
-            helperText="Format: Q1, Q2, Q3, Q4, or YYYY-MM"
-          />
-
-          {/* Error Message */}
           {error && (
-            <Alert severity="error" onClose={() => setError(null)}>
+            <Alert severity="error" onClose={() => setError(null)} sx={{ whiteSpace: 'pre-line' }}>
               {error}
             </Alert>
           )}
 
-          {/* Submit Button */}
           <Button
             type="submit"
             variant="contained"
             size="large"
             disabled={uploadMutation.isPending}
-            startIcon={
-              uploadMutation.isPending ? <CircularProgress size={20} /> : <UploadIcon />
-            }
+            startIcon={uploadMutation.isPending ? <CircularProgress size={20} /> : <UploadIcon />}
           >
             {uploadMutation.isPending ? 'Uploading...' : 'Upload Document'}
           </Button>
 
-          {/* Success Message */}
           {uploadMutation.isSuccess && (
-            <Alert severity="success">
-              Document uploaded successfully! Processing will begin shortly.
-            </Alert>
+            <Alert severity="success">Document uploaded successfully!</Alert>
           )}
         </Box>
       </form>
