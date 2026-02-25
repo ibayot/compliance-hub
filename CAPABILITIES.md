@@ -4,6 +4,8 @@
 
 > Patch (`v1.1.1-dev`, 2026-02-25): adds authenticated document download flow, category-scoped issue types, settings password/theme controls, and super-admin focal account management.
 
+> **Release `v1.1.2` (2026-02-25):** document download now returns proper filename via `Content-Disposition` (CORS fix); DOCX preview generates styled HTML via mammoth fallback when LibreOffice is unavailable; Document Viewer supports both HTML (iframe) and PDF (react-pdf); Reviews digital preview propagates MIME type correctly; Administration Metrics seeded with all 4 template types (section_check, keyword_check, property_check, date_check); Settings refactored to card layout with dynamic Role Management; User Manual has comprehensive field-level explanations for all 8 modules.
+
 ## Overview
 
 The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive document management and compliance tracking system designed to help government units maintain regulatory compliance through automated document processing, metrics analysis, and collaborative review workflows.

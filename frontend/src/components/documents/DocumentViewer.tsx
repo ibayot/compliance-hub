@@ -16,15 +16,21 @@ import 'react-pdf/dist/esm/Page/TextLayer.css';
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 interface DocumentViewerProps {
+  /** Blob URL pointing to the document content */
   pdfUrl: string;
+  /** MIME type of the document content: 'application/pdf' or 'text/html' */
+  mimeType?: string;
 }
 
-export default function DocumentViewer({ pdfUrl }: DocumentViewerProps) {
+/** Renders a document inline. Supports PDF (react-pdf) and HTML (styled iframe) previews. */
+export default function DocumentViewer({ pdfUrl, mimeType = 'application/pdf' }: DocumentViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  const isHtml = mimeType === 'text/html' || mimeType?.startsWith('text/html');
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -32,28 +38,59 @@ export default function DocumentViewer({ pdfUrl }: DocumentViewerProps) {
     setError(null);
   };
 
-  const onDocumentLoadError = (error: Error) => {
-    setError('Failed to load PDF. The preview may still be generating.');
+  const onDocumentLoadError = (err: Error) => {
+    setError('Failed to load PDF preview. The file may still be processing.');
     setLoading(false);
-    console.error('PDF load error:', error);
+    console.error('PDF load error:', err);
   };
 
-  const goToPrevPage = () => {
-    setPageNumber((prev) => Math.max(prev - 1, 1));
-  };
+  const goToPrevPage = () => setPageNumber((prev) => Math.max(prev - 1, 1));
+  const goToNextPage = () => setPageNumber((prev) => Math.min(prev + 1, numPages));
+  const zoomIn = () => setScale((prev) => Math.min(prev + 0.2, 3.0));
+  const zoomOut = () => setScale((prev) => Math.max(prev - 0.2, 0.5));
 
-  const goToNextPage = () => {
-    setPageNumber((prev) => Math.min(prev + 1, numPages));
-  };
+  // --- HTML preview via sandboxed iframe ---
+  if (isHtml) {
+    return (
+      <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            px: 2,
+            py: 1,
+            bgcolor: 'background.paper',
+            borderRadius: 1,
+            boxShadow: 1,
+          }}
+        >
+          <Typography variant="body2" color="text.secondary">
+            HTML Document Preview — rendered from extracted content
+          </Typography>
+          <Button size="small" component="a" href={pdfUrl} target="_blank" rel="noopener noreferrer">
+            Open in Tab
+          </Button>
+        </Box>
+        <Box
+          component="iframe"
+          src={pdfUrl}
+          title="Document Viewer"
+          sandbox="allow-same-origin allow-popups allow-scripts"
+          sx={{
+            width: '100%',
+            height: 700,
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            bgcolor: '#fff',
+          }}
+        />
+      </Box>
+    );
+  }
 
-  const zoomIn = () => {
-    setScale((prev) => Math.min(prev + 0.2, 3.0));
-  };
-
-  const zoomOut = () => {
-    setScale((prev) => Math.max(prev - 0.2, 0.5));
-  };
-
+  // --- PDF preview via react-pdf ---
   return (
     <Box sx={{ width: '100%' }}>
       {/* Controls */}
@@ -94,21 +131,11 @@ export default function DocumentViewer({ pdfUrl }: DocumentViewerProps) {
 
         {/* Zoom Controls */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Button
-            size="small"
-            onClick={zoomOut}
-            disabled={loading}
-            startIcon={<ZoomOutIcon />}
-          >
+          <Button size="small" onClick={zoomOut} disabled={loading} startIcon={<ZoomOutIcon />}>
             Zoom Out
           </Button>
           <Typography variant="body2">{Math.round(scale * 100)}%</Typography>
-          <Button
-            size="small"
-            onClick={zoomIn}
-            disabled={loading}
-            endIcon={<ZoomInIcon />}
-          >
+          <Button size="small" onClick={zoomIn} disabled={loading} endIcon={<ZoomInIcon />}>
             Zoom In
           </Button>
         </Box>

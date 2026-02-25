@@ -4,6 +4,8 @@
 
 > Patch (`v1.1.1-dev`, 2026-02-25): post-install verification now includes settings password change, theme toggle, and super-admin focal-user provisioning checks.
 
+> **Release `v1.1.2` (2026-02-25):** seed data updated — run `seed.sql` to load all 4 metric template types, HTML preview blobs, and correct column schema. A `preview_mime_type VARCHAR(50)` column is required on `document_versions` (auto-added by `ALTER TABLE` or TypeORM synchronize). No LibreOffice required — mammoth provides DOCX→HTML preview fallback on Windows.
+
 ## Table of Contents
 1. [Prerequisites](#prerequisites)
 2. [Installation Methods](#installation-methods)

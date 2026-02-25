@@ -28,6 +28,14 @@ export interface CreateUserPayload {
   designation?: string;
 }
 
+export interface RoleDefinition {
+  value: string;
+  label: string;
+  description: string;
+  assignable: boolean;
+  is_system: boolean;
+}
+
 export const usersApi = {
   list: async (): Promise<UserRecord[]> => {
     const response = await apiClient.get('/users');
@@ -36,6 +44,24 @@ export const usersApi = {
 
   create: async (payload: CreateUserPayload): Promise<UserRecord> => {
     const response = await apiClient.post('/users', payload);
+    return response.data;
+  },
+
+  updateRole: async (userId: number, role: string): Promise<UserRecord> => {
+    const response = await apiClient.patch(`/users/${userId}`, { role });
+    return response.data;
+  },
+
+  deactivate: async (userId: number): Promise<void> => {
+    await apiClient.patch(`/users/${userId}`, { is_active: false });
+  },
+
+  activate: async (userId: number): Promise<void> => {
+    await apiClient.patch(`/users/${userId}`, { is_active: true });
+  },
+
+  getRoles: async (): Promise<RoleDefinition[]> => {
+    const response = await apiClient.get('/users/roles');
     return response.data;
   },
 };
