@@ -88,6 +88,7 @@ export interface UpsertTicketConfigDto {
   name: string;
   description?: string;
   is_active?: boolean;
+  category_id?: string;
 }
 
 // Issuances API
@@ -200,9 +201,12 @@ export const ticketsApi = {
     return response.data;
   },
 
-  listIssueTypes: async (activeOnly = true): Promise<TicketConfigOption[]> => {
+  listIssueTypes: async (
+    activeOnly = true,
+    categoryId?: string,
+  ): Promise<TicketConfigOption[]> => {
     const response = await apiClient.get(`/tickets/issue-types`, {
-      params: { active_only: activeOnly },
+      params: { active_only: activeOnly, category_id: categoryId },
     });
     return response.data;
   },

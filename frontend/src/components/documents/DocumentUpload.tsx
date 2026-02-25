@@ -131,12 +131,18 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       // Validate file type
+      const isDocx =
+        selectedFile.name.toLowerCase().endsWith('.docx') ||
+        selectedFile.type ===
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      const isPdf =
+        selectedFile.name.toLowerCase().endsWith('.pdf') ||
+        selectedFile.type === 'application/pdf';
+
       if (
-        !selectedFile.name.toLowerCase().endsWith('.docx') &&
-        selectedFile.type !==
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        !isDocx && !isPdf
       ) {
-        setError('Only DOCX files are allowed');
+        setError('Only DOCX and PDF files are allowed');
         return;
       }
 
@@ -152,7 +158,7 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
       // Auto-fill title from filename if empty
       if (!formData.title) {
         const titleFromFile = selectedFile.name
-          .replace(/\.docx$/i, '')
+          .replace(/\.(docx|pdf)$/i, '')
           .replace(/[-_]/g, ' ');
         setFormData((prev) => ({ ...prev, title: titleFromFile }));
       }
@@ -213,11 +219,11 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
               startIcon={<UploadIcon />}
               sx={{ height: 56 }}
             >
-              {file ? file.name : 'Choose DOCX File'}
+              {file ? file.name : 'Choose DOCX or PDF File'}
               <input
                 type="file"
                 hidden
-                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept=".docx,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
                 onChange={handleFileChange}
               />
             </Button>

@@ -32,6 +32,9 @@ export class DocumentVersion {
   @Column({ type: 'varchar', length: 255 })
   file_path: string;
 
+  @Column({ type: 'longblob', nullable: true, select: false })
+  file_blob?: Buffer;
+
   @Column({ type: 'varchar', length: 50 })
   mime_type: string;
 
@@ -43,6 +46,9 @@ export class DocumentVersion {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   preview_path: string; // PDF preview path
+
+  @Column({ type: 'longblob', nullable: true, select: false })
+  preview_blob?: Buffer;
 
   @Column({ type: 'text', nullable: true })
   extracted_text: string; // Extracted text content for compliance checking

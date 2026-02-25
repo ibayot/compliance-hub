@@ -20,4 +20,12 @@ export const authApi = {
     const response = await apiClient.post('/auth/refresh', { refreshToken });
     return response.data;
   },
+
+  changePassword: async (payload: {
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<{ message: string }> => {
+    const response = await apiClient.post('/auth/change-password', payload);
+    return response.data;
+  },
 };

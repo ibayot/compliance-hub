@@ -5,8 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { Ticket } from './ticket.entity';
+import { TicketCategoryConfig } from './ticket-category.entity';
 
 @Entity('ticket_issue_types')
 export class TicketIssueType {
@@ -33,6 +36,13 @@ export class TicketIssueType {
 
   @Column({ type: 'int', nullable: true })
   updated_by: number | null;
+
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  category_id: string | null;
+
+  @ManyToOne(() => TicketCategoryConfig, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'category_id' })
+  category: TicketCategoryConfig;
 
   @OneToMany(() => Ticket, (ticket) => ticket.issue_type_config)
   tickets: Ticket[];

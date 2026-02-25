@@ -78,8 +78,8 @@ export class IssuanceService {
       .leftJoinAndSelect('issuance.documents', 'documents');
 
     if (filters?.authority) {
-      query.andWhere('issuance.issuing_authority = :authority', {
-        authority: filters.authority,
+      query.andWhere('issuance.issuing_authority LIKE :authority', {
+        authority: `%${filters.authority}%`,
       });
     }
 

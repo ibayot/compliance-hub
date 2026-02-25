@@ -50,6 +50,9 @@ export class Document {
   @Column({ type: 'text', nullable: true })
   extracted_text: string;
 
+  @Column({ type: 'longblob', nullable: true, select: false })
+  file_blob?: Buffer;
+
   @Column({ type: 'int' })
   unit_id: number;
 

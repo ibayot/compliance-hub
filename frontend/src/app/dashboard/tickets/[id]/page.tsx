@@ -265,15 +265,16 @@ export default function TicketDetailPage() {
                   <TextField
                     select
                     fullWidth
-                    label="Issue Type"
-                    value={issueTypeId || issueType}
+                    label="Category"
+                    value={categoryId || ticket.category}
                     onChange={(event) => {
-                      setIssueTypeId(event.target.value);
+                      setCategoryId(event.target.value);
+                      setIssueTypeId('');
                       setIssueType('other');
                     }}
                     size="small"
                   >
-                    {issueTypes
+                    {categories
                       .filter((item) => item.is_active)
                       .map((item) => (
                         <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>
@@ -284,12 +285,16 @@ export default function TicketDetailPage() {
                   <TextField
                     select
                     fullWidth
-                    label="Category"
-                    value={categoryId || ticket.category}
-                    onChange={(event) => setCategoryId(event.target.value)}
+                    label="Issue Type"
+                    value={issueTypeId || issueType}
+                    onChange={(event) => {
+                      setIssueTypeId(event.target.value);
+                      setIssueType('other');
+                    }}
                     size="small"
                   >
-                    {categories
+                    {issueTypes
+                      .filter((item) => !categoryId || (item as any).category_id === categoryId)
                       .filter((item) => item.is_active)
                       .map((item) => (
                         <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>

@@ -1,6 +1,8 @@
 # Architecture Design Document (ARCH)
 ## RICMS Compliance Hub
 
+> Revision note (`v1.1.0-dev`, 2026-02-24): architecture now reflects blob-first document/version persistence with conversion pipeline fallback.
+
 **Version:** 1.0  
 **Date:** February 23, 2026  
 **Status:** Draft

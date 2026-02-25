@@ -20,6 +20,7 @@ import {
 import { UserRole } from '../../users/entities/user.entity';
 import { ManualReview, ReviewDecision } from '../../reviews/entities/manual-review.entity';
 import { DocumentReference } from '../entities/document-reference.entity';
+import * as mammoth from 'mammoth';
 
 export interface UploadDocumentDto {
   title: string;
@@ -33,6 +34,7 @@ export interface UploadDocumentDto {
 }
 
 export interface ListDocumentsDto {
+  title?: string;
   unit_id?: string;
   document_type?: string;
   period?: string;
@@ -47,6 +49,19 @@ export interface ListDocumentsDto {
 @Injectable()
 export class DocumentService implements OnModuleInit {
   private readonly logger = new Logger(DocumentService.name);
+
+  private async extractInitialText(file: Express.Multer.File): Promise<string> {
+    if (file.originalname.toLowerCase().endsWith('.docx')) {
+      try {
+        const result = await mammoth.extractRawText({ buffer: file.buffer });
+        return result.value || '';
+      } catch {
+        return '';
+      }
+    }
+
+    return '';
+  }
 
   constructor(
     @InjectRepository(Document)
@@ -103,6 +118,17 @@ export class DocumentService implements OnModuleInit {
         CONSTRAINT fk_doc_ref_target FOREIGN KEY (target_document_id) REFERENCES documents (id) ON DELETE CASCADE,
         CONSTRAINT fk_doc_ref_creator FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await this.dataSource.query(`
+      ALTER TABLE document_versions
+      ADD COLUMN IF NOT EXISTS file_blob LONGBLOB NULL,
+      ADD COLUMN IF NOT EXISTS preview_blob LONGBLOB NULL;
+    `);
+
+    await this.dataSource.query(`
+      ALTER TABLE documents
+      ADD COLUMN IF NOT EXISTS file_blob LONGBLOB NULL;
     `);
   }
 
@@ -297,10 +323,10 @@ export class DocumentService implements OnModuleInit {
     );
 
     if (expectedBase) {
-      const uploadedBase = fileName.replace(/\.docx$/i, '').toUpperCase();
+      const uploadedBase = fileName.replace(/\.(docx|pdf)$/i, '').toUpperCase();
       if (uploadedBase !== expectedBase) {
         throw new BadRequestException(
-          `Invalid file name. Expected ${expectedBase}.docx`,
+          `Invalid file name. Expected ${expectedBase}.docx or ${expectedBase}.pdf`,
         );
       }
     }
@@ -314,8 +340,10 @@ export class DocumentService implements OnModuleInit {
     const { user_role, ...persistedMetadata } = metadata;
 
     // Validate file type
-    if (!file.originalname.toLowerCase().endsWith('.docx')) {
-      throw new BadRequestException('Only DOCX files are allowed');
+    const isDocx = file.originalname.toLowerCase().endsWith('.docx');
+    const isPdf = file.originalname.toLowerCase().endsWith('.pdf');
+    if (!isDocx && !isPdf) {
+      throw new BadRequestException('Only DOCX and PDF files are allowed');
     }
 
     const normalizedDocumentType = this.normalizeDocumentType(metadata.document_type);
@@ -338,32 +366,44 @@ export class DocumentService implements OnModuleInit {
     );
 
     // Create document entity
+    const extractedText = await this.extractInitialText(file);
     const document = this.documentRepo.create({
       ...persistedMetadata,
       document_type: normalizedDocumentType,
-      status: DocumentStatus.PENDING,
+      status: DocumentStatus.READY,
       current_version: 1,
+      extracted_text: extractedText,
+      file_blob: file.buffer,
     });
     await this.documentRepo.save(document);
 
     // Create version entity
-    const version = this.versionRepo.create({
+    const version = await this.versionRepo.save({
       document_id: document.id,
       version_number: 1,
       file_name: file.originalname,
       file_path: filePath,
+      file_blob: file.buffer,
       mime_type: file.mimetype,
       file_size: file.size,
       checksum,
+      preview_path: isPdf ? filePath : null,
+      preview_blob: isPdf ? file.buffer : null,
+      extracted_text: extractedText,
       uploaded_by: metadata.uploaded_by,
-    });
-    await this.versionRepo.save(version);
+    } as any);
 
     // Queue document processing job
-    await this.documentQueue.add('process-document', {
-      documentId: document.id,
-      versionId: version.id,
-    });
+    void this.documentQueue
+      .add('process-document', {
+        documentId: document.id,
+        versionId: version.id,
+      })
+      .catch((error) => {
+        this.logger.warn(
+          `Background processing queue unavailable for document ${document.id}: ${error?.message || 'unknown error'}`,
+        );
+      });
 
     this.logger.log(`Document uploaded: ${document.id}`);
 
@@ -397,6 +437,7 @@ export class DocumentService implements OnModuleInit {
     limit: number;
   }> {
     const {
+      title,
       unit_id,
       document_type,
       period,
@@ -417,6 +458,9 @@ export class DocumentService implements OnModuleInit {
 
     if (unit_id) {
       query.andWhere('doc.unit_id = :unit_id', { unit_id });
+    }
+    if (title) {
+      query.andWhere('doc.title LIKE :title', { title: `%${title}%` });
     }
     if (document_type) {
       query.andWhere('doc.document_type = :document_type', { document_type });
@@ -725,7 +769,7 @@ export class DocumentService implements OnModuleInit {
         document_type: assignment.document_type,
         report_name: assignment.report_name,
         submission_frequency: assignment.submission_frequency,
-        expected_file_name: expectedBase ? `${expectedBase}.docx` : undefined,
+        expected_file_name: expectedBase ? `${expectedBase}.docx/.pdf` : undefined,
       });
     }
 
@@ -766,16 +810,42 @@ export class DocumentService implements OnModuleInit {
   }
 
   /**
-   * Soft delete document
+   * Delete document
    */
   async deleteDocument(id: string): Promise<void> {
-    const document = await this.getDocumentById(id);
+    const document = await this.documentRepo.findOne({
+      where: { id, is_deleted: false },
+      relations: ['uploader', 'versions', 'issuances'],
+    });
 
-    if ((document as any).is_linked) {
+    if (!document) {
+      throw new NotFoundException(`Document with ID ${id} not found`);
+    }
+
+    const [enriched] = await this.enrichDocumentsForWorkflow([document]);
+
+    if ((enriched as any).is_linked) {
       throw new BadRequestException('Cannot delete a linked document. Unlink mappings first.');
     }
 
-    if ((document as any).compliance_status !== ReviewDecision.COMPLIANT) {
+    const uploaderRole = document.uploader?.role;
+    const shouldHardDelete =
+      uploaderRole === UserRole.SUPER_ADMIN || uploaderRole === UserRole.REVIEWER;
+
+    if (shouldHardDelete) {
+      for (const version of document.versions || []) {
+        await this.storageService.deleteFile(version.file_path);
+        if (version.preview_path && version.preview_path !== version.file_path) {
+          await this.storageService.deleteFile(version.preview_path);
+        }
+      }
+
+      await this.documentRepo.remove(document);
+      this.logger.log(`Document hard deleted: ${id}`);
+      return;
+    }
+
+    if ((enriched as any).compliance_status !== ReviewDecision.COMPLIANT) {
       throw new BadRequestException('Only compliant documents can be deleted.');
     }
 
@@ -796,10 +866,20 @@ export class DocumentService implements OnModuleInit {
 
     const document = await this.documentRepo.findOne({
       where: { id: payload.document_id, is_deleted: false },
+      relations: ['uploader'],
     });
 
     if (!document) {
       throw new NotFoundException('Document not found');
+    }
+
+    if (
+      document.uploader?.role === UserRole.SUPER_ADMIN ||
+      document.uploader?.role === UserRole.REVIEWER
+    ) {
+      throw new BadRequestException(
+        'Documents uploaded by compliance/super admin require hard delete instead of return.',
+      );
     }
 
     if (document.status !== DocumentStatus.PENDING) {

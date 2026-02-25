@@ -13,7 +13,23 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(Unit)
     private readonly unitsRepository: Repository<Unit>,
-  ) {}
+  ) {
+    this.ensureSchema().catch(() => undefined);
+  }
+
+  private async ensureSchema() {
+    const queryRunner = this.usersRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    try {
+      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS middle_name VARCHAR(255) NULL');
+      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS suffix VARCHAR(255) NULL');
+      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS staff_id VARCHAR(255) NULL');
+      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS position VARCHAR(255) NULL');
+      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS designation VARCHAR(255) NULL');
+    } finally {
+      await queryRunner.release();
+    }
+  }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     // Check if user already exists
@@ -40,7 +56,12 @@ export class UsersService {
       email: createUserDto.email,
       passwordHash,
       firstName: createUserDto.firstName,
+      middleName: (createUserDto as any).middleName,
       lastName: createUserDto.lastName,
+      suffix: (createUserDto as any).suffix,
+      staffId: (createUserDto as any).staffId,
+      position: (createUserDto as any).position,
+      designation: (createUserDto as any).designation,
       role: createUserDto.role,
       units,
     });
@@ -75,6 +96,10 @@ export class UsersService {
     });
   }
 
+  async updatePasswordHash(id: number, passwordHash: string): Promise<void> {
+    await this.usersRepository.update({ id }, { passwordHash });
+  }
+
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
     const user = await this.findOne(id);
     const dto = updateUserDto as any;
@@ -82,7 +107,12 @@ export class UsersService {
     // Update basic fields
     if (dto.email) user.email = dto.email;
     if (dto.firstName) user.firstName = dto.firstName;
+    if (dto.middleName !== undefined) user.middleName = dto.middleName;
     if (dto.lastName) user.lastName = dto.lastName;
+    if (dto.suffix !== undefined) user.suffix = dto.suffix;
+    if (dto.staffId !== undefined) user.staffId = dto.staffId;
+    if (dto.position !== undefined) user.position = dto.position;
+    if (dto.designation !== undefined) user.designation = dto.designation;
     if (dto.role) user.role = dto.role;
 
     // Update units if provided

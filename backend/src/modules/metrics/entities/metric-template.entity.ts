@@ -6,7 +6,6 @@ import {
   UpdateDateColumn,
   OneToMany,
 } from 'typeorm';
-import { MetricApplicability } from './metric-applicability.entity';
 
 export enum MetricType {
   SECTION_CHECK = 'section_check',
@@ -52,11 +51,11 @@ export class MetricTemplate {
   weight: number; // For weighted scoring
 
   @OneToMany(
-    () => MetricApplicability,
-    (applicability: MetricApplicability) => applicability.metric_template,
+    'MetricApplicability',
+    (applicability: any) => applicability.metric_template,
     { cascade: true },
   )
-  applicability: MetricApplicability[];
+  applicability: any[];
 
   @Column({ type: 'boolean', default: true })
   is_active: boolean;

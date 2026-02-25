@@ -1,5 +1,9 @@
 # RICTMS Compliance Hub - Installation Guide
 
+> Update (`v1.1.0-dev`, 2026-02-24): installation flow now includes blob-enabled schema (`file_blob`, `preview_blob`) and conversion smoke-test expectations.
+
+> Patch (`v1.1.1-dev`, 2026-02-25): post-install verification now includes settings password change, theme toggle, and super-admin focal-user provisioning checks.
+
 ## Table of Contents
 1. [Prerequisites](#prerequisites)
 2. [Installation Methods](#installation-methods)
@@ -416,6 +420,21 @@ Or let the application create them automatically on first upload.
 - ✅ Check if frontend loads: Visit `http://localhost:3000`
 - ✅ Check if Redis is accessible: `redis-cli ping` (should return "PONG")
 - ✅ Check if database is accessible: `mysql -u root -p rictms_compliance -e "SHOW TABLES;"`
+
+### 5. Verify Settings + Focal Management
+
+After login:
+
+1. Open **Settings** and confirm:
+  - Theme toggle switches between light/dark modes.
+  - Password change succeeds with correct current password.
+2. If logged in as `super_admin`, confirm **Focal User Management** is visible and can create focal/technician users with:
+  - first/middle/last/suffix,
+  - staff ID,
+  - role,
+  - position,
+  - designation.
+3. Open **Tickets** and verify category selection filters issue type options.
 
 ---
 

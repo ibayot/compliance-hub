@@ -1,5 +1,9 @@
 # RICTMS Compliance Hub
 
+> Documentation update (`v1.1.0-dev`, 2026-02-24): document versions now support blob-backed source/preview storage with filesystem fallback for legacy rows.
+
+> Patch update (`v1.1.1-dev`, 2026-02-25): settings now include password change + light/dark mode, and super-admins can provision focal users with extended profile fields.
+
 > A comprehensive document management and compliance tracking system for government agencies
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -22,8 +26,10 @@ The **Regional ICT Management System (RICTMS) Compliance Hub** is an enterprise-
 - 🧭 **Assignment-Governed Focal Uploads**: Super admins assign report types to focal users and enforce one submission per cycle
 - 🏷️ **Filename Policy Enforcement**: Uploads can be validated with assignment prefix + frequency-aware suffix conventions
 - 🔗 **Issuance Mapping Manager**: Super admin and compliance roles can link/unlink documents to issuances
+- 🧾 **Issuance Authority Flexibility**: Authorities are editable values and issuance titles open source URLs in a new tab
 - ↩️ **Return-to-Focal Workflow**: Super admin/compliance can return pending documents with mandatory remarks (non-destructive)
 - 🔁 **Document-to-Document Mapping**: Users can map one document to another (e.g., report ↔ memorandum) using ready/compliant-only linking
+- 🧠 **Category-Scoped Issue Types**: Ticket issue types are constrained by selected category in create/detail forms
 - 👥 **Collaborative Reviews**: Multi-user review and approval workflows
 - 👁️ **Inline Review Viewer**: Digital document viewing inside the review workspace with direct decision tagging
 - Automatic `Needs Revision` auto-review tagging when automated checks fail or error
@@ -34,6 +40,8 @@ The **Regional ICT Management System (RICTMS) Compliance Hub** is an enterprise-
 - Date/Deadline checks support monthly, quarterly, annual, and custom frequencies (with regex/group fallback for custom periods).
 - 🧩 **Admin Operations UI**: Working Units, Metrics Template, and Reviews pages
 - 🛡️ **Security Hardening Baseline**: API rate limiting + config validation + privileged action audit logs
+- ⚙️ **User Settings Enhancements**: In-app password change and persistent light/dark theme toggle
+- 👤 **Focal User Provisioning**: Super admin can create focal/technician users with first/middle/last/suffix, staff ID, role, position, and designation
 
 ## Quick Start
 - `super_admin` users can create/update/delete focal report assignments.

@@ -1,5 +1,9 @@
 # RICTMS Compliance Hub - User Walkthrough Guide
 
+> Update (`v1.1.0-dev`, 2026-02-24): walkthrough now reflects blob-first upload and preview behavior for document versions.
+
+> Patch (`v1.1.1-dev`, 2026-02-25): includes settings password/theme workflow, super-admin focal provisioning, and category-scoped issue-type behavior.
+
 ## Table of Contents
 1. [Getting Started](#getting-started)
 2. [Login & Authentication](#login--authentication)
@@ -10,8 +14,9 @@
 7. [Issuances & References](#issuances--references)
 8. [Tickets & Issues](#tickets--issues)
 9. [User Manual Module](#user-manual-module)
-10. [User Roles & Permissions](#user-roles--permissions)
-11. [Tips & Best Practices](#tips--best-practices)
+10. [Settings & Focal Management](#settings--focal-management)
+11. [User Roles & Permissions](#user-roles--permissions)
+12. [Tips & Best Practices](#tips--best-practices)
 
 ---
 
@@ -542,6 +547,54 @@ The system includes an in-app visual user manual that is role-aware.
 Expected behavior:
 - Content visibility aligns with your role permissions.
 - Guidance is presented in-app for operational onboarding.
+
+---
+
+## Settings & Focal Management
+
+### Theme and Password Settings
+
+1. Open **Settings** from the sidebar.
+2. Under **Theme Preference**, toggle Light/Dark mode.
+3. Under **Change Password**, enter:
+   - Current Password
+   - New Password
+   - Confirm New Password
+4. Click **Update Password**.
+
+Expected behavior:
+- Theme preference applies immediately and persists for your browser session history.
+- Password update requires correct current password and matching new password confirmation.
+
+### Super Admin: Create Focal Accounts
+
+If logged in as `super_admin`, Settings includes **Focal User Management**.
+
+1. Fill in required account fields:
+   - Email
+   - Temporary Password
+   - Role (`FOCAL` or `TECHNICIAN`)
+2. Fill in profile fields as needed:
+   - First, Middle, Last, Suffix
+   - Staff ID
+   - Position
+   - Designation
+3. Click **Create Focal User**.
+
+Expected behavior:
+- New account is created and appears in **Existing Focal Accounts**.
+- Role and staff metadata are visible in the account card list.
+
+### Ticket Category → Issue Type Dependency
+
+In ticket create and ticket detail update workflows:
+
+1. Select **Category** first.
+2. Open **Issue Type**.
+
+Expected behavior:
+- Issue type options are filtered to those mapped to the selected category.
+- Changing category clears previous incompatible issue-type selection.
 
 ---
 

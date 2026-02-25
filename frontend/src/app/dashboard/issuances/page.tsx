@@ -22,6 +22,7 @@ import {
   DialogContent,
   DialogActions,
   Alert,
+  Link,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -149,7 +150,13 @@ export default function IssuancesPage() {
     }
   };
 
-  const authorities = ['CHED', 'DBM', 'CSC', 'COA', 'DOH', 'Other'];
+  const authorityOptions = Array.from(
+    new Set(
+      issuances
+        .map((item) => item.issuing_authority)
+        .filter((item) => Boolean(item?.trim())),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
 
   const openMappingDialog = async (issuance: Issuance) => {
     try {
@@ -253,21 +260,33 @@ export default function IssuancesPage() {
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <TextField
-            select
-            label="Filter by Authority"
-            value={filterAuthority}
-            onChange={(e) => setFilterAuthority(e.target.value)}
-            sx={{ minWidth: 200 }}
-            size="small"
-          >
-            <MenuItem value="">All</MenuItem>
-            {authorities.map((auth) => (
-              <MenuItem key={auth} value={auth}>
-                {auth}
-              </MenuItem>
-            ))}
-          </TextField>
+          <Box display="flex" gap={2} alignItems="flex-start" flexWrap="wrap">
+            <TextField
+              label="Filter by Authority"
+              value={filterAuthority}
+              onChange={(e) => setFilterAuthority(e.target.value)}
+              placeholder="Type authority name"
+              sx={{ minWidth: 260 }}
+              size="small"
+            />
+            <Box display="flex" gap={1} flexWrap="wrap" alignItems="center">
+              <Chip
+                label="All"
+                clickable
+                color={filterAuthority ? 'default' : 'primary'}
+                onClick={() => setFilterAuthority('')}
+              />
+              {authorityOptions.map((authority) => (
+                <Chip
+                  key={authority}
+                  label={authority}
+                  clickable
+                  color={filterAuthority === authority ? 'primary' : 'default'}
+                  onClick={() => setFilterAuthority(authority)}
+                />
+              ))}
+            </Box>
+          </Box>
         </CardContent>
       </Card>
 
@@ -301,7 +320,20 @@ export default function IssuancesPage() {
               issuances.map((issuance) => (
                 <TableRow key={issuance.id}>
                   <TableCell>{issuance.issuance_number}</TableCell>
-                  <TableCell>{issuance.title}</TableCell>
+                  <TableCell>
+                    {issuance.source_url ? (
+                      <Link
+                        href={issuance.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        underline="hover"
+                      >
+                        {issuance.title}
+                      </Link>
+                    ) : (
+                      issuance.title
+                    )}
+                  </TableCell>
                   <TableCell>{issuance.issuing_authority}</TableCell>
                   <TableCell>
                     {new Date(issuance.issue_date).toLocaleDateString()}
@@ -389,21 +421,15 @@ export default function IssuancesPage() {
               fullWidth
             />
             <TextField
-              select
               label="Issuing Authority"
               value={formData.issuing_authority}
               onChange={(e) =>
                 setFormData({ ...formData, issuing_authority: e.target.value })
               }
+              placeholder="e.g. CHED"
               required
               fullWidth
-            >
-              {authorities.map((auth) => (
-                <MenuItem key={auth} value={auth}>
-                  {auth}
-                </MenuItem>
-              ))}
-            </TextField>
+            />
             <TextField
               label="Issue Date"
               type="date"

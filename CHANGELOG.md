@@ -8,6 +8,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - Current Development Build
 
+### Changed - 2026-02-25 (`v1.1.1-dev` UX + Governance Alignment)
+
+- Fixed protected document download flow by switching to authenticated blob download requests from the document details page.
+- Updated Documents list UX:
+  - removed Version column,
+  - added title filter,
+  - added total-record indicator,
+  - updated page label format to `Page X-X of Y`.
+- Extended `documents` table/model with `file_blob` persistence for source binaries and synchronized latest upload bytes on version updates.
+- Removed placeholder preview generation behavior for non-PDF uploads; preview now depends on actual conversion outputs.
+- Updated issuances UX:
+  - authority is now free-text/editable with dynamic chip filtering,
+  - title opens source URL in new tab when available.
+- Enforced category→issue-type dependency across ticket create/detail workflows and metadata configuration.
+- Added Settings features:
+  - authenticated change-password endpoint/UI,
+  - light/dark theme preference toggle.
+- Added super-admin focal account management in Settings with extended fields:
+  - first/middle/last/suffix,
+  - staff ID,
+  - role,
+  - position,
+  - designation.
+- Expanded user profile schema and DTOs to include focal profile fields.
+- Updated Metrics defaults to provide four sample examples per metric type.
+- Updated User Manual copy:
+  - removed explicit “Your role” badge,
+  - expanded field-level CRUD guidance, especially for all four metric types.
+
+### Changed - 2026-02-24 (`v1.1.0-dev` Blob Persistence + Conversion Stabilization)
+
+- Added `document_versions.file_blob` and `document_versions.preview_blob` to support database-native binary storage.
+- Updated upload/version creation to persist original files to both storage path and `file_blob`.
+- Updated document processing and preview generation jobs to read blob-first with filesystem fallback for existing path-only rows.
+- Updated preview handling to persist generated PDF preview bytes to `preview_blob`.
+- Updated processing state transition to `ready` after extraction queue flow to avoid indefinite upload/process spinner states.
+- Cleaned and realigned SQL seed scripts to a minimal executable baseline with blob-backed document version records.
+
 ### Summary
 
 Complete implementation of the RICTMS Compliance Hub system with all core features operational. The system includes document management, automated compliance checking, regulatory reference tracking, collaborative reviews, and issue management.

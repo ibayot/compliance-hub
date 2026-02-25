@@ -1,0 +1,72 @@
+[
+  {
+    "iteration": 1,
+    "documentId": "fd510c49-5972-451d-a3a8-f1acad5df010",
+    "versionId": "389b5bbc-0d66-47d4-928c-d58aa110fb0c",
+    "finalStatus": "ready",
+    "uploadStatus": 201,
+    "downloadStatus": 200,
+    "downloadType": "application/vnd.openxmlformats-officedocument.word",
+    "downloadLength": 1022,
+    "previewStatus": 200,
+    "previewType": "application/pdf",
+    "previewLength": 614,
+    "previewOk": true
+  },
+  {
+    "iteration": 2,
+    "documentId": "78d8a1a5-09c5-403c-852d-ee8f4f6fe74f",
+    "versionId": "5ed5fa33-236e-4d17-a46d-475ab91f29eb",
+    "finalStatus": "ready",
+    "uploadStatus": 201,
+    "downloadStatus": 200,
+    "downloadType": "application/vnd.openxmlformats-officedocument.word",
+    "downloadLength": 1022,
+    "previewStatus": 200,
+    "previewType": "application/pdf",
+    "previewLength": 614,
+    "previewOk": true
+  },
+  {
+    "iteration": 3,
+    "documentId": "9a9cfaba-f246-469d-90fd-4e7126ede0fa",
+    "versionId": "abe5b845-64b9-4b9d-bea7-60fbb234a23f",
+    "finalStatus": "ready",
+    "uploadStatus": 201,
+    "downloadStatus": 200,
+    "downloadType": "application/vnd.openxmlformats-officedocument.word",
+    "downloadLength": 1022,
+    "previewStatus": 200,
+    "previewType": "application/pdf",
+    "previewLength": 614,
+    "previewOk": true
+  },
+  {
+    "iteration": 4,
+    "documentId": "42bb37ef-64c0-4a6a-981f-15f9fd0f4c42",
+    "versionId": "79953089-eb05-4885-9af1-3cb256a7235e",
+    "finalStatus": "ready",
+    "uploadStatus": 201,
+    "downloadStatus": 200,
+    "downloadType": "application/vnd.openxmlformats-officedocument.word",
+    "downloadLength": 1022,
+    "previewStatus": 200,
+    "previewType": "application/pdf",
+    "previewLength": 614,
+    "previewOk": true
+  },
+  {
+    "iteration": 5,
+    "documentId": "656ee14d-06c3-4f5f-b91d-b6446af75fb1",
+    "versionId": "5a3b9b1c-31ff-4701-9f03-b3c60c6290b0",
+    "finalStatus": "ready",
+    "uploadStatus": 201,
+    "downloadStatus": 200,
+    "downloadType": "application/vnd.openxmlformats-officedocument.word",
+    "downloadLength": 1022,
+    "previewStatus": 200,
+    "previewType": "application/pdf",
+    "previewLength": 614,
+    "previewOk": true
+  }
+]

@@ -1,5 +1,7 @@
 # RICTMS Compliance Hub - Database Setup Complete
 
+> Update (`v1.1.0-dev`, 2026-02-24): `document_versions` now supports `file_blob` and `preview_blob` for source and preview binaries.
+
 ## ✅ Backend Status: RUNNING
 - URL: http://localhost:4000/api
 - Swagger API Docs: http://localhost:4000/api (Swagger UI available)
