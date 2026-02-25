@@ -4,6 +4,11 @@
 
 > Patch (`v1.1.1-dev`, 2026-02-25): post-install verification now includes settings password change, theme toggle, and super-admin focal-user provisioning checks.
 
+> **Hotfix `v1.1.2.2` (2026-02-25):** if `npm run dev` (frontend) or `npm run start:dev` (backend) exit with code 1 and the error contains `Unexpected token '∩╗┐'`, your `package.json` was saved with a UTF-8 BOM by your editor. Fix: run the following PowerShell in each affected directory:
+> ```powershell
+> $f = 'package.json'; $b = [IO.File]::ReadAllBytes($f); if ($b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) { [IO.File]::WriteAllBytes($f, $b[3..($b.Length-1)]); Write-Host 'BOM removed' }
+> ```
+
 > **Release `v1.1.2` (2026-02-25):** seed data updated — run `seed.sql` to load all 4 metric template types, HTML preview blobs, and correct column schema. A `preview_mime_type VARCHAR(50)` column is required on `document_versions` (auto-added by `ALTER TABLE` or TypeORM synchronize). No LibreOffice required — mammoth provides DOCX→HTML preview fallback on Windows.
 
 ## Table of Contents
