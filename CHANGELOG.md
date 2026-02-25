@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.1.2.2] - 2026-02-25 — Startup Fix: UTF-8 BOM in package.json
+
+### Fixed
+- **Frontend dev server crash (`npm run dev` exits 1)**: The `frontend/package.json` file was saved with a UTF-8 BOM (Byte Order Mark, `0xEF 0xBB 0xBF`) by an editor. Vite's PostCSS config loader uses `JSON.parse()` directly, which cannot handle BOM-prefixed JSON — it throws `SyntaxError: Unexpected token '∩╗┐'`. Removed the BOM bytes from `frontend/package.json`.
+- **Backend `npm run start:dev` exit 1 (spurious)**: `backend/package.json` also contained a UTF-8 BOM from the same editor save event. Removed BOM to ensure clean JSON parse across all tooling.
+
+### Verified (Smoke Tests Passed)
+- **Login** (`POST /api/auth/login`): Returns valid JWT for `admin@rictms.gov.ph` ✅
+- **Roles** (`GET /api/users/roles`): Returns 5 system role definitions ✅
+- **Documents list** (`GET /api/documents`): Returns 2 seeded documents ✅
+- **Document version** (`GET /api/documents/doc-001`): Version `ver-001` present ✅
+- **Document Preview** (`GET /api/documents/doc-001/versions/ver-001/preview`): `Content-Type: text/html; charset=utf-8` ✅
+- **Document Download** (`GET /api/documents/doc-001/versions/ver-001/download`): `Content-Disposition: attachment; filename="ICT_Compliance_Q1_2024.pdf"` ✅
+- **Metrics templates** (`GET /api/metrics/templates`): Returns metric templates ✅
+- **Units** (`GET /api/units`): Returns 2 seeded units ✅
+- **Frontend** (Vite dev server on port 3000): Starts cleanly after BOM removal ✅
+- **Backend** (NestJS on port 4000): All routes registered and responding ✅
+
+### Notes
+- Root cause: Some text editors (Notepad, older VS Code, PowerShell `Set-Content`) save files with UTF-8 BOM by default. JSON parsers following the spec must reject BOM. The fix strips the 3-byte BOM prefix before JSON content begins.
+- No code logic changes — this is purely a file encoding fix.
+- All v1.1.2 functionality (HTML preview, Content-Disposition download, role management, settings cards, user manual) confirmed working.
+
+---
+
 ## [1.1.2] - 2026-02-25 — Document Viewer, Metrics Seed, Dynamic Roles, Settings Cards
 
 ### Fixed
