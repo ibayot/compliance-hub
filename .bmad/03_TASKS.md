@@ -1,6 +1,8 @@
 # Task Breakdown (TASKS)
 ## RICMS Compliance Hub
 
+> Revision note (`v1.1.0-dev`, 2026-02-24): stabilization tasks include blob persistence migration, seed cleanup, and conversion smoke validation.
+
 **Version:** 1.0  
 **Date:** February 23, 2026  
 **Status:** Sprint Planning

@@ -1,6 +1,8 @@
 # Product Requirements Document (PRD)
 ## RICMS Compliance Hub
 
+> Revision note (`v1.1.0-dev`, 2026-02-24): storage requirement updated to support blob-backed document content and preview persistence.
+
 **Version:** 1.0  
 **Date:** February 23, 2026  
 **Status:** Draft

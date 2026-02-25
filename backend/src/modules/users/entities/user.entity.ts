@@ -34,8 +34,23 @@ export class User {
   @Column({ name: 'first_name', nullable: true })
   firstName: string;
 
+  @Column({ name: 'middle_name', nullable: true })
+  middleName: string;
+
   @Column({ name: 'last_name', nullable: true })
   lastName: string;
+
+  @Column({ name: 'suffix', nullable: true })
+  suffix: string;
+
+  @Column({ name: 'staff_id', nullable: true })
+  staffId: string;
+
+  @Column({ name: 'position', nullable: true })
+  position: string;
+
+  @Column({ name: 'designation', nullable: true })
+  designation: string;
 
   @Column({
     type: 'enum',

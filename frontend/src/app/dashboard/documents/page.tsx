@@ -40,6 +40,7 @@ export default function DocumentsPage() {
   const [filters, setFilters] = useState<ListDocumentsParams>({
     page: 1,
     limit: 20,
+    title: '',
     unit_id: '',
     document_type: '',
     period: '',
@@ -50,6 +51,7 @@ export default function DocumentsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [returnRemarks, setReturnRemarks] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [targetDocument, setTargetDocument] = useState<Document | null>(null);
 
   // Fetch documents
@@ -84,6 +86,15 @@ export default function DocumentsPage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => documentsApi.deleteDocument(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      setDeleteDialogOpen(false);
+      setTargetDocument(null);
+    },
+  });
+
   const handleFilterChange = (field: string, value: any) => {
     setFilters((prev) => ({ ...prev, [field]: value, page: 1 }));
   };
@@ -102,6 +113,11 @@ export default function DocumentsPage() {
     setReturnDialogOpen(true);
   };
 
+  const openDeleteDialog = (document: Document) => {
+    setTargetDocument(document);
+    setDeleteDialogOpen(true);
+  };
+
   const handleSubmitReturn = () => {
     if (!targetDocument) {
       return;
@@ -116,6 +132,14 @@ export default function DocumentsPage() {
       id: targetDocument.id,
       remarks,
     });
+  };
+
+  const handleSubmitDelete = () => {
+    if (!targetDocument) {
+      return;
+    }
+
+    deleteMutation.mutate(targetDocument.id);
   };
 
   const getWorkflowStatus = (document: Document) => {
@@ -153,6 +177,11 @@ export default function DocumentsPage() {
       return { allowed: false, reason: 'Only super admin and compliance roles can return documents.' };
     }
 
+    const uploaderRole = document.uploader?.role;
+    if (uploaderRole === 'super_admin' || uploaderRole === 'reviewer') {
+      return { allowed: false, reason: 'Documents uploaded by compliance/super admin require hard delete instead of return.' };
+    }
+
     if (document.status !== 'pending') {
       return { allowed: false, reason: 'Only pending documents can be returned.' };
     }
@@ -164,10 +193,25 @@ export default function DocumentsPage() {
     return { allowed: true };
   };
 
+  const canDeleteDocument = (document: Document) => {
+    const isSuperOrCompliance = user?.role === 'super_admin' || user?.role === 'reviewer';
+    if (!isSuperOrCompliance) {
+      return { allowed: false, reason: 'Only super admin and compliance roles can delete documents.' };
+    }
+
+    const uploaderRole = document.uploader?.role;
+    if (uploaderRole !== 'super_admin' && uploaderRole !== 'reviewer') {
+      return { allowed: false, reason: 'Hard delete is only enabled for documents uploaded by compliance/super admin.' };
+    }
+
+    return { allowed: true };
+  };
+
   const handleClearFilters = () => {
     setFilters({
       page: 1,
       limit: 20,
+      title: '',
       unit_id: '',
       document_type: '',
       period: '',
@@ -214,6 +258,15 @@ export default function DocumentsPage() {
               Filters
             </Typography>
             <Grid container spacing={2}>
+              <Grid item xs={12} md={3}>
+                <TextField
+                  label="Title"
+                  value={filters.title || ''}
+                  onChange={(e) => handleFilterChange('title', e.target.value)}
+                  fullWidth
+                  placeholder="Search by title"
+                />
+              </Grid>
               <Grid item xs={12} md={3}>
                 <TextField
                   select
@@ -299,8 +352,10 @@ export default function DocumentsPage() {
           onPageChange={handlePageChange}
           onLimitChange={handleLimitChange}
           onReturn={openReturnDialog}
+          onDelete={openDeleteDialog}
           statusFormatter={getWorkflowStatus}
           canReturnDocument={canReturnDocument}
+          canDeleteDocument={canDeleteDocument}
         />
       </Box>
 
@@ -329,6 +384,29 @@ export default function DocumentsPage() {
             onClick={handleSubmitReturn}
           >
             Return to Focal
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Hard Delete Document</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            This action permanently removes the document and its versions. This cannot be undone.
+          </Typography>
+          <Typography variant="body2">
+            {targetDocument ? `Delete "${targetDocument.title}"?` : ''}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleSubmitDelete}
+            disabled={!targetDocument || deleteMutation.isPending}
+          >
+            {deleteMutation.isPending ? 'Deleting...' : 'Hard Delete'}
           </Button>
         </DialogActions>
       </Dialog>

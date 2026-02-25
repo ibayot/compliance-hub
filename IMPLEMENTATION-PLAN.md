@@ -1,0 +1,548 @@
+# Compliance Hub - Complete Implementation Plan
+
+> Update (`v1.1.0-dev`, 2026-02-24): plan now tracks blob-based document persistence and conversion pipeline validation as mandatory stabilization work.
+
+**Date Created:** February 23, 2026  
+**Status:** In Progress  
+**Objective:** Complete MVP Phase 1, 2, and 3 with thorough testing and documentation
+
+## Update Addendum (2026-02-24)
+
+### Execution Focus Shift
+- Active execution is now centered on **Sprints 5-8 continuation** with mandatory hardening and test integration, not initial MVP scaffolding.
+
+### Completed During This Window
+- Added backend hardening baseline (rate limiting + env validation + privileged-action audit logs).
+- Added CI baseline (`.github/workflows/ci.yml`) with build/test/audit checks.
+- Added integrated metric-engine test suites for section/keyword/property/date checks.
+- Finalized submission-frequency support for deadline templates.
+- Implemented issuance-to-document mapping manager in frontend using existing backend link endpoints.
+- Applied role-aware issuance module UX: compliance/super-admin CRUD + mapping actions, read-only fallback for others.
+
+### Immediate Remaining Plan Steps
+1. Selectively stage files for release packaging (include public docs, exclude local tracking docs).
+2. Create release commit and tag `v1.0.0`.
+3. Push branch and tag to configured remote.
+4. Continue Sprint 8 hardening tasks after release baseline is published.
+
+### New Governance Adjustments (2026-02-24)
+1. Replace document delete workflow with non-destructive return-for-revision action.
+2. Enforce mandatory remarks and reviewer identity capture on return events.
+3. Hide returned documents from super-admin/compliance list while keeping focal visibility.
+4. Introduce dynamic ticket issue type/category masters with super-admin CRUD and soft-delete protection.
+5. Ensure in-app user manual route is fully wired and role-accessible in the Vite router.
+
+---
+
+## Current State Assessment
+
+### ✅ Working Features (Phase 1 Partial)
+- [x] User authentication + JWT tokens
+- [x] RBAC (roles: super_admin, reviewer, focal_person, technician, auditor)
+- [x] Database schema with 14 tables
+- [x] Document upload + versioning (backend API)
+- [x] Basic dashboard UI
+- [x] Documents listing page
+- [x] Issuances page
+- [x] Tickets page (traditional ticketing structure)
+- [x] Backend APIs operational on http://localhost:4000/api
+
+### ❌ Missing/Broken Features
+
+#### Critical UI Issues
+1. **No Navigation Menu** - Cannot navigate back to dashboard from sub-pages
+2. **No Back Buttons** - Stuck on pages after navigation
+3. **Container Width** - Should be 90% browser width, currently smaller
+4. **Cybersecurity Metrics** - Not visible on dashboard
+
+#### Missing Phase 1 (MVP Must-Have)
+5. **Units Management UI** - Cannot add/edit/delete units (super_admin)
+6. **Metrics Template Builder UI** - Cannot configure compliance rules
+7. **Manual Compliance Review UI** - Cannot manually check document compliance
+8. **Ticket Structure Wrong** - Should be Issue Documentation, not ticketing system
+9. **No Swagger UI** - Cannot test backend APIs visually
+10. **Period/Month Tagging** - Not implemented in UI
+11. **Compare Previous Version** - Text diff view missing
+12. **Laws/Standards Tracker** - Basic CRUD missing
+
+#### Missing Phase 2 (Expansion)
+13. **Advanced Metric Template Builder** - No UI for complex rules
+14. **Traceability Mapping** - Issuance → Metrics → Evidence Report
+15. **Notifications** - No email/in-app notifications
+16. **Period Lock/Closeout Workflow** - Not implemented
+17. **Cybersecurity Metrics API Integration** - No caching, no data fetching
+18. **Advanced Diff View** - No change summaries by headings
+
+#### Missing Phase 3 (Enterprise)
+19. **SSO Integration** - Not implemented
+20. **Multi-Region Support** - Not implemented
+21. **Offline Export Packs** - No audit export functionality
+22. **Advanced Reporting** - No scheduled exports
+23. **AI Assist** - No change summarization
+
+---
+
+## Implementation Plan
+
+### **PHASE 1A: Critical UI Fixes** (Priority: URGENT)
+
+#### Task 1.1: Add Navigation Menu
+- **Files to Create:**
+  - `frontend/src/components/layout/Sidebar.tsx` - Main navigation sidebar
+  - `frontend/src/components/layout/AppBar.tsx` - Top app bar with breadcrumbs
+  - `frontend/src/components/layout/DashboardLayout.tsx` - Layout wrapper
+- **Files to Modify:**
+  - `frontend/src/app/dashboard/layout.tsx` - Use new DashboardLayout
+- **Features:**
+  - Persistent sidebar with: Dashboard, Documents, Issuances, Tickets, Units (admin), Metrics (admin), Settings
+  - Breadcrumb navigation showing current path
+  - Mobile-responsive drawer
+  - User profile menu in top-right
+  - Logout button
+
+#### Task 1.2: Adjust Container Widths
+- **Files to Modify:**
+  - All page files: `dashboard/page.tsx`, `documents/page.tsx`, `issuances/page.tsx`, `tickets/page.tsx`
+- **Change:** `maxWidth="lg"` → `maxWidth={false}` + `sx={{ width: '90%', mx: 'auto' }}`
+
+#### Task 1.3: Add Cybersecurity Metrics Cards
+- **Files to Modify:**
+  - `frontend/src/app/dashboard/page.tsx`
+- **Features:**
+  - New card: "Cybersecurity Compliance" with status indicators
+  - Sample metrics: Firewall Status, Antivirus Updates, User Training, Incident Response
+  - Status colors: Green (compliant), Yellow (warning), Red (non-compliant)
+
+---
+
+### **PHASE 1B: Core Missing Features** (Priority: HIGH)
+
+#### Task 1.4: Units Management UI
+- **Files to Create:**
+  - `frontend/src/app/dashboard/units/page.tsx` - Units list + CRUD
+  - `frontend/src/components/units/UnitForm.tsx` - Add/Edit unit form
+  - `frontend/src/lib/api/units.ts` - API client
+- **Backend:**
+  - Already exists: `backend/src/modules/units/` (verify CRUD endpoints)
+- **Features:**
+  - List all units with data table
+  - Add new unit (super_admin only)
+  - Edit unit details
+  - Activate/deactivate units
+  - Assign focal persons to units
+
+#### Task 1.5: Metrics Template Builder UI
+- **Files to Create:**
+  - `frontend/src/app/dashboard/metrics/page.tsx` - Metrics templates list
+  - `frontend/src/app/dashboard/metrics/[id]/page.tsx` - Edit template
+  - `frontend/src/components/metrics/MetricBuilder.tsx` - Drag-and-drop rule builder
+  - `frontend/src/components/metrics/RuleForm.tsx` - Individual rule configuration
+- **Backend Files to Create:**
+  - `backend/src/modules/metrics/dto/create-template.dto.ts`
+  - `backend/src/modules/metrics/services/template.service.ts`
+  - `backend/src/modules/metrics/controllers/template.controller.ts`
+- **Features:**
+  - List metric templates (section_check, keyword_check, date_check, number_range_check)
+  - Create new template with rules:
+    - **Section Check:** Define required sections/headings
+    - **Keyword Check:** List keywords + minimum occurrences
+    - **Number Check:** Extract numbers near keywords (e.g., "Budget: $50,000")
+    - **Date Check:** Verify document dates within reporting period
+  - Assign templates to units and issuances
+  - Test template against sample document
+
+#### Task 1.6: Manual Compliance Review UI
+- **Files to Create:**
+  - `frontend/src/app/dashboard/reviews/page.tsx` - Pending reviews list
+  - `frontend/src/app/dashboard/reviews/[documentId]/page.tsx` - Review interface
+  - `frontend/src/components/reviews/ComplianceChecklist.tsx` - Checklist UI
+- **Features:**
+  - List documents pending manual review
+  - Open document viewer + compliance checklist side-by-side
+  - Automated metric results displayed (pass/warning/fail)
+  - Manual override: Mark as compliant/non-compliant
+  - Add reviewer remarks
+  - Submit review → Update document status
+
+#### Task 1.7: Restructure Tickets System
+- **Database Changes:**
+  ```sql
+  -- New structure for Issue Documentation
+  ALTER TABLE tickets 
+    ADD COLUMN issue_type VARCHAR(100),
+    ADD COLUMN resolution_steps TEXT,
+    ADD COLUMN resolution_date TIMESTAMP,
+    MODIFY COLUMN category VARCHAR(100) -- More flexible categories
+  ```
+- **Backend Files to Modify:**
+  - `backend/src/modules/tickets/entities/ticket.entity.ts`
+  - `backend/src/modules/tickets/dto/create-ticket.dto.ts`
+  - `backend/src/modules/tickets/services/ticket.service.ts`
+- **Frontend Files to Modify:**
+  - `frontend/src/app/dashboard/tickets/page.tsx`
+  - `frontend/src/app/dashboard/tickets/[id]/page.tsx`
+- **New Structure:**
+  - **Issue:** Title/summary of the problem
+  - **Category:** Document-related, System, Compliance, Training, Other
+  - **Description:** Detailed explanation
+  - **Resolution Steps:** Numbered steps taken to resolve (markdown)
+  - **Date Reported:** Auto-generated
+  - **Date Resolved:** When marked as resolved
+  - **Status:** Open, In Progress, Resolved, Documented
+
+#### Task 1.8: Enable Swagger UI
+- **Backend Files to Modify:**
+  - `backend/package.json` - Add `@nestjs/swagger` dependency
+  - `backend/src/main.ts` - Configure SwaggerModule
+- **Installation:**
+  ```bash
+  cd backend && npm install @nestjs/swagger swagger-ui-express
+  ```
+- **Configuration:**
+  - Swagger available at: `http://localhost:4000/api/docs`
+  - Add API decorators to all controllers
+  - Document DTOs with `@ApiProperty()`
+
+#### Task 1.9: Version Comparison Text Diff
+- **Files to Create:**
+  - `frontend/src/components/documents/TextDiffViewer.tsx`
+  - `frontend/src/lib/utils/textDiff.ts` - Diff algorithm
+- **Features:**
+  - Side-by-side comparison
+  - Highlight additions (green) and deletions (red)
+  - Show line numbers
+  - Jump to next/previous change
+  - Export comparison as PDF
+
+---
+
+### **PHASE 2: Expansion Features** (Priority: MEDIUM)
+
+#### Task 2.1: Advanced Metric Template Builder
+- **Features Beyond Basic:**
+  - Conditional rules (IF section exists THEN check keywords)
+  - Weighted scoring (assign points to each rule)
+  - Template inheritance (base template + unit-specific overrides)
+  - Formula builder for calculated metrics
+  - Import/export templates as JSON
+
+#### Task 2.2: Traceability Mapping
+- **Files to Create:**
+  - `frontend/src/app/dashboard/traceability/page.tsx`
+  - `backend/src/modules/traceability/` - New module
+- **Features:**
+  - Visual flowchart: Issuance → Metrics → Documents → Results
+  - Click any node to see details
+  - Generate traceability report for audits
+  - Show which documents satisfy which issuance requirements
+
+#### Task 2.3: Notifications System
+- **Backend:**
+  - Install: `npm install @nestjs-modules/mailer nodemailer`
+  - Create: `backend/src/modules/notifications/`
+  - Configure email templates
+- **Frontend:**
+  - Bell icon in app bar with unread count
+  - Notification drawer
+  - Mark as read/unread
+- **Triggers:**
+  - Document uploaded
+  - Review assigned
+  - Compliance check failed
+  - Ticket assigned
+  - Deadline approaching
+
+#### Task 2.4: Period Lock/Closeout Workflow
+- **Database:**
+  - New table: `reporting_periods` (id, name, start_date, end_date, status: open/locked/closed)
+  - Add `period_id` to documents table
+- **Features:**
+  - Create reporting periods (e.g., Q1 2024, Annual 2023)
+  - Lock period → No more document uploads for that period
+  - Closeout → Generate final compliance report
+  - Reopen if needed (with audit trail)
+
+#### Task 2.5: Cybersecurity Metrics API Integration
+- **Backend:**
+  - Create: `backend/src/modules/cybersecurity/`
+  - Integrate with external APIs (configurable endpoints)
+  - Implement caching with Redis (or in-memory if Redis unavailable)
+  - Schedule periodic fetches (cron job)
+- **Frontend:**
+  - Dashboard cards pull from `/api/cybersecurity/metrics`
+  - Real-time status indicators
+  - Drill-down to detailed metrics
+
+#### Task 2.6: Advanced Diff View
+- **Features:**
+  - Group changes by document section/heading
+  - Show summary: "5 changes in Section 2.1"
+  - Semantic diff (understands document structure)
+  - Track major changes vs minor edits
+  - Version comparison report (PDF export)
+
+---
+
+### **PHASE 3: Enterprise Hardening** (Priority: LOW)
+
+#### Task 3.1: SSO Integration
+- **Technologies:** OAuth 2.0 / SAML 2.0
+- **Providers:** Azure AD, Google Workspace, Okta
+- **Backend:** Install `passport-saml` or `passport-oauth2`
+- **Config:** Environment variables for SSO endpoints
+
+#### Task 3.2: Multi-Region Support
+- **Database:** Add `region` field to units and users
+- **Backend:** Filter data by user's region(s)
+- **Frontend:** Region selector for super_admin
+
+#### Task 3.3: Offline Export Packs
+- **Features:**
+  - Package all compliance docs for a period as ZIP
+  - Include: Documents, reviews, metrics results, audit trail
+  - Self-contained HTML viewer (no internet required)
+  - Digital signatures for authenticity
+
+#### Task 3.4: Advanced Reporting
+- **Features:**
+  - Report builder UI (select metrics, filters, date ranges)
+  - Schedule reports (daily, weekly, monthly)
+  - Email reports to stakeholders
+  - Dashboard widgets (customizable)
+  - Export formats: PDF, Excel, CSV
+
+#### Task 3.5: AI Assist for Change Summaries
+- **Technology:** OpenAI API / Anthropic Claude
+- **Features:**
+  - Summarize document changes in plain language
+  - Highlight compliance-relevant changes
+  - Suggest review focus areas
+  - NOT a replacement for manual review (assist only)
+
+---
+
+## Testing Strategy
+
+### Unit Testing
+- All backend services: Jest tests (aim for >80% coverage)
+- All frontend components: React Testing Library
+- Critical paths: Authentication, file upload, compliance checks
+
+### Integration Testing
+- API endpoint testing with Supertest
+- Database transactions
+- File storage operations
+
+### End-to-End Testing
+- Playwright for full user workflows:
+  1. Login → Upload Document → Run Compliance Check → Review → Approve
+  2. Create Ticket → Assign → Resolve → Document
+  3. Create Unit → Assign Metrics → Upload Doc → Verify Metrics Applied
+  4. Create Metric Template → Test Against Sample Doc → Verify Results
+
+### Manual Testing Checklist
+- [ ] Navigation: All links work, back buttons functional
+- [ ] Forms: Validation errors display correctly
+- [ ] File upload: Various file types and sizes
+- [ ] Permissions: Each role can only access allowed features
+- [ ] Responsive: Works on desktop, tablet, mobile
+- [ ] Performance: Pages load within 2 seconds
+- [ ] Security: XSS, CSRF, SQL injection tests
+- [ ] Accessibility: Keyboard navigation, screen reader compatibility
+
+---
+
+## Documentation Requirements
+
+### 1. README.md
+- Project overview
+- Technology stack
+- Quick start guide
+- Demo credentials
+- Screenshots
+
+### 2. INSTALLATION.md
+- Prerequisites (Node.js, MySQL, etc.)
+- Step-by-step setup
+- Environment variables explained
+- Database setup
+- Troubleshooting common issues
+
+### 3. USER-GUIDE.md (New)
+- How to use each feature
+- Role-specific guides
+- Compliance workflow walkthrough
+- Screenshots with annotations
+- FAQ
+
+### 4. API-DOCUMENTATION.md (New)
+- All endpoints documented
+- Request/response examples
+- Authentication instructions
+- Error codes
+- Postman collection link
+
+### 5. CHANGELOG.md
+- Version history
+- New features
+- Bug fixes
+- Breaking changes
+- Migration guides
+
+---
+
+## Execution Timeline
+
+### Sprint 1 (Days 1-2): Critical UI Fixes
+- Navigation menu + back buttons
+- Container widths
+- Cybersecurity metrics cards
+- **Deliverable:** Users can navigate the app smoothly
+
+### Sprint 2 (Days 3-5): Core Admin Features
+- Units management UI
+- Basic metrics template builder
+- Manual compliance review UI
+- **Deliverable:** Super admin can configure the system
+
+### Sprint 3 (Days 6-8): Tickets + Swagger
+- Restructure tickets system
+- Enable Swagger UI
+- Version comparison text diff
+- **Deliverable:** Issue documentation works, APIs testable
+
+#### Sprint 3 Clarification (Current Baseline)
+Sprint 3 is focused on **platform operability and issue/governance tooling**:
+1. **Issue workflow maturity** (tickets/incident tracking surfaces ready for operations)
+2. **API operability** (Swagger and testable endpoints for frontend-backend parity)
+3. **Auditability support** (version diff and evidence traceability)
+
+This sprint is considered complete when operational users can document issues, engineers can validate APIs quickly, and reviewers can inspect change history reliably.
+
+### Sprint 4 (Days 9-12): Phase 2 Features
+- Advanced metric builder
+- Traceability mapping
+- Notifications system
+- Period lock/closeout
+- **Deliverable:** Advanced compliance workflows operational
+
+### Sprint 5 (Days 13-15): Phase 2 Completion
+- Cybersecurity metrics API integration
+- Advanced diff view
+- **Deliverable:** All Phase 2 features complete
+
+### Sprint 6 (Days 16-18): Phase 3 Features
+- SSO integration
+- Multi-region support
+- Offline export packs
+- Advanced reporting
+- AI assist (optional)
+- **Deliverable:** Enterprise-ready features
+
+### Sprint 7 (Days 19-20): Testing & Bug Fixes
+- Run all tests
+- Fix discovered bugs
+- Performance optimization
+- Security hardening
+- **Deliverable:** Stable, production-ready app
+
+### Revamp Execution Update (2026-02-23)
+
+Completed in this execution cycle:
+1. Critical frontend compile/runtime bug fixes (`AppBar`, `Sidebar`, layout offseting)
+2. Cybersecurity incidents period analytics (daily/weekly/monthly/quarterly/yearly)
+3. Full Units/Metrics/Reviews page implementation (from placeholders to working flows)
+4. Build + runtime + API smoke-test validation loop (Nest build + Vite build verified)
+5. Documentation updates across the five primary markdown files
+6. Frontend framework migration to Vite + React Router to improve local performance and stability
+
+Next optimization track:
+1. Add pagination/batching for review-heavy document sets
+2. Add dashboard cache windows for slower endpoints
+3. Continue ticket/issue UX language alignment
+
+### Security/DevOps Execution Update (2026-02-24)
+
+Completed in this execution cycle:
+1. Added backend API throttling via `express-rate-limit` in bootstrap (`/api` scoped)
+2. Added first CI pipeline at `.github/workflows/ci.yml`:
+  - backend build
+  - frontend build
+  - backend test hook (`--passWithNoTests`)
+  - dependency scanning (`npm audit --audit-level=high`) for backend/frontend
+3. Added QA user guidance artifacts:
+  - `QA-USER-MANUAL.md`
+  - expanded metrics and QA sections in `WALKTHROUGH.md`
+4. Added submission-frequency support for date checks (`monthly`, `quarterly`, `annual`, `custom`)
+
+Next phases executable from current baseline:
+1. Add integration tests for metrics/reviews/tickets API paths and wire into CI gate
+2. Add dashboard/review pagination + batching to reduce load spikes
+3. Add structured audit logs for privileged actions (metrics/tickets/reviews)
+4. Add production-safe env parity checks (`NODE_ENV`, secrets, CORS origin whitelist)
+
+### Sprint 8 (Days 21-22): Documentation
+- Update all 5 markdown files
+- Create video walkthroughs
+- Document deployment process
+- **Deliverable:** Comprehensive documentation
+
+---
+
+## Success Criteria
+
+### Phase 1 MVP Complete When:
+- [x] All navigation works (back buttons, menu)
+- [x] Super admin can add/edit units
+- [x] Super admin can create metric templates
+- [x] Focal persons can manually review documents
+- [ ] Tickets system documents issues properly
+- [ ] Swagger UI accessible
+- [ ] Version comparison shows text diff
+- [ ] All UI containers are 90% width
+
+### Phase 2 Expansion Complete When:
+- [ ] Advanced metric builder with conditional rules
+- [ ] Traceability map visualizes compliance chain
+- [ ] Notifications sent for key events
+- [ ] Periods can be locked and closed out
+- [ ] Cybersecurity metrics display real data
+- [ ] Advanced diff groups changes by section
+
+### Phase 3 Enterprise Complete When:
+- [ ] SSO login works with Azure AD
+- [ ] Multi-region filtering operational
+- [ ] Offline export pack generates successfully
+- [ ] Scheduled reports email stakeholders
+- [ ] AI assist summarizes doc changes
+
+### Production Ready When:
+- [ ] All automated tests pass
+- [ ] Manual testing checklist 100% complete
+- [ ] Zero critical or high-priority bugs
+- [ ] All 5 documentation files updated
+- [ ] Performance benchmarks met
+- [ ] Security audit passed
+
+---
+
+## Risk Mitigation
+
+### Risk: Scope Creep
+- **Mitigation:** Stick to this plan, defer non-essential features
+
+### Risk: Complex Features Take Too Long
+- **Mitigation:** Timebox tasks, implement MVP version first, enhance later
+
+### Risk: Database Migration Issues
+- **Mitigation:** Test migrations on copy of database, have rollback plan
+
+### Risk: Frontend-Backend API Mismatches
+- **Mitigation:** Use Swagger docs as contract, validate with integration tests
+
+### Risk: User Confusion with New Features
+- **Mitigation:** Add tooltips, help icons, comprehensive user guide
+
+---
+
+**Next Step:** Begin Sprint 1 - Critical UI Fixes

@@ -20,6 +20,7 @@ import {
 import {
   Visibility as ViewIcon,
   Undo as ReturnIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { Document } from '@/lib/api/documents';
@@ -34,8 +35,10 @@ interface DocumentListProps {
   onPageChange: (page: number) => void;
   onLimitChange: (limit: number) => void;
   onReturn?: (document: Document) => void;
+  onDelete?: (document: Document) => void;
   statusFormatter?: (document: Document) => { label: string; color: 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' };
   canReturnDocument?: (document: Document) => { allowed: boolean; reason?: string };
+  canDeleteDocument?: (document: Document) => { allowed: boolean; reason?: string };
 }
 
 const getStatusColor = (
@@ -64,8 +67,10 @@ export default function DocumentList({
   onPageChange,
   onLimitChange,
   onReturn,
+  onDelete,
   statusFormatter,
   canReturnDocument,
+  canDeleteDocument,
 }: DocumentListProps) {
   const router = useRouter();
 
@@ -126,7 +131,6 @@ export default function DocumentList({
               <TableCell>Type</TableCell>
               <TableCell>Period</TableCell>
               <TableCell>Status</TableCell>
-              <TableCell>Version</TableCell>
               <TableCell>Uploaded By</TableCell>
               <TableCell>Date</TableCell>
               <TableCell align="right">Actions</TableCell>
@@ -160,7 +164,6 @@ export default function DocumentList({
                     );
                   })()}
                 </TableCell>
-                <TableCell>v{doc.current_version}</TableCell>
                 <TableCell>{doc.uploader?.username || 'N/A'}</TableCell>
                 <TableCell>
                   {format(new Date(doc.created_at), 'MMM dd, yyyy')}
@@ -197,12 +200,39 @@ export default function DocumentList({
                       );
                     })()
                   )}
+                  {onDelete && (
+                    (() => {
+                      const permission = canDeleteDocument
+                        ? canDeleteDocument(doc)
+                        : { allowed: true };
+
+                      return (
+                        <Tooltip title={permission.allowed ? 'Hard Delete' : permission.reason || 'Delete is not allowed'}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={() => permission.allowed && onDelete(doc)}
+                              color="error"
+                              disabled={!permission.allowed}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      );
+                    })()
+                  )}
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </TableContainer>
+      <Box sx={{ px: 2, pt: 1 }}>
+        <Typography variant="body2" color="text.secondary">
+          Total Records: {total}
+        </Typography>
+      </Box>
       <TablePagination
         rowsPerPageOptions={[10, 20, 50, 100]}
         component="div"
@@ -211,6 +241,10 @@ export default function DocumentList({
         page={page - 1} // MUI uses 0-based, our API uses 1-based
         onPageChange={handleChangePage}
         onRowsPerPageChange={handleChangeRowsPerPage}
+        labelDisplayedRows={() => {
+          const totalPages = Math.max(Math.ceil(total / limit), 1);
+          return `Page ${page}-${page} of ${totalPages}`;
+        }}
       />
     </Paper>
   );

@@ -52,6 +52,7 @@ export interface UpsertTicketConfigDto {
   name: string;
   description?: string;
   is_active?: boolean;
+  category_id?: string;
 }
 
 export interface AddCommentDto {
@@ -86,6 +87,7 @@ export class TicketService implements OnModuleInit {
         is_deleted tinyint(1) NOT NULL DEFAULT 0,
         created_by int DEFAULT NULL,
         updated_by int DEFAULT NULL,
+        category_id varchar(36) DEFAULT NULL,
         created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
         updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
         PRIMARY KEY (id),
@@ -117,6 +119,11 @@ export class TicketService implements OnModuleInit {
     `);
 
     await this.dataSource.query(`
+      ALTER TABLE ticket_issue_types
+      ADD COLUMN IF NOT EXISTS category_id varchar(36) NULL;
+    `);
+
+    await this.dataSource.query(`
       ALTER TABLE tickets
       ADD CONSTRAINT fk_tickets_issue_type_id
       FOREIGN KEY (issue_type_id) REFERENCES ticket_issue_types(id)
@@ -126,6 +133,13 @@ export class TicketService implements OnModuleInit {
     await this.dataSource.query(`
       ALTER TABLE tickets
       ADD CONSTRAINT fk_tickets_category_id
+      FOREIGN KEY (category_id) REFERENCES ticket_categories(id)
+      ON DELETE SET NULL;
+    `).catch(() => undefined);
+
+    await this.dataSource.query(`
+      ALTER TABLE ticket_issue_types
+      ADD CONSTRAINT fk_issue_type_category_id
       FOREIGN KEY (category_id) REFERENCES ticket_categories(id)
       ON DELETE SET NULL;
     `).catch(() => undefined);
@@ -173,6 +187,7 @@ export class TicketService implements OnModuleInit {
   private async resolveIssueType(
     issue_type_id?: string,
     fallbackIssueType?: IssueType,
+    category_id?: string,
   ): Promise<{ issue_type_id: string | null; issue_type: IssueType }> {
     if (!issue_type_id) {
       return {
@@ -187,6 +202,10 @@ export class TicketService implements OnModuleInit {
 
     if (!issueType || !issueType.is_active) {
       throw new BadRequestException('Selected issue type is invalid or inactive.');
+    }
+
+    if (category_id && issueType.category_id && issueType.category_id !== category_id) {
+      throw new BadRequestException('Selected issue type does not belong to the selected category.');
     }
 
     return {
@@ -236,13 +255,15 @@ export class TicketService implements OnModuleInit {
   async createTicket(dto: CreateTicketDto): Promise<Ticket> {
     const ticket_number = await this.generateTicketNumber();
 
-    const resolvedIssueType = await this.resolveIssueType(
-      dto.issue_type_id,
-      dto.issue_type,
-    );
     const resolvedCategory = await this.resolveCategory(
       dto.category_id,
       dto.category,
+    );
+
+    const resolvedIssueType = await this.resolveIssueType(
+      dto.issue_type_id,
+      dto.issue_type,
+      resolvedCategory.category_id || undefined,
     );
 
     const ticket = this.ticketRepo.create({
@@ -361,9 +382,13 @@ export class TicketService implements OnModuleInit {
     }
 
     if (dto.issue_type_id !== undefined) {
+      const categoryForValidation = dto.category_id !== undefined
+        ? dto.category_id
+        : ticket.category_id || undefined;
       const resolvedIssueType = await this.resolveIssueType(
         dto.issue_type_id,
         dto.issue_type,
+        categoryForValidation,
       );
       dto.issue_type = resolvedIssueType.issue_type;
       dto.issue_type_id = resolvedIssueType.issue_type_id || undefined;
@@ -450,14 +475,23 @@ export class TicketService implements OnModuleInit {
     };
   }
 
-  async listIssueTypes(includeInactive = true): Promise<TicketIssueType[]> {
+  async listIssueTypes(
+    includeInactive = true,
+    categoryId?: string,
+  ): Promise<TicketIssueType[]> {
     const qb = this.issueTypeRepo
       .createQueryBuilder('issueType')
       .where('issueType.is_deleted = :isDeleted', { isDeleted: false })
       .orderBy('issueType.name', 'ASC');
 
+    qb.leftJoinAndSelect('issueType.category', 'category');
+
     if (!includeInactive) {
       qb.andWhere('issueType.is_active = :isActive', { isActive: true });
+    }
+
+    if (categoryId) {
+      qb.andWhere('issueType.category_id = :categoryId', { categoryId });
     }
 
     return qb.getMany();
@@ -489,6 +523,17 @@ export class TicketService implements OnModuleInit {
       throw new BadRequestException('Issue type key is required.');
     }
 
+    let categoryId: string | null = null;
+    if (dto.category_id) {
+      const category = await this.categoryRepo.findOne({
+        where: { id: dto.category_id, is_deleted: false },
+      });
+      if (!category) {
+        throw new BadRequestException('Selected category is invalid.');
+      }
+      categoryId = category.id;
+    }
+
     const existing = await this.issueTypeRepo.findOne({ where: { key } });
     if (existing && !existing.is_deleted) {
       throw new ConflictException('Issue type key already exists.');
@@ -500,6 +545,7 @@ export class TicketService implements OnModuleInit {
       existing.is_active = dto.is_active ?? true;
       existing.is_deleted = false;
       existing.updated_by = actorId;
+      existing.category_id = categoryId;
       return this.issueTypeRepo.save(existing);
     }
 
@@ -509,6 +555,7 @@ export class TicketService implements OnModuleInit {
         name: dto.name.trim(),
         description: dto.description?.trim() || null,
         is_active: dto.is_active ?? true,
+        category_id: categoryId,
         created_by: actorId,
         updated_by: actorId,
       }),
@@ -550,6 +597,20 @@ export class TicketService implements OnModuleInit {
 
     if (dto.is_active !== undefined) {
       issueType.is_active = dto.is_active;
+    }
+
+    if (dto.category_id !== undefined) {
+      if (!dto.category_id) {
+        issueType.category_id = null;
+      } else {
+        const category = await this.categoryRepo.findOne({
+          where: { id: dto.category_id, is_deleted: false },
+        });
+        if (!category) {
+          throw new BadRequestException('Selected category is invalid.');
+        }
+        issueType.category_id = category.id;
+      }
     }
 
     issueType.updated_by = actorId;

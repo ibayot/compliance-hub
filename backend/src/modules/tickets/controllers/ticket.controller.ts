@@ -99,8 +99,11 @@ export class TicketController {
 
   @Get('issue-types')
   @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
-  async listIssueTypes(@Query('active_only') activeOnly?: string) {
-    return this.ticketService.listIssueTypes(activeOnly !== 'true');
+  async listIssueTypes(
+    @Query('active_only') activeOnly?: string,
+    @Query('category_id') categoryId?: string,
+  ) {
+    return this.ticketService.listIssueTypes(activeOnly !== 'true', categoryId);
   }
 
   @Post('issue-types')

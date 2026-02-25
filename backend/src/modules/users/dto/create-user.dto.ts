@@ -15,7 +15,27 @@ export class CreateUserDto {
 
   @IsString()
   @IsOptional()
+  middleName?: string;
+
+  @IsString()
+  @IsOptional()
   lastName?: string;
+
+  @IsString()
+  @IsOptional()
+  suffix?: string;
+
+  @IsString()
+  @IsOptional()
+  staffId?: string;
+
+  @IsString()
+  @IsOptional()
+  position?: string;
+
+  @IsString()
+  @IsOptional()
+  designation?: string;
 
   @IsEnum(UserRole)
   role: UserRole;

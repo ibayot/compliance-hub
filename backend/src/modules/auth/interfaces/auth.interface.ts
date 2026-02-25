@@ -12,7 +12,12 @@ export interface AuthResponse {
     id: number;
     email: string;
     firstName: string;
+    middleName?: string;
     lastName: string;
+    suffix?: string;
+    staffId?: string;
+    position?: string;
+    designation?: string;
     role: string;
   };
 }

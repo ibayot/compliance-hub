@@ -77,9 +77,6 @@ export class MetricsService {
     }
 
     const document = version.document;
-    if (!document.extracted_text) {
-      throw new Error('Document text has not been extracted yet');
-    }
 
     // Get applicable metrics
     const applicableMetrics = await this.getApplicableMetrics(
@@ -135,11 +132,12 @@ export class MetricsService {
     metric: MetricTemplate,
   ): Promise<MetricResult> {
     let result: any;
+    const extractedText = document.extracted_text || '';
 
     switch (metric.metric_type) {
       case MetricType.SECTION_CHECK:
         result = this.sectionCheckEngine.execute(
-          document.extracted_text!,
+          extractedText,
           metric.rule_config as any,
           metric.pass_criteria as any,
         );
@@ -147,7 +145,7 @@ export class MetricsService {
 
       case MetricType.KEYWORD_CHECK:
         result = this.keywordCheckEngine.execute(
-          document.extracted_text!,
+          extractedText,
           metric.rule_config as any,
           metric.pass_criteria as any,
         );
@@ -163,7 +161,7 @@ export class MetricsService {
         };
         result = this.propertyCheckEngine.execute(
           metadata,
-          document.extracted_text || '',
+          extractedText,
           metric.rule_config as any,
           metric.pass_criteria as any,
         );

@@ -67,6 +67,7 @@ export default function TicketsPage() {
   const [configKey, setConfigKey] = useState('');
   const [configDescription, setConfigDescription] = useState('');
   const [configActive, setConfigActive] = useState(true);
+  const [configCategoryId, setConfigCategoryId] = useState('');
   const [formData, setFormData] = useState<CreateTicketDto>({
     subject: '',
     description: '',
@@ -161,6 +162,7 @@ export default function TicketsPage() {
     setConfigKey(item?.key || '');
     setConfigDescription(item?.description || '');
     setConfigActive(item?.is_active ?? true);
+    setConfigCategoryId((item as any)?.category_id || '');
     setConfigDialogOpen(true);
   };
 
@@ -171,6 +173,7 @@ export default function TicketsPage() {
         name: configName,
         description: configDescription,
         is_active: configActive,
+        category_id: configType === 'issue_type' ? configCategoryId || undefined : undefined,
       };
 
       if (configType === 'issue_type') {
@@ -289,7 +292,7 @@ export default function TicketsPage() {
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              Issue Metadata Management (Super Admin)
+              Issue Metadata Management
             </Typography>
             <Stack spacing={2}>
               <Box>
@@ -446,6 +449,7 @@ export default function TicketsPage() {
               fullWidth
             >
               {issueTypes
+                .filter((item) => !formData.category_id || (item as any).category_id === formData.category_id)
                 .filter((item) => item.is_active)
                 .map((item) => (
                   <MenuItem key={item.id} value={item.id}>
@@ -462,6 +466,7 @@ export default function TicketsPage() {
                   ...formData,
                   category_id: e.target.value,
                   category: 'other',
+                  issue_type_id: undefined,
                 })
               }
               required
@@ -536,6 +541,24 @@ export default function TicketsPage() {
               required
               fullWidth
             />
+            {configType === 'issue_type' && (
+              <TextField
+                select
+                label="Category"
+                value={configCategoryId}
+                onChange={(event) => setConfigCategoryId(event.target.value)}
+                fullWidth
+              >
+                <MenuItem value="">No Category</MenuItem>
+                {categories
+                  .filter((item) => item.is_active)
+                  .map((item) => (
+                    <MenuItem key={item.id} value={item.id}>
+                      {item.name}
+                    </MenuItem>
+                  ))}
+              </TextField>
+            )}
             <TextField
               label="Description"
               value={configDescription}

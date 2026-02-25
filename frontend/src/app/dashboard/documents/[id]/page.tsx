@@ -66,7 +66,12 @@ export default function DocumentDetailsPage() {
   });
 
   const handleBack = () => {
-    router.back();
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push('/dashboard/documents');
   };
 
   const handleRefresh = () => {
@@ -78,18 +83,28 @@ export default function DocumentDetailsPage() {
     setSelectedVersionId(versionId);
   };
 
-  const handleDownloadVersion = (versionId: string) => {
-    const url = documentsApi.getDownloadUrl(documentId, versionId);
-    window.open(url, '_blank');
+  const handleDownloadVersion = async (versionId: string) => {
+    const { blob, fileName } = await documentsApi.downloadVersionBlob(
+      documentId,
+      versionId,
+    );
+    const blobUrl = URL.createObjectURL(blob);
+    const anchor = window.document.createElement('a');
+    anchor.href = blobUrl;
+    anchor.download = fileName;
+    window.document.body.appendChild(anchor);
+    anchor.click();
+    window.document.body.removeChild(anchor);
+    URL.revokeObjectURL(blobUrl);
   };
 
-  const handleDownloadCurrent = () => {
+  const handleDownloadCurrent = async () => {
     if (document && versions && versions.length > 0) {
       const currentVersion = versions.find(
         (v) => v.version_number === document.current_version,
       );
       if (currentVersion) {
-        handleDownloadVersion(currentVersion.id);
+        await handleDownloadVersion(currentVersion.id);
       }
     }
   };
@@ -142,34 +157,14 @@ export default function DocumentDetailsPage() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <Container>
-        <Box sx={{ py: 4, textAlign: 'center' }}>
-          <Typography>Loading...</Typography>
-        </Box>
-      </Container>
-    );
-  }
-
-  if (!document) {
-    return (
-      <Container>
-        <Box sx={{ py: 4 }}>
-          <Alert severity="error">Document not found</Alert>
-        </Box>
-      </Container>
-    );
-  }
-
   const currentVersion = versions?.find(
-    (v) => v.version_number === document.current_version,
+    (v) => v.version_number === document?.current_version,
   );
 
   useEffect(() => {
     const loadPreview = async () => {
       const targetVersionId = selectedVersionId || currentVersion?.id;
-      if (!targetVersionId || (document.status !== 'ready' && document.status !== 'pending')) {
+      if (!document || !targetVersionId || (document.status !== 'ready' && document.status !== 'pending')) {
         setPreviewBlobUrl(null);
         return;
       }
@@ -193,7 +188,7 @@ export default function DocumentDetailsPage() {
     };
 
     loadPreview();
-  }, [document.status, documentId, currentVersion?.id, selectedVersionId]);
+  }, [document, documentId, currentVersion?.id, selectedVersionId]);
 
   useEffect(() => {
     return () => {
@@ -202,6 +197,26 @@ export default function DocumentDetailsPage() {
       }
     };
   }, [previewBlobUrl]);
+
+  if (isLoading) {
+    return (
+      <Container>
+        <Box sx={{ py: 4, textAlign: 'center' }}>
+          <Typography>Loading...</Typography>
+        </Box>
+      </Container>
+    );
+  }
+
+  if (!document) {
+    return (
+      <Container>
+        <Box sx={{ py: 4 }}>
+          <Alert severity="error">Document not found</Alert>
+        </Box>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="xl">

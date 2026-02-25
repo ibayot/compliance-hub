@@ -40,11 +40,17 @@ export default function ReviewsPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string>('');
+  const [submitError, setSubmitError] = useState<string>('');
 
   const selectedDocument = useMemo(
     () => documents.find((document) => document.id === selectedDocumentId) || null,
     [documents, selectedDocumentId],
   );
+
+  const selectedDocumentReviewStatus = selectedDocumentId
+    ? latestReviewByDoc[selectedDocumentId] || 'not_reviewed'
+    : 'not_reviewed';
+  const isSelectedDocumentAlreadyCompliant = selectedDocumentReviewStatus === 'compliant';
 
   const loadData = async () => {
     try {
@@ -95,6 +101,7 @@ export default function ReviewsPage() {
     setDecision('needs_revision');
     setRemarks('');
     setPreviewError('');
+    setSubmitError('');
     setOpen(true);
 
     const document = documents.find((item) => item.id === documentId);
@@ -134,6 +141,7 @@ export default function ReviewsPage() {
     setOpen(false);
     releasePreviewBlob();
     setPreviewError('');
+    setSubmitError('');
   };
 
   useEffect(() => {
@@ -147,14 +155,30 @@ export default function ReviewsPage() {
       return;
     }
 
+    if (isSelectedDocumentAlreadyCompliant) {
+      setSubmitError('This document is already compliant and does not require a new review tag.');
+      return;
+    }
+
+    if (
+      (decision === 'needs_revision' || decision === 'non_compliant') &&
+      !remarks.trim()
+    ) {
+      setSubmitError('Remarks are required when tagging a document as needs revision or non-compliant.');
+      return;
+    }
+
     try {
       setSaving(true);
+      setSubmitError('');
       await reviewsApi.submitReview(selectedDocumentId, {
         decision,
         remarks,
       });
       closeDialog();
       await loadData();
+    } catch (error: any) {
+      setSubmitError(error?.response?.data?.message || 'Failed to submit review tag.');
     } finally {
       setSaving(false);
     }
@@ -270,47 +294,63 @@ export default function ReviewsPage() {
                 Compliance Tagging
               </Typography>
 
-              <Stack direction="column" spacing={1} mb={2}>
-                <Button
-                  variant={decision === 'compliant' ? 'contained' : 'outlined'}
-                  color="success"
-                  onClick={() => setDecision('compliant')}
-                >
-                  Mark Compliant
-                </Button>
-                <Button
-                  variant={decision === 'non_compliant' ? 'contained' : 'outlined'}
-                  color="error"
-                  onClick={() => setDecision('non_compliant')}
-                >
-                  Mark Non-Compliant
-                </Button>
-                <Button
-                  variant={decision === 'needs_revision' ? 'contained' : 'outlined'}
-                  color="warning"
-                  onClick={() => setDecision('needs_revision')}
-                >
-                  Mark Needs Revision
-                </Button>
-              </Stack>
+              {isSelectedDocumentAlreadyCompliant ? (
+                <Alert severity="success">
+                  This document is already tagged as compliant. No additional review tagging is required.
+                </Alert>
+              ) : (
+                <>
+                  <Stack direction="column" spacing={1} mb={2}>
+                    <Button
+                      variant={decision === 'compliant' ? 'contained' : 'outlined'}
+                      color="success"
+                      onClick={() => setDecision('compliant')}
+                    >
+                      Mark Compliant
+                    </Button>
+                    <Button
+                      variant={decision === 'non_compliant' ? 'contained' : 'outlined'}
+                      color="error"
+                      onClick={() => setDecision('non_compliant')}
+                    >
+                      Mark Non-Compliant
+                    </Button>
+                    <Button
+                      variant={decision === 'needs_revision' ? 'contained' : 'outlined'}
+                      color="warning"
+                      onClick={() => setDecision('needs_revision')}
+                    >
+                      Mark Needs Revision
+                    </Button>
+                  </Stack>
 
-              <TextField
-                margin="dense"
-                fullWidth
-                multiline
-                minRows={8}
-                label="Review Remarks"
-                value={remarks}
-                onChange={(event) => setRemarks(event.target.value)}
-              />
+                  <TextField
+                    margin="dense"
+                    fullWidth
+                    multiline
+                    minRows={8}
+                    label="Review Remarks"
+                    value={remarks}
+                    onChange={(event) => setRemarks(event.target.value)}
+                    helperText={
+                      decision === 'non_compliant' || decision === 'needs_revision'
+                        ? 'Remarks are required for non-compliant and needs revision tags.'
+                        : undefined
+                    }
+                  />
+                </>
+              )}
             </Paper>
           </Box>
+          {submitError && <Alert severity="error" sx={{ mt: 2 }}>{submitError}</Alert>}
         </DialogContent>
         <DialogActions>
           <Button onClick={closeDialog}>Cancel</Button>
-          <Button variant="contained" onClick={submitReview} disabled={saving || !selectedDocumentId}>
-            {saving ? 'Submitting...' : 'Submit Review'}
-          </Button>
+          {!isSelectedDocumentAlreadyCompliant && (
+            <Button variant="contained" onClick={submitReview} disabled={saving || !selectedDocumentId}>
+              {saving ? 'Submitting...' : 'Submit Review'}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

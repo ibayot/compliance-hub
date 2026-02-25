@@ -11,6 +11,7 @@ import { Document, DocumentStatus } from '../entities/document.entity';
 import { StorageService } from './storage.service';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+import * as mammoth from 'mammoth';
 
 export interface CreateVersionDto {
   document_id: string;
@@ -23,6 +24,19 @@ export interface CreateVersionDto {
 export class VersionService {
   private readonly logger = new Logger(VersionService.name);
 
+  private async extractInitialText(file: Express.Multer.File): Promise<string> {
+    if (file.originalname.toLowerCase().endsWith('.docx')) {
+      try {
+        const result = await mammoth.extractRawText({ buffer: file.buffer });
+        return result.value || '';
+      } catch {
+        return '';
+      }
+    }
+
+    return '';
+  }
+
   constructor(
     @InjectRepository(DocumentVersion)
     private versionRepo: Repository<DocumentVersion>,
@@ -31,6 +45,20 @@ export class VersionService {
     private storageService: StorageService,
     @InjectQueue('document-processing') private documentQueue: Queue,
   ) {}
+
+  private async getVersionWithBlobs(id: string): Promise<DocumentVersion> {
+    const version = await this.versionRepo
+      .createQueryBuilder('version')
+      .addSelect(['version.file_blob', 'version.preview_blob'])
+      .where('version.id = :id', { id })
+      .getOne();
+
+    if (!version) {
+      throw new NotFoundException(`Version with ID ${id} not found`);
+    }
+
+    return version;
+  }
 
   /**
    * Create a new version of an existing document
@@ -48,8 +76,10 @@ export class VersionService {
     }
 
     // Validate file type
-    if (!file.originalname.toLowerCase().endsWith('.docx')) {
-      throw new BadRequestException('Only DOCX files are allowed');
+    const isDocx = file.originalname.toLowerCase().endsWith('.docx');
+    const isPdf = file.originalname.toLowerCase().endsWith('.pdf');
+    if (!isDocx && !isPdf) {
+      throw new BadRequestException('Only DOCX and PDF files are allowed');
     }
 
     // Get current version number
@@ -80,30 +110,41 @@ export class VersionService {
     );
 
     // Create version entity
-    const version = this.versionRepo.create({
+    const extractedText = await this.extractInitialText(file);
+    const version = await this.versionRepo.save({
       document_id,
       version_number: nextVersionNumber,
       file_name: file.originalname,
       file_path: filePath,
+      file_blob: file.buffer,
       mime_type: file.mimetype,
       file_size: file.size,
       checksum,
+      preview_path: isPdf ? filePath : null,
+      preview_blob: isPdf ? file.buffer : null,
+      extracted_text: extractedText,
       change_notes,
       uploaded_by,
-    });
-
-    await this.versionRepo.save(version);
+    } as any);
 
     // Update document's current version and reset status
     document.current_version = nextVersionNumber;
-    document.status = DocumentStatus.PENDING;
+    document.status = DocumentStatus.READY;
+    document.extracted_text = extractedText;
+    document.file_blob = file.buffer;
     await this.documentRepo.save(document);
 
     // Queue document processing job
-    await this.documentQueue.add('process-document', {
-      documentId: document_id,
-      versionId: version.id,
-    });
+    void this.documentQueue
+      .add('process-document', {
+        documentId: document_id,
+        versionId: version.id,
+      })
+      .catch((error) => {
+        this.logger.warn(
+          `Background processing queue unavailable for version ${version.id}: ${error?.message || 'unknown error'}`,
+        );
+      });
 
     this.logger.log(
       `New version created: ${version.id} (v${nextVersionNumber})`,
@@ -136,9 +177,11 @@ export class VersionService {
     fileName: string;
     mimeType: string;
   }> {
-    const version = await this.getVersionById(id);
+    const version = await this.getVersionWithBlobs(id);
 
-    const buffer = await this.storageService.readFile(version.file_path);
+    const buffer =
+      version.file_blob ??
+      (await this.storageService.readFile(version.file_path));
 
     return {
       buffer,
@@ -154,7 +197,24 @@ export class VersionService {
     buffer: Buffer;
     mimeType: string;
   }> {
-    const version = await this.getVersionById(id);
+    const version = await this.getVersionWithBlobs(id);
+
+    if (version.mime_type === 'application/pdf' || version.file_name.toLowerCase().endsWith('.pdf')) {
+      const buffer =
+        version.file_blob ??
+        (await this.storageService.readFile(version.file_path));
+      return {
+        buffer,
+        mimeType: 'application/pdf',
+      };
+    }
+
+    if (version.preview_blob) {
+      return {
+        buffer: version.preview_blob,
+        mimeType: 'application/pdf',
+      };
+    }
 
     if (!version.preview_path) {
       throw new NotFoundException(
@@ -173,8 +233,15 @@ export class VersionService {
   /**
    * Update preview path after generation
    */
-  async updatePreviewPath(id: string, previewPath: string): Promise<void> {
-    await this.versionRepo.update(id, { preview_path: previewPath });
+  async updatePreviewPath(
+    id: string,
+    previewPath: string,
+    previewBlob?: Buffer,
+  ): Promise<void> {
+    await this.versionRepo.update(id, {
+      preview_path: previewPath,
+      preview_blob: previewBlob,
+    });
     this.logger.log(`Preview path updated for version: ${id}`);
   }
 }

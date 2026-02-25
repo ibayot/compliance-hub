@@ -1,5 +1,9 @@
 # RICTMS Compliance Hub - System Capabilities
 
+> Update (`v1.1.0-dev`, 2026-02-24): document management now includes blob-backed source and preview persistence with legacy path fallback.
+
+> Patch (`v1.1.1-dev`, 2026-02-25): adds authenticated document download flow, category-scoped issue types, settings password/theme controls, and super-admin focal account management.
+
 ## Overview
 
 The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive document management and compliance tracking system designed to help government units maintain regulatory compliance through automated document processing, metrics analysis, and collaborative review workflows.
@@ -27,6 +31,7 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 
 #### Document Access
 - **Document Listing**: Filterable lists with pagination support
+- **Title Filtering + Total Counter**: Document list supports title-based filtering and separate total-record indicators
 - **Version History**: Access complete version history for any document
 - **Document Preview**: In-system document preview capabilities
 - **Download Management**: Secure document and version downloads
@@ -65,10 +70,11 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 
 #### Regulatory Reference Library
 - **Issuance Database**: Comprehensive database of laws, executive orders, and regulations
-- **Authority Tracking**: Track issuing authorities (Congress, President, Agencies)
+- **Authority Tracking**: Manage editable authority values and filter issuances by authority text
 - **Effectivity Dates**: Manage issue and effectivity dates
 - **Source Documentation**: Link to official gazette and source URLs
 - **Active/Inactive Status**: Manage current and superseded issuances
+- **Source-first Title Access**: Issuance titles open source links in a new tab when URLs are provided
 
 #### Document-Issuance Linking
 - **Many-to-Many Relationships**: Documents can reference multiple issuances
@@ -108,6 +114,7 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 #### Ticket System
 - **Multi-category Tickets**: Compliance, content, format, technical, and general tickets
 - **Dynamic Issue Types/Categories**: Super admins can create, update, activate/deactivate, and soft-delete issue metadata.
+- **Category-Scoped Issue Types**: Ticket create/detail forms constrain issue type options by selected category
 - **Priority Management**: Low, medium, high, and urgent priority levels
 - **Status Workflow**: Open → In Progress → Resolved → Closed
 - **Document Linking**: Link tickets to specific documents
@@ -154,6 +161,7 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 #### Security Features
 - **JWT Authentication**: Secure token-based authentication
 - **Refresh Tokens**: Long-lived sessions with automatic token refresh
+- **Password Change API**: Authenticated users can update their own password from Settings
 - **Password Hashing**: BCrypt password encryption
 - **Session Management**: Secure session handling and logout
 - **Role-based Access Control (RBAC)**: Granular permission management
@@ -186,6 +194,13 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 
 - **Visual In-App Manual**: Dashboard user manual page with role-filtered feature guides.
 - **Role-aware Content**: Users only see workflows they are authorized to access.
+- **Deep Metrics CRUD Guidance**: Manual includes detailed create/update/delete field coverage for all four metric types.
+
+### 11. Settings & Focal Administration
+
+- **Theme Preference Toggle**: User-selectable light/dark mode persisted locally.
+- **Account Security Controls**: Change password form with current-password verification.
+- **Focal User Provisioning**: Super admins can create focal/technician accounts with first/middle/last/suffix, staff ID, role, position, and designation fields.
 
 #### Monitoring & Logging
 - **Application Logging**: Comprehensive logging system

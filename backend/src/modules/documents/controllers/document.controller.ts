@@ -73,6 +73,7 @@ export class DocumentController {
    */
   @Get()
   async listDocuments(
+    @Query('title') title?: string,
     @Query('unit_id') unit_id?: string,
     @Query('document_type') document_type?: string,
     @Query('period') period?: string,
@@ -83,6 +84,7 @@ export class DocumentController {
     @CurrentUser() user?: any,
   ) {
     return this.documentService.listDocuments({
+      title,
       unit_id,
       document_type,
       period,

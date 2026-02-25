@@ -39,6 +39,7 @@ import { CybersecurityModule } from './modules/cybersecurity/cybersecurity.modul
         CORS_ORIGIN: Joi.string().required(),
         RATE_LIMIT_WINDOW_MS: Joi.number().default(15 * 60 * 1000),
         RATE_LIMIT_MAX_REQUESTS: Joi.number().default(300),
+        DB_LOGGING: Joi.boolean().default(false),
       }),
     }),
 
@@ -61,7 +62,7 @@ import { CybersecurityModule } from './modules/cybersecurity/cybersecurity.modul
         database: configService.get('DB_DATABASE'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: isDevelopment && Boolean(synchronizeFromEnv),
-        logging: isDevelopment,
+        logging: Boolean(configService.get<boolean>('DB_LOGGING')),
       };
       },
     }),

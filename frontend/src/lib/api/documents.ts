@@ -25,6 +25,7 @@ export interface Document {
     id: string;
     username: string;
     email: string;
+    role?: 'super_admin' | 'reviewer' | 'focal' | 'technician' | 'auditor';
   };
   versions?: DocumentVersion[];
   issuances?: Array<{ id: string; issuance_number: string; title: string }>;
@@ -111,6 +112,7 @@ export interface DocumentAssignment {
 }
 
 export interface ListDocumentsParams {
+  title?: string;
   unit_id?: string;
   document_type?: string;
   period?: string;
@@ -209,6 +211,23 @@ export const documentsApi = {
    */
   getDownloadUrl: (documentId: string, versionId: string): string => {
     return `${API_URL}/documents/${documentId}/versions/${versionId}/download`;
+  },
+
+  downloadVersionBlob: async (
+    documentId: string,
+    versionId: string,
+  ): Promise<{ blob: Blob; fileName: string }> => {
+    const response = await apiClient.get(
+      `/documents/${documentId}/versions/${versionId}/download`,
+      { responseType: 'blob' },
+    );
+
+    const disposition =
+      response.headers?.['content-disposition'] || response.headers?.['Content-Disposition'] || '';
+    const match = /filename="?([^";]+)"?/i.exec(disposition);
+    const fileName = match?.[1] || `document-${versionId}`;
+
+    return { blob: response.data, fileName };
   },
 
   /**

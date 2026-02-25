@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'fs';
 import * as path from 'path';
@@ -31,6 +31,11 @@ export class StorageService {
     }
   }
 
+  private async ensureSubDirectoryExists(subDir: 'documents' | 'previews' | 'temp'): Promise<void> {
+    const fullPath = path.join(this.storageRoot, subDir);
+    await fs.mkdir(fullPath, { recursive: true });
+  }
+
   /**
    * Save a file to storage
    * @param buffer File buffer
@@ -43,6 +48,8 @@ export class StorageService {
     fileName: string,
     subDir: 'documents' | 'previews' | 'temp' = 'documents',
   ): Promise<string> {
+    await this.ensureSubDirectoryExists(subDir);
+
     const timestamp = Date.now();
     const sanitizedName = this.sanitizeFileName(fileName);
     const uniqueName = `${timestamp}-${sanitizedName}`;
@@ -62,7 +69,14 @@ export class StorageService {
    */
   async readFile(filePath: string): Promise<Buffer> {
     const fullPath = path.join(this.storageRoot, filePath);
-    return fs.readFile(fullPath);
+    try {
+      return await fs.readFile(fullPath);
+    } catch (error: any) {
+      if (error?.code === 'ENOENT') {
+        throw new NotFoundException(`Stored file not found: ${filePath}`);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -71,8 +85,7 @@ export class StorageService {
    * @returns Readable stream
    */
   async getFileStream(filePath: string): Promise<Readable> {
-    const fullPath = path.join(this.storageRoot, filePath);
-    return Readable.from(await fs.readFile(fullPath));
+    return Readable.from(await this.readFile(filePath));
   }
 
   /**

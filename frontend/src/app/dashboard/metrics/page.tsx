@@ -57,15 +57,15 @@ export default function MetricsPage() {
   const [documentType, setDocumentType] = useState('');
   const [unitId, setUnitId] = useState('');
 
-  const [requiredSectionsText, setRequiredSectionsText] = useState('Introduction\nMethodology\nFindings\nRecommendations\nAction Plan');
-  const [keywordText, setKeywordText] = useState('compliance, report, memorandum, issuance, implementation');
+  const [requiredSectionsText, setRequiredSectionsText] = useState('Introduction\nMethodology\nFindings\nRecommendations');
+  const [keywordText, setKeywordText] = useState('compliance, report, memorandum, issuance');
   const [keywordMinMatches, setKeywordMinMatches] = useState(1);
   const [keywordCaseSensitive, setKeywordCaseSensitive] = useState(false);
   const [keywordWordBoundary, setKeywordWordBoundary] = useState(false);
 
-  const [extractKeywordsText, setExtractKeywordsText] = useState('total incidents\nresolved incidents\nopen incidents\nusers trained\naction items closed');
+  const [extractKeywordsText, setExtractKeywordsText] = useState('total incidents\nresolved incidents\nopen incidents\nusers trained');
   const [extractComparison, setExtractComparison] = useState<'gte' | 'lte' | 'eq' | 'gt' | 'lt'>('gte');
-  const [extractExpectedNumbersText, setExtractExpectedNumbersText] = useState('1\n1\n0\n10\n1');
+  const [extractExpectedNumbersText, setExtractExpectedNumbersText] = useState('1\n1\n0\n10');
 
   const [deadlineDay, setDeadlineDay] = useState(5);
   const [deadlineMonthOffset, setDeadlineMonthOffset] = useState(1);
@@ -106,15 +106,15 @@ export default function MetricsPage() {
     setDocumentType('');
     setUnitId('');
 
-    setRequiredSectionsText('Introduction\nMethodology\nFindings\nRecommendations\nAction Plan');
-    setKeywordText('compliance, report, memorandum, issuance, implementation');
+    setRequiredSectionsText('Introduction\nMethodology\nFindings\nRecommendations');
+    setKeywordText('compliance, report, memorandum, issuance');
     setKeywordMinMatches(1);
     setKeywordCaseSensitive(false);
     setKeywordWordBoundary(false);
 
-    setExtractKeywordsText('total incidents\nresolved incidents\nopen incidents\nusers trained\naction items closed');
+    setExtractKeywordsText('total incidents\nresolved incidents\nopen incidents\nusers trained');
     setExtractComparison('gte');
-    setExtractExpectedNumbersText('1\n1\n0\n10\n1');
+    setExtractExpectedNumbersText('1\n1\n0\n10');
 
     setDeadlineDay(5);
     setDeadlineMonthOffset(1);
