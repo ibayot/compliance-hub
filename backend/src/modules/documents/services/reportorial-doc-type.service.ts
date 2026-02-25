@@ -17,12 +17,12 @@ export class ReportorialDocTypeService {
   ) {}
 
   async findAll(): Promise<ReportorialDocumentType[]> {
-    return this.repo.find({ relations: ['unit'], order: { unit_id: 'ASC', display_name: 'ASC' } });
+    return this.repo.find({ where: { active: true }, relations: ['unit'], order: { unit_id: 'ASC', display_name: 'ASC' } });
   }
 
   async findByUnit(unitId: number): Promise<ReportorialDocumentType[]> {
     return this.repo.find({
-      where: { unit_id: unitId },
+      where: { unit_id: unitId, active: true },
       relations: ['unit'],
       order: { display_name: 'ASC' },
     });
@@ -37,7 +37,7 @@ export class ReportorialDocTypeService {
   async create(dto: CreateReportorialDocTypeDto): Promise<ReportorialDocumentType> {
     // Check uniqueness: same unit + base_name
     const existing = await this.repo.findOne({
-      where: { unit_id: dto.unit_id, base_name: dto.base_name },
+      where: { unit_id: dto.unit_id, base_name: dto.base_name, active: true },
     });
     if (existing) {
       throw new ConflictException(`A document type with base_name "${dto.base_name}" already exists for this unit`);
