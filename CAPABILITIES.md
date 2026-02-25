@@ -4,6 +4,8 @@
 
 > Patch (`v1.1.1-dev`, 2026-02-25): adds authenticated document download flow, category-scoped issue types, settings password/theme controls, and super-admin focal account management.
 
+> **Hotfix `v1.1.2.3` (2026-02-25):** on-demand DOCX preview fallback — uploaded DOCX files with no cached `preview_blob` (e.g., when queue job failed silently) now generate styled HTML via mammoth on first preview request and cache the result. `passwordHash` security leak patched: `ClassSerializerInterceptor` registered globally so `@Exclude()` on User entity is enforced across all endpoints. EADDRINUSE troubleshooting note added to INSTALLATION.
+
 > **Hotfix `v1.1.2.2` (2026-02-25):** resolved frontend dev server startup failure (`npm run dev` exits 1) caused by a UTF-8 BOM in `frontend/package.json`. Vite's internal PostCSS config loader threw `SyntaxError: Unexpected token '∩╗┐'` on BOM-prefixed JSON. BOM also removed from `backend/package.json`. All capabilities smoke-tested and confirmed operational.
 
 > **Release `v1.1.2` (2026-02-25):** document download now returns proper filename via `Content-Disposition` (CORS fix); DOCX preview generates styled HTML via mammoth fallback when LibreOffice is unavailable; Document Viewer supports both HTML (iframe) and PDF (react-pdf); Reviews digital preview propagates MIME type correctly; Administration Metrics seeded with all 4 template types (section_check, keyword_check, property_check, date_check); Settings refactored to card layout with dynamic Role Management; User Manual has comprehensive field-level explanations for all 8 modules.
