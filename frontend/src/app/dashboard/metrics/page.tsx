@@ -29,7 +29,7 @@ import {
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { metricsApi, MetricTemplate } from '@/lib/api/metrics';
 import { unitsApi, Unit } from '@/lib/api/units';
-import { documentsApi } from '@/lib/api/documents';
+import { docTypesApi, ReportorialDocType } from '@/lib/api/document-types';
 
 type MetricType = 'section_check' | 'keyword_check' | 'property_check' | 'date_check';
 
@@ -47,15 +47,14 @@ export default function MetricsPage() {
   const [open, setOpen] = useState(false);
   const [templates, setTemplates] = useState<MetricTemplate[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
-  const [documentTypeOptions, setDocumentTypeOptions] = useState<string[]>([]);
+  const [docTypes, setDocTypes] = useState<ReportorialDocType[]>([]);
   const [editing, setEditing] = useState<MetricTemplate | null>(null);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [metricType, setMetricType] = useState<MetricType>('keyword_check');
   const [weight, setWeight] = useState(1);
-  const [documentType, setDocumentType] = useState('');
-  const [unitId, setUnitId] = useState('');
+  const [reportorialDocTypeId, setReportorialDocTypeId] = useState('');
 
   const [requiredSectionsText, setRequiredSectionsText] = useState('Introduction\nMethodology\nFindings\nRecommendations');
   const [keywordText, setKeywordText] = useState('compliance, report, memorandum, issuance');
@@ -80,14 +79,14 @@ export default function MetricsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [metrics, unitList, docTypes] = await Promise.all([
+      const [metrics, unitList, doctypeList] = await Promise.all([
         metricsApi.listTemplates(),
         unitsApi.listAll(),
-        documentsApi.listDocumentTypes(),
+        docTypesApi.fetchAll(),
       ]);
       setTemplates(metrics);
       setUnits(unitList);
-      setDocumentTypeOptions(docTypes);
+      setDocTypes(doctypeList);
     } finally {
       setLoading(false);
     }
@@ -103,8 +102,7 @@ export default function MetricsPage() {
     setDescription('');
     setMetricType('keyword_check');
     setWeight(1);
-    setDocumentType('');
-    setUnitId('');
+    setReportorialDocTypeId('');
 
     setRequiredSectionsText('Introduction\nMethodology\nFindings\nRecommendations');
     setKeywordText('compliance, report, memorandum, issuance');
@@ -146,8 +144,11 @@ export default function MetricsPage() {
     setDescription(template.description || '');
     setMetricType(template.metric_type);
     setWeight(template.weight || 1);
-    setDocumentType(template.applicability?.[0]?.document_type || '');
-    setUnitId(template.applicability?.[0]?.unit_id ? String(template.applicability[0].unit_id) : '');
+    setReportorialDocTypeId(
+      template.applicability?.[0]?.reportorial_doc_type_id
+        ? String(template.applicability[0].reportorial_doc_type_id)
+        : ''
+    );
 
     const ruleConfig = template.rule_config || {};
     const passCriteria = template.pass_criteria || {};
@@ -321,12 +322,9 @@ export default function MetricsPage() {
       weight,
       rule_config,
       pass_criteria,
-      applicability: [
-        {
-          unit_id: unitId ? Number(unitId) : undefined,
-          document_type: documentType || undefined,
-        },
-      ],
+      applicability: reportorialDocTypeId
+        ? [{ reportorial_doc_type_id: Number(reportorialDocTypeId) }]
+        : [],
     };
 
     try {
@@ -419,10 +417,13 @@ export default function MetricsPage() {
                     <TableCell>{metricTypeLabels[template.metric_type]}</TableCell>
                     <TableCell>{template.weight}</TableCell>
                     <TableCell>
-                      {template.applicability?.length ? (
+                      {template.applicability?.length && template.applicability[0].reportorial_doc_type_id ? (
                         <Chip
                           size="small"
-                          label={`${template.applicability[0].unit?.name || 'All Units'} • ${template.applicability[0].document_type || 'All Docs'}`}
+                          label={(() => {
+                            const dt = docTypes.find((d) => d.id === template.applicability![0].reportorial_doc_type_id);
+                            return dt ? `${dt.unit?.name ?? ''} • ${dt.display_name}` : `Doc Type #${template.applicability![0].reportorial_doc_type_id}`;
+                          })()}
                         />
                       ) : (
                         'Global'
@@ -457,36 +458,28 @@ export default function MetricsPage() {
           <TextField margin="dense" label="Template Name" fullWidth value={name} onChange={(event) => setName(event.target.value)} />
           <TextField margin="dense" label="Description" fullWidth value={description} onChange={(event) => setDescription(event.target.value)} />
 
-          <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr 1fr' }} gap={2} mt={1}>
-            <TextField select label="Metric Type" value={metricType} onChange={(event) => setMetricType(event.target.value as MetricType)}>
-              <MenuItem value="section_check">Section Rules</MenuItem>
-              <MenuItem value="keyword_check">Keyword Rules</MenuItem>
-              <MenuItem value="property_check">Number Extraction</MenuItem>
-              <MenuItem value="date_check">Date / Deadline Check</MenuItem>
-            </TextField>
-            <TextField type="number" label="Weight" value={weight} onChange={(event) => setWeight(Math.max(Number(event.target.value) || 1, 1))} />
-            <TextField select label="Unit (optional)" value={unitId} onChange={(event) => setUnitId(event.target.value)}>
-              <MenuItem value="">All Units</MenuItem>
-              {units.map((unit) => (
-                <MenuItem key={unit.id} value={String(unit.id)}>
-                  {unit.name}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Box>
+            <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={2} mt={1}>
+              <TextField select label="Metric Type" value={metricType} onChange={(event) => setMetricType(event.target.value as MetricType)}>
+                <MenuItem value="section_check">Section Rules</MenuItem>
+                <MenuItem value="keyword_check">Keyword Rules</MenuItem>
+                <MenuItem value="property_check">Number Extraction</MenuItem>
+                <MenuItem value="date_check">Date / Deadline Check</MenuItem>
+              </TextField>
+              <TextField type="number" label="Weight" value={weight} onChange={(event) => setWeight(Math.max(Number(event.target.value) || 1, 1))} />
+            </Box>
 
           <TextField
             margin="dense"
             select
-            label="Document Type (optional)"
+            label="Reportorial Document Type (optional)"
             fullWidth
-            value={documentType}
-            onChange={(event) => setDocumentType(event.target.value)}
+            value={reportorialDocTypeId}
+            onChange={(event) => setReportorialDocTypeId(event.target.value)}
           >
-            <MenuItem value="">All Document Types</MenuItem>
-            {documentTypeOptions.map((option) => (
-              <MenuItem key={option} value={option}>
-                {option}
+            <MenuItem value="">All Document Types (Global)</MenuItem>
+            {docTypes.map((dt) => (
+              <MenuItem key={dt.id} value={String(dt.id)}>
+                {dt.unit?.name ? `${dt.unit.name} — ` : ''}{dt.display_name}
               </MenuItem>
             ))}
           </TextField>

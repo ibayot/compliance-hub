@@ -54,7 +54,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const mainNavItems: NavItem[] = [
     { label: 'Dashboard', icon: DashboardIcon, path: '/dashboard', roles: ['all'] },
     { label: 'Documents', icon: DocumentsIcon, path: '/dashboard/documents', roles: ['all'] },
-    { label: 'Issuances', icon: IssuancesIcon, path: '/dashboard/issuances', roles: ['all'] },
+    { label: 'Issuances', icon: IssuancesIcon, path: '/dashboard/issuances', roles: ['super_admin', 'reviewer'] },
     { label: 'Issues', icon: TicketsIcon, path: '/dashboard/tickets', roles: ['all'] },
   ];
 
@@ -84,7 +84,10 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
   const renderNavItem = (item: NavItem) => {
     const Icon = item.icon;
-    const isActive = pathname === item.path || pathname?.startsWith(`${item.path}/`);
+    // Dashboard: exact match only — sub-routes like /dashboard/documents should NOT highlight it
+    const isActive = item.path === '/dashboard'
+      ? pathname === '/dashboard'
+      : pathname === item.path || pathname?.startsWith(`${item.path}/`);
 
     const content = (
       <ListItemButton

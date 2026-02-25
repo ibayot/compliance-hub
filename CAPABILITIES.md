@@ -1,5 +1,7 @@
 # RICTMS Compliance Hub - System Capabilities
 
+> **Release `v1.2.0.1` (2026-02-26):** Reportorial Document Types system (per-unit, filename validation `{base_name}_{period_suffix}`); metrics applicability now uses `reportorial_doc_type_id` FK; nav fixed (Dashboard exact match, Issuances role-gated); document breadcrumbs show title; Version History timeline layout fixed; User Management: deactivate bug fixed, unit assignment in create dialog; 16 seeded metric templates (4 per type); Document upload overhauled.
+
 > Update (`v1.1.0-dev`, 2026-02-24): document management now includes blob-backed source and preview persistence with legacy path fallback.
 
 > Patch (`v1.1.1-dev`, 2026-02-25): adds authenticated document download flow, category-scoped issue types, settings password/theme controls, and super-admin focal account management.

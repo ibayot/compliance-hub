@@ -72,7 +72,7 @@ export class UsersService {
   async findAll(): Promise<User[]> {
     return await this.usersRepository.find({
       relations: ['units'],
-      where: { active: true },
+      // Return all users (including inactive) so management UI can show/toggle them
     });
   }
 
@@ -114,6 +114,7 @@ export class UsersService {
     if (dto.position !== undefined) user.position = dto.position;
     if (dto.designation !== undefined) user.designation = dto.designation;
     if (dto.role) user.role = dto.role;
+    if ((dto as any).active !== undefined) user.active = (dto as any).active;
 
     // Update units if provided
     if (dto.unitIds) {

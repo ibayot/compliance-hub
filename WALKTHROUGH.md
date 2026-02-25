@@ -4,6 +4,8 @@
 
 > Patch (`v1.1.1-dev`, 2026-02-25): includes settings password/theme workflow, super-admin focal provisioning, and category-scoped issue-type behavior.
 
+> **Release `v1.2.0.1` (2026-02-26):** Reportorial Document Types — go to Units, expand a unit accordion, use "Add" button to create document types with base name + frequency. On the Upload Document page, the unit is auto-filled (for focal users), and you select a document type from the per-unit list; the expected filename is shown before you pick a file. Metrics now use a "Reportorial Document Type" dropdown (instead of Unit+DocType free text). Settings → User Management → "Create New User" opens a dialog with a unit multi-select. Dashboard nav exact-match fix: navigating to Documents no longer highlights Dashboard. Breadcrumbs on Document Detail show the document title.
+
 > **Hotfix `v1.1.2.3` (2026-02-25):** DOCX Document Viewer now works for newly uploaded DOCX files — on-demand HTML generation via mammoth ensures instant preview even when the background queue job hasn't run yet. Security: `passwordHash` is no longer exposed in API responses.
 
 > **Hotfix `v1.1.2.2` (2026-02-25):** frontend dev server (`npm run dev`) now starts successfully. Root cause was a UTF-8 BOM added to `package.json` by an editor, causing Vite to crash with a JSON parse error. Fix applied; all walkthrough steps verified against running servers.

@@ -50,11 +50,18 @@ export default function VersionTimeline({
     <Timeline position="right">
       {versions.map((version, index) => (
         <TimelineItem key={version.id}>
-          <TimelineOppositeContent sx={{ flex: 0.3 }}>
-            <Typography variant="body2" color="text.secondary">
+          <TimelineOppositeContent
+            sx={{
+              flex: '0 0 90px',
+              maxWidth: 90,
+              minWidth: 70,
+              py: 1.5,
+            }}
+          >
+            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
               {format(new Date(version.created_at), 'MMM dd, yyyy')}
             </Typography>
-            <Typography variant="caption">
+            <Typography variant="caption" sx={{ fontSize: '0.68rem' }}>
               {format(new Date(version.created_at), 'hh:mm a')}
             </Typography>
           </TimelineOppositeContent>
@@ -69,15 +76,20 @@ export default function VersionTimeline({
                 bgcolor: version.id === currentVersionId ? 'action.hover' : 'background.paper',
               }}
             >
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <Typography variant="h6">Version {version.version_number}</Typography>
+              <CardContent sx={{ pb: '12px !important' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                  <Typography variant="subtitle2">Version {version.version_number}</Typography>
                   {version.id === currentVersionId && (
                     <Chip label="Current" color="primary" size="small" />
                   )}
                 </Box>
 
-                <Typography variant="body2" color="text.secondary" gutterBottom>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  gutterBottom
+                  sx={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                >
                   {version.file_name}
                 </Typography>
 

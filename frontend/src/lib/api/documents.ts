@@ -74,6 +74,7 @@ export interface UploadDocumentRequest {
   period: string;
   year: string;
   unit_id?: string;
+  reportorial_doc_type_id?: number;
   file: File;
 }
 
@@ -141,6 +142,9 @@ export const documentsApi = {
     formData.append('year', data.year);
     if (data.unit_id) {
       formData.append('unit_id', data.unit_id);
+    }
+    if (data.reportorial_doc_type_id != null) {
+      formData.append('reportorial_doc_type_id', String(data.reportorial_doc_type_id));
     }
     formData.append('file', data.file);
 

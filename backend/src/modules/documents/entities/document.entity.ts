@@ -12,6 +12,7 @@ import {
 import { Unit } from '../../units/entities/unit.entity';
 import { User } from '../../users/entities/user.entity';
 import { DocumentVersion } from './document-version.entity';
+import { ReportorialDocumentType } from './reportorial-document-type.entity';
 
 export enum DocumentStatus {
   PENDING = 'pending',
@@ -31,11 +32,19 @@ export class Document {
   @Column({ type: 'varchar', length: 100 })
   document_type: string;
 
-  @Column({ type: 'varchar', length: 20 })
-  period: string; // e.g., "2024-Q1", "2024-01"
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  period: string; // e.g., "202602", "202601-03", "2026"
 
-  @Column({ type: 'varchar', length: 4 })
+  @Column({ type: 'varchar', length: 4, nullable: true })
   year: string;
+
+  /** FK to reportorial_document_types — null for legacy/seeded documents */
+  @Column({ type: 'int', nullable: true })
+  reportorial_doc_type_id: number;
+
+  @ManyToOne(() => ReportorialDocumentType, { onDelete: 'SET NULL', nullable: true, eager: false })
+  @JoinColumn({ name: 'reportorial_doc_type_id' })
+  reportorialDocType: ReportorialDocumentType;
 
   @Column({
     type: 'enum',

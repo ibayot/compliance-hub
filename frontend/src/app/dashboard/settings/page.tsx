@@ -15,10 +15,13 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControl,
   FormControlLabel,
   Grid,
   IconButton,
+  InputLabel,
   MenuItem,
+  Select,
   Switch,
   Table,
   TableBody,
@@ -43,6 +46,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useThemeMode } from '@/contexts/ThemeModeContext';
 import { authApi } from '@/lib/api/auth';
 import { usersApi, RoleDefinition } from '@/lib/api/users';
+import { unitsApi, Unit } from '@/lib/api/units';
 import { UserRole } from '@/lib/types/auth';
 
 // --- Change Password Card ---------------------------------------------------
@@ -250,7 +254,9 @@ function RoleManagementCard() {
 
 function FocalUserManagementCard() {
   const [roles, setRoles] = useState<RoleDefinition[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
   const [focalUsers, setFocalUsers] = useState<any[]>([]);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editUserId, setEditUserId] = useState<number | null>(null);
   const [editRole, setEditRole] = useState('');
@@ -258,14 +264,20 @@ function FocalUserManagementCard() {
   const [form, setForm] = useState({
     email: '', password: '', firstName: '', middleName: '', lastName: '',
     suffix: '', staffId: '', role: UserRole.FOCAL, position: '', designation: '',
+    unitIds: [] as number[],
   });
 
   const assignableRoles = useMemo(() => roles.filter((r) => r.assignable), [roles]);
 
   const reload = useCallback(async () => {
     try {
-      const [users, roleList] = await Promise.all([usersApi.list(), usersApi.getRoles()]);
+      const [users, roleList, unitList] = await Promise.all([
+        usersApi.list(),
+        usersApi.getRoles(),
+        unitsApi.listAll(),
+      ]);
       setRoles(roleList);
+      setUnits(unitList);
       const assignable = new Set(roleList.filter((r) => r.assignable).map((r) => r.value));
       setFocalUsers(users.filter((u: any) => assignable.has(u.role as string)));
     } catch { /* non-blocking */ }
@@ -273,13 +285,21 @@ function FocalUserManagementCard() {
 
   useEffect(() => { reload(); }, [reload]);
 
+  const resetForm = () => setForm({
+    email: '', password: '', firstName: '', middleName: '', lastName: '',
+    suffix: '', staffId: '', role: UserRole.FOCAL, position: '', designation: '', unitIds: [],
+  });
+
+  const handleOpenCreate = () => { resetForm(); setMsg(null); setCreateDialogOpen(true); };
+
   const handleCreate = async () => {
     setMsg(null);
     try {
       setCreating(true);
       await usersApi.create(form);
       setMsg({ type: 'success', text: `User ${form.email} created successfully.` });
-      setForm({ email: '', password: '', firstName: '', middleName: '', lastName: '', suffix: '', staffId: '', role: UserRole.FOCAL, position: '', designation: '' });
+      resetForm();
+      setCreateDialogOpen(false);
       await reload();
     } catch (err: any) {
       setMsg({ type: 'error', text: err?.response?.data?.message || 'Failed to create user.' });
@@ -319,6 +339,11 @@ function FocalUserManagementCard() {
         avatar={<PersonAddIcon color="primary" />}
         title="Focal & Operations User Management"
         subheader="Create and manage user accounts for focal persons, technicians, reviewers, and auditors."
+        action={
+          <Button variant="contained" startIcon={<PersonAddIcon />} size="small" onClick={handleOpenCreate}>
+            Create New User
+          </Button>
+        }
       />
       <CardContent>
         {msg && (
@@ -327,48 +352,74 @@ function FocalUserManagementCard() {
           </Alert>
         )}
 
-        <Typography variant="subtitle2" sx={{ mb: 1.5 }}>Create New User</Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={4}>
-            <TextField label="Email Address" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} fullWidth helperText="Login credential" />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField label="Temporary Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} fullWidth helperText="User should change on first login" />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField select label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })} fullWidth helperText="Determines access permissions">
-              {assignableRoles.map((r) => (
-                <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField label="First Name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} fullWidth />
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField label="Middle Name" value={form.middleName} onChange={(e) => setForm({ ...form, middleName: e.target.value })} fullWidth />
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField label="Last Name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} fullWidth />
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField label="Suffix (Jr./Sr.)" value={form.suffix} onChange={(e) => setForm({ ...form, suffix: e.target.value })} fullWidth />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField label="Staff ID" value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} fullWidth helperText="Optional employee identifier" />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField label="Position" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} fullWidth />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField label="Designation / Title" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} fullWidth />
-          </Grid>
-          <Grid item xs={12}>
+        {/* Create user dialog */}
+        <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="md" fullWidth>
+          <DialogTitle>Create New User</DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 0.5 }}>
+              <Grid item xs={12} md={4}>
+                <TextField label="Email Address" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} fullWidth helperText="Login credential" />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField label="Temporary Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} fullWidth helperText="User should change on first login" />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField select label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })} fullWidth helperText="Determines access permissions">
+                  {assignableRoles.map((r) => (
+                    <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField label="First Name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} fullWidth />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField label="Middle Name" value={form.middleName} onChange={(e) => setForm({ ...form, middleName: e.target.value })} fullWidth />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField label="Last Name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} fullWidth />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField label="Suffix (Jr./Sr.)" value={form.suffix} onChange={(e) => setForm({ ...form, suffix: e.target.value })} fullWidth />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField label="Staff ID" value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} fullWidth helperText="Optional employee identifier" />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField label="Position" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} fullWidth />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField label="Designation / Title" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} fullWidth />
+              </Grid>
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Assigned Units</InputLabel>
+                  <Select
+                    multiple
+                    value={form.unitIds}
+                    label="Assigned Units"
+                    onChange={(e) => setForm({ ...form, unitIds: e.target.value as number[] })}
+                    renderValue={(selected) =>
+                      (selected as number[])
+                        .map((id) => units.find((u) => u.id === id)?.name ?? id)
+                        .join(', ')
+                    }
+                  >
+                    {units.map((u) => (
+                      <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
             <Button variant="contained" startIcon={<PersonAddIcon />} onClick={handleCreate} disabled={creating || !form.email || !form.password}>
               {creating ? 'Creating...' : 'Create User'}
             </Button>
-          </Grid>
-        </Grid>
+          </DialogActions>
+        </Dialog>
 
         <Divider sx={{ my: 3 }} />
 

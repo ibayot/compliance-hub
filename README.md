@@ -1,5 +1,5 @@
 # RICTMS Compliance Hub
-
+> **Release `v1.2.0.1` (2026-02-26):** Reportorial Document Types per unit (base name + period suffix filename validation, monthly/quarterly/annual); metrics now linked to documents via FK (not free-text strings); navigation fixes (Dashboard exact match, Issuances restricted to reviewers); breadcrumbs show document titles; version history layout fixed; deactivate user bug fixed; user creation dialog with unit assignment; 16 metric templates seeded (4 per type); Document upload fully overhauled.
 > Documentation update (`v1.1.0-dev`, 2026-02-24): document versions now support blob-backed source/preview storage with filesystem fallback for legacy rows.
 
 > Patch update (`v1.1.1-dev`, 2026-02-25): settings now include password change + light/dark mode, and super-admins can provision focal users with extended profile fields.
