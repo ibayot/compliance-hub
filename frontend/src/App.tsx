@@ -16,6 +16,7 @@ import TicketDetailPage from '@/app/dashboard/tickets/[id]/page';
 import UnitsPage from '@/app/dashboard/units/page';
 import MetricsPage from '@/app/dashboard/metrics/page';
 import ReviewsPage from '@/app/dashboard/reviews/page';
+import KpiPage from '@/app/dashboard/kpi/page';
 import SettingsPage from '@/app/dashboard/settings/page';
 import UserManualPage from '@/app/dashboard/user-manual/page';
 
@@ -128,6 +129,14 @@ export default function App() {
         element={
           <ProtectedDashboard>
             <ReviewsPage />
+          </ProtectedDashboard>
+        }
+      />
+      <Route
+        path="/dashboard/kpi"
+        element={
+          <ProtectedDashboard>
+            <KpiPage />
           </ProtectedDashboard>
         }
       />

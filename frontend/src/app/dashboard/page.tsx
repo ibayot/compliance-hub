@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -31,6 +31,7 @@ import { documentsApi } from '@/lib/api/documents';
 import { ticketsApi } from '@/app/api/references';
 import { incidentsApi, TodayStats } from '@/lib/api/incidents';
 import { cybersecurityApi, CybersecurityMetric } from '@/lib/api/cybersecurity';
+import { DashboardSummaryResponse, kpiApi } from '@/lib/api/kpi';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -48,6 +49,11 @@ export default function DashboardPage() {
   
   // Real-time incident tracking (8AM - 5PM)
   const [incidentStats, setIncidentStats] = useState<TodayStats | null>(null);
+  const [kpiSummary, setKpiSummary] = useState<DashboardSummaryResponse | null>(null);
+
+  const now = useMemo(() => new Date(), []);
+  const periodYear = now.getFullYear();
+  const periodMonth = now.getMonth() + 1;
 
   useEffect(() => {
     fetchDashboardData();
@@ -57,12 +63,13 @@ export default function DashboardPage() {
     try {
       setLoading(true);
 
-      const [docsResponse, metricsResult, incidentsResult, ticketStatsResult] =
+      const [docsResponse, metricsResult, incidentsResult, ticketStatsResult, kpiSummaryResult] =
         await Promise.allSettled([
           documentsApi.listDocuments({}),
           cybersecurityApi.getAll(),
           incidentsApi.getTodayStats(),
           ticketsApi.getStatistics(),
+          kpiApi.dashboardSummary(periodYear, periodMonth),
         ]);
 
       const docs =
@@ -89,6 +96,10 @@ export default function DashboardPage() {
       // Fetch today's incident tracking (8AM - 5PM Philippines time)
       if (incidentsResult.status === 'fulfilled') {
         setIncidentStats(incidentsResult.value);
+      }
+
+      if (kpiSummaryResult.status === 'fulfilled') {
+        setKpiSummary(kpiSummaryResult.value);
       }
 
       setStats({
@@ -348,6 +359,66 @@ export default function DashboardPage() {
               );
             })}
           </Grid>
+        </CardContent>
+      </Card>
+
+      {/* KPI Overview */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+            <Box>
+              <Typography variant="h6">KPI Overview</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {user?.role === 'super_admin' || user?.role === 'reviewer'
+                  ? 'Consolidated KPI visibility across all units.'
+                  : 'KPI visibility scoped to your assigned unit(s).'}
+              </Typography>
+            </Box>
+            <Button variant="outlined" href="/dashboard/kpi">Open KPI Workspace</Button>
+          </Box>
+
+          <Grid container spacing={2} mb={2}>
+            <Grid item xs={12} sm={4}>
+              <Paper sx={{ p: 2 }}>
+                <Typography variant="caption" color="text.secondary">Overall KPI Score</Typography>
+                <Typography variant="h5" color="primary">{kpiSummary?.summary.overallScore ?? 0}</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <Paper sx={{ p: 2 }}>
+                <Typography variant="caption" color="text.secondary">Units Covered</Typography>
+                <Typography variant="h5">{kpiSummary?.summary.unitCount ?? 0}</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <Paper sx={{ p: 2 }}>
+                <Typography variant="caption" color="text.secondary">Monitoring Rows</Typography>
+                <Typography variant="h5">{kpiSummary?.summary.rowCount ?? 0}</Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Period: {periodYear}-{String(periodMonth).padStart(2, '0')}
+          </Typography>
+
+          {kpiSummary && kpiSummary.units.length > 0 ? (
+            <List>
+              {kpiSummary.units.slice(0, 5).map((unit) => (
+                <ListItem key={unit.unitId}>
+                  <ListItemText
+                    primary={unit.unitName}
+                    secondary={`KPI Count: ${unit.kpiCount} • Score: ${unit.score}`}
+                  />
+                  <Chip label={String(unit.band).toUpperCase()} size="small" />
+                </ListItem>
+              ))}
+            </List>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              No KPI rows found for this period.
+            </Typography>
+          )}
         </CardContent>
       </Card>
 
