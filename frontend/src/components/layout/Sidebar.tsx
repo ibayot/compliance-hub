@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Drawer,
@@ -45,8 +45,8 @@ interface NavItem {
 }
 
 export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
-  const pathname = usePathname();
-  const router = useRouter();
+  const location = useLocation();
+  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user } = useAuth();
@@ -78,7 +78,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   };
 
   const handleNavigate = (path: string) => {
-    router.push(path);
+    navigate(path);
     if (isMobile) {
       onMobileClose();
     }
@@ -88,8 +88,8 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     const Icon = item.icon;
     // Dashboard: exact match only — sub-routes like /dashboard/documents should NOT highlight it
     const isActive = item.path === '/dashboard'
-      ? pathname === '/dashboard'
-      : pathname === item.path || pathname?.startsWith(`${item.path}/`);
+      ? location.pathname === '/dashboard'
+      : location.pathname === item.path || location.pathname?.startsWith(`${item.path}/`);
 
     const content = (
       <ListItemButton
