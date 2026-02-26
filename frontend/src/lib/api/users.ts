@@ -34,7 +34,34 @@ export interface RoleDefinition {
   label: string;
   description: string;
   assignable: boolean;
-  is_system: boolean;
+  isSystem?: boolean;
+  is_system?: boolean;
+}
+
+export interface UpdateUserPayload {
+  email?: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  suffix?: string;
+  position?: string;
+  designation?: string;
+  role?: UserRole;
+  active?: boolean;
+  unitIds?: number[];
+}
+
+export interface CreateRolePayload {
+  value: UserRole;
+  label: string;
+  description: string;
+  assignable?: boolean;
+}
+
+export interface UpdateRolePayload {
+  label?: string;
+  description?: string;
+  assignable?: boolean;
 }
 
 export const usersApi = {
@@ -53,6 +80,11 @@ export const usersApi = {
     return response.data;
   },
 
+  updateUser: async (userId: number, payload: UpdateUserPayload): Promise<UserRecord> => {
+    const response = await apiClient.patch(`/users/${userId}`, payload);
+    return response.data;
+  },
+
   deactivate: async (userId: number): Promise<void> => {
     await apiClient.patch(`/users/${userId}`, { active: false });
   },
@@ -63,6 +95,16 @@ export const usersApi = {
 
   getRoles: async (): Promise<RoleDefinition[]> => {
     const response = await apiClient.get('/users/roles');
+    return response.data;
+  },
+
+  createRoleDefinition: async (payload: CreateRolePayload): Promise<RoleDefinition> => {
+    const response = await apiClient.post('/users/roles', payload);
+    return response.data;
+  },
+
+  updateRoleDefinition: async (value: string, payload: UpdateRolePayload): Promise<RoleDefinition> => {
+    const response = await apiClient.patch(`/users/roles/${value}`, payload);
     return response.data;
   },
 };

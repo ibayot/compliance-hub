@@ -169,10 +169,68 @@ function RoleManagementCard() {
   const [roles, setRoles] = useState<RoleDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<RoleDefinition | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { enqueueSnackbar } = useSnackbar();
+  const [form, setForm] = useState({
+    value: UserRole.FOCAL,
+    label: '',
+    description: '',
+    assignable: true,
+  });
+
+  const loadRoles = useCallback(async () => {
+    try {
+      const list = await usersApi.getRoles();
+      setRoles(list);
+    } catch {
+      enqueueSnackbar('Failed to load role definitions.', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [enqueueSnackbar]);
 
   useEffect(() => {
-    usersApi.getRoles().then(setRoles).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+    loadRoles();
+  }, [loadRoles]);
+
+  const enumValues = Object.values(UserRole);
+  const usedValues = new Set(roles.map((r) => r.value));
+  const availableCodes = enumValues.filter((value) => !usedValues.has(value));
+
+  const handleCreate = async () => {
+    try {
+      setSaving(true);
+      await usersApi.createRoleDefinition(form);
+      enqueueSnackbar('Role definition added.', { variant: 'success' });
+      setCreateOpen(false);
+      setForm({ value: UserRole.FOCAL, label: '', description: '', assignable: true });
+      await loadRoles();
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to create role definition.', { variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!selected) return;
+    try {
+      setSaving(true);
+      await usersApi.updateRoleDefinition(selected.value, {
+        label: selected.label,
+        description: selected.description,
+        assignable: selected.value === UserRole.SUPER_ADMIN ? false : selected.assignable,
+      });
+      enqueueSnackbar('Role definition updated.', { variant: 'success' });
+      setSelected(null);
+      await loadRoles();
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to update role definition.', { variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Card elevation={2}>
@@ -180,6 +238,16 @@ function RoleManagementCard() {
         avatar={<RoleIcon color="primary" />}
         title="System Role Definitions"
         subheader="View all roles available for user provisioning. System roles are pre-defined and cannot be deleted."
+        action={
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => setCreateOpen(true)}
+            disabled={availableCodes.length === 0}
+          >
+            Add Role Definition
+          </Button>
+        }
       />
       <CardContent>
         {loading ? (
@@ -222,22 +290,101 @@ function RoleManagementCard() {
             </Table>
 
             <Dialog open={Boolean(selected)} onClose={() => setSelected(null)} maxWidth="xs" fullWidth>
-              <DialogTitle>{selected?.label}</DialogTitle>
+              <DialogTitle>Edit Role Definition</DialogTitle>
               <DialogContent dividers>
-                <Typography variant="body2" gutterBottom>
-                  <strong>Role Code:</strong> <code>{selected?.value}</code>
-                </Typography>
-                <Typography variant="body2" gutterBottom>
-                  <strong>Assignable:</strong>{' '}
-                  {selected?.assignable
-                    ? 'Yes  can be assigned when creating users.'
-                    : 'No  reserved for system administrators.'}
-                </Typography>
-                <Divider sx={{ my: 1.5 }} />
-                <Typography variant="body2">{selected?.description}</Typography>
+                <TextField
+                  label="Role Code"
+                  value={selected?.value || ''}
+                  fullWidth
+                  disabled
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  label="Role Label"
+                  value={selected?.label || ''}
+                  onChange={(e) => setSelected((prev) => prev ? { ...prev, label: e.target.value } : prev)}
+                  fullWidth
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  label="Description"
+                  value={selected?.description || ''}
+                  onChange={(e) => setSelected((prev) => prev ? { ...prev, description: e.target.value } : prev)}
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  sx={{ mb: 2 }}
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(selected?.assignable)}
+                      disabled={selected?.value === UserRole.SUPER_ADMIN}
+                      onChange={(e) => setSelected((prev) => prev ? { ...prev, assignable: e.target.checked } : prev)}
+                    />
+                  }
+                  label="Assignable during user creation"
+                />
               </DialogContent>
               <DialogActions>
                 <Button onClick={() => setSelected(null)}>Close</Button>
+                <Button variant="contained" onClick={handleUpdate} disabled={saving || !selected?.label || !selected?.description}>
+                  {saving ? 'Saving...' : 'Save'}
+                </Button>
+              </DialogActions>
+            </Dialog>
+
+            <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="xs" fullWidth>
+              <DialogTitle>Add Role Definition</DialogTitle>
+              <DialogContent dividers>
+                <TextField
+                  select
+                  label="Role Code"
+                  value={form.value}
+                  onChange={(e) => setForm((prev) => ({ ...prev, value: e.target.value as UserRole }))}
+                  fullWidth
+                  sx={{ mb: 2 }}
+                >
+                  {availableCodes.map((code) => (
+                    <MenuItem key={code} value={code}>{code}</MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  label="Role Label"
+                  value={form.label}
+                  onChange={(e) => setForm((prev) => ({ ...prev, label: e.target.value }))}
+                  fullWidth
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  label="Description"
+                  value={form.description}
+                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  sx={{ mb: 2 }}
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={form.value === UserRole.SUPER_ADMIN ? false : form.assignable}
+                      disabled={form.value === UserRole.SUPER_ADMIN}
+                      onChange={(e) => setForm((prev) => ({ ...prev, assignable: e.target.checked }))}
+                    />
+                  }
+                  label="Assignable during user creation"
+                />
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={() => setCreateOpen(false)}>Cancel</Button>
+                <Button
+                  variant="contained"
+                  onClick={handleCreate}
+                  disabled={saving || !form.label || !form.description || availableCodes.length === 0}
+                >
+                  {saving ? 'Saving...' : 'Create'}
+                </Button>
               </DialogActions>
             </Dialog>
           </>
@@ -255,8 +402,8 @@ function FocalUserManagementCard() {
   const [focalUsers, setFocalUsers] = useState<any[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [editUserId, setEditUserId] = useState<number | null>(null);
-  const [editRole, setEditRole] = useState('');
+  const [editUser, setEditUser] = useState<any | null>(null);
+  const [editing, setEditing] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const { enqueueSnackbar } = useSnackbar();
   const [form, setForm] = useState({
@@ -306,15 +453,28 @@ function FocalUserManagementCard() {
     }
   };
 
-  const handleRoleUpdate = async () => {
-    if (!editUserId || !editRole) return;
+  const handleEditSave = async () => {
+    if (!editUser) return;
     try {
-      await usersApi.updateRole(editUserId, editRole);
-      enqueueSnackbar('Role updated successfully.', { variant: 'success' });
-      setEditUserId(null);
+      setEditing(true);
+      await usersApi.updateUser(editUser.id, {
+        email: editUser.email,
+        firstName: editUser.firstName,
+        middleName: editUser.middleName,
+        lastName: editUser.lastName,
+        suffix: editUser.suffix,
+        position: editUser.position,
+        designation: editUser.designation,
+        role: editUser.role,
+        unitIds: editUser.unitIds,
+      });
+      enqueueSnackbar('User profile updated successfully.', { variant: 'success' });
+      setEditUser(null);
       await reload();
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to update role.', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to update user.', { variant: 'error' });
+    } finally {
+      setEditing(false);
     }
   };
 
@@ -462,8 +622,26 @@ function FocalUserManagementCard() {
                       : <Chip icon={<InactiveIcon />} label="Inactive" size="small" color="default" />}
                   </TableCell>
                   <TableCell align="right">
-                    <Tooltip title="Change role">
-                      <IconButton size="small" color="primary" onClick={() => { setEditUserId(u.id); setEditRole(u.role); }}>
+                    <Tooltip title="Edit user">
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={() => {
+                          setEditUser({
+                            id: u.id,
+                            email: u.email || '',
+                            firstName: u.firstName || '',
+                            middleName: u.middleName || '',
+                            lastName: u.lastName || '',
+                            suffix: u.suffix || '',
+                            staffId: u.staffId || '',
+                            position: u.position || '',
+                            designation: u.designation || '',
+                            role: u.role,
+                            unitIds: Array.isArray(u.units) ? u.units.map((unit: any) => unit.id) : [],
+                          });
+                        }}
+                      >
                         <EditIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
@@ -479,23 +657,119 @@ function FocalUserManagementCard() {
           </Table>
         )}
 
-        <Dialog open={editUserId !== null} onClose={() => setEditUserId(null)} maxWidth="xs" fullWidth>
-          <DialogTitle>Change User Role</DialogTitle>
+        <Dialog open={Boolean(editUser)} onClose={() => setEditUser(null)} maxWidth="md" fullWidth>
+          <DialogTitle>Edit User Profile</DialogTitle>
           <DialogContent>
-            <TextField select label="New Role" value={editRole} onChange={(e) => setEditRole(e.target.value)} fullWidth sx={{ mt: 1 }}>
-              {assignableRoles.map((r) => (
-                <MenuItem key={r.value} value={r.value}>
-                  <Box>
-                    <Typography variant="body2" fontWeight={600}>{r.label}</Typography>
-                    <Typography variant="caption" color="text.secondary">{r.description}</Typography>
-                  </Box>
-                </MenuItem>
-              ))}
-            </TextField>
+            <Grid container spacing={2} sx={{ mt: 0.5 }}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Email"
+                  value={editUser?.email || ''}
+                  onChange={(e) => setEditUser((prev: any) => ({ ...prev, email: e.target.value }))}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  label="Staff ID"
+                  value={editUser?.staffId || ''}
+                  fullWidth
+                  disabled
+                  helperText="Staff ID is immutable and cannot be updated."
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField
+                  label="First Name"
+                  value={editUser?.firstName || ''}
+                  onChange={(e) => setEditUser((prev: any) => ({ ...prev, firstName: e.target.value }))}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField
+                  label="Middle Name"
+                  value={editUser?.middleName || ''}
+                  onChange={(e) => setEditUser((prev: any) => ({ ...prev, middleName: e.target.value }))}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField
+                  label="Last Name"
+                  value={editUser?.lastName || ''}
+                  onChange={(e) => setEditUser((prev: any) => ({ ...prev, lastName: e.target.value }))}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField
+                  label="Suffix"
+                  value={editUser?.suffix || ''}
+                  onChange={(e) => setEditUser((prev: any) => ({ ...prev, suffix: e.target.value }))}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  label="Position"
+                  value={editUser?.position || ''}
+                  onChange={(e) => setEditUser((prev: any) => ({ ...prev, position: e.target.value }))}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  label="Designation"
+                  value={editUser?.designation || ''}
+                  onChange={(e) => setEditUser((prev: any) => ({ ...prev, designation: e.target.value }))}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  select
+                  label="Role"
+                  value={editUser?.role || ''}
+                  onChange={(e) => setEditUser((prev: any) => ({ ...prev, role: e.target.value }))}
+                  fullWidth
+                >
+                  {assignableRoles.map((r) => (
+                    <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Assigned Units</InputLabel>
+                  <Select
+                    multiple
+                    value={editUser?.unitIds || []}
+                    label="Assigned Units"
+                    onChange={(e) => setEditUser((prev: any) => ({ ...prev, unitIds: e.target.value as number[] }))}
+                    renderValue={(selected) =>
+                      (selected as number[])
+                        .map((id) => units.find((u) => u.id === id)?.name ?? id)
+                        .join(', ')
+                    }
+                    MenuProps={{ disableAutoFocusItem: true }}
+                  >
+                    {units.map((u) => (
+                      <MenuItem key={u.id} value={u.id}>
+                        <Checkbox checked={Boolean(editUser?.unitIds?.includes(u.id))} />
+                        <ListItemText primary={u.name} />
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setEditUserId(null)}>Cancel</Button>
-            <Button variant="contained" onClick={handleRoleUpdate} disabled={!editRole}>Save</Button>
+            <Button onClick={() => setEditUser(null)}>Cancel</Button>
+            <Button variant="contained" onClick={handleEditSave} disabled={editing || !editUser?.email || !editUser?.role}>
+              {editing ? 'Saving...' : 'Save'}
+            </Button>
           </DialogActions>
         </Dialog>
       </CardContent>
@@ -530,16 +804,16 @@ export default function SettingsPage() {
             <Grid item xs={12} sm={6} md={3}>
               <Typography variant="caption" color="text.secondary" display="block">Full Name</Typography>
               <Typography variant="body1">
-                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || '—'}
+                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'ï¿½'}
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
               <Typography variant="caption" color="text.secondary" display="block">Email</Typography>
-              <Typography variant="body1">{user?.email || '—'}</Typography>
+              <Typography variant="body1">{user?.email || 'ï¿½'}</Typography>
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <Typography variant="caption" color="text.secondary" display="block">Role</Typography>
-              <Chip label={user?.role?.replace('_', ' ').toUpperCase() || '—'} size="small" color="primary" variant="outlined" />
+              <Chip label={user?.role?.replace('_', ' ').toUpperCase() || 'ï¿½'} size="small" color="primary" variant="outlined" />
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
               <Typography variant="caption" color="text.secondary" display="block">Assigned Units</Typography>

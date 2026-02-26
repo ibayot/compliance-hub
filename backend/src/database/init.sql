@@ -7,7 +7,7 @@ USE rictms_compliance;
 
 -- Insert default super admin (password: Admin@123)
 -- Password hash for: Admin@123
-INSERT INTO users (id, email, passwordHash, first_name, last_name, role, is_active, created_at, updated_at)
+INSERT INTO users (id, email, passwordHash, first_name, last_name, role, active, created_at, updated_at)
 VALUES (1, 'admin@rictms.gov.ph', '$2b$10$YourHashedPasswordHere', 'System', 'Administrator', 'super_admin', 1, NOW(), NOW())
 ON DUPLICATE KEY UPDATE email = email;
 

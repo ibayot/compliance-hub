@@ -23,6 +23,7 @@ import {
   BugReport as TicketsIcon,
   Business as UnitsIcon,
   Assessment as MetricsIcon,
+  Insights as KpiIcon,
   Settings as SettingsIcon,
   Security as SecurityIcon,
   MenuBook as ManualIcon,
@@ -61,6 +62,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const adminNavItems: NavItem[] = [
     { label: 'Units', icon: UnitsIcon, path: '/dashboard/units', roles: ['super_admin'] },
     { label: 'Metrics', icon: MetricsIcon, path: '/dashboard/metrics', roles: ['super_admin', 'reviewer'] },
+    { label: 'KPI', icon: KpiIcon, path: '/dashboard/kpi', roles: ['super_admin', 'reviewer', 'focal', 'auditor', 'technician'] },
     { label: 'Reviews', icon: SecurityIcon, path: '/dashboard/reviews', roles: ['super_admin', 'reviewer'] },
   ];
 

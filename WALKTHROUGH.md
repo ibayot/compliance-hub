@@ -1,5 +1,7 @@
 # RICTMS Compliance Hub - User Walkthrough Guide
 
+> **Release `v1.2.0.4` (2026-02-26):** New `Dashboard → KPI` page introduces KPI Master (admin/compliance), KPI Monitoring input (admin/compliance), and KPI Dashboard (role-scoped by unit). Settings now supports editing existing users (name/unit/role/position/designation) while `staff_id` remains immutable. System Role Definitions now support add/edit metadata from Settings.
+
 > Update (`v1.1.0-dev`, 2026-02-24): walkthrough now reflects blob-first upload and preview behavior for document versions.
 
 > Patch (`v1.1.1-dev`, 2026-02-25): includes settings password/theme workflow, super-admin focal provisioning, and category-scoped issue-type behavior.

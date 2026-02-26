@@ -1,10 +1,49 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { User } from './entities/user.entity';
-import { CreateUserDto, UpdateUserDto } from './dto';
+import { User, UserRole } from './entities/user.entity';
+import { CreateRoleDefinitionDto, UpdateRoleDefinitionDto, CreateUserDto, UpdateUserDto } from './dto';
 import { Unit } from '../units/entities/unit.entity';
+import { RoleDefinitionEntity } from './entities/role-definition.entity';
+
+const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'label' | 'description' | 'assignable' | 'isSystem'>> = [
+  {
+    value: UserRole.SUPER_ADMIN,
+    label: 'Super Admin',
+    description: 'Full system access: manage users, units, issuances, metrics, tickets, documents, and settings.',
+    assignable: false,
+    isSystem: true,
+  },
+  {
+    value: UserRole.REVIEWER,
+    label: 'Reviewer / Compliance Officer',
+    description: 'Review and tag documents as compliant, non-compliant, or for revision. Manage issuances and tickets.',
+    assignable: true,
+    isSystem: true,
+  },
+  {
+    value: UserRole.FOCAL,
+    label: 'Focal Person',
+    description: 'Unit focal person responsible for uploading and submitting compliance documents on behalf of their unit.',
+    assignable: true,
+    isSystem: true,
+  },
+  {
+    value: UserRole.TECHNICIAN,
+    label: 'Technician',
+    description: 'Technical operations staff who assist in document preparation and submission.',
+    assignable: true,
+    isSystem: true,
+  },
+  {
+    value: UserRole.AUDITOR,
+    label: 'Auditor',
+    description: 'Read-only audit access to view documents, reviews, and compliance records for inspection purposes.',
+    assignable: true,
+    isSystem: true,
+  },
+];
 
 @Injectable()
 export class UsersService {
@@ -13,8 +52,11 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(Unit)
     private readonly unitsRepository: Repository<Unit>,
+    @InjectRepository(RoleDefinitionEntity)
+    private readonly roleDefinitionsRepository: Repository<RoleDefinitionEntity>,
   ) {
     this.ensureSchema().catch(() => undefined);
+    this.ensureRoleDefinitions().catch(() => undefined);
   }
 
   private async ensureSchema() {
@@ -29,6 +71,59 @@ export class UsersService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  private async ensureRoleDefinitions() {
+    const existing = await this.roleDefinitionsRepository.find();
+    const existingByValue = new Set(existing.map((role) => role.value));
+    const missing = DEFAULT_ROLE_DEFINITIONS.filter((role) => !existingByValue.has(role.value));
+
+    if (missing.length > 0) {
+      await this.roleDefinitionsRepository.save(
+        missing.map((role) => this.roleDefinitionsRepository.create(role)),
+      );
+    }
+  }
+
+  async getRoles() {
+    await this.ensureRoleDefinitions();
+    return this.roleDefinitionsRepository.find({ order: { label: 'ASC' } });
+  }
+
+  async createRoleDefinition(dto: CreateRoleDefinitionDto) {
+    const existing = await this.roleDefinitionsRepository.findOne({ where: { value: dto.value } });
+    if (existing) {
+      throw new ConflictException(`Role definition for '${dto.value}' already exists`);
+    }
+
+    const role = this.roleDefinitionsRepository.create({
+      value: dto.value,
+      label: dto.label,
+      description: dto.description,
+      assignable: dto.value === UserRole.SUPER_ADMIN ? false : (dto.assignable ?? true),
+      isSystem: true,
+    });
+
+    return this.roleDefinitionsRepository.save(role);
+  }
+
+  async updateRoleDefinition(value: string, dto: UpdateRoleDefinitionDto) {
+    const role = await this.roleDefinitionsRepository.findOne({ where: { value } });
+    if (!role) {
+      throw new NotFoundException(`Role definition '${value}' not found`);
+    }
+
+    if (dto.value && dto.value !== role.value) {
+      throw new BadRequestException('Role code cannot be changed.');
+    }
+
+    if (dto.label !== undefined) role.label = dto.label;
+    if (dto.description !== undefined) role.description = dto.description;
+    if (dto.assignable !== undefined) {
+      role.assignable = role.value === UserRole.SUPER_ADMIN ? false : dto.assignable;
+    }
+
+    return this.roleDefinitionsRepository.save(role);
   }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -110,7 +205,6 @@ export class UsersService {
     if (dto.middleName !== undefined) user.middleName = dto.middleName;
     if (dto.lastName) user.lastName = dto.lastName;
     if (dto.suffix !== undefined) user.suffix = dto.suffix;
-    if (dto.staffId !== undefined) user.staffId = dto.staffId;
     if (dto.position !== undefined) user.position = dto.position;
     if (dto.designation !== undefined) user.designation = dto.designation;
     if (dto.role) user.role = dto.role;

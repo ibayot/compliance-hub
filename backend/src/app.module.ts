@@ -14,6 +14,7 @@ import { ReferencesModule } from './modules/references/references.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
 import { IncidentsModule } from './modules/incidents/incidents.module';
 import { CybersecurityModule } from './modules/cybersecurity/cybersecurity.module';
+import { KpiModule } from './modules/kpi/kpi.module';
 
 @Module({
   imports: [
@@ -90,6 +91,7 @@ import { CybersecurityModule } from './modules/cybersecurity/cybersecurity.modul
     TicketsModule,
     IncidentsModule,
     CybersecurityModule,
+    KpiModule,
   ],
   controllers: [],
   providers: [],

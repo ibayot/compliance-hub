@@ -11,7 +11,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto } from './dto';
+import { CreateRoleDefinitionDto, UpdateRoleDefinitionDto, CreateUserDto, UpdateUserDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -25,43 +25,19 @@ export class UsersController {
   @Get('roles')
   @Roles('super_admin', 'reviewer')
   getRoles() {
-    return [
-      {
-        value: 'super_admin',
-        label: 'Super Admin',
-        description: 'Full system access: manage users, units, issuances, metrics, tickets, documents, and settings.',
-        assignable: false,
-        is_system: true,
-      },
-      {
-        value: 'reviewer',
-        label: 'Reviewer / Compliance Officer',
-        description: 'Review and tag documents as compliant, non-compliant, or for revision. Manage issuances and tickets.',
-        assignable: true,
-        is_system: true,
-      },
-      {
-        value: 'focal',
-        label: 'Focal Person',
-        description: 'Unit focal person responsible for uploading and submitting compliance documents on behalf of their unit.',
-        assignable: true,
-        is_system: true,
-      },
-      {
-        value: 'technician',
-        label: 'Technician',
-        description: 'Technical operations staff who assist in document preparation and submission.',
-        assignable: true,
-        is_system: true,
-      },
-      {
-        value: 'auditor',
-        label: 'Auditor',
-        description: 'Read-only audit access to view documents, reviews, and compliance records for inspection purposes.',
-        assignable: true,
-        is_system: true,
-      },
-    ];
+    return this.usersService.getRoles();
+  }
+
+  @Post('roles')
+  @Roles('super_admin')
+  createRole(@Body() createRoleDefinitionDto: CreateRoleDefinitionDto) {
+    return this.usersService.createRoleDefinition(createRoleDefinitionDto);
+  }
+
+  @Patch('roles/:value')
+  @Roles('super_admin')
+  updateRole(@Param('value') value: string, @Body() updateRoleDefinitionDto: UpdateRoleDefinitionDto) {
+    return this.usersService.updateRoleDefinition(value, updateRoleDefinitionDto);
   }
 
   @Post()

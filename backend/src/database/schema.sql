@@ -26,6 +26,19 @@ CREATE TABLE IF NOT EXISTS `users` (
   KEY `idx_role` (`role`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `role_definitions` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `value` varchar(255) NOT NULL,
+  `label` varchar(255) NOT NULL,
+  `description` text NOT NULL,
+  `assignable` tinyint(1) NOT NULL DEFAULT 1,
+  `is_system` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ux_role_definitions_value` (`value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- =============================================
 -- ORGANIZATIONAL UNITS
 -- =============================================
@@ -146,6 +159,78 @@ CREATE TABLE IF NOT EXISTS `metric_results` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================
+-- KPI MONITORING AND DASHBOARD
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS `kpi_master` (
+  `code` varchar(80) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `unit_id` int(11) NOT NULL,
+  `type` enum('measurement','yes_no') NOT NULL DEFAULT 'measurement',
+  `unit_of_measure` varchar(80) DEFAULT NULL,
+  `direction` enum('higher_is_better','lower_is_better') NOT NULL,
+  `target_value` float NOT NULL,
+  `weight` float NOT NULL DEFAULT 1,
+  `frequency` enum('monthly','quarterly','annual') NOT NULL DEFAULT 'monthly',
+  `active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`code`),
+  KEY `idx_kpi_master_unit` (`unit_id`),
+  KEY `idx_kpi_master_active` (`active`),
+  CONSTRAINT `fk_kpi_master_unit` FOREIGN KEY (`unit_id`) REFERENCES `units` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `kpi_monitoring` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `kpi_master_code` varchar(80) NOT NULL,
+  `unit_id` int(11) NOT NULL,
+  `period_year` int(11) NOT NULL,
+  `period_month` int(11) NOT NULL,
+  `actual_value` float NOT NULL,
+  `remarks` text DEFAULT NULL,
+  `entered_by_user_id` int(11) DEFAULT NULL,
+  `entered_by_staff_id` varchar(120) DEFAULT NULL,
+  `entered_by_name` varchar(255) DEFAULT NULL,
+  `status` enum('draft','locked') NOT NULL DEFAULT 'draft',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ux_kpi_monitoring_period` (`kpi_master_code`, `unit_id`, `period_year`, `period_month`),
+  KEY `idx_kpi_monitoring_unit` (`unit_id`),
+  KEY `idx_kpi_monitoring_period` (`period_year`, `period_month`),
+  CONSTRAINT `fk_kpi_monitoring_master` FOREIGN KEY (`kpi_master_code`) REFERENCES `kpi_master` (`code`) ON DELETE CASCADE,
+  CONSTRAINT `fk_kpi_monitoring_unit` FOREIGN KEY (`unit_id`) REFERENCES `units` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_kpi_monitoring_user` FOREIGN KEY (`entered_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `kpi_thresholds` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `band` varchar(40) NOT NULL,
+  `min_score` float NOT NULL,
+  `max_score` float NOT NULL,
+  `color` varchar(40) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ux_kpi_thresholds_band` (`band`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `kpi_scoring_rules` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(80) NOT NULL DEFAULT 'default',
+  `active` tinyint(1) NOT NULL DEFAULT 1,
+  `cap_score` float NOT NULL DEFAULT 100,
+  `floor_score` float NOT NULL DEFAULT 0,
+  `yes_score` float NOT NULL DEFAULT 100,
+  `no_score` float NOT NULL DEFAULT 0,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
 -- REVIEWS AND COMPARISONS
 -- =============================================
 
@@ -260,3 +345,4 @@ CREATE INDEX idx_documents_year_period ON documents(year, period);
 CREATE INDEX idx_metric_results_version_metric ON metric_results(version_id, metric_id);
 CREATE INDEX idx_reviews_document_date ON manual_reviews(document_id, reviewed_at);
 CREATE INDEX idx_tickets_assigned ON tickets(assigned_to_id, status);
+CREATE INDEX idx_kpi_monitoring_status ON kpi_monitoring(status);

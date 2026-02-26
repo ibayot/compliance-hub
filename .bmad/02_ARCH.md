@@ -3,6 +3,8 @@
 
 > Revision note (`v1.1.0-dev`, 2026-02-24): architecture now reflects blob-first document/version persistence with conversion pipeline fallback.
 
+> Revision note (`v1.2.0.4`, 2026-02-26): architecture extended with KPI module (`kpi_master`, `kpi_monitoring`, `kpi_thresholds`, `kpi_scoring_rules`) and role-scoped KPI dashboard aggregation. User management policy updated: existing user profile fields and unit assignments are editable, while `staff_id` is immutable post-create.
+
 **Version:** 1.0  
 **Date:** February 23, 2026  
 **Status:** Draft
