@@ -2,6 +2,8 @@
 
 > Update (`v1.1.0-dev`, 2026-02-24): QA checks now include blob persistence validation and DOCX-to-PDF preview generation checks.
 
+> **Release `v1.2.0.4` (2026-02-26):** Verify: (1) Settings → Existing Users: name/unit/role/position/designation can be edited. (2) Staff ID is immutable — PATCH with `staffId` is rejected and Settings edit dialog keeps Staff ID disabled. (3) Settings → System Role Definitions supports add/edit role metadata (label/description/assignable). (4) Dashboard → KPI is visible; KPI Master uses `unit_id` from Units table. (5) KPI Monitoring records `entered_by_staff_id` and `entered_by_name`, and supports status `draft/locked` only. (6) KPI Dashboard enforces unit visibility for focal users and consolidated visibility for compliance/super-admin roles.
+
 > **Release `v1.2.0.3` (2026-02-26):** Verify: (1) Documents pagination shows "Page 1 of 1" (not "Page 1-1 of 1"). (2) Login with a unit-assigned account → Settings → Account Information shows the assigned unit(s) as chips. (3) Login as focal user → Upload Document → unit auto-populates from assigned unit. (4) Settings → Create New User: error messages appear inside the modal (not below the card). (5) Unit multi-select in create user dialog shows checkboxes for each option. (6) Dashboard incident response section shows the full date (e.g., "Wednesday, February 26, 2026"). (7) All action success/error notifications are toast messages in top-right corner. (8) Creating a user with non-focal role (e.g., Reviewer) results in correct role in users table.
 
 > **Release `v1.2.0.1` (2026-02-26):** Verify: (1) Units page shows accordion; click unit to expand and see Reportorial Document Types section with Add button. (2) Upload Document page: focal user's unit is auto-filled; selecting a doc type shows the expected filename. (3) Uploading a file with wrong name shows a validation error before submit. (4) Metrics page: "Reportorial Document Type" dropdown replaces Unit+DocType. (5) Settings → "Create New User" opens a dialog with unit multi-select. (6) Deactivate user in Settings now works (no more "Failed to update user status"). (7) Navigating to /dashboard/documents no longer highlights Dashboard in sidebar. (8) GET /api/metrics returns 16 templates.
@@ -22,6 +24,7 @@ This manual is for business and QA users who need to verify if core workflows ar
 - CI/baseline validation checkpoints for release readiness
 - Document return-for-revision workflow (remarks-required, audit-preserving)
 - Super-admin management of dynamic ticket issue types and categories
+- KPI Master, KPI Monitoring, KPI Dashboard, and KPI lookup table behavior
 
 ## Test Environment Prep
 1. Start backend (`backend`): `npm run start:dev`

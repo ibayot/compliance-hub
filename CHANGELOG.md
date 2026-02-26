@@ -6,6 +6,71 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.2.0.4] - 2026-02-26 — KPI Monitoring Module, KPI Dashboard, User/Role Management Enhancements
+
+### Added
+- **KPI Module (new)**: Added `backend/src/modules/kpi` with secure endpoints for:
+  - `KPI Master` (`/api/kpi/master`)
+  - `KPI Monitoring` (`/api/kpi/monitoring`)
+  - `KPI Dashboard` (`/api/kpi/dashboard/summary`, `/api/kpi/dashboard/unit/:unitId`)
+  - `Lookup Tables` (`/api/kpi/lookups/thresholds`, `/api/kpi/lookups/scoring-rules`)
+- **KPI Master table structure aligned to requirements**:
+  - `code` (primary key), `name`, `description`, `unit_id`, `type`, `unit_of_measure`, `direction`, `target_value`, `weight`, `frequency`, `active`
+  - Removed `min_value` / `max_value`
+- **KPI Monitoring table structure aligned to requirements**:
+  - `kpi_master_code`, `unit_id`, `period_year`, `period_month`, `actual_value`, `remarks`, `entered_by_staff_id`, `entered_by_name`, `status`
+  - `status` supports `draft` / `locked`
+  - Removed `submitted_at`
+- **Lookup tables added**:
+  - `kpi_thresholds`
+  - `kpi_scoring_rules`
+- **Frontend KPI workspace page**: Added `Dashboard → KPI` (`/dashboard/kpi`) with role-aware tabs for KPI Master, Monitoring, and Dashboard.
+
+### Changed
+- **User edit behavior**:
+  - Existing users can now be edited for name, email, role, position/designation, and assigned unit(s).
+  - `staff_id` is now immutable by design (locked in UI and rejected in update DTO/service path).
+- **System roles management**:
+  - Added persisted role definitions (`role_definitions` table) and API create/update/list support.
+  - Settings `System Role Definitions` now supports add/edit metadata (label, description, assignable).
+- **Sidebar navigation**:
+  - Added KPI entry in Administration navigation for permitted roles.
+
+### Security / Access
+- KPI endpoints enforce role and unit visibility server-side:
+  - Focal users see only allowed units in KPI dashboard data.
+  - Compliance/Admin roles can manage KPI master and monitoring.
+  - Super admin controls lookup table maintenance.
+
+### Database / Seed Updates
+- Updated `schema.sql` with:
+  - `role_definitions`
+  - `kpi_master`
+  - `kpi_monitoring`
+  - `kpi_thresholds`
+  - `kpi_scoring_rules`
+- Updated `seed.sql` and `seed-data.sql` with role definition seeds and KPI baseline records.
+- Updated `init.sql` to use current `users.active` column naming.
+
+### Documentation Updated
+- `CAPABILITIES.md`
+- `CHANGELOG.md`
+- `README.md`
+- `INSTALLATION.md`
+- `WALKTHROUGH.md`
+- `QA-USER-MANUAL.md`
+- `.bmad/02_ARCH.md`
+
+### Verified (Smoke)
+- Frontend TypeScript: `npx tsc --noEmit` ✅
+- Frontend build: `npm run build` ✅
+- Backend TypeScript: `npx tsc --noEmit` ✅
+- Backend build: `npm run build` ✅
+- API smoke: login + KPI dashboard summary endpoint ✅
+- API smoke: staff ID update attempt rejected (`property staffId should not exist`) ✅
+
+---
+
 ## [1.2.0.3] - 2026-02-26 — Bug Fixes: Toast Notifications, Units in Login, Create User Modal, Pagination, Dashboard Date
 
 ### Fixed

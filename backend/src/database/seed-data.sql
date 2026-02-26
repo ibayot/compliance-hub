@@ -12,6 +12,11 @@ TRUNCATE TABLE manual_reviews;
 TRUNCATE TABLE metric_results;
 TRUNCATE TABLE metric_applicability;
 TRUNCATE TABLE metric_templates;
+TRUNCATE TABLE kpi_monitoring;
+TRUNCATE TABLE kpi_master;
+TRUNCATE TABLE kpi_thresholds;
+TRUNCATE TABLE kpi_scoring_rules;
+TRUNCATE TABLE role_definitions;
 TRUNCATE TABLE document_versions;
 TRUNCATE TABLE documents;
 TRUNCATE TABLE issuances;
@@ -36,6 +41,13 @@ INSERT INTO user_unit_access (user_id, unit_id) VALUES
 (1, 1), (1, 2),
 (2, 1), (2, 2),
 (3, 1);
+
+INSERT INTO role_definitions (`value`, `label`, `description`, `assignable`, `is_system`, `created_at`, `updated_at`) VALUES
+('super_admin', 'Super Admin', 'Full system access including user and security administration.', 0, 1, NOW(), NOW()),
+('reviewer', 'Reviewer / Compliance Officer', 'Consolidated compliance oversight and KPI monitoring input.', 1, 1, NOW(), NOW()),
+('focal', 'Focal Person', 'Unit-level dashboard visibility and document operations.', 1, 1, NOW(), NOW()),
+('technician', 'Technician', 'Operational support role with limited visibility.', 1, 1, NOW(), NOW()),
+('auditor', 'Auditor', 'Read-only compliance and KPI access for audit.', 1, 1, NOW(), NOW());
 
 -- Issuances: is_active is correct for this table
 INSERT INTO issuances (id, issuance_number, title, description, issuing_authority, issue_date, effectivity_date, source_url, is_active, created_at, updated_at) VALUES
@@ -75,6 +87,30 @@ INSERT INTO metric_applicability (id, metric_id, unit_id, document_type) VALUES
 ('map-002', 'metric-002', NULL, NULL),
 ('map-003', 'metric-003', NULL, NULL),
 ('map-004', 'metric-004', NULL, NULL);
+
+INSERT INTO kpi_master (`code`, `name`, `description`, `unit_id`, `type`, `unit_of_measure`, `direction`, `target_value`, `weight`, `frequency`, `active`, `created_at`, `updated_at`) VALUES
+('KPI-IT-ONTIME', 'On-time Compliance Submission', 'Percentage of compliance submissions received on or before deadline.', 1, 'measurement', '%', 'higher_is_better', 95, 0.4, 'monthly', 1, NOW(), NOW()),
+('KPI-IT-QA', 'Quality Pass Rate', 'Percentage of submissions passing first compliance review.', 1, 'measurement', '%', 'higher_is_better', 90, 0.35, 'monthly', 1, NOW(), NOW()),
+('KPI-IT-COMP', 'Critical Control Completed', 'Whether all critical controls for the period are completed.', 1, 'yes_no', 'yes/no', 'higher_is_better', 1, 0.25, 'monthly', 1, NOW(), NOW()),
+('KPI-FIN-ONTIME', 'On-time Compliance Submission', 'Percentage of compliance submissions received on or before deadline.', 2, 'measurement', '%', 'higher_is_better', 95, 0.4, 'monthly', 1, NOW(), NOW()),
+('KPI-FIN-QA', 'Quality Pass Rate', 'Percentage of submissions passing first compliance review.', 2, 'measurement', '%', 'higher_is_better', 90, 0.35, 'monthly', 1, NOW(), NOW()),
+('KPI-FIN-COMP', 'Critical Control Completed', 'Whether all critical controls for the period are completed.', 2, 'yes_no', 'yes/no', 'higher_is_better', 1, 0.25, 'monthly', 1, NOW(), NOW());
+
+INSERT INTO kpi_scoring_rules (`name`, `active`, `cap_score`, `floor_score`, `yes_score`, `no_score`, `created_at`, `updated_at`) VALUES
+('default', 1, 100, 0, 100, 0, NOW(), NOW());
+
+INSERT INTO kpi_thresholds (`band`, `min_score`, `max_score`, `color`, `created_at`, `updated_at`) VALUES
+('green', 90, 100, 'success', NOW(), NOW()),
+('amber', 75, 89.99, 'warning', NOW(), NOW()),
+('red', 0, 74.99, 'error', NOW(), NOW());
+
+INSERT INTO kpi_monitoring (`kpi_master_code`, `unit_id`, `period_year`, `period_month`, `actual_value`, `remarks`, `entered_by_user_id`, `entered_by_staff_id`, `entered_by_name`, `status`, `created_at`, `updated_at`) VALUES
+('KPI-IT-ONTIME', 1, 2026, 2, 92, 'Slight delay due to document revisions.', 2, 'CO-1002', 'QA Reviewer', 'draft', NOW(), NOW()),
+('KPI-IT-QA', 1, 2026, 2, 88, 'Two submissions required corrections.', 2, 'CO-1002', 'QA Reviewer', 'draft', NOW(), NOW()),
+('KPI-IT-COMP', 1, 2026, 2, 1, 'All required controls completed.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-FIN-ONTIME', 2, 2026, 2, 96, 'All reports submitted ahead of deadline.', 2, 'CO-1002', 'QA Reviewer', 'draft', NOW(), NOW()),
+('KPI-FIN-QA', 2, 2026, 2, 91, 'Quality target achieved.', 2, 'CO-1002', 'QA Reviewer', 'draft', NOW(), NOW()),
+('KPI-FIN-COMP', 2, 2026, 2, 0, 'One control pending final sign-off.', 2, 'CO-1002', 'QA Reviewer', 'draft', NOW(), NOW());
 
 -- metric_results: columns are id, version_id, metric_template_id, status (enum pass/fail/warning/error), message, score, computed_at, evidence
 INSERT INTO metric_results (id, version_id, metric_template_id, status, score, message, evidence, computed_at) VALUES
