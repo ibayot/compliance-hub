@@ -24,6 +24,7 @@ import {
   Alert,
   Link,
 } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -37,6 +38,7 @@ import { documentsApi, Document } from '@/lib/api/documents';
 
 export default function IssuancesPage() {
   const { user } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
   const [issuances, setIssuances] = useState<Issuance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -131,7 +133,7 @@ export default function IssuancesPage() {
       handleCloseDialog();
       fetchIssuances();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to save issuance');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to save issuance', { variant: 'error' });
     }
   };
 
@@ -146,7 +148,7 @@ export default function IssuancesPage() {
       await issuancesApi.delete(id);
       fetchIssuances();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to delete issuance');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to delete issuance', { variant: 'error' });
     }
   };
 
@@ -174,7 +176,7 @@ export default function IssuancesPage() {
       setMappedDocuments(linkedDocs);
       setAvailableDocuments((docs.data || []).filter((document) => document.status === 'ready'));
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to load mapping details');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to load mapping details', { variant: 'error' });
     } finally {
       setMappingLoading(false);
     }
@@ -199,7 +201,7 @@ export default function IssuancesPage() {
       await openMappingDialog(selectedIssuance);
       await fetchIssuances();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to link document');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to link document', { variant: 'error' });
     }
   };
 
@@ -213,7 +215,7 @@ export default function IssuancesPage() {
       await openMappingDialog(selectedIssuance);
       await fetchIssuances();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to unlink document');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to unlink document', { variant: 'error' });
     }
   };
 
@@ -252,11 +254,7 @@ export default function IssuancesPage() {
         </Alert>
       )}
 
-      {error && (
-        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+
 
       <Card sx={{ mb: 3 }}>
         <CardContent>

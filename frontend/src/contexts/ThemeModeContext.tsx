@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import { SnackbarProvider } from 'notistack';
 import { getAppTheme } from '@/lib/theme';
 
 type ThemeMode = 'light' | 'dark';
@@ -41,7 +42,14 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
     <ThemeModeContext.Provider value={value}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        {children}
+        <SnackbarProvider
+          maxSnack={4}
+          anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+          autoHideDuration={4000}
+          style={{ marginTop: 8 }}
+        >
+          {children}
+        </SnackbarProvider>
       </ThemeProvider>
     </ThemeModeContext.Provider>
   );

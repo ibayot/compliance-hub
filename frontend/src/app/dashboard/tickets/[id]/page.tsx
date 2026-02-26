@@ -18,6 +18,7 @@ import {
   Grid,
 } from '@mui/material';
 import { useParams, useRouter } from 'next/navigation';
+import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { ticketsApi, Ticket, TicketConfigOption } from '@/app/api/references';
 
@@ -29,9 +30,9 @@ export default function TicketDetailPage() {
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const { enqueueSnackbar } = useSnackbar();
   const [issueType, setIssueType] = useState<Ticket['issue_type']>('other');
   const [issueTypeId, setIssueTypeId] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -56,7 +57,7 @@ export default function TicketDetailPage() {
       setResolutionSteps(data.resolution_steps || '');
       setResolutionDate(data.resolution_date ? new Date(data.resolution_date).toISOString().slice(0, 10) : '');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to fetch ticket');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to fetch ticket', { variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -83,7 +84,7 @@ export default function TicketDetailPage() {
       setComment('');
       fetchTicket();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to add comment');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to add comment', { variant: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -94,7 +95,7 @@ export default function TicketDetailPage() {
       await ticketsApi.update(ticketId, { status: newStatus });
       fetchTicket();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to update status');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to update status', { variant: 'error' });
     }
   };
 
@@ -109,7 +110,7 @@ export default function TicketDetailPage() {
       });
       fetchTicket();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to update issue details');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to update issue details', { variant: 'error' });
     }
   };
 
@@ -139,12 +140,6 @@ export default function TicketDetailPage() {
       <Button onClick={() => router.push('/dashboard/tickets')} sx={{ mb: 2 }}>
         ← Back to Issues
       </Button>
-
-      {error && (
-        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
 
       <Card sx={{ mb: 3 }}>
         <CardContent>

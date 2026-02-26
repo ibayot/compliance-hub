@@ -19,5 +19,6 @@ export interface AuthResponse {
     position?: string;
     designation?: string;
     role: string;
+    units: { id: number; name: string }[];
   };
 }
