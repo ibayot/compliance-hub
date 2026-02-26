@@ -37,6 +37,7 @@ export class AuthService {
         position: user.position,
         designation: user.designation,
         role: user.role,
+        units: user.units?.map((u) => ({ id: u.id, name: u.name })) || [],
       },
     };
   }

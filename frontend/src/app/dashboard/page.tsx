@@ -25,6 +25,7 @@ import {
   VpnLock as VpnLockIcon,
   BugReport as BugIcon,
 } from '@mui/icons-material';
+import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { documentsApi } from '@/lib/api/documents';
 import { ticketsApi } from '@/app/api/references';
@@ -239,7 +240,7 @@ export default function DashboardPage() {
             <Box display="flex" alignItems="center" gap={2} mb={3}>
               <BugIcon color="error" fontSize="large" />
               <Box>
-                <Typography variant="h6">Incident Response (Today 8AM - 5PM)</Typography>
+                <Typography variant="h6">Incident Response — {format(new Date(), 'EEEE, MMMM d, yyyy')}</Typography>
                 <Typography variant="caption" color="text.secondary">
                   Start: {incidentStats.startCount} • Added: {incidentStats.addedToday} • Current: {incidentStats.currentCount}
                 </Typography>

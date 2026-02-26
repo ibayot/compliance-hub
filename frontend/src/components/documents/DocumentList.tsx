@@ -243,7 +243,7 @@ export default function DocumentList({
         onRowsPerPageChange={handleChangeRowsPerPage}
         labelDisplayedRows={() => {
           const totalPages = Math.max(Math.ceil(total / limit), 1);
-          return `Page ${page}-${page} of ${totalPages}`;
+          return `Page ${page} of ${totalPages}`;
         }}
       />
     </Paper>

@@ -17,9 +17,9 @@ import {
   Select,
   MenuItem,
   InputLabel,
-  Alert,
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { useSnackbar } from 'notistack';
 import { ReviewDecision, SubmitReviewDto, Finding } from '@/app/api/reviews';
 
 interface ReviewFormProps {
@@ -39,7 +39,7 @@ export default function ReviewForm({
   const [remarks, setRemarks] = useState('');
   const [findings, setFindings] = useState<Finding[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { enqueueSnackbar } = useSnackbar();
 
   const handleAddFinding = () => {
     setFindings([
@@ -65,7 +65,6 @@ export default function ReviewForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
 
     try {
       const reviewData: SubmitReviewDto = {
@@ -76,7 +75,7 @@ export default function ReviewForm({
 
       await onSubmit(reviewData);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to submit review');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to submit review', { variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -88,12 +87,6 @@ export default function ReviewForm({
         <Typography variant="h6" gutterBottom>
           Submit Manual Review
         </Typography>
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
 
         <Box component="form" onSubmit={handleSubmit}>
           <FormControl fullWidth margin="normal">

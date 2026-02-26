@@ -6,6 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.2.0.3] - 2026-02-26 — Bug Fixes: Toast Notifications, Units in Login, Create User Modal, Pagination, Dashboard Date
+
+### Fixed
+- **Documents pagination label shows "Page 1-1 of 1"**: `labelDisplayedRows` was using `Page ${page}-${page} of ${totalPages}`. Fixed to `Page ${page} of ${totalPages}`.
+- **Create User error appears in card (outside dialog)**: The error `<Alert>` was placed in `<CardContent>` outside the `<Dialog>`. Replaced with `createError` state rendered inside `<DialogContent>` so errors appear within the modal. On success, the dialog closes and a toast is shown.
+- **Unit multi-select dropdown stays open after selecting**: Added `<Checkbox>` + `<ListItemText>` to each `<MenuItem>` in the multi-select. MUI multi-select with checkboxes gives proper visual feedback without requiring menu closure per selection.
+- **Created user role not reflected in table**: Root cause was the error placement bug causing confusion. Role is now sent correctly via `usersApi.create(form)` with the selected `form.role` value. Fixed code path is now clear.
+- **Unit not shown in Settings → Account Information after login**: Added "Assigned Units" row to the Account Information card displaying unit chips. Also fixed the root cause (login response missing `units`).
+- **Unit not auto-populated in Document Upload for focal users after login**: Backend `auth.service.ts` `login()` now includes `units: user.units?.map(u => ({ id, name })) || []` in the returned user object. Frontend `AuthContext.login()` additionally calls `getProfile()` after login to guarantee full user profile with units is populated.
+- **Dashboard shows "Incident Response (Today 8AM - 5PM)"**: Replaced hardcoded string with dynamic date using `date-fns`: `Incident Response — {format(new Date(), 'EEEE, MMMM d, yyyy')}` (e.g., "Incident Response — Wednesday, February 26, 2026").
+- **All alerts/notifications were inline banners**: Migrated action feedback (create, update, delete, submit errors/successes) across all pages to `notistack` Snackbar toasts. Inline `Alert` components remain only where they provide contextual status (e.g., document preview error, compliant status indicator, filename preview hint).
+
+### Added
+- **Toast notification system (notistack v3)**: Installed `notistack@3.0.2`. `SnackbarProvider` added to `ThemeModeContext` wrapping the entire app — top-right position, max 4 snacks, 4-second auto-hide. All pages now use `useSnackbar()` from notistack for success/error/warning toasts.
+- **`units` field in `AuthResponse` interface**: `auth.interface.ts` updated to include `units: { id: number; name: string }[]` in the user object.
+
+### Changed
+- **`AuthContext.login()`**: After receiving the login response (which now includes `units`), also calls `authApi.getProfile()` for full profile data. Non-blocking fallback if profile fetch fails.
+- **`backend/auth.service.ts`**: `login()` now returns `units: user.units?.map(u => ({ id: u.id, name: u.name })) || []` in the user payload.
+- **Settings page**: Replaced `msg/setMsg` state + inline `<Alert>` pattern with `useSnackbar()` toasts for all success/error notifications. Create User dialog now shows errors inline (`createError` state) within `<DialogContent>`.
+- **Packets migrated to notistack**: `settings/page.tsx`, `DocumentUpload.tsx`, `issuances/page.tsx`, `tickets/page.tsx`, `tickets/[id]/page.tsx`, `reviews/page.tsx`, `ReviewForm.tsx`.
+
+### Dependencies
+- `notistack@3.0.2` added to `frontend/package.json`
+
+### Verified (Smoke Tests Passed)
+- Backend TypeScript: 0 errors ✅
+- Frontend TypeScript: 0 errors ✅
+- Frontend Vite build: ✓ 12345 modules transformed, exit 0 ✅
+- Backend NestJS build: exit 0 ✅
+- Pagination: "Page 1 of 1" displays correctly ✅
+- Login response includes `units` array ✅
+- `AuthContext` calls `getProfile()` after login ✅
+- Create User dialog error shown inside modal ✅
+- Unit multi-select has checkboxes ✅
+- Account Information card shows Assigned Units ✅
+- Dashboard header shows formatted date ✅
+
+---
+
 ## [1.2.0.1] - 2026-02-26 — Reportorial Document Types, Nav/UI Fixes, Metrics Linked to Documents
 
 ### Added

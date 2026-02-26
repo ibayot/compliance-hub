@@ -1,4 +1,4 @@
-ï»¿'use client';
+'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -9,6 +9,7 @@ import {
   Card,
   CardContent,
   CardHeader,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
@@ -20,6 +21,7 @@ import {
   Grid,
   IconButton,
   InputLabel,
+  ListItemText,
   MenuItem,
   Select,
   Switch,
@@ -42,6 +44,7 @@ import {
   CheckCircle as ActiveIcon,
   Cancel as InactiveIcon,
 } from '@mui/icons-material';
+import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { useThemeMode } from '@/contexts/ThemeModeContext';
 import { authApi } from '@/lib/api/auth';
@@ -56,19 +59,18 @@ function ChangePasswordCard() {
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const { enqueueSnackbar } = useSnackbar();
 
   const handleSubmit = async () => {
-    setMsg(null);
-    if (next.length < 8) { setMsg({ type: 'error', text: 'New password must be at least 8 characters.' }); return; }
-    if (next !== confirm) { setMsg({ type: 'error', text: 'New password and confirmation do not match.' }); return; }
+    if (next.length < 8) { enqueueSnackbar('New password must be at least 8 characters.', { variant: 'error' }); return; }
+    if (next !== confirm) { enqueueSnackbar('New password and confirmation do not match.', { variant: 'error' }); return; }
     try {
       setBusy(true);
       const res = await authApi.changePassword({ currentPassword: current, newPassword: next });
-      setMsg({ type: 'success', text: res.message || 'Password updated successfully.' });
+      enqueueSnackbar(res.message || 'Password updated successfully.', { variant: 'success' });
       setCurrent(''); setNext(''); setConfirm('');
     } catch (err: any) {
-      setMsg({ type: 'error', text: err?.response?.data?.message || 'Failed to update password.' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to update password.', { variant: 'error' });
     } finally {
       setBusy(false);
     }
@@ -82,11 +84,6 @@ function ChangePasswordCard() {
         subheader="Update your account password. Minimum 8 characters."
       />
       <CardContent>
-        {msg && (
-          <Alert severity={msg.type} sx={{ mb: 2 }} onClose={() => setMsg(null)}>
-            {msg.text}
-          </Alert>
-        )}
         <Grid container spacing={2}>
           <Grid item xs={12} md={4}>
             <TextField
@@ -260,7 +257,8 @@ function FocalUserManagementCard() {
   const [creating, setCreating] = useState(false);
   const [editUserId, setEditUserId] = useState<number | null>(null);
   const [editRole, setEditRole] = useState('');
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const { enqueueSnackbar } = useSnackbar();
   const [form, setForm] = useState({
     email: '', password: '', firstName: '', middleName: '', lastName: '',
     suffix: '', staffId: '', role: UserRole.FOCAL, position: '', designation: '',
@@ -290,19 +288,19 @@ function FocalUserManagementCard() {
     suffix: '', staffId: '', role: UserRole.FOCAL, position: '', designation: '', unitIds: [],
   });
 
-  const handleOpenCreate = () => { resetForm(); setMsg(null); setCreateDialogOpen(true); };
+  const handleOpenCreate = () => { resetForm(); setCreateError(null); setCreateDialogOpen(true); };
 
   const handleCreate = async () => {
-    setMsg(null);
+    setCreateError(null);
     try {
       setCreating(true);
       await usersApi.create(form);
-      setMsg({ type: 'success', text: `User ${form.email} created successfully.` });
+      enqueueSnackbar(`User ${form.email} created successfully.`, { variant: 'success' });
       resetForm();
       setCreateDialogOpen(false);
       await reload();
     } catch (err: any) {
-      setMsg({ type: 'error', text: err?.response?.data?.message || 'Failed to create user.' });
+      setCreateError(err?.response?.data?.message || 'Failed to create user.');
     } finally {
       setCreating(false);
     }
@@ -312,11 +310,11 @@ function FocalUserManagementCard() {
     if (!editUserId || !editRole) return;
     try {
       await usersApi.updateRole(editUserId, editRole);
-      setMsg({ type: 'success', text: 'Role updated successfully.' });
+      enqueueSnackbar('Role updated successfully.', { variant: 'success' });
       setEditUserId(null);
       await reload();
     } catch (err: any) {
-      setMsg({ type: 'error', text: err?.response?.data?.message || 'Failed to update role.' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to update role.', { variant: 'error' });
     }
   };
 
@@ -329,7 +327,7 @@ function FocalUserManagementCard() {
       }
       await reload();
     } catch {
-      setMsg({ type: 'error', text: 'Failed to update user status.' });
+      enqueueSnackbar('Failed to update user status.', { variant: 'error' });
     }
   };
 
@@ -346,16 +344,15 @@ function FocalUserManagementCard() {
         }
       />
       <CardContent>
-        {msg && (
-          <Alert severity={msg.type} sx={{ mb: 2 }} onClose={() => setMsg(null)}>
-            {msg.text}
-          </Alert>
-        )}
-
         {/* Create user dialog */}
         <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="md" fullWidth>
           <DialogTitle>Create New User</DialogTitle>
           <DialogContent>
+            {createError && (
+              <Alert severity="error" sx={{ mb: 2, mt: 0.5 }} onClose={() => setCreateError(null)}>
+                {createError}
+              </Alert>
+            )}
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
               <Grid item xs={12} md={4}>
                 <TextField label="Email Address" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} fullWidth helperText="Login credential" />
@@ -404,9 +401,13 @@ function FocalUserManagementCard() {
                         .map((id) => units.find((u) => u.id === id)?.name ?? id)
                         .join(', ')
                     }
+                    MenuProps={{ disableAutoFocusItem: true }}
                   >
                     {units.map((u) => (
-                      <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>
+                      <MenuItem key={u.id} value={u.id}>
+                        <Checkbox checked={form.unitIds.includes(u.id)} />
+                        <ListItemText primary={u.name} />
+                      </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -529,16 +530,28 @@ export default function SettingsPage() {
             <Grid item xs={12} sm={6} md={3}>
               <Typography variant="caption" color="text.secondary" display="block">Full Name</Typography>
               <Typography variant="body1">
-                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || ''}
+                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || '—'}
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
               <Typography variant="caption" color="text.secondary" display="block">Email</Typography>
-              <Typography variant="body1">{user?.email || ''}</Typography>
+              <Typography variant="body1">{user?.email || '—'}</Typography>
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <Typography variant="caption" color="text.secondary" display="block">Role</Typography>
-              <Chip label={user?.role?.replace('_', ' ').toUpperCase() || ''} size="small" color="primary" variant="outlined" />
+              <Chip label={user?.role?.replace('_', ' ').toUpperCase() || '—'} size="small" color="primary" variant="outlined" />
+            </Grid>
+            <Grid item xs={12} sm={6} md={2}>
+              <Typography variant="caption" color="text.secondary" display="block">Assigned Units</Typography>
+              {user?.units && user.units.length > 0 ? (
+                <Box display="flex" flexWrap="wrap" gap={0.5} mt={0.25}>
+                  {(user.units as any[]).map((unit: any) => (
+                    <Chip key={unit.id} label={unit.name} size="small" variant="outlined" color="secondary" />
+                  ))}
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.secondary">None assigned</Typography>
+              )}
             </Grid>
           </Grid>
         </CardContent>
@@ -567,3 +580,5 @@ export default function SettingsPage() {
     </Box>
   );
 }
+
+

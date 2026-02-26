@@ -44,7 +44,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await authApi.login({ email, password });
       localStorage.setItem('accessToken', response.accessToken);
       localStorage.setItem('refreshToken', response.refreshToken);
-      setUser(response.user);
+      // Set user from login response first (includes units now)
+      setUser(response.user as any);
+      // Then fetch full profile to guarantee units and all relations are populated
+      try {
+        const profile = await authApi.getProfile();
+        setUser(profile);
+      } catch {
+        // Non-blocking: login response user data is still valid
+      }
       router.push('/dashboard');
     } catch (error) {
       throw error;

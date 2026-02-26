@@ -21,9 +21,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Alert,
   Stack,
 } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import {
   Add as AddIcon,
   Visibility as ViewIcon,
@@ -54,11 +54,11 @@ const statusColors = {
 export default function TicketsPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [issueTypes, setIssueTypes] = useState<TicketConfigOption[]>([]);
   const [categories, setCategories] = useState<TicketConfigOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [configType, setConfigType] = useState<'issue_type' | 'category'>('issue_type');
@@ -96,7 +96,7 @@ export default function TicketsPage() {
       });
       setTickets(data);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to fetch tickets');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to fetch tickets', { variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -112,7 +112,7 @@ export default function TicketsPage() {
       setIssueTypes(issueTypeData || []);
       setCategories(categoryData || []);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to load issue metadata');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to load issue metadata', { variant: 'error' });
     }
   };
 
@@ -144,7 +144,7 @@ export default function TicketsPage() {
       handleCloseDialog();
       fetchTickets();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to create ticket');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to create ticket', { variant: 'error' });
     }
   };
 
@@ -194,7 +194,7 @@ export default function TicketsPage() {
       setEditingConfig(null);
       fetchConfigs();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to save metadata configuration');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to save metadata configuration', { variant: 'error' });
     }
   };
 
@@ -210,7 +210,7 @@ export default function TicketsPage() {
       }
       fetchConfigs();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to toggle metadata status');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to toggle metadata status', { variant: 'error' });
     }
   };
 
@@ -230,7 +230,7 @@ export default function TicketsPage() {
       }
       fetchConfigs();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to delete metadata option');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to delete metadata option', { variant: 'error' });
     }
   };
 
@@ -246,12 +246,6 @@ export default function TicketsPage() {
           Create Ticket
         </Button>
       </Box>
-
-      {error && (
-        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
 
       <Card sx={{ mb: 3 }}>
         <CardContent>

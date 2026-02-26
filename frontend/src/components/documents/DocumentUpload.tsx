@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Box,
   Button,
   CircularProgress,
@@ -13,9 +12,11 @@ import {
   Select,
   TextField,
   Typography,
+  Alert,
 } from '@mui/material';
 import { CloudUpload as UploadIcon } from '@mui/icons-material';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { useSnackbar } from 'notistack';
 import { documentsApi, UploadDocumentRequest } from '@/lib/api/documents';
 import { unitsApi } from '@/lib/api/units';
 import { docTypesApi, computeExpectedFilename, ReportorialDocType } from '@/lib/api/document-types';
@@ -27,6 +28,7 @@ interface DocumentUploadProps {
 
 export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
   const { user } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
   const isFocal = user?.role === 'focal';
 
   const [title, setTitle] = useState('');
@@ -79,6 +81,7 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
       setFile(null);
       setError(null);
       if (!isFocal) setUnitId('');
+      enqueueSnackbar('Document uploaded successfully!', { variant: 'success' });
       onSuccess?.();
     },
     onError: (err: any) => {
@@ -261,10 +264,6 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
           >
             {uploadMutation.isPending ? 'Uploading...' : 'Upload Document'}
           </Button>
-
-          {uploadMutation.isSuccess && (
-            <Alert severity="success">Document uploaded successfully!</Alert>
-          )}
         </Box>
       </form>
     </Paper>

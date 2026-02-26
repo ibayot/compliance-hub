@@ -22,6 +22,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import { documentsApi, Document } from '@/lib/api/documents';
 import { reviewsApi, ReviewDecision } from '@/lib/api/reviews';
 import DocumentViewer from '@/components/documents/DocumentViewer';
@@ -30,6 +31,7 @@ export default function ReviewsPage() {
   const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [latestReviewByDoc, setLatestReviewByDoc] = useState<Record<string, string>>({});
+  const { enqueueSnackbar } = useSnackbar();
 
   const [open, setOpen] = useState(false);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>('');
@@ -158,7 +160,7 @@ export default function ReviewsPage() {
     }
 
     if (isSelectedDocumentAlreadyCompliant) {
-      setSubmitError('This document is already compliant and does not require a new review tag.');
+      enqueueSnackbar('This document is already compliant and does not require a new review tag.', { variant: 'warning' });
       return;
     }
 
@@ -166,7 +168,7 @@ export default function ReviewsPage() {
       (decision === 'needs_revision' || decision === 'non_compliant') &&
       !remarks.trim()
     ) {
-      setSubmitError('Remarks are required when tagging a document as needs revision or non-compliant.');
+      enqueueSnackbar('Remarks are required when tagging a document as needs revision or non-compliant.', { variant: 'warning' });
       return;
     }
 
@@ -177,10 +179,11 @@ export default function ReviewsPage() {
         decision,
         remarks,
       });
+      enqueueSnackbar('Review submitted successfully.', { variant: 'success' });
       closeDialog();
       await loadData();
     } catch (error: any) {
-      setSubmitError(error?.response?.data?.message || 'Failed to submit review tag.');
+      enqueueSnackbar(error?.response?.data?.message || 'Failed to submit review tag.', { variant: 'error' });
     } finally {
       setSaving(false);
     }
@@ -344,7 +347,6 @@ export default function ReviewsPage() {
               )}
             </Paper>
           </Box>
-          {submitError && <Alert severity="error" sx={{ mt: 2 }}>{submitError}</Alert>}
         </DialogContent>
         <DialogActions>
           <Button onClick={closeDialog}>Cancel</Button>
