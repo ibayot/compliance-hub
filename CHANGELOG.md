@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0.7] - 2026-02-27 — Backend DB Fix, Always-Draw Chart Lines & Seed Cleanup
+
+### Fixed
+- **Backend `Unable to connect to database` on startup**: TypeORM `DB_SYNCHRONIZE=true` was attempting to auto-migrate the schema on every server start. This caused a `QueryFailedError: Cannot drop index 'fk_issue_type_category_id': needed in a foreign key constraint` error that looped indefinitely, preventing the backend from serving any requests. Fixed by setting `DB_SYNCHRONIZE=false` in `backend/.env`. The database schema is already correct and no migration is needed; synchronize was only causing destructive alteration attempts.
+- **KPI multi-line chart — always draw lines regardless of frequency filter**: The Unit KPI Scores chart was skipping `<Line>` elements for any unit whose `allUnitsTimeseries` contained zero `hasData: true` points in the **currently visible** period. This meant that when filtering to a period where a unit had no entries (e.g., a quarterly unit in a monthly view), its line disappeared entirely. Removed the `hasAnyData` guard (`if (!hasAnyData) return null`) — all unit lines are now always rendered; individual data points that have no value remain as `null` (visual gap via `connectNulls={false}`).
+
+### Cleanup
+- **Removed stale seed files**: Deleted `backend/database/seed-data.sql` (empty copy) and `backend/src/database/seed.sql` (old file with deprecated KPI codes `KPI-IT-ONTIME`, `KPI-IT-QA`, `KPI-IT-COMP`). The sole authoritative seed file is now `backend/src/database/seed-data.sql` which contains the correct live-DB KPI codes (`KPI-IT-001`–`KPI-IT-005`, `KPI-FI-001`–`KPI-FI-005`) and full 2025 monitoring data.
+
+### Verified (Smoke)
+- Backend starts cleanly: `Nest application successfully started` with no DB errors in startup log
+- Login OK, 5 roles, 2 units, 2 docs, KPI summary (overallScore=85.59, 2 units) ✅
+- IT timeseries: 12 points, first point `hasData=True` ✅; Finance timeseries: 12 points ✅
+- KPI Master: 10 records ✅; KPI Monitoring: 105 records ✅
+- Document detail, metric templates, KPI thresholds all respond correctly ✅
+- Frontend `npm run build` ✅ (Vite — 13 118 modules, 0 errors)
+
+---
+
 ## [1.3.0.6] - 2026-02-28 — KPI Multi-line Charts, Color Column, Trend-Only Tables & Expanded Seed
 
 ### Changed
