@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0.2] - 2026-02-27 — KPI Dashboard Default View, Chart Empty-State, Visual Scorecards
+
+### Fixed
+- **KPI Dashboard hidden behind tabs**: KPI Dashboard tab was positioned at index 2 for manage-role users (super_admin, reviewer, section_head), meaning graphs were never visible on page load. Dashboard tab is now always tab 0 (first/default) for all roles.
+- **KPI Monitoring tab condition bug**: `canManage && tab === 1` guard was broken by incorrect nested condition. Simplified and corrected.
+- **Pie chart unclosed JSX block**: Structural JSX error in the Band Distribution pie card caused a runtime tree mismatch. Fixed indentation and added proper conditional closure.
+- **`overallBand` missing from API type**: `DashboardSummaryResponse` does not include `overallBand`. Replaced with computed `computeBand()` helper using the returned `thresholds` array.
+- **`MuiTooltip` unused import**: Removed unused aliased import that was imported but never referenced.
+
+### Changed
+- **KPI tab order**: Tabs reordered to `[KPI Dashboard, KPI Master*, KPI Monitoring*]` (* = manage roles only). Default tab 0 = Dashboard for everyone.
+- **Scorecard visuals**: Overall KPI Score card now shows a color-coded left border, bold score, band label, and `LinearProgress` bar colored by band (green/amber/red).
+- **Unit score table**: Band chips are now color-filled with BAND_COLORS matching the chart; clicking a row selects it for unit detail drill-down.
+- **Unit detail panel**: Header shows composite score and band inline. Chart shows bar labels above each bar. Added `Band` column to the details table with colored chip.
+- **Band distribution pie**: Added `Legend` component and better label formatting; conditional empty state shown when no data.
+- **Empty states**: All three chart areas (unit scores, unit detail, band distribution) show a descriptive empty-state message when there is no data for the selected period instead of blank containers.
+
+### Verified (Smoke)
+- Frontend build: `npm run build` ✅ (exit code 0)
+- Backend build: `npm run build` ✅
+- SUPER_LOGIN_OK, FOCAL_LOGIN_OK ✅
+- ROLES=5, DOCS=2, UNITS=2, METRICS=16, TICKETS=1 ✅
+- KPI super summary: overall=100 units=1 ✅
+- KPI thresholds=3, scoring rules=1 ✅
+- KPI focal summary: overall=100 units=1 ✅
+- KPI focal unit detail: unitId=1 score=100 band=green ✅
+- AUTH_ME no passwordHash leak ✅
+
+### Documentation Updated
+- `CAPABILITIES.md`
+- `CHANGELOG.md`
+- `README.md`
+- `INSTALLATION.md`
+- `WALKTHROUGH.md`
+
+---
+
 ## [1.3.0.1] - 2026-02-27 — KPI Access Hotfix, Graph Dashboard Upgrade, Toast Notification Standardization
 
 ### Fixed

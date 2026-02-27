@@ -12,18 +12,20 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControl,
   Grid,
   InputLabel,
+  LinearProgress,
   MenuItem,
   Select,
   Tab,
-  Tabs,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
@@ -32,6 +34,7 @@ import {
   Bar,
   BarChart,
   Cell,
+  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -84,6 +87,16 @@ const BAND_COLORS: Record<string, string> = {
   red: '#d32f2f',
   unclassified: '#546e7a',
 };
+
+function computeBand(score: number, thresholds: Array<{ band: string; minScore: number; maxScore: number }>): string {
+  const sorted = [...thresholds].sort((a, b) => b.minScore - a.minScore);
+  for (const t of sorted) {
+    if (score >= t.minScore && score <= t.maxScore) return t.band.toLowerCase();
+  }
+  if (score >= 80) return 'green';
+  if (score >= 50) return 'amber';
+  return 'red';
+}
 
 export default function KpiPage() {
   const { user } = useAuth();
@@ -366,6 +379,9 @@ export default function KpiPage() {
     actual: Number(item.actualValue || 0),
   }));
 
+  const overallBand = computeBand(Number(summary?.summary.overallScore ?? 0), summary?.thresholds || []);
+  const overallBandColor = BAND_COLORS[overallBand] || BAND_COLORS.unclassified;
+
   return (
     <Box>
       <Box mb={3}>
@@ -420,12 +436,12 @@ export default function KpiPage() {
       </Card>
 
       <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
+        <Tab label="KPI Dashboard" />
         {canManage && <Tab label="KPI Master" />}
         {canManage && <Tab label="KPI Monitoring" />}
-        <Tab label="KPI Dashboard" />
       </Tabs>
 
-      {canManage && tab === 0 && (
+      {canManage && tab === 1 && (
         <Card>
           <CardHeader
             title="KPI Master"
@@ -469,7 +485,7 @@ export default function KpiPage() {
         </Card>
       )}
 
-      {canManage && ((tab === 1) || (!canManage && tab === 0)) && (
+      {canManage && tab === 2 && (
         <Card>
           <CardHeader
             title="KPI Monitoring"
@@ -511,65 +527,96 @@ export default function KpiPage() {
         </Card>
       )}
 
-      {((canManage && tab === 2) || (!canManage && tab === 0)) && (
+      {tab === 0 && (
         <Grid container spacing={2}>
+          {/* ── Scorecard row ── */}
           <Grid item xs={12} md={4}>
-            <Card>
+            <Card sx={{ borderLeft: `6px solid ${overallBandColor}` }}>
               <CardContent>
-                <Typography variant="caption" color="text.secondary">Overall Score</Typography>
-                <Typography variant="h4">{summary?.summary.overallScore ?? 0}</Typography>
+                <Typography variant="overline" color="text.secondary">Overall KPI Score</Typography>
+                <Typography variant="h3" fontWeight={700}>{summary?.summary.overallScore ?? 0}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
+                  Band: {summary ? overallBand : 'No data'}
+                </Typography>
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min(Number(summary?.summary.overallScore ?? 0), 100)}
+                  sx={{ mt: 1, height: 8, borderRadius: 4, bgcolor: 'grey.200',
+                    '& .MuiLinearProgress-bar': { bgcolor: overallBandColor } }}
+                />
               </CardContent>
             </Card>
           </Grid>
           <Grid item xs={12} md={4}>
-            <Card>
+            <Card sx={{ borderLeft: '6px solid #1976d2' }}>
               <CardContent>
-                <Typography variant="caption" color="text.secondary">Units in Dashboard</Typography>
-                <Typography variant="h4">{summary?.summary.unitCount ?? 0}</Typography>
+                <Typography variant="overline" color="text.secondary">Units in Dashboard</Typography>
+                <Typography variant="h3" fontWeight={700}>{summary?.summary.unitCount ?? 0}</Typography>
+                <Typography variant="caption" color="text.secondary">Units with at least one KPI entry</Typography>
               </CardContent>
             </Card>
           </Grid>
           <Grid item xs={12} md={4}>
-            <Card>
+            <Card sx={{ borderLeft: '6px solid #0288d1' }}>
               <CardContent>
-                <Typography variant="caption" color="text.secondary">Monitoring Rows</Typography>
-                <Typography variant="h4">{summary?.summary.rowCount ?? 0}</Typography>
+                <Typography variant="overline" color="text.secondary">Monitoring Rows</Typography>
+                <Typography variant="h3" fontWeight={700}>{summary?.summary.rowCount ?? 0}</Typography>
+                <Typography variant="caption" color="text.secondary">KPI entries for this period</Typography>
               </CardContent>
             </Card>
           </Grid>
 
           <Grid item xs={12} md={6}>
             <Card>
-              <CardHeader title="Unit KPI Scores" subheader="Scoreboard view by unit" />
+              <CardHeader title="Unit KPI Scores" subheader="Scoreboard view by unit — click a unit row to drilling into individual KPIs" />
               <CardContent>
-                <Box sx={{ width: '100%', height: 280 }}>
-                  <ResponsiveContainer>
-                    <BarChart data={unitScoreChart}>
-                      <XAxis dataKey="name" hide={unitScoreChart.length > 8} />
-                      <YAxis domain={[0, 100]} />
-                      <Tooltip />
-                      <Bar dataKey="score" radius={[8, 8, 0, 0]}>
-                        {unitScoreChart.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={BAND_COLORS[entry.band] || BAND_COLORS.unclassified} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Box>
+                {unitScoreChart.length === 0 ? (
+                  <Box sx={{ py: 6, textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">No KPI monitoring data for this period. Encode values in KPI Monitoring tab.</Typography>
+                  </Box>
+                ) : (
+                  <Box sx={{ width: '100%', height: 280 }}>
+                    <ResponsiveContainer>
+                      <BarChart data={unitScoreChart} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                        <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                        <Tooltip formatter={(val: number) => [`${val}`, 'Score']} />
+                        <Bar dataKey="score" radius={[8, 8, 0, 0]} label={{ position: 'top', fontSize: 11 }}>
+                          {unitScoreChart.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={BAND_COLORS[entry.band] || BAND_COLORS.unclassified} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Box>
+                )}
 
+                <Divider sx={{ my: 1 }} />
                 <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Unit</TableCell>
+                      <TableCell>Score</TableCell>
+                      <TableCell>Band</TableCell>
+                      <TableCell>KPIs</TableCell>
+                      <TableCell align="right"></TableCell>
+                    </TableRow>
+                  </TableHead>
                   <TableBody>
                     {(summary?.units || []).map((unit) => (
-                      <TableRow key={unit.unitId}>
+                      <TableRow key={unit.unitId} hover sx={{ cursor: 'pointer' }} onClick={() => openUnitDashboard(unit.unitId)}>
                         <TableCell>{unit.unitName}</TableCell>
-                        <TableCell>{unit.score}</TableCell>
-                        <TableCell><Chip size="small" label={unit.band.toUpperCase()} /></TableCell>
+                        <TableCell><strong>{unit.score}</strong></TableCell>
+                        <TableCell><Chip size="small" label={unit.band.toUpperCase()} sx={{ bgcolor: BAND_COLORS[unit.band.toLowerCase()] || BAND_COLORS.unclassified, color: '#fff', fontWeight: 700 }} /></TableCell>
                         <TableCell>{unit.kpiCount}</TableCell>
                         <TableCell align="right">
-                          <Button size="small" onClick={() => openUnitDashboard(unit.unitId)}>View</Button>
+                          <Button size="small" variant="outlined" onClick={(e) => { e.stopPropagation(); openUnitDashboard(unit.unitId); }}>Detail</Button>
                         </TableCell>
                       </TableRow>
                     ))}
+                    {(summary?.units || []).length === 0 && (
+                      <TableRow><TableCell colSpan={5} align="center"><Typography variant="caption" color="text.secondary">No unit data.</Typography></TableCell></TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -578,23 +625,34 @@ export default function KpiPage() {
 
           <Grid item xs={12} md={6}>
             <Card>
-              <CardHeader title={selectedUnitDashboard ? `Unit Detail - ${selectedUnitDashboard.unitName}` : 'Unit Detail'} subheader="KPI normalized metrics" />
+              <CardHeader
+                title={selectedUnitDashboard ? `Unit Detail — ${selectedUnitDashboard.unitName}` : 'Unit Detail'}
+                subheader={selectedUnitDashboard ? `Composite Score: ${selectedUnitDashboard.score} • Band: ${selectedUnitDashboard.band}` : 'Click a unit row to view KPI breakdown'}
+              />
               <CardContent>
                 {!selectedUnitDashboard ? (
-                  <Typography variant="body2" color="text.secondary">Select a unit to view KPI-level normalized scores.</Typography>
+                  <Box sx={{ py: 6, textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">Select a unit from the left table to drill into its KPI-level detail.</Typography>
+                  </Box>
                 ) : (
                   <>
-                    <Typography variant="body2" sx={{ mb: 1 }}>Composite Score: <strong>{selectedUnitDashboard.score}</strong> ({selectedUnitDashboard.band})</Typography>
-                    <Box sx={{ width: '100%', height: 220, mb: 2 }}>
-                      <ResponsiveContainer>
-                        <BarChart data={selectedKpiDetailChart}>
-                          <XAxis dataKey="name" hide={selectedKpiDetailChart.length > 6} />
-                          <YAxis domain={[0, 100]} />
-                          <Tooltip />
-                          <Bar dataKey="normalized" fill="#1976d2" radius={[6, 6, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </Box>
+                    {selectedKpiDetailChart.length === 0 ? (
+                      <Box sx={{ py: 3, textAlign: 'center' }}>
+                        <Typography variant="body2" color="text.secondary">No KPI detail data for this unit/period.</Typography>
+                      </Box>
+                    ) : (
+                      <Box sx={{ width: '100%', height: 240, mb: 2 }}>
+                        <ResponsiveContainer>
+                          <BarChart data={selectedKpiDetailChart} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                            <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                            <Tooltip />
+                            <Bar dataKey="normalized" fill="#1976d2" radius={[6, 6, 0, 0]} label={{ position: 'top', fontSize: 10 }} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </Box>
+                    )}
+                    <Divider sx={{ my: 1 }} />
                     <Table size="small">
                       <TableHead>
                         <TableRow>
@@ -602,6 +660,7 @@ export default function KpiPage() {
                           <TableCell>Target</TableCell>
                           <TableCell>Actual</TableCell>
                           <TableCell>Normalized</TableCell>
+                          <TableCell>Band</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -610,7 +669,12 @@ export default function KpiPage() {
                             <TableCell>{item.code}</TableCell>
                             <TableCell>{item.targetValue}</TableCell>
                             <TableCell>{item.actualValue}</TableCell>
-                            <TableCell>{item.normalizedScore}</TableCell>
+                            <TableCell><strong>{item.normalizedScore}</strong></TableCell>
+                            <TableCell>
+                              {item.band ? (
+                                <Chip size="small" label={String(item.band).toUpperCase()} sx={{ bgcolor: BAND_COLORS[String(item.band).toLowerCase()] || BAND_COLORS.unclassified, color: '#fff', fontWeight: 700 }} />
+                              ) : '-'}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -623,20 +687,35 @@ export default function KpiPage() {
 
           <Grid item xs={12} md={4}>
             <Card>
-              <CardHeader title="Band Distribution" />
+              <CardHeader title="Band Distribution" subheader="Units by performance band" />
               <CardContent>
-                <Box sx={{ width: '100%', height: 240 }}>
-                  <ResponsiveContainer>
-                    <PieChart>
-                      <Pie data={bandDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                        {bandDistribution.map((entry, index) => (
-                          <Cell key={`pie-${index}`} fill={BAND_COLORS[String(entry.name).toLowerCase()] || BAND_COLORS.unclassified} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </Box>
+                {bandDistribution.length === 0 ? (
+                  <Box sx={{ py: 6, textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">No band data for this period.</Typography>
+                  </Box>
+                ) : (
+                  <Box sx={{ width: '100%', height: 280 }}>
+                    <ResponsiveContainer>
+                      <PieChart>
+                        <Pie
+                          data={bandDistribution}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={90}
+                          label={({ name, value }) => `${name}: ${value}`}
+                        >
+                          {bandDistribution.map((entry, index) => (
+                            <Cell key={`pie-${index}`} fill={BAND_COLORS[String(entry.name).toLowerCase()] || BAND_COLORS.unclassified} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </Box>
+                )}
               </CardContent>
             </Card>
           </Grid>
