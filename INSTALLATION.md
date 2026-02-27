@@ -1,5 +1,6 @@
 # RICTMS Compliance Hub - Installation Guide
 
+> **Release `v1.3.0.2` (2026-02-27):** KPI Dashboard tab bug fixed — graphs now display immediately on page load (tab 0 = Dashboard). No schema changes; pull latest code and restart frontend/backend.
 > **Release `v1.3.0.1` (2026-02-27):** Includes KPI access-control/runtime hotfixes and graph dashboard updates. If upgrading from `v1.2.0.4`, restart backend/frontend services after pulling latest code and ensure users re-login to refresh JWT role/unit claims before KPI smoke testing.
 
 > **Release `v1.2.0.4` (2026-02-26):** KPI tables were added (`kpi_master`, `kpi_monitoring`, `kpi_thresholds`, `kpi_scoring_rules`) together with `role_definitions`. If upgrading an existing DB, re-run `schema.sql`, then `seed.sql` (or `seed-data.sql`) to load KPI baseline records and lookup defaults.

@@ -1,5 +1,6 @@
 # RICTMS Compliance Hub - User Walkthrough Guide
 
+> **Release `v1.3.0.2` (2026-02-27):** KPI Dashboard is now immediately visible when opening `Dashboard → KPI` — no tab switching required. Graphs (unit score bars, KPI detail bars, band distribution pie) are the first thing you see. Click any unit row to drill into its KPI breakdown. The scorecard shows a color-coded progress bar representing the overall band.
 > **Release `v1.3.0.1` (2026-02-27):** KPI button routing now navigates correctly to `/dashboard/kpi`. KPI dashboard now uses graph-based scorecards and unit performance visuals. Focal users can open KPI dashboards with unit-scoped visibility, while super-admin/reviewer users can view consolidated KPI data across units.
 
 > **Release `v1.2.0.4` (2026-02-26):** New `Dashboard → KPI` page introduces KPI Master (admin/compliance), KPI Monitoring input (admin/compliance), and KPI Dashboard (role-scoped by unit). Settings now supports editing existing users (name/unit/role/position/designation) while `staff_id` remains immutable. System Role Definitions now support add/edit metadata from Settings.
