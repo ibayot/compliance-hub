@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0.6] - 2026-02-28 — KPI Multi-line Charts, Color Column, Trend-Only Tables & Expanded Seed
+
+### Changed
+- **Unit KPI Scores — BarChart → multi-line LineChart**: The static bar chart is replaced with a `<LineChart>` that renders one `<Line>` per unit across the selected time window. Each unit line uses a unique color from the new `UNIT_COLORS` palette (`#1565c0`, `#6a1b9a`, `#00695c`, `#e65100`, …). Lines with zero data for the entire selected period are not rendered.
+- **Unit KPI Scores table — columns revised**: Removed the Band (full-cell color block) column. Added a **Color** column (20×20 rounded swatch matching the chart line) and a **Trend** column (`TrendSparkline` using `first-hasData → last-hasData` point for start/end, colored by band). Columns are now: Unit | Color | Score | Trend | # KPIs.
+- **Unit Detail — single composite line → multi-KPI LineChart**: The composite score line chart is replaced with a `<LineChart>` that renders one `<Line>` per KPI code, each with a unique color from `UNIT_COLORS`. The KPI codes are derived from `unitTimeseries[].kpiScores[].code`.
+- **Unit Detail table — columns revised**: Removed the Band column. Added a **Color** column for each KPI row. Columns are now: KPI | Color | Actual | Target | Score | Trend.
+- **Band Distribution**: Now computed directly from `summary.units[].band` (unchanged logic, but reflects the new seed data).
+- **`loadDashboard` — all-units timeseries**: After fetching the dashboard summary, `loadDashboard` now calls `kpiApi.dashboardUnitTimeseries()` for every visible unit in a `Promise.all` and stores results in the new `allUnitsTimeseries: Record<number, UnitTimeseriesPoint[]>` state map. This feeds the multi-line Unit Scores chart.
+- **Unit Detail auto-refresh**: Added `selectedUnitIdRef` (a `useRef<number|null>`) to track which unit is currently shown. On every `loadDashboard` call (triggered by filter changes), if a unit is already selected, its detail panel is re-fetched automatically — no manual re-click required.
+- **Partial data / gap rendering**: `connectNulls={false}` (already in use) causes recharts to leave visual gaps for `null` score points (periods where `hasData: false`). Only units/KPIs with **no** data across the entire selected range are excluded from the chart entirely.
+- **`Bar`/`BarChart` imports removed** from recharts import block (no longer used).
+- **`useRef` added** to React import.
+
+### Added
+- **`UNIT_COLORS` palette constant**: `['#1565c0','#6a1b9a','#00695c','#e65100','#558b2f','#4527a0','#ad1457','#00838f']` — assigned cyclically by unit/KPI index.
+- **`allUnitsTimeseries` state**: `Record<number, UnitTimeseriesPoint[]>` — stores per-unit timeseries indexed by `unitId`.
+- **`selectedUnitIdRef`**: `React.useRef<number|null>` — persists the selected unit ID without triggering re-renders or appearing as a `useCallback` dependency.
+- **`allUnitsLineData` memo**: Pivots `allUnitsTimeseries` + `summary.units` into a flat recharts-compatible array `{ label, u<unitId>: score|null }[]`.
+- **`kpiDetailLineData` memo**: Pivots `unitTimeseries[].kpiScores` into `{ data: { label, [kpiCode]: score|null }[], codes: string[] }`.
+
+### Seed
+- **IT Unit (`unit_id=1`)**: Added monitoring rows for January–December 2025 (5 KPIs × 12 months = 60 rows). Existing Jun–Aug 2025 rows (35 already in DB) replaced by re-seed. Narrative arc: strong Jan–Mar (green), gradual dip Apr–May (green), continuation Jun (green ~98.76), amber Jul (~86.36), RED Aug (backup failure), recovery Sep–Dec back to green.
+- **Finance Unit (`unit_id=2`)**: Added monitoring rows for February–August 2025 (5 KPIs × 7 months = 35 rows). Existing Jun–Aug 2025 rows replaced. Narrative arc: GREEN Feb–Jun (high accuracy), RED Jul (audit finding not resolved), AMBER Aug (recovery).
+- **February 2026 data**: Updated to use correct live-DB KPI codes (`KPI-IT-001`–`KPI-IT-005`, `KPI-FI-001`–`KPI-FI-005`) replacing the previous `KPI-IT-ONTIME`/`KPI-IT-QA` etc. codes that existed only in the seed file but not in the live DB.
+- **`kpi_master` INSERT in seed-data.sql** updated to match live DB KPI definitions (System Uptime, Incident Resolution Time, Help Desk Satisfaction, Backup Success Rate, Network Availability | Budget Utilization Rate, Report Submission Accuracy, Collection Efficiency, Audit Finding Resolution, Financial Statement Timeliness).
+- Seed SQL verified: `SELECT unit_id, period_year, period_month, COUNT(*) FROM kpi_monitoring GROUP BY ...` → IT: 13 periods × 5 KPIs, Finance: 8 periods × 5 KPIs.
+
+### Verified (Smoke)
+- 0 TS errors; `get_errors` tool on kpi/page.tsx → No errors found
+- Frontend `npm run build` ✅ (Vite — 13 118 modules, 0 errors)
+- Seed executed: IT Unit 60 + Finance 35 + 2026 demo data all present in DB
+- `SELECT COUNT(*) FROM kpi_monitoring WHERE period_year = 2025` → 95 rows (was 35)
+
+---
+
 ## [1.3.0.5] - 2026-02-27 — KPI Sparkline Diagonal Fix & Pie Chart Label Fix
 
 ### Fixed

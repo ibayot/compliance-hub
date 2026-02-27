@@ -89,12 +89,18 @@ INSERT INTO metric_applicability (id, metric_id, unit_id, document_type) VALUES
 ('map-004', 'metric-004', NULL, NULL);
 
 INSERT INTO kpi_master (`code`, `name`, `description`, `unit_id`, `type`, `unit_of_measure`, `direction`, `target_value`, `weight`, `frequency`, `active`, `created_at`, `updated_at`) VALUES
-('KPI-IT-ONTIME', 'On-time Compliance Submission', 'Percentage of compliance submissions received on or before deadline.', 1, 'measurement', '%', 'higher_is_better', 95, 0.4, 'monthly', 1, NOW(), NOW()),
-('KPI-IT-QA', 'Quality Pass Rate', 'Percentage of submissions passing first compliance review.', 1, 'measurement', '%', 'higher_is_better', 90, 0.35, 'monthly', 1, NOW(), NOW()),
-('KPI-IT-COMP', 'Critical Control Completed', 'Whether all critical controls for the period are completed.', 1, 'yes_no', 'yes/no', 'higher_is_better', 1, 0.25, 'monthly', 1, NOW(), NOW()),
-('KPI-FIN-ONTIME', 'On-time Compliance Submission', 'Percentage of compliance submissions received on or before deadline.', 2, 'measurement', '%', 'higher_is_better', 95, 0.4, 'monthly', 1, NOW(), NOW()),
-('KPI-FIN-QA', 'Quality Pass Rate', 'Percentage of submissions passing first compliance review.', 2, 'measurement', '%', 'higher_is_better', 90, 0.35, 'monthly', 1, NOW(), NOW()),
-('KPI-FIN-COMP', 'Critical Control Completed', 'Whether all critical controls for the period are completed.', 2, 'yes_no', 'yes/no', 'higher_is_better', 1, 0.25, 'monthly', 1, NOW(), NOW());
+-- IT Unit KPIs
+('KPI-IT-001', 'System Uptime', 'Percentage of time systems are operational', 1, 'measurement', 'percent', 'higher_is_better', 99.9, 3, 'monthly', 1, NOW(), NOW()),
+('KPI-IT-002', 'Incident Resolution Time', 'Average hours to resolve IT incidents', 1, 'measurement', 'hours', 'lower_is_better', 4, 2, 'monthly', 1, NOW(), NOW()),
+('KPI-IT-003', 'Help Desk Satisfaction', 'User satisfaction score for help desk', 1, 'measurement', 'percent', 'higher_is_better', 90, 2, 'monthly', 1, NOW(), NOW()),
+('KPI-IT-004', 'Backup Success Rate', 'Whether scheduled backup completed successfully', 1, 'yes_no', 'yes/no', 'higher_is_better', 1, 2, 'monthly', 1, NOW(), NOW()),
+('KPI-IT-005', 'Network Availability', 'Percentage uptime of network infrastructure', 1, 'measurement', 'percent', 'higher_is_better', 99.5, 1, 'monthly', 1, NOW(), NOW()),
+-- Finance Unit KPIs
+('KPI-FI-001', 'Budget Utilization Rate', 'Percentage of approved budget actually utilized', 2, 'measurement', 'percent', 'higher_is_better', 90, 3, 'quarterly', 1, NOW(), NOW()),
+('KPI-FI-002', 'Report Submission Accuracy', 'Accuracy rate of financial reports submitted', 2, 'measurement', 'percent', 'higher_is_better', 95, 2, 'monthly', 1, NOW(), NOW()),
+('KPI-FI-003', 'Collection Efficiency', 'Percentage of receivables collected on time', 2, 'measurement', 'percent', 'higher_is_better', 85, 2, 'monthly', 1, NOW(), NOW()),
+('KPI-FI-004', 'Audit Finding Resolution', 'Whether all audit findings from the period are resolved', 2, 'yes_no', 'yes/no', 'higher_is_better', 1, 2, 'monthly', 1, NOW(), NOW()),
+('KPI-FI-005', 'Financial Statement Timeliness', 'Percentage of financial statements submitted on time', 2, 'measurement', 'percent', 'higher_is_better', 100, 1, 'monthly', 1, NOW(), NOW());
 
 INSERT INTO kpi_scoring_rules (`name`, `active`, `cap_score`, `floor_score`, `yes_score`, `no_score`, `created_at`, `updated_at`) VALUES
 ('default', 1, 100, 0, 100, 0, NOW(), NOW());
@@ -105,12 +111,131 @@ INSERT INTO kpi_thresholds (`band`, `min_score`, `max_score`, `color`, `created_
 ('red', 0, 74.99, 'error', NOW(), NOW());
 
 INSERT INTO kpi_monitoring (`kpi_master_code`, `unit_id`, `period_year`, `period_month`, `actual_value`, `remarks`, `entered_by_user_id`, `entered_by_staff_id`, `entered_by_name`, `status`, `created_at`, `updated_at`) VALUES
-('KPI-IT-ONTIME', 1, 2026, 2, 92, 'Slight delay due to document revisions.', 2, 'CO-1002', 'QA Reviewer', 'draft', NOW(), NOW()),
-('KPI-IT-QA', 1, 2026, 2, 88, 'Two submissions required corrections.', 2, 'CO-1002', 'QA Reviewer', 'draft', NOW(), NOW()),
-('KPI-IT-COMP', 1, 2026, 2, 1, 'All required controls completed.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
-('KPI-FIN-ONTIME', 2, 2026, 2, 96, 'All reports submitted ahead of deadline.', 2, 'CO-1002', 'QA Reviewer', 'draft', NOW(), NOW()),
-('KPI-FIN-QA', 2, 2026, 2, 91, 'Quality target achieved.', 2, 'CO-1002', 'QA Reviewer', 'draft', NOW(), NOW()),
-('KPI-FIN-COMP', 2, 2026, 2, 0, 'One control pending final sign-off.', 2, 'CO-1002', 'QA Reviewer', 'draft', NOW(), NOW());
+-- IT Unit — January 2025 (composite ≈ 100, GREEN)
+('KPI-IT-001', 1, 2025, 1, 99.9, 'Systems fully operational.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-002', 1, 2025, 1, 3.1,  'All incidents resolved quickly.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-003', 1, 2025, 1, 92,   'Excellent help desk satisfaction.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-004', 1, 2025, 1, 1,    'Backup completed successfully.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-005', 1, 2025, 1, 99.8, 'Network fully available.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+-- IT Unit — February 2025 (composite ≈ 99.8, GREEN)
+('KPI-IT-001', 1, 2025, 2, 99.8, 'Minor maintenance window.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-002', 1, 2025, 2, 3.3,  'Fast incident resolution.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-003', 1, 2025, 2, 91,   'High satisfaction rate.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-004', 1, 2025, 2, 1,    'Backup completed successfully.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-005', 1, 2025, 2, 99.7, 'Network stable.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+-- IT Unit — March 2025 (composite ≈ 99.5, GREEN)
+('KPI-IT-001', 1, 2025, 3, 99.7, 'Scheduled maintenance completed.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-002', 1, 2025, 3, 3.5,  'Resolution time within target.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-003', 1, 2025, 3, 90,   'Help desk met satisfaction target.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-004', 1, 2025, 3, 1,    'Backup completed successfully.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-005', 1, 2025, 3, 99.6, 'Network fully available.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+-- IT Unit — April 2025 (composite ≈ 98.4, GREEN)
+('KPI-IT-001', 1, 2025, 4, 99.5, 'Uptime met.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-002', 1, 2025, 4, 3.8,  'Minor delays in resolution.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-003', 1, 2025, 4, 89,   'Slight dip in user satisfaction.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-004', 1, 2025, 4, 1,    'Backup completed successfully.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-005', 1, 2025, 4, 99.5, 'Network stable.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+-- IT Unit — May 2025 (composite ≈ 97.2, GREEN)
+('KPI-IT-001', 1, 2025, 5, 99.3, 'System stable.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-002', 1, 2025, 5, 4.1,  'Slightly over resolution target.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-003', 1, 2025, 5, 88,   'Two escalated tickets impacted score.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-004', 1, 2025, 5, 1,    'Backup completed successfully.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-005', 1, 2025, 5, 99.3, 'Network available.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+-- IT Unit — June 2025 (composite ≈ 98.76, GREEN — preserved from prior session)
+('KPI-IT-001', 1, 2025, 6, 99.5, 'Systems operational.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-002', 1, 2025, 6, 3.5,  'Incidents resolved below target.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-003', 1, 2025, 6, 85,   'Help desk satisfaction slightly dipping.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-004', 1, 2025, 6, 1,    'Backup completed.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-005', 1, 2025, 6, 99.8, 'Network fully available.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+-- IT Unit — July 2025 (composite ≈ 86.36, AMBER — preserved from prior session)
+('KPI-IT-001', 1, 2025, 7, 95,   'Planned upgrade caused brief outage.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-002', 1, 2025, 7, 6.5,  'Incident backlog from upgrade.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-003', 1, 2025, 7, 71,   'User complaints from upgrade downtime.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-004', 1, 2025, 7, 1,    'Backup completed.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-005', 1, 2025, 7, 97,   'Network partially impacted during upgrade.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+-- IT Unit — August 2025 (composite ≈ 71.96, RED — Backup failed)
+('KPI-IT-001', 1, 2025, 8, 97.8, 'System recovering post-upgrade.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-002', 1, 2025, 8, 5.2,  'Residual incidents from upgrade.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-003', 1, 2025, 8, 78,   'Satisfaction recovering.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-004', 1, 2025, 8, 0,    'Backup failed — storage issue.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-005', 1, 2025, 8, 98.2, 'Network stable.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+-- IT Unit — September 2025 (composite ≈ 95.5, GREEN — recovery)
+('KPI-IT-001', 1, 2025, 9, 98.5, 'Systems near full capacity.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-002', 1, 2025, 9, 4.5,  'Resolution slightly above target.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-003', 1, 2025, 9, 82,   'Help desk recovery in progress.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-004', 1, 2025, 9, 1,    'Backup restored and successful.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-005', 1, 2025, 9, 98.8, 'Network fully available.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+-- IT Unit — October 2025 (composite ≈ 97.6, GREEN)
+('KPI-IT-001', 1, 2025, 10, 99.0, 'Strong uptime.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-002', 1, 2025, 10, 4.2,  'Response time improving.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-003', 1, 2025, 10, 85,   'Satisfaction trending upward.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-004', 1, 2025, 10, 1,    'Backup completed successfully.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-005', 1, 2025, 10, 99.1, 'Network stable.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+-- IT Unit — November 2025 (composite ≈ 98.4, GREEN)
+('KPI-IT-001', 1, 2025, 11, 99.5, 'Excellent uptime.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-002', 1, 2025, 11, 3.8,  'Fast resolution times.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-003', 1, 2025, 11, 88,   'Strong help desk performance.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-004', 1, 2025, 11, 1,    'Backup completed.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-005', 1, 2025, 11, 99.3, 'Network available.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+-- IT Unit — December 2025 (composite ≈ 99.8, GREEN — year-end excellence)
+('KPI-IT-001', 1, 2025, 12, 99.8, 'Year-end uptime excellent.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-002', 1, 2025, 12, 3.3,  'Year-end resolution time excellent.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-003', 1, 2025, 12, 91,   'Year-end satisfaction high.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-004', 1, 2025, 12, 1,    'Backup completed.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-005', 1, 2025, 12, 99.6, 'Network fully available year-end.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+-- Finance Unit — February 2025 (composite ≈ 100, GREEN)
+('KPI-FI-001', 2, 2025, 2, 91,  'Budget utilization on track.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-002', 2, 2025, 2, 96,  'High report accuracy.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-003', 2, 2025, 2, 87,  'Collection above target.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-004', 2, 2025, 2, 1,   'All audit findings resolved.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-005', 2, 2025, 2, 100, 'All statements submitted on time.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+-- Finance Unit — March 2025 (composite ≈ 99.7, GREEN)
+('KPI-FI-001', 2, 2025, 3, 90,  'Budget on target.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-002', 2, 2025, 3, 97,  'Excellent report accuracy.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-003', 2, 2025, 3, 88,  'Collections above target.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-004', 2, 2025, 3, 1,   'All audit findings resolved.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-005', 2, 2025, 3, 99,  'Statements submitted on time.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+-- Finance Unit — April 2025 (composite ≈ 99.8, GREEN)
+('KPI-FI-001', 2, 2025, 4, 92,  'Budget utilization excellent.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-002', 2, 2025, 4, 96,  'High accuracy maintained.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-003', 2, 2025, 4, 86,  'Collection on track.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-004', 2, 2025, 4, 1,   'Audit findings cleared.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-005', 2, 2025, 4, 100, 'Statements on time.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+-- Finance Unit — May 2025 (composite ≈ 99.25, GREEN)
+('KPI-FI-001', 2, 2025, 5, 89,  'Slight under-utilization.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-002', 2, 2025, 5, 94,  'Minor accuracy issues.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-003', 2, 2025, 5, 85,  'Collection at target.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-004', 2, 2025, 5, 1,   'All findings resolved.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-005', 2, 2025, 5, 98,  'One statement slightly late.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+-- Finance Unit — June 2025 (composite ≈ 95.9, GREEN — preserved from prior session)
+('KPI-FI-001', 2, 2025, 6, 88,  'Budget nearing cap.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-002', 2, 2025, 6, 93,  'Accuracy issues flagged.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-003', 2, 2025, 6, 73,  'Collections below target.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-004', 2, 2025, 6, 1,   'Audit findings resolved.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-005', 2, 2025, 6, 98,  'Most statements on time.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+-- Finance Unit — July 2025 (composite ≈ 72.4, RED — Audit finding unresolved)
+('KPI-FI-001', 2, 2025, 7, 82,  'Budget under-utilized mid-year.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-002', 2, 2025, 7, 88,  'Report errors increased.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-003', 2, 2025, 7, 72,  'Collection efficiency dropped.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-004', 2, 2025, 7, 0,   'Audit finding not resolved this period.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-005', 2, 2025, 7, 96,  'Timeliness mostly maintained.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+-- Finance Unit — August 2025 (composite ≈ 89.4, AMBER — preserved from prior session)
+('KPI-FI-001', 2, 2025, 8, 87,  'Budget recovery.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-002', 2, 2025, 8, 76,  'Accuracy issues continue.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-003', 2, 2025, 8, 62,  'Collections still below target.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-004', 2, 2025, 8, 1,   'Audit findings cleared.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+('KPI-FI-005', 2, 2025, 8, 98,  'Statement timeliness improving.', 2, 'CO-1003', 'Finance Auditor', 'locked', NOW(), NOW()),
+-- IT and Finance — February 2026 (current demo period)
+('KPI-IT-001', 1, 2026, 2, 97.5, 'Minor scheduled maintenance.', 2, 'CO-1002', 'QA Reviewer', 'draft', NOW(), NOW()),
+('KPI-IT-002', 1, 2026, 2, 4.5,  'Slightly over resolution target.', 2, 'CO-1002', 'QA Reviewer', 'draft', NOW(), NOW()),
+('KPI-IT-003', 1, 2026, 2, 84,   'Tickets backlogged.', 2, 'CO-1002', 'QA Reviewer', 'draft', NOW(), NOW()),
+('KPI-IT-004', 1, 2026, 2, 1,    'Backup completed.', 2, 'CO-1002', 'QA Reviewer', 'locked', NOW(), NOW()),
+('KPI-IT-005', 1, 2026, 2, 98.9, 'Network stable.', 2, 'CO-1002', 'QA Reviewer', 'draft', NOW(), NOW()),
+('KPI-FI-001', 2, 2026, 2, 88,   'Budget utilization on track.', 2, 'CO-1003', 'Finance Auditor', 'draft', NOW(), NOW()),
+('KPI-FI-002', 2, 2026, 2, 94,   'Some accuracy issues.', 2, 'CO-1003', 'Finance Auditor', 'draft', NOW(), NOW()),
+('KPI-FI-003', 2, 2026, 2, 71,   'Collections below target.', 2, 'CO-1003', 'Finance Auditor', 'draft', NOW(), NOW()),
+('KPI-FI-004', 2, 2026, 2, 0,    'One control pending final sign-off.', 2, 'CO-1003', 'Finance Auditor', 'draft', NOW(), NOW()),
+('KPI-FI-005', 2, 2026, 2, 97,   'Most statements on time.', 2, 'CO-1003', 'Finance Auditor', 'draft', NOW(), NOW());
 
 -- metric_results: columns are id, version_id, metric_template_id, status (enum pass/fail/warning/error), message, score, computed_at, evidence
 INSERT INTO metric_results (id, version_id, metric_template_id, status, score, message, evidence, computed_at) VALUES
