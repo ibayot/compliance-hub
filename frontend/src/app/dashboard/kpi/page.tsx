@@ -33,8 +33,11 @@ import { useSnackbar } from 'notistack';
 import {
   Bar,
   BarChart,
+  CartesianGrid,
   Cell,
   Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -54,6 +57,7 @@ import {
   KpiMonitoringStatus,
   KpiType,
   UnitDashboardResponse,
+  UnitTimeseriesPoint,
 } from '@/lib/api/kpi';
 
 const monthOptions = [
@@ -98,6 +102,90 @@ function computeBand(score: number, thresholds: Array<{ band: string; minScore: 
   return 'red';
 }
 
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Returns the from/to year+month range to fetch timeseries data for. */
+function getTimeseriesRange(
+  viewFrequency: 'monthly' | 'quarterly' | 'semestral' | 'annual',
+  periodYear: number,
+  periodMonth: number,
+  periodQuarter: number,
+  periodSemester: number,
+): { fromYear: number; fromMonth: number; toYear: number; toMonth: number } {
+  switch (viewFrequency) {
+    case 'monthly': {
+      const toMonth = periodMonth;
+      if (periodMonth === 1) return { fromYear: periodYear - 1, fromMonth: 12, toYear: periodYear, toMonth };
+      return { fromYear: periodYear, fromMonth: periodMonth - 1, toYear: periodYear, toMonth };
+    }
+    case 'quarterly': {
+      const toMonth = periodQuarter * 3;
+      if (periodQuarter === 1) return { fromYear: periodYear - 1, fromMonth: 12, toYear: periodYear, toMonth };
+      return { fromYear: periodYear, fromMonth: (periodQuarter - 1) * 3, toYear: periodYear, toMonth };
+    }
+    case 'semestral': {
+      const toMonth = periodSemester * 6;
+      if (periodSemester === 1) return { fromYear: periodYear - 1, fromMonth: 12, toYear: periodYear, toMonth };
+      return { fromYear: periodYear, fromMonth: 6, toYear: periodYear, toMonth };
+    }
+    case 'annual':
+      return { fromYear: periodYear - 1, fromMonth: 12, toYear: periodYear, toMonth: 12 };
+    default:
+      return { fromYear: periodYear, fromMonth: periodMonth, toYear: periodYear, toMonth: periodMonth };
+  }
+}
+
+/** Returns the X-axis label for a timeseries data point. */
+function getXAxisLabel(
+  point: { periodYear: number; periodMonth: number },
+  viewFrequency: 'monthly' | 'quarterly' | 'semestral' | 'annual',
+  periodYear: number,
+  periodQuarter: number,
+  periodSemester: number,
+  prevYear: number,
+  prevMonth: number,
+): string {
+  const isPrev = point.periodYear === prevYear && point.periodMonth === prevMonth;
+  const abbr = MONTH_ABBR[point.periodMonth - 1];
+  if (isPrev) {
+    const yy = String(point.periodYear).slice(-2);
+    return `${abbr}'${yy}`;
+  }
+  switch (viewFrequency) {
+    case 'monthly': return abbr;
+    case 'quarterly': {
+      const rel = point.periodMonth - ((periodQuarter - 1) * 3 + 1) + 1;
+      return `Q${periodQuarter}-${rel}`;
+    }
+    case 'semestral': {
+      const rel = point.periodMonth - ((periodSemester - 1) * 6 + 1) + 1;
+      return `H${periodSemester}-${rel}`;
+    }
+    case 'annual': {
+      const yy = String(point.periodYear).slice(-2);
+      return point.periodYear === periodYear ? abbr : `${abbr}'${yy}`;
+    }
+    default: return abbr;
+  }
+}
+
+/** Mini 2-point line sparkline for the Trend column in the KPI detail table. */
+function TrendSparkline({ prev, current, band }: { prev: number | null; current: number | null; band: string }) {
+  const color = BAND_COLORS[band] || BAND_COLORS.unclassified;
+  const w = 60; const h = 24; const pad = 5;
+  const startVal = prev ?? current ?? 0;
+  const endVal = current ?? prev ?? 0;
+  const toY = (v: number) => h - pad - (Math.min(100, Math.max(0, v)) / 100) * (h - 2 * pad);
+  const y1 = toY(startVal); const y2 = toY(endVal);
+  return (
+    <svg width={w} height={h} style={{ display: 'block', overflow: 'visible' }}>
+      <line x1={pad} y1={y1} x2={w - pad} y2={y2} stroke={color} strokeWidth={2} />
+      <circle cx={pad} cy={y1} r={3} fill="#b0bec5" stroke="#fff" strokeWidth={1} />
+      <circle cx={w - pad} cy={y2} r={3} fill={color} stroke="#fff" strokeWidth={1} />
+    </svg>
+  );
+}
+
 export default function KpiPage() {
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
@@ -112,6 +200,7 @@ export default function KpiPage() {
   const [monitoring, setMonitoring] = useState<KpiMonitoringRecord[]>([]);
   const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null);
   const [selectedUnitDashboard, setSelectedUnitDashboard] = useState<UnitDashboardResponse | null>(null);
+  const [unitTimeseries, setUnitTimeseries] = useState<UnitTimeseriesPoint[]>([]);
 
   const [periodYear, setPeriodYear] = useState(currentYear);
   const [periodMonth, setPeriodMonth] = useState(currentMonth);
@@ -197,14 +286,21 @@ export default function KpiPage() {
       if (!canManage) {
         const ownUnit = availableUnits[0];
         if (ownUnit && Number.isFinite(ownUnit.id)) {
-          const detail = await kpiApi.dashboardUnit(ownUnit.id, periodYear, effectiveMonth);
+          const { fromYear, fromMonth, toYear, toMonth } = getTimeseriesRange(
+            viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester,
+          );
+          const [detail, tseries] = await Promise.all([
+            kpiApi.dashboardUnit(ownUnit.id, periodYear, effectiveMonth),
+            kpiApi.dashboardUnitTimeseries(ownUnit.id, fromYear, fromMonth, toYear, toMonth),
+          ]);
           setSelectedUnitDashboard(detail);
+          setUnitTimeseries(tseries);
         }
       }
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI dashboard.', { variant: 'error' });
     }
-  }, [enqueueSnackbar, effectiveMonth, periodYear, canManage, availableUnits]);
+  }, [enqueueSnackbar, effectiveMonth, periodYear, canManage, availableUnits, viewFrequency, periodQuarter, periodSemester]);
 
   useEffect(() => {
     loadInitial();
@@ -363,8 +459,15 @@ export default function KpiPage() {
   const openUnitDashboard = async (unitId: number) => {
     if (!Number.isFinite(unitId) || !Number.isFinite(periodYear) || !Number.isFinite(effectiveMonth)) return;
     try {
-      const detail = await kpiApi.dashboardUnit(unitId, periodYear, effectiveMonth);
+      const { fromYear, fromMonth, toYear, toMonth } = getTimeseriesRange(
+        viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester,
+      );
+      const [detail, tseries] = await Promise.all([
+        kpiApi.dashboardUnit(unitId, periodYear, effectiveMonth),
+        kpiApi.dashboardUnitTimeseries(unitId, fromYear, fromMonth, toYear, toMonth),
+      ]);
       setSelectedUnitDashboard(detail);
+      setUnitTimeseries(tseries);
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to load unit KPI dashboard.', { variant: 'error' });
     }
@@ -574,18 +677,15 @@ export default function KpiPage() {
         <Grid container spacing={2}>
           {/* ── Scorecard row ── */}
           <Grid item xs={12} md={4}>
-            <Card sx={{ borderLeft: `6px solid ${overallBandColor}` }}>
+            <Card>
               <CardContent>
                 <Typography variant="overline" color="text.secondary">Overall KPI Score</Typography>
                 <Typography variant="h3" fontWeight={700}>{summary?.summary.overallScore ?? 0}</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
-                  Band: {summary ? overallBand : 'No data'}
-                </Typography>
                 <LinearProgress
                   variant="determinate"
                   value={Math.min(Number(summary?.summary.overallScore ?? 0), 100)}
                   sx={{ mt: 1, height: 8, borderRadius: 4, bgcolor: 'grey.200',
-                    '& .MuiLinearProgress-bar': { bgcolor: overallBandColor } }}
+                    '& .MuiLinearProgress-bar': { bgcolor: '#1976d2' } }}
                 />
               </CardContent>
             </Card>
@@ -624,7 +724,7 @@ export default function KpiPage() {
                 <Chip
                   key={t.band}
                   size="small"
-                  label={`${String(t.band).toUpperCase()} (${t.minScore}–${t.maxScore})`}
+                  label={`${t.minScore}–${t.maxScore}`}
                   sx={{ bgcolor: BAND_COLORS[String(t.band).toLowerCase()] || BAND_COLORS.unclassified, color: '#fff', fontWeight: 600, fontSize: 11 }}
                 />
               ))}
@@ -675,10 +775,9 @@ export default function KpiPage() {
                   <TableHead>
                     <TableRow>
                       <TableCell>Unit</TableCell>
-                      <TableCell>Score</TableCell>
-                      <TableCell>Band</TableCell>
-                      <TableCell>KPIs</TableCell>
-                      <TableCell align="right"></TableCell>
+                      <TableCell>Current Score</TableCell>
+                      <TableCell sx={{ width: 48, p: 0 }}>Band</TableCell>
+                      <TableCell># KPIs</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -686,15 +785,12 @@ export default function KpiPage() {
                       <TableRow key={unit.unitId} hover sx={{ cursor: 'pointer' }} onClick={() => openUnitDashboard(unit.unitId)}>
                         <TableCell>{unit.unitName}</TableCell>
                         <TableCell><strong>{unit.score}</strong></TableCell>
-                        <TableCell><Chip size="small" label={unit.band.toUpperCase()} sx={{ bgcolor: BAND_COLORS[unit.band.toLowerCase()] || BAND_COLORS.unclassified, color: '#fff', fontWeight: 700 }} /></TableCell>
+                        <TableCell sx={{ p: 0, width: 48, bgcolor: BAND_COLORS[unit.band.toLowerCase()] || BAND_COLORS.unclassified }} />
                         <TableCell>{unit.kpiCount}</TableCell>
-                        <TableCell align="right">
-                          <Button size="small" variant="outlined" onClick={(e) => { e.stopPropagation(); openUnitDashboard(unit.unitId); }}>Detail</Button>
-                        </TableCell>
                       </TableRow>
                     ))}
                     {(summary?.units || []).length === 0 && (
-                      <TableRow><TableCell colSpan={5} align="center"><Typography variant="caption" color="text.secondary">No unit data.</Typography></TableCell></TableRow>
+                      <TableRow><TableCell colSpan={4} align="center"><Typography variant="caption" color="text.secondary">No unit data.</Typography></TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -715,47 +811,69 @@ export default function KpiPage() {
                   </Box>
                 ) : (
                   <>
-                    {selectedKpiDetailChart.length === 0 ? (
+                    {unitTimeseries.length === 0 ? (
                       <Box sx={{ py: 3, textAlign: 'center' }}>
-                        <Typography variant="body2" color="text.secondary">No KPI detail data for this unit/period.</Typography>
+                        <Typography variant="body2" color="text.secondary">No trend data for this unit/period.</Typography>
                       </Box>
-                    ) : (
-                      <Box sx={{ width: '100%', height: 240, mb: 2 }}>
-                        <ResponsiveContainer>
-                          <BarChart data={selectedKpiDetailChart} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                            <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                            <Tooltip />
-                            <Bar dataKey="normalized" fill="#1976d2" radius={[6, 6, 0, 0]} label={{ position: 'top', fontSize: 10 }} />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </Box>
-                    )}
+                    ) : (() => {
+                      const { fromYear, fromMonth } = getTimeseriesRange(viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester);
+                      const trendChartData = unitTimeseries.map((pt) => ({
+                        label: getXAxisLabel(pt, viewFrequency, periodYear, periodQuarter, periodSemester, fromYear, fromMonth),
+                        score: pt.hasData ? pt.score : null,
+                        band: String(pt.band || 'unclassified').toLowerCase(),
+                      }));
+                      return (
+                        <Box sx={{ width: '100%', height: 240, mb: 2 }}>
+                          <ResponsiveContainer>
+                            <LineChart data={trendChartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                              <Tooltip formatter={(val: any) => [`${val}`, 'Score']} />
+                              <Line
+                                dataKey="score"
+                                stroke="#90a4ae"
+                                strokeWidth={2}
+                                connectNulls={false}
+                                dot={(props: any) => {
+                                  const { cx, cy, payload, index } = props;
+                                  return <circle key={index} cx={cx} cy={cy} r={5} fill={BAND_COLORS[payload.band] || BAND_COLORS.unclassified} stroke="#fff" strokeWidth={1.5} />;
+                                }}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </Box>
+                      );
+                    })()}
                     <Divider sx={{ my: 1 }} />
                     <Table size="small">
                       <TableHead>
                         <TableRow>
                           <TableCell>KPI</TableCell>
-                          <TableCell>Target</TableCell>
                           <TableCell>Actual</TableCell>
-                          <TableCell>Normalized</TableCell>
-                          <TableCell>Band</TableCell>
+                          <TableCell>Target</TableCell>
+                          <TableCell>Score</TableCell>
+                          <TableCell>Trend</TableCell>
+                          <TableCell sx={{ width: 48, p: 0 }}>Band</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {selectedUnitDashboard.details.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell>{item.code}</TableCell>
-                            <TableCell>{item.targetValue}</TableCell>
-                            <TableCell>{item.actualValue}</TableCell>
-                            <TableCell><strong>{item.normalizedScore}</strong></TableCell>
-                            <TableCell>
-                              {item.band ? (
-                                <Chip size="small" label={String(item.band).toUpperCase()} sx={{ bgcolor: BAND_COLORS[String(item.band).toLowerCase()] || BAND_COLORS.unclassified, color: '#fff', fontWeight: 700 }} />
-                              ) : '-'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {selectedUnitDashboard.details.map((item) => {
+                          const prevScore = unitTimeseries[0]?.kpiScores?.find((k) => k.code === item.code)?.normalizedScore ?? null;
+                          const currScore = unitTimeseries[unitTimeseries.length - 1]?.kpiScores?.find((k) => k.code === item.code)?.normalizedScore ?? null;
+                          return (
+                            <TableRow key={item.id}>
+                              <TableCell>{item.code}</TableCell>
+                              <TableCell>{item.actualValue}</TableCell>
+                              <TableCell>{item.targetValue}</TableCell>
+                              <TableCell><strong>{item.normalizedScore}</strong></TableCell>
+                              <TableCell>
+                                <TrendSparkline prev={prevScore} current={currScore} band={String(item.band || 'unclassified').toLowerCase()} />
+                              </TableCell>
+                              <TableCell sx={{ p: 0, width: 48, bgcolor: BAND_COLORS[String(item.band || '').toLowerCase()] || BAND_COLORS.unclassified }} />
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </>

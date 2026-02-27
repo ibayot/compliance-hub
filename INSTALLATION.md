@@ -1,5 +1,6 @@
 ﻿# RICTMS Compliance Hub - Installation Guide
 
+> **Release `v1.3.0.4` (2026-02-28):** No schema changes. Pull latest code and restart backend/frontend. The new timeseries endpoint is served automatically via the existing KPI module registration.
 > **Release `v1.3.0.3` (2026-02-27):** NaN SQL error fix (no schema change). `ALTER TABLE kpi_master` adds `semestral` to frequency enum. Pull latest, run the ALTER, restart backend/frontend. See CHANGELOG for full detail.
 > **Release `v1.3.0.2` (2026-02-27):** KPI Dashboard tab bug fixed — graphs now display immediately on page load (tab 0 = Dashboard). No schema changes; pull latest code and restart frontend/backend.
 > **Release `v1.3.0.1` (2026-02-27):** Includes KPI access-control/runtime hotfixes and graph dashboard updates. If upgrading from `v1.2.0.4`, restart backend/frontend services after pulling latest code and ensure users re-login to refresh JWT role/unit claims before KPI smoke testing.

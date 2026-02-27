@@ -95,6 +95,23 @@ export interface UnitDashboardResponse {
   }>;
 }
 
+export interface UnitTimeseriesPoint {
+  periodYear: number;
+  periodMonth: number;
+  unitId: number;
+  unitName: string;
+  score: number;
+  band: string;
+  hasData: boolean;
+  kpiScores: Array<{
+    code: string;
+    name: string;
+    normalizedScore: number;
+    actualValue: number;
+    band: string;
+  }>;
+}
+
 export const kpiApi = {
   listMaster: async (): Promise<KpiMasterRecord[]> => {
     const response = await apiClient.get('/kpi/master');
@@ -152,6 +169,19 @@ export const kpiApi = {
   dashboardUnit: async (unitId: number, periodYear: number, periodMonth: number) => {
     const response = await apiClient.get(`/kpi/dashboard/unit/${unitId}`, { params: { periodYear, periodMonth } });
     return response.data as UnitDashboardResponse;
+  },
+
+  dashboardUnitTimeseries: async (
+    unitId: number,
+    fromYear: number,
+    fromMonth: number,
+    toYear: number,
+    toMonth: number,
+  ) => {
+    const response = await apiClient.get(`/kpi/dashboard/unit/${unitId}/timeseries`, {
+      params: { fromYear, fromMonth, toYear, toMonth },
+    });
+    return response.data as UnitTimeseriesPoint[];
   },
 
   listThresholds: async () => {
