@@ -197,19 +197,23 @@ export class KpiService {
   async listMonitoring(user: AuthUser, query: { periodYear?: number; periodMonth?: number; unitId?: number; kpiMasterCode?: string }) {
     const where: any = {};
 
-    if (query.periodYear !== undefined) where.periodYear = query.periodYear;
-    if (query.periodMonth !== undefined) where.periodMonth = query.periodMonth;
+    const yearNum = query.periodYear !== undefined ? Number(query.periodYear) : undefined;
+    const monthNum = query.periodMonth !== undefined ? Number(query.periodMonth) : undefined;
+    const unitIdNum = query.unitId !== undefined ? Number(query.unitId) : undefined;
+
+    if (yearNum !== undefined && Number.isFinite(yearNum)) where.periodYear = yearNum;
+    if (monthNum !== undefined && Number.isFinite(monthNum)) where.periodMonth = monthNum;
     if (query.kpiMasterCode !== undefined) where.kpiMasterCode = query.kpiMasterCode;
 
     if (this.canViewAll(user)) {
-      if (query.unitId !== undefined) where.unitId = query.unitId;
+      if (unitIdNum !== undefined && Number.isFinite(unitIdNum)) where.unitId = unitIdNum;
     } else {
       const allowed = await this.getAllowedUnitIds(user);
       if (allowed.length === 0) return [];
-      if (query.unitId !== undefined && !allowed.includes(query.unitId)) {
+      if (unitIdNum !== undefined && Number.isFinite(unitIdNum) && !allowed.includes(unitIdNum)) {
         throw new ForbiddenException('Unit access denied.');
       }
-      where.unitId = query.unitId !== undefined ? query.unitId : In(allowed);
+      where.unitId = (unitIdNum !== undefined && Number.isFinite(unitIdNum)) ? unitIdNum : In(allowed);
     }
 
     return this.kpiMonitoringRepo.find({
@@ -335,8 +339,16 @@ export class KpiService {
     );
   }
 
-  async dashboardSummary(user: AuthUser, periodYear: number, periodMonth: number) {
-    const where: any = { periodYear, periodMonth };
+  async dashboardSummary(user: AuthUser, periodYear?: number, periodMonth?: number) {
+    const yearNum = Number(periodYear);
+    const monthNum = Number(periodMonth);
+    if (!Number.isFinite(yearNum) || yearNum < 2000 || yearNum > 2100) {
+      throw new BadRequestException('periodYear must be a valid year (2000-2100).');
+    }
+    if (!Number.isFinite(monthNum) || monthNum < 1 || monthNum > 12) {
+      throw new BadRequestException('periodMonth must be between 1 and 12.');
+    }
+    const where: any = { periodYear: yearNum, periodMonth: monthNum };
 
     if (!this.canViewAll(user)) {
       const allowed = await this.getAllowedUnitIds(user);
@@ -402,24 +414,36 @@ export class KpiService {
         overallScore: Number(overallScore.toFixed(2)),
         unitCount: units.length,
         rowCount: rows.length,
-        periodYear,
-        periodMonth,
+        periodYear: yearNum,
+        periodMonth: monthNum,
       },
       units: units.sort((a, b) => b.score - a.score),
       thresholds,
     };
   }
 
-  async dashboardUnit(user: AuthUser, unitId: number, periodYear: number, periodMonth: number) {
+  async dashboardUnit(user: AuthUser, unitId: number, periodYear?: number, periodMonth?: number) {
+    const unitIdNum = Number(unitId);
+    if (!Number.isFinite(unitIdNum) || unitIdNum <= 0) {
+      throw new BadRequestException('Invalid unit ID.');
+    }
+    const yearNum = Number(periodYear);
+    const monthNum = Number(periodMonth);
+    if (!Number.isFinite(yearNum) || yearNum < 2000 || yearNum > 2100) {
+      throw new BadRequestException('periodYear must be a valid year (2000-2100).');
+    }
+    if (!Number.isFinite(monthNum) || monthNum < 1 || monthNum > 12) {
+      throw new BadRequestException('periodMonth must be between 1 and 12.');
+    }
     if (!this.canViewAll(user)) {
       const allowed = await this.getAllowedUnitIds(user);
-      if (!allowed.includes(unitId)) {
+      if (!allowed.includes(unitIdNum)) {
         throw new ForbiddenException('Unit access denied.');
       }
     }
 
     const rows = await this.kpiMonitoringRepo.find({
-      where: { unitId, periodYear, periodMonth },
+      where: { unitId: unitIdNum, periodYear: yearNum, periodMonth: monthNum },
       relations: ['kpiMaster', 'unit'],
     });
 
@@ -460,12 +484,12 @@ export class KpiService {
     const score = totalWeight > 0 ? weightedSum / totalWeight : 0;
 
     return {
-      unitId,
-      unitName: rows[0]?.unit?.name || `Unit ${unitId}`,
+      unitId: unitIdNum,
+      unitName: rows[0]?.unit?.name || `Unit ${unitIdNum}`,
       score: Number(score.toFixed(2)),
       band: this.classifyScore(score, thresholds),
-      periodYear,
-      periodMonth,
+      periodYear: yearNum,
+      periodMonth: monthNum,
       details,
     };
   }

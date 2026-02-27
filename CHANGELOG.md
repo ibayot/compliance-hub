@@ -1,4 +1,4 @@
-# RICTMS Compliance Hub - Changelog
+﻿# RICTMS Compliance Hub - Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -6,7 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [1.3.0.2] - 2026-02-27 — KPI Dashboard Default View, Chart Empty-State, Visual Scorecards
+## [1.3.0.3] - 2026-02-27 -- KPI NaN Fix, Period Frequency, Labels, Legend and Seed Data
+
+### Fixed
+- **NaN SQL error on dashboard load**: 4x Unknown column 'NaN' in where clause errors eliminated. Guards in frontend loadDashboard/openUnitDashboard and backend service methods dashboardSummary, dashboardUnit, listMonitoring.
+- **Backend unguarded query params**: dashboardSummary/dashboardUnit validate periodYear (2000-2100) and periodMonth (1-12), returning HTTP 400 on invalid input instead of NaN SQL error.
+- **Controller query coercion**: @Query params for dashboard endpoints use ParseIntPipe({ optional: true }) for automatic numeric type enforcement.
+
+### Added
+- **Period frequency selector**: Monthly / Quarterly / Semestral / Annual dropdown; derived effectiveMonth used across all API calls.
+- **Semestral KPI frequency**: Backend entity enum, DTO, frontend type, KPI Master dialog, DB ALTER TABLE all updated.
+- **Band color legend**: Dynamic chip row below scorecards showing threshold ranges (Green/Amber/Red) sourced from live thresholds API.
+- **KPI seed data**: 10 KPI masters (5 per unit) and 30 monitoring rows (3 months x 10 KPIs) for demo/testing.
+- **QA-USER-MANUAL.md section I**: KPI Module full user guide -- band definition, scoring math, CRUD steps, dashboard guide, role table, 12-item smoke checklist.
+
+### Changed
+- **Bar chart X-axis**: Unit names truncated to 16 chars + ellipsis; ticks rotated -25 degrees to prevent overlap for 7+ units.
+- loadMonitoring and loadDashboard use effectiveMonth derived from frequency picker.
+
+### Verified (Smoke)
+- 0 TS errors; frontend 
+pm run build exits 0
+- Dashboard summary/unit API: 200 OK with seeded data (2 units, 10 KPIs)
+- Invalid inputs (year=0, month=99): HTTP 400 as expected
+- Monitoring list (all months): 10 rows per month
+
+---
+
+## [1.3.0.2] - 2026-02-27 â€” KPI Dashboard Default View, Chart Empty-State, Visual Scorecards
 
 ### Fixed
 - **KPI Dashboard hidden behind tabs**: KPI Dashboard tab was positioned at index 2 for manage-role users (super_admin, reviewer, section_head), meaning graphs were never visible on page load. Dashboard tab is now always tab 0 (first/default) for all roles.
@@ -24,15 +51,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Empty states**: All three chart areas (unit scores, unit detail, band distribution) show a descriptive empty-state message when there is no data for the selected period instead of blank containers.
 
 ### Verified (Smoke)
-- Frontend build: `npm run build` ✅ (exit code 0)
-- Backend build: `npm run build` ✅
-- SUPER_LOGIN_OK, FOCAL_LOGIN_OK ✅
-- ROLES=5, DOCS=2, UNITS=2, METRICS=16, TICKETS=1 ✅
-- KPI super summary: overall=100 units=1 ✅
-- KPI thresholds=3, scoring rules=1 ✅
-- KPI focal summary: overall=100 units=1 ✅
-- KPI focal unit detail: unitId=1 score=100 band=green ✅
-- AUTH_ME no passwordHash leak ✅
+- Frontend build: `npm run build` âœ… (exit code 0)
+- Backend build: `npm run build` âœ…
+- SUPER_LOGIN_OK, FOCAL_LOGIN_OK âœ…
+- ROLES=5, DOCS=2, UNITS=2, METRICS=16, TICKETS=1 âœ…
+- KPI super summary: overall=100 units=1 âœ…
+- KPI thresholds=3, scoring rules=1 âœ…
+- KPI focal summary: overall=100 units=1 âœ…
+- KPI focal unit detail: unitId=1 score=100 band=green âœ…
+- AUTH_ME no passwordHash leak âœ…
 
 ### Documentation Updated
 - `CAPABILITIES.md`
@@ -43,7 +70,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [1.3.0.1] - 2026-02-27 — KPI Access Hotfix, Graph Dashboard Upgrade, Toast Notification Standardization
+## [1.3.0.1] - 2026-02-27 â€” KPI Access Hotfix, Graph Dashboard Upgrade, Toast Notification Standardization
 
 ### Fixed
 - **KPI focal access denied issue**: Hardened KPI unit-scope resolution to support token unit formats and fallback to DB unit mapping when token units are missing/empty.
@@ -57,11 +84,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Notification standardization**: Migrated remaining inline frontend alerts and browser `alert()` usage to `notistack` toast notifications across login, upload, metrics validation, reviews, settings dialog errors, and module status feedback.
 
 ### Verified (Smoke)
-- Frontend build: `npm run build` ✅
-- Backend build: `npm run build` ✅
-- KPI smoke (super admin): summary endpoint ✅
-- KPI smoke (focal): summary + unit detail endpoints ✅
-- Core API smoke: auth login, roles, documents, units ✅
+- Frontend build: `npm run build` âœ…
+- Backend build: `npm run build` âœ…
+- KPI smoke (super admin): summary endpoint âœ…
+- KPI smoke (focal): summary + unit detail endpoints âœ…
+- Core API smoke: auth login, roles, documents, units âœ…
 
 ### Documentation Updated
 - `CAPABILITIES.md`
@@ -72,7 +99,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [1.2.0.4] - 2026-02-26 — KPI Monitoring Module, KPI Dashboard, User/Role Management Enhancements
+## [1.2.0.4] - 2026-02-26 â€” KPI Monitoring Module, KPI Dashboard, User/Role Management Enhancements
 
 ### Added
 - **KPI Module (new)**: Added `backend/src/modules/kpi` with secure endpoints for:
@@ -90,7 +117,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Lookup tables added**:
   - `kpi_thresholds`
   - `kpi_scoring_rules`
-- **Frontend KPI workspace page**: Added `Dashboard → KPI` (`/dashboard/kpi`) with role-aware tabs for KPI Master, Monitoring, and Dashboard.
+- **Frontend KPI workspace page**: Added `Dashboard â†’ KPI` (`/dashboard/kpi`) with role-aware tabs for KPI Master, Monitoring, and Dashboard.
 
 ### Changed
 - **User edit behavior**:
@@ -128,29 +155,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `.bmad/02_ARCH.md`
 
 ### Verified (Smoke)
-- Frontend TypeScript: `npx tsc --noEmit` ✅
-- Frontend build: `npm run build` ✅
-- Backend TypeScript: `npx tsc --noEmit` ✅
-- Backend build: `npm run build` ✅
-- API smoke: login + KPI dashboard summary endpoint ✅
-- API smoke: staff ID update attempt rejected (`property staffId should not exist`) ✅
+- Frontend TypeScript: `npx tsc --noEmit` âœ…
+- Frontend build: `npm run build` âœ…
+- Backend TypeScript: `npx tsc --noEmit` âœ…
+- Backend build: `npm run build` âœ…
+- API smoke: login + KPI dashboard summary endpoint âœ…
+- API smoke: staff ID update attempt rejected (`property staffId should not exist`) âœ…
 
 ---
 
-## [1.2.0.3] - 2026-02-26 — Bug Fixes: Toast Notifications, Units in Login, Create User Modal, Pagination, Dashboard Date
+## [1.2.0.3] - 2026-02-26 â€” Bug Fixes: Toast Notifications, Units in Login, Create User Modal, Pagination, Dashboard Date
 
 ### Fixed
 - **Documents pagination label shows "Page 1-1 of 1"**: `labelDisplayedRows` was using `Page ${page}-${page} of ${totalPages}`. Fixed to `Page ${page} of ${totalPages}`.
 - **Create User error appears in card (outside dialog)**: The error `<Alert>` was placed in `<CardContent>` outside the `<Dialog>`. Replaced with `createError` state rendered inside `<DialogContent>` so errors appear within the modal. On success, the dialog closes and a toast is shown.
 - **Unit multi-select dropdown stays open after selecting**: Added `<Checkbox>` + `<ListItemText>` to each `<MenuItem>` in the multi-select. MUI multi-select with checkboxes gives proper visual feedback without requiring menu closure per selection.
 - **Created user role not reflected in table**: Root cause was the error placement bug causing confusion. Role is now sent correctly via `usersApi.create(form)` with the selected `form.role` value. Fixed code path is now clear.
-- **Unit not shown in Settings → Account Information after login**: Added "Assigned Units" row to the Account Information card displaying unit chips. Also fixed the root cause (login response missing `units`).
+- **Unit not shown in Settings â†’ Account Information after login**: Added "Assigned Units" row to the Account Information card displaying unit chips. Also fixed the root cause (login response missing `units`).
 - **Unit not auto-populated in Document Upload for focal users after login**: Backend `auth.service.ts` `login()` now includes `units: user.units?.map(u => ({ id, name })) || []` in the returned user object. Frontend `AuthContext.login()` additionally calls `getProfile()` after login to guarantee full user profile with units is populated.
-- **Dashboard shows "Incident Response (Today 8AM - 5PM)"**: Replaced hardcoded string with dynamic date using `date-fns`: `Incident Response — {format(new Date(), 'EEEE, MMMM d, yyyy')}` (e.g., "Incident Response — Wednesday, February 26, 2026").
+- **Dashboard shows "Incident Response (Today 8AM - 5PM)"**: Replaced hardcoded string with dynamic date using `date-fns`: `Incident Response â€” {format(new Date(), 'EEEE, MMMM d, yyyy')}` (e.g., "Incident Response â€” Wednesday, February 26, 2026").
 - **All alerts/notifications were inline banners**: Migrated action feedback (create, update, delete, submit errors/successes) across all pages to `notistack` Snackbar toasts. Inline `Alert` components remain only where they provide contextual status (e.g., document preview error, compliant status indicator, filename preview hint).
 
 ### Added
-- **Toast notification system (notistack v3)**: Installed `notistack@3.0.2`. `SnackbarProvider` added to `ThemeModeContext` wrapping the entire app — top-right position, max 4 snacks, 4-second auto-hide. All pages now use `useSnackbar()` from notistack for success/error/warning toasts.
+- **Toast notification system (notistack v3)**: Installed `notistack@3.0.2`. `SnackbarProvider` added to `ThemeModeContext` wrapping the entire app â€” top-right position, max 4 snacks, 4-second auto-hide. All pages now use `useSnackbar()` from notistack for success/error/warning toasts.
 - **`units` field in `AuthResponse` interface**: `auth.interface.ts` updated to include `units: { id: number; name: string }[]` in the user object.
 
 ### Changed
@@ -163,30 +190,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `notistack@3.0.2` added to `frontend/package.json`
 
 ### Verified (Smoke Tests Passed)
-- Backend TypeScript: 0 errors ✅
-- Frontend TypeScript: 0 errors ✅
-- Frontend Vite build: ✓ 12345 modules transformed, exit 0 ✅
-- Backend NestJS build: exit 0 ✅
-- Pagination: "Page 1 of 1" displays correctly ✅
-- Login response includes `units` array ✅
-- `AuthContext` calls `getProfile()` after login ✅
-- Create User dialog error shown inside modal ✅
-- Unit multi-select has checkboxes ✅
-- Account Information card shows Assigned Units ✅
-- Dashboard header shows formatted date ✅
+- Backend TypeScript: 0 errors âœ…
+- Frontend TypeScript: 0 errors âœ…
+- Frontend Vite build: âœ“ 12345 modules transformed, exit 0 âœ…
+- Backend NestJS build: exit 0 âœ…
+- Pagination: "Page 1 of 1" displays correctly âœ…
+- Login response includes `units` array âœ…
+- `AuthContext` calls `getProfile()` after login âœ…
+- Create User dialog error shown inside modal âœ…
+- Unit multi-select has checkboxes âœ…
+- Account Information card shows Assigned Units âœ…
+- Dashboard header shows formatted date âœ…
 
 ---
 
-## [1.2.0.1] - 2026-02-26 — Reportorial Document Types, Nav/UI Fixes, Metrics Linked to Documents
+## [1.2.0.1] - 2026-02-26 â€” Reportorial Document Types, Nav/UI Fixes, Metrics Linked to Documents
 
 ### Added
 - **Reportorial Document Types system**: New `reportorial_document_types` table per-unit. Each type has a `base_name` (e.g., `Incident_Report`), `display_name`, `submission_frequency` (monthly/quarterly/annual), and auto-computed period suffix. Filename format: `{base_name}_{period_suffix}` (e.g., `Incident_Report_202602` for February 2026 monthly).
 - **Document upload filename validation**: Uploaded filename is validated against the expected `{base_name}_{period_suffix}` format on both client and server. Front-end shows a dynamic preview of the expected filename.
 - **Metrics linked to documents (not units)**: `metric_applicability` now has a `reportorial_doc_type_id` FK. The Metrics Template Builder UI replaced the "Unit + Document Type (free text)" selectors with a single "Reportorial Document Type" dropdown fetched from the new API.
-- **Units page — Reportorial Documents CRUD**: Each unit row is now an expandable accordion with a full in-page CRUD table for its `ReportorialDocumentType` records (display name, base name, frequency, sample filename, active toggle).
-- **User Management — Unit selector**: "Create New User" is now a button opening a dialog with a multi-select for "Assigned Units" (`unitIds[]`) sent to the backend `CreateUserDto`.
+- **Units page â€” Reportorial Documents CRUD**: Each unit row is now an expandable accordion with a full in-page CRUD table for its `ReportorialDocumentType` records (display name, base name, frequency, sample filename, active toggle).
+- **User Management â€” Unit selector**: "Create New User" is now a button opening a dialog with a multi-select for "Assigned Units" (`unitIds[]`) sent to the backend `CreateUserDto`.
 - **4 metric template examples per type (16 total)**: Seed data expanded from 4 (1 per type) to 16 (4 per type): section_check, keyword_check, property_check, and date_check each have 4 distinct real-world templates.
-- **Seed data — Reportorial Document Types**: 4 examples seeded (2 per unit) including monthly ICT Narrative, quarterly ICT Security Report, monthly Finance Memo, and annual Finance Compliance Report.
+- **Seed data â€” Reportorial Document Types**: 4 examples seeded (2 per unit) including monthly ICT Narrative, quarterly ICT Security Report, monthly Finance Memo, and annual Finance Compliance Report.
 - **PageTitleContext**: New React context (`PageTitleProvider` / `usePageTitle()`) allows detail pages to set a human-readable breadcrumb title. Document detail page now sets the document's `title` so breadcrumbs show the document name instead of a raw UUID.
 
 ### Fixed
@@ -201,34 +228,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **User Management form layout**: "Create New User" inline form replaced with a dialog opened by a button in the card header.
 
 ### Verified (Smoke Tests Passed)
-- Backend build: 0 TypeScript errors ✅
-- Frontend build: 0 TypeScript errors, clean Vite output ✅
-- `GET /api/document-types` → 200 with empty array (no seeded doc types via API in dev, seed via SQL) ✅
-- `GET /api/metrics` → 16 metric templates after seed ✅
-- `PATCH /api/users/:id { active: false }` → 200 (deactivate fix) ✅
-- Dashboard nav highlight: exact match only ✅
-- Breadcrumb on document detail page: shows document title ✅
+- Backend build: 0 TypeScript errors âœ…
+- Frontend build: 0 TypeScript errors, clean Vite output âœ…
+- `GET /api/document-types` â†’ 200 with empty array (no seeded doc types via API in dev, seed via SQL) âœ…
+- `GET /api/metrics` â†’ 16 metric templates after seed âœ…
+- `PATCH /api/users/:id { active: false }` â†’ 200 (deactivate fix) âœ…
+- Dashboard nav highlight: exact match only âœ…
+- Breadcrumb on document detail page: shows document title âœ…
 
 ---
 
-## [1.1.2.3] - 2026-02-25 — Hotfix: On-Demand DOCX Preview, Security Serializer, EADDRINUSE Docs
+## [1.1.2.3] - 2026-02-25 â€” Hotfix: On-Demand DOCX Preview, Security Serializer, EADDRINUSE Docs
 
 ### Fixed
 - **DOCX document preview returning 404 ("Preview not available")**: Uploaded DOCX files whose `generate-preview` Bull queue job failed silently (no `preview_blob` in DB) now generate an HTML preview on first request via mammoth. `getPreview()` in `version.service.ts` gained a "Priority 3" on-demand fallback: reads `file_blob`, invokes `mammoth.convertToHtml()`, wraps in styled HTML, and saves the result back to `preview_blob + preview_mime_type='text/html'` non-blocking for future caching. Real-world upload (DSWD FO II AIMS Policy.docx 1.7 MB) confirmed: endpoint returns `200 text/html` 38 KB.
-- **`passwordHash` exposed in all API responses**: `@Exclude()` on `User.passwordHash` was present on the entity class but had no effect because `ClassSerializerInterceptor` was never registered globally. Added `app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)))` in `main.ts`. Re-tested `/api/auth/me` and `/api/users` — `passwordHash` no longer appears in JSON responses.
+- **`passwordHash` exposed in all API responses**: `@Exclude()` on `User.passwordHash` was present on the entity class but had no effect because `ClassSerializerInterceptor` was never registered globally. Added `app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)))` in `main.ts`. Re-tested `/api/auth/me` and `/api/users` â€” `passwordHash` no longer appears in JSON responses.
 - **`Error: listen EADDRINUSE :::4000` on backend restart**: Documented resolution (kill existing PID before restart) in INSTALLATION.md. Caused by a stale `npm run start:dev` background process retaining the port across sessions.
 
 ### Verified (Smoke Tests Passed)
-- **Login** (`POST /api/auth/login`): Returns valid JWT ✅
-- **Roles** (`GET /api/users/roles`): Returns 5 system role definitions ✅
-- **`passwordHash` in `/auth/me`**: Not exposed ✅
-- **`passwordHash` in `/users`**: Not exposed ✅
-- **Documents list** (`GET /api/documents`): Returns 3 documents (2 seeded + DSWD upload) ✅
-- **Seeded HTML preview** (`ver-001`): `Content-Type: text/html; charset=utf-8` ✅
-- **DSWD DOCX on-demand preview** (`750f3ff2-…`): `200 text/html` 38 KB generated live via mammoth ✅
-- **DSWD document download**: `200` `attachment; filename="DSWD FO II…Policy.docx"` 1.7 MB ✅
-- **Metrics** (`GET /api/metrics`): 4 templates (section_check, keyword_check, property_check, date_check) ✅
-- **Units** (`GET /api/units`): 2 seeded units ✅
+- **Login** (`POST /api/auth/login`): Returns valid JWT âœ…
+- **Roles** (`GET /api/users/roles`): Returns 5 system role definitions âœ…
+- **`passwordHash` in `/auth/me`**: Not exposed âœ…
+- **`passwordHash` in `/users`**: Not exposed âœ…
+- **Documents list** (`GET /api/documents`): Returns 3 documents (2 seeded + DSWD upload) âœ…
+- **Seeded HTML preview** (`ver-001`): `Content-Type: text/html; charset=utf-8` âœ…
+- **DSWD DOCX on-demand preview** (`750f3ff2-â€¦`): `200 text/html` 38 KB generated live via mammoth âœ…
+- **DSWD document download**: `200` `attachment; filename="DSWD FO IIâ€¦Policy.docx"` 1.7 MB âœ…
+- **Metrics** (`GET /api/metrics`): 4 templates (section_check, keyword_check, property_check, date_check) âœ…
+- **Units** (`GET /api/units`): 2 seeded units âœ…
 
 ### Notes
 - Queue-based preview generation still runs in the background but is no longer the sole path to a working DOCX preview. The on-demand fallback ensures the viewer works immediately on first request.
@@ -236,35 +263,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [1.1.2.2] - 2026-02-25 — Startup Fix: UTF-8 BOM in package.json
+## [1.1.2.2] - 2026-02-25 â€” Startup Fix: UTF-8 BOM in package.json
 
 ### Fixed
-- **Frontend dev server crash (`npm run dev` exits 1)**: The `frontend/package.json` file was saved with a UTF-8 BOM (Byte Order Mark, `0xEF 0xBB 0xBF`) by an editor. Vite's PostCSS config loader uses `JSON.parse()` directly, which cannot handle BOM-prefixed JSON — it throws `SyntaxError: Unexpected token '∩╗┐'`. Removed the BOM bytes from `frontend/package.json`.
+- **Frontend dev server crash (`npm run dev` exits 1)**: The `frontend/package.json` file was saved with a UTF-8 BOM (Byte Order Mark, `0xEF 0xBB 0xBF`) by an editor. Vite's PostCSS config loader uses `JSON.parse()` directly, which cannot handle BOM-prefixed JSON â€” it throws `SyntaxError: Unexpected token 'âˆ©â•—â”'`. Removed the BOM bytes from `frontend/package.json`.
 - **Backend `npm run start:dev` exit 1 (spurious)**: `backend/package.json` also contained a UTF-8 BOM from the same editor save event. Removed BOM to ensure clean JSON parse across all tooling.
 
 ### Verified (Smoke Tests Passed)
-- **Login** (`POST /api/auth/login`): Returns valid JWT for `admin@rictms.gov.ph` ✅
-- **Roles** (`GET /api/users/roles`): Returns 5 system role definitions ✅
-- **Documents list** (`GET /api/documents`): Returns 2 seeded documents ✅
-- **Document version** (`GET /api/documents/doc-001`): Version `ver-001` present ✅
-- **Document Preview** (`GET /api/documents/doc-001/versions/ver-001/preview`): `Content-Type: text/html; charset=utf-8` ✅
-- **Document Download** (`GET /api/documents/doc-001/versions/ver-001/download`): `Content-Disposition: attachment; filename="ICT_Compliance_Q1_2024.pdf"` ✅
-- **Metrics templates** (`GET /api/metrics/templates`): Returns metric templates ✅
-- **Units** (`GET /api/units`): Returns 2 seeded units ✅
-- **Frontend** (Vite dev server on port 3000): Starts cleanly after BOM removal ✅
-- **Backend** (NestJS on port 4000): All routes registered and responding ✅
+- **Login** (`POST /api/auth/login`): Returns valid JWT for `admin@rictms.gov.ph` âœ…
+- **Roles** (`GET /api/users/roles`): Returns 5 system role definitions âœ…
+- **Documents list** (`GET /api/documents`): Returns 2 seeded documents âœ…
+- **Document version** (`GET /api/documents/doc-001`): Version `ver-001` present âœ…
+- **Document Preview** (`GET /api/documents/doc-001/versions/ver-001/preview`): `Content-Type: text/html; charset=utf-8` âœ…
+- **Document Download** (`GET /api/documents/doc-001/versions/ver-001/download`): `Content-Disposition: attachment; filename="ICT_Compliance_Q1_2024.pdf"` âœ…
+- **Metrics templates** (`GET /api/metrics/templates`): Returns metric templates âœ…
+- **Units** (`GET /api/units`): Returns 2 seeded units âœ…
+- **Frontend** (Vite dev server on port 3000): Starts cleanly after BOM removal âœ…
+- **Backend** (NestJS on port 4000): All routes registered and responding âœ…
 
 ### Notes
 - Root cause: Some text editors (Notepad, older VS Code, PowerShell `Set-Content`) save files with UTF-8 BOM by default. JSON parsers following the spec must reject BOM. The fix strips the 3-byte BOM prefix before JSON content begins.
-- No code logic changes — this is purely a file encoding fix.
+- No code logic changes â€” this is purely a file encoding fix.
 - All v1.1.2 functionality (HTML preview, Content-Disposition download, role management, settings cards, user manual) confirmed working.
 
 ---
 
-## [1.1.2] - 2026-02-25 — Document Viewer, Metrics Seed, Dynamic Roles, Settings Cards
+## [1.1.2] - 2026-02-25 â€” Document Viewer, Metrics Seed, Dynamic Roles, Settings Cards
 
 ### Fixed
-- **Document Download "blob" issue**: Added `exposedHeaders: ['Content-Disposition', 'Content-Type', 'Content-Length']` to CORS configuration — browser can now read the `Content-Disposition` header to extract the proper filename and extension when downloading documents.
+- **Document Download "blob" issue**: Added `exposedHeaders: ['Content-Disposition', 'Content-Type', 'Content-Length']` to CORS configuration â€” browser can now read the `Content-Disposition` header to extract the proper filename and extension when downloading documents.
 - **Document Preview "not available" (DOCX on Windows)**: Replaced LibreOffice (`soffice`) dependency in the preview processor with a `mammoth` HTML fallback. DOCX files are now converted to styled HTML when LibreOffice is unavailable, and saved as `preview_blob` with `preview_mime_type: 'text/html'`.
 - **Seeded documents showing no preview**: Replaced the 15-byte fake PDF stub in seed data with full styled HTML preview content. Both seeded documents now render immediately in the Document Viewer without requiring re-processing.
 - **Reviews "Unable to load digital preview"**: Fixed by propagating `mimeType` through `getPreviewBlobUrl()` return value and passing it to `DocumentViewer` as a prop. The viewer now branches correctly: iframe for HTML, react-pdf for PDF.
@@ -279,7 +306,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Activate/Deactivate user buttons**: Existing users table now includes an activate/deactivate toggle per user.
 - **Change Role dialog**: Edit (pencil) icon opens a dialog to change an existing user's role, with purpose description shown per option.
 - **4 metric template types in seed**: Added `property_check` (incident count) and `date_check` (monthly submission deadline) templates alongside existing `section_check` and `keyword_check`. 6 metric results seeded.
-- **Settings page card-based layout**: Refactored from single `Paper` container to individual `Card` components — Account Information, Theme Preference, Change Password, Role Definitions, Focal User Management.
+- **Settings page card-based layout**: Refactored from single `Paper` container to individual `Card` components â€” Account Information, Theme Preference, Change Password, Role Definitions, Focal User Management.
 - **"Document Viewer" label**: Renamed "Document Preview" to "Document Viewer" in the document detail page.
 - **DocumentViewer HTML iframe support**: New branch in `DocumentViewer.tsx` renders HTML previews in a sandboxed `<iframe>` with an "Open in Tab" button. PDF branch unchanged (react-pdf).
 - **User Manual expanded field explanations**: All 7 modules now have comprehensive per-field input and output descriptions. New "Settings and Role Management" module added. Close button added to detail dialog.
@@ -307,7 +334,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Updated issuances UX:
   - authority is now free-text/editable with dynamic chip filtering,
   - title opens source URL in new tab when available.
-- Enforced category→issue-type dependency across ticket create/detail workflows and metadata configuration.
+- Enforced categoryâ†’issue-type dependency across ticket create/detail workflows and metadata configuration.
 - Added Settings features:
   - authenticated change-password endpoint/UI,
   - light/dark theme preference toggle.
@@ -320,7 +347,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Expanded user profile schema and DTOs to include focal profile fields.
 - Updated Metrics defaults to provide four sample examples per metric type.
 - Updated User Manual copy:
-  - removed explicit “Your role” badge,
+  - removed explicit â€œYour roleâ€ badge,
   - expanded field-level CRUD guidance, especially for all four metric types.
 
 ### Changed - 2026-02-24 (`v1.1.0-dev` Blob Persistence + Conversion Stabilization)
@@ -420,8 +447,8 @@ Complete implementation of the RICTMS Compliance Hub system with all core featur
 
 ### Verified - 2026-02-23
 
-- Backend build: `npm run build` ✅
-- Frontend build: `npm run build` ✅
+- Backend build: `npm run build` âœ…
+- Frontend build: `npm run build` âœ…
 - API smoke tests passed:
   - Incidents period stats
   - Units CRUD
@@ -804,43 +831,43 @@ For users migrating from previous versions:
 ## Project Development History
 
 ### Sprint 1 - Foundation (Completed)
-- ✅ Authentication & User Management
-- ✅ Database schema design
-- ✅ Project structure setup
+- âœ… Authentication & User Management
+- âœ… Database schema design
+- âœ… Project structure setup
 
 ### Sprint 2 - Core Modules (Completed)
-- ✅ Units Module
-- ✅ Documents Module with Versioning
-- ✅ File upload and storage
+- âœ… Units Module
+- âœ… Documents Module with Versioning
+- âœ… File upload and storage
 
 ### Sprint 3 - Compliance Engine (Completed)
-- ✅ Metrics Module
-- ✅ Automated scoring
-- ✅ Background processing
+- âœ… Metrics Module
+- âœ… Automated scoring
+- âœ… Background processing
 
 ### Sprint 4 - Reviews & Comparison (Completed)
-- ✅ Manual Review Module
-- ✅ Version comparison
-- ✅ Review workflows
+- âœ… Manual Review Module
+- âœ… Version comparison
+- âœ… Review workflows
 
 ### Sprint 5 - References & Tickets (Completed)
-- ✅ Issuances Module
-- ✅ Tickets Module
-- ✅ Frontend pages for both modules
+- âœ… Issuances Module
+- âœ… Tickets Module
+- âœ… Frontend pages for both modules
 
 ### Sprint 6 - Dashboard & Reporting (In Progress)
-- ✅ Enhanced dashboard with real statistics
-- ⏳ Advanced reporting features (planned)
-- ⏳ Export functionality (planned)
-- ⏳ Charts and visualizations (planned)
+- âœ… Enhanced dashboard with real statistics
+- â³ Advanced reporting features (planned)
+- â³ Export functionality (planned)
+- â³ Charts and visualizations (planned)
 
 ### Sprint 7 - Testing & Documentation (In Progress)
-- ✅ Comprehensive documentation (5 files)
-- ✅ Database setup scripts
-- ✅ Seed data script
-- ⏳ End-to-end testing (pending)
-- ⏳ Bug fixes (pending)
-- ⏳ Performance testing (pending)
+- âœ… Comprehensive documentation (5 files)
+- âœ… Database setup scripts
+- âœ… Seed data script
+- â³ End-to-end testing (pending)
+- â³ Bug fixes (pending)
+- â³ Performance testing (pending)
 
 ---
 

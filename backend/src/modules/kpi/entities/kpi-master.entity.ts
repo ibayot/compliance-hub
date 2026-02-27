@@ -24,6 +24,7 @@ export enum KpiDirection {
 export enum KpiFrequency {
   MONTHLY = 'monthly',
   QUARTERLY = 'quarterly',
+  SEMESTRAL = 'semestral',
   ANNUAL = 'annual',
 }
 

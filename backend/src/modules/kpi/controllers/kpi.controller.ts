@@ -82,8 +82,8 @@ export class KpiController {
   @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'section_head')
   dashboardSummary(
     @Request() req: any,
-    @Query('periodYear') periodYear: number,
-    @Query('periodMonth') periodMonth: number,
+    @Query('periodYear', new ParseIntPipe({ optional: true })) periodYear?: number,
+    @Query('periodMonth', new ParseIntPipe({ optional: true })) periodMonth?: number,
   ) {
     return this.kpiService.dashboardSummary(req.user, periodYear, periodMonth);
   }
@@ -93,8 +93,8 @@ export class KpiController {
   dashboardUnit(
     @Request() req: any,
     @Param('unitId', ParseIntPipe) unitId: number,
-    @Query('periodYear') periodYear: number,
-    @Query('periodMonth') periodMonth: number,
+    @Query('periodYear', new ParseIntPipe({ optional: true })) periodYear?: number,
+    @Query('periodMonth', new ParseIntPipe({ optional: true })) periodMonth?: number,
   ) {
     return this.kpiService.dashboardUnit(req.user, unitId, periodYear, periodMonth);
   }
