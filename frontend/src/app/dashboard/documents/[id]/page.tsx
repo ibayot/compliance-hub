@@ -13,7 +13,6 @@ import {
   Divider,
   IconButton,
   Tooltip,
-  Alert,
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
@@ -225,7 +224,7 @@ export default function DocumentDetailsPage() {
     return (
       <Container>
         <Box sx={{ py: 4 }}>
-          <Alert severity="error">Document not found</Alert>
+          <Typography color="error">Document not found</Typography>
         </Box>
       </Container>
     );
@@ -327,14 +326,14 @@ export default function DocumentDetailsPage() {
                 Document Viewer
               </Typography>
               {document.status === 'processing' && (
-                <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography color="info.main" sx={{ mb: 2 }}>
                   Document is being processed. Preview will be available soon.
-                </Alert>
+                </Typography>
               )}
               {document.status === 'failed' && (
-                <Alert severity="error" sx={{ mb: 2 }}>
+                <Typography color="error.main" sx={{ mb: 2 }}>
                   Document processing failed. Please try uploading again.
-                </Alert>
+                </Typography>
               )}
               {previewBlobUrl && (document.status === 'ready' || document.status === 'pending') ? (
                 <DocumentViewer pdfUrl={previewBlobUrl} mimeType={previewMimeType} />

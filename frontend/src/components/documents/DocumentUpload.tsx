@@ -12,7 +12,6 @@ import {
   Select,
   TextField,
   Typography,
-  Alert,
 } from '@mui/material';
 import { CloudUpload as UploadIcon } from '@mui/icons-material';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -35,7 +34,6 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
   const [unitId, setUnitId] = useState('');
   const [reportorialDocTypeId, setReportorialDocTypeId] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   // Load units (admin can pick any)
   const { data: unitsResponse } = useQuery({
@@ -79,13 +77,12 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
       setTitle('');
       setReportorialDocTypeId('');
       setFile(null);
-      setError(null);
       if (!isFocal) setUnitId('');
       enqueueSnackbar('Document uploaded successfully!', { variant: 'success' });
       onSuccess?.();
     },
     onError: (err: any) => {
-      setError(err.response?.data?.message || 'Failed to upload document');
+      enqueueSnackbar(err.response?.data?.message || 'Failed to upload document', { variant: 'error' });
     },
   });
 
@@ -101,12 +98,12 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
       selectedFile.type === 'application/pdf';
 
     if (!isDocx && !isPdf) {
-      setError('Only DOCX and PDF files are allowed');
+      enqueueSnackbar('Only DOCX and PDF files are allowed', { variant: 'error' });
       return;
     }
 
     if (selectedFile.size > 50 * 1024 * 1024) {
-      setError('File size must be less than 50 MB');
+      enqueueSnackbar('File size must be less than 50 MB', { variant: 'error' });
       return;
     }
 
@@ -114,15 +111,15 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
     if (expectedFilename) {
       const fileBaseName = selectedFile.name.replace(/\.(docx|pdf)$/i, '');
       if (fileBaseName !== expectedFilename) {
-        setError(
+        enqueueSnackbar(
           `Filename does not match expected pattern.\nExpected: "${expectedFilename}.docx" (or .pdf)\nGot: "${selectedFile.name}"`,
+          { variant: 'error' },
         );
         return;
       }
     }
 
     setFile(selectedFile);
-    setError(null);
 
     if (!title) {
       const titleFromFile = selectedFile.name
@@ -134,9 +131,9 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) { setError('Please select a file'); return; }
-    if (!unitId) { setError('Please select a unit'); return; }
-    if (!reportorialDocTypeId) { setError('Please select a document type'); return; }
+    if (!file) { enqueueSnackbar('Please select a file', { variant: 'error' }); return; }
+    if (!unitId) { enqueueSnackbar('Please select a unit', { variant: 'error' }); return; }
+    if (!reportorialDocTypeId) { enqueueSnackbar('Please select a document type', { variant: 'error' }); return; }
 
     uploadMutation.mutate({
       title,
@@ -244,15 +241,9 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
           </FormControl>
 
           {expectedFilename && (
-            <Alert severity="info">
+            <Typography variant="body2" color="text.secondary">
               Expected filename: <strong>{expectedFilename}.docx</strong> (or .pdf)
-            </Alert>
-          )}
-
-          {error && (
-            <Alert severity="error" onClose={() => setError(null)} sx={{ whiteSpace: 'pre-line' }}>
-              {error}
-            </Alert>
+            </Typography>
           )}
 
           <Button

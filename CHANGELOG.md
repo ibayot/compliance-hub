@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0.1] - 2026-02-27 — KPI Access Hotfix, Graph Dashboard Upgrade, Toast Notification Standardization
+
+### Fixed
+- **KPI focal access denied issue**: Hardened KPI unit-scope resolution to support token unit formats and fallback to DB unit mapping when token units are missing/empty.
+- **KPI super admin internal server error**: Guarded KPI unit-detail score computation from orphan monitoring rows with missing KPI master relation.
+- **KPI navigation routing bug**: Sidebar navigation now uses React Router navigation hooks consistently with app routing, resolving KPI button misroute to dashboard.
+- **KPI route registration gap**: Added `/dashboard/kpi` route wiring in app router to ensure direct KPI page rendering.
+
+### Changed
+- **KPI dashboard UX**: Upgraded KPI page dashboard section to graph-first layout (unit score bar chart, band distribution donut, KPI normalized bars) while preserving KPI master and monitoring workflows.
+- **Dashboard home KPI overview**: Added KPI overview cards/list in main dashboard for all roles; super admin/reviewer see consolidated scope, unit roles see unit-scoped KPI output.
+- **Notification standardization**: Migrated remaining inline frontend alerts and browser `alert()` usage to `notistack` toast notifications across login, upload, metrics validation, reviews, settings dialog errors, and module status feedback.
+
+### Verified (Smoke)
+- Frontend build: `npm run build` ✅
+- Backend build: `npm run build` ✅
+- KPI smoke (super admin): summary endpoint ✅
+- KPI smoke (focal): summary + unit detail endpoints ✅
+- Core API smoke: auth login, roles, documents, units ✅
+
+### Documentation Updated
+- `CAPABILITIES.md`
+- `CHANGELOG.md`
+- `README.md`
+- `INSTALLATION.md`
+- `WALKTHROUGH.md`
+
+---
+
 ## [1.2.0.4] - 2026-02-26 — KPI Monitoring Module, KPI Dashboard, User/Role Management Enhancements
 
 ### Added

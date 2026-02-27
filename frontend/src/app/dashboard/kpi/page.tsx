@@ -28,6 +28,17 @@ import {
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { useAuth } from '@/contexts/AuthContext';
 import { unitsApi, Unit } from '@/lib/api/units';
 import {
@@ -65,6 +76,13 @@ const typeLabels: Record<KpiType, string> = {
 const directionLabels: Record<KpiDirection, string> = {
   higher_is_better: 'Higher is better',
   lower_is_better: 'Lower is better',
+};
+
+const BAND_COLORS: Record<string, string> = {
+  green: '#2e7d32',
+  amber: '#ed6c02',
+  red: '#d32f2f',
+  unclassified: '#546e7a',
 };
 
 export default function KpiPage() {
@@ -324,6 +342,30 @@ export default function KpiPage() {
     }
   };
 
+  const unitScoreChart = (summary?.units || []).map((unit) => ({
+    name: unit.unitName,
+    score: Number(unit.score || 0),
+    band: String(unit.band || 'unclassified').toLowerCase(),
+  }));
+
+  const bandDistribution = Object.values(
+    unitScoreChart.reduce((acc, row) => {
+      const band = row.band || 'unclassified';
+      if (!acc[band]) {
+        acc[band] = { name: band.toUpperCase(), value: 0 };
+      }
+      acc[band].value += 1;
+      return acc;
+    }, {} as Record<string, { name: string; value: number }>),
+  );
+
+  const selectedKpiDetailChart = (selectedUnitDashboard?.details || []).map((item) => ({
+    name: item.code,
+    normalized: Number(item.normalizedScore || 0),
+    target: Number(item.targetValue || 0),
+    actual: Number(item.actualValue || 0),
+  }));
+
   return (
     <Box>
       <Box mb={3}>
@@ -498,18 +540,24 @@ export default function KpiPage() {
 
           <Grid item xs={12} md={6}>
             <Card>
-              <CardHeader title="Unit KPI Scores" />
+              <CardHeader title="Unit KPI Scores" subheader="Scoreboard view by unit" />
               <CardContent>
+                <Box sx={{ width: '100%', height: 280 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={unitScoreChart}>
+                      <XAxis dataKey="name" hide={unitScoreChart.length > 8} />
+                      <YAxis domain={[0, 100]} />
+                      <Tooltip />
+                      <Bar dataKey="score" radius={[8, 8, 0, 0]}>
+                        {unitScoreChart.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={BAND_COLORS[entry.band] || BAND_COLORS.unclassified} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Box>
+
                 <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Unit</TableCell>
-                      <TableCell>Score</TableCell>
-                      <TableCell>Band</TableCell>
-                      <TableCell>KPIs</TableCell>
-                      <TableCell align="right">Details</TableCell>
-                    </TableRow>
-                  </TableHead>
                   <TableBody>
                     {(summary?.units || []).map((unit) => (
                       <TableRow key={unit.unitId}>
@@ -530,13 +578,23 @@ export default function KpiPage() {
 
           <Grid item xs={12} md={6}>
             <Card>
-              <CardHeader title={selectedUnitDashboard ? `Unit Detail - ${selectedUnitDashboard.unitName}` : 'Unit Detail'} />
+              <CardHeader title={selectedUnitDashboard ? `Unit Detail - ${selectedUnitDashboard.unitName}` : 'Unit Detail'} subheader="KPI normalized metrics" />
               <CardContent>
                 {!selectedUnitDashboard ? (
                   <Typography variant="body2" color="text.secondary">Select a unit to view KPI-level normalized scores.</Typography>
                 ) : (
                   <>
                     <Typography variant="body2" sx={{ mb: 1 }}>Composite Score: <strong>{selectedUnitDashboard.score}</strong> ({selectedUnitDashboard.band})</Typography>
+                    <Box sx={{ width: '100%', height: 220, mb: 2 }}>
+                      <ResponsiveContainer>
+                        <BarChart data={selectedKpiDetailChart}>
+                          <XAxis dataKey="name" hide={selectedKpiDetailChart.length > 6} />
+                          <YAxis domain={[0, 100]} />
+                          <Tooltip />
+                          <Bar dataKey="normalized" fill="#1976d2" radius={[6, 6, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Box>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
@@ -559,6 +617,26 @@ export default function KpiPage() {
                     </Table>
                   </>
                 )}
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardHeader title="Band Distribution" />
+              <CardContent>
+                <Box sx={{ width: '100%', height: 240 }}>
+                  <ResponsiveContainer>
+                    <PieChart>
+                      <Pie data={bandDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                        {bandDistribution.map((entry, index) => (
+                          <Cell key={`pie-${index}`} fill={BAND_COLORS[String(entry.name).toLowerCase()] || BAND_COLORS.unclassified} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Box>
               </CardContent>
             </Card>
           </Grid>

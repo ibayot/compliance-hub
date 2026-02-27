@@ -19,7 +19,7 @@ import { UpsertKpiScoringRuleDto, UpsertKpiThresholdDto } from '../dto/kpi-looku
 interface AuthUser {
   id: number;
   role: string;
-  units?: number[];
+  units?: Array<number | string | { id?: number | string }>;
 }
 
 @Injectable()
@@ -74,9 +74,39 @@ export class KpiService {
     return ['super_admin', 'reviewer', 'section_head'].includes(user.role);
   }
 
-  private getAllowedUnitIds(user: AuthUser): number[] {
-    const units = Array.isArray(user.units) ? user.units.map(Number).filter(Number.isFinite) : [];
-    return Array.from(new Set(units));
+  private normalizeUnitId(value: number | string | { id?: number | string } | undefined): number | null {
+    if (value === undefined || value === null) return null;
+    if (typeof value === 'object') {
+      const nested = Number((value as any).id);
+      return Number.isFinite(nested) ? nested : null;
+    }
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  private async getAllowedUnitIds(user: AuthUser): Promise<number[]> {
+    const fromToken = Array.isArray(user.units)
+      ? user.units
+          .map((unit) => this.normalizeUnitId(unit))
+          .filter((unitId): unitId is number => Number.isFinite(unitId as number))
+      : [];
+
+    if (fromToken.length > 0) {
+      return Array.from(new Set(fromToken));
+    }
+
+    const actor = await this.userRepo.findOne({ where: { id: user.id }, relations: ['units'] });
+    if (!actor?.units?.length) {
+      return [];
+    }
+
+    return Array.from(
+      new Set(
+        actor.units
+          .map((unit) => Number(unit.id))
+          .filter((unitId) => Number.isFinite(unitId)),
+      ),
+    );
   }
 
   private async ensureUnit(unitId: number) {
@@ -99,7 +129,7 @@ export class KpiService {
       return this.kpiMasterRepo.find({ relations: ['unit'], order: { code: 'ASC' } });
     }
 
-    const allowed = this.getAllowedUnitIds(user);
+    const allowed = await this.getAllowedUnitIds(user);
     if (allowed.length === 0) return [];
 
     return this.kpiMasterRepo.find({
@@ -174,7 +204,7 @@ export class KpiService {
     if (this.canViewAll(user)) {
       if (query.unitId !== undefined) where.unitId = query.unitId;
     } else {
-      const allowed = this.getAllowedUnitIds(user);
+      const allowed = await this.getAllowedUnitIds(user);
       if (allowed.length === 0) return [];
       if (query.unitId !== undefined && !allowed.includes(query.unitId)) {
         throw new ForbiddenException('Unit access denied.');
@@ -309,7 +339,7 @@ export class KpiService {
     const where: any = { periodYear, periodMonth };
 
     if (!this.canViewAll(user)) {
-      const allowed = this.getAllowedUnitIds(user);
+      const allowed = await this.getAllowedUnitIds(user);
       if (allowed.length === 0) {
         return { summary: { overallScore: 0, unitCount: 0, rowCount: 0 }, units: [] };
       }
@@ -382,7 +412,7 @@ export class KpiService {
 
   async dashboardUnit(user: AuthUser, unitId: number, periodYear: number, periodMonth: number) {
     if (!this.canViewAll(user)) {
-      const allowed = this.getAllowedUnitIds(user);
+      const allowed = await this.getAllowedUnitIds(user);
       if (!allowed.includes(unitId)) {
         throw new ForbiddenException('Unit access denied.');
       }
@@ -399,8 +429,11 @@ export class KpiService {
 
     const thresholds = await this.kpiThresholdRepo.find({ order: { minScore: 'DESC' } });
 
-    const details = rows.map((row) => {
+    const details = rows
+      .filter((row) => Boolean(row.kpiMaster))
+      .map((row) => {
       const kpi = row.kpiMaster;
+      if (!kpi) return null;
       const raw = this.computeRaw(kpi, Number(row.actualValue), scoringRule);
       const normalized = this.clamp(raw, Number(scoringRule.floorScore), Number(scoringRule.capScore));
 
@@ -419,7 +452,8 @@ export class KpiService {
         band: this.classifyScore(normalized, thresholds),
         remarks: row.remarks,
       };
-    });
+    })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
     const totalWeight = details.reduce((sum, item) => sum + Number(item.weight || 0), 0);
     const weightedSum = details.reduce((sum, item) => sum + Number(item.normalizedScore) * Number(item.weight || 0), 0);

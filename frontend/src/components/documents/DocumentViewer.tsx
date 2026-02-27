@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Box, Button, Typography, CircularProgress, Alert } from '@mui/material';
+import { Box, Button, Typography, CircularProgress } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import {
   ZoomIn as ZoomInIcon,
   ZoomOut as ZoomOutIcon,
@@ -24,6 +25,7 @@ interface DocumentViewerProps {
 
 /** Renders a document inline. Supports PDF (react-pdf) and HTML (styled iframe) previews. */
 export default function DocumentViewer({ pdfUrl, mimeType = 'application/pdf' }: DocumentViewerProps) {
+  const { enqueueSnackbar } = useSnackbar();
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.0);
@@ -40,6 +42,7 @@ export default function DocumentViewer({ pdfUrl, mimeType = 'application/pdf' }:
 
   const onDocumentLoadError = (err: Error) => {
     setError('Failed to load PDF preview. The file may still be processing.');
+    enqueueSnackbar('Failed to load PDF preview. The file may still be processing.', { variant: 'error' });
     setLoading(false);
     console.error('PDF load error:', err);
   };
@@ -171,9 +174,9 @@ export default function DocumentViewer({ pdfUrl, mimeType = 'application/pdf' }:
         )}
 
         {error && (
-          <Alert severity="warning" sx={{ m: 2 }}>
+          <Typography color="warning.main" sx={{ m: 2 }}>
             {error}
-          </Alert>
+          </Typography>
         )}
 
         {!error && (

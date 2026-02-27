@@ -1,5 +1,7 @@
 # RICTMS Compliance Hub - Installation Guide
 
+> **Release `v1.3.0.1` (2026-02-27):** Includes KPI access-control/runtime hotfixes and graph dashboard updates. If upgrading from `v1.2.0.4`, restart backend/frontend services after pulling latest code and ensure users re-login to refresh JWT role/unit claims before KPI smoke testing.
+
 > **Release `v1.2.0.4` (2026-02-26):** KPI tables were added (`kpi_master`, `kpi_monitoring`, `kpi_thresholds`, `kpi_scoring_rules`) together with `role_definitions`. If upgrading an existing DB, re-run `schema.sql`, then `seed.sql` (or `seed-data.sql`) to load KPI baseline records and lookup defaults.
 
 > Update (`v1.1.0-dev`, 2026-02-24): installation flow now includes blob-enabled schema (`file_blob`, `preview_blob`) and conversion smoke-test expectations.

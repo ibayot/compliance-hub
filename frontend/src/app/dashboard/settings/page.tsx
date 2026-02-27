@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Badge,
   Box,
   Button,
@@ -509,9 +508,9 @@ function FocalUserManagementCard() {
           <DialogTitle>Create New User</DialogTitle>
           <DialogContent>
             {createError && (
-              <Alert severity="error" sx={{ mb: 2, mt: 0.5 }} onClose={() => setCreateError(null)}>
+              <Typography color="error" sx={{ mb: 2, mt: 0.5 }}>
                 {createError}
-              </Alert>
+              </Typography>
             )}
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
               <Grid item xs={12} md={4}>
