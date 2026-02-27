@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0.8] - 2026-02-27 — KPI UI Polish, Unit Filter Panel Collapse, Finance Partial-Period Lines Fix & Theme Toggle
+
+### Fixed
+- **Finance Unit lines not drawn in Q3/S2 views**: `loadDashboard` previously fetched timeseries only for units present in `summary.units` (those with data for the exact `effectiveMonth`). Finance has no September data, so it was absent from Q3 summary and its chart line was never drawn. Fixed by fetching timeseries for all `availableUnits` (union of `summaryUnitIds` and `availableUnits.map(u => u.id)`); Finance Q3 now shows Jun/Jul/Aug data with a null gap at September.
+- **Unit filter did not auto-open Unit Detail**: When `filterUnitId` was set, the Unit Detail panel was not auto-populated on dashboard load. Added a new branch in `loadDashboard` to auto-fetch and populate the detail panel whenever a unit filter is active.
+- **DocTypesPanel "None Yet" on accordion expand**: The Reportorial Document Types panel in the Units page showed "None yet" on every initial expansion because `load()` was only called inside `handleSave`/`handleDelete`. Added `useEffect(() => { load(); }, [])` so data loads automatically on accordion expand.
+
+### Changed
+- **Unit KPI Scores hidden when unit filter applied**: When a specific unit is selected in the Unit Filter dropdown, the Unit KPI Scores chart and table are hidden and the Unit Detail card expands to full width (`md={12}`).
+- **KPI Score card progress bar is now band-colored**: The `LinearProgress` bar in the Overall KPI Score card uses `overallBandColor` (green/amber/red) instead of hardcoded blue (`#1976d2`).
+- **Chart legends removed**: Removed `<Legend />` from all three charts (Unit KPI Scores line chart, Unit Detail line chart, Band Distribution pie chart). Color information is already shown in the Color swatch column in each table.
+- **Band Distribution pie hover tooltip removed**: Removed `<Tooltip />` from the `PieChart` — counts are shown as bold white numbers inside each segment.
+- **Theme mode toggle in AppBar user menu**: Dark/Light mode toggle added directly to the user account dropdown menu (upper right) for quick one-click access. Previously only accessible via the Settings page.
+- **`unitColorMap` useMemo**: Stable per-unit color mapping based on `availableUnits` order ensures consistent colors between chart lines and table Color swatches across all re-renders.
+
+### Verified (Smoke)
+- 0 TS errors; `get_errors` on all 3 changed files → No errors
+- Frontend `npm run build` ✅ (Vite — 13 118 modules, 0 errors)
+- Backend running on port 4000, no DB errors
+- Finance Q3 timeseries: 4 points, `hasData=3` (Jun/Jul/Aug) ✅
+- DocTypes: IT=3, Finance=2 ✅; KPI Monitoring Aug 2025 = 10 rows ✅
+
+---
+
 ## [1.3.0.7] - 2026-02-27 — Backend DB Fix, Always-Draw Chart Lines & Seed Cleanup
 
 ### Fixed

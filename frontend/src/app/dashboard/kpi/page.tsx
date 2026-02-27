@@ -33,7 +33,6 @@ import { useSnackbar } from 'notistack';
 import {
   CartesianGrid,
   Cell,
-  Legend,
   Line,
   LineChart,
   Pie,
@@ -298,12 +297,15 @@ export default function KpiPage() {
         viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester,
       );
       // Fetch timeseries for all visible units simultaneously (multi-line chart).
-      const unitIds = (data.units || []).map((u) => u.unitId);
+      // Fetch timeseries for ALL user-visible units (not just those with data in this period)
+      // so that units with partial coverage (e.g. Finance in Q3) still render lines.
+      const summaryUnitIds = (data.units || []).map((u) => u.unitId);
+      const allVisibleIds = [...new Set([...summaryUnitIds, ...availableUnits.map((u) => u.id)])];
       const tseriesArray = await Promise.all(
-        unitIds.map((id) => kpiApi.dashboardUnitTimeseries(id, fromYear, fromMonth, toYear, toMonth)),
+        allVisibleIds.map((id) => kpiApi.dashboardUnitTimeseries(id, fromYear, fromMonth, toYear, toMonth)),
       );
       const tseriesMap: Record<number, UnitTimeseriesPoint[]> = {};
-      unitIds.forEach((id, idx) => { tseriesMap[id] = tseriesArray[idx]; });
+      allVisibleIds.forEach((id, idx) => { tseriesMap[id] = tseriesArray[idx]; });
       setAllUnitsTimeseries(tseriesMap);
       if (!canManage) {
         const ownUnit = availableUnits[0];
@@ -313,6 +315,13 @@ export default function KpiPage() {
           setUnitTimeseries(tseriesMap[ownUnit.id] || []);
           selectedUnitIdRef.current = ownUnit.id;
         }
+      } else if (filterUnitId !== '' && Number.isFinite(Number(filterUnitId))) {
+        // When a specific unit filter is active, auto-open that unit's detail panel.
+        const fid = Number(filterUnitId);
+        selectedUnitIdRef.current = fid;
+        const detail = await kpiApi.dashboardUnit(fid, periodYear, effectiveMonth);
+        setSelectedUnitDashboard(detail);
+        setUnitTimeseries(tseriesMap[fid] || []);
       } else if (selectedUnitIdRef.current) {
         // Auto-refresh the unit detail pane when the period/filter changes.
         const uid = selectedUnitIdRef.current;
@@ -323,7 +332,7 @@ export default function KpiPage() {
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI dashboard.', { variant: 'error' });
     }
-  }, [enqueueSnackbar, effectiveMonth, periodYear, canManage, availableUnits, viewFrequency, periodQuarter, periodSemester]);
+  }, [enqueueSnackbar, effectiveMonth, periodYear, canManage, availableUnits, viewFrequency, periodQuarter, periodSemester, filterUnitId]);
 
   useEffect(() => {
     loadInitial();
@@ -504,25 +513,36 @@ export default function KpiPage() {
     band: String(unit.band || 'unclassified').toLowerCase(),
   }));
 
-  // Multi-line chart data for Unit KPI Scores: { label, u<unitId>: score|null } per period.
+  // Stable per-unit color map based on availableUnits order — consistent between chart lines and table swatches.
+  const unitColorMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    availableUnits.forEach((u, idx) => { map[u.id] = UNIT_COLORS[idx % UNIT_COLORS.length]; });
+    return map;
+  }, [availableUnits]);
+
+  // Multi-line chart data for Unit KPI Scores.
+  // Uses availableUnits (not just summary.units) so units with partial-period data
+  // (e.g. Finance with data only through August in a Q3 or Semester-2 view) are included.
   const allUnitsLineData = useMemo(() => {
-    const unitList = summary?.units || [];
-    if (unitList.length === 0) return [];
-    const firstTs = allUnitsTimeseries[unitList[0].unitId] || [];
-    if (firstTs.length === 0) return [];
+    if (availableUnits.length === 0) return [];
+    // Use the first unit that has any timeseries data as the X-axis anchor.
+    const anchorUnit = availableUnits.find((u) => (allUnitsTimeseries[u.id] || []).length > 0);
+    if (!anchorUnit) return [];
+    const anchorTs = allUnitsTimeseries[anchorUnit.id];
+    if (!anchorTs || anchorTs.length === 0) return [];
     const { fromYear, fromMonth } = getTimeseriesRange(viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester);
-    return firstTs.map((pt) => {
+    return anchorTs.map((pt) => {
       const label = getXAxisLabel(pt, viewFrequency, periodYear, periodQuarter, periodSemester, fromYear, fromMonth);
       const datum: Record<string, any> = { label };
-      unitList.forEach((unit) => {
-        const ts = allUnitsTimeseries[unit.unitId] || [];
+      availableUnits.forEach((unit) => {
+        const ts = allUnitsTimeseries[unit.id] || [];
         const match = ts.find((p) => p.periodYear === pt.periodYear && p.periodMonth === pt.periodMonth);
-        datum[`u${unit.unitId}`] = match?.hasData ? match.score : null;
+        datum[`u${unit.id}`] = match?.hasData ? match.score : null;
       });
       return datum;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allUnitsTimeseries, summary, viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester]);
+  }, [allUnitsTimeseries, availableUnits, viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester]);
 
   // KPI detail multi-line chart: { label, [kpiCode]: score|null } per period.
   const kpiDetailLineData = useMemo(() => {
@@ -738,7 +758,7 @@ export default function KpiPage() {
                   variant="determinate"
                   value={Math.min(Number(summary?.summary.overallScore ?? 0), 100)}
                   sx={{ mt: 1, height: 8, borderRadius: 4, bgcolor: 'grey.200',
-                    '& .MuiLinearProgress-bar': { bgcolor: '#1976d2' } }}
+                    '& .MuiLinearProgress-bar': { bgcolor: overallBandColor } }}
                 />
               </CardContent>
             </Card>
@@ -784,6 +804,7 @@ export default function KpiPage() {
             </Box>
           </Grid>
 
+          {filterUnitId === '' && (
           <Grid item xs={12} md={6}>
             <Card>
               <CardHeader title="Unit KPI Scores" subheader="Scoreboard view by unit — click a unit row to drilling into individual KPIs" />
@@ -800,20 +821,23 @@ export default function KpiPage() {
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
                         <Tooltip formatter={(val: any) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
-                        <Legend />
-                        {(summary?.units || []).map((unit, idx) => (
+                        {availableUnits.map((unit) => {
+                          const ts = allUnitsTimeseries[unit.id] || [];
+                          if (!ts.some((p) => p.hasData)) return null;
+                          return (
                             <Line
-                              key={unit.unitId}
+                              key={unit.id}
                               type="monotone"
-                              dataKey={`u${unit.unitId}`}
-                              name={unit.unitName}
-                              stroke={UNIT_COLORS[idx % UNIT_COLORS.length]}
+                              dataKey={`u${unit.id}`}
+                              name={unit.name}
+                              stroke={unitColorMap[unit.id]}
                               strokeWidth={2}
                               connectNulls={false}
                               dot={{ r: 4, strokeWidth: 1.5 }}
                               activeDot={{ r: 6 }}
                             />
-                        ))}
+                          );
+                        })}
                       </LineChart>
                     </ResponsiveContainer>
                   </Box>
@@ -838,7 +862,7 @@ export default function KpiPage() {
                       const prevScore = firstHasData ? firstHasData.score : null;
                       const currScore = lastHasData ? lastHasData.score : Number(unit.score || 0);
                       const bandKey = String(unit.band || 'unclassified').toLowerCase();
-                      const unitColor = UNIT_COLORS[idx % UNIT_COLORS.length];
+                      const unitColor = unitColorMap[unit.unitId] ?? UNIT_COLORS[idx % UNIT_COLORS.length];
                       return (
                         <TableRow key={unit.unitId} hover sx={{ cursor: 'pointer' }} onClick={() => openUnitDashboard(unit.unitId)}>
                           <TableCell>{unit.unitName}</TableCell>
@@ -861,8 +885,9 @@ export default function KpiPage() {
               </CardContent>
             </Card>
           </Grid>
+          )}
 
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={filterUnitId !== '' ? 12 : 6}>
             <Card>
               <CardHeader
                 title={selectedUnitDashboard ? `Unit Detail — ${selectedUnitDashboard.unitName}` : 'Unit Detail'}
@@ -887,7 +912,6 @@ export default function KpiPage() {
                             <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                             <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
                             <Tooltip formatter={(val: any) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
-                            <Legend />
                             {kpiDetailLineData.codes.map((code, idx) => (
                               <Line
                                 key={code}
@@ -983,8 +1007,6 @@ export default function KpiPage() {
                             <Cell key={`pie-${index}`} fill={BAND_COLORS[String(entry.name).toLowerCase()] || BAND_COLORS.unclassified} />
                           ))}
                         </Pie>
-                        <Tooltip />
-                        <Legend />
                       </PieChart>
                     </ResponsiveContainer>
                   </Box>

@@ -1,5 +1,6 @@
 ﻿# RICTMS Compliance Hub - Installation Guide
 
+> **Release `v1.3.0.8` (2026-02-27):** Frontend-only changes (no schema changes, no re-seed required). Pull latest code and rebuild frontend (`npm run build` in `frontend/`). Backend rebuild is optional — no backend files were changed.
 > **Release `v1.3.0.7` (2026-02-27):** Hotfix — no schema changes, no re-seed required. Pull latest, run `npm run build` in `backend/` (or restart with `dist/main.js`). If you previously manually set `DB_SYNCHRONIZE=true` in your `.env`, set it to `false` to prevent the startup `Cannot drop index` FK constraint error. Frontend changes only require a rebuild (`npm run build` in `frontend/`).
 > **Release `v1.3.0.6` (2026-02-28):** Frontend-only changes (no schema changes). Pull latest code, run the seed SQL (`backend/src/database/seed-data.sql`) to load IT Unit Jan–Dec 2025 and Finance Unit Feb–Aug 2025 monitoring data, then restart frontend. Seed is a complete re-seed (TRUNCATE + INSERT) — existing KPI monitoring data will be replaced.
 > **Release `v1.3.0.5` (2026-02-27):** Bug fix release. No schema changes. Pull latest code and restart frontend only (the fix is in React components).

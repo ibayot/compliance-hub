@@ -20,11 +20,14 @@ import {
   ArrowBack as BackIcon,
   AccountCircle,
   Logout as LogoutIcon,
+  Brightness4 as DarkModeIcon,
+  Brightness7 as LightModeIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { usePageTitle } from '@/contexts/PageTitleContext';
+import { useThemeMode } from '@/contexts/ThemeModeContext';
 import { useState } from 'react';
 
 interface AppBarProps {
@@ -42,6 +45,7 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
   const { user, logout } = useAuth();
   const { isCollapsed, toggleSidebar, drawerWidth } = useSidebar();
   const { pageTitle } = usePageTitle();
+  const { mode, toggleMode } = useThemeMode();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   // Generate breadcrumbs from pathname
@@ -233,6 +237,10 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
               </Typography>
             </Box>
             <Divider />
+            <MenuItem onClick={toggleMode}>
+              {mode === 'dark' ? <LightModeIcon sx={{ mr: 1 }} /> : <DarkModeIcon sx={{ mr: 1 }} />}
+              {mode === 'dark' ? 'Light Mode' : 'Dark Mode'}
+            </MenuItem>
             <MenuItem onClick={handleSettings}>
               <AccountCircle sx={{ mr: 1 }} />
               Settings

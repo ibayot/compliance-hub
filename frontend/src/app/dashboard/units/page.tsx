@@ -77,6 +77,10 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
     }
   };
 
+  // Load document types automatically when the accordion panel mounts (expands).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, []);
+
   const openCreate = () => {
     setEditing(null);
     setForm({ base_name: '', display_name: '', description: '', submission_frequency: 'monthly' });
