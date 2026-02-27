@@ -115,6 +115,9 @@ export default function KpiPage() {
 
   const [periodYear, setPeriodYear] = useState(currentYear);
   const [periodMonth, setPeriodMonth] = useState(currentMonth);
+  const [viewFrequency, setViewFrequency] = useState<'monthly' | 'quarterly' | 'semestral' | 'annual'>('monthly');
+  const [periodQuarter, setPeriodQuarter] = useState<1 | 2 | 3 | 4>(Math.ceil(currentMonth / 3) as 1 | 2 | 3 | 4);
+  const [periodSemester, setPeriodSemester] = useState<1 | 2>(currentMonth <= 6 ? 1 : 2);
   const [filterUnitId, setFilterUnitId] = useState<number | ''>('');
 
   const [masterOpen, setMasterOpen] = useState(false);
@@ -148,6 +151,15 @@ export default function KpiPage() {
   const canManage = ['super_admin', 'reviewer', 'section_head'].includes(String(user?.role));
   const userUnitIds = useMemo(() => ((user?.units || []) as any[]).map((u: any) => Number(u.id)).filter(Number.isFinite), [user?.units]);
 
+  const effectiveMonth = useMemo(() => {
+    switch (viewFrequency) {
+      case 'quarterly': return (periodQuarter as number) * 3;
+      case 'semestral': return (periodSemester as number) * 6;
+      case 'annual': return 12;
+      default: return periodMonth;
+    }
+  }, [viewFrequency, periodMonth, periodQuarter, periodSemester]);
+
   const availableUnits = useMemo(() => {
     if (canManage) return units;
     return units.filter((unit) => userUnitIds.includes(unit.id));
@@ -164,33 +176,35 @@ export default function KpiPage() {
   }, [enqueueSnackbar]);
 
   const loadMonitoring = useCallback(async () => {
+    if (!Number.isFinite(periodYear) || !Number.isFinite(effectiveMonth)) return;
     try {
       const data = await kpiApi.listMonitoring({
         periodYear,
-        periodMonth,
+        periodMonth: effectiveMonth,
         unitId: filterUnitId === '' ? undefined : Number(filterUnitId),
       });
       setMonitoring(data);
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI monitoring data.', { variant: 'error' });
     }
-  }, [enqueueSnackbar, periodMonth, periodYear, filterUnitId]);
+  }, [enqueueSnackbar, effectiveMonth, periodYear, filterUnitId]);
 
   const loadDashboard = useCallback(async () => {
+    if (!Number.isFinite(periodYear) || !Number.isFinite(effectiveMonth)) return;
     try {
-      const data = await kpiApi.dashboardSummary(periodYear, periodMonth);
+      const data = await kpiApi.dashboardSummary(periodYear, effectiveMonth);
       setSummary(data);
       if (!canManage) {
         const ownUnit = availableUnits[0];
-        if (ownUnit) {
-          const detail = await kpiApi.dashboardUnit(ownUnit.id, periodYear, periodMonth);
+        if (ownUnit && Number.isFinite(ownUnit.id)) {
+          const detail = await kpiApi.dashboardUnit(ownUnit.id, periodYear, effectiveMonth);
           setSelectedUnitDashboard(detail);
         }
       }
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI dashboard.', { variant: 'error' });
     }
-  }, [enqueueSnackbar, periodMonth, periodYear, canManage, availableUnits]);
+  }, [enqueueSnackbar, effectiveMonth, periodYear, canManage, availableUnits]);
 
   useEffect(() => {
     loadInitial();
@@ -287,7 +301,7 @@ export default function KpiPage() {
       kpiMasterCode: masters[0]?.code || '',
       unitId: availableUnits[0]?.id || 0,
       periodYear,
-      periodMonth,
+      periodMonth: effectiveMonth,
       actualValue: 0,
       remarks: '',
       status: 'draft',
@@ -347,8 +361,9 @@ export default function KpiPage() {
   };
 
   const openUnitDashboard = async (unitId: number) => {
+    if (!Number.isFinite(unitId) || !Number.isFinite(periodYear) || !Number.isFinite(effectiveMonth)) return;
     try {
-      const detail = await kpiApi.dashboardUnit(unitId, periodYear, periodMonth);
+      const detail = await kpiApi.dashboardUnit(unitId, periodYear, effectiveMonth);
       setSelectedUnitDashboard(detail);
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to load unit KPI dashboard.', { variant: 'error' });
@@ -356,7 +371,8 @@ export default function KpiPage() {
   };
 
   const unitScoreChart = (summary?.units || []).map((unit) => ({
-    name: unit.unitName,
+    name: unit.unitName.length > 16 ? unit.unitName.substring(0, 15) + '\u2026' : unit.unitName,
+    fullName: unit.unitName,
     score: Number(unit.score || 0),
     band: String(unit.band || 'unclassified').toLowerCase(),
   }));
@@ -394,7 +410,7 @@ export default function KpiPage() {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={2}>
               <TextField
                 label="Period Year"
                 type="number"
@@ -403,18 +419,45 @@ export default function KpiPage() {
                 fullWidth
               />
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={2}>
               <TextField
                 select
-                label="Period Month"
-                value={periodMonth}
-                onChange={(e) => setPeriodMonth(Number(e.target.value))}
+                label="Frequency"
+                value={viewFrequency}
+                onChange={(e) => setViewFrequency(e.target.value as 'monthly' | 'quarterly' | 'semestral' | 'annual')}
                 fullWidth
               >
-                {monthOptions.map((m) => <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>)}
+                <MenuItem value="monthly">Monthly</MenuItem>
+                <MenuItem value="quarterly">Quarterly</MenuItem>
+                <MenuItem value="semestral">Semestral</MenuItem>
+                <MenuItem value="annual">Annual</MenuItem>
               </TextField>
             </Grid>
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={3}>
+              {viewFrequency === 'monthly' && (
+                <TextField select label="Period Month" value={periodMonth} onChange={(e) => setPeriodMonth(Number(e.target.value))} fullWidth>
+                  {monthOptions.map((m) => <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>)}
+                </TextField>
+              )}
+              {viewFrequency === 'quarterly' && (
+                <TextField select label="Quarter" value={periodQuarter} onChange={(e) => setPeriodQuarter(Number(e.target.value) as 1 | 2 | 3 | 4)} fullWidth>
+                  <MenuItem value={1}>Q1 (Jan–Mar)</MenuItem>
+                  <MenuItem value={2}>Q2 (Apr–Jun)</MenuItem>
+                  <MenuItem value={3}>Q3 (Jul–Sep)</MenuItem>
+                  <MenuItem value={4}>Q4 (Oct–Dec)</MenuItem>
+                </TextField>
+              )}
+              {viewFrequency === 'semestral' && (
+                <TextField select label="Semester" value={periodSemester} onChange={(e) => setPeriodSemester(Number(e.target.value) as 1 | 2)} fullWidth>
+                  <MenuItem value={1}>H1 (Jan–Jun)</MenuItem>
+                  <MenuItem value={2}>H2 (Jul–Dec)</MenuItem>
+                </TextField>
+              )}
+              {viewFrequency === 'annual' && (
+                <Box sx={{ pt: 2 }}><Typography variant="body2" color="text.secondary">Full year {periodYear} — reporting month: Dec</Typography></Box>
+              )}
+            </Grid>
+            <Grid item xs={12} md={3}>
               <TextField
                 select
                 label="Unit Filter"
@@ -566,6 +609,28 @@ export default function KpiPage() {
             </Card>
           </Grid>
 
+          {/* ── Band Color Legend ── */}
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center', px: 0.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5, fontWeight: 600 }}>KPI Band Scale:</Typography>
+              {(summary?.thresholds?.length
+                ? summary.thresholds
+                : [
+                    { band: 'green', minScore: 90, maxScore: 100 },
+                    { band: 'amber', minScore: 75, maxScore: 89 },
+                    { band: 'red', minScore: 0, maxScore: 74 },
+                  ]
+              ).map((t) => (
+                <Chip
+                  key={t.band}
+                  size="small"
+                  label={`${String(t.band).toUpperCase()} (${t.minScore}–${t.maxScore})`}
+                  sx={{ bgcolor: BAND_COLORS[String(t.band).toLowerCase()] || BAND_COLORS.unclassified, color: '#fff', fontWeight: 600, fontSize: 11 }}
+                />
+              ))}
+            </Box>
+          </Grid>
+
           <Grid item xs={12} md={6}>
             <Card>
               <CardHeader title="Unit KPI Scores" subheader="Scoreboard view by unit — click a unit row to drilling into individual KPIs" />
@@ -577,8 +642,22 @@ export default function KpiPage() {
                 ) : (
                   <Box sx={{ width: '100%', height: 280 }}>
                     <ResponsiveContainer>
-                      <BarChart data={unitScoreChart} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <BarChart data={unitScoreChart} margin={{ top: 8, right: 16, left: 0, bottom: 30 }}>
+                        <XAxis
+                          dataKey="name"
+                          interval={0}
+                          height={60}
+                          tick={(props: any) => {
+                            const { x, y, payload } = props;
+                            return (
+                              <g transform={`translate(${x},${y})`}>
+                                <text x={0} y={0} dy={10} textAnchor="end" fill="#555" fontSize={10} transform="rotate(-25)">
+                                  {payload.value}
+                                </text>
+                              </g>
+                            );
+                          }}
+                        />
                         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
                         <Tooltip formatter={(val: number) => [`${val}`, 'Score']} />
                         <Bar dataKey="score" radius={[8, 8, 0, 0]} label={{ position: 'top', fontSize: 11 }}>
@@ -771,6 +850,7 @@ export default function KpiPage() {
               <TextField select label="Frequency" value={masterForm.frequency} onChange={(e) => setMasterForm((prev) => ({ ...prev, frequency: e.target.value as KpiFrequency }))} fullWidth>
                 <MenuItem value="monthly">Monthly</MenuItem>
                 <MenuItem value="quarterly">Quarterly</MenuItem>
+                <MenuItem value="semestral">Semestral</MenuItem>
                 <MenuItem value="annual">Annual</MenuItem>
               </TextField>
             </Grid>

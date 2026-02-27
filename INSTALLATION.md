@@ -1,5 +1,6 @@
-# RICTMS Compliance Hub - Installation Guide
+﻿# RICTMS Compliance Hub - Installation Guide
 
+> **Release `v1.3.0.3` (2026-02-27):** NaN SQL error fix (no schema change). `ALTER TABLE kpi_master` adds `semestral` to frequency enum. Pull latest, run the ALTER, restart backend/frontend. See CHANGELOG for full detail.
 > **Release `v1.3.0.2` (2026-02-27):** KPI Dashboard tab bug fixed — graphs now display immediately on page load (tab 0 = Dashboard). No schema changes; pull latest code and restart frontend/backend.
 > **Release `v1.3.0.1` (2026-02-27):** Includes KPI access-control/runtime hotfixes and graph dashboard updates. If upgrading from `v1.2.0.4`, restart backend/frontend services after pulling latest code and ensure users re-login to refresh JWT role/unit claims before KPI smoke testing.
 
@@ -9,7 +10,7 @@
 
 > Patch (`v1.1.1-dev`, 2026-02-25): post-install verification now includes settings password change, theme toggle, and super-admin focal-user provisioning checks.
 
-> **Hotfix `v1.1.2.2` (2026-02-25):** if `npm run dev` (frontend) or `npm run start:dev` (backend) exit with code 1 and the error contains `Unexpected token '∩╗┐'`, your `package.json` was saved with a UTF-8 BOM by your editor. Fix: run the following PowerShell in each affected directory:
+> **Hotfix `v1.1.2.2` (2026-02-25):** if `npm run dev` (frontend) or `npm run start:dev` (backend) exit with code 1 and the error contains `Unexpected token 'âˆ©â•—â”'`, your `package.json` was saved with a UTF-8 BOM by your editor. Fix: run the following PowerShell in each affected directory:
 > ```powershell
 > $f = 'package.json'; $b = [IO.File]::ReadAllBytes($f); if ($b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) { [IO.File]::WriteAllBytes($f, $b[3..($b.Length-1)]); Write-Host 'BOM removed' }
 > ```
@@ -26,7 +27,7 @@
 > npm run start:dev
 > ```
 
-> **Release `v1.1.2` (2026-02-25):** seed data updated — run `seed.sql` to load all 4 metric template types, HTML preview blobs, and correct column schema. A `preview_mime_type VARCHAR(50)` column is required on `document_versions` (auto-added by `ALTER TABLE` or TypeORM synchronize). No LibreOffice required — mammoth provides DOCX→HTML preview fallback on Windows.
+> **Release `v1.1.2` (2026-02-25):** seed data updated â€” run `seed.sql` to load all 4 metric template types, HTML preview blobs, and correct column schema. A `preview_mime_type VARCHAR(50)` column is required on `document_versions` (auto-added by `ALTER TABLE` or TypeORM synchronize). No LibreOffice required â€” mammoth provides DOCXâ†’HTML preview fallback on Windows.
 
 ## Table of Contents
 1. [Prerequisites](#prerequisites)
@@ -75,12 +76,12 @@
 Choose one of the following installation methods based on your environment:
 
 ### Option 1: Docker Installation (Recommended)
-✅ **Pros**: Quick setup, isolated environment, includes all dependencies  
-❌ **Cons**: Requires Docker installed
+âœ… **Pros**: Quick setup, isolated environment, includes all dependencies  
+âŒ **Cons**: Requires Docker installed
 
 ### Option 2: Manual Installation
-✅ **Pros**: Direct control, easier debugging, native performance  
-❌ **Cons**: More setup steps, manual dependency management
+âœ… **Pros**: Direct control, easier debugging, native performance  
+âŒ **Cons**: More setup steps, manual dependency management
 
 ---
 
@@ -440,10 +441,10 @@ Or let the application create them automatically on first upload.
 
 ### 4. Verify Services
 
-- ✅ Check if backend responds: `curl http://localhost:4000/api/health`
-- ✅ Check if frontend loads: Visit `http://localhost:3000`
-- ✅ Check if Redis is accessible: `redis-cli ping` (should return "PONG")
-- ✅ Check if database is accessible: `mysql -u root -p rictms_compliance -e "SHOW TABLES;"`
+- âœ… Check if backend responds: `curl http://localhost:4000/api/health`
+- âœ… Check if frontend loads: Visit `http://localhost:3000`
+- âœ… Check if Redis is accessible: `redis-cli ping` (should return "PONG")
+- âœ… Check if database is accessible: `mysql -u root -p rictms_compliance -e "SHOW TABLES;"`
 
 ### 5. Verify Settings + Focal Management
 

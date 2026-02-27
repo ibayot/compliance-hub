@@ -1,5 +1,6 @@
-# RICTMS Compliance Hub - System Capabilities
+﻿# RICTMS Compliance Hub - System Capabilities
 
+> **Release `v1.3.0.3` (2026-02-27):** Fixed NaN SQL errors on KPI load. Added period frequency selector (Monthly/Quarterly/Semestral/Annual), band color legend, XAxis label rotation, semestral enum, 10 KPI masters + 30 monitoring rows seeded, and KPI User Manual (QA-USER-MANUAL.md §I).
 > **Release `v1.3.0.2` (2026-02-27):** KPI Dashboard tab is now tab 0 (default) for all roles; graphs render immediately without manual tab navigation. Empty-state handling for all chart areas. Colored band progress indicator on scorecard. Unit score table and detail panel enhanced with band chip and drill-down.
 > **Release `v1.3.0.1` (2026-02-27):** KPI access control hotfix for focal users (unit resolution fallback) and KPI unit-detail stability fix for super-admin dashboards; KPI page updated with graph-based scorecards; dashboard home now includes KPI overview by role scope; remaining inline notification alerts migrated to toast notifications.
 
@@ -11,9 +12,9 @@
 
 > Patch (`v1.1.1-dev`, 2026-02-25): adds authenticated document download flow, category-scoped issue types, settings password/theme controls, and super-admin focal account management.
 
-> **Hotfix `v1.1.2.3` (2026-02-25):** on-demand DOCX preview fallback — uploaded DOCX files with no cached `preview_blob` (e.g., when queue job failed silently) now generate styled HTML via mammoth on first preview request and cache the result. `passwordHash` security leak patched: `ClassSerializerInterceptor` registered globally so `@Exclude()` on User entity is enforced across all endpoints. EADDRINUSE troubleshooting note added to INSTALLATION.
+> **Hotfix `v1.1.2.3` (2026-02-25):** on-demand DOCX preview fallback â€” uploaded DOCX files with no cached `preview_blob` (e.g., when queue job failed silently) now generate styled HTML via mammoth on first preview request and cache the result. `passwordHash` security leak patched: `ClassSerializerInterceptor` registered globally so `@Exclude()` on User entity is enforced across all endpoints. EADDRINUSE troubleshooting note added to INSTALLATION.
 
-> **Hotfix `v1.1.2.2` (2026-02-25):** resolved frontend dev server startup failure (`npm run dev` exits 1) caused by a UTF-8 BOM in `frontend/package.json`. Vite's internal PostCSS config loader threw `SyntaxError: Unexpected token '∩╗┐'` on BOM-prefixed JSON. BOM also removed from `backend/package.json`. All capabilities smoke-tested and confirmed operational.
+> **Hotfix `v1.1.2.2` (2026-02-25):** resolved frontend dev server startup failure (`npm run dev` exits 1) caused by a UTF-8 BOM in `frontend/package.json`. Vite's internal PostCSS config loader threw `SyntaxError: Unexpected token 'âˆ©â•—â”'` on BOM-prefixed JSON. BOM also removed from `backend/package.json`. All capabilities smoke-tested and confirmed operational.
 
 > **Release `v1.1.2` (2026-02-25):** document download now returns proper filename via `Content-Disposition` (CORS fix); DOCX preview generates styled HTML via mammoth fallback when LibreOffice is unavailable; Document Viewer supports both HTML (iframe) and PDF (react-pdf); Reviews digital preview propagates MIME type correctly; Administration Metrics seeded with all 4 template types (section_check, keyword_check, property_check, date_check); Settings refactored to card layout with dynamic Role Management; User Manual has comprehensive field-level explanations for all 8 modules.
 
@@ -112,8 +113,8 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 - **Review History**: Complete audit trail of all reviews
 - **Inline Digital Review Viewer**: Reviewers can open document previews in-app and submit decisions without downloading
 - **Decision-driven Status Routing**:
-  - `compliant` → document becomes `ready`
-  - `non_compliant` / `needs_revision` → document returns to `pending` for focal action
+  - `compliant` â†’ document becomes `ready`
+  - `non_compliant` / `needs_revision` â†’ document returns to `pending` for focal action
 - **Return-to-Focal Control**: Super-admin/compliance can return pending documents with mandatory remarks (no hard delete in workflow).
 
 #### Version Comparison
@@ -129,7 +130,7 @@ The Regional ICT Management System (RICTMS) Compliance Hub is a comprehensive do
 - **Dynamic Issue Types/Categories**: Super admins can create, update, activate/deactivate, and soft-delete issue metadata.
 - **Category-Scoped Issue Types**: Ticket create/detail forms constrain issue type options by selected category
 - **Priority Management**: Low, medium, high, and urgent priority levels
-- **Status Workflow**: Open → In Progress → Resolved → Closed
+- **Status Workflow**: Open â†’ In Progress â†’ Resolved â†’ Closed
 - **Document Linking**: Link tickets to specific documents
 - **Unit Assignment**: Assign tickets to organizational units
 

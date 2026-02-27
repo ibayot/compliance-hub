@@ -239,3 +239,153 @@ Expected:
 - Backend metric-engine tests pass.
 - API smoke checks pass for login, metric template create/update, ticket create/update, and review submit.
 - No blocking runtime 500 errors in tickets/reviews/metrics core paths.
+
+---
+
+## I. KPI Module  User Manual & QA Guide (v1.3.0.3)
+
+### I.1 What Is a KPI Band?
+
+A **KPI Band** is a color-coded performance classification applied to a unit or an individual KPI based on its **Normalized Score** (0100 scale).
+
+| Band  | Color  | Default Score Range | Meaning                              |
+|-------|--------|---------------------|--------------------------------------|
+| Green |  Green | 90  100          | Target met or exceeded  Performing  |
+| Amber |  Amber | 75  89.99        | Near target  Needs attention        |
+| Red   |  Red  | 0  74.99         | Below threshold  Immediate action   |
+
+**How normalized score is calculated:**
+- For *higher-is-better* KPIs: `(Actual  Target)  100`, capped at 100.
+- For *lower-is-better* KPIs: `(Target  Actual)  100`, capped at 100.
+- For *Yes/No* KPIs: `100` if actual = 1 (Yes), `0` if actual = 0 (No).
+
+**Composite Unit Score** = Weighted average of all KPI normalized scores for a unit in a period.  
+Where multiple KPIs have different weights, higher-weight KPIs influence the unit score more.
+
+---
+
+### I.2 KPI Master  CRUD Steps
+
+> Role required: `super_admin`, `reviewer`, or `section_head`
+
+#### Create a KPI Master
+1. Navigate to **KPI Monitoring & Dashboard** page.
+2. Click the **KPI Master** tab (visible only to `super_admin`, `reviewer`, `section_head`).
+3. Click **Add KPI**.
+4. Fill the form:
+   - **Code**: Unique identifier (e.g., `KPI-IT-001`). Cannot be changed after creation.
+   - **KPI Name**: Descriptive name.
+   - **Description**: Optional but recommended.
+   - **Unit**: Select the organizational unit this KPI belongs to.
+   - **Type**: `Measurement` (numeric) or `Yes/No` (binary).
+   - **Unit of Measure**: e.g., `percent`, `hours`, `yes/no`.
+   - **Direction**: `Higher is better` or `Lower is better`.
+   - **Target Value**: Numeric goal (e.g., `99.9` for 99.9% uptime).
+   - **Weight**: Relative importance within the unit's composite score (default: `1`).
+   - **Frequency**: `Monthly`, `Quarterly`, `Semestral`, or `Annual`.
+5. Click **Save**.
+
+#### Edit a KPI Master
+- Click **Edit** on any KPI row.
+- Modify allowed fields (Code is locked).
+- Click **Save**.
+
+#### Delete a KPI Master
+- Click **Delete** (restricted to `super_admin`).
+- Also deletes associated monitoring records.
+
+---
+
+### I.3 KPI Monitoring  Encoding Periodic Values
+
+> Role required: `super_admin`, `reviewer`, or `section_head`
+
+#### Encode a KPI Monitoring Value
+1. Navigate to **KPI Monitoring & Dashboard**  **KPI Monitoring** tab.
+2. Click **Encode KPI**.
+3. Select the **KPI** from the dropdown.
+4. Select the **Unit**.
+5. Set **Period Year** and **Period Month**.
+6. Enter the **Actual Value**:
+   - For `Measurement` type: enter the numeric result (e.g., `98.7`).
+   - For `Yes/No` type: enter `1` for Yes, `0` for No.
+7. Add optional **Remarks**.
+8. Leave **Status** as `Draft` unless ready to finalize.
+9. Click **Save**.
+
+#### Lock a Monitoring Row
+- Click **Lock** button on any `Draft` row to prevent further edits.
+- Locked rows show a green `LOCKED` badge.
+- Only `super_admin`, `reviewer`, `section_head` can lock.
+
+---
+
+### I.4 KPI Dashboard  Reading the Dashboard
+
+The **KPI Dashboard** tab is visible to all roles.
+
+#### Period Filter Controls
+- **Period Year**: Select the reporting year.
+- **Frequency**: Choose `Monthly`, `Quarterly`, `Semestral`, or `Annual`.
+  - Monthly: select a specific month.
+  - Quarterly: select Q1 (JanMar), Q2 (AprJun), Q3 (JulSep), Q4 (OctDec).
+  - Semestral: select H1 (JanJun) or H2 (JulDec).
+  - Annual: shows full-year data (Dec as the end month).
+- Click **Refresh** to reload data after changing filters.
+
+#### Scorecard Row (Top)
+| Scorecard           | Shows                                           |
+|---------------------|-------------------------------------------------|
+| Overall KPI Score   | Weighted average across all reporting units     |
+| Units in Dashboard  | Count of units with at least one KPI entry      |
+| Monitoring Rows     | Total KPI entries for the selected period       |
+
+The **KPI Band Scale** legend below the scorecards shows current threshold ranges with color-coded chips.
+
+#### Unit KPI Scores (Bar Chart)
+- Each bar represents a unit's composite KPI score for the period.
+- Bar color indicates the performance band (green/amber/red).
+- Long unit names are truncated with `` and shown at an angle for readability.
+- Click a unit row in the table below the chart to drill into KPI details.
+
+#### Unit Detail Panel
+- Shows the selected unit's composite score and band.
+- Bar chart displays each KPI's normalized score.
+- Table lists KPI code, target value, actual value, normalized score, and band.
+
+#### Band Distribution (Pie Chart)
+- Shows the proportion of units in each performance band.
+- Color legend is auto-rendered using band colors.
+
+---
+
+### I.5 Role-Scoped Visibility Rules
+
+| Role               | Can View Dashboard | Can Drill Unit Detail | Can Manage KPI Master | Can Encode Monitoring |
+|--------------------|-------------------|----------------------|-----------------------|-----------------------|
+| `super_admin`      | All units          | All units            |  Yes               |  Yes                |
+| `reviewer`         | All units          | All units            |  Yes               |  Yes                |
+| `section_head`     | Own unit only      | Own unit only        |  Yes               |  Yes                |
+| `focal`            | Own unit only      | Own unit only        |  No                |  No                 |
+| `auditor`          | Own unit only      | Own unit only        |  No                |  No                 |
+| `technician`       | Own unit only      | Own unit only        |  No                |  No                 |
+
+---
+
+### I.6 KPI Module Smoke Checks (v1.3.0.3)
+
+| # | Test Step                                                                        | Expected Result                               |
+|---|----------------------------------------------------------------------------------|-----------------------------------------------|
+| 1 | Load KPI page as `admin@rictms.gov.ph`                                          | No NaN SQL errors in backend; dashboard loads |
+| 2 | Default period shows May 2025 with 10 monitoring rows                            | Scorecards show data; charts render           |
+| 3 | Switch frequency to **Quarterly (Q2)**  click Refresh                           | Dashboard recalculates for AprilJune data    |
+| 4 | Switch frequency to **Annual**, click Refresh                                    | Full-year December data shown                 |
+| 5 | Click a unit row  Unit Detail panel                                             | Unit's KPI breakdown visible, band chips show |
+| 6 | KPI Master tab: Create new KPI for any unit                                      | Saved successfully, appears in table          |
+| 7 | KPI Monitoring tab: Encode actual value for new KPI                              | Saved as Draft                                |
+| 8 | Lock the encoded row                                                              | Status shows LOCKED, Edit/Lock buttons hide   |
+| 9 | Login as `focal@rictms.gov.ph`, open KPI Dashboard                               | Can view own unit only; no Master/Monitoring tabs |
+| 10| Try calling `GET /api/kpi/dashboard/unit/NaN?periodYear=NaN` directly           | Returns 400 Bad Request, not 500 NaN SQL error |
+| 11| Check Unit KPI Scores bar chart with 7+ units (add more units if needed)         | Bars have angled labels, no overflow          |
+| 12| Band Scale legend row shows Green/Amber/Red chips below scorecards               | Color chips visible with threshold ranges     |
+

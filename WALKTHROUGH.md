@@ -1,17 +1,18 @@
-# RICTMS Compliance Hub - User Walkthrough Guide
+﻿# RICTMS Compliance Hub - User Walkthrough Guide
 
+> **Release `v1.3.0.3` (2026-02-27):** KPI dashboard no longer throws NaN SQL errors on load. New frequency picker (Monthly/Quarterly/Semestral/Annual) lets you drill into any period. Band color legend appears below scorecards. Bar chart handles 7+ unit names with angled labels. 10 sample KPIs + 30 monitoring rows pre-loaded.
 > **Release `v1.3.0.2` (2026-02-27):** KPI Dashboard is now immediately visible when opening `Dashboard → KPI` — no tab switching required. Graphs (unit score bars, KPI detail bars, band distribution pie) are the first thing you see. Click any unit row to drill into its KPI breakdown. The scorecard shows a color-coded progress bar representing the overall band.
 > **Release `v1.3.0.1` (2026-02-27):** KPI button routing now navigates correctly to `/dashboard/kpi`. KPI dashboard now uses graph-based scorecards and unit performance visuals. Focal users can open KPI dashboards with unit-scoped visibility, while super-admin/reviewer users can view consolidated KPI data across units.
 
-> **Release `v1.2.0.4` (2026-02-26):** New `Dashboard → KPI` page introduces KPI Master (admin/compliance), KPI Monitoring input (admin/compliance), and KPI Dashboard (role-scoped by unit). Settings now supports editing existing users (name/unit/role/position/designation) while `staff_id` remains immutable. System Role Definitions now support add/edit metadata from Settings.
+> **Release `v1.2.0.4` (2026-02-26):** New `Dashboard â†’ KPI` page introduces KPI Master (admin/compliance), KPI Monitoring input (admin/compliance), and KPI Dashboard (role-scoped by unit). Settings now supports editing existing users (name/unit/role/position/designation) while `staff_id` remains immutable. System Role Definitions now support add/edit metadata from Settings.
 
 > Update (`v1.1.0-dev`, 2026-02-24): walkthrough now reflects blob-first upload and preview behavior for document versions.
 
 > Patch (`v1.1.1-dev`, 2026-02-25): includes settings password/theme workflow, super-admin focal provisioning, and category-scoped issue-type behavior.
 
-> **Release `v1.2.0.1` (2026-02-26):** Reportorial Document Types — go to Units, expand a unit accordion, use "Add" button to create document types with base name + frequency. On the Upload Document page, the unit is auto-filled (for focal users), and you select a document type from the per-unit list; the expected filename is shown before you pick a file. Metrics now use a "Reportorial Document Type" dropdown (instead of Unit+DocType free text). Settings → User Management → "Create New User" opens a dialog with a unit multi-select. Dashboard nav exact-match fix: navigating to Documents no longer highlights Dashboard. Breadcrumbs on Document Detail show the document title.
+> **Release `v1.2.0.1` (2026-02-26):** Reportorial Document Types â€” go to Units, expand a unit accordion, use "Add" button to create document types with base name + frequency. On the Upload Document page, the unit is auto-filled (for focal users), and you select a document type from the per-unit list; the expected filename is shown before you pick a file. Metrics now use a "Reportorial Document Type" dropdown (instead of Unit+DocType free text). Settings â†’ User Management â†’ "Create New User" opens a dialog with a unit multi-select. Dashboard nav exact-match fix: navigating to Documents no longer highlights Dashboard. Breadcrumbs on Document Detail show the document title.
 
-> **Hotfix `v1.1.2.3` (2026-02-25):** DOCX Document Viewer now works for newly uploaded DOCX files — on-demand HTML generation via mammoth ensures instant preview even when the background queue job hasn't run yet. Security: `passwordHash` is no longer exposed in API responses.
+> **Hotfix `v1.1.2.3` (2026-02-25):** DOCX Document Viewer now works for newly uploaded DOCX files â€” on-demand HTML generation via mammoth ensures instant preview even when the background queue job hasn't run yet. Security: `passwordHash` is no longer exposed in API responses.
 
 > **Hotfix `v1.1.2.2` (2026-02-25):** frontend dev server (`npm run dev`) now starts successfully. Root cause was a UTF-8 BOM added to `package.json` by an editor, causing Vite to crash with a JSON parse error. Fix applied; all walkthrough steps verified against running servers.
 
@@ -52,7 +53,7 @@ If you ran the seed script during installation:
 - **Username**: `admin`
 - **Password**: `Admin123!`
 
-> ⚠️ **Important**: Change the default password immediately after first login in production environments!
+> âš ï¸ **Important**: Change the default password immediately after first login in production environments!
 
 ---
 
@@ -100,7 +101,7 @@ After logging in, you'll see the main dashboard with key information:
 #### 2. Compliance Rate
 
 - Displayed as a percentage
-- Formula: (Compliant Documents ÷ Total Documents) × 100
+- Formula: (Compliant Documents Ã· Total Documents) Ã— 100
 - Green indicator: Good compliance (>80%)
 - Yellow indicator: Needs improvement (60-80%)
 - Red indicator: Critical (<60%)
@@ -183,7 +184,7 @@ Workflow clarification:
 - `Ready` indicates compliance-approved and linkable documents.
 - `Pending` includes newly extracted documents awaiting manual review and documents returned after non-compliant/needs-revision decisions.
 - Super Admin/Compliance view: `Pending` and `Compliant` (returned items are hidden from their list).
-- Focal view: `Submitted` → `Under Review` → `Returned/Compliant`.
+- Focal view: `Submitted` â†’ `Under Review` â†’ `Returned/Compliant`.
 
 #### Filtering Documents
 
@@ -254,7 +255,7 @@ The Metrics module allows admins/reviewers to define automated compliance checks
 
 ### Create a metrics template
 
-1. Go to **Administration → Metrics**.
+1. Go to **Administration â†’ Metrics**.
 2. Click **Create Template**.
 3. Fill in:
     - Template name
@@ -329,7 +330,7 @@ Use this quick QA run every time there is a metrics/reviews/tickets update.
 
 ### C. Reviews QA
 
-1. Open **Dashboard → Reviews**.
+1. Open **Dashboard â†’ Reviews**.
 2. Click **Review** on a `ready` document.
 3. Verify inline digital viewer loads.
 4. Tag as compliant/non-compliant/needs revision and submit.
@@ -598,7 +599,7 @@ Expected behavior:
 - New account is created and appears in **Existing Focal Accounts**.
 - Role and staff metadata are visible in the account card list.
 
-### Ticket Category → Issue Type Dependency
+### Ticket Category â†’ Issue Type Dependency
 
 In ticket create and ticket detail update workflows:
 
@@ -617,36 +618,36 @@ Expected behavior:
 
 #### Admin
 **Full system access** - Can do everything:
-- ✅ Manage users
-- ✅ Upload documents
-- ✅ Review documents
-- ✅ Manage issuances
-- ✅ Create and resolve tickets
-- ✅ View all analytics
-- ✅ Configure system settings
+- âœ… Manage users
+- âœ… Upload documents
+- âœ… Review documents
+- âœ… Manage issuances
+- âœ… Create and resolve tickets
+- âœ… View all analytics
+- âœ… Configure system settings
 
 #### Reviewer
 **Review and approve documents**:
-- ✅ Upload documents
-- ✅ Review and rate documents
-- ✅ Approve or request changes
-- ✅ Create issuances (limited)
-- ✅ Resolve tickets
-- ✅ View analytics for their unit
-- ❌ Cannot manage users
-- ❌ Cannot access system settings
+- âœ… Upload documents
+- âœ… Review and rate documents
+- âœ… Approve or request changes
+- âœ… Create issuances (limited)
+- âœ… Resolve tickets
+- âœ… View analytics for their unit
+- âŒ Cannot manage users
+- âŒ Cannot access system settings
 
 #### Viewer
 **Read-only access**:
-- ✅ View documents
-- ✅ Download documents
-- ✅ View issuances
-- ✅ View tickets
-- ✅ Create tickets (for issues)
-- ❌ Cannot upload documents
-- ❌ Cannot review or approve
-- ❌ Cannot modify issuances
-- ❌ Cannot resolve tickets
+- âœ… View documents
+- âœ… Download documents
+- âœ… View issuances
+- âœ… View tickets
+- âœ… Create tickets (for issues)
+- âŒ Cannot upload documents
+- âŒ Cannot review or approve
+- âŒ Cannot modify issuances
+- âŒ Cannot resolve tickets
 
 ### Checking Your Role
 
@@ -660,14 +661,14 @@ Expected behavior:
 
 ### Document Management
 
-#### ✅ DO:
+#### âœ… DO:
 - **Use descriptive titles**: "Q1 2024 Financial Audit Report" instead of "Report1"
 - **Select correct document type**: Helps with filtering and compliance rules
 - **Keep files organized**: One document per file, don't bundle multiple documents
 - **Upload promptly**: Upload documents as soon as they're finalized
 - **Add change notes**: When creating new versions, explain what changed
 
-#### ❌ DON'T:
+#### âŒ DON'T:
 - Upload unfinished/draft documents to the main system
 - Use generic filenames like "document.pdf"
 - Upload documents in the wrong unit
@@ -698,8 +699,8 @@ Expected behavior:
 #### Creating Effective Tickets
 
 1. **Good Subject Lines**
-   - ✅ "Missing RA-10173 citation in IT Security Policy"
-   - ❌ "Problem with document"
+   - âœ… "Missing RA-10173 citation in IT Security Policy"
+   - âŒ "Problem with document"
 
 2. **Clear Descriptions**
    ```

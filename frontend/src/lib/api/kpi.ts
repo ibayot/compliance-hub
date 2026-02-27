@@ -2,7 +2,7 @@ import { apiClient } from './client';
 
 export type KpiType = 'measurement' | 'yes_no';
 export type KpiDirection = 'higher_is_better' | 'lower_is_better';
-export type KpiFrequency = 'monthly' | 'quarterly' | 'annual';
+export type KpiFrequency = 'monthly' | 'quarterly' | 'semestral' | 'annual';
 export type KpiMonitoringStatus = 'draft' | 'locked';
 
 export interface KpiMasterRecord {

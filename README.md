@@ -1,7 +1,8 @@
-# RICTMS Compliance Hub
+﻿# RICTMS Compliance Hub
+> **Release `v1.3.0.3` (2026-02-27):** Fixed NaN SQL errors on KPI dashboard load (guards in frontend + backend), added period frequency selector (Monthly/Quarterly/Semestral/Annual), band color legend, bar chart tick rotation for long unit names, seeded 10 KPI masters and 30 monitoring rows, and added comprehensive KPI User Manual section (QA-USER-MANUAL.md §I).
 > **Release `v1.3.0.2` (2026-02-27):** KPI Dashboard is now the default landing tab for all roles. Graphs (bar chart, pie chart, scorecard) are now immediately visible without navigating to a hidden tab. Fixed KPI tab ordering bug, empty-state charts, colored band scorecards with progress bars, and corrected KPI type resolution for `overallBand`.
 > **Release `v1.3.0.1` (2026-02-27):** Fixed KPI focal `Unit access denied` and super-admin KPI internal server errors, corrected KPI sidebar routing and route registration, upgraded KPI dashboard to graph-based scorecards, added KPI overview cards on the main dashboard by role scope, and standardized remaining inline alerts to toast notifications.
-> **Release `v1.2.0.4` (2026-02-26):** Added KPI Monitoring module (`KPI Master`, `KPI Monitoring`, `KPI Dashboard`, lookup tables and normalized scoring), added `Dashboard → KPI` page, enabled editing existing users (name/unit/role/position/designation) while keeping `staff_id` immutable, and enabled add/edit persisted system role definitions.
+> **Release `v1.2.0.4` (2026-02-26):** Added KPI Monitoring module (`KPI Master`, `KPI Monitoring`, `KPI Dashboard`, lookup tables and normalized scoring), added `Dashboard â†’ KPI` page, enabled editing existing users (name/unit/role/position/designation) while keeping `staff_id` immutable, and enabled add/edit persisted system role definitions.
 > **Release `v1.2.0.1` (2026-02-26):** Reportorial Document Types per unit (base name + period suffix filename validation, monthly/quarterly/annual); metrics now linked to documents via FK (not free-text strings); navigation fixes (Dashboard exact match, Issuances restricted to reviewers); breadcrumbs show document titles; version history layout fixed; deactivate user bug fixed; user creation dialog with unit assignment; 16 metric templates seeded (4 per type); Document upload fully overhauled.
 > Documentation update (`v1.1.0-dev`, 2026-02-24): document versions now support blob-backed source/preview storage with filesystem fallback for legacy rows.
 
@@ -9,7 +10,7 @@
 
 > **Hotfix `v1.1.2.3` (2026-02-25):** fixed DOCX document viewer returning 404 for uploaded DOCX files (on-demand mammoth fallback in `getPreview()`); fixed `passwordHash` being exposed in all API responses (`ClassSerializerInterceptor` now registered globally); documented EADDRINUSE port conflict resolution.
 
-> **Hotfix `v1.1.2.2` (2026-02-25):** fixed frontend dev server crash caused by UTF-8 BOM in `package.json` files. Vite's PostCSS loader threw `SyntaxError: Unexpected token '∩╗┐'` on BOM-prefixed JSON. All smoke tests pass: login, 5 roles, document preview (`text/html`), document download (`Content-Disposition: attachment`), units, metrics.
+> **Hotfix `v1.1.2.2` (2026-02-25):** fixed frontend dev server crash caused by UTF-8 BOM in `package.json` files. Vite's PostCSS loader threw `SyntaxError: Unexpected token 'âˆ©â•—â”'` on BOM-prefixed JSON. All smoke tests pass: login, 5 roles, document preview (`text/html`), document download (`Content-Disposition: attachment`), units, metrics.
 
 > **Release `v1.1.2` (2026-02-25):** fixed document download filename, DOCX preview via mammoth HTML fallback, seeded 4 metric template types, dynamic Role Management in Settings with card layout, Document Viewer renamed, Reviews preview fix, and expanded User Manual field-level documentation.
 
@@ -32,25 +33,25 @@ The **Regional ICT Management System (RICTMS) Compliance Hub** is an enterprise-
 
 ### Key Features
 
-- 🧭 **Assignment-Governed Focal Uploads**: Super admins assign report types to focal users and enforce one submission per cycle
-- 🏷️ **Filename Policy Enforcement**: Uploads can be validated with assignment prefix + frequency-aware suffix conventions
-- 🔗 **Issuance Mapping Manager**: Super admin and compliance roles can link/unlink documents to issuances
-- 🧾 **Issuance Authority Flexibility**: Authorities are editable values and issuance titles open source URLs in a new tab
-- ↩️ **Return-to-Focal Workflow**: Super admin/compliance can return pending documents with mandatory remarks (non-destructive)
-- 🔁 **Document-to-Document Mapping**: Users can map one document to another (e.g., report ↔ memorandum) using ready/compliant-only linking
-- 🧠 **Category-Scoped Issue Types**: Ticket issue types are constrained by selected category in create/detail forms
-- 👥 **Collaborative Reviews**: Multi-user review and approval workflows
-- 👁️ **Inline Review Viewer**: Digital document viewing inside the review workspace with direct decision tagging
+- ðŸ§­ **Assignment-Governed Focal Uploads**: Super admins assign report types to focal users and enforce one submission per cycle
+- ðŸ·ï¸ **Filename Policy Enforcement**: Uploads can be validated with assignment prefix + frequency-aware suffix conventions
+- ðŸ”— **Issuance Mapping Manager**: Super admin and compliance roles can link/unlink documents to issuances
+- ðŸ§¾ **Issuance Authority Flexibility**: Authorities are editable values and issuance titles open source URLs in a new tab
+- â†©ï¸ **Return-to-Focal Workflow**: Super admin/compliance can return pending documents with mandatory remarks (non-destructive)
+- ðŸ” **Document-to-Document Mapping**: Users can map one document to another (e.g., report â†” memorandum) using ready/compliant-only linking
+- ðŸ§  **Category-Scoped Issue Types**: Ticket issue types are constrained by selected category in create/detail forms
+- ðŸ‘¥ **Collaborative Reviews**: Multi-user review and approval workflows
+- ðŸ‘ï¸ **Inline Review Viewer**: Digital document viewing inside the review workspace with direct decision tagging
 - Automatic `Needs Revision` auto-review tagging when automated checks fail or error
-- 📊 **Dashboard & Reports**: Real-time analytics and compliance reporting
-- 🔐 **Role-based Access**: Secure access control for different user roles
-- Metrics templates are managed from **Administration → Metrics** in the sidebar.
+- ðŸ“Š **Dashboard & Reports**: Real-time analytics and compliance reporting
+- ðŸ” **Role-based Access**: Secure access control for different user roles
+- Metrics templates are managed from **Administration â†’ Metrics** in the sidebar.
 - Number Extraction rules support comma/newline keyword and expected-number lists.
 - Date/Deadline checks support monthly, quarterly, annual, and custom frequencies (with regex/group fallback for custom periods).
-- 🧩 **Admin Operations UI**: Working Units, Metrics Template, and Reviews pages
-- 🛡️ **Security Hardening Baseline**: API rate limiting + config validation + privileged action audit logs
-- ⚙️ **User Settings Enhancements**: In-app password change and persistent light/dark theme toggle
-- 👤 **Focal User Provisioning**: Super admin can create focal/technician users with first/middle/last/suffix, staff ID, role, position, and designation
+- ðŸ§© **Admin Operations UI**: Working Units, Metrics Template, and Reviews pages
+- ðŸ›¡ï¸ **Security Hardening Baseline**: API rate limiting + config validation + privileged action audit logs
+- âš™ï¸ **User Settings Enhancements**: In-app password change and persistent light/dark theme toggle
+- ðŸ‘¤ **Focal User Provisioning**: Super admin can create focal/technician users with first/middle/last/suffix, staff ID, role, position, and designation
 
 ## Quick Start
 - `super_admin` users can create/update/delete focal report assignments.
@@ -145,28 +146,28 @@ docker-compose exec backend npm run migration:run
 
 ### System Architecture
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                  Frontend (Vite + React Router)              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │Dashboard │  │Documents │  │ Reviews  │  │ Tickets  │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ HTTP/REST API
-┌──────────────────────────┴──────────────────────────────────┐
-│                      Backend (NestJS)                        │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐           │
-│  │Auth Module │  │Docs Module │  │Metrics     │           │
-│  └────────────┘  └────────────┘  │Module      │           │
-│  ┌────────────┐  ┌────────────┐  └────────────┘           │
-│  │Reviews     │  │Tickets     │  ┌────────────┐           │
-│  │Module      │  │Module      │  │References  │           │
-│  └────────────┘  └────────────┘  │Module      │           │
-└──────────┬───────────────────────┴────────────┴────────────┘
-           │                        │
-     ┌─────┴──────┐           ┌────┴─────┐
-     │  MariaDB   │           │  Redis   │
-     │  Database  │           │  Queue   │
-     └────────────┘           └──────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                  Frontend (Vite + React Router)              â”‚
+â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚
+â”‚  â”‚Dashboard â”‚  â”‚Documents â”‚  â”‚ Reviews  â”‚  â”‚ Tickets  â”‚   â”‚
+â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                           â”‚ HTTP/REST API
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                      Backend (NestJS)                        â”‚
+â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”           â”‚
+â”‚  â”‚Auth Module â”‚  â”‚Docs Module â”‚  â”‚Metrics     â”‚           â”‚
+â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â”‚Module      â”‚           â”‚
+â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜           â”‚
+â”‚  â”‚Reviews     â”‚  â”‚Tickets     â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”           â”‚
+â”‚  â”‚Module      â”‚  â”‚Module      â”‚  â”‚References  â”‚           â”‚
+â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â”‚Module      â”‚           â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+           â”‚                        â”‚
+     â”Œâ”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”           â”Œâ”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”
+     â”‚  MariaDB   â”‚           â”‚  Redis   â”‚
+     â”‚  Database  â”‚           â”‚  Queue   â”‚
+     â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜           â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ### Module Structure
@@ -205,58 +206,58 @@ The incident response dashboard now supports:
 
 ```
 rictms-compliance-hub/
-├── backend/
-│   ├── src/
-│   │   ├── auth/               # Authentication module
-│   │   ├── users/              # User management
-│   │   ├── units/              # Organizational units
-│   │   ├── documents/          # Document management
-│   │   ├── metrics/            # Compliance metrics
-│   │   ├── reviews/            # Review workflows
-│   │   ├── references/         # Issuances (regulations)
-│   │   ├── tickets/            # Issue tracking
-│   │   ├── database/           # Database scripts
-│   │   │   ├── init.sql        # Database creation
-│   │   │   ├── schema.sql      # Table schemas
-│   │   │   └── seed.sql        # Sample data
-│   │   ├── common/             # Shared utilities
-│   │   │   ├── decorators/
-│   │   │   ├── guards/
-│   │   │   └── interceptors/
-│   │   ├── app.module.ts       # Root module
-│   │   └── main.ts             # Application entry
-│   ├── storage/                # Document storage
-│   ├── .env                    # Environment config
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── frontend/
-│   ├── src/
-│   │   ├── app/                # Page components (migrated from Next app-dir)
-│   │   │   ├── dashboard/      # Dashboard pages
-│   │   │   ├── login/          # Login page
-│   │   │   ├── api/            # API client functions
-│   │   │   ├── layout.tsx      # Root layout
-│   │   │   └── page.tsx        # Home page
-│   │   ├── components/         # Shared React components
-│   │   │   ├── DashboardLayout.tsx
-│   │   │   ├── DocumentUpload.tsx
-│   │   │   └── ...
-│   │   ├── contexts/           # React contexts
-│   │   │   └── AuthContext.tsx
-│   │   ├── lib/                # Utilities
-│   │   │   └── api/            # API clients
-│   │   └── types/              # TypeScript types
-│   ├── .env.local              # Environment config
-│   ├── package.json
-│   └── vite.config.ts
-│
-├── docker-compose.yml          # Docker orchestration
-├── CAPABILITIES.md             # Feature documentation
-├── INSTALLATION.md             # Setup instructions
-├── WALKTHROUGH.md              # User guide
-├── CHANGELOG.md                # Version history
-└── README.md                   # This file
+â”œâ”€â”€ backend/
+â”‚   â”œâ”€â”€ src/
+â”‚   â”‚   â”œâ”€â”€ auth/               # Authentication module
+â”‚   â”‚   â”œâ”€â”€ users/              # User management
+â”‚   â”‚   â”œâ”€â”€ units/              # Organizational units
+â”‚   â”‚   â”œâ”€â”€ documents/          # Document management
+â”‚   â”‚   â”œâ”€â”€ metrics/            # Compliance metrics
+â”‚   â”‚   â”œâ”€â”€ reviews/            # Review workflows
+â”‚   â”‚   â”œâ”€â”€ references/         # Issuances (regulations)
+â”‚   â”‚   â”œâ”€â”€ tickets/            # Issue tracking
+â”‚   â”‚   â”œâ”€â”€ database/           # Database scripts
+â”‚   â”‚   â”‚   â”œâ”€â”€ init.sql        # Database creation
+â”‚   â”‚   â”‚   â”œâ”€â”€ schema.sql      # Table schemas
+â”‚   â”‚   â”‚   â””â”€â”€ seed.sql        # Sample data
+â”‚   â”‚   â”œâ”€â”€ common/             # Shared utilities
+â”‚   â”‚   â”‚   â”œâ”€â”€ decorators/
+â”‚   â”‚   â”‚   â”œâ”€â”€ guards/
+â”‚   â”‚   â”‚   â””â”€â”€ interceptors/
+â”‚   â”‚   â”œâ”€â”€ app.module.ts       # Root module
+â”‚   â”‚   â””â”€â”€ main.ts             # Application entry
+â”‚   â”œâ”€â”€ storage/                # Document storage
+â”‚   â”œâ”€â”€ .env                    # Environment config
+â”‚   â”œâ”€â”€ package.json
+â”‚   â””â”€â”€ tsconfig.json
+â”‚
+â”œâ”€â”€ frontend/
+â”‚   â”œâ”€â”€ src/
+â”‚   â”‚   â”œâ”€â”€ app/                # Page components (migrated from Next app-dir)
+â”‚   â”‚   â”‚   â”œâ”€â”€ dashboard/      # Dashboard pages
+â”‚   â”‚   â”‚   â”œâ”€â”€ login/          # Login page
+â”‚   â”‚   â”‚   â”œâ”€â”€ api/            # API client functions
+â”‚   â”‚   â”‚   â”œâ”€â”€ layout.tsx      # Root layout
+â”‚   â”‚   â”‚   â””â”€â”€ page.tsx        # Home page
+â”‚   â”‚   â”œâ”€â”€ components/         # Shared React components
+â”‚   â”‚   â”‚   â”œâ”€â”€ DashboardLayout.tsx
+â”‚   â”‚   â”‚   â”œâ”€â”€ DocumentUpload.tsx
+â”‚   â”‚   â”‚   â””â”€â”€ ...
+â”‚   â”‚   â”œâ”€â”€ contexts/           # React contexts
+â”‚   â”‚   â”‚   â””â”€â”€ AuthContext.tsx
+â”‚   â”‚   â”œâ”€â”€ lib/                # Utilities
+â”‚   â”‚   â”‚   â””â”€â”€ api/            # API clients
+â”‚   â”‚   â””â”€â”€ types/              # TypeScript types
+â”‚   â”œâ”€â”€ .env.local              # Environment config
+â”‚   â”œâ”€â”€ package.json
+â”‚   â””â”€â”€ vite.config.ts
+â”‚
+â”œâ”€â”€ docker-compose.yml          # Docker orchestration
+â”œâ”€â”€ CAPABILITIES.md             # Feature documentation
+â”œâ”€â”€ INSTALLATION.md             # Setup instructions
+â”œâ”€â”€ WALKTHROUGH.md              # User guide
+â”œâ”€â”€ CHANGELOG.md                # Version history
+â””â”€â”€ README.md                   # This file
 ```
 
 ## Key Capabilities
@@ -297,14 +298,14 @@ rictms-compliance-hub/
 - Version comparison with diff analysis
 - Audit trail maintenance
 - Review outcome controls workflow status:
-  - `compliant` → document is marked `ready`
-  - `non_compliant` / `needs_revision` → document returns to `pending`
+  - `compliant` â†’ document is marked `ready`
+  - `non_compliant` / `needs_revision` â†’ document returns to `pending`
 
 ### 5. Issue & Ticket Management
 - Categorized ticket system
 - Dynamic issue type and category masters (super-admin managed, soft-delete, activate/deactivate)
 - Priority levels (low to urgent)
-- Status workflow (open → resolved → closed)
+- Status workflow (open â†’ resolved â†’ closed)
 - Document linking
 - Threaded comments
 - Assignment and notification system
@@ -534,16 +535,16 @@ For issues, questions, or suggestions:
 
 This system helps organizations comply with:
 
-- ✅ Republic Act 11032 (Ease of Doing Business Act)
-- ✅ Republic Act 10173 (Data Privacy Act)
-- ✅ Executive Order 2 (Freedom of Information)
-- ✅ ARTA Guidelines (Anti-Red Tape Authority)
-- ✅ CSC Circulars (Civil Service Commission)
-- ✅ COA Guidelines (Commission on Audit)
+- âœ… Republic Act 11032 (Ease of Doing Business Act)
+- âœ… Republic Act 10173 (Data Privacy Act)
+- âœ… Executive Order 2 (Freedom of Information)
+- âœ… ARTA Guidelines (Anti-Red Tape Authority)
+- âœ… CSC Circulars (Civil Service Commission)
+- âœ… COA Guidelines (Commission on Audit)
 
 ---
 
-**Built with ❤️ for Philippine Government Agencies**
+**Built with â¤ï¸ for Philippine Government Agencies**
 
 ---
 
