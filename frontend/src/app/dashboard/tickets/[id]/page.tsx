@@ -14,7 +14,6 @@ import {
   ListItemText,
   Divider,
   MenuItem,
-  Alert,
   Grid,
 } from '@mui/material';
 import { useParams, useRouter } from 'next/navigation';
@@ -125,7 +124,7 @@ export default function TicketDetailPage() {
   if (!ticket) {
     return (
       <Box>
-        <Alert severity="error">Issue not found</Alert>
+        <Typography color="error">Issue not found</Typography>
         <Button onClick={() => router.push('/dashboard/tickets')} sx={{ mt: 2 }}>
           Back to Issues
         </Button>

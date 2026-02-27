@@ -5,7 +5,6 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
-  Alert,
   Box,
   Button,
   Chip,
@@ -30,6 +29,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
@@ -53,6 +53,7 @@ const FREQ_LABELS: Record<SubmissionFrequency, string> = {
 
 // ---------- Reportorial Doc Types panel per unit ----------
 function DocTypesPanel({ unit }: { unit: Unit }) {
+  const { enqueueSnackbar } = useSnackbar();
   const [docTypes, setDocTypes] = useState<ReportorialDocType[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -97,6 +98,7 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
 
   const handleSave = async () => {
     if (!form.base_name.trim() || !form.display_name.trim()) {
+      enqueueSnackbar('Base name and display name are required.', { variant: 'error' });
       setErr('Base name and display name are required.');
       return;
     }
@@ -110,7 +112,9 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
       setOpen(false);
       await load();
     } catch (e: any) {
-      setErr(e?.response?.data?.message || 'Failed to save.');
+      const msg = e?.response?.data?.message || 'Failed to save.';
+      setErr(msg);
+      enqueueSnackbar(msg, { variant: 'error' });
     } finally {
       setSaving(false);
     }
@@ -187,7 +191,7 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editing ? 'Edit Document Type' : 'Add Document Type'}</DialogTitle>
         <DialogContent>
-          {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
+          {err && <Typography color="error" sx={{ mb: 2 }}>{err}</Typography>}
           <TextField
             margin="dense" label="Display Name" fullWidth required
             value={form.display_name}
@@ -218,9 +222,9 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
           {form.base_name && (
-            <Alert severity="info" sx={{ mt: 1 }}>
+            <Typography color="text.secondary" sx={{ mt: 1 }}>
               Sample filename: <strong>{computeExpectedFilename({ base_name: form.base_name, submission_frequency: form.submission_frequency } as ReportorialDocType)}</strong>
-            </Alert>
+            </Typography>
           )}
         </DialogContent>
         <DialogActions>

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Box,
   Button,
   Chip,
@@ -111,6 +110,7 @@ export default function ReviewsPage() {
     if (!document || (document.status !== 'ready' && document.status !== 'pending')) {
       releasePreviewBlob();
       setPreviewError('Preview is not available yet. The document may still be processing.');
+      enqueueSnackbar('Preview is not available yet. The document may still be processing.', { variant: 'warning' });
       return;
     }
 
@@ -122,6 +122,7 @@ export default function ReviewsPage() {
       if (!currentVersion) {
         releasePreviewBlob();
         setPreviewError('Current document version was not found.');
+        enqueueSnackbar('Current document version was not found.', { variant: 'error' });
         return;
       }
 
@@ -136,6 +137,7 @@ export default function ReviewsPage() {
     } catch {
       releasePreviewBlob();
       setPreviewError('Unable to load digital preview for this document.');
+      enqueueSnackbar('Unable to load digital preview for this document.', { variant: 'error' });
     } finally {
       setPreviewLoading(false);
     }
@@ -289,7 +291,9 @@ export default function ReviewsPage() {
                 </Box>
               )}
 
-              {!previewLoading && previewError && <Alert severity="warning">{previewError}</Alert>}
+              {!previewLoading && previewError && (
+                <Typography color="warning.main">{previewError}</Typography>
+              )}
 
               {!previewLoading && !previewError && previewBlobUrl && <DocumentViewer pdfUrl={previewBlobUrl} mimeType={previewMimeType} />}
             </Paper>
@@ -300,9 +304,9 @@ export default function ReviewsPage() {
               </Typography>
 
               {isSelectedDocumentAlreadyCompliant ? (
-                <Alert severity="success">
+                <Typography color="success.main">
                   This document is already tagged as compliant. No additional review tagging is required.
-                </Alert>
+                </Typography>
               ) : (
                 <>
                   <Stack direction="column" spacing={1} mb={2}>

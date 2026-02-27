@@ -1,5 +1,7 @@
 # RICTMS Compliance Hub - System Capabilities
 
+> **Release `v1.3.0.1` (2026-02-27):** KPI access control hotfix for focal users (unit resolution fallback) and KPI unit-detail stability fix for super-admin dashboards; KPI page updated with graph-based scorecards; dashboard home now includes KPI overview by role scope; remaining inline notification alerts migrated to toast notifications.
+
 > **Release `v1.2.0.4` (2026-02-26):** New KPI module with role-scoped dashboards and monitoring input (`kpi_master`, `kpi_monitoring`, `kpi_thresholds`, `kpi_scoring_rules`); KPI master now uses `unit_id` (from Units table) instead of free category; KPI monitoring stores `entered_by_staff_id` and `entered_by_name`; status model is `draft/locked`. Settings now supports editing existing users (except immutable `staff_id`) and add/edit persisted system role definitions.
 
 > **Release `v1.2.0.1` (2026-02-26):** Reportorial Document Types system (per-unit, filename validation `{base_name}_{period_suffix}`); metrics applicability now uses `reportorial_doc_type_id` FK; nav fixed (Dashboard exact match, Issuances role-gated); document breadcrumbs show title; Version History timeline layout fixed; User Management: deactivate bug fixed, unit assignment in create dialog; 16 seeded metric templates (4 per type); Document upload overhauled.

@@ -27,6 +27,7 @@ import {
   Checkbox,
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { useSnackbar } from 'notistack';
 import { metricsApi, MetricTemplate } from '@/lib/api/metrics';
 import { unitsApi, Unit } from '@/lib/api/units';
 import { docTypesApi, ReportorialDocType } from '@/lib/api/document-types';
@@ -41,6 +42,7 @@ const metricTypeLabels: Record<MetricType, string> = {
 };
 
 export default function MetricsPage() {
+  const { enqueueSnackbar } = useSnackbar();
   const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -309,7 +311,7 @@ export default function MetricsPage() {
   const handleSave = async () => {
     const validationError = validateForm();
     if (validationError) {
-      alert(validationError);
+      enqueueSnackbar(validationError, { variant: 'error' });
       return;
     }
 

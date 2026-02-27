@@ -21,7 +21,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Alert,
   Link,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
@@ -249,9 +248,9 @@ export default function IssuancesPage() {
       </Box>
 
       {!canManageIssuances && (
-        <Alert severity="info" sx={{ mb: 2 }}>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>
           Read-only view. Issuance CRUD and document mapping actions are available to compliance and super admin roles.
-        </Alert>
+        </Typography>
       )}
 
 

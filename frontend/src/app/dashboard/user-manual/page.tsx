@@ -508,12 +508,12 @@ const manualItems: ManualItem[] = [
         {
           field: 'Password Change Confirmation',
           explanation:
-            'A green success alert confirming the password was updated. If the current password is wrong or the new password does not meet requirements, a red error alert details the specific problem.',
+            'A success toast confirms the password update. If the current password is wrong or the new password does not meet requirements, an error toast shows the specific problem.',
         },
         {
           field: 'User Created Confirmation',
           explanation:
-            'A success alert with the new user\'s email address. The new user immediately appears in the Existing Users table with Active status.',
+            'A success toast includes the new user\'s email address. The new user immediately appears in the Existing Users table with Active status.',
         },
         {
           field: 'Role Definitions Reference Table',

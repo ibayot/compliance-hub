@@ -8,27 +8,26 @@ import {
   TextField,
   Button,
   Typography,
-  Alert,
   Container,
 } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
 
     try {
       await login(email, password);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid email or password');
+      enqueueSnackbar(err.response?.data?.message || 'Invalid email or password', { variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -53,13 +52,6 @@ export default function LoginPage() {
                 Sign in to your account
               </Typography>
             </Box>
-
-            {error && (
-              <Alert severity="error" sx={{ mb: 3 }}>
-                {error}
-              </Alert>
-            )}
-
             <form onSubmit={handleSubmit}>
               <TextField
                 label="Email"
