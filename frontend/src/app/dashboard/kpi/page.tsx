@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -31,8 +31,6 @@ import {
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import {
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Legend,
@@ -91,6 +89,12 @@ const BAND_COLORS: Record<string, string> = {
   red: '#d32f2f',
   unclassified: '#546e7a',
 };
+
+/** Distinct palette for units / KPIs in multi-line charts. */
+const UNIT_COLORS: string[] = [
+  '#1565c0', '#6a1b9a', '#00695c', '#e65100',
+  '#558b2f', '#4527a0', '#ad1457', '#00838f',
+];
 
 function computeBand(score: number, thresholds: Array<{ band: string; minScore: number; maxScore: number }>): string {
   const sorted = [...thresholds].sort((a, b) => b.minScore - a.minScore);
@@ -205,6 +209,9 @@ export default function KpiPage() {
   const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null);
   const [selectedUnitDashboard, setSelectedUnitDashboard] = useState<UnitDashboardResponse | null>(null);
   const [unitTimeseries, setUnitTimeseries] = useState<UnitTimeseriesPoint[]>([]);
+  const [allUnitsTimeseries, setAllUnitsTimeseries] = useState<Record<number, UnitTimeseriesPoint[]>>({});
+  /** Tracks the currently-selected unit ID without being a useCallback dependency. */
+  const selectedUnitIdRef = useRef<number | null>(null);
 
   const [periodYear, setPeriodYear] = useState(currentYear);
   const [periodMonth, setPeriodMonth] = useState(currentMonth);
@@ -287,19 +294,31 @@ export default function KpiPage() {
     try {
       const data = await kpiApi.dashboardSummary(periodYear, effectiveMonth);
       setSummary(data);
+      const { fromYear, fromMonth, toYear, toMonth } = getTimeseriesRange(
+        viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester,
+      );
+      // Fetch timeseries for all visible units simultaneously (multi-line chart).
+      const unitIds = (data.units || []).map((u) => u.unitId);
+      const tseriesArray = await Promise.all(
+        unitIds.map((id) => kpiApi.dashboardUnitTimeseries(id, fromYear, fromMonth, toYear, toMonth)),
+      );
+      const tseriesMap: Record<number, UnitTimeseriesPoint[]> = {};
+      unitIds.forEach((id, idx) => { tseriesMap[id] = tseriesArray[idx]; });
+      setAllUnitsTimeseries(tseriesMap);
       if (!canManage) {
         const ownUnit = availableUnits[0];
         if (ownUnit && Number.isFinite(ownUnit.id)) {
-          const { fromYear, fromMonth, toYear, toMonth } = getTimeseriesRange(
-            viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester,
-          );
-          const [detail, tseries] = await Promise.all([
-            kpiApi.dashboardUnit(ownUnit.id, periodYear, effectiveMonth),
-            kpiApi.dashboardUnitTimeseries(ownUnit.id, fromYear, fromMonth, toYear, toMonth),
-          ]);
+          const detail = await kpiApi.dashboardUnit(ownUnit.id, periodYear, effectiveMonth);
           setSelectedUnitDashboard(detail);
-          setUnitTimeseries(tseries);
+          setUnitTimeseries(tseriesMap[ownUnit.id] || []);
+          selectedUnitIdRef.current = ownUnit.id;
         }
+      } else if (selectedUnitIdRef.current) {
+        // Auto-refresh the unit detail pane when the period/filter changes.
+        const uid = selectedUnitIdRef.current;
+        const detail = await kpiApi.dashboardUnit(uid, periodYear, effectiveMonth);
+        setSelectedUnitDashboard(detail);
+        setUnitTimeseries(tseriesMap[uid] || []);
       }
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI dashboard.', { variant: 'error' });
@@ -463,6 +482,7 @@ export default function KpiPage() {
   const openUnitDashboard = async (unitId: number) => {
     if (!Number.isFinite(unitId) || !Number.isFinite(periodYear) || !Number.isFinite(effectiveMonth)) return;
     try {
+      selectedUnitIdRef.current = unitId;
       const { fromYear, fromMonth, toYear, toMonth } = getTimeseriesRange(
         viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester,
       );
@@ -484,23 +504,52 @@ export default function KpiPage() {
     band: String(unit.band || 'unclassified').toLowerCase(),
   }));
 
+  // Multi-line chart data for Unit KPI Scores: { label, u<unitId>: score|null } per period.
+  const allUnitsLineData = useMemo(() => {
+    const unitList = summary?.units || [];
+    if (unitList.length === 0) return [];
+    const firstTs = allUnitsTimeseries[unitList[0].unitId] || [];
+    if (firstTs.length === 0) return [];
+    const { fromYear, fromMonth } = getTimeseriesRange(viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester);
+    return firstTs.map((pt) => {
+      const label = getXAxisLabel(pt, viewFrequency, periodYear, periodQuarter, periodSemester, fromYear, fromMonth);
+      const datum: Record<string, any> = { label };
+      unitList.forEach((unit) => {
+        const ts = allUnitsTimeseries[unit.unitId] || [];
+        const match = ts.find((p) => p.periodYear === pt.periodYear && p.periodMonth === pt.periodMonth);
+        datum[`u${unit.unitId}`] = match?.hasData ? match.score : null;
+      });
+      return datum;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allUnitsTimeseries, summary, viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester]);
+
+  // KPI detail multi-line chart: { label, [kpiCode]: score|null } per period.
+  const kpiDetailLineData = useMemo(() => {
+    if (unitTimeseries.length === 0) return { data: [] as Record<string, any>[], codes: [] as string[] };
+    const codes = [...new Set(unitTimeseries.flatMap((pt) => (pt.kpiScores || []).map((k) => k.code)))];
+    const { fromYear, fromMonth } = getTimeseriesRange(viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester);
+    const data = unitTimeseries.map((pt) => {
+      const label = getXAxisLabel(pt, viewFrequency, periodYear, periodQuarter, periodSemester, fromYear, fromMonth);
+      const datum: Record<string, any> = { label };
+      codes.forEach((code) => {
+        const kp = (pt.kpiScores || []).find((k) => k.code === code);
+        datum[code] = pt.hasData && kp ? kp.normalizedScore : null;
+      });
+      return datum;
+    });
+    return { data, codes };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitTimeseries, viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester]);
+
   const bandDistribution = Object.values(
-    unitScoreChart.reduce((acc, row) => {
-      const band = row.band || 'unclassified';
-      if (!acc[band]) {
-        acc[band] = { name: band.toUpperCase(), value: 0 };
-      }
+    (summary?.units || []).reduce((acc, unit) => {
+      const band = String(unit.band || 'unclassified').toLowerCase();
+      if (!acc[band]) acc[band] = { name: band.toUpperCase(), value: 0 };
       acc[band].value += 1;
       return acc;
     }, {} as Record<string, { name: string; value: number }>),
   );
-
-  const selectedKpiDetailChart = (selectedUnitDashboard?.details || []).map((item) => ({
-    name: item.code,
-    normalized: Number(item.normalizedScore || 0),
-    target: Number(item.targetValue || 0),
-    actual: Number(item.actualValue || 0),
-  }));
 
   const overallBand = computeBand(Number(summary?.summary.overallScore ?? 0), summary?.thresholds || []);
   const overallBandColor = BAND_COLORS[overallBand] || BAND_COLORS.unclassified;
@@ -739,37 +788,37 @@ export default function KpiPage() {
             <Card>
               <CardHeader title="Unit KPI Scores" subheader="Scoreboard view by unit — click a unit row to drilling into individual KPIs" />
               <CardContent>
-                {unitScoreChart.length === 0 ? (
+                {allUnitsLineData.length === 0 ? (
                   <Box sx={{ py: 6, textAlign: 'center' }}>
                     <Typography variant="body2" color="text.secondary">No KPI monitoring data for this period. Encode values in KPI Monitoring tab.</Typography>
                   </Box>
                 ) : (
                   <Box sx={{ width: '100%', height: 280 }}>
                     <ResponsiveContainer>
-                      <BarChart data={unitScoreChart} margin={{ top: 8, right: 16, left: 0, bottom: 30 }}>
-                        <XAxis
-                          dataKey="name"
-                          interval={0}
-                          height={60}
-                          tick={(props: any) => {
-                            const { x, y, payload } = props;
-                            return (
-                              <g transform={`translate(${x},${y})`}>
-                                <text x={0} y={0} dy={10} textAnchor="end" fill="#555" fontSize={10} transform="rotate(-25)">
-                                  {payload.value}
-                                </text>
-                              </g>
-                            );
-                          }}
-                        />
+                      <LineChart data={allUnitsLineData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                        <Tooltip formatter={(val: number) => [`${val}`, 'Score']} />
-                        <Bar dataKey="score" radius={[8, 8, 0, 0]} label={{ position: 'top', fontSize: 11 }}>
-                          {unitScoreChart.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={BAND_COLORS[entry.band] || BAND_COLORS.unclassified} />
-                          ))}
-                        </Bar>
-                      </BarChart>
+                        <Tooltip formatter={(val: any) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
+                        <Legend />
+                        {(summary?.units || []).map((unit, idx) => {
+                          const hasAnyData = (allUnitsTimeseries[unit.unitId] || []).some((p) => p.hasData);
+                          if (!hasAnyData) return null;
+                          return (
+                            <Line
+                              key={unit.unitId}
+                              type="monotone"
+                              dataKey={`u${unit.unitId}`}
+                              name={unit.unitName}
+                              stroke={UNIT_COLORS[idx % UNIT_COLORS.length]}
+                              strokeWidth={2}
+                              connectNulls={false}
+                              dot={{ r: 4, strokeWidth: 1.5 }}
+                              activeDot={{ r: 6 }}
+                            />
+                          );
+                        })}
+                      </LineChart>
                     </ResponsiveContainer>
                   </Box>
                 )}
@@ -779,22 +828,37 @@ export default function KpiPage() {
                   <TableHead>
                     <TableRow>
                       <TableCell>Unit</TableCell>
-                      <TableCell>Current Score</TableCell>
-                      <TableCell sx={{ width: 48, p: 0 }}>Band</TableCell>
+                      <TableCell sx={{ width: 32, p: 0 }}>Color</TableCell>
+                      <TableCell>Score</TableCell>
+                      <TableCell>Trend</TableCell>
                       <TableCell># KPIs</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {(summary?.units || []).map((unit) => (
-                      <TableRow key={unit.unitId} hover sx={{ cursor: 'pointer' }} onClick={() => openUnitDashboard(unit.unitId)}>
-                        <TableCell>{unit.unitName}</TableCell>
-                        <TableCell><strong>{unit.score}</strong></TableCell>
-                        <TableCell sx={{ p: 0, width: 48, bgcolor: BAND_COLORS[unit.band.toLowerCase()] || BAND_COLORS.unclassified }} />
-                        <TableCell>{unit.kpiCount}</TableCell>
-                      </TableRow>
-                    ))}
+                    {(summary?.units || []).map((unit, idx) => {
+                      const ts = allUnitsTimeseries[unit.unitId] || [];
+                      const firstHasData = ts.find((p) => p.hasData);
+                      const lastHasData = [...ts].reverse().find((p) => p.hasData);
+                      const prevScore = firstHasData ? firstHasData.score : null;
+                      const currScore = lastHasData ? lastHasData.score : Number(unit.score || 0);
+                      const bandKey = String(unit.band || 'unclassified').toLowerCase();
+                      const unitColor = UNIT_COLORS[idx % UNIT_COLORS.length];
+                      return (
+                        <TableRow key={unit.unitId} hover sx={{ cursor: 'pointer' }} onClick={() => openUnitDashboard(unit.unitId)}>
+                          <TableCell>{unit.unitName}</TableCell>
+                          <TableCell sx={{ p: 1 }}>
+                            <Box sx={{ width: 20, height: 20, borderRadius: '4px', bgcolor: unitColor }} />
+                          </TableCell>
+                          <TableCell><strong>{unit.score}</strong></TableCell>
+                          <TableCell>
+                            <TrendSparkline prev={prevScore} current={currScore} band={bandKey} />
+                          </TableCell>
+                          <TableCell>{unit.kpiCount}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                     {(summary?.units || []).length === 0 && (
-                      <TableRow><TableCell colSpan={4} align="center"><Typography variant="caption" color="text.secondary">No unit data.</Typography></TableCell></TableRow>
+                      <TableRow><TableCell colSpan={5} align="center"><Typography variant="caption" color="text.secondary">No unit data.</Typography></TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -815,66 +879,67 @@ export default function KpiPage() {
                   </Box>
                 ) : (
                   <>
-                    {unitTimeseries.length === 0 ? (
+                    {kpiDetailLineData.data.length === 0 ? (
                       <Box sx={{ py: 3, textAlign: 'center' }}>
                         <Typography variant="body2" color="text.secondary">No trend data for this unit/period.</Typography>
                       </Box>
-                    ) : (() => {
-                      const { fromYear, fromMonth } = getTimeseriesRange(viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester);
-                      const trendChartData = unitTimeseries.map((pt) => ({
-                        label: getXAxisLabel(pt, viewFrequency, periodYear, periodQuarter, periodSemester, fromYear, fromMonth),
-                        score: pt.hasData ? pt.score : null,
-                        band: String(pt.band || 'unclassified').toLowerCase(),
-                      }));
-                      return (
-                        <Box sx={{ width: '100%', height: 240, mb: 2 }}>
-                          <ResponsiveContainer>
-                            <LineChart data={trendChartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                              <Tooltip formatter={(val: any) => [`${val}`, 'Score']} />
+                    ) : (
+                      <Box sx={{ width: '100%', height: 240, mb: 2 }}>
+                        <ResponsiveContainer>
+                          <LineChart data={kpiDetailLineData.data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                            <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                            <Tooltip formatter={(val: any) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
+                            <Legend />
+                            {kpiDetailLineData.codes.map((code, idx) => (
                               <Line
-                                dataKey="score"
-                                stroke="#90a4ae"
+                                key={code}
+                                type="monotone"
+                                dataKey={code}
+                                name={code}
+                                stroke={UNIT_COLORS[idx % UNIT_COLORS.length]}
                                 strokeWidth={2}
                                 connectNulls={false}
-                                dot={(props: any) => {
-                                  const { cx, cy, payload, index } = props;
-                                  return <circle key={index} cx={cx} cy={cy} r={5} fill={BAND_COLORS[payload.band] || BAND_COLORS.unclassified} stroke="#fff" strokeWidth={1.5} />;
-                                }}
+                                dot={{ r: 4, strokeWidth: 1.5 }}
+                                activeDot={{ r: 6 }}
                               />
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </Box>
-                      );
-                    })()}
+                            ))}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </Box>
+                    )}
                     <Divider sx={{ my: 1 }} />
                     <Table size="small">
                       <TableHead>
                         <TableRow>
                           <TableCell>KPI</TableCell>
+                          <TableCell sx={{ width: 32, p: 0 }}>Color</TableCell>
                           <TableCell>Actual</TableCell>
                           <TableCell>Target</TableCell>
                           <TableCell>Score</TableCell>
                           <TableCell>Trend</TableCell>
-                          <TableCell sx={{ width: 48, p: 0 }}>Band</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {selectedUnitDashboard.details.map((item) => {
-                          const prevScore = unitTimeseries[0]?.kpiScores?.find((k) => k.code === item.code)?.normalizedScore ?? null;
-                          const currScore = unitTimeseries[unitTimeseries.length - 1]?.kpiScores?.find((k) => k.code === item.code)?.normalizedScore ?? null;
+                        {selectedUnitDashboard.details.map((item, idx) => {
+                          const firstPt = unitTimeseries.find((pt) => pt.hasData && pt.kpiScores?.some((k) => k.code === item.code));
+                          const lastPt = [...unitTimeseries].reverse().find((pt) => pt.hasData && pt.kpiScores?.some((k) => k.code === item.code));
+                          const prevScore = firstPt?.kpiScores?.find((k) => k.code === item.code)?.normalizedScore ?? null;
+                          const currScore = lastPt?.kpiScores?.find((k) => k.code === item.code)?.normalizedScore ?? item.normalizedScore;
+                          const kpiColor = UNIT_COLORS[idx % UNIT_COLORS.length];
                           return (
                             <TableRow key={item.id}>
                               <TableCell>{item.code}</TableCell>
+                              <TableCell sx={{ p: 1 }}>
+                                <Box sx={{ width: 20, height: 20, borderRadius: '4px', bgcolor: kpiColor }} />
+                              </TableCell>
                               <TableCell>{item.actualValue}</TableCell>
                               <TableCell>{item.targetValue}</TableCell>
                               <TableCell><strong>{item.normalizedScore}</strong></TableCell>
                               <TableCell>
                                 <TrendSparkline prev={prevScore} current={currScore} band={String(item.band || 'unclassified').toLowerCase()} />
                               </TableCell>
-                              <TableCell sx={{ p: 0, width: 48, bgcolor: BAND_COLORS[String(item.band || '').toLowerCase()] || BAND_COLORS.unclassified }} />
                             </TableRow>
                           );
                         })}
