@@ -1,5 +1,7 @@
 # RICTMS Compliance Hub - QA User Manual
 
+> **Release `v1.3.0.5` (2026-02-27):** Verify: (1) KPI Detail table Trend column sparklines are **diagonal** — when previous period has no data, the line goes from bottom-left (0) to the current score at top-right; when both periods have data and values differ, the slope reflects actual change. (2) A KPI with the same score in both periods (no change) correctly shows a **flat horizontal line** (expected). (3) Band Distribution pie chart shows **bold white numbers inside each colored slice** — no callout label text outside the pie. Legend below the pie is unchanged.
+
 > Update (`v1.1.0-dev`, 2026-02-24): QA checks now include blob persistence validation and DOCX-to-PDF preview generation checks.
 
 > **Release `v1.3.0.2` (2026-02-27):** Verify: (1) Dashboard → KPI opens directly to the **KPI Dashboard tab** (graphs visible on first load, no tab switching needed). (2) Unit score bar chart renders with color-coded bars (green/amber/red). (3) Overall KPI scorecard shows a colored progress bar and band label. (4) Clicking a unit row in the table populates the Unit Detail panel on the right. (5) Band Distribution pie chart shows with legend. (6) All charts show an empty-state message (not blank containers) when no data exists for the selected period. (7) KPI Master and KPI Monitoring tabs are only visible to super_admin, reviewer, section_head roles. (8) Focal users see the dashboard directly as the only tab.
@@ -383,7 +385,7 @@ The **KPI Band Scale** legend below the scorecards shows current threshold range
 
 ---
 
-### I.6 KPI Module Smoke Checks (v1.3.0.3)
+### I.6 KPI Module Smoke Checks (v1.3.0.5)
 
 > **Seeded data reference:** 10 KPI masters (5 for IT Unit, 5 for Finance Unit), 30 monitoring rows
 > for year 2025 months 6 (June), 7 (July), 8 (August). Default dashboard period is current date
@@ -397,10 +399,12 @@ The **KPI Band Scale** legend below the scorecards shows current threshold range
 | 4  | Set Month=7 (July), Frequency=Monthly, click Refresh                                   | IT AMBER (~86.4), Finance RED (~72.4) due to Yes/No miss|
 | 5  | Set Month=8 (August), click Refresh                                                    | IT RED (~72.0), Finance AMBER (~89.4) - band reversal   |
 | 6  | Switch frequency to Annual, click Refresh                                              | Uses December (month 12) - no data shown (expected)     |
-| 7  | Click a unit row in the table to open Unit Detail panel                                | Unit KPI breakdown visible with band chips              |
-| 8  | KPI Master tab: Create new KPI for any unit                                            | Saved successfully, appears in table                    |
-| 9  | KPI Monitoring tab: Encode actual value for the new KPI                                | Saved as Draft                                          |
-| 10 | Lock the encoded row                                                                   | Status shows LOCKED; Edit/Lock buttons hidden           |
-| 11 | Login as `focal@rictms.gov.ph`, open KPI Dashboard                                    | Can view own unit only; no Master/Monitoring tabs        |
-| 12 | Call `GET /api/kpi/dashboard/summary?periodYear=0&periodMonth=2` directly             | Returns HTTP 400 Bad Request (not 500 NaN SQL error)    |
+| 7  | Click a unit row, Month=7 (July), open Unit Detail; inspect Trend column sparklines    | Lines are diagonal: KPI-IT-002 steep drop (100→61.54); each KPI shows correct slope |
+| 8  | Still in Unit Detail Month=6 (June, no May data): check sparklines                    | Sparklines start from bottom-left (0) and ascend diagonally to the June score |
+| 9  | Band Distribution pie chart (any month with data)                                      | Bold white count numbers inside each colored slice; no callout text outside the pie; legend below unchanged |
+| 10 | KPI Master tab: Create new KPI for any unit                                            | Saved successfully, appears in table                    |
+| 11 | KPI Monitoring tab: Encode actual value for the new KPI                                | Saved as Draft                                          |
+| 12 | Lock the encoded row                                                                   | Status shows LOCKED; Edit/Lock buttons hidden           |
+| 13 | Login as `focal@rictms.gov.ph`, open KPI Dashboard                                    | Can view own unit only; no Master/Monitoring tabs        |
+| 14 | Call `GET /api/kpi/dashboard/summary?periodYear=0&periodMonth=2` directly             | Returns HTTP 400 Bad Request (not 500 NaN SQL error)    |
 
