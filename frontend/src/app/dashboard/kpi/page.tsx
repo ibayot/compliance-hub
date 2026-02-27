@@ -801,10 +801,7 @@ export default function KpiPage() {
                         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
                         <Tooltip formatter={(val: any) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
                         <Legend />
-                        {(summary?.units || []).map((unit, idx) => {
-                          const hasAnyData = (allUnitsTimeseries[unit.unitId] || []).some((p) => p.hasData);
-                          if (!hasAnyData) return null;
-                          return (
+                        {(summary?.units || []).map((unit, idx) => (
                             <Line
                               key={unit.unitId}
                               type="monotone"
@@ -816,8 +813,7 @@ export default function KpiPage() {
                               dot={{ r: 4, strokeWidth: 1.5 }}
                               activeDot={{ r: 6 }}
                             />
-                          );
-                        })}
+                        ))}
                       </LineChart>
                     </ResponsiveContainer>
                   </Box>
