@@ -6,7 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [1.3.0.3] - 2026-02-27 -- KPI NaN Fix, Period Frequency, Labels, Legend and Seed Data
+## [1.3.0.4] - 2026-02-28 — KPI Dashboard UI Overhaul & In-App User Manual KPI Section
+
+### Changed
+- **Overall KPI Score Card**: Removed band-colored left border and 'Band:' caption; LinearProgress bar now uses a neutral blue (`#1976d2`) to avoid visual noise at the aggregate level.
+- **Band Scale chips**: Now display only the numeric range (e.g., `90–100`) — band color name text removed for cleaner legend.
+- **Unit KPI Scores table**: Columns restructured to Unit | Current Score | Band | # KPIs. Band column is a full-cell color block (no text chip). 'Detail' button column removed — click anywhere on the row to drill in.
+- **Unit Detail — Line Chart**: Replaced per-KPI bar chart with a composite score **trend line chart** showing score trajectory over time. Monthly=2 pts, Quarterly=4 pts, Semestral=7 pts, Annual=13 pts (includes prior period baseline). Each dot is color-coded by band; null periods render as gaps.
+- **Unit Detail — KPI table**: Columns restructured to KPI | Actual | Target | Score | Trend | Band. Trend column shows a 60×24 SVG sparkline (grey start dot → band-colored end dot). Band column is a full-cell color block.
+
+### Added
+- **Backend timeseries endpoint**: `GET /kpi/dashboard/unit/:unitId/timeseries?fromYear&fromMonth&toYear&toMonth` — returns per-period composite score + per-KPI breakdown for any date range (safety cap: 60 periods).
+- **Frontend kpi.ts**: `UnitTimeseriesPoint` interface and `kpiApi.dashboardUnitTimeseries()` method.
+- **Helper functions in kpi/page.tsx**: `getTimeseriesRange()` (computes correct historical window per frequency), `getXAxisLabel()` (formats period labels), `TrendSparkline` component (inline SVG).
+- **In-app User Manual — KPI section**: Full `KPI Monitoring & Dashboard` entry added to `/dashboard/user-manual` page covering purpose, all inputs (Period Year, Frequency, KPI Code/Name/Type/Direction/Target/Weight/Actual, Remarks) and all outputs (Overall Score Card, Band Scale Legend, Unit Scores Table, Trend Line Chart, KPI Detail Table with sparklines, Band Distribution Pie).
+- **`'section_head'` role** added to `ManualRole` union type in user-manual/page.tsx.
+
+### Verified (Smoke)
+- 0 TS errors; `tsc -b` exits 0
+- Frontend `npm run build` ✅ (Vite — 13 118 modules, 0 TS errors)
+- Backend `npm run build` ✅ (NestJS — 0 TS errors)
+- Timeseries endpoint tested: `GET /kpi/dashboard/unit/1/timeseries?fromYear=2025&fromMonth=6&toYear=2025&toMonth=8` → 3 data points with score + band + kpiScores array
+- Unit Detail panel shows LineChart with colored dots and sparklines in KPI table
+
+---
+
+## [1.3.0.3] - 2026-02-27 — KPI NaN Fix, Period Frequency, Labels, Legend and Seed Data
 
 > **Post-release seed & doc fix (2026-02-27):**
 > - Re-seeded KPI monitoring data from Mar-May 2025 to **Jun-Aug 2025** to enable quarterly Q2 simulation (Q2 end-month = June).

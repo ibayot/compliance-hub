@@ -494,6 +494,120 @@ export class KpiService {
     };
   }
 
+  /** Returns composite + per-KPI scores for a range of (year, month) periods. */
+  async dashboardUnitTimeseries(
+    user: AuthUser,
+    unitId: number,
+    fromYear: number,
+    fromMonth: number,
+    toYear: number,
+    toMonth: number,
+  ) {
+    const unitIdNum = Number(unitId);
+    if (!Number.isFinite(unitIdNum) || unitIdNum <= 0)
+      throw new BadRequestException('Invalid unit ID.');
+
+    const fy = Number(fromYear);
+    const fm = Number(fromMonth);
+    const ty = Number(toYear);
+    const tm = Number(toMonth);
+
+    if (!Number.isFinite(fy) || fy < 2000 || fy > 2100) throw new BadRequestException('fromYear invalid.');
+    if (!Number.isFinite(fm) || fm < 1 || fm > 12) throw new BadRequestException('fromMonth invalid.');
+    if (!Number.isFinite(ty) || ty < 2000 || ty > 2100) throw new BadRequestException('toYear invalid.');
+    if (!Number.isFinite(tm) || tm < 1 || tm > 12) throw new BadRequestException('toMonth invalid.');
+
+    if (!this.canViewAll(user)) {
+      const allowed = await this.getAllowedUnitIds(user);
+      if (!allowed.includes(unitIdNum)) throw new ForbiddenException('Unit access denied.');
+    }
+
+    // Build list of (year, month) tuples in range
+    const periods: Array<{ year: number; month: number }> = [];
+    let y = fy;
+    let m = fm;
+    while (y < ty || (y === ty && m <= tm)) {
+      periods.push({ year: y, month: m });
+      m++;
+      if (m > 12) { m = 1; y++; }
+      if (periods.length > 60) break; // safety cap
+    }
+
+    if (periods.length === 0) return [];
+
+    // Fetch all monitoring rows in the date range for this unit in one query
+    const rows = await this.kpiMonitoringRepo
+      .createQueryBuilder('km')
+      .leftJoinAndSelect('km.kpiMaster', 'kpiMaster')
+      .where('km.unit_id = :unitId', { unitId: unitIdNum })
+      .andWhere(
+        '(km.period_year > :fy OR (km.period_year = :fy AND km.period_month >= :fm))',
+        { fy, fm },
+      )
+      .andWhere(
+        '(km.period_year < :ty OR (km.period_year = :ty AND km.period_month <= :tm))',
+        { ty, tm },
+      )
+      .getMany();
+
+    const scoringRule =
+      (await this.kpiScoringRuleRepo.findOne({ where: { active: true }, order: { id: 'DESC' } })) ||
+      this.kpiScoringRuleRepo.create({ capScore: 100, floorScore: 0, yesScore: 100, noScore: 0 });
+    const thresholds = await this.kpiThresholdRepo.find({ order: { minScore: 'DESC' } });
+
+    // Group rows by (year, month)
+    const rowsByPeriod = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const key = `${row.periodYear}-${row.periodMonth}`;
+      if (!rowsByPeriod.has(key)) rowsByPeriod.set(key, []);
+      rowsByPeriod.get(key)!.push(row);
+    }
+
+    // For each period, compute composite score + per-KPI breakdown
+    const unitName = rows[0]?.unit?.name
+      ?? (await this.unitRepo.findOne({ where: { id: unitIdNum } }))?.name
+      ?? `Unit ${unitIdNum}`;
+
+    return periods.map(({ year, month }) => {
+      const periodRows = rowsByPeriod.get(`${year}-${month}`) ?? [];
+      const kpiScores = periodRows
+        .filter((r) => Boolean(r.kpiMaster))
+        .map((r) => {
+          const kpi = r.kpiMaster!;
+          const raw = this.computeRaw(kpi, Number(r.actualValue), scoringRule);
+          const normalized = this.clamp(raw, Number(scoringRule.floorScore), Number(scoringRule.capScore));
+          return {
+            code: r.kpiMasterCode,
+            name: kpi.name,
+            normalizedScore: Number(normalized.toFixed(2)),
+            actualValue: Number(r.actualValue),
+            band: this.classifyScore(normalized, thresholds),
+          };
+        });
+
+      const totalWeight = periodRows
+        .filter((r) => Boolean(r.kpiMaster))
+        .reduce((s, r) => s + Number(r.kpiMaster!.weight || 0), 0);
+      const weightedSum = kpiScores.reduce(
+        (s, k, i) =>
+          s + k.normalizedScore * Number(periodRows.filter((r) => Boolean(r.kpiMaster))[i]?.kpiMaster!.weight || 0),
+        0,
+      );
+      const score = totalWeight > 0 ? weightedSum / totalWeight : 0;
+
+      return {
+        periodYear: year,
+        periodMonth: month,
+        unitId: unitIdNum,
+        unitName,
+        score: Number(score.toFixed(2)),
+        band: periodRows.length > 0 ? this.classifyScore(score, thresholds) : 'unclassified',
+        hasData: periodRows.length > 0,
+        kpiScores,
+      };
+    });
+  }
+
   async listThresholds() {
     await this.ensureLookups();
     return this.kpiThresholdRepo.find({ order: { minScore: 'DESC' } });

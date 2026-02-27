@@ -99,6 +99,23 @@ export class KpiController {
     return this.kpiService.dashboardUnit(req.user, unitId, periodYear, periodMonth);
   }
 
+  @Get('dashboard/unit/:unitId/timeseries')
+  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'section_head')
+  dashboardUnitTimeseries(
+    @Request() req: any,
+    @Param('unitId', ParseIntPipe) unitId: number,
+    @Query('fromYear') fromYear?: number,
+    @Query('fromMonth') fromMonth?: number,
+    @Query('toYear') toYear?: number,
+    @Query('toMonth') toMonth?: number,
+  ) {
+    return this.kpiService.dashboardUnitTimeseries(
+      req.user, unitId,
+      Number(fromYear), Number(fromMonth),
+      Number(toYear), Number(toMonth),
+    );
+  }
+
   @Get('lookups/thresholds')
   @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'section_head')
   listThresholds() {

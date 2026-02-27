@@ -21,7 +21,7 @@ import {
 import { Close as CloseIcon } from '@mui/icons-material';
 import { useAuth } from '@/contexts/AuthContext';
 
-type ManualRole = 'super_admin' | 'reviewer' | 'focal' | 'technician' | 'auditor';
+type ManualRole = 'super_admin' | 'reviewer' | 'focal' | 'technician' | 'auditor' | 'section_head';
 
 type ManualItem = {
   title: string;
@@ -524,6 +524,100 @@ const manualItems: ManualItem[] = [
           field: 'Updated Existing Users Table',
           explanation:
             'The Existing Users table refreshes after every create, role change, or activate/deactivate action. Displays name, email, Staff ID, current role chip, and active status chip for all provisioned users with assignable roles.',
+        },
+      ],
+    },
+  },
+  {
+    title: 'KPI Monitoring & Dashboard',
+    description: 'Track unit KPI targets, encode periodic actuals, and analyze performance through composite scoring and band classification.',
+    roles: ['super_admin', 'reviewer', 'section_head', 'focal', 'technician', 'auditor'],
+    path: '/dashboard/kpi',
+    details: {
+      purpose:
+        'The KPI module enables the organization to define performance indicators per unit, encode actual values for each monitoring period (Monthly, Quarterly, Semestral, or Annual), and automatically compute a composite score using weighted normalization. Each score is classified into a color-coded band (Green, Amber, Red, or Unclassified) according to configurable thresholds. The Dashboard tab visualizes overall and per-unit performance, including historical trend lines and KPI-level breakdowns, allowing managers and reviewers to identify underperforming units and individual indicators at a glance.',
+      inputs: [
+        {
+          field: 'Period Year',
+          explanation:
+            'The calendar year for which KPI data is being viewed or encoded. Determines which monitoring records are loaded and which thresholds are applied.',
+        },
+        {
+          field: 'Frequency (Monthly / Quarterly / Semestral / Annual)',
+          explanation:
+            'Selects the reporting frequency. Monthly shows a single month; Quarterly groups 3-month windows (Q1–Q4); Semestral groups 6-month windows (H1–H2); Annual covers the full calendar year. Each frequency mode affects which periods the trend chart displays.',
+        },
+        {
+          field: 'KPI Code',
+          explanation:
+            'A short unique identifier for the KPI master record (e.g., KPI-001). Used as the primary key when linking monitoring rows to master definitions and displayed in breakdown tables.',
+        },
+        {
+          field: 'KPI Name',
+          explanation:
+            'The full descriptive name of the KPI (e.g., "Document Compliance Rate"). Shown in master records and unit detail breakdowns.',
+        },
+        {
+          field: 'Type (Measurement / Compliance / Qualitative)',
+          explanation:
+            'Classification of the KPI type. Measurement KPIs use numeric actual vs. target comparisons. Compliance KPIs evaluate yes/no or percentage-based compliance status. Qualitative KPIs accept descriptive ratings.',
+        },
+        {
+          field: 'Direction (Higher is Better / Lower is Better)',
+          explanation:
+            'Determines the normalization formula. Higher-is-better KPIs score higher when actual values approach or exceed the target. Lower-is-better KPIs score higher when actuals are minimized relative to target.',
+        },
+        {
+          field: 'Target Value',
+          explanation:
+            'The benchmark value for the KPI. Used in the normalized score formula: Score = (Actual / Target) × 100 for higher-is-better, or (Target / Actual) × 100 for lower-is-better. The result is clamped to 0–100.',
+        },
+        {
+          field: 'Weight',
+          explanation:
+            'A numeric weighting factor applied when computing the composite unit score. Higher-weight KPIs contribute proportionally more to the overall unit score. Weights are normalized across all active KPIs in a unit.',
+        },
+        {
+          field: 'Actual Value',
+          explanation:
+            'The measured or reported value for a specific KPI, unit, and period. Entered through the KPI Monitoring tab. A missing actual leaves that KPI unscored for the period.',
+        },
+        {
+          field: 'Remarks',
+          explanation:
+            'Optional notes for a monitoring entry, such as data sources, caveats, or contextual information for reviewers.',
+        },
+      ],
+      outputs: [
+        {
+          field: 'Overall KPI Score Card',
+          explanation:
+            'Displays the organization-wide composite KPI score for the selected period. The score is the weighted average of all unit scores. A progress bar shows relative attainment. No band color is shown here to maintain neutrality at the aggregate level.',
+        },
+        {
+          field: 'Band Scale Legend',
+          explanation:
+            'Color-coded chips showing the numeric ranges for each performance band (e.g., 90–100, 75–89, 0–74). Thresholds are configurable by administrators. The chips use band colors (green, amber, red) without text labels for visual clarity.',
+        },
+        {
+          field: 'Unit KPI Scores Table',
+          explanation:
+            'A sortable table listing each unit with its composite score, a color-block band indicator (full-cell background, no text), and the count of KPI entries. Click any row to open the Unit Detail panel.',
+        },
+        {
+          field: 'Trend Line Chart (Unit Detail)',
+          explanation:
+            'A line chart showing the composite score trajectory for the selected unit across the full period range. Each data point is a colored circle matching the performance band for that period. Monthly mode shows 2 points; Quarterly shows 4; Semestral shows 7; Annual shows 13 (including the prior December as a baseline). Null periods are shown as gaps, not zero values.',
+        },
+        {
+          field: 'KPI Detail Table (Unit Detail)',
+          explanation:
+            'A per-KPI breakdown showing Actual, Target, Score (normalized), a mini sparkline Trend (prev vs. current period), and a color-block Band indicator. Use this to identify which specific indicators are dragging the composite score down.',
+        },
+        {
+          field: 'Band Distribution Pie Chart',
+          explanation:
+            'A donut chart summarizing how many units fall into each performance band for the selected period. Useful for board-level reporting and trend analysis across reporting cycles.',
         },
       ],
     },
