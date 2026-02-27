@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0.5] - 2026-02-27 — KPI Sparkline Diagonal Fix & Pie Chart Label Fix
+
+### Fixed
+- **TrendSparkline always horizontal**: The sparkline in the KPI Detail table Trend column was always drawing a horizontal line because when `prev` was `null` (no historic period data), `startVal` fell back to `current` (`prev ?? current ?? 0`), making both endpoints the same y-coordinate. Fixed to `startVal = prev !== null ? prev : 0` — when there is no prior period, the sparkline now shows a diagonal from 0 (baseline) up to the current score. When both periods have data and values differ, the sparkline shows the correct ascending or descending diagonal.
+- **Band Distribution pie chart outer text labels**: The pie chart was rendering `"BAND: N"` strings as outer callout labels via recharts `label` prop, which cluttered the visualization. Removed the outer text label entirely; the count number is now rendered **inside** the colored pie segment (white bold text, centered in each slice). The legend below remains unchanged.
+
+### Verified (Smoke)
+- 0 TS errors; `tsc --noEmit` exits 0
+- Frontend `npm run build` ✅ (Vite — 13 118 modules, 0 errors)
+- Backend `npm run build` ✅ (NestJS — 0 errors)
+- Timeseries Jun→Jul (both periods with data): 2 points, scores 98.77 → 86.36 — sparklines now diagonal for all KPIs where value changed
+- KPI-IT-002 Jun=100 Jul=61.54 — steep downward diagonal confirmed
+- KPI-IT-004 Jul=100 Aug=0 (Yes/No flip) — steep downward diagonal confirmed
+- Band Distribution pie: number inside colored segment, no outer text
+- `GET /api/kpi/dashboard/summary?periodYear=0&periodMonth=2` → HTTP 400 ✅
+- August 2025 overall score: 80.67 (2 units) ✅
+
+---
+
 ## [1.3.0.4] - 2026-02-28 — KPI Dashboard UI Overhaul & In-App User Manual KPI Section
 
 ### Changed

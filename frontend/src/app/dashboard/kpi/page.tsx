@@ -173,14 +173,18 @@ function getXAxisLabel(
 function TrendSparkline({ prev, current, band }: { prev: number | null; current: number | null; band: string }) {
   const color = BAND_COLORS[band] || BAND_COLORS.unclassified;
   const w = 60; const h = 24; const pad = 5;
-  const startVal = prev ?? current ?? 0;
-  const endVal = current ?? prev ?? 0;
+  // When prev is null (no historic data) we anchor the start at 0 so the
+  // line shows a diagonal ascent/descent rather than a flat horizontal.
+  const startVal = prev !== null ? prev : 0;
+  const endVal = current !== null ? current : 0;
   const toY = (v: number) => h - pad - (Math.min(100, Math.max(0, v)) / 100) * (h - 2 * pad);
   const y1 = toY(startVal); const y2 = toY(endVal);
+  // Grey start dot when prev had no data (anchored at 0); band-colored otherwise.
+  const startColor = prev !== null ? color : '#b0bec5';
   return (
     <svg width={w} height={h} style={{ display: 'block', overflow: 'visible' }}>
       <line x1={pad} y1={y1} x2={w - pad} y2={y2} stroke={color} strokeWidth={2} />
-      <circle cx={pad} cy={y1} r={3} fill="#b0bec5" stroke="#fff" strokeWidth={1} />
+      <circle cx={pad} cy={y1} r={3} fill={startColor} stroke="#fff" strokeWidth={1} />
       <circle cx={w - pad} cy={y2} r={3} fill={color} stroke="#fff" strokeWidth={1} />
     </svg>
   );
@@ -901,7 +905,18 @@ export default function KpiPage() {
                           cx="50%"
                           cy="50%"
                           outerRadius={90}
-                          label={({ name, value }) => `${name}: ${value}`}
+                          labelLine={false}
+                          label={({ cx, cy, midAngle, innerRadius, outerRadius, value }: any) => {
+                            const RADIAN = Math.PI / 180;
+                            const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                            const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                            const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                            return (
+                              <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={14} fontWeight={700}>
+                                {value}
+                              </text>
+                            );
+                          }}
                         >
                           {bandDistribution.map((entry, index) => (
                             <Cell key={`pie-${index}`} fill={BAND_COLORS[String(entry.name).toLowerCase()] || BAND_COLORS.unclassified} />
