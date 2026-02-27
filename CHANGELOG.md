@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.3.0.3] - 2026-02-27 -- KPI NaN Fix, Period Frequency, Labels, Legend and Seed Data
 
+> **Post-release seed & doc fix (2026-02-27):**
+> - Re-seeded KPI monitoring data from Mar-May 2025 to **Jun-Aug 2025** to enable quarterly Q2 simulation (Q2 end-month = June).
+> - Fixed Section I of QA-USER-MANUAL.md: corrupted Unicode characters replaced with ASCII equivalents; smoke checks updated to reference June 2025 seed data and quarterly navigation steps; formula notation corrected.
+
 ### Fixed
 - **NaN SQL error on dashboard load**: 4x Unknown column 'NaN' in where clause errors eliminated. Guards in frontend loadDashboard/openUnitDashboard and backend service methods dashboardSummary, dashboardUnit, listMonitoring.
 - **Backend unguarded query params**: dashboardSummary/dashboardUnit validate periodYear (2000-2100) and periodMonth (1-12), returning HTTP 400 on invalid input instead of NaN SQL error.

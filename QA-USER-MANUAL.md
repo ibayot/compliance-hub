@@ -26,7 +26,7 @@ This manual is for business and QA users who need to verify if core workflows ar
 - CI/baseline validation checkpoints for release readiness
 - Document return-for-revision workflow (remarks-required, audit-preserving)
 - Super-admin management of dynamic ticket issue types and categories
-- KPI Master, KPI Monitoring, KPI Dashboard, and KPI lookup table behavior
+- KPI Master, KPI Monitoring, KPI Dashboard, and KPI lookup table behavior (see **Section I**)
 
 ## Test Environment Prep
 1. Start backend (`backend`): `npm run start:dev`
@@ -242,29 +242,35 @@ Expected:
 
 ---
 
-## I. KPI Module  User Manual & QA Guide (v1.3.0.3)
+## I. KPI Module - User Manual & QA Guide (v1.3.0.3)
 
 ### I.1 What Is a KPI Band?
 
-A **KPI Band** is a color-coded performance classification applied to a unit or an individual KPI based on its **Normalized Score** (0100 scale).
+A **KPI Band** is a color-coded performance classification applied to a unit or an individual KPI based on its **Normalized Score** (0-100 scale).
 
-| Band  | Color  | Default Score Range | Meaning                              |
-|-------|--------|---------------------|--------------------------------------|
-| Green |  Green | 90  100          | Target met or exceeded  Performing  |
-| Amber |  Amber | 75  89.99        | Near target  Needs attention        |
-| Red   |  Red  | 0  74.99         | Below threshold  Immediate action   |
+| Band  | Color  | Default Score Range | Meaning                                    |
+|-------|--------|---------------------|--------------------------------------------|
+| Green | Green  | 90 - 100            | Target met or exceeded - Performing well   |
+| Amber | Amber  | 75 - 89.99          | Near target - Needs attention              |
+| Red   | Red    | 0 - 74.99           | Below threshold - Immediate action needed  |
 
 **How normalized score is calculated:**
-- For *higher-is-better* KPIs: `(Actual  Target)  100`, capped at 100.
-- For *lower-is-better* KPIs: `(Target  Actual)  100`, capped at 100.
+- For *higher-is-better* KPIs: `(Actual / Target) * 100`, capped at 100.
+- For *lower-is-better* KPIs: `(Target / Actual) * 100`, capped at 100.
 - For *Yes/No* KPIs: `100` if actual = 1 (Yes), `0` if actual = 0 (No).
 
 **Composite Unit Score** = Weighted average of all KPI normalized scores for a unit in a period.  
 Where multiple KPIs have different weights, higher-weight KPIs influence the unit score more.
 
+> **Example (seeded data, June 2025 Q2):**
+> - IT Unit: avg score ~98.8 (GREEN) - all KPIs met target
+> - Finance Unit: avg score ~95.9 (GREEN) - one KPI near amber
+> - July 2025: Finance drops to RED (72.4) due to a Yes/No KPI miss (actual=0)
+> - August 2025: IT drops to RED (72.0) due to a Yes/No KPI miss (actual=0)
+
 ---
 
-### I.2 KPI Master  CRUD Steps
+### I.2 KPI Master - CRUD Steps
 
 > Role required: `super_admin`, `reviewer`, or `section_head`
 
@@ -296,12 +302,12 @@ Where multiple KPIs have different weights, higher-weight KPIs influence the uni
 
 ---
 
-### I.3 KPI Monitoring  Encoding Periodic Values
+### I.3 KPI Monitoring - Encoding Periodic Values
 
 > Role required: `super_admin`, `reviewer`, or `section_head`
 
 #### Encode a KPI Monitoring Value
-1. Navigate to **KPI Monitoring & Dashboard**  **KPI Monitoring** tab.
+1. Navigate to **KPI Monitoring & Dashboard** > **KPI Monitoring** tab.
 2. Click **Encode KPI**.
 3. Select the **KPI** from the dropdown.
 4. Select the **Unit**.
@@ -320,18 +326,23 @@ Where multiple KPIs have different weights, higher-weight KPIs influence the uni
 
 ---
 
-### I.4 KPI Dashboard  Reading the Dashboard
+### I.4 KPI Dashboard - Reading the Dashboard
 
 The **KPI Dashboard** tab is visible to all roles.
 
 #### Period Filter Controls
 - **Period Year**: Select the reporting year.
 - **Frequency**: Choose `Monthly`, `Quarterly`, `Semestral`, or `Annual`.
-  - Monthly: select a specific month.
-  - Quarterly: select Q1 (JanMar), Q2 (AprJun), Q3 (JulSep), Q4 (OctDec).
-  - Semestral: select H1 (JanJun) or H2 (JulDec).
-  - Annual: shows full-year data (Dec as the end month).
+  - Monthly: select a specific month (1-12).
+  - Quarterly: select Q1 (Jan-Mar, month 3), Q2 (Apr-Jun, month 6), Q3 (Jul-Sep, month 9), Q4 (Oct-Dec, month 12).
+  - Semestral: select H1 (Jan-Jun, month 6) or H2 (Jul-Dec, month 12).
+  - Annual: shows full-year data (uses December, month 12, as the reference month).
 - Click **Refresh** to reload data after changing filters.
+
+> **Seeded test data tip:** Set Year = `2025`, Frequency = `Monthly`, then pick
+> Month `6` (June), `7` (July), or `8` (August) to see pre-loaded data.
+> For quarterly simulation, set Frequency = `Quarterly` and select `Q2` - this
+> maps to June 2025 and shows: IT Unit GREEN (~98.8), Finance Unit GREEN (~95.9).
 
 #### Scorecard Row (Top)
 | Scorecard           | Shows                                           |
@@ -345,7 +356,7 @@ The **KPI Band Scale** legend below the scorecards shows current threshold range
 #### Unit KPI Scores (Bar Chart)
 - Each bar represents a unit's composite KPI score for the period.
 - Bar color indicates the performance band (green/amber/red).
-- Long unit names are truncated with `` and shown at an angle for readability.
+- Long unit names are truncated with `...` and shown at an angle for readability.
 - Click a unit row in the table below the chart to drill into KPI details.
 
 #### Unit Detail Panel
@@ -361,31 +372,35 @@ The **KPI Band Scale** legend below the scorecards shows current threshold range
 
 ### I.5 Role-Scoped Visibility Rules
 
-| Role               | Can View Dashboard | Can Drill Unit Detail | Can Manage KPI Master | Can Encode Monitoring |
-|--------------------|-------------------|----------------------|-----------------------|-----------------------|
-| `super_admin`      | All units          | All units            |  Yes               |  Yes                |
-| `reviewer`         | All units          | All units            |  Yes               |  Yes                |
-| `section_head`     | Own unit only      | Own unit only        |  Yes               |  Yes                |
-| `focal`            | Own unit only      | Own unit only        |  No                |  No                 |
-| `auditor`          | Own unit only      | Own unit only        |  No                |  No                 |
-| `technician`       | Own unit only      | Own unit only        |  No                |  No                 |
+| Role           | Can View Dashboard | Can Drill Unit Detail | Can Manage KPI Master | Can Encode Monitoring |
+|----------------|--------------------|-----------------------|-----------------------|-----------------------|
+| `super_admin`  | All units          | All units             | Yes                   | Yes                   |
+| `reviewer`     | All units          | All units             | Yes                   | Yes                   |
+| `section_head` | Own unit only      | Own unit only         | Yes                   | Yes                   |
+| `focal`        | Own unit only      | Own unit only         | No                    | No                    |
+| `auditor`      | Own unit only      | Own unit only         | No                    | No                    |
+| `technician`   | Own unit only      | Own unit only         | No                    | No                    |
 
 ---
 
 ### I.6 KPI Module Smoke Checks (v1.3.0.3)
 
-| # | Test Step                                                                        | Expected Result                               |
-|---|----------------------------------------------------------------------------------|-----------------------------------------------|
-| 1 | Load KPI page as `admin@rictms.gov.ph`                                          | No NaN SQL errors in backend; dashboard loads |
-| 2 | Default period shows May 2025 with 10 monitoring rows                            | Scorecards show data; charts render           |
-| 3 | Switch frequency to **Quarterly (Q2)**  click Refresh                           | Dashboard recalculates for AprilJune data    |
-| 4 | Switch frequency to **Annual**, click Refresh                                    | Full-year December data shown                 |
-| 5 | Click a unit row  Unit Detail panel                                             | Unit's KPI breakdown visible, band chips show |
-| 6 | KPI Master tab: Create new KPI for any unit                                      | Saved successfully, appears in table          |
-| 7 | KPI Monitoring tab: Encode actual value for new KPI                              | Saved as Draft                                |
-| 8 | Lock the encoded row                                                              | Status shows LOCKED, Edit/Lock buttons hide   |
-| 9 | Login as `focal@rictms.gov.ph`, open KPI Dashboard                               | Can view own unit only; no Master/Monitoring tabs |
-| 10| Try calling `GET /api/kpi/dashboard/unit/NaN?periodYear=NaN` directly           | Returns 400 Bad Request, not 500 NaN SQL error |
-| 11| Check Unit KPI Scores bar chart with 7+ units (add more units if needed)         | Bars have angled labels, no overflow          |
-| 12| Band Scale legend row shows Green/Amber/Red chips below scorecards               | Color chips visible with threshold ranges     |
+> **Seeded data reference:** 10 KPI masters (5 for IT Unit, 5 for Finance Unit), 30 monitoring rows
+> for year 2025 months 6 (June), 7 (July), 8 (August). Default dashboard period is current date
+> so you must manually set Year=2025 and pick a month with data.
+
+| #  | Test Step                                                                              | Expected Result                                         |
+|----|----------------------------------------------------------------------------------------|---------------------------------------------------------|
+| 1  | Load KPI page as `admin@rictms.gov.ph`                                                | No NaN SQL errors in backend; dashboard loads           |
+| 2  | Set Year=2025, Frequency=Monthly, Month=6 (June), click Refresh                        | 10 monitoring rows; IT ~98.8 GREEN, Finance ~95.9 GREEN |
+| 3  | Set Year=2025, Frequency=Quarterly, Q2, click Refresh                                  | Same June data shown; both units GREEN                  |
+| 4  | Set Month=7 (July), Frequency=Monthly, click Refresh                                   | IT AMBER (~86.4), Finance RED (~72.4) due to Yes/No miss|
+| 5  | Set Month=8 (August), click Refresh                                                    | IT RED (~72.0), Finance AMBER (~89.4) - band reversal   |
+| 6  | Switch frequency to Annual, click Refresh                                              | Uses December (month 12) - no data shown (expected)     |
+| 7  | Click a unit row in the table to open Unit Detail panel                                | Unit KPI breakdown visible with band chips              |
+| 8  | KPI Master tab: Create new KPI for any unit                                            | Saved successfully, appears in table                    |
+| 9  | KPI Monitoring tab: Encode actual value for the new KPI                                | Saved as Draft                                          |
+| 10 | Lock the encoded row                                                                   | Status shows LOCKED; Edit/Lock buttons hidden           |
+| 11 | Login as `focal@rictms.gov.ph`, open KPI Dashboard                                    | Can view own unit only; no Master/Monitoring tabs        |
+| 12 | Call `GET /api/kpi/dashboard/summary?periodYear=0&periodMonth=2` directly             | Returns HTTP 400 Bad Request (not 500 NaN SQL error)    |
 
