@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0.9] - 2026-02-27 — KPI Dashboard: All-Units Table, Partial Scores, Trend Fix, Band Dist Partial Slice, Unit Detail Close Button & No Prev-Year X-Axis
+
+### Fixed
+- **Unit KPI Scores table now shows all available units, including partial-period ones**: Previously the table only iterated `summary.units` (units with data for the exact `effectiveMonth`). Finance Unit in Q3 (no September data) was completely absent from the table even though it had 2 months of Q3 data. The table now iterates `availableUnits` — every unit visible to the current user — ensuring all units always have a row regardless of data coverage.
+- **Score column shows `—` for partial-period / incomplete units**: When a unit has no `summary.units` entry for the selected period (e.g. Finance in Q3 with data only up to August), the Score column now correctly shows `—` instead of misrepresenting a missing value.
+- **Trend sparkline uses last available data point**: `TrendSparkline` in both the Unit KPI Scores table and the Unit Detail KPI table now anchors to the chronologically last month that has `hasData=true`, instead of the first. This means Finance Q3 trend correctly reflects the August score, not the July score.
+- **No previous-year indicator**: `getTimeseriesRange` and `getXAxisLabel` no longer include a prior-year December anchor point. All frequency views (monthly, quarterly, semestral, annual) now start from the first month of the period. January trend therefore starts from 0 (upward or horizontal) instead of referencing Dec of the previous year.
+- **Trend sparkline always starts at 0** when no prior period data exists — consistent with the start-at-zero rule above.
+
+### Changed
+- **Unit KPI Scores panel is now full-width (`xs={12}`)**: Removed the side-by-side `md={6}` layout — the Scores panel now occupies the full row width, giving more horizontal space to the chart and table.
+- **Unit Detail panel is now stacked below Unit KPI Scores**: Unit Detail appears as a separate full-width (`xs={12}`) row below the Scores panel, instead of sitting side by side. This gives each panel more room and makes the layout less cramped.
+- **Unit Detail hidden by default; shows only when a unit is selected**: Unit Detail card is no longer always rendered with an empty placeholder. It only appears when a unit row is clicked.
+- **Close (×) button on Unit Detail**: An `IconButton` (`CloseIcon`) in the Unit Detail card header lets users dismiss the detail panel, collapsing it back and restoring the full Scores-only view.
+- **Band Distribution: partial-period units shown as transparent/dashed slice**: Units with timeseries data but no summary entry for the select period (i.e. partial coverage) are now included in the pie chart as a white transparent segment with a dashed grey border, visually distinguishing them from scored bands.
+
+### Verified (Smoke)
+- 0 TS errors (`get_errors` on kpi/page.tsx → No errors)
+- Frontend `npm run build` ✅ (Vite — 13 124 modules, 0 errors)
+- Backend running on port 4000 (PID 47124)
+- Finance Q3 timeseries: 3 points, hasData=2 (Jul/Aug); IT Q3: 3 pts, hasData=3 ✅
+- Summary Aug 2025 overall=80.67 units=2 ✅
+- Summary Q3 2025 overall=95.51 units=1 (Finance partial — shown in table as `—`) ✅
+
+---
+
 ## [1.3.0.8] - 2026-02-27 — KPI UI Polish, Unit Filter Panel Collapse, Finance Partial-Period Lines Fix & Theme Toggle
 
 ### Fixed
