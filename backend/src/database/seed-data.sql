@@ -147,6 +147,32 @@ INSERT INTO metric_applicability (id, metric_id, unit_id, document_type) VALUES
 ('map-003', 'metric-003', NULL, NULL),
 ('map-004', 'metric-004', NULL, NULL);
 
+-- ──────────────────────────────────────────────────────────────────────────────
+-- Unit-targeted metric templates (2 per type — 1 IT, 1 Finance).
+-- Combined with the 4 global templates above this gives 3 of each type in total.
+-- IT templates apply only to document_type='ICT Security Assessment' for unit 1.
+-- Finance templates apply only to document_type='Finance Risk Report' for unit 2.
+-- ──────────────────────────────────────────────────────────────────────────────
+INSERT INTO metric_templates (id, name, description, metric_type, rule_config, pass_criteria, weight, is_active, created_at, updated_at) VALUES
+('metric-005', 'ICT Risk Report Sections',       'Verifies ICT security assessments contain Executive Summary, Risk Analysis, and Mitigation Plan.',    'section_check',  JSON_OBJECT('required_sections', JSON_ARRAY('Executive Summary', 'Risk Analysis', 'Mitigation Plan')),                                                               JSON_OBJECT('all_present', TRUE),                       2, 1, NOW(), NOW()),
+('metric-006', 'ICT Security Keyword Check',     'Checks that ICT security terms (cybersecurity, vulnerability, patch) appear in the document.',        'keyword_check',  JSON_OBJECT('keywords', JSON_ARRAY('cybersecurity', 'vulnerability', 'patch'),        'min_matches', 2, 'case_sensitive', FALSE, 'whole_word', FALSE),              JSON_OBJECT('min_matches', 2),                          1, 1, NOW(), NOW()),
+('metric-007', 'Vulnerability Count Extraction', 'Extracts and validates the reported vulnerability count is non-negative.',                             'property_check', JSON_OBJECT('extraction_keywords', JSON_ARRAY('total vulnerabilities', 'vulnerabilities found'), 'comparison', '>=', 'expected_values', JSON_ARRAY(0)),           JSON_OBJECT('comparison', '>=', 'threshold', 0),        1, 1, NOW(), NOW()),
+('metric-008', 'ICT Assessment Deadline Check',  'Validates ICT security assessments are submitted by the 5th of the month following the report period.','date_check',     JSON_OBJECT('submission_frequency', 'monthly', 'deadline_day', 5,  'deadline_month_offset', 1, 'max_days_late', 2),                                          JSON_OBJECT('on_time', TRUE),                           2, 1, NOW(), NOW()),
+('metric-009', 'Finance Report Sections',        'Verifies Finance risk reports contain Budget Summary, Variance Analysis, and Recommendations.',        'section_check',  JSON_OBJECT('required_sections', JSON_ARRAY('Budget Summary', 'Variance Analysis', 'Recommendations')),                                                           JSON_OBJECT('all_present', TRUE),                       2, 1, NOW(), NOW()),
+('metric-010', 'Finance Terminology Check',      'Checks that Finance-specific terms (audit, budget, variance) appear in the document.',                 'keyword_check',  JSON_OBJECT('keywords', JSON_ARRAY('audit', 'budget', 'variance'),                    'min_matches', 2, 'case_sensitive', FALSE, 'whole_word', FALSE),              JSON_OBJECT('min_matches', 2),                          1, 1, NOW(), NOW()),
+('metric-011', 'Transaction Count Extraction',   'Extracts and validates the reported transaction count is at least 1.',                                 'property_check', JSON_OBJECT('extraction_keywords', JSON_ARRAY('total transactions', 'transactions processed'), 'comparison', '>=', 'expected_values', JSON_ARRAY(1)),           JSON_OBJECT('comparison', '>=', 'threshold', 1),        1, 1, NOW(), NOW()),
+('metric-012', 'Finance Report Deadline Check',  'Validates Finance Risk Reports are submitted by the 7th of the month following the report period.',    'date_check',     JSON_OBJECT('submission_frequency', 'monthly', 'deadline_day', 7,  'deadline_month_offset', 1, 'max_days_late', 2),                                          JSON_OBJECT('on_time', TRUE),                           2, 1, NOW(), NOW());
+
+INSERT INTO metric_applicability (id, metric_id, unit_id, document_type) VALUES
+('map-005', 'metric-005', 1, 'ICT Security Assessment'),
+('map-006', 'metric-006', 1, 'ICT Security Assessment'),
+('map-007', 'metric-007', 1, 'ICT Security Assessment'),
+('map-008', 'metric-008', 1, 'ICT Security Assessment'),
+('map-009', 'metric-009', 2, 'Finance Risk Report'),
+('map-010', 'metric-010', 2, 'Finance Risk Report'),
+('map-011', 'metric-011', 2, 'Finance Risk Report'),
+('map-012', 'metric-012', 2, 'Finance Risk Report');
+
 INSERT INTO kpi_master (`code`, `name`, `description`, `unit_id`, `type`, `unit_of_measure`, `direction`, `target_value`, `weight`, `frequency`, `active`, `created_at`, `updated_at`) VALUES
 -- IT Unit KPIs
 ('KPI-IT-001', 'System Uptime', 'Percentage of time systems are operational', 1, 'measurement', 'percent', 'higher_is_better', 99.9, 3, 'monthly', 1, NOW(), NOW()),
@@ -296,6 +322,37 @@ INSERT INTO kpi_monitoring (`kpi_master_code`, `unit_id`, `period_year`, `period
 ('KPI-FI-004', 2, 2026, 2, 0,    'One control pending final sign-off.', 2, 'CO-1003', 'Finance Auditor', 'draft', NOW(), NOW()),
 ('KPI-FI-005', 2, 2026, 2, 97,   'Most statements on time.', 2, 'CO-1003', 'Finance Auditor', 'draft', NOW(), NOW());
 
+-- ──────────────────────────────────────────────────────────────────────────────
+-- Metric-module test documents.
+--   doc-011: IT  — ICT Security Assessment  (triggers metric-001..008: global + IT targeted)
+--   doc-012: Fin — Finance Risk Report      (triggers metric-001..004 + 009..012: global + Finance targeted)
+--   doc-013: IT  — Policy Document          (triggers only global metric-001..004)
+--   doc-014: Fin — Policy Document          (triggers only global metric-001..004)
+-- ──────────────────────────────────────────────────────────────────────────────
+SET @ict_text    = 'Executive Summary. This report presents the ICT security assessment for February 2026. Risk Analysis. Cybersecurity vulnerabilities were identified and patched. Mitigation Plan. Security patch cycle accelerated. Introduction. This document covers all ICT compliance and security activities. Findings. Three observations noted. Total incidents: 3. Total vulnerabilities: 7 vulnerabilities found and remediated. Compliance with regulation maintained. Security policy updated. Patch deployment rate 100%. Recommendations. Strengthen vulnerability scanning cadence. Update cybersecurity policy annually. Review patch management procedure.';
+SET @finance_text= 'Budget Summary. Finance Unit risk report for February 2026. Budget utilization at 92%. Variance Analysis. Variance of 8% against approved allocation noted. Total transactions: 250 transactions processed. Audit compliance maintained at 100%. Recommendations. Revise budget allocation methodology. Expedite procurement clearance. Introduction. This report covers Finance compliance and risk activities. Findings. Total incidents: 1 documentation gap identified. All financial statements submitted on time. Compliance with fiscal regulation maintained. Policy adherence at 96%. Budget performance within acceptable range.';
+SET @policy_text  = 'Introduction. This policy document covers compliance obligations for the reporting period. All policies and regulations were reviewed. Findings. Compliance rate maintained at 98%. Total incidents: 2 incidents logged. Policy adherence confirmed at 97%. Regulation updates implemented on schedule. Recommendations. Strengthen compliance monitoring. Schedule policy review for next quarter.';
+
+INSERT INTO documents (id, title, document_type, period, year, status, current_version, extracted_text, unit_id, uploaded_by, is_deleted, created_at, updated_at) VALUES
+('doc-011', 'ICT Security Assessment February 2026',  'ICT Security Assessment', '202602', '2026', 'ready',   1, @ict_text,     1, 3, 0, '2026-03-03 09:00:00', '2026-03-03 09:00:00'),
+('doc-012', 'Finance Risk Report February 2026',       'Finance Risk Report',     '202602', '2026', 'ready',   1, @finance_text, 2, 3, 0, '2026-03-04 10:00:00', '2026-03-04 10:00:00'),
+('doc-013', 'IT Division Policy Review February 2026', 'Policy Document',         '202602', '2026', 'ready',   1, @policy_text,  1, 3, 0, '2026-03-03 14:00:00', '2026-03-03 14:00:00'),
+('doc-014', 'Finance Division Policy Update Feb 2026', 'Policy Document',         '202602', '2026', 'pending', 1, @policy_text,  2, 3, 0, '2026-03-04 15:00:00', '2026-03-04 15:00:00');
+
+INSERT INTO document_versions (id, document_id, version_number, file_name, file_path, file_blob, mime_type, file_size, checksum, preview_path, preview_blob, preview_mime_type, extracted_text, change_notes, uploaded_by, created_at) VALUES
+('ver-011', 'doc-011', 1, 'ICT_Security_Assessment_Feb2026.pdf', 'documents/seed-it-sec-202602.pdf', @pdf_blob, 'application/pdf', OCTET_LENGTH(@pdf_blob), SHA2(@pdf_blob, 256), NULL,
+ CONCAT(@html_base, '<div class="hdr"><strong>Document Viewer</strong><div style="font-size:0.85em;color:#555;margin-top:4px;">ICT_Security_Assessment_Feb2026.pdf</div></div><h1>ICT Security Assessment \u2014 February 2026</h1><h2>Executive Summary</h2><p>Cybersecurity activities review for February 2026. Vulnerability scanning completed. Patch deployment 100%.</p><h2>Risk Analysis</h2><p>Total vulnerabilities: 7 found and remediated. Cybersecurity patch applied to all systems.</p><h2>Mitigation Plan</h2><p>Accelerate patch cycle to bi-weekly. Enhance vulnerability scanning scope.</p><h2>Introduction</h2><p>ICT compliance and security activities for February 2026. All policies and regulations reviewed.</p><h2>Findings</h2><p>Total incidents: 3 resolved within SLA. Compliance with regulation confirmed. Policy adherence 100%.</p><h2>Recommendations</h2><p>Strengthen vulnerability scanning. Review cybersecurity policy annually.</p></body></html>'),
+ 'text/html', @ict_text, 'Initial seed version', 3, '2026-03-03 09:00:00'),
+('ver-012', 'doc-012', 1, 'Finance_Risk_Report_Feb2026.pdf', 'documents/seed-fin-risk-202602.pdf', @pdf_blob, 'application/pdf', OCTET_LENGTH(@pdf_blob), SHA2(@pdf_blob, 256), NULL,
+ CONCAT(@html_base, '<div class="hdr"><strong>Document Viewer</strong><div style="font-size:0.85em;color:#555;margin-top:4px;">Finance_Risk_Report_Feb2026.pdf</div></div><h1>Finance Risk Report \u2014 February 2026</h1><h2>Budget Summary</h2><p>Budget utilization: 92% of approved allocation. All budget lines within parameters.</p><h2>Variance Analysis</h2><p>8% variance against approved allocation. Total transactions: 250 processed. Audit compliance 100%.</p><h2>Recommendations</h2><p>Revise budget allocation methodology. Expedite procurement clearance.</p><h2>Introduction</h2><p>Finance compliance and risk activities for February 2026. Fiscal regulation and policy reviewed.</p><h2>Findings</h2><p>Total incidents: 1 documentation gap. Financial statements on time. Compliance with fiscal regulation. Policy adherence at 96%.</p></body></html>'),
+ 'text/html', @finance_text, 'Initial seed version', 3, '2026-03-04 10:00:00'),
+('ver-013', 'doc-013', 1, 'IT_Policy_Review_Feb2026.pdf', 'documents/seed-it-policy-202602.pdf', @pdf_blob, 'application/pdf', OCTET_LENGTH(@pdf_blob), SHA2(@pdf_blob, 256), NULL,
+ CONCAT(@html_base, '<div class="hdr"><strong>Document Viewer</strong><div style="font-size:0.85em;color:#555;margin-top:4px;">IT_Policy_Review_Feb2026.pdf</div></div><h1>IT Division Policy Review \u2014 February 2026</h1><h2>Introduction</h2><p>Policy review covering ICT compliance obligations for February 2026. All policies and regulations reviewed.</p><h2>Findings</h2><p>Compliance rate at 98%. Total incidents: 2 incidents logged. Policy adherence at 97%. Regulation updates implemented.</p><h2>Recommendations</h2><p>Schedule quarterly policy reviews. Reinforce compliance monitoring.</p></body></html>'),
+ 'text/html', @policy_text, 'Initial seed version', 3, '2026-03-03 14:00:00'),
+('ver-014', 'doc-014', 1, 'Finance_Policy_Update_Feb2026.pdf', 'documents/seed-fin-policy-202602.pdf', @pdf_blob, 'application/pdf', OCTET_LENGTH(@pdf_blob), SHA2(@pdf_blob, 256), NULL,
+ CONCAT(@html_base, '<div class="hdr"><strong>Document Viewer</strong><div style="font-size:0.85em;color:#555;margin-top:4px;">Finance_Policy_Update_Feb2026.pdf</div></div><h1>Finance Division Policy Update \u2014 February 2026</h1><h2>Introduction</h2><p>Policy update covering Finance Unit compliance obligations. All policies and regulations reviewed.</p><h2>Findings</h2><p>Total incidents: 2 minor compliance incidents. Policy adherence at 97%. All regulation requirements met.</p><h2>Recommendations</h2><p>Continue quarterly policy reviews. Strengthen regulation monitoring.</p></body></html>'),
+ 'text/html', @policy_text, 'Initial seed version', 3, '2026-03-04 15:00:00');
+
 -- metric_results: columns are id, version_id, metric_template_id, status (enum pass/fail/warning/error), message, score, computed_at, evidence
 INSERT INTO metric_results (id, version_id, metric_template_id, status, score, message, evidence, computed_at) VALUES
 ('result-001', 'ver-001', 'metric-001', 'pass', 100.00, 'All required sections found.', JSON_OBJECT('sections_found', JSON_ARRAY('Introduction', 'Findings', 'Recommendations')), NOW()),
@@ -308,6 +365,39 @@ INSERT INTO metric_results (id, version_id, metric_template_id, status, score, m
 -- manual_reviews: reviewer_id is int
 INSERT INTO manual_reviews (id, document_id, version_id, decision, remarks, findings, reviewer_id, reviewed_at) VALUES
 ('review-001', 'doc-001', 'ver-001', 'compliant', 'Seeded compliant review. All sections verified.', NULL, 2, NOW());
+
+-- Metric results for metric-test documents (doc-011 through doc-014)
+INSERT INTO metric_results (id, version_id, metric_template_id, status, score, message, evidence, computed_at) VALUES
+-- doc-011 (ICT Security Assessment) — 4 global templates
+('result-007', 'ver-011', 'metric-001', 'pass', 100.00, 'All required sections found.',         JSON_OBJECT('sections_found', JSON_ARRAY('Introduction', 'Findings', 'Recommendations')), NOW()),
+('result-008', 'ver-011', 'metric-002', 'pass', 100.00, 'All required keywords found.',         JSON_OBJECT('count', 3, 'matches', JSON_ARRAY('compliance', 'regulation', 'policy')), NOW()),
+('result-009', 'ver-011', 'metric-003', 'pass', 100.00, 'Incident count meets threshold.',      JSON_OBJECT('extracted_value', 3, 'comparison', '>=', 'threshold', 1), NOW()),
+('result-010', 'ver-011', 'metric-004', 'pass', 100.00, 'Document submitted on time.',          JSON_OBJECT('on_time', TRUE, 'days_late', 0), NOW()),
+-- doc-011 (ICT Security Assessment) — 4 IT-targeted templates
+('result-011', 'ver-011', 'metric-005', 'pass', 100.00, 'All ICT risk sections found.',         JSON_OBJECT('sections_found', JSON_ARRAY('Executive Summary', 'Risk Analysis', 'Mitigation Plan')), NOW()),
+('result-012', 'ver-011', 'metric-006', 'pass', 100.00, 'ICT security keywords found.',         JSON_OBJECT('count', 3, 'matches', JSON_ARRAY('cybersecurity', 'vulnerability', 'patch')), NOW()),
+('result-013', 'ver-011', 'metric-007', 'pass', 100.00, 'Vulnerability count meets threshold.', JSON_OBJECT('extracted_value', 7, 'comparison', '>=', 'threshold', 0), NOW()),
+('result-014', 'ver-011', 'metric-008', 'pass', 100.00, 'ICT assessment submitted on time.',    JSON_OBJECT('on_time', TRUE, 'days_late', 0), NOW()),
+-- doc-012 (Finance Risk Report) — 4 global templates
+('result-015', 'ver-012', 'metric-001', 'pass', 100.00, 'All required sections found.',         JSON_OBJECT('sections_found', JSON_ARRAY('Introduction', 'Findings', 'Recommendations')), NOW()),
+('result-016', 'ver-012', 'metric-002', 'pass', 100.00, 'All required keywords found.',         JSON_OBJECT('count', 3, 'matches', JSON_ARRAY('compliance', 'regulation', 'policy')), NOW()),
+('result-017', 'ver-012', 'metric-003', 'pass', 100.00, 'Incident count meets threshold.',      JSON_OBJECT('extracted_value', 1, 'comparison', '>=', 'threshold', 1), NOW()),
+('result-018', 'ver-012', 'metric-004', 'pass', 100.00, 'Document submitted on time.',          JSON_OBJECT('on_time', TRUE, 'days_late', 0), NOW()),
+-- doc-012 (Finance Risk Report) — 4 Finance-targeted templates
+('result-019', 'ver-012', 'metric-009', 'pass', 100.00, 'All Finance risk sections found.',     JSON_OBJECT('sections_found', JSON_ARRAY('Budget Summary', 'Variance Analysis', 'Recommendations')), NOW()),
+('result-020', 'ver-012', 'metric-010', 'pass', 100.00, 'Finance keywords found.',              JSON_OBJECT('count', 3, 'matches', JSON_ARRAY('audit', 'budget', 'variance')), NOW()),
+('result-021', 'ver-012', 'metric-011', 'pass', 100.00, 'Transaction count meets threshold.',   JSON_OBJECT('extracted_value', 250, 'comparison', '>=', 'threshold', 1), NOW()),
+('result-022', 'ver-012', 'metric-012', 'pass', 100.00, 'Finance report submitted on time.',    JSON_OBJECT('on_time', TRUE, 'days_late', 0), NOW()),
+-- doc-013 (IT Policy Document) — global templates only (no unit-targeted match)
+('result-023', 'ver-013', 'metric-001', 'pass', 100.00, 'All required sections found.',         JSON_OBJECT('sections_found', JSON_ARRAY('Introduction', 'Findings', 'Recommendations')), NOW()),
+('result-024', 'ver-013', 'metric-002', 'pass', 100.00, 'All required keywords found.',         JSON_OBJECT('count', 3, 'matches', JSON_ARRAY('compliance', 'regulation', 'policy')), NOW()),
+('result-025', 'ver-013', 'metric-003', 'pass', 100.00, 'Incident count meets threshold.',      JSON_OBJECT('extracted_value', 2, 'comparison', '>=', 'threshold', 1), NOW()),
+('result-026', 'ver-013', 'metric-004', 'pass', 100.00, 'Document submitted on time.',          JSON_OBJECT('on_time', TRUE, 'days_late', 0), NOW()),
+-- doc-014 (Finance Policy Document) — global templates only (no unit-targeted match)
+('result-027', 'ver-014', 'metric-001', 'pass', 100.00, 'All required sections found.',         JSON_OBJECT('sections_found', JSON_ARRAY('Introduction', 'Findings', 'Recommendations')), NOW()),
+('result-028', 'ver-014', 'metric-002', 'pass', 100.00, 'All required keywords found.',         JSON_OBJECT('count', 3, 'matches', JSON_ARRAY('compliance', 'regulation', 'policy')), NOW()),
+('result-029', 'ver-014', 'metric-003', 'pass', 100.00, 'Incident count meets threshold.',      JSON_OBJECT('extracted_value', 2, 'comparison', '>=', 'threshold', 1), NOW()),
+('result-030', 'ver-014', 'metric-004', 'pass', 100.00, 'Document submitted on time.',          JSON_OBJECT('on_time', TRUE, 'days_late', 0), NOW());
 
 COMMIT;
 

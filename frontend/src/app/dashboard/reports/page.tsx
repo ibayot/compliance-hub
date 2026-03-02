@@ -142,7 +142,8 @@ function getTimeseriesRange(p: ReportParams) {
   const { year, frequency, month, quarter, semester } = p;
   switch (frequency) {
     case 'monthly':
-      return { fromYear: year, fromMonth: month, toYear: year, toMonth: month };
+      // Fetch from Jan 1 so monthly charts show Jan → selected-month progression.
+      return { fromYear: year, fromMonth: 1, toYear: year, toMonth: month };
     case 'quarterly':
       return { fromYear: year, fromMonth: (quarter - 1) * 3 + 1, toYear: year, toMonth: quarter * 3 };
     case 'semestral':
@@ -183,8 +184,9 @@ function ReportView({ params }: { params: ReportParams }) {
     queryFn: () =>
       kpiApi.dashboardUnitTimeseries(
         Number(unitId),
-        // Always fetch from Jan 1 so partial-period units show their full-year history.
-        year, 1,
+        // tsRange.fromMonth is 1 for monthly (Jan → selectedMonth) and the period
+        // start for quarterly/semestral/annual.
+        tsRange.fromYear, tsRange.fromMonth,
         tsRange.toYear, tsRange.toMonth,
       ),
     enabled: Boolean(unitId),
@@ -254,11 +256,18 @@ function ReportView({ params }: { params: ReportParams }) {
       });
       return datum;
     });
-    // Always prepend a score=0 anchor so all chart lines start from bottom-left.
+    // For units with no data at the first visible period but with data later,
+    // inject 0 at that first point so the line draws from 0 → first-actual.
     if (mapped.length > 0) {
-      const zeroAnchor: Record<string, any> = { label: '' };
-      summaryUnits.forEach((u) => { zeroAnchor[`u${u.unitId}`] = 0; });
-      return [zeroAnchor, ...mapped];
+      const first = { ...mapped[0] };
+      summaryUnits.forEach((u) => {
+        const key = `u${u.unitId}`;
+        if (first[key] === null) {
+          const hasLater = mapped.slice(1).some((d) => d[key] !== null);
+          if (hasLater) first[key] = 0;
+        }
+      });
+      return [first, ...mapped.slice(1)];
     }
     return mapped;
   }, [allUnitsTsQuery.data, summaryUnits]);
@@ -276,11 +285,17 @@ function ReportView({ params }: { params: ReportParams }) {
       });
       return datum;
     });
-    // Always prepend a score=0 anchor so all KPI lines start from bottom-left.
+    // For KPIs with no data at the first visible period but with data later,
+    // inject 0 at that first point so the line draws from 0 → first-actual.
     if (data.length > 0) {
-      const zeroAnchor: Record<string, any> = { label: '' };
-      codes.forEach((code) => { zeroAnchor[code] = 0; });
-      return { data: [zeroAnchor, ...data], codes };
+      const first = { ...data[0] };
+      codes.forEach((code) => {
+        if (first[code] === null) {
+          const hasLater = data.slice(1).some((d) => d[code] !== null);
+          if (hasLater) first[code] = 0;
+        }
+      });
+      return { data: [first, ...data.slice(1)], codes };
     }
     return { data, codes };
   }, [unitTsQuery.data]);
