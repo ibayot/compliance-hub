@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0.10] - 2026-02-28 — Report Repository, Document Period Picker & Consolidated Reports
+
+### Added
+- **Report Repository (`/dashboard/repository`)**: New Google Drive-style page that groups all non-deleted documents into Year → Period-Bucket (month name, Q1–Q4, Annual) folders. Click a folder to reveal an inline document table with title, type, unit, status chips, upload date, and view/download actions. Admins/reviewers see all documents; focal users see their own uploads only.
+- **Documents Period Picker** (uploader): The document upload form now displays a Year + Month/Quarter selector below the Document Type field (Month drop-down for monthly doc types, Quarter Q1–Q4 for quarterly, Year-only for annual). The expected filename preview and backend filename validation both use the user-selected period, enabling correct late submissions without filename mismatch errors.
+- **Consolidated Reports (`/dashboard/reports`)**: New page where users select Year + Month (+ optional unit) and hit "Generate" to produce a printed-layout report combining: overall KPI score card (unit count, entry count, overall score), per-unit KPI scores table (Unit | Score | Band | KPI Count), and a documents submission table for that year (Title | Type | Unit | Period | Status | Submitted On). A "Print / Export PDF" button opens a print-ready popup window.
+- **`GET /documents/repository`** backend endpoint (before `:id` to avoid route conflict): returns `{ years: [{ year, buckets: [{ key, label, count, documents[] }] }] }`. Period strings are parsed into human-readable bucket labels: `202601` → "January", `202601-03` → "Q1 (Jan–Mar)", `2026Q1` → "Q1 (Jan–Mar)", `2026` → "Annual".
+- **`ReportorialDocTypeService.computePeriodSuffixFromParts` / `computeExpectedFilenameFromParts`**: new static helpers that compute the expected filename from explicit integer year/period inputs (rather than a `Date` object), mirroring the frontend period picker values. Used by `uploadDocument` when year/period are supplied by the client.
+- **`computePeriodSuffixExplicit` / `computeExpectedFilenameExplicit`** in `frontend/src/lib/api/document-types.ts`: explicit overloads that accept `{ year, month?, quarter? }` integers instead of a `Date`.
+- **Sidebar navigation**: "Repository" (FolderOpen icon, all roles) added to main nav after Documents; "Reports" (Summarize icon, super_admin/reviewer/focal) added to Administration section.
+- **`documentsApi.getRepository()`** in frontend API client; `RepositoryBucket`, `RepositoryYear`, `RepositoryResponse` TypeScript interfaces added to `documents.ts`.
+
+### Changed
+- **`uploadDocument`** in `document.service.ts`: when `reportorial_doc_type_id` is provided, uses client-supplied `year` and `period` (if present) to compute the expected filename for validation, not the current server date. This allows late submissions to pass filename validation without modifying the system clock. Falls back to current date when year/period are absent.
+
+### Verified (Smoke)
+- 0 TS errors · Frontend `npm run build` ✅ (13 126 modules, 0 errors)
+- Backend `nest build` ✅ (0 errors)
+- `GET /documents/repository` registered before `GET /documents/:id` (no route conflict)
+- Period picker initializes to current year/month/quarter; changes immediately update expected filename preview
+
+---
+
 ## [1.3.0.9] - 2026-02-27 — KPI Dashboard: All-Units Table, Partial Scores, Trend Fix, Band Dist Partial Slice, Unit Detail Close Button & No Prev-Year X-Axis
 
 ### Fixed

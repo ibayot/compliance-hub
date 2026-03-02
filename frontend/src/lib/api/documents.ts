@@ -130,6 +130,22 @@ export interface ListDocumentsResponse {
   limit: number;
 }
 
+export interface RepositoryBucket {
+  key: string;
+  label: string;
+  count: number;
+  documents: Document[];
+}
+
+export interface RepositoryYear {
+  year: string;
+  buckets: RepositoryBucket[];
+}
+
+export interface RepositoryResponse {
+  years: RepositoryYear[];
+}
+
 export const documentsApi = {
   /**
    * Upload a new document
@@ -347,5 +363,13 @@ export const documentsApi = {
 
   deleteAssignment: async (id: string): Promise<void> => {
     await apiClient.delete(`/documents/assignments/${id}`);
+  },
+
+  /**
+   * Get all documents grouped by year and period bucket (repository view)
+   */
+  getRepository: async (): Promise<RepositoryResponse> => {
+    const response = await apiClient.get('/documents/repository');
+    return response.data;
   },
 };

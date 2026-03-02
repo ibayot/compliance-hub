@@ -182,6 +182,15 @@ export class DocumentController {
   }
 
   /**
+   * Get document repository grouped by year and period bucket
+   * GET /documents/repository
+   */
+  @Get('repository')
+  async getRepository(@CurrentUser() user: any) {
+    return this.documentService.getRepository(user?.role, user?.id);
+  }
+
+  /**
    * Get document by ID
    * GET /documents/:id
    */

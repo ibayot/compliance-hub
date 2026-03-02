@@ -374,17 +374,36 @@ export class DocumentService implements OnModuleInit {
       if (!reportorialDocType) {
         throw new BadRequestException('Invalid reportorial document type ID');
       }
-      const expectedFilename = ReportorialDocTypeService.computeExpectedFilename(reportorialDocType);
+
+      // Use client-supplied year/period (late submission support); fall back to current date
+      let expectedFilename: string;
+      if (metadata.year && (metadata.period || reportorialDocType.submission_frequency === 'annual')) {
+        expectedFilename = ReportorialDocTypeService.computeExpectedFilenameFromParts(
+          reportorialDocType,
+          metadata.year,
+          metadata.period || '',
+        );
+      } else {
+        expectedFilename = ReportorialDocTypeService.computeExpectedFilename(reportorialDocType);
+      }
+
       const uploadedBase = file.originalname.replace(/\.(docx|pdf)$/i, '');
       if (uploadedBase !== expectedFilename) {
         throw new BadRequestException(
-          `Invalid filename. Expected "${expectedFilename}.docx" or "${expectedFilename}.pdf" based on the document type and current period.`,
+          `Invalid filename. Expected "${expectedFilename}.docx" or "${expectedFilename}.pdf" based on the document type and selected period.`,
         );
       }
       finalDocumentType = reportorialDocType.display_name;
-      const suffix = ReportorialDocTypeService.computePeriodSuffix(reportorialDocType.submission_frequency);
+      // Compute the canonical period suffix using the same parts
+      const suffix = (metadata.year && (metadata.period || reportorialDocType.submission_frequency === 'annual'))
+        ? ReportorialDocTypeService.computePeriodSuffixFromParts(
+            reportorialDocType.submission_frequency,
+            metadata.year,
+            metadata.period || '',
+          )
+        : ReportorialDocTypeService.computePeriodSuffix(reportorialDocType.submission_frequency);
       finalPeriod = suffix;
-      finalYear = String(new Date().getFullYear());
+      finalYear = metadata.year || String(new Date().getFullYear());
     }
 
     // Calculate checksum
@@ -956,5 +975,107 @@ export class DocumentService implements OnModuleInit {
     );
 
     return review;
+  }
+
+  /**
+   * Parse a stored period string into a human-readable bucket label and sort order.
+   * Handles: YYYYMM (monthly), YYYYMM-MM (quarterly range), YYYYQ# (quarterly), YYYY (annual)
+   */
+  private parsePeriodBucket(period: string): { key: string; label: string; sortOrder: number } {
+    const p = (period || '').trim();
+
+    // Monthly: "202601" → January
+    const monthly = /^(\d{4})(\d{2})$/.exec(p);
+    if (monthly) {
+      const month = parseInt(monthly[2], 10);
+      const names = ['January', 'February', 'March', 'April', 'May', 'June',
+                     'July', 'August', 'September', 'October', 'November', 'December'];
+      return { key: `month-${monthly[2]}`, label: names[month - 1] || `Month ${month}`, sortOrder: month };
+    }
+
+    // Range: "202601-03" → Q1
+    const range = /^(\d{4})(\d{2})-(\d{2})$/.exec(p);
+    if (range) {
+      const startM = parseInt(range[2], 10);
+      const endM = parseInt(range[3], 10);
+      const q = Math.ceil(startM / 3);
+      const startName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return {
+        key: `q${q}`,
+        label: `Q${q} (${startName[startM - 1]}–${startName[endM - 1]})`,
+        sortOrder: 100 + q,
+      };
+    }
+
+    // Quarter: "2026Q1" or "2026-Q1"
+    const qtr = /^(\d{4})-?Q([1-4])$/i.exec(p);
+    if (qtr) {
+      const q = parseInt(qtr[2], 10);
+      const qLabels = ['Jan–Mar', 'Apr–Jun', 'Jul–Sep', 'Oct–Dec'];
+      return { key: `q${q}`, label: `Q${q} (${qLabels[q - 1]})`, sortOrder: 100 + q };
+    }
+
+    // Annual: "2026" (4-digit only) or blank
+    if (/^\d{4}$/.test(p) || p === '') {
+      return { key: 'annual', label: 'Annual', sortOrder: 999 };
+    }
+
+    return { key: `other-${p}`, label: p || 'Other', sortOrder: 998 };
+  }
+
+  /**
+   * Return all non-deleted documents grouped by year → period-bucket.
+   * FOCAL users see only their own uploads; admins/reviewers see all.
+   */
+  async getRepository(actorRole: UserRole, actorId: number): Promise<{
+    years: Array<{
+      year: string;
+      buckets: Array<{
+        key: string;
+        label: string;
+        count: number;
+        documents: Document[];
+      }>;
+    }>;
+  }> {
+    const qb = this.documentRepo
+      .createQueryBuilder('doc')
+      .leftJoinAndSelect('doc.unit', 'unit')
+      .leftJoinAndSelect('doc.uploader', 'uploader')
+      .where('doc.is_deleted = :d', { d: false });
+
+    if (actorRole === UserRole.FOCAL && actorId) {
+      qb.andWhere('doc.uploaded_by = :actorId', { actorId });
+    }
+
+    qb.orderBy('doc.year', 'DESC').addOrderBy('doc.created_at', 'DESC');
+
+    const docs = await qb.getMany();
+    const enriched = await this.enrichDocumentsForWorkflow(docs);
+
+    // Group: year → bucket-key → { label, sortOrder, documents[] }
+    const yearMap = new Map<string, Map<string, { label: string; sortOrder: number; documents: Document[] }>>();
+
+    for (const doc of enriched) {
+      const y = doc.year || String(new Date((doc as any).created_at).getFullYear());
+      const { key, label, sortOrder } = this.parsePeriodBucket(doc.period);
+      if (!yearMap.has(y)) yearMap.set(y, new Map());
+      const buckets = yearMap.get(y)!;
+      if (!buckets.has(key)) buckets.set(key, { label, sortOrder, documents: [] });
+      buckets.get(key)!.documents.push(doc);
+    }
+
+    const years = [...yearMap.keys()]
+      .sort((a, b) => Number(b) - Number(a))
+      .map((year) => ({
+        year,
+        buckets: [...yearMap.get(year)!.entries()]
+          .map(([key, v]) => ({ key, label: v.label, count: v.documents.length, documents: v.documents, sortOrder: v.sortOrder }))
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map(({ sortOrder: _sortOrder, ...rest }) => rest),
+      }));
+
+    return { years };
   }
 }
