@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0.11] - 2026-03-02 — KPI Data-Gate, Multi-Frequency Reports & Report Visual Overhaul
+
+### Added
+- **KPI Dashboard — `hasDataForPeriod` gate**: A new `useMemo` boolean (`hasDataForPeriod`) checks whether any unit has at least one timeseries point with `hasData=true` for the selected period. When false:
+  - The Unit KPI Scores table renders a "No KPI monitoring data for this period yet" row instead of empty unit rows with `—` values.
+  - The Unit Detail panel is hidden entirely (not just empty).
+  - A `useEffect` auto-closes any open Unit Detail card the moment the period changes to one with no data.
+- **Consolidated Reports — Frequency selector**: The Report Parameters form now matches the KPI module: Year + Frequency (Monthly / Quarterly / Semestral / Annual) + sub-period picker (Month / Quarter Q1–Q4 / Semester H1–H2). Period labels update dynamically (e.g. "Q1 2026 (Jan–Mar)", "H2 2026 (Jul–Dec)", "Annual 2026").
+- **Consolidated Reports — Unit name card**: When a specific unit is selected, the "Units Reporting" score card is replaced by a "Reporting Unit" card showing the unit name.
+- **Consolidated Reports — KPIs Monitored** (renamed from "KPI Entries"): the third score card label now reads "KPIs Monitored".
+- **Consolidated Reports — Single-unit KPI chart**: When a unit is selected, `ReportView` fetches `kpiApi.dashboardUnit` + `kpiApi.dashboardUnitTimeseries` and renders the KPI detail line chart (one line per KPI code, same style as the KPI module's Unit Detail chart), followed by an individual KPI breakdown table (Code | Actual | Target | Score | Band).
+- **Consolidated Reports — All-units KPI trend chart**: When "All Units" is selected, a multi-line `LineChart` (one line per unit from `allUnitsTsQuery`) is rendered above the per-unit summary table, exactly mirroring the KPI Dashboard's Unit KPI Scores chart.
+- **Consolidated Reports — Metrics Applied column**: The Document Submissions table now includes a "Metrics Applied" column showing how many metric templates from the Metrics module are linked to each document's type (via `metricsApi.listTemplates()` + `applicability[].document_type` matching). Shown as a small info `Chip`; `—` when none.
+- **Consolidated Reports — Print icon/SVG fix**: Print CSS now includes `svg { display: none !important; }` — this suppresses all MUI icon SVGs (including the large `<Alert severity="info">` icon) in the printed output. All "no data" messages now use a plain `<Box>` with a blue left-border instead of `<Alert severity="info">`.
+- **Consolidated Reports — Visual overhaul**: Report body upgraded to `Paper elevation={3}`, colored score cards with band-based border/text, `LinearProgress` on Overall Score card, section headers with MUI icons (`TrendingUp`, `InsertDriveFile`), `Legend` added to all charts, and recharts imported into the reports page.
+
+### Changed
+- **`ReportParams` interface** extended with `frequency`, `quarter`, `semester`, `unitName` fields; `ReportsPage` state now tracks `selectedFrequency`, `selectedQuarter`, `selectedSemester`.
+- **KPI page unit table conditional rendering**: `availableUnits.map(...)` is now wrapped in a `hasDataForPeriod` check — empty-period states show a centered message row rather than rendering clickable rows with `—` values.
+- **`selectedUnitDashboard` render guard**: changed from `{selectedUnitDashboard && ...}` to `{hasDataForPeriod && selectedUnitDashboard && ...}` so the Unit Detail panel is always hidden when the selected period has no data.
+
+### Verified (Smoke)
+- 0 TS errors — `get_errors` on both `kpi/page.tsx` and `reports/page.tsx` → No errors
+- Frontend `npm run build` ✅ (Vite — 13 126 modules, 0 errors, 28 s)
+
+---
+
 ## [1.3.0.10] - 2026-02-28 — Report Repository, Document Period Picker & Consolidated Reports
 
 ### Added
