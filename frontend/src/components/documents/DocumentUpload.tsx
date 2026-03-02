@@ -18,22 +18,38 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import { documentsApi, UploadDocumentRequest } from '@/lib/api/documents';
 import { unitsApi } from '@/lib/api/units';
-import { docTypesApi, computeExpectedFilename, ReportorialDocType } from '@/lib/api/document-types';
+import {
+  docTypesApi,
+  computeExpectedFilenameExplicit,
+  ReportorialDocType,
+} from '@/lib/api/document-types';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface DocumentUploadProps {
   onSuccess?: () => void;
 }
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
 export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const isFocal = user?.role === 'focal';
 
+  const now = new Date();
+
   const [title, setTitle] = useState('');
   const [unitId, setUnitId] = useState('');
   const [reportorialDocTypeId, setReportorialDocTypeId] = useState('');
   const [file, setFile] = useState<File | null>(null);
+
+  // Period picker state
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [selectedQuarter, setSelectedQuarter] = useState(Math.ceil((now.getMonth() + 1) / 3));
 
   // Load units (admin can pick any)
   const { data: unitsResponse } = useQuery({
@@ -61,15 +77,21 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
     setReportorialDocTypeId('');
   }, [unitId]);
 
-  // Compute expected filename dynamically
+  // Selected doc type object
   const selectedDocType = useMemo(
     () => docTypes.find((dt) => String(dt.id) === reportorialDocTypeId),
     [docTypes, reportorialDocTypeId],
   );
-  const expectedFilename = useMemo(
-    () => (selectedDocType ? computeExpectedFilename(selectedDocType) : null),
-    [selectedDocType],
-  );
+
+  // Compute expected filename from explicit period picker values
+  const expectedFilename = useMemo(() => {
+    if (!selectedDocType) return null;
+    return computeExpectedFilenameExplicit(selectedDocType, {
+      year: selectedYear,
+      month: selectedMonth,
+      quarter: selectedQuarter,
+    });
+  }, [selectedDocType, selectedYear, selectedMonth, selectedQuarter]);
 
   const uploadMutation = useMutation({
     mutationFn: (data: UploadDocumentRequest) => documentsApi.uploadDocument(data),
@@ -135,14 +157,25 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
     if (!unitId) { enqueueSnackbar('Please select a unit', { variant: 'error' }); return; }
     if (!reportorialDocTypeId) { enqueueSnackbar('Please select a document type', { variant: 'error' }); return; }
 
+    // Compute period token for the backend
+    let periodToken = '';
+    if (selectedDocType) {
+      if (selectedDocType.submission_frequency === 'monthly') {
+        periodToken = String(selectedMonth).padStart(2, '0');
+      } else if (selectedDocType.submission_frequency === 'quarterly') {
+        periodToken = `Q${selectedQuarter}`;
+      }
+      // annual: periodToken stays ''
+    }
+
     uploadMutation.mutate({
       title,
       file,
       unit_id: unitId,
       document_type: selectedDocType?.display_name || '',
       reportorial_doc_type_id: Number(reportorialDocTypeId),
-      period: '',
-      year: String(new Date().getFullYear()),
+      period: periodToken,
+      year: String(selectedYear),
     });
   };
 
@@ -151,6 +184,9 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
     : (unitsResponse?.data ?? []);
 
   const selectedUnitName = unitOptions.find((u) => String(u.id) === unitId)?.name;
+
+  // Year range: current year ± 3
+  const yearOptions = Array.from({ length: 7 }, (_, i) => now.getFullYear() - 3 + i);
 
   return (
     <Paper elevation={3} sx={{ p: 4, maxWidth: 600, mx: 'auto' }}>
@@ -239,6 +275,57 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
               )}
             </Select>
           </FormControl>
+
+          {/* ── Period Picker (shown once a doc type is selected) ── */}
+          {selectedDocType && (
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              {/* Year */}
+              <FormControl sx={{ minWidth: 110 }} required>
+                <InputLabel>Year</InputLabel>
+                <Select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  label="Year"
+                >
+                  {yearOptions.map((y) => (
+                    <MenuItem key={y} value={y}>{y}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {/* Month (monthly only) */}
+              {selectedDocType.submission_frequency === 'monthly' && (
+                <FormControl sx={{ minWidth: 160 }} required>
+                  <InputLabel>Month</InputLabel>
+                  <Select
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                    label="Month"
+                  >
+                    {MONTH_NAMES.map((name, idx) => (
+                      <MenuItem key={idx + 1} value={idx + 1}>{name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+
+              {/* Quarter (quarterly only) */}
+              {selectedDocType.submission_frequency === 'quarterly' && (
+                <FormControl sx={{ minWidth: 130 }} required>
+                  <InputLabel>Quarter</InputLabel>
+                  <Select
+                    value={selectedQuarter}
+                    onChange={(e) => setSelectedQuarter(Number(e.target.value))}
+                    label="Quarter"
+                  >
+                    {[1, 2, 3, 4].map((q) => (
+                      <MenuItem key={q} value={q}>Q{q}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+            </Box>
+          )}
 
           {expectedFilename && (
             <Typography variant="body2" color="text.secondary">

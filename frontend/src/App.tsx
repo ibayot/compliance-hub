@@ -19,6 +19,8 @@ import ReviewsPage from '@/app/dashboard/reviews/page';
 import KpiPage from '@/app/dashboard/kpi/page';
 import SettingsPage from '@/app/dashboard/settings/page';
 import UserManualPage from '@/app/dashboard/user-manual/page';
+import RepositoryPage from '@/app/dashboard/repository/page';
+import ReportsPage from '@/app/dashboard/reports/page';
 
 function ProtectedDashboard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
@@ -153,6 +155,22 @@ export default function App() {
         element={
           <ProtectedDashboard>
             <SettingsPage />
+          </ProtectedDashboard>
+        }
+      />
+      <Route
+        path="/dashboard/repository"
+        element={
+          <ProtectedDashboard>
+            <RepositoryPage />
+          </ProtectedDashboard>
+        }
+      />
+      <Route
+        path="/dashboard/reports"
+        element={
+          <ProtectedDashboard>
+            <ReportsPage />
           </ProtectedDashboard>
         }
       />

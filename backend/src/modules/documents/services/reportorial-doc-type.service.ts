@@ -98,10 +98,59 @@ export class ReportorialDocTypeService {
   }
 
   /**
+   * Compute the expected filename suffix from explicit year + period parts
+   * sent by the client (for late submissions / period picker).
+   *
+   * @param frequency  – submission_frequency of the doc type
+   * @param yearStr    – 4-digit year string, e.g. "2026"
+   * @param periodStr  – period token: "01"–"12" for monthly, "Q1"–"Q4" for quarterly, "" for annual
+   */
+  static computePeriodSuffixFromParts(
+    frequency: SubmissionFrequency,
+    yearStr: string,
+    periodStr: string,
+  ): string {
+    const year = yearStr || String(new Date().getFullYear());
+
+    if (frequency === SubmissionFrequency.MONTHLY) {
+      const month = periodStr ? String(periodStr).padStart(2, '0') : String(new Date().getMonth() + 1).padStart(2, '0');
+      return `${year}${month}`;
+    }
+
+    if (frequency === SubmissionFrequency.QUARTERLY) {
+      // Accept "Q1"–"Q4" or "1"–"4"
+      const qMatch = /^[Qq]?([1-4])$/.exec(periodStr || '');
+      const q = qMatch ? parseInt(qMatch[1], 10) : Math.ceil((new Date().getMonth() + 1) / 3);
+      const startMonth = (q - 1) * 3 + 1;
+      const endMonth = q * 3;
+      return `${year}${String(startMonth).padStart(2, '0')}-${String(endMonth).padStart(2, '0')}`;
+    }
+
+    // Annual
+    return `${year}`;
+  }
+
+  /**
    * Compute the expected full filename (without extension) for a document type.
    */
   static computeExpectedFilename(docType: ReportorialDocumentType, ref: Date = new Date()): string {
     const suffix = ReportorialDocTypeService.computePeriodSuffix(docType.submission_frequency, ref);
+    return `${docType.base_name}_${suffix}`;
+  }
+
+  /**
+   * Compute the expected full filename from explicit period parts (for period picker / late submissions).
+   */
+  static computeExpectedFilenameFromParts(
+    docType: ReportorialDocumentType,
+    yearStr: string,
+    periodStr: string,
+  ): string {
+    const suffix = ReportorialDocTypeService.computePeriodSuffixFromParts(
+      docType.submission_frequency,
+      yearStr,
+      periodStr,
+    );
     return `${docType.base_name}_${suffix}`;
   }
 }

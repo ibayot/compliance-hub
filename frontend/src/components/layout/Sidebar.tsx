@@ -27,6 +27,8 @@ import {
   Settings as SettingsIcon,
   Security as SecurityIcon,
   MenuBook as ManualIcon,
+  FolderOpen as RepositoryIcon,
+  Summarize as ReportsIcon,
 } from '@mui/icons-material';
 import type { ElementType } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -55,6 +57,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const mainNavItems: NavItem[] = [
     { label: 'Dashboard', icon: DashboardIcon, path: '/dashboard', roles: ['all'] },
     { label: 'Documents', icon: DocumentsIcon, path: '/dashboard/documents', roles: ['all'] },
+    { label: 'Repository', icon: RepositoryIcon, path: '/dashboard/repository', roles: ['all'] },
     { label: 'Issuances', icon: IssuancesIcon, path: '/dashboard/issuances', roles: ['super_admin', 'reviewer'] },
     { label: 'Issues', icon: TicketsIcon, path: '/dashboard/tickets', roles: ['all'] },
   ];
@@ -64,6 +67,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     { label: 'Metrics', icon: MetricsIcon, path: '/dashboard/metrics', roles: ['super_admin', 'reviewer'] },
     { label: 'KPI', icon: KpiIcon, path: '/dashboard/kpi', roles: ['super_admin', 'reviewer', 'focal', 'auditor', 'technician'] },
     { label: 'Reviews', icon: SecurityIcon, path: '/dashboard/reviews', roles: ['super_admin', 'reviewer'] },
+    { label: 'Reports', icon: ReportsIcon, path: '/dashboard/reports', roles: ['super_admin', 'reviewer', 'focal'] },
   ];
 
   const settingsNavItems: NavItem[] = [

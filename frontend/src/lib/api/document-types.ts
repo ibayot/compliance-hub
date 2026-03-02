@@ -51,8 +51,46 @@ export function computePeriodSuffix(frequency: SubmissionFrequency, ref: Date = 
   return String(year);
 }
 
+/**
+ * Compute period suffix from explicit integer inputs (for late submissions / period picker).
+ * @param frequency  – monthly | quarterly | annual
+ * @param opts.year    – full 4-digit year
+ * @param opts.month   – 1-based month number (used for monthly)
+ * @param opts.quarter – 1-based quarter number (used for quarterly)
+ */
+export function computePeriodSuffixExplicit(
+  frequency: SubmissionFrequency,
+  opts: { year: number; month?: number; quarter?: number },
+): string {
+  const { year, month = 1, quarter = 1 } = opts;
+
+  if (frequency === 'monthly') {
+    return `${year}${String(month).padStart(2, '0')}`;
+  }
+
+  if (frequency === 'quarterly') {
+    const startMonth = (quarter - 1) * 3 + 1;
+    const endMonth = startMonth + 2;
+    return `${year}${String(startMonth).padStart(2, '0')}-${String(endMonth).padStart(2, '0')}`;
+  }
+
+  // annual
+  return String(year);
+}
+
 export function computeExpectedFilename(docType: ReportorialDocType, ref: Date = new Date()): string {
   const suffix = computePeriodSuffix(docType.submission_frequency, ref);
+  return `${docType.base_name}_${suffix}`;
+}
+
+/**
+ * Compute expected filename from explicit period picker values (for late submissions).
+ */
+export function computeExpectedFilenameExplicit(
+  docType: ReportorialDocType,
+  opts: { year: number; month?: number; quarter?: number },
+): string {
+  const suffix = computePeriodSuffixExplicit(docType.submission_frequency, opts);
   return `${docType.base_name}_${suffix}`;
 }
 
