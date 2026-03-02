@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0.13] - 2026-03-04 — KPI/Reports Chart Anchoring, Unit Detail Fix, KPIs Needing Attention & Sample Docs
+
+### Fixed
+- **KPI — Unit Detail blank for partial-period units**: `openUnitDashboard` now always fetches timeseries from January 1 of the selected year (`periodYear, 1`) instead of the period start month. Units that only have Q1–Q2 data are now visible when the selected period is Q3, showing their historical trend rather than a blank "No trend data" message.
+- **KPI — `kpiDetailLineData` X-axis labels wrong after full-year fetch**: Replaced `getXAxisLabel()` (which produced quarterly-relative labels like "Q3--5") with `MONTH_ABBR[pt.periodMonth - 1]` so the per-KPI detail chart always shows correct month abbreviations (Jan, Feb, …).
+- **KPI — KPI detail table missing KPI name**: Table cell now renders both `item.name` (bold) and `item.code` (caption, secondary color) instead of code-only.
+
+### Changed
+- **KPI — All charts always anchor at 0**: `allUnitsLineData` and `kpiDetailLineData` both unconditionally prepend a `{ label: '', score: 0 }` anchor point so all trend lines start from the bottom-left of the chart regardless of selected period or frequency. Previously only January monthly got the anchor.
+- **Reports — KPI Scores section matches KPI module exactly**: Added `TrendSparkline` function to Reports page; all-units table now has Color / Score / Trend / # KPIs columns (was Unit / Score / Band / KPIs Monitored). Single-unit KPI table gains Color swatch, KPI name + code combined cell, and Trend sparkline column.
+- **Reports — `unitTsQuery` fetches from Jan 1**: Same fix as KPI module — always fetches full-year history for correct trend computation and partial-period visibility.
+- **Reports — `allUnitsLineData` and `kpiDetailLineData` 0-anchor**: Same 0-anchor prepend applied to Reports page chart data.
+
+### Added
+- **Reports — "KPIs Requiring Attention" section**: A new highlighted table section appears between KPI Scores and Document Submissions whenever the selected period has any Red or Amber KPIs. For single-unit view, KPIs come from `unitDashQuery.data.details`; for all-units view, from the last `hasData` timeseries point per unit. Table columns: Unit (all-units only) | KPI Name | Code | Score | Band | Actual Value.
+- **Seed — 8 sample compliance documents** (`doc-003` through `doc-010`): Added to `seed-data.sql` covering IT and Finance units, spanning 2025 Q2 through 2026 (Monthly, Quarterly, Annual, Incident, Compliance types). All documents contain text satisfying all 4 metric template rules: Introduction/Findings/Recommendations sections, compliance/regulation/policy keywords (min 2), "Total incidents: N" for property check, and a submission date within deadline for the date-check template.
+- **User Manual — Consolidated Reports section**: New `manualItem` added for `/dashboard/reports` covering inputs (Year, Frequency, Unit) and outputs (Score Card, KPI Scores Chart, KPIs Requiring Attention table, Document Submissions Table).
+- **User Manual — Report Repository section**: New `manualItem` added for `/dashboard/repository` covering folder navigation (Year Accordion, Period Folder) and outputs (Document Table, View Action, Download Action).
+
+### Verified (Smoke)
+- 0 TS errors — `npx tsc --noEmit` on frontend → clean
+
+---
+
 ## [1.3.0.12] - 2026-03-03 — KPI Score Fix, Trend Sparklines, Band Chips & Reports Alignment
 
 ### Fixed
