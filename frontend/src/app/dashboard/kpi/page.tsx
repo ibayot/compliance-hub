@@ -580,6 +580,21 @@ export default function KpiPage() {
     selectedUnitIdRef.current = null;
   };
 
+  /** True when at least one unit has a timeseries point with actual data for the selected period. */
+  const hasDataForPeriod = useMemo(() => {
+    return availableUnits.some((u) =>
+      (allUnitsTimeseries[u.id] || []).some((p) => p.hasData),
+    );
+  }, [availableUnits, allUnitsTimeseries]);
+
+  /** Auto-close the Unit Detail panel when the current period has no monitoring data. */
+  useEffect(() => {
+    if (!hasDataForPeriod) {
+      closeUnitDetail();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasDataForPeriod]);
+
   const overallBand = computeBand(Number(summary?.summary.overallScore ?? 0), summary?.thresholds || []);
   const overallBandColor = BAND_COLORS[overallBand] || BAND_COLORS.unclassified;
 
@@ -864,40 +879,49 @@ export default function KpiPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {availableUnits.map((unit, idx) => {
-                      const summaryRow = summaryUnitMap[unit.id];
-                      const ts = allUnitsTimeseries[unit.id] || [];
-                      // Use the chronologically last point with actual data for Trend end-value.
-                      const lastHasData = [...ts].reverse().find((p) => p.hasData);
-                      const currScore: number | null = lastHasData
-                        ? lastHasData.score
-                        : (summaryRow ? Number(summaryRow.score) : null);
-                      const bandKey = summaryRow
-                        ? String(summaryRow.band || 'unclassified').toLowerCase()
-                        : 'unclassified';
-                      const unitColor = unitColorMap[unit.id] ?? UNIT_COLORS[idx % UNIT_COLORS.length];
-                      return (
-                        <TableRow key={unit.id} hover sx={{ cursor: 'pointer' }} onClick={() => openUnitDashboard(unit.id)}>
-                          <TableCell>{unit.name}</TableCell>
-                          <TableCell sx={{ p: 1 }}>
-                            <Box sx={{ width: 20, height: 20, borderRadius: '4px', bgcolor: unitColor }} />
-                          </TableCell>
-                          <TableCell>
-                            <strong>{summaryRow ? summaryRow.score : '—'}</strong>
-                          </TableCell>
-                          <TableCell>
-                            {currScore !== null ? (
-                              <TrendSparkline prev={null} current={currScore} band={bandKey} />
-                            ) : (
-                              <Typography variant="caption" color="text.secondary">—</Typography>
-                            )}
-                          </TableCell>
-                          <TableCell>{summaryRow ? summaryRow.kpiCount : '—'}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    {availableUnits.length === 0 && (
+                    {!hasDataForPeriod ? (
+                      <TableRow>
+                        <TableCell colSpan={5} align="center">
+                          <Typography variant="body2" color="text.secondary" sx={{ py: 1.5 }}>
+                            No KPI monitoring data for this period yet.
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ) : availableUnits.length === 0 ? (
                       <TableRow><TableCell colSpan={5} align="center"><Typography variant="caption" color="text.secondary">No unit data.</Typography></TableCell></TableRow>
+                    ) : (
+                      availableUnits.map((unit, idx) => {
+                        const summaryRow = summaryUnitMap[unit.id];
+                        const ts = allUnitsTimeseries[unit.id] || [];
+                        // Use the chronologically last point with actual data for Trend end-value.
+                        const lastHasData = [...ts].reverse().find((p) => p.hasData);
+                        const currScore: number | null = lastHasData
+                          ? lastHasData.score
+                          : (summaryRow ? Number(summaryRow.score) : null);
+                        const bandKey = summaryRow
+                          ? String(summaryRow.band || 'unclassified').toLowerCase()
+                          : 'unclassified';
+                        const unitColor = unitColorMap[unit.id] ?? UNIT_COLORS[idx % UNIT_COLORS.length];
+                        return (
+                          <TableRow key={unit.id} hover sx={{ cursor: 'pointer' }} onClick={() => openUnitDashboard(unit.id)}>
+                            <TableCell>{unit.name}</TableCell>
+                            <TableCell sx={{ p: 1 }}>
+                              <Box sx={{ width: 20, height: 20, borderRadius: '4px', bgcolor: unitColor }} />
+                            </TableCell>
+                            <TableCell>
+                              <strong>{summaryRow ? summaryRow.score : '—'}</strong>
+                            </TableCell>
+                            <TableCell>
+                              {currScore !== null ? (
+                                <TrendSparkline prev={null} current={currScore} band={bandKey} />
+                              ) : (
+                                <Typography variant="caption" color="text.secondary">—</Typography>
+                              )}
+                            </TableCell>
+                            <TableCell>{summaryRow ? summaryRow.kpiCount : '—'}</TableCell>
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>
@@ -906,7 +930,7 @@ export default function KpiPage() {
           </Grid>
           )}
 
-          {selectedUnitDashboard && (
+          {hasDataForPeriod && selectedUnitDashboard && (
           <Grid item xs={12}>
             <Card>
               <CardHeader
