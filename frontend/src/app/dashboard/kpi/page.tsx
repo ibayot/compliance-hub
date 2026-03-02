@@ -488,15 +488,17 @@ export default function KpiPage() {
     if (!Number.isFinite(unitId) || !Number.isFinite(periodYear) || !Number.isFinite(effectiveMonth)) return;
     try {
       selectedUnitIdRef.current = unitId;
-      // Always fetch unit detail timeseries from Jan 1 of the selected year so that
-      // partial-period units (e.g. Finance with data only through Q2 being viewed in Q3)
-      // still show their historical trend instead of a blank chart.
-      const { toYear, toMonth } = getTimeseriesRange(
+      // Fetch the unit detail timeseries using the period's natural range:
+      //   Monthly  → Jan 1 to selected month (from getTimeseriesRange monthly fix)
+      //   Quarterly → only Q months (e.g. Q3 = Jul–Sep)
+      //   Semestral → only H months (e.g. H2 = Jul–Dec)
+      //   Annual   → Jan–Dec
+      const { fromYear, fromMonth, toYear, toMonth } = getTimeseriesRange(
         viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester,
       );
       const [detail, tseries] = await Promise.all([
         kpiApi.dashboardUnit(unitId, periodYear, effectiveMonth),
-        kpiApi.dashboardUnitTimeseries(unitId, periodYear, 1, toYear, toMonth),
+        kpiApi.dashboardUnitTimeseries(unitId, fromYear, fromMonth, toYear, toMonth),
       ]);
       setSelectedUnitDashboard(detail);
       setUnitTimeseries(tseries);
@@ -539,13 +541,20 @@ export default function KpiPage() {
       });
       return datum;
     });
-    // Always prepend a score=0 anchor so every chart line starts from bottom-left
-    // regardless of which period is selected. This ensures visual consistency:
-    // even when the first data point is e.g. Q2 Apr, viewers see the line rise from 0.
+    // For units that have no data at the first visible period but do have data later
+    // in the range (e.g. Finance with no Jan value when viewed in monthly Feb),
+    // inject 0 at the first point so the line draws from 0 → first-actual instead
+    // of showing a disconnected floating dot.
     if (mapped.length > 0) {
-      const zeroAnchor: Record<string, any> = { label: '' };
-      availableUnits.forEach((unit) => { zeroAnchor[`u${unit.id}`] = 0; });
-      return [zeroAnchor, ...mapped];
+      const first = { ...mapped[0] };
+      availableUnits.forEach((unit) => {
+        const key = `u${unit.id}`;
+        if (first[key] === null) {
+          const hasLater = mapped.slice(1).some((d) => d[key] !== null);
+          if (hasLater) first[key] = 0;
+        }
+      });
+      return [first, ...mapped.slice(1)];
     }
     return mapped;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -575,8 +584,8 @@ export default function KpiPage() {
   const kpiDetailLineData = useMemo(() => {
     if (unitTimeseries.length === 0) return { data: [] as Record<string, any>[], codes: [] as string[] };
     const codes = [...new Set(unitTimeseries.flatMap((pt) => (pt.kpiScores || []).map((k) => k.code)))];
-    // Unit detail always uses month abbreviations regardless of view frequency,
-    // because we now fetch from Jan 1 meaning the x-axis spans full-year months.
+    // Always use month abbreviations on the X-axis: monthly shows Jan→selected month,
+    // quarterly shows only that quarter's months, semestral shows only that H's months.
     const data = unitTimeseries.map((pt) => {
       const datum: Record<string, any> = { label: MONTH_ABBR[pt.periodMonth - 1] };
       codes.forEach((code) => {
@@ -585,11 +594,17 @@ export default function KpiPage() {
       });
       return datum;
     });
-    // Always prepend a score=0 anchor so all KPI lines start from bottom-left.
+    // For KPIs that have no data at the first visible period but do have data later,
+    // inject 0 at the first point so the line draws from 0 → first-actual.
     if (data.length > 0) {
-      const zeroAnchor: Record<string, any> = { label: '' };
-      codes.forEach((code) => { zeroAnchor[code] = 0; });
-      return { data: [zeroAnchor, ...data], codes };
+      const first = { ...data[0] };
+      codes.forEach((code) => {
+        if (first[code] === null) {
+          const hasLater = data.slice(1).some((d) => d[code] !== null);
+          if (hasLater) first[code] = 0;
+        }
+      });
+      return { data: [first, ...data.slice(1)], codes };
     }
     return { data, codes };
   // eslint-disable-next-line react-hooks/exhaustive-deps

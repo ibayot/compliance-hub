@@ -69,7 +69,6 @@ function DocumentTable({ documents }: { documents: Document[] }) {
         <TableHead>
           <TableRow>
             <TableCell>Title</TableCell>
-            <TableCell>Type</TableCell>
             <TableCell>Unit</TableCell>
             <TableCell>Status</TableCell>
             <TableCell>Uploaded</TableCell>
@@ -80,11 +79,6 @@ function DocumentTable({ documents }: { documents: Document[] }) {
           {documents.map((doc) => (
             <TableRow key={doc.id} hover>
               <TableCell>{doc.title}</TableCell>
-              <TableCell>
-                <Typography variant="caption" color="text.secondary">
-                  {doc.document_type}
-                </Typography>
-              </TableCell>
               <TableCell>{doc.unit?.name ?? '—'}</TableCell>
               <TableCell>
                 <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
@@ -135,62 +129,53 @@ function DocumentTable({ documents }: { documents: Document[] }) {
 
 function BucketFolder({
   bucket,
-  yearLabel,
+  isSelected,
+  onClick,
 }: {
   bucket: RepositoryBucket;
-  yearLabel: string;
+  isSelected: boolean;
+  onClick: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-
   return (
-    <Box>
-      <Paper
-        elevation={open ? 3 : 1}
-        sx={{
-          p: 2,
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1.5,
-          bgcolor: open ? 'primary.light' : 'background.paper',
-          color: open ? 'primary.contrastText' : 'text.primary',
-          transition: 'all 0.15s',
-          '&:hover': { bgcolor: open ? 'primary.light' : 'action.hover' },
-          borderRadius: 2,
-        }}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {open ? (
-          <FolderOpenIcon color={open ? 'inherit' : 'primary'} />
-        ) : (
-          <FolderIcon color="primary" />
-        )}
-        <Box sx={{ flexGrow: 1 }}>
-          <Typography variant="subtitle2" fontWeight={600}>
-            {bucket.label}
-          </Typography>
-          <Typography variant="caption" sx={{ opacity: 0.8 }}>
-            {yearLabel}
-          </Typography>
-        </Box>
-        <Chip
-          label={bucket.count}
-          size="small"
-          color={open ? 'default' : 'primary'}
-          sx={{ fontWeight: 700 }}
-        />
-      </Paper>
-
-      {open && (
-        <Box sx={{ mt: 1, ml: 1, borderLeft: 2, borderColor: 'primary.light', pl: 2 }}>
-          <DocumentTable documents={bucket.documents} />
-        </Box>
+    <Paper
+      elevation={isSelected ? 3 : 1}
+      sx={{
+        p: 1.5,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.5,
+        bgcolor: isSelected ? 'primary.light' : 'background.paper',
+        color: isSelected ? 'primary.contrastText' : 'text.primary',
+        transition: 'all 0.15s',
+        '&:hover': { bgcolor: isSelected ? 'primary.light' : 'action.hover' },
+        borderRadius: 2,
+      }}
+      onClick={onClick}
+    >
+      {isSelected ? (
+        <FolderOpenIcon fontSize="small" />
+      ) : (
+        <FolderIcon color="primary" fontSize="small" />
       )}
-    </Box>
+      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+        <Typography variant="body2" fontWeight={600} noWrap>
+          {bucket.label}
+        </Typography>
+      </Box>
+      <Chip
+        label={bucket.count}
+        size="small"
+        color={isSelected ? 'default' : 'primary'}
+        sx={{ fontWeight: 700, flexShrink: 0 }}
+      />
+    </Paper>
   );
 }
 
 export default function RepositoryPage() {
+  const [selectedBucketKey, setSelectedBucketKey] = useState<string | null>(null);
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['repository'],
     queryFn: () => documentsApi.getRepository(),
@@ -252,13 +237,40 @@ export default function RepositoryPage() {
             </Box>
           </AccordionSummary>
           <AccordionDetails>
-            <Grid container spacing={2}>
+            <Grid container spacing={1.5}>
               {yearGroup.buckets.map((bucket) => (
-                <Grid item xs={12} sm={6} md={4} key={bucket.key}>
-                  <BucketFolder bucket={bucket} yearLabel={yearGroup.year} />
+                <Grid item xs={6} sm={4} md={3} key={bucket.key}>
+                  <BucketFolder
+                    bucket={bucket}
+                    isSelected={selectedBucketKey === `${yearGroup.year}-${bucket.key}`}
+                    onClick={() =>
+                      setSelectedBucketKey((prev) =>
+                        prev === `${yearGroup.year}-${bucket.key}`
+                          ? null
+                          : `${yearGroup.year}-${bucket.key}`,
+                      )
+                    }
+                  />
                 </Grid>
               ))}
             </Grid>
+            {/* Document table rendered below the folder grid — uses available width */}
+            {(() => {
+              const activeBucketKeyStr = selectedBucketKey?.startsWith(`${yearGroup.year}-`)
+                ? selectedBucketKey.slice(`${yearGroup.year}-`.length)
+                : null;
+              const activeBucket = activeBucketKeyStr
+                ? yearGroup.buckets.find((b) => b.key === activeBucketKeyStr)
+                : null;
+              return activeBucket ? (
+                <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                  <Typography variant="subtitle2" fontWeight={600} mb={1} color="primary.main">
+                    {activeBucket.label} — {activeBucket.count} document{activeBucket.count !== 1 ? 's' : ''}
+                  </Typography>
+                  <DocumentTable documents={activeBucket.documents} />
+                </Box>
+              ) : null;
+            })()}
           </AccordionDetails>
         </Accordion>
       ))}

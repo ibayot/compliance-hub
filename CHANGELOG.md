@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0.14] - 2026-03-04 — Repository Layout, KPI/Reports Chart Range Fix, Targeted Metrics & Test Docs
+
+### Fixed
+- **Repository — horizontal scrollbar**: Document table was rendered inside a narrow grid cell (~33% width). Restructured `BucketFolder` component to be a stateless folder tile; the document table is now rendered below the full-width folder grid in `AccordionDetails`, eliminating horizontal overflow.
+- **Repository — spurious "Type" column**: Removed the `document_type` column from the repository document table (no `Type` column exists in the other modules or the DB schema).
+- **KPI — monthly chart range incorrect**: `getTimeseriesRange` monthly case now always returns `fromMonth: 1` (January) regardless of selected month, so the all-units chart always shows Jan → selected month. Previously it only returned the prior month → current month window.
+- **KPI — Unit Detail shows wrong period months**: `openUnitDashboard` now uses the full `getTimeseriesRange` result (`fromYear, fromMonth`) instead of the hardcoded `periodYear, 1`. Quarterly Q3 now shows only Jul–Sep; Semestral H2 now shows only Jul–Dec; Monthly Feb shows Jan–Feb.
+- **KPI — blank 0-anchor replaced with per-unit first-null injection**: Instead of prepending a blank-label `{ label:'', score:0 }` before all data, both `allUnitsLineData` and `kpiDetailLineData` now inject `0` only at the **first visible period** for a unit/KPI that has no data there but has data later in the range. Units with no data at all in the period keep null (no line drawn). This gives IT Unit a true Jan→Feb comparison while Finance starts from 0 at Jan only because it has Feb data.
+- **Reports — same chart range and injection fixes**: Applied the same `getTimeseriesRange` monthly fix (fromMonth=1), updated `unitTsQuery` to use `tsRange.fromYear/fromMonth` (not hardcoded Jan-1), and applied the first-null injection logic to both `allUnitsLineData` and `kpiDetailLineData`.
+
+### Added
+- **Metrics — 8 new unit-targeted templates** (`metric-005` through `metric-012`): Combined with the existing 4 global templates this gives 3 templates per metric type (section_check, keyword_check, property_check, date_check).
+  - `metric-005..008`: IT Unit templates targeting `document_type='ICT Security Assessment'` — ICT section structure (Executive Summary/Risk Analysis/Mitigation Plan), cybersecurity keywords, vulnerability count, ICT submission deadline (day 5).
+  - `metric-009..012`: Finance Unit templates targeting `document_type='Finance Risk Report'` — Finance section structure (Budget Summary/Variance Analysis/Recommendations), finance keywords (audit/budget/variance), transaction count, Finance submission deadline (day 7).
+- **Seed — 4 metric-test documents** (`doc-011` through `doc-014`):
+  - `doc-011` (IT, ICT Security Assessment): triggers all 8 global+IT-targeted templates — extracted text contains both section sets, both keyword sets, Total vulnerabilities: 7, Total incidents: 3.
+  - `doc-012` (Finance, Finance Risk Report): triggers all 8 global+Finance-targeted templates — Budget Summary/Variance Analysis, audit/budget/variance keywords, Total transactions: 250.
+  - `doc-013` (IT, Policy Document): triggers **only** the 4 global templates (no IT-specific applicability match) — confirms applicability filtering works correctly.
+  - `doc-014` (Finance, Policy Document): triggers **only** the 4 global templates — same applicability isolation test for Finance.
+  - All 4 docs include pre-computed `metric_results` rows (result-007 through result-030).
+
+### Verified (Smoke)
+- 0 TS errors — `npx tsc --noEmit` on frontend → clean
+
+---
+
 ## [1.3.0.13] - 2026-03-04 — KPI/Reports Chart Anchoring, Unit Detail Fix, KPIs Needing Attention & Sample Docs
 
 ### Fixed
