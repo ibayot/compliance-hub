@@ -421,11 +421,11 @@ function ReportView({ params }: { params: ReportParams }) {
                       </>
                     ) : (
                       <>
-                        <Typography variant="h3" fontWeight={700}>
-                          {summary.unitCount}
+                        <Typography variant="h4" fontWeight={700} sx={{ mt: 1 }}>
+                          All Units
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                          Units Reporting
+                          Reporting Scope
                         </Typography>
                       </>
                     )}
@@ -458,7 +458,7 @@ function ReportView({ params }: { params: ReportParams }) {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
               <TrendingUpIcon color="primary" />
               <Typography variant="h6" fontWeight={700}>
-                KPI Scores by Unit
+                {unitId ? 'KPI Scores' : 'KPI Scores by Unit'}
               </Typography>
             </Box>
 

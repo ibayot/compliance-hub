@@ -119,8 +119,14 @@ function getTimeseriesRange(
 ): { fromYear: number; fromMonth: number; toYear: number; toMonth: number } {
   switch (viewFrequency) {
     case 'monthly':
-      // For the monthly view show only the current month (no cross-year Dec anchor).
-      return { fromYear: periodYear, fromMonth: periodMonth, toYear: periodYear, toMonth: periodMonth };
+      // For non-January months: also fetch the previous month so the chart draws a
+      // line from prev → current instead of showing a single dot.
+      // For January: only the current month is fetched; the frontend prepends a
+      // synthetic score=0 anchor so the line draws from 0 → Jan value.
+      if (periodMonth > 1) {
+        return { fromYear: periodYear, fromMonth: periodMonth - 1, toYear: periodYear, toMonth: periodMonth };
+      }
+      return { fromYear: periodYear, fromMonth: 1, toYear: periodYear, toMonth: 1 };
     case 'quarterly': {
       const fromMonth = (periodQuarter - 1) * 3 + 1;
       const toMonth = periodQuarter * 3;
@@ -520,7 +526,7 @@ export default function KpiPage() {
     if (!anchorUnit) return [];
     const anchorTs = allUnitsTimeseries[anchorUnit.id];
     if (!anchorTs || anchorTs.length === 0) return [];
-    return anchorTs.map((pt) => {
+    const mapped = anchorTs.map((pt) => {
       const label = getXAxisLabel(pt, viewFrequency, periodYear, periodQuarter, periodSemester);
       const datum: Record<string, any> = { label };
       availableUnits.forEach((unit) => {
@@ -530,8 +536,36 @@ export default function KpiPage() {
       });
       return datum;
     });
+    // For monthly January: prepend a synthetic score=0 anchor so the chart draws a
+    // line from 0 \u2192 Jan actual score instead of showing a lone dot.
+    if (viewFrequency === 'monthly' && effectiveMonth === 1 && mapped.length > 0) {
+      const zeroAnchor: Record<string, any> = { label: '' };
+      availableUnits.forEach((unit) => { zeroAnchor[`u${unit.id}`] = 0; });
+      return [zeroAnchor, ...mapped];
+    }
+    return mapped;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allUnitsTimeseries, availableUnits, viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester]);
+
+  /** KPI-level band distribution: count of KPI entries per band across all units for the current period. */
+  const kpiBandDistribution = useMemo(() => {
+    const counts: Record<string, number> = {};
+    availableUnits.forEach((u) => {
+      const ts = allUnitsTimeseries[u.id] || [];
+      const lastPt = [...ts].reverse().find((p) => p.hasData);
+      if (!lastPt) return;
+      (lastPt.kpiScores || []).forEach((k: any) => {
+        const band = String(k.band || 'unclassified').toLowerCase();
+        counts[band] = (counts[band] || 0) + 1;
+      });
+    });
+    return Object.entries(counts).map(([band, value]) => ({
+      name: band.toUpperCase(),
+      value,
+      partial: false,
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableUnits, allUnitsTimeseries]);
 
   // KPI detail multi-line chart: { label, [kpiCode]: score|null } per period.
   const kpiDetailLineData = useMemo(() => {
@@ -894,9 +928,12 @@ export default function KpiPage() {
                         const summaryRow = summaryUnitMap[unit.id];
                         const ts = allUnitsTimeseries[unit.id] || [];
                         // Use the chronologically last point with actual data for Trend end-value.
-                        const lastHasData = [...ts].reverse().find((p) => p.hasData);
-                        const currScore: number | null = lastHasData
-                          ? lastHasData.score
+                        const hasDataPts = ts.filter((p) => p.hasData);
+                        const firstHasDataPt = hasDataPts[0] ?? null;
+                        const lastHasDataPt = hasDataPts[hasDataPts.length - 1] ?? null;
+                        const prevScore: number | null = hasDataPts.length > 1 ? (firstHasDataPt?.score ?? null) : null;
+                        const currScore: number | null = lastHasDataPt
+                          ? lastHasDataPt.score
                           : (summaryRow ? Number(summaryRow.score) : null);
                         const bandKey = summaryRow
                           ? String(summaryRow.band || 'unclassified').toLowerCase()
@@ -913,7 +950,7 @@ export default function KpiPage() {
                             </TableCell>
                             <TableCell>
                               {currScore !== null ? (
-                                <TrendSparkline prev={null} current={currScore} band={bandKey} />
+                                <TrendSparkline prev={prevScore} current={currScore} band={bandKey} />
                               ) : (
                                 <Typography variant="caption" color="text.secondary">—</Typography>
                               )}
@@ -935,7 +972,21 @@ export default function KpiPage() {
             <Card>
               <CardHeader
                 title={`Unit Detail — ${selectedUnitDashboard.unitName}`}
-                subheader={`Composite Score: ${selectedUnitDashboard.score} • Band: ${selectedUnitDashboard.band}`}
+                subheader={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                    <Typography variant="body2" color="text.secondary">Composite Score:</Typography>
+                    <Chip
+                      size="small"
+                      label={selectedUnitDashboard.details?.length > 0 ? String(selectedUnitDashboard.score) : '—'}
+                      sx={{
+                        bgcolor: selectedUnitDashboard.details?.length > 0
+                          ? BAND_COLORS[String(selectedUnitDashboard.band || 'unclassified').toLowerCase()] || BAND_COLORS.unclassified
+                          : 'grey.400',
+                        color: '#fff', fontWeight: 700, fontSize: 13, px: 0.5,
+                      }}
+                    />
+                  </Box>
+                }
                 action={
                   <IconButton size="small" onClick={closeUnitDetail} title="Close detail">
                     <CloseIcon fontSize="small" />
@@ -974,6 +1025,13 @@ export default function KpiPage() {
                     </Box>
                   )}
                   <Divider sx={{ my: 1 }} />
+                  {selectedUnitDashboard.details?.length === 0 ? (
+                    <Box sx={{ py: 3, textAlign: 'center' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        No KPI data available for this unit/period (partial period).
+                      </Typography>
+                    </Box>
+                  ) : (
                   <Table size="small">
                     <TableHead>
                       <TableRow>
@@ -987,8 +1045,13 @@ export default function KpiPage() {
                     </TableHead>
                     <TableBody>
                       {selectedUnitDashboard.details.map((item, idx) => {
-                        const lastPt = [...unitTimeseries].reverse().find((pt) => pt.hasData && pt.kpiScores?.some((k) => k.code === item.code));
-                        const currScore = lastPt?.kpiScores?.find((k) => k.code === item.code)?.normalizedScore ?? item.normalizedScore;
+                        const kpiMoments = unitTimeseries.filter((pt) => pt.hasData && pt.kpiScores?.some((k) => k.code === item.code));
+                        const firstMoment = kpiMoments[0] ?? null;
+                        const lastMoment = kpiMoments[kpiMoments.length - 1] ?? null;
+                        const prevKpiScore: number | null = kpiMoments.length > 1
+                          ? (firstMoment?.kpiScores?.find((k) => k.code === item.code)?.normalizedScore ?? null)
+                          : null;
+                        const currScore = lastMoment?.kpiScores?.find((k) => k.code === item.code)?.normalizedScore ?? item.normalizedScore;
                         const kpiColor = UNIT_COLORS[idx % UNIT_COLORS.length];
                         return (
                           <TableRow key={item.id}>
@@ -1000,20 +1063,21 @@ export default function KpiPage() {
                             <TableCell>{item.targetValue}</TableCell>
                             <TableCell><strong>{item.normalizedScore}</strong></TableCell>
                             <TableCell>
-                              <TrendSparkline prev={null} current={currScore} band={String(item.band || 'unclassified').toLowerCase()} />
+                              <TrendSparkline prev={prevKpiScore} current={currScore} band={String(item.band || 'unclassified').toLowerCase()} />
                             </TableCell>
                           </TableRow>
                         );
                       })}
                     </TableBody>
                   </Table>
+                  )}
                 </>
               </CardContent>
             </Card>
           </Grid>
           )}
 
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={6}>
             <Card>
               <CardHeader title="Band Distribution" subheader="Units by performance band" />
               <CardContent>
@@ -1056,6 +1120,53 @@ export default function KpiPage() {
                               stroke={entry.partial ? '#ccc' : undefined}
                               strokeWidth={entry.partial ? 2 : undefined}
                               strokeDasharray={entry.partial ? '4 3' : undefined}
+                            />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardHeader title="KPIs by Performance Band" subheader="KPI count per band across all units" />
+              <CardContent>
+                {kpiBandDistribution.length === 0 ? (
+                  <Box sx={{ py: 6, textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">No KPI band data for this period.</Typography>
+                  </Box>
+                ) : (
+                  <Box sx={{ width: '100%', height: 280 }}>
+                    <ResponsiveContainer>
+                      <PieChart>
+                        <Pie
+                          data={kpiBandDistribution}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={90}
+                          labelLine={false}
+                          label={({ cx, cy, midAngle, innerRadius, outerRadius, value }: any) => {
+                            const RADIAN = Math.PI / 180;
+                            const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                            const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                            const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                            return (
+                              <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={14} fontWeight={700}>
+                                {value}
+                              </text>
+                            );
+                          }}
+                        >
+                          {kpiBandDistribution.map((entry, index) => (
+                            <Cell
+                              key={`kpi-pie-${index}`}
+                              fill={BAND_COLORS[String(entry.name).toLowerCase()] || BAND_COLORS.unclassified}
                             />
                           ))}
                         </Pie>
