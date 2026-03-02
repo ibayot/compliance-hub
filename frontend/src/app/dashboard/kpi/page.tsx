@@ -488,12 +488,15 @@ export default function KpiPage() {
     if (!Number.isFinite(unitId) || !Number.isFinite(periodYear) || !Number.isFinite(effectiveMonth)) return;
     try {
       selectedUnitIdRef.current = unitId;
-      const { fromYear, fromMonth, toYear, toMonth } = getTimeseriesRange(
+      // Always fetch unit detail timeseries from Jan 1 of the selected year so that
+      // partial-period units (e.g. Finance with data only through Q2 being viewed in Q3)
+      // still show their historical trend instead of a blank chart.
+      const { toYear, toMonth } = getTimeseriesRange(
         viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester,
       );
       const [detail, tseries] = await Promise.all([
         kpiApi.dashboardUnit(unitId, periodYear, effectiveMonth),
-        kpiApi.dashboardUnitTimeseries(unitId, fromYear, fromMonth, toYear, toMonth),
+        kpiApi.dashboardUnitTimeseries(unitId, periodYear, 1, toYear, toMonth),
       ]);
       setSelectedUnitDashboard(detail);
       setUnitTimeseries(tseries);
@@ -536,9 +539,10 @@ export default function KpiPage() {
       });
       return datum;
     });
-    // For monthly January: prepend a synthetic score=0 anchor so the chart draws a
-    // line from 0 \u2192 Jan actual score instead of showing a lone dot.
-    if (viewFrequency === 'monthly' && effectiveMonth === 1 && mapped.length > 0) {
+    // Always prepend a score=0 anchor so every chart line starts from bottom-left
+    // regardless of which period is selected. This ensures visual consistency:
+    // even when the first data point is e.g. Q2 Apr, viewers see the line rise from 0.
+    if (mapped.length > 0) {
       const zeroAnchor: Record<string, any> = { label: '' };
       availableUnits.forEach((unit) => { zeroAnchor[`u${unit.id}`] = 0; });
       return [zeroAnchor, ...mapped];
@@ -571,15 +575,22 @@ export default function KpiPage() {
   const kpiDetailLineData = useMemo(() => {
     if (unitTimeseries.length === 0) return { data: [] as Record<string, any>[], codes: [] as string[] };
     const codes = [...new Set(unitTimeseries.flatMap((pt) => (pt.kpiScores || []).map((k) => k.code)))];
+    // Unit detail always uses month abbreviations regardless of view frequency,
+    // because we now fetch from Jan 1 meaning the x-axis spans full-year months.
     const data = unitTimeseries.map((pt) => {
-      const label = getXAxisLabel(pt, viewFrequency, periodYear, periodQuarter, periodSemester);
-      const datum: Record<string, any> = { label };
+      const datum: Record<string, any> = { label: MONTH_ABBR[pt.periodMonth - 1] };
       codes.forEach((code) => {
         const kp = (pt.kpiScores || []).find((k) => k.code === code);
         datum[code] = pt.hasData && kp ? kp.normalizedScore : null;
       });
       return datum;
     });
+    // Always prepend a score=0 anchor so all KPI lines start from bottom-left.
+    if (data.length > 0) {
+      const zeroAnchor: Record<string, any> = { label: '' };
+      codes.forEach((code) => { zeroAnchor[code] = 0; });
+      return { data: [zeroAnchor, ...data], codes };
+    }
     return { data, codes };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unitTimeseries, viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester]);
@@ -1055,7 +1066,10 @@ export default function KpiPage() {
                         const kpiColor = UNIT_COLORS[idx % UNIT_COLORS.length];
                         return (
                           <TableRow key={item.id}>
-                            <TableCell>{item.code}</TableCell>
+                            <TableCell>
+                              <Typography variant="body2" fontWeight={600}>{item.name}</Typography>
+                              <Typography variant="caption" color="text.secondary">{item.code}</Typography>
+                            </TableCell>
                             <TableCell sx={{ p: 1 }}>
                               <Box sx={{ width: 20, height: 20, borderRadius: '4px', bgcolor: kpiColor }} />
                             </TableCell>

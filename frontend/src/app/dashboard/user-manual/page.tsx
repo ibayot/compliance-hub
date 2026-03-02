@@ -622,6 +622,94 @@ const manualItems: ManualItem[] = [
       ],
     },
   },
+  {
+    title: 'Consolidated Reports',
+    description: 'Generate period reports combining KPI performance scores and document submissions for management review.',
+    roles: ['super_admin', 'reviewer', 'section_head'],
+    path: '/dashboard/reports',
+    details: {
+      purpose:
+        'Produce a management-ready report for a selected period that combines KPI score cards, performance trend charts, a KPIs requiring attention alert table, and document submission tracking in one view. Designed for office heads who need a single-page compliance overview they can act on immediately.',
+      inputs: [
+        {
+          field: 'Year',
+          explanation:
+            'The calendar year for the report. Determines which KPI monitoring records and document submissions are included.',
+        },
+        {
+          field: 'Frequency (Monthly / Quarterly / Semestral / Annual)',
+          explanation:
+            'Reporting granularity. Combined with Year and Period, this selects the exact compliance snapshot to display.',
+        },
+        {
+          field: 'Unit (optional)',
+          explanation:
+            'Filter the report to a single organizational unit. Leave blank to view the all-units consolidated report showing every unit on the same charts and summary tables.',
+        },
+      ],
+      outputs: [
+        {
+          field: 'KPI Score Card',
+          explanation:
+            'Overall composite score with a band-colored progress bar, scope label (unit name or "All Units"), and count of KPIs monitored for the period.',
+        },
+        {
+          field: 'KPI Scores Chart',
+          explanation:
+            'For all-units view: a multi-line trend chart overlaying all unit scores from Jan 1 to period end. For single-unit view: a per-KPI line chart showing each indicator\'s score trajectory. All lines start from 0 for visual clarity.',
+        },
+        {
+          field: 'KPIs Requiring Attention',
+          explanation:
+            'A highlighted alert table listing every KPI whose band is Red or Amber. Shows unit, KPI name, code, normalized score, band chip, and actual value. Intended for immediate management action. Only appears when at least one underperforming KPI exists for the period.',
+        },
+        {
+          field: 'Document Submissions Table',
+          explanation:
+            'All documents submitted in the selected year, listing title, unit, document type, status chip, overall compliance chip, and the number of metric templates applied. Sortable and filterable by unit and status.',
+        },
+      ],
+    },
+  },
+  {
+    title: 'Report Repository',
+    description: 'Browse all submitted compliance documents organized by year and period in a folder-style view.',
+    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'auditor'],
+    path: '/dashboard/repository',
+    details: {
+      purpose:
+        'Provides a folder-style view of all compliance documents grouped by Year → Period. Focal users see their own unit\'s submissions; admins, reviewers, and auditors see all units. The repository is the canonical reference for auditors who need to locate and verify specific period submissions.',
+      inputs: [
+        {
+          field: 'Year Accordion',
+          explanation:
+            'Click to expand a year and reveal all period buckets (monthly folders, quarterly folders, annual folder) that contain at least one document for that year.',
+        },
+        {
+          field: 'Period Folder',
+          explanation:
+            'Click a period bucket (e.g., "Q1 (Jan–Mar)", "June 2025", "2025 Annual") to expand it and list all documents submitted for that period.',
+        },
+      ],
+      outputs: [
+        {
+          field: 'Document Table',
+          explanation:
+            'For each open folder: document title, type, submitting unit, status chip (Pending, Ready, Approved), compliance chip (Compliant, Non-Compliant, Needs Revision), and upload date.',
+        },
+        {
+          field: 'View Action',
+          explanation:
+            'Opens the document detail page where authorized users can read the inline document preview, inspect metric results, and review the full version/review history.',
+        },
+        {
+          field: 'Download Action',
+          explanation:
+            'Downloads the latest version of the document directly from the repository. The file is streamed with the correct filename and MIME type.',
+        },
+      ],
+    },
+  },
 ];
 
 export default function UserManualPage() {

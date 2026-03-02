@@ -90,6 +90,24 @@ function getBandChipColor(band: string): 'error' | 'warning' | 'success' | 'info
   return 'info';
 }
 
+/** Mini 2-point sparkline identical to the KPI module trend column. */
+function TrendSparkline({ prev, current, band }: { prev: number | null; current: number | null; band: string }) {
+  const color = BAND_COLORS[band] || BAND_COLORS.unclassified;
+  const w = 60; const h = 24; const pad = 5;
+  const startVal = prev !== null ? prev : 0;
+  const endVal = current !== null ? current : 0;
+  const toY = (v: number) => h - pad - (Math.min(100, Math.max(0, v)) / 100) * (h - 2 * pad);
+  const y1 = toY(startVal); const y2 = toY(endVal);
+  const startColor = prev !== null ? color : '#b0bec5';
+  return (
+    <svg width={w} height={h} style={{ display: 'block', overflow: 'visible' }}>
+      <line x1={pad} y1={y1} x2={w - pad} y2={y2} stroke={color} strokeWidth={2} />
+      <circle cx={pad} cy={y1} r={3} fill={startColor} stroke="#fff" strokeWidth={1} />
+      <circle cx={w - pad} cy={y2} r={3} fill={color} stroke="#fff" strokeWidth={1} />
+    </svg>
+  );
+}
+
 type Frequency = 'monthly' | 'quarterly' | 'semestral' | 'annual';
 
 interface ReportParams {
@@ -165,7 +183,8 @@ function ReportView({ params }: { params: ReportParams }) {
     queryFn: () =>
       kpiApi.dashboardUnitTimeseries(
         Number(unitId),
-        tsRange.fromYear, tsRange.fromMonth,
+        // Always fetch from Jan 1 so partial-period units show their full-year history.
+        year, 1,
         tsRange.toYear, tsRange.toMonth,
       ),
     enabled: Boolean(unitId),
@@ -226,7 +245,7 @@ function ReportView({ params }: { params: ReportParams }) {
     const sorted = [...periodMap.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, v]) => v);
-    return sorted.map(({ periodYear, periodMonth }) => {
+    const mapped = sorted.map(({ periodYear, periodMonth }) => {
       const datum: Record<string, any> = { label: MONTH_ABBR[periodMonth - 1] };
       summaryUnits.forEach((u) => {
         const pts: any[] = allTs[u.unitId] || [];
@@ -235,6 +254,13 @@ function ReportView({ params }: { params: ReportParams }) {
       });
       return datum;
     });
+    // Always prepend a score=0 anchor so all chart lines start from bottom-left.
+    if (mapped.length > 0) {
+      const zeroAnchor: Record<string, any> = { label: '' };
+      summaryUnits.forEach((u) => { zeroAnchor[`u${u.unitId}`] = 0; });
+      return [zeroAnchor, ...mapped];
+    }
+    return mapped;
   }, [allUnitsTsQuery.data, summaryUnits]);
 
   /** KPI detail line data for a single selected unit */
@@ -250,8 +276,48 @@ function ReportView({ params }: { params: ReportParams }) {
       });
       return datum;
     });
+    // Always prepend a score=0 anchor so all KPI lines start from bottom-left.
+    if (data.length > 0) {
+      const zeroAnchor: Record<string, any> = { label: '' };
+      codes.forEach((code) => { zeroAnchor[code] = 0; });
+      return { data: [zeroAnchor, ...data], codes };
+    }
     return { data, codes };
   }, [unitTsQuery.data]);
+
+  /** KPIs needing attention: amber or red band, derived from existing timeseries data. */
+  const kpisNeedingAttention = useMemo(() => {
+    const items: Array<{
+      unitName: string; code: string; name: string; score: number;
+      band: string; actualValue: number;
+    }> = [];
+    if (unitId) {
+      // Single-unit view: use dashboardUnit details
+      const det = unitDashQuery.data;
+      if (det?.details) {
+        det.details
+          .filter((d) => ['red', 'amber'].includes(String(d.band || '').toLowerCase()))
+          .forEach((d) => items.push({
+            unitName: det.unitName || unitName, code: d.code, name: d.name,
+            score: d.normalizedScore, band: String(d.band).toLowerCase(), actualValue: d.actualValue,
+          }));
+      }
+    } else if (allUnitsTsQuery.data) {
+      // All-units view: use last hasData kpiScores per unit
+      summaryUnits.forEach((u) => {
+        const pts: any[] = allUnitsTsQuery.data[u.unitId] || [];
+        const lastPt = [...pts].reverse().find((p) => p.hasData);
+        if (!lastPt) return;
+        (lastPt.kpiScores || [])
+          .filter((k: any) => ['red', 'amber'].includes(String(k.band || '').toLowerCase()))
+          .forEach((k: any) => items.push({
+            unitName: u.unitName, code: k.code, name: k.name,
+            score: k.normalizedScore, band: String(k.band).toLowerCase(), actualValue: k.actualValue,
+          }));
+      });
+    }
+    return items;
+  }, [unitId, unitDashQuery.data, unitName, allUnitsTsQuery.data, summaryUnits]);
 
   /** Metrics count keyed by document_type string */
   const metricsPerDocType = useMemo(() => {
@@ -497,29 +563,47 @@ function ReportView({ params }: { params: ReportParams }) {
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>KPI Code</TableCell>
+                          <TableCell>Color</TableCell>
+                          <TableCell>KPI</TableCell>
                           <TableCell align="right">Actual</TableCell>
                           <TableCell align="right">Target</TableCell>
                           <TableCell align="right">Score</TableCell>
                           <TableCell>Band</TableCell>
+                          <TableCell>Trend</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {unitDetail.details.map((item) => (
-                          <TableRow key={item.id} hover>
-                            <TableCell>{item.code}</TableCell>
-                            <TableCell align="right">{item.actualValue}</TableCell>
-                            <TableCell align="right">{item.targetValue}</TableCell>
-                            <TableCell align="right"><strong>{item.normalizedScore}</strong></TableCell>
-                            <TableCell>
-                              <Chip
-                                label={item.band || '—'}
-                                size="small"
-                                color={getBandChipColor(String(item.band || ''))}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {unitDetail.details.map((item, idx) => {
+                          // Trend: first → last hasData kpiScore for this code
+                          const kpiMoments = (unitTsQuery.data || []).filter(
+                            (pt: any) => pt.hasData && (pt.kpiScores || []).some((k: any) => k.code === item.code)
+                          );
+                          const prevKpiScore: number | null = kpiMoments.length > 1
+                            ? (kpiMoments[0].kpiScores?.find((k: any) => k.code === item.code)?.normalizedScore ?? null)
+                            : null;
+                          const currKpiScore = kpiMoments[kpiMoments.length - 1]?.kpiScores?.find((k: any) => k.code === item.code)?.normalizedScore ?? item.normalizedScore;
+                          const kpiColor = UNIT_COLORS[idx % UNIT_COLORS.length];
+                          return (
+                            <TableRow key={item.id} hover>
+                              <TableCell sx={{ p: 1 }}>
+                                <Box sx={{ width: 16, height: 16, borderRadius: '3px', bgcolor: kpiColor }} />
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2" fontWeight={600}>{item.name}</Typography>
+                                <Typography variant="caption" color="text.secondary">{item.code}</Typography>
+                              </TableCell>
+                              <TableCell align="right">{item.actualValue}</TableCell>
+                              <TableCell align="right">{item.targetValue}</TableCell>
+                              <TableCell align="right"><strong>{item.normalizedScore}</strong></TableCell>
+                              <TableCell>
+                                <Chip label={item.band || '—'} size="small" color={getBandChipColor(String(item.band || ''))} />
+                              </TableCell>
+                              <TableCell>
+                                <TrendSparkline prev={prevKpiScore} current={currKpiScore} band={String(item.band || 'unclassified').toLowerCase()} />
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -588,20 +672,37 @@ function ReportView({ params }: { params: ReportParams }) {
                       <TableHead>
                         <TableRow>
                           <TableCell>Unit</TableCell>
+                          <TableCell sx={{ width: 32, p: 0 }}>Color</TableCell>
                           <TableCell align="right">Score</TableCell>
-                          <TableCell>Band</TableCell>
-                          <TableCell align="right">KPIs Monitored</TableCell>
+                          <TableCell>Trend</TableCell>
+                          <TableCell align="right"># KPIs</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {filteredKpiUnits.map((u) => (
-                          <TableRow key={u.unitId} hover>
-                            <TableCell>{u.unitName}</TableCell>
-                            <TableCell align="right"><Typography fontWeight={600}>{Number(u.score).toFixed(1)}</Typography></TableCell>
-                            <TableCell><Chip label={u.band || '—'} size="small" color={getBandChipColor(u.band)} /></TableCell>
-                            <TableCell align="right">{u.kpiCount}</TableCell>
-                          </TableRow>
-                        ))}
+                        {filteredKpiUnits.map((u, idx) => {
+                          const unitColor = UNIT_COLORS[idx % UNIT_COLORS.length];
+                          const bandKey = String(u.band || 'unclassified').toLowerCase();
+                          // Trend: first → last hasData point for this unit's timeseries
+                          const unitTs: any[] = allUnitsTsQuery.data?.[u.unitId] || [];
+                          const hasDataPts = unitTs.filter((p: any) => p.hasData);
+                          const prevScore: number | null = hasDataPts.length > 1 ? (hasDataPts[0]?.score ?? null) : null;
+                          const currScore: number | null = hasDataPts[hasDataPts.length - 1]?.score ?? Number(u.score) ?? null;
+                          return (
+                            <TableRow key={u.unitId} hover>
+                              <TableCell>{u.unitName}</TableCell>
+                              <TableCell sx={{ p: 1 }}>
+                                <Box sx={{ width: 20, height: 20, borderRadius: '4px', bgcolor: unitColor }} />
+                              </TableCell>
+                              <TableCell align="right"><Typography fontWeight={600}>{Number(u.score).toFixed(1)}</Typography></TableCell>
+                              <TableCell>
+                                {currScore !== null
+                                  ? <TrendSparkline prev={prevScore} current={currScore} band={bandKey} />
+                                  : <Typography variant="caption" color="text.secondary">—</Typography>}
+                              </TableCell>
+                              <TableCell align="right">{u.kpiCount}</TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -613,6 +714,61 @@ function ReportView({ params }: { params: ReportParams }) {
               </>
             )}
           </Box>
+
+          <Divider sx={{ mb: 3 }} />
+
+          {/* ── KPIs Requiring Attention ── */}
+          {kpisNeedingAttention.length > 0 && (
+            <Box sx={{ mb: 4 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <TrendingUpIcon color="error" />
+                <Typography variant="h6" fontWeight={700} color="error.main">
+                  KPIs Requiring Attention
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                The following KPIs are below acceptable thresholds (red or amber band) and require immediate review.
+              </Typography>
+              <TableContainer component={Paper} elevation={0} variant="outlined" sx={{ borderColor: 'error.light' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: 'error.50' }}>
+                      {!unitId && <TableCell><strong>Unit</strong></TableCell>}
+                      <TableCell><strong>KPI Name</strong></TableCell>
+                      <TableCell><strong>Code</strong></TableCell>
+                      <TableCell align="right"><strong>Score</strong></TableCell>
+                      <TableCell><strong>Band</strong></TableCell>
+                      <TableCell align="right"><strong>Actual</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {kpisNeedingAttention.map((item, idx) => (
+                      <TableRow key={idx} hover sx={{ bgcolor: item.band === 'red' ? 'rgb(253,237,237)' : 'rgb(255,249,240)' }}>
+                        {!unitId && <TableCell>{item.unitName}</TableCell>}
+                        <TableCell><strong>{item.name}</strong></TableCell>
+                        <TableCell>
+                          <Typography variant="caption" color="text.secondary">{item.code}</Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography fontWeight={700} color={item.band === 'red' ? 'error.main' : 'warning.main'}>
+                            {item.score}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={item.band.toUpperCase()}
+                            size="small"
+                            color={item.band === 'red' ? 'error' : 'warning'}
+                          />
+                        </TableCell>
+                        <TableCell align="right">{item.actualValue}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          )}
 
           <Divider sx={{ mb: 3 }} />
 
