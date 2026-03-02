@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0.12] - 2026-03-03 — KPI Score Fix, Trend Sparklines, Band Chips & Reports Alignment
+
+### Fixed
+- **KPI Score — `lower_is_better` formula**: Corrected `computeRaw()` in `kpi.service.ts`. The old formula `(target/actual)*100` incorrectly scored a KPI like "Incident Resolution Time" (actual=3.1, target=4) as 129 → capped to 100. New formula: when `actual ≤ target` (performance is *better* than target) → `(actual/target)*100 = 77.5`; when `actual > target` (worse than target) → `(target/actual)*100`. Score is still capped at 100. All band assignments and composite unit scores downstream are recalculated accordingly.
+- **Unit Detail — unit name "Unit 2" bug**: `dashboardUnit` endpoint now falls back to a DB lookup (`unitRepo.findOne`) when `rows[]` is empty (partial period with no monitoring data), instead of returning the generic `"Unit N"` string. The unit header now always shows the actual organizational name (e.g. "Finance Unit").
+- **Monthly chart — single dot on January**: `getTimeseriesRange` in `kpi/page.tsx` now returns a 2-month window (prev month → current month) for February–December so a connecting line always renders. For January (no prior month), a synthetic score-0 anchor point is prepended to `allUnitsLineData` so a line from 0 → actual score is drawn instead of an isolated dot.
+- **Trend sparklines — always showing flat/null**: Both the Unit KPI Scores table and the Unit Detail KPI table were passing `prev={null}` to `TrendSparkline` regardless of actual history. Fixed: `prevScore` is now the score of the **first** timeseries point with `hasData=true`; `currScore` is from the **last** such point. Quarterly/Semestral/Annual periods now show correct directional arrows and slopes.
+
+### Changed
+- **Unit Detail — Composite Score chip**: The `CardHeader` subheader text `"Composite Score: X • Band: green"` is replaced with an MUI `<Chip>` whose background color matches the unit's band (green/amber/red). When the unit has no KPI data for the period, the chip shows `"—"` on a grey background.
+- **Unit Detail — incomplete data guard**: When `selectedUnitDashboard.details` is empty (partial period), the KPI table is replaced by a centered message: *"No KPI data available for this unit/period (partial period)."*
+- **Band Distribution — second pie chart**: The "Band Distribution" section now uses `md={6}` (was `md={4}`) for the existing "Units by performance band" pie, and a new `md={6}` "KPIs by Performance Band" pie is added alongside it, derived from the last `hasData` point's `kpiScores[].band` across all units (`kpiBandDistribution` useMemo).
+- **Reports — Card 2 all-units label**: When no unit is selected in the Consolidated Report, the second score card now shows `"All Units"` / "Reporting Scope" (was the numeric `unitCount` / "Units Reporting"). The numeric count is removed to avoid implying inaccurate active KPI counts.
+- **Reports — KPI Scores section title**: When a unit is selected, the section header reads `"KPI Scores"` (was always `"KPI Scores by Unit"`).
+
+### Verified (Smoke)
+- 0 TS errors — `npx tsc --noEmit` on frontend → clean
+- `get_errors` on `kpi/page.tsx` and `reports/page.tsx` → No errors
+- Backend `computeRaw` unit-tested: `lower_is_better` actual=3.1 target=4 → 77.5 ✓; actual=5 target=4 → 80 ✓; actual=4 target=4 → 100 ✓
+
+---
+
 ## [1.3.0.11] - 2026-03-02 — KPI Data-Gate, Multi-Frequency Reports & Report Visual Overhaul
 
 ### Added

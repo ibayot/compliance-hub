@@ -1,5 +1,7 @@
 # RICTMS Compliance Hub - QA User Manual
 
+> **Release `v1.3.0.12` (2026-03-03):** Verify: (1) **Score fix** — set Year=2025, Month=6, unit=IT, open Unit Detail for any `lower_is_better` KPI (e.g. KPI-IT-002 "Incident Resolution Time", actual=3.1, target=4); normalized score must show **77.5** (not 100). (2) **Unit Detail header** — composite score is displayed as a **colored Chip** (green/amber/red background with white bold text), no "• Band: X" text. (3) **Unit Detail incomplete period** — select Q3 2025, unit=Finance; the KPI table should show *"No KPI data available for this unit/period (partial period)"* instead of an empty table. (4) **January monthly chart** — set Month=1 (January) with any year/unit that has data; the trend line must start from 0 and go up to the January score (not a lone isolated dot). (5) **Trend arrows Q/S** — set Quarterly Q2 2025 and click any unit; the Trend column sparklines must reflect the actual H1 slope (not a flat line). (6) **KPIs by Performance Band** second pie chart appears alongside "Units by performance band" in a side-by-side layout. (7) **Reports "All Units" card** — generate a report with no unit selected; Card 2 must read "All Units / Reporting Scope" (no raw count number). (8) **Reports section title** — when a unit is selected, the KPI section heading reads "KPI Scores"; when "All Units", it reads "KPI Scores by Unit".
+
 > **Release `v1.3.0.5` (2026-02-27):** Verify: (1) KPI Detail table Trend column sparklines are **diagonal** — when previous period has no data, the line goes from bottom-left (0) to the current score at top-right; when both periods have data and values differ, the slope reflects actual change. (2) A KPI with the same score in both periods (no change) correctly shows a **flat horizontal line** (expected). (3) Band Distribution pie chart shows **bold white numbers inside each colored slice** — no callout label text outside the pie. Legend below the pie is unchanged.
 
 > Update (`v1.1.0-dev`, 2026-02-24): QA checks now include blob persistence validation and DOCX-to-PDF preview generation checks.
@@ -258,7 +260,8 @@ A **KPI Band** is a color-coded performance classification applied to a unit or 
 
 **How normalized score is calculated:**
 - For *higher-is-better* KPIs: `(Actual / Target) * 100`, capped at 100.
-- For *lower-is-better* KPIs: `(Target / Actual) * 100`, capped at 100.
+- For *lower-is-better* KPIs: when `Actual ≤ Target` (on-track) → `(Actual / Target) * 100`; when `Actual > Target` (exceeds threshold) → `(Target / Actual) * 100`. Result capped at 100.  
+  *Example: Incident Resolution Time, actual=3.1 h, target=4 h → score = 3.1/4×100 = **77.5**.*
 - For *Yes/No* KPIs: `100` if actual = 1 (Yes), `0` if actual = 0 (No).
 
 **Composite Unit Score** = Weighted average of all KPI normalized scores for a unit in a period.  
@@ -362,13 +365,16 @@ The **KPI Band Scale** legend below the scorecards shows current threshold range
 - Click a unit row in the table below the chart to drill into KPI details.
 
 #### Unit Detail Panel
-- Shows the selected unit's composite score and band.
-- Bar chart displays each KPI's normalized score.
-- Table lists KPI code, target value, actual value, normalized score, and band.
+- Shows the selected unit's name and a **colored Chip** for the composite score (green/amber/red background). No `"• Band: X"` text displayed.
+- When the unit has no KPI data for the period (partial period), shows a *"No KPI data available for this unit/period"* message instead of a table.
+- Line chart displays trend of each individual KPI over the period.
+- Table lists KPI code, actual value, target value, normalized score, and trend sparkline.
+- Trend sparklines now use the **first** and **last** `hasData` timeseries points as prev/curr, showing correct directional slopes for multi-point periods (Q/S/Annual).
 
-#### Band Distribution (Pie Chart)
-- Shows the proportion of units in each performance band.
-- Color legend is auto-rendered using band colors.
+#### Band Distribution (Pie Charts)
+- **Units by performance band** (left): proportion of *units* in each performance band.
+- **KPIs by Performance Band** (right, new in v1.3.0.12): count of *individual KPIs* (across all units) per band, based on the last `hasData` point for each unit.
+- Both pies show bold white count numbers inside colored slices.
 
 ---
 
@@ -382,6 +388,24 @@ The **KPI Band Scale** legend below the scorecards shows current threshold range
 | `focal`        | Own unit only      | Own unit only         | No                    | No                    |
 | `auditor`      | Own unit only      | Own unit only         | No                    | No                    |
 | `technician`   | Own unit only      | Own unit only         | No                    | No                    |
+
+---
+
+### I.7 KPI Module Smoke Checks (v1.3.0.12)
+
+> Tests for the v1.3.0.12 bug-fix release. Run in addition to all I.6 checks.
+
+| #  | Test Step                                                                                                             | Expected Result                                                                                        |
+|----|-----------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------|
+| 1  | Year=2025, Month=6, click unit=IT, open Unit Detail, find KPI-IT-002 (Incident Resolution Time, actual=3.1, target=4) | Normalized score shows **77.5**, NOT 100                                                               |
+| 2  | Same unit detail view: inspect the CardHeader subheader                                                               | Colored Chip with score value (e.g. "88.3" on green background); NO "• Band: green" text               |
+| 3  | Set Quarterly Q3 2025, click Finance Unit → Unit Detail                                                               | "No KPI data available for this unit/period (partial period)" message instead of empty table            |
+| 4  | Set Monthly, Month=January, any year with data → check all-units chart                                                | Chart line starts from 0 at the left anchor point and rises to the January score — no isolated dot      |
+| 5  | Set Quarterly Q2 2025, click IT Unit → Unit Detail → Trend column                                                     | Sparklines are **diagonal** reflecting Jan→Jun slope, not flat/null lines                              |
+| 6  | Scroll to Band Distribution section (any period with data)                                                            | Two pies side-by-side: "Units by performance band" (left) and "KPIs by Performance Band" (right)       |
+| 7  | Open Reports page, generate report with **no unit selected**                                                          | Card 2 shows "All Units" + "Reporting Scope" label; no numeric count                                   |
+| 8  | Generate report with a specific unit selected                                                                         | KPI Scores section header reads "KPI Scores" (not "KPI Scores by Unit")                                |
+| 9  | Open KPI Dashboard → Unit KPI Scores table, set Quarterly Q2 2025                                                     | Trend column sparklines show directional slope (IT improved Q1→Q2, Finance dropped)                    |
 
 ---
 

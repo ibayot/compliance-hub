@@ -328,8 +328,17 @@ export class KpiService {
       return (Number(actual) / target) * 100;
     }
 
-    if (Number(actual) <= 0) return 0;
-    return (target / Number(actual)) * 100;
+    // lower_is_better:
+    //  - actual <= target (at/below ceiling): proportional 0–100 based on how close to target.
+    //    e.g. actual=3.1, target=4 → 3.1/4*100 = 77.5
+    //  - actual > target (over ceiling, penalised): (target/actual)*100
+    //    e.g. actual=5, target=4 → 4/5*100 = 80
+    const actualNum = Number(actual);
+    if (actualNum <= 0) return 0;
+    if (actualNum <= target) {
+      return (actualNum / target) * 100;
+    }
+    return (target / actualNum) * 100;
   }
 
   private classifyScore(score: number, thresholds: KpiThreshold[]) {
@@ -483,9 +492,15 @@ export class KpiService {
     const weightedSum = details.reduce((sum, item) => sum + Number(item.normalizedScore) * Number(item.weight || 0), 0);
     const score = totalWeight > 0 ? weightedSum / totalWeight : 0;
 
+    // Resolve unit name even when there are no monitoring rows for this period (partial period).
+    const unitName =
+      rows[0]?.unit?.name ??
+      (await this.unitRepo.findOne({ where: { id: unitIdNum } }))?.name ??
+      `Unit ${unitIdNum}`;
+
     return {
       unitId: unitIdNum,
-      unitName: rows[0]?.unit?.name || `Unit ${unitIdNum}`,
+      unitName,
       score: Number(score.toFixed(2)),
       band: this.classifyScore(score, thresholds),
       periodYear: yearNum,
