@@ -45,7 +45,7 @@ export default function DocumentsPage() {
     document_type: '',
     period: '',
     year: '',
-    status: undefined,
+    status: 'pending',
   });
 
   const [showFilters, setShowFilters] = useState(false);
@@ -216,7 +216,7 @@ export default function DocumentsPage() {
       document_type: '',
       period: '',
       year: '',
-      status: undefined,
+      status: 'pending',
     });
   };
 

@@ -5,6 +5,12 @@ export interface Issuance {
   issuance_number: string;
   title: string;
   description?: string;
+  issuance_type?: string;
+  applicability_scope?: string;
+  relevance_notes?: string;
+  is_amendment?: boolean;
+  amended_issuance_number?: string;
+  ict_amendment_notes?: string;
   issuing_authority: string;
   issue_date: string;
   effectivity_date?: string;
@@ -19,10 +25,17 @@ export interface CreateIssuanceDto {
   issuance_number: string;
   title: string;
   description?: string;
+  issuance_type?: string;
+  applicability_scope?: string;
+  relevance_notes?: string;
+  is_amendment?: boolean;
+  amended_issuance_number?: string;
+  ict_amendment_notes?: string;
   issuing_authority: string;
   issue_date: string;
   effectivity_date?: string;
   source_url?: string;
+  is_active?: boolean;
 }
 
 export interface Ticket {
@@ -94,10 +107,11 @@ export interface UpsertTicketConfigDto {
 // Issuances API
 export const issuancesApi = {
   getAll: async (
-    filters?: { authority?: string; search?: string; is_active?: boolean },
+    filters?: { authority?: string; category?: string; search?: string; is_active?: boolean },
   ): Promise<Issuance[]> => {
     const params = new URLSearchParams();
     if (filters?.authority) params.append('authority', filters.authority);
+    if (filters?.category) params.append('category', filters.category);
     if (filters?.search) params.append('search', filters.search);
     if (filters?.is_active !== undefined)
       params.append('is_active', String(filters.is_active));

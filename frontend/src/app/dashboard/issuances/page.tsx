@@ -30,6 +30,7 @@ import {
   Delete as DeleteIcon,
   Link as LinkIcon,
   LinkOff as UnlinkIcon,
+  InfoOutlined as InfoOutlinedIcon,
 } from '@mui/icons-material';
 import { useAuth } from '@/contexts/AuthContext';
 import { issuancesApi, Issuance, CreateIssuanceDto } from '@/app/api/references';
@@ -44,6 +45,7 @@ export default function IssuancesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingIssuance, setEditingIssuance] = useState<Issuance | null>(null);
   const [mappingOpen, setMappingOpen] = useState(false);
+  const [relevanceOpen, setRelevanceOpen] = useState(false);
   const [mappingLoading, setMappingLoading] = useState(false);
   const [mappingSearch, setMappingSearch] = useState('');
   const [selectedIssuance, setSelectedIssuance] = useState<Issuance | null>(null);
@@ -53,24 +55,35 @@ export default function IssuancesPage() {
     issuance_number: '',
     title: '',
     description: '',
+    issuance_type: '',
+    applicability_scope: '',
+    relevance_notes: '',
+    is_amendment: false,
+    amended_issuance_number: '',
+    ict_amendment_notes: '',
     issuing_authority: '',
     issue_date: '',
     effectivity_date: '',
     source_url: '',
+    is_active: true,
   });
   const [filterAuthority, setFilterAuthority] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const canManageIssuances = user?.role === 'super_admin' || user?.role === 'reviewer';
 
   useEffect(() => {
     fetchIssuances();
-  }, [filterAuthority]);
+  }, [filterAuthority, filterCategory, filterStatus]);
 
   const fetchIssuances = async () => {
     try {
       setLoading(true);
       const data = await issuancesApi.getAll({
         authority: filterAuthority || undefined,
-        is_active: true,
+        category: filterCategory || undefined,
+        is_active:
+          filterStatus === 'all' ? undefined : filterStatus === 'active',
       });
       setIssuances(data);
     } catch (err: any) {
@@ -91,12 +104,19 @@ export default function IssuancesPage() {
         issuance_number: issuance.issuance_number,
         title: issuance.title,
         description: issuance.description || '',
+          issuance_type: issuance.issuance_type || '',
+          applicability_scope: issuance.applicability_scope || '',
+          relevance_notes: issuance.relevance_notes || '',
+        is_amendment: Boolean(issuance.is_amendment),
+        amended_issuance_number: issuance.amended_issuance_number || '',
+        ict_amendment_notes: issuance.ict_amendment_notes || '',
         issuing_authority: issuance.issuing_authority,
         issue_date: issuance.issue_date.split('T')[0],
         effectivity_date: issuance.effectivity_date
           ? issuance.effectivity_date.split('T')[0]
           : '',
         source_url: issuance.source_url || '',
+        is_active: issuance.is_active,
       });
     } else {
       setEditingIssuance(null);
@@ -104,10 +124,17 @@ export default function IssuancesPage() {
         issuance_number: '',
         title: '',
         description: '',
+        issuance_type: '',
+        applicability_scope: '',
+        relevance_notes: '',
+        is_amendment: false,
+        amended_issuance_number: '',
+        ict_amendment_notes: '',
         issuing_authority: '',
         issue_date: '',
         effectivity_date: '',
         source_url: '',
+        is_active: true,
       });
     }
     setDialogOpen(true);
@@ -136,6 +163,19 @@ export default function IssuancesPage() {
     }
   };
 
+  const handleToggleActive = async (issuance: Issuance) => {
+    if (!canManageIssuances) {
+      return;
+    }
+
+    try {
+      await issuancesApi.update(issuance.id, { is_active: !issuance.is_active });
+      await fetchIssuances();
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to update issuance status', { variant: 'error' });
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!canManageIssuances) {
       return;
@@ -156,6 +196,14 @@ export default function IssuancesPage() {
       issuances
         .map((item) => item.issuing_authority)
         .filter((item) => Boolean(item?.trim())),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+
+  const categoryOptions = Array.from(
+    new Set(
+      issuances
+        .map((item) => item.issuance_type)
+        .filter((item): item is string => Boolean(item?.trim())),
     ),
   ).sort((a, b) => a.localeCompare(b));
 
@@ -188,6 +236,16 @@ export default function IssuancesPage() {
     setSelectedIssuance(null);
     setMappedDocuments([]);
     setAvailableDocuments([]);
+  };
+
+  const openRelevanceDialog = (issuance: Issuance) => {
+    setSelectedIssuance(issuance);
+    setRelevanceOpen(true);
+  };
+
+  const closeRelevanceDialog = () => {
+    setRelevanceOpen(false);
+    setSelectedIssuance(null);
   };
 
   const handleLinkDocument = async (documentId: string) => {
@@ -259,30 +317,47 @@ export default function IssuancesPage() {
         <CardContent>
           <Box display="flex" gap={2} alignItems="flex-start" flexWrap="wrap">
             <TextField
-              label="Filter by Authority"
+              select
+              label="Authority"
               value={filterAuthority}
               onChange={(e) => setFilterAuthority(e.target.value)}
-              placeholder="Type authority name"
               sx={{ minWidth: 260 }}
               size="small"
-            />
-            <Box display="flex" gap={1} flexWrap="wrap" alignItems="center">
-              <Chip
-                label="All"
-                clickable
-                color={filterAuthority ? 'default' : 'primary'}
-                onClick={() => setFilterAuthority('')}
-              />
+            >
+              <MenuItem value="">All Authorities</MenuItem>
               {authorityOptions.map((authority) => (
-                <Chip
-                  key={authority}
-                  label={authority}
-                  clickable
-                  color={filterAuthority === authority ? 'primary' : 'default'}
-                  onClick={() => setFilterAuthority(authority)}
-                />
+                <MenuItem key={authority} value={authority}>
+                  {authority}
+                </MenuItem>
               ))}
-            </Box>
+            </TextField>
+            <TextField
+              select
+              label="Category"
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              sx={{ minWidth: 220 }}
+              size="small"
+            >
+              <MenuItem value="">All Categories</MenuItem>
+              {categoryOptions.map((category) => (
+                <MenuItem key={category} value={category}>
+                  {category}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              label="Status"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
+              sx={{ minWidth: 180 }}
+              size="small"
+            >
+              <MenuItem value="all">All Statuses</MenuItem>
+              <MenuItem value="active">Active</MenuItem>
+              <MenuItem value="inactive">Inactive</MenuItem>
+            </TextField>
           </Box>
         </CardContent>
       </Card>
@@ -296,20 +371,21 @@ export default function IssuancesPage() {
               <TableCell>Authority</TableCell>
               <TableCell>Issue Date</TableCell>
               <TableCell>Status</TableCell>
-                  <TableCell>Mapped Docs</TableCell>
+                  <TableCell>Mapped Documents</TableCell>
+              <TableCell>ICT Related Amendments</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
               <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : issuances.length === 0 ? (
               <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                   No issuances found
                 </TableCell>
               </TableRow>
@@ -350,7 +426,27 @@ export default function IssuancesPage() {
                       variant="outlined"
                     />
                   </TableCell>
+                  <TableCell>
+                    {issuance.is_amendment ? (
+                      <Box>
+                        <Chip label={`Amends ${issuance.amended_issuance_number || 'N/A'}`} size="small" color="secondary" sx={{ mb: 0.5 }} />
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {issuance.ict_amendment_notes || 'Includes ICT-related amendment provisions.'}
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">None</Typography>
+                    )}
+                  </TableCell>
                   <TableCell align="right">
+                    <IconButton
+                      size="small"
+                      color="info"
+                      onClick={() => openRelevanceDialog(issuance)}
+                      title="View applicability and relevance"
+                    >
+                      <InfoOutlinedIcon fontSize="small" />
+                    </IconButton>
                     <IconButton
                       size="small"
                       color="primary"
@@ -360,6 +456,14 @@ export default function IssuancesPage() {
                     </IconButton>
                     {canManageIssuances && (
                       <>
+                        <Button
+                          size="small"
+                          color={issuance.is_active ? 'warning' : 'success'}
+                          onClick={() => handleToggleActive(issuance)}
+                          sx={{ mr: 1 }}
+                        >
+                          {issuance.is_active ? 'Deactivate' : 'Activate'}
+                        </Button>
                         <IconButton
                           size="small"
                           onClick={() => handleOpenDialog(issuance)}
@@ -417,6 +521,95 @@ export default function IssuancesPage() {
               rows={3}
               fullWidth
             />
+            <TextField
+              select
+              label="Issuance Type"
+              value={formData.issuance_type || ''}
+              onChange={(e) =>
+                setFormData({ ...formData, issuance_type: e.target.value })
+              }
+              fullWidth
+            >
+              <MenuItem value="">None</MenuItem>
+              <MenuItem value="law">Law</MenuItem>
+              <MenuItem value="circular">Circular</MenuItem>
+              <MenuItem value="memorandum">Memorandum</MenuItem>
+              <MenuItem value="irr">IRR</MenuItem>
+              <MenuItem value="standard">Standard</MenuItem>
+              <MenuItem value="executive_order">Executive Order</MenuItem>
+              <MenuItem value="plan">Plan</MenuItem>
+              <MenuItem value="guideline">Guideline</MenuItem>
+            </TextField>
+            <TextField
+              select
+              label="Status"
+              value={formData.is_active === false ? 'inactive' : 'active'}
+              onChange={(e) =>
+                setFormData({ ...formData, is_active: e.target.value === 'active' })
+              }
+              fullWidth
+            >
+              <MenuItem value="active">Active</MenuItem>
+              <MenuItem value="inactive">Inactive</MenuItem>
+            </TextField>
+            <TextField
+              label="Applicability Scope"
+              value={formData.applicability_scope || ''}
+              onChange={(e) =>
+                setFormData({ ...formData, applicability_scope: e.target.value })
+              }
+              multiline
+              rows={5}
+              fullWidth
+              placeholder="Describe detailed operational scope (who is covered, what processes/systems are affected, governance boundaries, lifecycle stages, and exceptions)."
+            />
+            <TextField
+              label="Relevance Notes"
+              value={formData.relevance_notes || ''}
+              onChange={(e) =>
+                setFormData({ ...formData, relevance_notes: e.target.value })
+              }
+              multiline
+              rows={6}
+              fullWidth
+              placeholder="Provide in-depth rationale: legal/operational basis, control objectives, implementation implications, affected teams, compliance evidence expected, and replacement/supersession context if applicable."
+            />
+            <TextField
+              select
+              label="Is Amendment"
+              value={formData.is_amendment ? 'yes' : 'no'}
+              onChange={(e) =>
+                setFormData({ ...formData, is_amendment: e.target.value === 'yes' })
+              }
+              fullWidth
+            >
+              <MenuItem value="no">No</MenuItem>
+              <MenuItem value="yes">Yes</MenuItem>
+            </TextField>
+            {formData.is_amendment ? (
+              <>
+                <TextField
+                  label="Amended Issuance Number"
+                  value={formData.amended_issuance_number || ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, amended_issuance_number: e.target.value })
+                  }
+                  fullWidth
+                  placeholder="e.g. RA-9184"
+                />
+                <TextField
+                  label="ICT Related Amendment Notes"
+                  value={formData.ict_amendment_notes || ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, ict_amendment_notes: e.target.value })
+                  }
+                  multiline
+                  rows={4}
+                  fullWidth
+                  placeholder="Describe which ICT provisions were introduced/expanded by this amendment."
+                />
+              </>
+            ) : null}
             <TextField
               label="Issuing Authority"
               value={formData.issuing_authority}
@@ -583,6 +776,59 @@ export default function IssuancesPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={closeMappingDialog}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={relevanceOpen} onClose={closeRelevanceDialog} maxWidth="md" fullWidth>
+        <DialogTitle>
+          Applicability and Relevance {selectedIssuance ? `• ${selectedIssuance.issuance_number}` : ''}
+        </DialogTitle>
+        <DialogContent>
+          {selectedIssuance ? (
+            <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Title</Typography>
+                <Typography variant="body1" fontWeight={600}>{selectedIssuance.title}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Issuance Type</Typography>
+                <Typography variant="body1">{selectedIssuance.issuance_type || 'Not specified'}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Applicability Scope</Typography>
+                <Typography variant="body1">{selectedIssuance.applicability_scope || 'No applicability scope provided.'}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Relevance Notes</Typography>
+                <Typography variant="body1">{selectedIssuance.relevance_notes || selectedIssuance.description || 'No relevance notes provided.'}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Amendment</Typography>
+                <Typography variant="body1">
+                  {selectedIssuance.is_amendment
+                    ? `Yes • Amends ${selectedIssuance.amended_issuance_number || 'N/A'}`
+                    : 'No'}
+                </Typography>
+              </Box>
+              {selectedIssuance.is_amendment ? (
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">ICT Related Amendment Notes</Typography>
+                  <Typography variant="body1">
+                    {selectedIssuance.ict_amendment_notes || 'No ICT amendment notes provided.'}
+                  </Typography>
+                </Box>
+              ) : null}
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">Mapped Documents</Typography>
+                <Typography variant="body1">{selectedIssuance.documents?.length || 0}</Typography>
+              </Box>
+            </Box>
+          ) : (
+            <Typography sx={{ pt: 1 }}>No issuance selected.</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeRelevanceDialog}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

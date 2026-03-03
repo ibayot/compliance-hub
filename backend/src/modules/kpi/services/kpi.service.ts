@@ -329,15 +329,12 @@ export class KpiService {
     }
 
     // lower_is_better:
-    //  - actual <= target (at/below ceiling): proportional 0–100 based on how close to target.
-    //    e.g. actual=3.1, target=4 → 3.1/4*100 = 77.5
-    //  - actual > target (over ceiling, penalised): (target/actual)*100
-    //    e.g. actual=5, target=4 → 4/5*100 = 80
+    //  - normalized score should increase as actual decreases.
+    //  - use target/actual and clamp by scoring rule caps.
+    //    e.g. actual=3.1, target=4 → 4/3.1*100 ≈ 129 → clamped to 100
+    //    e.g. actual=5,   target=4 → 4/5*100 = 80
     const actualNum = Number(actual);
     if (actualNum <= 0) return 0;
-    if (actualNum <= target) {
-      return (actualNum / target) * 100;
-    }
     return (target / actualNum) * 100;
   }
 

@@ -119,21 +119,23 @@ function getTimeseriesRange(
 ): { fromYear: number; fromMonth: number; toYear: number; toMonth: number } {
   switch (viewFrequency) {
     case 'monthly':
-      // For non-January months: also fetch the previous month so the chart draws a
-      // line from prev → current instead of showing a single dot.
-      // For January: only the current month is fetched; the frontend prepends a
-      // synthetic score=0 anchor so the line draws from 0 → Jan value.
+      // Monthly shows previous month -> selected month.
+      // January has no prior month, so it starts at January and uses synthetic zero-anchor.
       if (periodMonth > 1) {
         return { fromYear: periodYear, fromMonth: periodMonth - 1, toYear: periodYear, toMonth: periodMonth };
       }
       return { fromYear: periodYear, fromMonth: 1, toYear: periodYear, toMonth: 1 };
     case 'quarterly': {
-      const fromMonth = (periodQuarter - 1) * 3 + 1;
+      const quarterStart = (periodQuarter - 1) * 3 + 1;
+      // Q2/Q3/Q4 include prior quarter end anchor (Q1-3/Q2-3/Q3-3).
+      const fromMonth = periodQuarter > 1 ? quarterStart - 1 : quarterStart;
       const toMonth = periodQuarter * 3;
       return { fromYear: periodYear, fromMonth, toYear: periodYear, toMonth };
     }
     case 'semestral': {
-      const fromMonth = (periodSemester - 1) * 6 + 1;
+      const semStart = (periodSemester - 1) * 6 + 1;
+      // H2 includes prior semester end anchor (H1-6 / Jun).
+      const fromMonth = periodSemester > 1 ? semStart - 1 : semStart;
       const toMonth = periodSemester * 6;
       return { fromYear: periodYear, fromMonth, toYear: periodYear, toMonth };
     }
@@ -148,45 +150,68 @@ function getTimeseriesRange(
 function getXAxisLabel(
   point: { periodYear: number; periodMonth: number },
   viewFrequency: 'monthly' | 'quarterly' | 'semestral' | 'annual',
-  periodYear: number,
-  periodQuarter: number,
-  periodSemester: number,
 ): string {
-  const abbr = MONTH_ABBR[point.periodMonth - 1];
+  const month = point.periodMonth;
+  const abbr = MONTH_ABBR[month - 1];
   switch (viewFrequency) {
     case 'monthly': return abbr;
     case 'quarterly': {
-      const rel = point.periodMonth - ((periodQuarter - 1) * 3 + 1) + 1;
-      return `Q${periodQuarter}-${rel}`;
+      const q = Math.ceil(month / 3);
+      const rel = ((month - 1) % 3) + 1;
+      return `Q${q}-${rel}`;
     }
     case 'semestral': {
-      const rel = point.periodMonth - ((periodSemester - 1) * 6 + 1) + 1;
-      return `H${periodSemester}-${rel}`;
+      const h = month <= 6 ? 1 : 2;
+      const rel = ((month - 1) % 6) + 1;
+      return `H${h}-${rel}`;
     }
     case 'annual': return abbr;
     default: return abbr;
   }
 }
 
-/** Mini 2-point line sparkline for the Trend column in the KPI detail table. */
-function TrendSparkline({ prev, current, band }: { prev: number | null; current: number | null; band: string }) {
+/** Sparkline for Trend column; supports multi-point zigzag via `points`. */
+function TrendSparkline({ prev, current, band, points }: { prev: number | null; current: number | null; band: string; points?: number[] }) {
   const color = BAND_COLORS[band] || BAND_COLORS.unclassified;
   const w = 60; const h = 24; const pad = 5;
-  // When prev is null (no historic data) we anchor the start at 0 so the
-  // line shows a diagonal ascent/descent rather than a flat horizontal.
-  const startVal = prev !== null ? prev : 0;
-  const endVal = current !== null ? current : 0;
+  const fallbackSeries = [prev !== null ? prev : 0, current !== null ? current : 0];
+  const series = (points && points.length > 0 ? points : fallbackSeries).map((v) => Math.min(100, Math.max(0, Number(v))));
   const toY = (v: number) => h - pad - (Math.min(100, Math.max(0, v)) / 100) * (h - 2 * pad);
-  const y1 = toY(startVal); const y2 = toY(endVal);
-  // Grey start dot when prev had no data (anchored at 0); band-colored otherwise.
-  const startColor = prev !== null ? color : '#b0bec5';
+  const xFor = (idx: number) => {
+    if (series.length <= 1) return pad;
+    return pad + (idx / (series.length - 1)) * ((w - pad) - pad);
+  };
+  const pathPoints = series.map((val, idx) => `${xFor(idx)},${toY(val)}`).join(' ');
+  const startX = xFor(0);
+  const startY = toY(series[0] ?? 0);
+  const endX = xFor(series.length - 1);
+  const endY = toY(series[series.length - 1] ?? 0);
+  const prevIdx = Math.max(0, series.length - 2);
+  const prevX = xFor(prevIdx);
+  const prevY = toY(series[prevIdx] ?? (series[series.length - 1] ?? 0));
+  const angle = Math.atan2(endY - prevY, endX - prevX) * (180 / Math.PI);
+  const startColor = points && points.length > 0 ? color : (prev !== null ? color : '#b0bec5');
   return (
     <svg width={w} height={h} style={{ display: 'block', overflow: 'visible' }}>
-      <line x1={pad} y1={y1} x2={w - pad} y2={y2} stroke={color} strokeWidth={2} />
-      <circle cx={pad} cy={y1} r={3} fill={startColor} stroke="#fff" strokeWidth={1} />
-      <circle cx={w - pad} cy={y2} r={3} fill={color} stroke="#fff" strokeWidth={1} />
+      <polyline points={pathPoints} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={startX} cy={startY} r={3} fill={startColor} stroke="#fff" strokeWidth={1} />
+      <polygon
+        points="-6,-4 0,0 -6,4"
+        transform={`translate(${endX},${endY}) rotate(${angle})`}
+        fill={color}
+      />
     </svg>
   );
+}
+
+function DirectionIndicator({ direction }: { direction?: KpiDirection | null }) {
+  if (direction === 'higher_is_better') {
+    return <Typography variant="caption" color="success.main">↑</Typography>;
+  }
+  if (direction === 'lower_is_better') {
+    return <Typography variant="caption" color="info.main">↓</Typography>;
+  }
+  return <Typography variant="caption" color="text.secondary">—</Typography>;
 }
 
 export default function KpiPage() {
@@ -526,13 +551,21 @@ export default function KpiPage() {
   // (e.g. Finance with data only through August in a Q3 or Semester-2 view) are included.
   const allUnitsLineData = useMemo(() => {
     if (availableUnits.length === 0) return [];
-    // Use the first unit that has any timeseries data as the X-axis anchor.
-    const anchorUnit = availableUnits.find((u) => (allUnitsTimeseries[u.id] || []).length > 0);
-    if (!anchorUnit) return [];
-    const anchorTs = allUnitsTimeseries[anchorUnit.id];
-    if (!anchorTs || anchorTs.length === 0) return [];
-    const mapped = anchorTs.map((pt) => {
-      const label = getXAxisLabel(pt, viewFrequency, periodYear, periodQuarter, periodSemester);
+    const periodMap = new Map<string, { periodYear: number; periodMonth: number }>();
+    availableUnits.forEach((unit) => {
+      const ts = allUnitsTimeseries[unit.id] || [];
+      ts.forEach((pt) => {
+        const key = `${pt.periodYear}-${String(pt.periodMonth).padStart(2, '0')}`;
+        if (!periodMap.has(key)) periodMap.set(key, { periodYear: pt.periodYear, periodMonth: pt.periodMonth });
+      });
+    });
+    const sortedPeriods = [...periodMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, v]) => v);
+    if (sortedPeriods.length === 0) return [];
+
+    const mapped = sortedPeriods.map((pt) => {
+      const label = getXAxisLabel(pt, viewFrequency);
       const datum: Record<string, any> = { label };
       availableUnits.forEach((unit) => {
         const ts = allUnitsTimeseries[unit.id] || [];
@@ -554,40 +587,64 @@ export default function KpiPage() {
           if (hasLater) first[key] = 0;
         }
       });
-      return [first, ...mapped.slice(1)];
+      const adjusted = [first, ...mapped.slice(1)];
+      const shouldPrependZero =
+        viewFrequency === 'annual'
+        || (viewFrequency === 'monthly' && periodMonth === 1)
+        || (viewFrequency === 'quarterly' && periodQuarter === 1)
+        || (viewFrequency === 'semestral' && periodSemester === 1);
+      if (shouldPrependZero) {
+        const zeroAnchor: Record<string, any> = { label: '' };
+        availableUnits.forEach((unit) => { zeroAnchor[`u${unit.id}`] = 0; });
+        return [zeroAnchor, ...adjusted];
+      }
+      return adjusted;
     }
     return mapped;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allUnitsTimeseries, availableUnits, viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester]);
 
-  /** KPI-level band distribution: count of KPI entries per band across all units for the current period. */
+  /** KPI-level band distribution aligned to selected filters with transparent partial logic. */
   const kpiBandDistribution = useMemo(() => {
     const counts: Record<string, number> = {};
-    availableUnits.forEach((u) => {
+    let partialCount = 0;
+    const selectedUnitIds = filterUnitId === ''
+      ? availableUnits.map((u) => u.id)
+      : [Number(filterUnitId)].filter(Number.isFinite);
+    const summaryUnitIds = new Set((summary?.units || []).map((u) => u.unitId));
+    selectedUnitIds.forEach((unitId) => {
+      const u = availableUnits.find((unit) => unit.id === unitId);
+      if (!u) return;
       const ts = allUnitsTimeseries[u.id] || [];
       const lastPt = [...ts].reverse().find((p) => p.hasData);
       if (!lastPt) return;
+      if (!summaryUnitIds.has(u.id)) {
+        partialCount += (lastPt.kpiScores || []).length;
+        return;
+      }
       (lastPt.kpiScores || []).forEach((k: any) => {
         const band = String(k.band || 'unclassified').toLowerCase();
         counts[band] = (counts[band] || 0) + 1;
       });
     });
-    return Object.entries(counts).map(([band, value]) => ({
+    const entries = Object.entries(counts).map(([band, value]) => ({
       name: band.toUpperCase(),
       value,
       partial: false,
     }));
+    if (partialCount > 0) {
+      entries.push({ name: 'PARTIAL', value: partialCount, partial: true });
+    }
+    return entries;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availableUnits, allUnitsTimeseries]);
+  }, [availableUnits, allUnitsTimeseries, filterUnitId, summary]);
 
   // KPI detail multi-line chart: { label, [kpiCode]: score|null } per period.
   const kpiDetailLineData = useMemo(() => {
     if (unitTimeseries.length === 0) return { data: [] as Record<string, any>[], codes: [] as string[] };
     const codes = [...new Set(unitTimeseries.flatMap((pt) => (pt.kpiScores || []).map((k) => k.code)))];
-    // Always use month abbreviations on the X-axis: monthly shows Jan→selected month,
-    // quarterly shows only that quarter's months, semestral shows only that H's months.
     const data = unitTimeseries.map((pt) => {
-      const datum: Record<string, any> = { label: MONTH_ABBR[pt.periodMonth - 1] };
+      const datum: Record<string, any> = { label: getXAxisLabel(pt, viewFrequency) };
       codes.forEach((code) => {
         const kp = (pt.kpiScores || []).find((k) => k.code === code);
         datum[code] = pt.hasData && kp ? kp.normalizedScore : null;
@@ -604,11 +661,77 @@ export default function KpiPage() {
           if (hasLater) first[code] = 0;
         }
       });
-      return { data: [first, ...data.slice(1)], codes };
+      const adjusted = [first, ...data.slice(1)];
+      const shouldPrependZero =
+        viewFrequency === 'annual'
+        || (viewFrequency === 'monthly' && periodMonth === 1)
+        || (viewFrequency === 'quarterly' && periodQuarter === 1)
+        || (viewFrequency === 'semestral' && periodSemester === 1);
+      if (shouldPrependZero) {
+        const zeroAnchor: Record<string, any> = { label: '' };
+        codes.forEach((code) => { zeroAnchor[code] = 0; });
+        return { data: [zeroAnchor, ...adjusted], codes };
+      }
+      return { data: adjusted, codes };
     }
     return { data, codes };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unitTimeseries, viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester]);
+
+  const selectedUnitDetailRows = useMemo(() => {
+    if (!selectedUnitDashboard) return [] as Array<{
+      id: number | string;
+      code: string;
+      name: string;
+      direction: KpiDirection | null;
+      targetValue: number | null;
+      actualValue: number | null;
+      normalizedScore: number | null;
+      band: string;
+      hasData: boolean;
+    }>;
+    const detailMap = new Map(selectedUnitDashboard.details.map((d) => [d.code, d]));
+    const unitMasters = masters.filter((m) => m.unitId === selectedUnitDashboard.unitId && m.active);
+    const rows = unitMasters.map((m) => {
+      const d = detailMap.get(m.code);
+      return {
+        id: d?.id ?? `master-${m.code}`,
+        code: m.code,
+        name: m.name,
+        direction: d ? d.direction : m.direction,
+        targetValue: d ? d.targetValue : Number(m.targetValue),
+        actualValue: d ? d.actualValue : null,
+        normalizedScore: d ? d.normalizedScore : null,
+        band: String(d?.band || 'unclassified').toLowerCase(),
+        hasData: Boolean(d),
+      };
+    });
+    const masterCodes = new Set(unitMasters.map((m) => m.code));
+    const extras = selectedUnitDashboard.details
+      .filter((d) => !masterCodes.has(d.code))
+      .map((d) => ({
+        id: d.id,
+        code: d.code,
+        name: d.name,
+        direction: d.direction,
+        targetValue: d.targetValue,
+        actualValue: d.actualValue,
+        normalizedScore: d.normalizedScore,
+        band: String(d.band || 'unclassified').toLowerCase(),
+        hasData: true,
+      }));
+    return [...rows, ...extras];
+  }, [selectedUnitDashboard, masters]);
+
+  const computeTrendValues = useCallback((values: number[]) => {
+    if (values.length === 0) return { prev: null as number | null, current: null as number | null };
+    if (viewFrequency === 'monthly') {
+      if (values.length === 1) return { prev: null as number | null, current: values[0] };
+      return { prev: values[0], current: values[values.length - 1] };
+    }
+    const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
+    return { prev: values[0], current: Number(avg.toFixed(2)) };
+  }, [viewFrequency]);
 
   const bandDistribution = Object.values(
     (summary?.units || []).reduce((acc, unit) => {
@@ -906,8 +1029,6 @@ export default function KpiPage() {
                         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
                         <Tooltip formatter={(val: any) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
                         {availableUnits.map((unit) => {
-                          const ts = allUnitsTimeseries[unit.id] || [];
-                          if (!ts.some((p) => p.hasData)) return null;
                           return (
                             <Line
                               key={unit.id}
@@ -952,15 +1073,12 @@ export default function KpiPage() {
                     ) : (
                       availableUnits.map((unit, idx) => {
                         const summaryRow = summaryUnitMap[unit.id];
-                        const ts = allUnitsTimeseries[unit.id] || [];
-                        // Use the chronologically last point with actual data for Trend end-value.
-                        const hasDataPts = ts.filter((p) => p.hasData);
-                        const firstHasDataPt = hasDataPts[0] ?? null;
-                        const lastHasDataPt = hasDataPts[hasDataPts.length - 1] ?? null;
-                        const prevScore: number | null = hasDataPts.length > 1 ? (firstHasDataPt?.score ?? null) : null;
-                        const currScore: number | null = lastHasDataPt
-                          ? lastHasDataPt.score
-                          : (summaryRow ? Number(summaryRow.score) : null);
+                        const visibleTrendValues = allUnitsLineData
+                          .map((d) => d[`u${unit.id}`])
+                          .filter((v) => v !== null && v !== undefined) as number[];
+                        const trend = computeTrendValues(visibleTrendValues);
+                        const prevScore: number | null = trend.prev;
+                        const currScore: number | null = trend.current ?? (summaryRow ? Number(summaryRow.score) : null);
                         const bandKey = summaryRow
                           ? String(summaryRow.band || 'unclassified').toLowerCase()
                           : 'unclassified';
@@ -976,7 +1094,7 @@ export default function KpiPage() {
                             </TableCell>
                             <TableCell>
                               {currScore !== null ? (
-                                <TrendSparkline prev={prevScore} current={currScore} band={bandKey} />
+                                <TrendSparkline prev={prevScore} current={currScore} points={visibleTrendValues} band={bandKey} />
                               ) : (
                                 <Typography variant="caption" color="text.secondary">—</Typography>
                               )}
@@ -1003,9 +1121,9 @@ export default function KpiPage() {
                     <Typography variant="body2" color="text.secondary">Composite Score:</Typography>
                     <Chip
                       size="small"
-                      label={selectedUnitDashboard.details?.length > 0 ? String(selectedUnitDashboard.score) : '—'}
+                      label={selectedUnitDetailRows.some((r) => r.hasData) ? String(selectedUnitDashboard.score) : '—'}
                       sx={{
-                        bgcolor: selectedUnitDashboard.details?.length > 0
+                        bgcolor: selectedUnitDetailRows.some((r) => r.hasData)
                           ? BAND_COLORS[String(selectedUnitDashboard.band || 'unclassified').toLowerCase()] || BAND_COLORS.unclassified
                           : 'grey.400',
                         color: '#fff', fontWeight: 700, fontSize: 13, px: 0.5,
@@ -1051,10 +1169,10 @@ export default function KpiPage() {
                     </Box>
                   )}
                   <Divider sx={{ my: 1 }} />
-                  {selectedUnitDashboard.details?.length === 0 ? (
+                  {selectedUnitDetailRows.length === 0 ? (
                     <Box sx={{ py: 3, textAlign: 'center' }}>
                       <Typography variant="body2" color="text.secondary">
-                        No KPI data available for this unit/period (partial period).
+                        No KPI master definitions available for this unit.
                       </Typography>
                     </Box>
                   ) : (
@@ -1063,6 +1181,7 @@ export default function KpiPage() {
                       <TableRow>
                         <TableCell>KPI</TableCell>
                         <TableCell sx={{ width: 32, p: 0 }}>Color</TableCell>
+                        <TableCell>Direction</TableCell>
                         <TableCell>Actual</TableCell>
                         <TableCell>Target</TableCell>
                         <TableCell>Score</TableCell>
@@ -1070,14 +1189,13 @@ export default function KpiPage() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {selectedUnitDashboard.details.map((item, idx) => {
-                        const kpiMoments = unitTimeseries.filter((pt) => pt.hasData && pt.kpiScores?.some((k) => k.code === item.code));
-                        const firstMoment = kpiMoments[0] ?? null;
-                        const lastMoment = kpiMoments[kpiMoments.length - 1] ?? null;
-                        const prevKpiScore: number | null = kpiMoments.length > 1
-                          ? (firstMoment?.kpiScores?.find((k) => k.code === item.code)?.normalizedScore ?? null)
-                          : null;
-                        const currScore = lastMoment?.kpiScores?.find((k) => k.code === item.code)?.normalizedScore ?? item.normalizedScore;
+                      {selectedUnitDetailRows.map((item, idx) => {
+                        const visibleTrendValues = kpiDetailLineData.data
+                          .map((d) => d[item.code])
+                          .filter((v) => v !== null && v !== undefined) as number[];
+                        const trend = computeTrendValues(visibleTrendValues);
+                        const prevKpiScore: number | null = trend.prev;
+                        const currScore = item.hasData ? (trend.current ?? item.normalizedScore) : null;
                         const kpiColor = UNIT_COLORS[idx % UNIT_COLORS.length];
                         return (
                           <TableRow key={item.id}>
@@ -1088,11 +1206,18 @@ export default function KpiPage() {
                             <TableCell sx={{ p: 1 }}>
                               <Box sx={{ width: 20, height: 20, borderRadius: '4px', bgcolor: kpiColor }} />
                             </TableCell>
-                            <TableCell>{item.actualValue}</TableCell>
-                            <TableCell>{item.targetValue}</TableCell>
-                            <TableCell><strong>{item.normalizedScore}</strong></TableCell>
                             <TableCell>
-                              <TrendSparkline prev={prevKpiScore} current={currScore} band={String(item.band || 'unclassified').toLowerCase()} />
+                              <DirectionIndicator direction={item.direction} />
+                            </TableCell>
+                            <TableCell>{item.hasData ? item.actualValue : '—'}</TableCell>
+                            <TableCell>{item.targetValue ?? '—'}</TableCell>
+                            <TableCell><strong>{item.hasData ? item.normalizedScore : '—'}</strong></TableCell>
+                            <TableCell>
+                              {currScore !== null ? (
+                                <TrendSparkline prev={prevKpiScore} current={currScore} points={visibleTrendValues} band={String(item.band || 'unclassified').toLowerCase()} />
+                              ) : (
+                                <Typography variant="caption" color="text.secondary">—</Typography>
+                              )}
                             </TableCell>
                           </TableRow>
                         );
@@ -1162,7 +1287,7 @@ export default function KpiPage() {
 
           <Grid item xs={12} md={6}>
             <Card>
-              <CardHeader title="KPIs by Performance Band" subheader="KPI count per band across all units" />
+              <CardHeader title="KPIs by Performance Band" subheader="KPI count per selected filters; partial units shown as transparent" />
               <CardContent>
                 {kpiBandDistribution.length === 0 ? (
                   <Box sx={{ py: 6, textAlign: 'center' }}>
@@ -1180,13 +1305,13 @@ export default function KpiPage() {
                           cy="50%"
                           outerRadius={90}
                           labelLine={false}
-                          label={({ cx, cy, midAngle, innerRadius, outerRadius, value }: any) => {
+                          label={({ cx, cy, midAngle, innerRadius, outerRadius, value, partial: isPartial }: any) => {
                             const RADIAN = Math.PI / 180;
                             const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
                             const x = cx + radius * Math.cos(-midAngle * RADIAN);
                             const y = cy + radius * Math.sin(-midAngle * RADIAN);
                             return (
-                              <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={14} fontWeight={700}>
+                              <text x={x} y={y} fill={isPartial ? '#888' : '#fff'} textAnchor="middle" dominantBaseline="central" fontSize={14} fontWeight={700}>
                                 {value}
                               </text>
                             );
@@ -1195,7 +1320,14 @@ export default function KpiPage() {
                           {kpiBandDistribution.map((entry, index) => (
                             <Cell
                               key={`kpi-pie-${index}`}
-                              fill={BAND_COLORS[String(entry.name).toLowerCase()] || BAND_COLORS.unclassified}
+                              fill={
+                                entry.partial
+                                  ? 'transparent'
+                                  : (BAND_COLORS[String(entry.name).toLowerCase()] || BAND_COLORS.unclassified)
+                              }
+                              stroke={entry.partial ? '#ccc' : undefined}
+                              strokeWidth={entry.partial ? 2 : undefined}
+                              strokeDasharray={entry.partial ? '4 3' : undefined}
                             />
                           ))}
                         </Pie>

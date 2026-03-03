@@ -38,7 +38,7 @@ type ManualItem = {
 const manualItems: ManualItem[] = [
   {
     title: 'Documents Upload and Tracking',
-    description: 'Upload DOCX, monitor processing, review versions, and map references for ready/compliant documents.',
+    description: 'Upload DOCX and track only pending-for-review submissions in the Documents work queue.',
     roles: ['super_admin', 'reviewer', 'focal', 'technician', 'auditor'],
     path: '/dashboard/documents',
     details: {
@@ -86,6 +86,11 @@ const manualItems: ManualItem[] = [
           field: 'Processing Status Badge',
           explanation:
             'Displayed on each document row: queued (waiting in queue), processing (extraction running), completed (text and preview ready), or error (extraction failed  hover to see error details). You can retry a failed document from the document detail page.',
+        },
+        {
+          field: 'Pending Review Queue (Documents page)',
+          explanation:
+            'The Documents module now acts as a pending-work queue. It lists only pending submissions that still require reviewer action. Once a document is marked compliant (ready), it is no longer listed here and is available in the Repository module.',
         },
         {
           field: 'Version History List',
@@ -159,6 +164,11 @@ const manualItems: ManualItem[] = [
           explanation:
             'Restricts the template to documents belonging to a specific organizational unit. Combine with Document Type for precise targeting  for example, applying a security metrics template only to IT unit policies.',
         },
+        {
+          field: 'Seeded Baseline Template Sets',
+          explanation:
+            'The baseline seed contains 12 templates total (3 per metric type): 4 global templates (apply to all), 4 IT-targeted templates (ICT Security Assessment), and 4 Finance-targeted templates (Finance Risk Report). This ensures each unit document can be evaluated by one section, one keyword, one number extraction, and one date rule, plus global checks.',
+        },
       ],
       outputs: [
         {
@@ -196,7 +206,7 @@ const manualItems: ManualItem[] = [
         {
           field: 'Review Queue Selection',
           explanation:
-            'The Reviews list shows all documents in "pending review" or "returned" status that are assigned to or accessible by the current user. Click a row to open the review dialog. Only documents that have completed extraction processing appear in the queue.',
+            'The Reviews list is synchronized with the pending queue from the Documents module and shows only pending items that require compliance tagging. Compliant/ready items are excluded from this queue and can be accessed from the Repository module.',
         },
         {
           field: 'Document Viewer (within Review Dialog)',
@@ -245,7 +255,7 @@ const manualItems: ManualItem[] = [
     path: '/dashboard/issuances',
     details: {
       purpose:
-        'Maintain an authoritative registry of regulatory and policy issuances, and link each issuance to the supporting compliance documents that provide evidence of adherence. This module provides the traceability required for compliance audits.',
+        'Maintain an authoritative registry of regulatory and policy issuances, and link each issuance to the supporting compliance documents that provide evidence of adherence. Seeded issuances include applicable laws, IRRs, standards (e.g., ISO/NIST), Executive Orders, DICT/NPC circular references, and national plan references relevant to ICT operations and administration.',
       inputs: [
         {
           field: 'Issuance Code',
@@ -260,12 +270,17 @@ const manualItems: ManualItem[] = [
         {
           field: 'Issuance Category',
           explanation:
-            'The classification type: Executive Order, Memorandum Circular, Administrative Order, Directive, Resolution, or Other. Used for filtering and aggregated reporting.',
+            'The classification type used by the Issuances category filter (e.g., law, circular, memorandum, IRR, standard, guideline, executive_order, plan). Used for filtering and aggregated reporting.',
         },
         {
-          field: 'Effective and Expiry Dates',
+          field: 'Issuance Status and Effectivity',
           explanation:
-            'The validity period of the issuance. Expiry dates are monitored and surfaced in the administration dashboard to warn about upcoming regulatory renewals.',
+            'Tracks issuance lifecycle using active/inactive status and effectivity metadata. Inactive is used for superseded or withdrawn references while preserving historical mappings.',
+        },
+        {
+          field: 'Amendment Metadata',
+          explanation:
+            'For amendment issuances, maintain Is Amendment, Amended Issuance Number, and ICT Related Amendment Notes to document ICT-specific legal and operational impact.',
         },
         {
           field: 'Document Mapping Selection',
@@ -277,7 +292,7 @@ const manualItems: ManualItem[] = [
         {
           field: 'Issuance Registry List',
           explanation:
-            'A paginated, filterable table of all issuances with code, title, category, date range, and compliance status indicator (fully mapped, partially mapped, no documents linked).',
+            'A paginated, filterable table of all issuances with code, title, authority, category, status, and ICT Related Amendments context, plus mapping status indicator (fully mapped, partially mapped, no documents linked).',
         },
         {
           field: 'Mapped Document Set',
@@ -607,12 +622,12 @@ const manualItems: ManualItem[] = [
         {
           field: 'Trend Line Chart (Unit Detail)',
           explanation:
-            'A line chart showing the composite score trajectory for the selected unit across the full period range. Each data point is a colored circle matching the performance band for that period. Monthly mode shows 2 points; Quarterly shows 4; Semestral shows 7; Annual shows 13 (including the prior December as a baseline). Null periods are shown as gaps, not zero values.',
+            'A line chart showing composite trajectory for the selected unit. Monthly mode shows previous month → selected month (January uses 0 → January). Quarterly and Semestral include one boundary anchor point (Q1-3 or H1-6) before the selected range. Annual spans Jan–Dec with a 0 start anchor.',
         },
         {
           field: 'KPI Detail Table (Unit Detail)',
           explanation:
-            'A per-KPI breakdown showing Actual, Target, Score (normalized), a mini sparkline Trend (prev vs. current period), and a color-block Band indicator. Use this to identify which specific indicators are dragging the composite score down.',
+            'A per-KPI breakdown showing Direction (↑ higher is better / ↓ lower is better), Actual, Target, Score (normalized), and mini sparkline Trend with arrowhead. All KPI masters for the selected unit are listed even when period data is incomplete; incomplete rows show Score as "—".',
         },
         {
           field: 'Band Distribution Pie Chart',
@@ -656,12 +671,17 @@ const manualItems: ManualItem[] = [
         {
           field: 'KPI Scores Chart',
           explanation:
-            'For all-units view: a multi-line trend chart overlaying all unit scores from Jan 1 to period end. For single-unit view: a per-KPI line chart showing each indicator\'s score trajectory. All lines start from 0 for visual clarity.',
+            'For all-units view: same chart content/line behavior as KPI module Unit KPI Scores. For single-unit view: same chart content as KPI module Unit Detail. Chart legends are intentionally hidden because the color-key table is shown directly below.',
+        },
+        {
+          field: 'Direction + Trend Indicators',
+          explanation:
+            'Single-unit KPI tables now include Direction (↑/↓) to indicate whether higher or lower actual values are preferred. Trend sparkline lines include arrowheads so upward/downward movement is visually clear for each KPI and unit row.',
         },
         {
           field: 'KPIs Requiring Attention',
           explanation:
-            'A highlighted alert table listing every KPI whose band is Red or Amber. Shows unit, KPI name, code, normalized score, band chip, and actual value. Intended for immediate management action. Only appears when at least one underperforming KPI exists for the period.',
+            'A highlighted alert table listing every KPI below acceptable thresholds. Shows unit, KPI name, code, color-coded score value, and actual value. Intended for immediate management action. Only appears when at least one underperforming KPI exists for the period.',
         },
         {
           field: 'Document Submissions Table',
@@ -678,7 +698,7 @@ const manualItems: ManualItem[] = [
     path: '/dashboard/repository',
     details: {
       purpose:
-        'Provides a folder-style view of all compliance documents grouped by Year → Period. Focal users see their own unit\'s submissions; admins, reviewers, and auditors see all units. The repository is the canonical reference for auditors who need to locate and verify specific period submissions.',
+        'Provides a folder-style view of compliant/ready documents grouped by Year → Period. Pending review documents are not shown here; they remain in the Documents and Reviews queues. Focal users see their own unit\'s compliant submissions; admins, reviewers, and auditors see all compliant units.',
       inputs: [
         {
           field: 'Year Accordion',
@@ -695,17 +715,17 @@ const manualItems: ManualItem[] = [
         {
           field: 'Document Table',
           explanation:
-            'For each open folder: document title, type, submitting unit, status chip (Pending, Ready, Approved), compliance chip (Compliant, Non-Compliant, Needs Revision), and upload date.',
+            'For each open folder: document title, submitting unit, upload date, and actions. Repository entries are already compliant/ready outputs, so status/compliance chips are omitted to keep the table focused on retrieval and reuse.',
         },
         {
           field: 'View Action',
           explanation:
-            'Opens the document detail page where authorized users can read the inline document preview, inspect metric results, and review the full version/review history.',
+            'Opens an inline modal preview directly in the Repository module so users can review content without navigating away from folder context.',
         },
         {
           field: 'Download Action',
           explanation:
-            'Downloads the latest version of the document directly from the repository. The file is streamed with the correct filename and MIME type.',
+            'Downloads the latest version of the document directly from the repository. This supports reuse of prior compliant reports as a baseline for the next cycle update.',
         },
       ],
     },
