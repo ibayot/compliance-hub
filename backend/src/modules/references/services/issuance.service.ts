@@ -14,15 +14,28 @@ export interface CreateIssuanceDto {
   issuance_number: string;
   title: string;
   description?: string;
+  issuance_type?: string;
+  applicability_scope?: string;
+  relevance_notes?: string;
+  is_amendment?: boolean;
+  amended_issuance_number?: string;
+  ict_amendment_notes?: string;
   issuing_authority: string;
   issue_date: Date;
   effectivity_date?: Date;
   source_url?: string;
+  is_active?: boolean;
 }
 
 export interface UpdateIssuanceDto {
   title?: string;
   description?: string;
+  issuance_type?: string;
+  applicability_scope?: string;
+  relevance_notes?: string;
+  is_amendment?: boolean;
+  amended_issuance_number?: string;
+  ict_amendment_notes?: string;
   issuing_authority?: string;
   issue_date?: Date;
   effectivity_date?: Date;
@@ -70,6 +83,7 @@ export class IssuanceService {
    */
   async getIssuances(filters?: {
     authority?: string;
+    category?: string;
     search?: string;
     is_active?: boolean;
   }): Promise<Issuance[]> {
@@ -80,6 +94,12 @@ export class IssuanceService {
     if (filters?.authority) {
       query.andWhere('issuance.issuing_authority LIKE :authority', {
         authority: `%${filters.authority}%`,
+      });
+    }
+
+    if (filters?.category) {
+      query.andWhere('issuance.issuance_type = :category', {
+        category: filters.category,
       });
     }
 

@@ -24,6 +24,24 @@ export class Issuance {
   @Column({ type: 'text', nullable: true })
   description: string;
 
+  @Column({ type: 'varchar', length: 80, nullable: true })
+  issuance_type: string; // law, circular, memorandum, irr, standard, guideline
+
+  @Column({ type: 'text', nullable: true })
+  applicability_scope: string;
+
+  @Column({ type: 'text', nullable: true })
+  relevance_notes: string;
+
+  @Column({ type: 'boolean', default: false })
+  is_amendment: boolean;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  amended_issuance_number: string;
+
+  @Column({ type: 'text', nullable: true })
+  ict_amendment_notes: string;
+
   @Column({ type: 'varchar', length: 100 })
   issuing_authority: string; // e.g., "CHED", "DBM", "CSC"
 

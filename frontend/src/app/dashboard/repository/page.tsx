@@ -8,6 +8,9 @@ import {
   Box,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   Divider,
   Grid,
   IconButton,
@@ -22,6 +25,7 @@ import {
   Typography,
 } from '@mui/material';
 import {
+  Close as CloseIcon,
   ExpandMore as ExpandMoreIcon,
   FolderOpen as FolderOpenIcon,
   Folder as FolderIcon,
@@ -29,25 +33,16 @@ import {
   Visibility as ViewIcon,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { documentsApi, type RepositoryBucket, type Document } from '@/lib/api/documents';
+import DocumentViewer from '@/components/documents/DocumentViewer';
 
-const STATUS_COLOR: Record<string, 'default' | 'warning' | 'success' | 'error' | 'info'> = {
-  pending: 'warning',
-  processing: 'info',
-  ready: 'success',
-  failed: 'error',
-};
-
-const COMPLIANCE_COLOR: Record<string, 'default' | 'warning' | 'success' | 'error' | 'info'> = {
-  pending: 'warning',
-  compliant: 'success',
-  non_compliant: 'error',
-  needs_revision: 'warning',
-};
-
-function DocumentTable({ documents }: { documents: Document[] }) {
-  const navigate = useNavigate();
+function DocumentTable({
+  documents,
+  onView,
+}: {
+  documents: Document[];
+  onView: (doc: Document) => void;
+}) {
 
   const handleDownload = async (doc: Document) => {
     if (!doc.versions?.length) return;
@@ -70,7 +65,6 @@ function DocumentTable({ documents }: { documents: Document[] }) {
           <TableRow>
             <TableCell>Title</TableCell>
             <TableCell>Unit</TableCell>
-            <TableCell>Status</TableCell>
             <TableCell>Uploaded</TableCell>
             <TableCell align="center">Actions</TableCell>
           </TableRow>
@@ -81,32 +75,15 @@ function DocumentTable({ documents }: { documents: Document[] }) {
               <TableCell>{doc.title}</TableCell>
               <TableCell>{doc.unit?.name ?? '—'}</TableCell>
               <TableCell>
-                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                  <Chip
-                    label={(doc.status || 'pending').replace('_', ' ')}
-                    color={STATUS_COLOR[doc.status] ?? 'default'}
-                    size="small"
-                  />
-                  {doc.compliance_status && doc.compliance_status !== 'pending' && (
-                    <Chip
-                      label={doc.compliance_status.replace('_', ' ')}
-                      color={COMPLIANCE_COLOR[doc.compliance_status] ?? 'default'}
-                      size="small"
-                      variant="outlined"
-                    />
-                  )}
-                </Box>
-              </TableCell>
-              <TableCell>
                 <Typography variant="caption">
                   {new Date(doc.created_at).toLocaleDateString()}
                 </Typography>
               </TableCell>
               <TableCell align="center">
-                <Tooltip title="View details">
+                <Tooltip title="View preview">
                   <IconButton
                     size="small"
-                    onClick={() => navigate(`/dashboard/documents/${doc.id}`)}
+                    onClick={() => onView(doc)}
                   >
                     <ViewIcon fontSize="small" />
                   </IconButton>
@@ -175,6 +152,32 @@ function BucketFolder({
 
 export default function RepositoryPage() {
   const [selectedBucketKey, setSelectedBucketKey] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [previewMimeType, setPreviewMimeType] = useState<string>('application/pdf');
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  const downloadLatestVersion = async (doc: Document | null) => {
+    if (!doc) return;
+    try {
+      const [fullDoc, versions] = await Promise.all([
+        documentsApi.getDocument(doc.id),
+        documentsApi.getVersionHistory(doc.id),
+      ]);
+      const target =
+        versions.find((v) => v.version_number === fullDoc.current_version)
+        || versions.reduce((a, b) => (a.version_number >= b.version_number ? a : b), versions[0]);
+      if (!target) return;
+      const { blob, fileName } = await documentsApi.downloadVersionBlob(doc.id, target.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+    }
+  };
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['repository'],
@@ -200,6 +203,45 @@ export default function RepositoryPage() {
   }
 
   const years = data?.years ?? [];
+
+  const closePreview = () => {
+    if (previewBlobUrl && previewBlobUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewBlobUrl);
+    }
+    setPreviewBlobUrl(null);
+    setPreviewMimeType('application/pdf');
+    setPreviewDoc(null);
+    setPreviewLoading(false);
+  };
+
+  const openPreview = async (doc: Document) => {
+    setPreviewDoc(doc);
+    setPreviewLoading(true);
+    setPreviewBlobUrl(null);
+    try {
+      const [fullDoc, versions] = await Promise.all([
+        documentsApi.getDocument(doc.id),
+        documentsApi.getVersionHistory(doc.id),
+      ]);
+      const target =
+        versions.find((v) => v.version_number === fullDoc.current_version)
+        || versions.reduce((a, b) => (a.version_number >= b.version_number ? a : b), versions[0]);
+      if (!target) {
+        setPreviewLoading(false);
+        return;
+      }
+      const { blobUrl, mimeType } = await documentsApi.getPreviewBlobUrl(doc.id, target.id);
+      setPreviewMimeType(mimeType);
+      setPreviewBlobUrl((prev) => {
+        if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+        return blobUrl;
+      });
+    } catch {
+      setPreviewBlobUrl(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   return (
     <Box p={3}>
@@ -267,13 +309,49 @@ export default function RepositoryPage() {
                   <Typography variant="subtitle2" fontWeight={600} mb={1} color="primary.main">
                     {activeBucket.label} — {activeBucket.count} document{activeBucket.count !== 1 ? 's' : ''}
                   </Typography>
-                  <DocumentTable documents={activeBucket.documents} />
+                  <DocumentTable documents={activeBucket.documents} onView={openPreview} />
                 </Box>
               ) : null;
             })()}
           </AccordionDetails>
         </Accordion>
       ))}
+
+      <Dialog
+        open={Boolean(previewDoc)}
+        onClose={closePreview}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+          <Typography variant="h6" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {previewDoc?.title ?? 'Document Preview'}
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Tooltip title="Download latest version">
+              <span>
+                <IconButton size="small" onClick={() => downloadLatestVersion(previewDoc)} disabled={!previewDoc || previewLoading}>
+                  <DownloadIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <IconButton onClick={closePreview} size="small">
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {previewLoading ? (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight={240}>
+              <CircularProgress size={28} />
+            </Box>
+          ) : previewBlobUrl ? (
+            <DocumentViewer pdfUrl={previewBlobUrl} mimeType={previewMimeType} />
+          ) : (
+            <Typography color="text.secondary">Preview is not available for this document.</Typography>
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }

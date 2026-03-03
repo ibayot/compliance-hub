@@ -6,6 +6,175 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.0] - 2026-03-03 — Issuances Expanded Regulatory Coverage + Amendment Tracking
+
+### Added
+- **Expanded issuance baseline coverage** in `backend/src/database/seed-data.sql` for broader applicability search:
+  - Additional laws and legal amendments relevant to ICT implementation context.
+  - Additional IRR/policy guidance entries where originally non-ICT legal frameworks include ICT-operational provisions.
+  - Additional standards references (ISO/NIST) for security, privacy, cloud, and control baselines.
+  - Executive Order reference (`EO-170-2022`) and national planning reference (`NCSP-2023-2028`).
+  - Additional DICT/NPC circular reference entries to support operations-level compliance lookup.
+- **Amendment metadata model** for issuances:
+  - `is_amendment`
+  - `amended_issuance_number`
+  - `ict_amendment_notes`
+
+### Changed
+- **Issuances UI** now surfaces amendment context in list and detail workflows:
+  - Added table column: `ICT Related Amendments`.
+  - Add/Edit form supports amendment-specific fields.
+  - Applicability/Relevance modal now includes amendment metadata and ICT amendment narrative.
+- **Issuance type options** expanded to include `executive_order` and `plan` for broader issuance classification.
+
+### Verified (Smoke)
+- `npm run db:seed` (backend) → success.
+- `npm run build` (backend) → success.
+- `npx tsc --noEmit` (frontend) → success.
+
+### Rollback
+- Revert seed additions and amendment metadata updates in Issuances entity/schema/UI/API.
+- Re-run `npm run db:seed` to restore prior issuance baseline.
+
+## [1.3.0.22] - 2026-03-03 — Issuances Dropdown Filters, Category/Status Controls, Deeper Applicability Notes
+
+### Changed
+- **Issuance filtering UX**: Issuances filters are now dropdown/option style (Authority, Category, Status) instead of free-text/chip filtering.
+- **Category-aware filtering**: Added backend/frontend support for filtering issuances by category (`issuance_type`).
+- **Status-aware filtering**: Added active/inactive/all status filtering using `is_active`.
+- **Status management action**: Issuance rows now support quick Activate/Deactivate action, and Add/Edit form includes explicit Status selection.
+- **Deeper baseline narratives**: Seed data now enriches `applicability_scope` and `relevance_notes` with more detailed implementation-oriented explanations by issuance type.
+
+### Added
+- **Controller/service filter contract**: `GET /issuances` now supports `category` in addition to existing `authority/search/is_active` filters.
+- **Frontend API contract**: Issuance create/update DTO now supports `is_active` and issuance list filters now support `category`.
+
+### Verified (Smoke)
+- `npm run db:seed` (backend) → success.
+- `npm run build` (backend) → success.
+- `npx tsc --noEmit` (frontend) → success.
+- `npm run start:dev` (backend) → starts clean after clearing local port conflict.
+
+### Rollback
+- Revert Issuance controller/service/api/page updates for category/status filtering and status editing.
+- Revert seed narrative updates in `backend/src/database/seed-data.sql`.
+- Re-run `npm run db:seed` to restore previous baseline text/data.
+
+## [1.3.0.21] - 2026-03-03 — Issuances Comprehensive ICT Inclusion + Applicability/Relevance Modal
+
+### Changed
+- **Comprehensive Issuances baseline**: `backend/src/database/seed-data.sql` now includes a broad ICT set covering laws, circulars, memorandums, IRRs, and international standards (ISO/NIST) related to operations, governance, cybersecurity, business continuity, disaster response, safety, and applicable use.
+- **Issuances table structure aligned**: Issuances page table now uses `Issuance Number | Title | Authority | Issue Date | Status | Mapped Documents | Actions`.
+- **Actions extended with relevance view**: Existing actions are preserved and an additional action now opens a modal that displays applicability and relevance details.
+
+### Added
+- **Issuance metadata fields**: Added optional issuance metadata fields (`issuance_type`, `applicability_scope`, `relevance_notes`) in backend entity + schema + seed compatibility `ALTER TABLE` guard.
+- **Traceability map expanded**: `ICT-ISSUANCE-RELEVANCE-MAP.md` now documents full comprehensive baseline coverage and source links.
+
+### Verified (Smoke)
+- `npm run db:seed` (backend) → success.
+- `npm run build` (backend) → success.
+- `npx tsc --noEmit` (frontend) → success.
+- `npm run start:dev` (backend) → compiles cleanly in watch mode with 0 TypeScript errors.
+
+### Rollback
+- Revert issuance metadata field additions in entity/schema/seed.
+- Revert issuances table/modal UI updates in frontend.
+- Re-run `npm run db:seed` to restore previous baseline.
+
+## [1.3.0.20] - 2026-03-03 — Issuances ICT Relevance Curation + Traceability Map
+
+### Changed
+- **Issuances seed baseline curated**: `backend/src/database/seed-data.sql` now includes only ICT-relevant operational/governance/safety issuances with direct applicability to digital operations and compliance controls.
+- **Seed references normalized to authoritative links**: Core entries now point to Official Gazette pages (plus NPC page for DPA IRR) instead of generic agency/standards placeholders.
+- **Non-baseline references removed**: International standards-only and non-specific homepage placeholders were removed from seeded Issuances module data to keep scope focused on enforceable local issuances.
+
+### Added
+- **ICT traceability document**: Added `ICT-ISSUANCE-RELEVANCE-MAP.md` with per-issuance rationale, category (operations/governance/safety), and source link.
+
+### Verified (Smoke)
+- `npm run db:seed` (backend) → success.
+- `npm run build` (backend) → success.
+- `npx tsc --noEmit` (frontend) → success.
+
+### Rollback
+- Revert `backend/src/database/seed-data.sql` issuance block and remove `ICT-ISSUANCE-RELEVANCE-MAP.md`, then re-run seed.
+
+## [1.3.0.18] - 2026-03-03 — Subtle Trend Tilt, Applicability Scope Tightening, Repository Modal Download
+
+### Changed
+- **KPI/Reports trend arrowheads**: Minimum enforced arrowhead tilt is now subtle (`~5°`) so near-flat trends look natural while still showing direction.
+- **Metrics applicability scope**: Unit-targeted sets remain `metric-005..008` (IT + `ICT Security Assessment`) and `metric-009..012` (Finance + `Finance Risk Report`), while Jan/Feb/Mar 2025 pending queue samples (`doc-017..022`) are now seeded as `Monthly Report` to avoid unintentionally matching targeted sets.
+- **Repository modal actions**: Added in-modal download action so users can download the latest original file directly from preview dialog.
+
+### Verified (Smoke)
+- `npm run db:seed` (backend) → success; `metric_templates=12`, `metric_applicability=12`, `pending documents=10`.
+- `npm run build` (backend) → success.
+- `npx tsc --noEmit` (frontend) → success.
+
+### Rollback
+- Revert `TrendSparkline` min-tilt edits in KPI/Reports pages.
+- Revert `doc-017..022` `document_type` values in `seed-data.sql`.
+- Revert repository modal download action in `frontend/src/app/dashboard/repository/page.tsx`.
+
+## [1.3.0.19] - 2026-03-03 — Natural Arrowhead Angle + Zigzag Non-Monthly Trend
+
+### Changed
+- **KPI/Reports trend arrowheads**: Removed enforced minimum tilt; arrowheads now follow the true terminal segment angle.
+- **KPI/Reports trend sparkline shape**: Trend sparklines now support multi-point rendering. Quarterly, Semestral, and Annual views show zigzag movement across actual visible points instead of a compressed 2-point approximation.
+
+### Verified (Smoke)
+- `npm run db:seed` (backend) → success; `metric_templates=12`, `metric_applicability=12`, `pending documents=10`.
+- `npm run build` (backend) → success.
+- `npx tsc --noEmit` (frontend) → success.
+- VS Code diagnostics for touched KPI/Reports/Repository/seed files → clean.
+- DB count validation query confirms expected baseline counts.
+
+### Rollback
+- Revert `TrendSparkline` updates in KPI and Reports pages to the prior 2-point implementation.
+
+## [1.3.0.17] - 2026-03-03 — Direction Glyph Simplification, Stronger Trend Arrowheads, Seed Runner Repair
+
+### Fixed
+- **Seed execution reliability**: Added missing `backend/src/database/seed.ts` used by `npm run db:seed`; this resolves failed reseed runs that prevented expected Documents/Metrics baseline data from loading.
+- **Documents queue visibility (seed ownership)**: Pending sample documents (`doc-017..022`, plus pending `doc-008`/`doc-010`) are now seeded under focal ownership (`uploaded_by=3`) so they appear in the focal Documents queue.
+
+### Changed
+- **KPI/Reports Direction column**: Direction indicators now render arrows only (`↑` / `↓`) instead of text labels.
+- **KPI/Reports trend arrowheads**: Arrowheads now enforce a minimum visual tilt so up/down direction remains obvious even when trend deltas are small.
+
+### Added
+- **Seed verification output**: `db:seed` now prints post-seed counters (active metric templates, applicability rows, pending documents) for immediate QA confirmation.
+
+### Verified (Smoke)
+- `npm run db:seed` (backend) → success; `metric_templates=12`, `metric_applicability=12`, pending documents populated.
+- Frontend diagnostics clean on KPI/Reports pages.
+- Backend build: `npm run build` (backend) → success.
+
+### Rollback
+- Revert this patch and re-run the previous known-good seed baseline.
+- If needed, restore prior UI behavior by reverting `TrendSparkline` + `DirectionIndicator` changes in KPI/Reports pages.
+
+## [1.3.0.16] - 2026-03-04 — KPI Direction Indicators, Trend Arrowheads, Repository Simplification, Jan–Mar Seeds
+
+### Fixed
+- **KPI scoring — `lower_is_better`**: Formula corrected to `target/actual*100` (with existing clamp), so lower actual values are properly rewarded and higher actual values are penalized.
+- **KPI charting — KPI band pie filter scope**: `KPIs by Performance Band` now follows the active dashboard filters (year/frequency/period/unit) and no longer ignores selected unit scope.
+
+### Changed
+- **KPI Unit Detail table**: Added Direction indicator column (`↑ Higher`, `↓ Lower`) for each KPI.
+- **Reports single-unit KPI table**: Added the same Direction indicator column for parity with KPI module.
+- **Trend visuals (KPI + Reports)**: Trend sparklines now include arrowheads to make up/down direction immediately visible.
+- **KPI band pie transparent logic parity**: Partial/incomplete-filter data is represented as a transparent dashed `PARTIAL` slice (same visual logic used by unit-level band distribution).
+- **Repository table UX**: Removed status/compliance columns from repository list (repository already contains compliant/ready outputs only). Download action remains for reusing prior reports as baseline updates.
+
+### Added
+- **Seed — Documents module monthly samples**: Added 2025 January, February, and March report samples for both IT and Finance units (`doc-017`..`doc-022`) with matching versions (`ver-017`..`ver-022`).
+
+### Verified (Smoke)
+- Frontend TypeScript compile: `npx tsc --noEmit` (frontend)
+- Backend build: `npm run build` (backend)
+
 ## [1.3.0.14] - 2026-03-04 — Repository Layout, KPI/Reports Chart Range Fix, Targeted Metrics & Test Docs
 
 ### Fixed

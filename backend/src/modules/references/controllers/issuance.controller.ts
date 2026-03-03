@@ -45,6 +45,7 @@ export class IssuanceController {
   @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
   async getIssuances(
     @Query('authority') authority?: string,
+    @Query('category') category?: string,
     @Query('search') search?: string,
     @Query('is_active') is_active?: string,
   ) {
@@ -53,6 +54,7 @@ export class IssuanceController {
 
     return this.issuanceService.getIssuances({
       authority,
+      category,
       search,
       is_active: parsedIsActive,
     });

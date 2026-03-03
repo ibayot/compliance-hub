@@ -1043,7 +1043,8 @@ export class DocumentService implements OnModuleInit {
       .createQueryBuilder('doc')
       .leftJoinAndSelect('doc.unit', 'unit')
       .leftJoinAndSelect('doc.uploader', 'uploader')
-      .where('doc.is_deleted = :d', { d: false });
+      .where('doc.is_deleted = :d', { d: false })
+      .andWhere('doc.status = :readyStatus', { readyStatus: DocumentStatus.READY });
 
     if (actorRole === UserRole.FOCAL && actorId) {
       qb.andWhere('doc.uploaded_by = :actorId', { actorId });

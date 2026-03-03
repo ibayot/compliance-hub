@@ -57,7 +57,7 @@ export default function ReviewsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const response = await documentsApi.listDocuments({ limit: 50 });
+      const response = await documentsApi.listDocuments({ status: 'pending', limit: 200 });
       const docs = response.data || [];
       setDocuments(docs);
 

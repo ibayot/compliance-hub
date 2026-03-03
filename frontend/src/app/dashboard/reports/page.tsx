@@ -35,7 +35,6 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -43,7 +42,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { kpiApi } from '@/lib/api/kpi';
+import { kpiApi, KpiDirection } from '@/lib/api/kpi';
 import { documentsApi } from '@/lib/api/documents';
 import { unitsApi } from '@/lib/api/units';
 import { metricsApi } from '@/lib/api/metrics';
@@ -90,22 +89,48 @@ function getBandChipColor(band: string): 'error' | 'warning' | 'success' | 'info
   return 'info';
 }
 
-/** Mini 2-point sparkline identical to the KPI module trend column. */
-function TrendSparkline({ prev, current, band }: { prev: number | null; current: number | null; band: string }) {
+/** Sparkline identical to KPI module trend column; supports multi-point zigzag via `points`. */
+function TrendSparkline({ prev, current, band, points }: { prev: number | null; current: number | null; band: string; points?: number[] }) {
   const color = BAND_COLORS[band] || BAND_COLORS.unclassified;
   const w = 60; const h = 24; const pad = 5;
-  const startVal = prev !== null ? prev : 0;
-  const endVal = current !== null ? current : 0;
+  const fallbackSeries = [prev !== null ? prev : 0, current !== null ? current : 0];
+  const series = (points && points.length > 0 ? points : fallbackSeries).map((v) => Math.min(100, Math.max(0, Number(v))));
   const toY = (v: number) => h - pad - (Math.min(100, Math.max(0, v)) / 100) * (h - 2 * pad);
-  const y1 = toY(startVal); const y2 = toY(endVal);
-  const startColor = prev !== null ? color : '#b0bec5';
+  const xFor = (idx: number) => {
+    if (series.length <= 1) return pad;
+    return pad + (idx / (series.length - 1)) * ((w - pad) - pad);
+  };
+  const pathPoints = series.map((val, idx) => `${xFor(idx)},${toY(val)}`).join(' ');
+  const startX = xFor(0);
+  const startY = toY(series[0] ?? 0);
+  const endX = xFor(series.length - 1);
+  const endY = toY(series[series.length - 1] ?? 0);
+  const prevIdx = Math.max(0, series.length - 2);
+  const prevX = xFor(prevIdx);
+  const prevY = toY(series[prevIdx] ?? (series[series.length - 1] ?? 0));
+  const angle = Math.atan2(endY - prevY, endX - prevX) * (180 / Math.PI);
+  const startColor = points && points.length > 0 ? color : (prev !== null ? color : '#b0bec5');
   return (
     <svg width={w} height={h} style={{ display: 'block', overflow: 'visible' }}>
-      <line x1={pad} y1={y1} x2={w - pad} y2={y2} stroke={color} strokeWidth={2} />
-      <circle cx={pad} cy={y1} r={3} fill={startColor} stroke="#fff" strokeWidth={1} />
-      <circle cx={w - pad} cy={y2} r={3} fill={color} stroke="#fff" strokeWidth={1} />
+      <polyline points={pathPoints} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={startX} cy={startY} r={3} fill={startColor} stroke="#fff" strokeWidth={1} />
+      <polygon
+        points="-6,-4 0,0 -6,4"
+        transform={`translate(${endX},${endY}) rotate(${angle})`}
+        fill={color}
+      />
     </svg>
   );
+}
+
+function DirectionIndicator({ direction }: { direction?: KpiDirection | null }) {
+  if (direction === 'higher_is_better') {
+    return <Typography variant="caption" color="success.main">↑</Typography>;
+  }
+  if (direction === 'lower_is_better') {
+    return <Typography variant="caption" color="info.main">↓</Typography>;
+  }
+  return <Typography variant="caption" color="text.secondary">—</Typography>;
 }
 
 type Frequency = 'monthly' | 'quarterly' | 'semestral' | 'annual';
@@ -142,14 +167,43 @@ function getTimeseriesRange(p: ReportParams) {
   const { year, frequency, month, quarter, semester } = p;
   switch (frequency) {
     case 'monthly':
-      // Fetch from Jan 1 so monthly charts show Jan → selected-month progression.
-      return { fromYear: year, fromMonth: 1, toYear: year, toMonth: month };
-    case 'quarterly':
-      return { fromYear: year, fromMonth: (quarter - 1) * 3 + 1, toYear: year, toMonth: quarter * 3 };
-    case 'semestral':
-      return { fromYear: year, fromMonth: (semester - 1) * 6 + 1, toYear: year, toMonth: semester * 6 };
+      // Monthly shows previous month -> selected month.
+      if (month > 1) {
+        return { fromYear: year, fromMonth: month - 1, toYear: year, toMonth: month };
+      }
+      return { fromYear: year, fromMonth: 1, toYear: year, toMonth: 1 };
+    case 'quarterly': {
+      const quarterStart = (quarter - 1) * 3 + 1;
+      return { fromYear: year, fromMonth: quarter > 1 ? quarterStart - 1 : quarterStart, toYear: year, toMonth: quarter * 3 };
+    }
+    case 'semestral': {
+      const semStart = (semester - 1) * 6 + 1;
+      return { fromYear: year, fromMonth: semester > 1 ? semStart - 1 : semStart, toYear: year, toMonth: semester * 6 };
+    }
     case 'annual':
       return { fromYear: year, fromMonth: 1, toYear: year, toMonth: 12 };
+  }
+}
+
+function getXAxisLabel(periodMonth: number, frequency: Frequency): string {
+  const abbr = MONTH_ABBR[periodMonth - 1];
+  switch (frequency) {
+    case 'monthly':
+      return abbr;
+    case 'quarterly': {
+      const q = Math.ceil(periodMonth / 3);
+      const rel = ((periodMonth - 1) % 3) + 1;
+      return `Q${q}-${rel}`;
+    }
+    case 'semestral': {
+      const h = periodMonth <= 6 ? 1 : 2;
+      const rel = ((periodMonth - 1) % 6) + 1;
+      return `H${h}-${rel}`;
+    }
+    case 'annual':
+      return abbr;
+    default:
+      return abbr;
   }
 }
 
@@ -172,6 +226,16 @@ function ReportView({ params }: { params: ReportParams }) {
     queryFn: () => kpiApi.dashboardSummary(year, effectiveMonth),
   });
 
+  const unitsQuery = useQuery({
+    queryKey: ['report-units-all'],
+    queryFn: () => unitsApi.listUnits({ page: 1, limit: 200 }),
+  });
+
+  const mastersQuery = useQuery({
+    queryKey: ['report-kpi-masters'],
+    queryFn: () => kpiApi.listMaster(),
+  });
+
   // Unit-specific dashboard + timeseries (when a single unit is selected)
   const unitDashQuery = useQuery({
     queryKey: ['report-kpi-unit', unitId, year, effectiveMonth],
@@ -192,28 +256,28 @@ function ReportView({ params }: { params: ReportParams }) {
     enabled: Boolean(unitId),
   });
 
-  // All-units timeseries ids derived from summary
-  const summaryUnits = useMemo(() => kpiQuery.data?.units ?? [], [kpiQuery.data]);
+  // All units should always be shown in all-units mode, even with incomplete data.
+  const allUnits = useMemo(() => unitsQuery.data?.data ?? [], [unitsQuery.data]);
 
   const allUnitsTsQuery = useQuery({
     // eslint-disable-next-line @tanstack/query/exhaustive-deps
-    queryKey: ['report-all-units-ts', summaryUnits.map((u) => u.unitId), year, effectiveMonth, frequency],
+    queryKey: ['report-all-units-ts', allUnits.map((u) => u.id), year, effectiveMonth, frequency],
     queryFn: async () => {
-      if (summaryUnits.length === 0) return {} as Record<number, any[]>;
+      if (allUnits.length === 0) return {} as Record<number, any[]>;
       const results = await Promise.all(
-        summaryUnits.map((u) =>
+        allUnits.map((u) =>
           kpiApi.dashboardUnitTimeseries(
-            u.unitId,
+            Number(u.id),
             tsRange.fromYear, tsRange.fromMonth,
             tsRange.toYear, tsRange.toMonth,
           ),
         ),
       );
       const map: Record<number, any[]> = {};
-      summaryUnits.forEach((u, i) => { map[u.unitId] = results[i]; });
+      allUnits.forEach((u, i) => { map[Number(u.id)] = results[i]; });
       return map;
     },
-    enabled: !unitId && summaryUnits.length > 0,
+    enabled: !unitId && allUnits.length > 0,
   });
 
   const docsQuery = useQuery({
@@ -248,11 +312,12 @@ function ReportView({ params }: { params: ReportParams }) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, v]) => v);
     const mapped = sorted.map(({ periodYear, periodMonth }) => {
-      const datum: Record<string, any> = { label: MONTH_ABBR[periodMonth - 1] };
-      summaryUnits.forEach((u) => {
-        const pts: any[] = allTs[u.unitId] || [];
+      const datum: Record<string, any> = { label: getXAxisLabel(periodMonth, frequency) };
+      allUnits.forEach((u) => {
+        const unitIdNum = Number(u.id);
+        const pts: any[] = allTs[unitIdNum] || [];
         const pt = pts.find((p: any) => p.periodYear === periodYear && p.periodMonth === periodMonth);
-        datum[`u${u.unitId}`] = pt?.hasData ? pt.score : null;
+        datum[`u${unitIdNum}`] = pt?.hasData ? pt.score : null;
       });
       return datum;
     });
@@ -260,17 +325,28 @@ function ReportView({ params }: { params: ReportParams }) {
     // inject 0 at that first point so the line draws from 0 → first-actual.
     if (mapped.length > 0) {
       const first = { ...mapped[0] };
-      summaryUnits.forEach((u) => {
-        const key = `u${u.unitId}`;
+      allUnits.forEach((u) => {
+        const key = `u${Number(u.id)}`;
         if (first[key] === null) {
           const hasLater = mapped.slice(1).some((d) => d[key] !== null);
           if (hasLater) first[key] = 0;
         }
       });
-      return [first, ...mapped.slice(1)];
+      const adjusted = [first, ...mapped.slice(1)];
+      const shouldPrependZero =
+        frequency === 'annual'
+        || (frequency === 'monthly' && month === 1)
+        || (frequency === 'quarterly' && quarter === 1)
+        || (frequency === 'semestral' && semester === 1);
+      if (shouldPrependZero) {
+        const zeroAnchor: Record<string, any> = { label: '' };
+        allUnits.forEach((u) => { zeroAnchor[`u${Number(u.id)}`] = 0; });
+        return [zeroAnchor, ...adjusted];
+      }
+      return adjusted;
     }
     return mapped;
-  }, [allUnitsTsQuery.data, summaryUnits]);
+  }, [allUnitsTsQuery.data, allUnits, frequency, month, quarter, semester]);
 
   /** KPI detail line data for a single selected unit */
   const kpiDetailLineData = useMemo(() => {
@@ -278,7 +354,7 @@ function ReportView({ params }: { params: ReportParams }) {
     if (ts.length === 0) return { data: [] as Record<string, any>[], codes: [] as string[] };
     const codes = [...new Set(ts.flatMap((pt) => (pt.kpiScores || []).map((k: any) => k.code as string)))];
     const data = ts.map((pt) => {
-      const datum: Record<string, any> = { label: MONTH_ABBR[pt.periodMonth - 1] };
+      const datum: Record<string, any> = { label: getXAxisLabel(pt.periodMonth, frequency) };
       codes.forEach((code) => {
         const kp = (pt.kpiScores || []).find((k: any) => k.code === code);
         datum[code] = pt.hasData && kp ? kp.normalizedScore : null;
@@ -295,10 +371,86 @@ function ReportView({ params }: { params: ReportParams }) {
           if (hasLater) first[code] = 0;
         }
       });
-      return { data: [first, ...data.slice(1)], codes };
+      const adjusted = [first, ...data.slice(1)];
+      const shouldPrependZero =
+        frequency === 'annual'
+        || (frequency === 'monthly' && month === 1)
+        || (frequency === 'quarterly' && quarter === 1)
+        || (frequency === 'semestral' && semester === 1);
+      if (shouldPrependZero) {
+        const zeroAnchor: Record<string, any> = { label: '' };
+        codes.forEach((code) => { zeroAnchor[code] = 0; });
+        return { data: [zeroAnchor, ...adjusted], codes };
+      }
+      return { data: adjusted, codes };
     }
     return { data, codes };
-  }, [unitTsQuery.data]);
+  }, [unitTsQuery.data, frequency, month, quarter, semester]);
+
+  const summaryUnits = useMemo(() => kpiQuery.data?.units ?? [], [kpiQuery.data]);
+  const summaryUnitMap = useMemo(() => {
+    const map: Record<number, { unitId: number; unitName: string; score: number; kpiCount: number; band: string }> = {};
+    summaryUnits.forEach((u) => { map[u.unitId] = u; });
+    return map;
+  }, [summaryUnits]);
+
+  const unitDetailRows = useMemo(() => {
+    if (!unitDashQuery.data) return [] as Array<{
+      id: number | string;
+      code: string;
+      name: string;
+      direction: KpiDirection | null;
+      targetValue: number | null;
+      actualValue: number | null;
+      normalizedScore: number | null;
+      band: string;
+      hasData: boolean;
+    }>;
+    const unitIdNum = Number(unitId);
+    const detailMap = new Map(unitDashQuery.data.details.map((d) => [d.code, d]));
+    const masters = (mastersQuery.data || []).filter((m: any) => Number(m.unitId) === unitIdNum && m.active);
+    const rows = masters.map((m: any) => {
+      const d = detailMap.get(m.code);
+      return {
+        id: d?.id ?? `master-${m.code}`,
+        code: m.code,
+        name: m.name,
+        direction: d ? d.direction : m.direction,
+        targetValue: d ? d.targetValue : Number(m.targetValue),
+        actualValue: d ? d.actualValue : null,
+        normalizedScore: d ? d.normalizedScore : null,
+        band: String(d?.band || 'unclassified').toLowerCase(),
+        hasData: Boolean(d),
+      };
+    });
+    const masterCodes = new Set(masters.map((m: any) => m.code));
+    const extras = unitDashQuery.data.details
+      .filter((d) => !masterCodes.has(d.code))
+      .map((d) => ({
+        id: d.id,
+        code: d.code,
+        name: d.name,
+        direction: d.direction,
+        targetValue: d.targetValue,
+        actualValue: d.actualValue,
+        normalizedScore: d.normalizedScore,
+        band: String(d.band || 'unclassified').toLowerCase(),
+        hasData: true,
+      }));
+    return [...rows, ...extras];
+  }, [unitDashQuery.data, mastersQuery.data, unitId]);
+
+  const computeTrendValues = useMemo(() => {
+    return (values: number[]) => {
+      if (values.length === 0) return { prev: null as number | null, current: null as number | null };
+      if (frequency === 'monthly') {
+        if (values.length === 1) return { prev: null as number | null, current: values[0] };
+        return { prev: values[0], current: values[values.length - 1] };
+      }
+      const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
+      return { prev: values[0], current: Number(avg.toFixed(2)) };
+    };
+  }, [frequency]);
 
   /** KPIs needing attention: amber or red band, derived from existing timeseries data. */
   const kpisNeedingAttention = useMemo(() => {
@@ -319,20 +471,21 @@ function ReportView({ params }: { params: ReportParams }) {
       }
     } else if (allUnitsTsQuery.data) {
       // All-units view: use last hasData kpiScores per unit
-      summaryUnits.forEach((u) => {
-        const pts: any[] = allUnitsTsQuery.data[u.unitId] || [];
+      allUnits.forEach((u) => {
+        const unitIdNum = Number(u.id);
+        const pts: any[] = allUnitsTsQuery.data[unitIdNum] || [];
         const lastPt = [...pts].reverse().find((p) => p.hasData);
         if (!lastPt) return;
         (lastPt.kpiScores || [])
           .filter((k: any) => ['red', 'amber'].includes(String(k.band || '').toLowerCase()))
           .forEach((k: any) => items.push({
-            unitName: u.unitName, code: k.code, name: k.name,
+            unitName: u.name, code: k.code, name: k.name,
             score: k.normalizedScore, band: String(k.band).toLowerCase(), actualValue: k.actualValue,
           }));
       });
     }
     return items;
-  }, [unitId, unitDashQuery.data, unitName, allUnitsTsQuery.data, summaryUnits]);
+  }, [unitId, unitDashQuery.data, unitName, allUnitsTsQuery.data, allUnits]);
 
   /** Metrics count keyed by document_type string */
   const metricsPerDocType = useMemo(() => {
@@ -349,8 +502,8 @@ function ReportView({ params }: { params: ReportParams }) {
 
   // ── Early returns ─────────────────────────────────────────────────────────────
 
-  const loading = kpiQuery.isLoading || docsQuery.isLoading;
-  const error = kpiQuery.isError || docsQuery.isError;
+  const loading = kpiQuery.isLoading || docsQuery.isLoading || unitsQuery.isLoading;
+  const error = kpiQuery.isError || docsQuery.isError || unitsQuery.isError;
 
   if (loading) {
     return (
@@ -374,7 +527,10 @@ function ReportView({ params }: { params: ReportParams }) {
   const kpiUnits = kpiQuery.data?.units ?? [];
   const docs = docsQuery.data?.data ?? [];
 
-  const filteredKpiUnits = unitId ? kpiUnits.filter((u) => String(u.unitId) === unitId) : kpiUnits;
+  const filteredKpiUnits = unitId
+    ? kpiUnits.filter((u) => String(u.unitId) === unitId)
+    : allUnits.map((u) => summaryUnitMap[Number(u.id)]).filter(Boolean);
+  const allUnitsRows = allUnits;
   const filteredDocs = unitId ? docs.filter((d) => String(d.unit_id) === unitId) : docs;
   const unitDetail = unitDashQuery.data ?? null;
 
@@ -554,7 +710,6 @@ function ReportView({ params }: { params: ReportParams }) {
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
                         <Tooltip formatter={(val: any) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
-                        <Legend />
                         {kpiDetailLineData.codes.map((code, idx) => (
                           <Line
                             key={code}
@@ -573,30 +728,28 @@ function ReportView({ params }: { params: ReportParams }) {
                   </Box>
                 ) : null}
 
-                {unitDetail && unitDetail.details && unitDetail.details.length > 0 ? (
+                {unitDetail && unitDetailRows.length > 0 ? (
                   <TableContainer component={Paper} elevation={0} variant="outlined">
                     <Table size="small">
                       <TableHead>
                         <TableRow>
                           <TableCell>Color</TableCell>
                           <TableCell>KPI</TableCell>
+                          <TableCell>Direction</TableCell>
                           <TableCell align="right">Actual</TableCell>
                           <TableCell align="right">Target</TableCell>
                           <TableCell align="right">Score</TableCell>
-                          <TableCell>Band</TableCell>
                           <TableCell>Trend</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {unitDetail.details.map((item, idx) => {
-                          // Trend: first → last hasData kpiScore for this code
-                          const kpiMoments = (unitTsQuery.data || []).filter(
-                            (pt: any) => pt.hasData && (pt.kpiScores || []).some((k: any) => k.code === item.code)
-                          );
-                          const prevKpiScore: number | null = kpiMoments.length > 1
-                            ? (kpiMoments[0].kpiScores?.find((k: any) => k.code === item.code)?.normalizedScore ?? null)
-                            : null;
-                          const currKpiScore = kpiMoments[kpiMoments.length - 1]?.kpiScores?.find((k: any) => k.code === item.code)?.normalizedScore ?? item.normalizedScore;
+                        {unitDetailRows.map((item, idx) => {
+                          const visibleTrendValues = kpiDetailLineData.data
+                            .map((d) => d[item.code])
+                            .filter((v) => v !== null && v !== undefined) as number[];
+                          const trend = computeTrendValues(visibleTrendValues);
+                          const prevKpiScore: number | null = trend.prev;
+                          const currKpiScore = item.hasData ? (trend.current ?? item.normalizedScore) : null;
                           const kpiColor = UNIT_COLORS[idx % UNIT_COLORS.length];
                           return (
                             <TableRow key={item.id} hover>
@@ -607,14 +760,16 @@ function ReportView({ params }: { params: ReportParams }) {
                                 <Typography variant="body2" fontWeight={600}>{item.name}</Typography>
                                 <Typography variant="caption" color="text.secondary">{item.code}</Typography>
                               </TableCell>
-                              <TableCell align="right">{item.actualValue}</TableCell>
-                              <TableCell align="right">{item.targetValue}</TableCell>
-                              <TableCell align="right"><strong>{item.normalizedScore}</strong></TableCell>
+                              <TableCell><DirectionIndicator direction={item.direction} /></TableCell>
+                              <TableCell align="right">{item.hasData ? item.actualValue : '—'}</TableCell>
+                              <TableCell align="right">{item.targetValue ?? '—'}</TableCell>
+                              <TableCell align="right"><strong>{item.hasData ? item.normalizedScore : '—'}</strong></TableCell>
                               <TableCell>
-                                <Chip label={item.band || '—'} size="small" color={getBandChipColor(String(item.band || ''))} />
-                              </TableCell>
-                              <TableCell>
-                                <TrendSparkline prev={prevKpiScore} current={currKpiScore} band={String(item.band || 'unclassified').toLowerCase()} />
+                                {currKpiScore !== null ? (
+                                  <TrendSparkline prev={prevKpiScore} current={currKpiScore} points={visibleTrendValues} band={String(item.band || 'unclassified').toLowerCase()} />
+                                ) : (
+                                  <Typography variant="caption" color="text.secondary">—</Typography>
+                                )}
                               </TableCell>
                             </TableRow>
                           );
@@ -662,13 +817,12 @@ function ReportView({ params }: { params: ReportParams }) {
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
                         <Tooltip formatter={(val: any) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
-                        <Legend />
-                        {summaryUnits.map((u, idx) => (
+                        {allUnitsRows.map((u, idx) => (
                           <Line
-                            key={u.unitId}
+                            key={u.id}
                             type="monotone"
-                            dataKey={`u${u.unitId}`}
-                            name={u.unitName}
+                            dataKey={`u${Number(u.id)}`}
+                            name={u.name}
                             stroke={UNIT_COLORS[idx % UNIT_COLORS.length]}
                             strokeWidth={2}
                             connectNulls={false}
@@ -681,7 +835,7 @@ function ReportView({ params }: { params: ReportParams }) {
                   </Box>
                 )}
 
-                {filteredKpiUnits.length > 0 ? (
+                {allUnitsRows.length > 0 ? (
                   <TableContainer component={Paper} elevation={0} variant="outlined">
                     <Table size="small">
                       <TableHead>
@@ -694,27 +848,30 @@ function ReportView({ params }: { params: ReportParams }) {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {filteredKpiUnits.map((u, idx) => {
+                        {allUnitsRows.map((u, idx) => {
+                          const unitIdNum = Number(u.id);
+                          const summaryRow = summaryUnitMap[unitIdNum];
                           const unitColor = UNIT_COLORS[idx % UNIT_COLORS.length];
-                          const bandKey = String(u.band || 'unclassified').toLowerCase();
-                          // Trend: first → last hasData point for this unit's timeseries
-                          const unitTs: any[] = allUnitsTsQuery.data?.[u.unitId] || [];
-                          const hasDataPts = unitTs.filter((p: any) => p.hasData);
-                          const prevScore: number | null = hasDataPts.length > 1 ? (hasDataPts[0]?.score ?? null) : null;
-                          const currScore: number | null = hasDataPts[hasDataPts.length - 1]?.score ?? Number(u.score) ?? null;
+                          const bandKey = String(summaryRow?.band || 'unclassified').toLowerCase();
+                          const visibleTrendValues = allUnitsLineData
+                            .map((d) => d[`u${unitIdNum}`])
+                            .filter((v) => v !== null && v !== undefined) as number[];
+                          const trend = computeTrendValues(visibleTrendValues);
+                          const prevScore: number | null = trend.prev;
+                          const currScore: number | null = trend.current ?? (summaryRow ? Number(summaryRow.score) : null);
                           return (
-                            <TableRow key={u.unitId} hover>
-                              <TableCell>{u.unitName}</TableCell>
+                            <TableRow key={unitIdNum} hover>
+                              <TableCell>{u.name}</TableCell>
                               <TableCell sx={{ p: 1 }}>
                                 <Box sx={{ width: 20, height: 20, borderRadius: '4px', bgcolor: unitColor }} />
                               </TableCell>
-                              <TableCell align="right"><Typography fontWeight={600}>{Number(u.score).toFixed(1)}</Typography></TableCell>
+                              <TableCell align="right"><Typography fontWeight={600}>{summaryRow ? Number(summaryRow.score).toFixed(1) : '—'}</Typography></TableCell>
                               <TableCell>
                                 {currScore !== null
-                                  ? <TrendSparkline prev={prevScore} current={currScore} band={bandKey} />
+                                  ? <TrendSparkline prev={prevScore} current={currScore} points={visibleTrendValues} band={bandKey} />
                                   : <Typography variant="caption" color="text.secondary">—</Typography>}
                               </TableCell>
-                              <TableCell align="right">{u.kpiCount}</TableCell>
+                              <TableCell align="right">{summaryRow ? summaryRow.kpiCount : '—'}</TableCell>
                             </TableRow>
                           );
                         })}
@@ -742,7 +899,7 @@ function ReportView({ params }: { params: ReportParams }) {
                 </Typography>
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                The following KPIs are below acceptable thresholds (red or amber band) and require immediate review.
+                The following KPIs are below acceptable thresholds and require immediate review.
               </Typography>
               <TableContainer component={Paper} elevation={0} variant="outlined" sx={{ borderColor: 'error.light' }}>
                 <Table size="small">
@@ -752,7 +909,6 @@ function ReportView({ params }: { params: ReportParams }) {
                       <TableCell><strong>KPI Name</strong></TableCell>
                       <TableCell><strong>Code</strong></TableCell>
                       <TableCell align="right"><strong>Score</strong></TableCell>
-                      <TableCell><strong>Band</strong></TableCell>
                       <TableCell align="right"><strong>Actual</strong></TableCell>
                     </TableRow>
                   </TableHead>
@@ -768,13 +924,6 @@ function ReportView({ params }: { params: ReportParams }) {
                           <Typography fontWeight={700} color={item.band === 'red' ? 'error.main' : 'warning.main'}>
                             {item.score}
                           </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={item.band.toUpperCase()}
-                            size="small"
-                            color={item.band === 'red' ? 'error' : 'warning'}
-                          />
                         </TableCell>
                         <TableCell align="right">{item.actualValue}</TableCell>
                       </TableRow>
