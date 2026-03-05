@@ -10,7 +10,13 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -118,5 +124,74 @@ export class IssuanceController {
     @Param('documentId') documentId: string,
   ) {
     await this.issuanceService.unlinkDocument(id, documentId);
+  }
+
+  /**
+   * Upload or replace issuance attachment
+   * POST /issuances/:id/attachment
+   */
+  @Post(':id/attachment')
+  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 50 * 1024 * 1024,
+      },
+    }),
+  )
+  async uploadAttachment(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.issuanceService.uploadAttachment(id, file);
+  }
+
+  /**
+   * Remove issuance attachment
+   * DELETE /issuances/:id/attachment
+   */
+  @Delete(':id/attachment')
+  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteAttachment(@Param('id') id: string) {
+    await this.issuanceService.deleteAttachment(id);
+  }
+
+  /**
+   * View issuance attachment inline
+   * GET /issuances/:id/attachment/view
+   */
+  @Get(':id/attachment/view')
+  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  async viewAttachment(
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const { buffer, fileName, mimeType } = await this.issuanceService.getAttachment(id);
+    res.set({
+      'Content-Type': mimeType,
+      'Content-Disposition': `inline; filename="${fileName}"`,
+      'Content-Length': buffer.length,
+    });
+    return new StreamableFile(buffer);
+  }
+
+  /**
+   * Download issuance attachment
+   * GET /issuances/:id/attachment/download
+   */
+  @Get(':id/attachment/download')
+  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  async downloadAttachment(
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const { buffer, fileName, mimeType } = await this.issuanceService.getAttachment(id);
+    res.set({
+      'Content-Type': mimeType,
+      'Content-Disposition': `attachment; filename="${fileName}"`,
+      'Content-Length': buffer.length,
+    });
+    return new StreamableFile(buffer);
   }
 }

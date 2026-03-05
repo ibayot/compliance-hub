@@ -2,6 +2,16 @@
 
 > **Release `v1.4.0` (2026-03-03):** Pull latest code, run `npm run db:seed` in `backend/`, then restart backend/frontend. This release expands Issuances baseline references (laws, IRRs, standards, Executive Orders, DICT/NPC circular references, NCSP) and adds amendment metadata fields displayed in Issuances UI. Package versions are aligned to `1.4.0` (backend/frontend).
 
+> **Patch (`v1.4.0`, 2026-03-03):** Install VS Code PDF viewer extension (`tomoki1207.pdf`) for local PDF inspection. For manual issuance validation, place files under `issuance-file-drop/` and run `python scripts/classify_issuance_drop.py` to generate `issuance-file-drop/classification-results.csv` with Included / Mark-for-Removal / Mark-for-Review outputs. This workflow does not delete existing seeded issuances.
+
+> **Patch 2 (`v1.4.0`, 2026-03-03):** Deep-dive classification additionally writes `issuance-file-drop/deepdive-assessment.md` and enriches CSV with policy grouping/category fields. AO/MC files are included by rule as `INTERNAL_POLICY` categories.
+
+> **Patch 3 (`v1.4.0`, 2026-03-03):** Reassessment applies a public-service inclusion criterion. Re-run `python scripts/classify_issuance_drop.py` after adding files and validate that public-service issuances are included while sector-specific non-general issuances are explicitly deferred with reason text.
+
+> **Patch 4 (`v1.4.0`, 2026-03-03):** After pulling latest code, run `npm run db:seed` in `backend/` to load internal AO/MC issuance rows and `NPC-CIRCULAR-17-01` into Issuances. Build frontend (`npm run build` in `frontend/`) to apply category label formatting updates in Issuances filters.
+
+> **Patch 5 (`v1.4.0`, 2026-03-03):** Issuances now include DB-backed attachment fields and APIs. Re-run `npm run db:seed` (or start backend once to auto-apply `ALTER TABLE` from the references service), then run frontend build/type-check. Validate that row actions are under ellipsis, pagination appears under Issuances table, and title-click opens attachment only when no source link exists.
+
 > **Release `v1.3.0.22` (2026-03-03):** Pull latest code, run `npm run db:seed` in `backend/`, then restart backend/frontend. This update enables Issuances dropdown filters (Authority/Category/Status), active/inactive status management for issuances, and deeper applicability/relevance seeded narratives. If backend start fails with `EADDRINUSE` on `:4000`, stop the existing listener and restart.
 
 > **Release `v1.3.0.21` (2026-03-03):** Backend + frontend + seed update. Pull latest code, run `npm run db:seed` in `backend/`, then restart backend/frontend. This applies comprehensive ICT issuance inclusion (laws/circulars/memorandums/IRRs/ISO/NIST), adds issuance metadata fields (`issuance_type`, `applicability_scope`, `relevance_notes`), and enables the new Applicability/Relevance modal action in Issuances. No destructive migration required; seed includes `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` safeguards.

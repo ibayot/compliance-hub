@@ -112,6 +112,29 @@ export interface UnitTimeseriesPoint {
   }>;
 }
 
+export interface KpiActionPlanItem {
+  unitId: number;
+  unitName: string;
+  kpiCode: string;
+  kpiName: string;
+  targetValue: number;
+  actualValue: number;
+  normalizedScore: number;
+  band: string;
+  priority: 'high' | 'medium';
+  owner: string;
+  recommendation: string;
+  suggestedDueDate: string;
+  sourceRemarks?: string | null;
+}
+
+export interface KpiActionPlanResponse {
+  periodYear: number;
+  periodMonth: number;
+  generatedAt: string;
+  items: KpiActionPlanItem[];
+}
+
 export const kpiApi = {
   listMaster: async (): Promise<KpiMasterRecord[]> => {
     const response = await apiClient.get('/kpi/master');
@@ -182,6 +205,13 @@ export const kpiApi = {
       params: { fromYear, fromMonth, toYear, toMonth },
     });
     return response.data as UnitTimeseriesPoint[];
+  },
+
+  actionPlans: async (periodYear: number, periodMonth: number, unitId?: number) => {
+    const response = await apiClient.get('/kpi/action-plans', {
+      params: { periodYear, periodMonth, unitId },
+    });
+    return response.data as KpiActionPlanResponse;
   },
 
   listThresholds: async () => {

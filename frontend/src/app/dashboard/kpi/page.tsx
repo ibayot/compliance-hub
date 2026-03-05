@@ -49,6 +49,7 @@ import { unitsApi, Unit } from '@/lib/api/units';
 import {
   DashboardSummaryResponse,
   kpiApi,
+  KpiActionPlanItem,
   KpiDirection,
   KpiFrequency,
   KpiMasterRecord,
@@ -230,6 +231,7 @@ export default function KpiPage() {
   const [selectedUnitDashboard, setSelectedUnitDashboard] = useState<UnitDashboardResponse | null>(null);
   const [unitTimeseries, setUnitTimeseries] = useState<UnitTimeseriesPoint[]>([]);
   const [allUnitsTimeseries, setAllUnitsTimeseries] = useState<Record<number, UnitTimeseriesPoint[]>>({});
+  const [actionPlans, setActionPlans] = useState<KpiActionPlanItem[]>([]);
   /** Tracks the currently-selected unit ID without being a useCallback dependency. */
   const selectedUnitIdRef = useRef<number | null>(null);
 
@@ -314,6 +316,12 @@ export default function KpiPage() {
     try {
       const data = await kpiApi.dashboardSummary(periodYear, effectiveMonth);
       setSummary(data);
+      const plans = await kpiApi.actionPlans(
+        periodYear,
+        effectiveMonth,
+        filterUnitId === '' ? undefined : Number(filterUnitId),
+      );
+      setActionPlans(plans.items || []);
       const { fromYear, fromMonth, toYear, toMonth } = getTimeseriesRange(
         viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester,
       );
@@ -988,6 +996,53 @@ export default function KpiPage() {
               </CardContent>
             </Card>
           </Grid>
+
+          {actionPlans.length > 0 && (
+            <Grid item xs={12}>
+              <Card>
+                <CardHeader
+                  title="KPI Auto-Generated Action Plans"
+                  subheader="Recommendations generated from KPI gaps, remarks, and risk keywords for this selected period."
+                />
+                <CardContent>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Unit</TableCell>
+                        <TableCell>KPI</TableCell>
+                        <TableCell>Priority</TableCell>
+                        <TableCell>Recommendation</TableCell>
+                        <TableCell>Owner</TableCell>
+                        <TableCell>Due Date</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {actionPlans.map((item, index) => (
+                        <TableRow key={`${item.kpiCode}-${index}`}>
+                          <TableCell>{item.unitName}</TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight={600}>{item.kpiName}</Typography>
+                            <Typography variant="caption" color="text.secondary">{item.kpiCode}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={item.priority.toUpperCase()}
+                              size="small"
+                              color={item.priority === 'high' ? 'error' : 'warning'}
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell>{item.recommendation}</TableCell>
+                          <TableCell>{item.owner}</TableCell>
+                          <TableCell>{item.suggestedDueDate}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
 
           {/* ── Band Color Legend ── */}
           <Grid item xs={12}>

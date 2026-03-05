@@ -1,5 +1,11 @@
 # Current Status Update - Compliance Hub
 
+> Update (`v1.5.0.1`, 2026-03-05 - Iteration 2): Issuances quarterly monitoring tags + register-added date, MoV Builder tabbed reorganization, per-register report buttons/coverage, assessment-plan/schedule editing enhancements, and print reliability fix.
+
+> Update (`v1.5.0.1`, 2026-03-05): QA polish pass applied for KPI validation stability, Issuances seed/context enrichment, and MoV Builder HTML register output with print/save-PDF support.
+
+> Update (`v1.5.0.1`, 2026-03-04): KPI MoV major update implemented with MoV Planner, assessment/review templates, and KPI action-plan automation.
+
 > Update (`v1.1.0-dev`, 2026-02-24): document upload/preview now runs on blob-first persistence with backward compatibility.
 
 **Date:** February 24, 2026  
@@ -13,6 +19,104 @@ This file is part of local project tracking and is **not intended for the `v1.0.
 ---
 
 ## ✅ Current Release-Prep Highlights (2026-02-24)
+
+### Major KPI MoV update delta (2026-03-04)
+
+- Added backend `mov` module with artifact CRUD and template generation endpoints.
+- Added DB support for `mov_artifacts` in schema and seed baseline.
+- Shifted frontend **MoV Planner** page (`/dashboard/mov`) to a **report builder** workflow:
+  - Register report auto-generates from saved Issuances records.
+  - Assessment report/checklist auto-generates from assessment plan + schedule + KPI monitoring.
+  - Assessment schedule entries are user-settable in UI with seeded sample entries.
+- Added visible KPI-page action-plan recommendations (not only reports page).
+- Expanded Issuances form/model for required register governance and MoV tracking fields.
+- Added KPI recommendation automation endpoint (`/api/kpi/action-plans`) and integrated output into Reports page.
+- Kept existing behavior intact; changes were additive and backward compatible.
+- Validation snapshot for this update:
+  - backend build ✅
+  - backend tests ✅
+  - frontend build ✅
+  - smoke script ✅ passed end-to-end.
+
+### QA polish delta (2026-03-05)
+
+- KPI: fixed query parsing path that produced `Validation failed (numeric string is expected)` by using safe numeric conversion before service-level validation.
+- Issuances: enriched seeded descriptions/context for `binding_nature`, `adoption_basis`, `applicable_provisions`, and `compliance_obligations`.
+- Issuances: changed `Process Owner` input to dropdown sourced from active app users (with focal/reviewer/section_head/super_admin emphasis).
+- MoV: module UX now consistently labeled **MoV Builder**.
+- MoV Register report:
+  - now rendered in HTML visuals (not markdown-only),
+  - header and summary structure aligned to QA specification,
+  - table output aligned to legal/regulatory/standard reporting scope,
+  - split sections: Legal Register, Standards Register, Internal Policy Register,
+  - includes monitoring matrix table,
+  - notes section removed.
+- MoV UI: optional unit filter is now text-based (not numeric ID), and generated reports can be printed/saved to PDF via browser print dialog.
+
+### How to test this QA polish quickly
+
+- Backend build: `cd backend && npm run build`
+- Backend tests: `cd backend && npm test -- --runInBand`
+- Frontend build: `cd frontend && npm run build`
+- Smoke: `./smoke-test.ps1` from repo root
+- Manual UI checks:
+  - KPI dashboard/reports should no longer throw numeric-string validation errors.
+  - Issuances Add/Edit dialog should show Process Owner dropdown values from app users.
+  - MoV Builder register generation should render HTML report, show 3 register sections, and support `Print / Save PDF`.
+
+### Migration / rollback notes
+
+- Seed migration in this pass is content enrichment only (no destructive schema modifications).
+- Rollback by reverting updated files in KPI controller, MoV service/controller/UI/API, Issuances page, sidebar label, and `backend/src/database/seed-data.sql`.
+
+### QA iteration 2 delta (2026-03-05)
+
+- Issuances now supports explicit quarterly monitoring tags in-register:
+  - `Q1 Compliance`, `Q2 Compliance`, `Q3 Compliance`, `Q4 Compliance`
+  - `Register Added Date` for monitoring/reporting basis.
+- MoV Builder reduced vertical scroll load by splitting workflow into tabs:
+  - Reports
+  - Assessment Plan
+  - Assessment Schedule
+  - Artifacts
+- Register reporting now has three dedicated actions:
+  - `Generate Legal Register Report`
+  - `Generate Standards Register Report`
+  - `Generate Internal Policy Register Report`
+- Register report generation now uses issuance-type categorization and includes all applicable issuances for the selected register type.
+- Added-entry summary in reports now uses `register_added_at` (fallback `created_at`) within the selected quarter window.
+- Print/PDF workflow moved to iframe-based browser print (prevents popup-open failures).
+- Assessment report generation improvements:
+  - button renamed to `Generate Assessment Report`
+  - checklist sourced from assessment-plan bullet items
+  - conformance text rewritten in plain language (no dash-list output)
+  - failed checks use `❌`
+  - `Assessment Schedule` section now includes remarks
+  - manual KPI remarks override available before report generation
+- Assessment Plan now supports edit/add/delete and bullet-item authoring per year.
+- Assessment Schedule now supports status and remarks updates per row.
+
+### How to test this iteration quickly
+
+- Backend build: `cd backend && npm run build`
+- Backend tests: `cd backend && npm test -- --runInBand`
+- Frontend build: `cd frontend && npm run build`
+- Smoke: `./smoke-test.ps1` from repo root
+- Manual UI checks:
+  - Issuances Add/Edit should show quarter compliance selectors and register-added date.
+  - MoV Builder should show tabbed layout and three register generate buttons.
+  - Assessment Plan entries should support edit/add/delete with bullet lists.
+  - Assessment Schedule rows should allow status/remarks updates and save.
+  - Print/Save PDF should launch print dialog without popup error.
+
+### Migration / rollback notes (iteration 2)
+
+- DB migration is additive:
+  - new issuance columns: `q1_compliance_status`, `q2_compliance_status`, `q3_compliance_status`, `q4_compliance_status`, `register_added_at`.
+- Rollback by reverting:
+  - Issuances entity/service/UI/API and schema/seed updates,
+  - MoV service/controller/API/UI updates,
+  - related status-doc entries.
 
 ### Post-release patch delta (2026-02-24 PM)
 
@@ -326,3 +430,17 @@ This file is part of local project tracking and is **not intended for the `v1.0.
 **Last Updated:** February 23, 2026 1:45 PM  
 **Updated By:** AI Development Assistant  
 **Status:** Awaiting user feedback on progress
+
+---
+
+## KPI MoV Audit Delta (2026-03-04, Documentation-Only)
+
+- Branch isolation confirmed for audit work: `audit/kpi-mov-gap-assessment-2026-03-04`.
+- Applied quality-focused audit clarification (Efficiency ignored in this pass per user direction).
+- Published concrete recommendations for Register content completeness (including applicability scope + relevance notes + binding/adoption distinctions).
+- Added planning templates for:
+  - Assessment artifacts (plan/schedule/report/checklist framing)
+  - ICT Document Review Report (national + regional coverage)
+- No backend/frontend/database/config code changes performed in this stage.
+
+**Status:** Ready for implementation-phase scoping and change execution in a separate coding pass.

@@ -29,6 +29,7 @@ import {
   MenuBook as ManualIcon,
   FolderOpen as RepositoryIcon,
   Summarize as ReportsIcon,
+  FactCheck as MovIcon,
 } from '@mui/icons-material';
 import type { ElementType } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -68,6 +69,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     { label: 'KPI', icon: KpiIcon, path: '/dashboard/kpi', roles: ['super_admin', 'reviewer', 'focal', 'auditor', 'technician'] },
     { label: 'Reviews', icon: SecurityIcon, path: '/dashboard/reviews', roles: ['super_admin', 'reviewer'] },
     { label: 'Reports', icon: ReportsIcon, path: '/dashboard/reports', roles: ['super_admin', 'reviewer', 'focal'] },
+    { label: 'MoV Builder', icon: MovIcon, path: '/dashboard/mov', roles: ['super_admin', 'reviewer', 'focal'] },
   ];
 
   const settingsNavItems: NavItem[] = [

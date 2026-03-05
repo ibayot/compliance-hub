@@ -8,6 +8,25 @@ export interface Issuance {
   issuance_type?: string;
   applicability_scope?: string;
   relevance_notes?: string;
+  binding_nature?: string;
+  adoption_basis?: string;
+  applicable_provisions?: string;
+  compliance_obligations?: string;
+  required_evidence?: string;
+  evidence_location?: string;
+  process_owner?: string;
+  frequency_cadence?: string;
+  compliance_status?: string;
+  gap_summary?: string;
+  action_required?: string;
+  target_date?: string;
+  last_review_date?: string;
+  quarterly_readiness?: string;
+  q1_compliance_status?: string;
+  q2_compliance_status?: string;
+  q3_compliance_status?: string;
+  q4_compliance_status?: string;
+  register_added_at?: string;
   is_amendment?: boolean;
   amended_issuance_number?: string;
   ict_amendment_notes?: string;
@@ -15,6 +34,9 @@ export interface Issuance {
   issue_date: string;
   effectivity_date?: string;
   source_url?: string;
+  attachment_file_name?: string;
+  attachment_mime_type?: string;
+  attachment_uploaded_at?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -28,6 +50,25 @@ export interface CreateIssuanceDto {
   issuance_type?: string;
   applicability_scope?: string;
   relevance_notes?: string;
+  binding_nature?: string;
+  adoption_basis?: string;
+  applicable_provisions?: string;
+  compliance_obligations?: string;
+  required_evidence?: string;
+  evidence_location?: string;
+  process_owner?: string;
+  frequency_cadence?: string;
+  compliance_status?: string;
+  gap_summary?: string;
+  action_required?: string;
+  target_date?: string;
+  last_review_date?: string;
+  quarterly_readiness?: string;
+  q1_compliance_status?: string;
+  q2_compliance_status?: string;
+  q3_compliance_status?: string;
+  q4_compliance_status?: string;
+  register_added_at?: string;
   is_amendment?: boolean;
   amended_issuance_number?: string;
   ict_amendment_notes?: string;
@@ -35,6 +76,9 @@ export interface CreateIssuanceDto {
   issue_date: string;
   effectivity_date?: string;
   source_url?: string;
+  attachment_file_name?: string;
+  attachment_mime_type?: string;
+  attachment_uploaded_at?: string;
   is_active?: boolean;
 }
 
@@ -159,6 +203,35 @@ export const issuancesApi = {
     await apiClient.delete(
       `/issuances/${issuanceId}/documents/${documentId}`,
     );
+  },
+
+  uploadAttachment: async (issuanceId: string, file: File): Promise<Issuance> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await apiClient.post(`/issuances/${issuanceId}/attachment`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  deleteAttachment: async (issuanceId: string): Promise<void> => {
+    await apiClient.delete(`/issuances/${issuanceId}/attachment`);
+  },
+
+  getAttachmentViewUrl: (issuanceId: string): string => `/issuances/${issuanceId}/attachment/view`,
+
+  viewAttachment: async (issuanceId: string): Promise<Blob> => {
+    const response = await apiClient.get(`/issuances/${issuanceId}/attachment/view`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  downloadAttachment: async (issuanceId: string): Promise<Blob> => {
+    const response = await apiClient.get(`/issuances/${issuanceId}/attachment/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
   },
 };
 

@@ -1,5 +1,98 @@
 # RICTMS Compliance Hub - Implementation Progress Report
 
+## 📌 QA Fix Checkpoint 2 (2026-03-05)
+
+- **Release target:** `v1.5.0.1`
+- **Theme:** Issuances monitoring extension + MoV Builder workflow alignment
+- **Status:** ✅ Implemented and validated
+
+### Delivered in this checkpoint
+- Issuances now supports quarterly compliance tagging (`Q1`..`Q4`) and explicit `register_added_at` tracking.
+- Issuances UI now captures and displays quarter compliance + register-added date in add/edit/detail flows.
+- MoV Builder reorganized into tabbed workflow to reduce long scrolling.
+- Register generation split into three dedicated controls:
+  - Legal Register report
+  - Standards Register report
+  - Internal Policy Register report
+- Register grouping now follows issuance type/category and includes all applicable issuances in selected register tables.
+- Register “Added Entries” summary now uses `register_added_at` (fallback `created_at`) within selected quarter boundaries.
+- Assessment report updates:
+  - checklist based on assessment-plan items,
+  - conformance narrative made human-readable,
+  - failed items use `❌`,
+  - schedule section renamed and remarks-enabled,
+  - manual KPI remarks override supported.
+- Assessment plan now supports edit/add/delete with bullet-item authoring.
+- Assessment schedule now supports status + remarks updates per entry.
+- Print/PDF action migrated to iframe print flow to avoid popup-window failures.
+
+### Validation snapshot
+- Backend build: ✅
+- Backend unit tests: ✅
+- Frontend build: ✅
+- Smoke script (`smoke-test.ps1`): ✅ passed end-to-end
+
+### Migration / rollback notes
+- DB impact is additive only (new nullable issuance columns).
+- Rollback by reverting MoV + Issuances backend/frontend/schema/seed changes included in this checkpoint.
+
+## 📌 QA Fix Checkpoint (2026-03-05)
+
+- **Release target:** `v1.5.0.1`
+- **Theme:** KPI + Issuances + MoV Builder QA compliance fixes
+- **Status:** ✅ Implemented and validated
+
+### Delivered in this checkpoint
+- KPI query handling hardened to prevent `Validation failed (numeric string is expected)` on dashboard/action-plan query paths.
+- Issuances seed text/context enriched for:
+  - `binding_nature`
+  - `adoption_basis`
+  - `applicable_provisions`
+  - `compliance_obligations`
+- Issuances `Process Owner` changed to dropdown sourced from active app users (focal/reviewer/section_head/super_admin-focused).
+- MoV report generation switched to HTML visual output and aligned with requested reporting structure:
+  - Required ISMS register header + period/summary bullets
+  - Register table aligned to requested compliance columns
+  - Split sections: Legal Register / Standards Register / Internal Policy Register
+  - Monitoring matrix added (`Applicable Bases | Description/Link | Compliance Score (Q1-Q4)`)
+  - Notes removed from register output
+- MoV UX updates:
+  - Rename to **MoV Builder**
+  - Optional Unit field now text-based (not numeric ID)
+  - Print/save-PDF support via browser print action
+
+### Validation snapshot
+- Backend build: ✅
+- Backend unit tests: ✅
+- Frontend build: ✅
+- Smoke script (`smoke-test.ps1`): ✅ passed end-to-end
+
+### Migration / rollback notes
+- DB impact in this checkpoint is seed-data enrichment only (non-destructive).
+- Rollback by reverting KPI controller, MoV service/controller/UI/API, Issuances page, sidebar label, and seed-data updates.
+
+## 📌 Release Checkpoint (2026-03-04)
+
+- **Release target:** `v1.5.0.1`
+- **Theme:** KPI MoV Major Update (quality-first)
+- **Status:** ✅ Implemented and build-validated
+
+### Delivered in this checkpoint
+- Added backend `mov` module with artifact CRUD + MoV template generation endpoints.
+- Added `mov_artifacts` schema/seed support.
+- Added frontend `MoV Planner` page and dashboard navigation entry, now refocused as a report builder.
+- Added register report auto-generation from Issuances data.
+- Added assessment report/checklist generation using plan + schedule + KPI monitoring comparison.
+- Added 5-year assessment roadmap seed and quarterly schedule sample seeds.
+- Added visible KPI dashboard action-plan recommendations.
+- Expanded Issuances register fields for governance/evidence/action tracking.
+
+### Validation snapshot
+- Backend build: ✅
+- Backend unit tests: ✅
+- Frontend build: ✅
+- Smoke script (`smoke-test.ps1`): ✅ passed end-to-end.
+
 > Update (`v1.1.0-dev`, 2026-02-24): blob-backed document version storage and preview conversion hardening applied.
 
 ## 📌 Release Checkpoint (2026-02-24)
@@ -412,6 +505,21 @@ Compliance Hub/
   - Add rollback/runbook documentation
   - Add staging parity validation checklist
   - Add monitoring/alerting baseline
+
+---
+
+## KPI MoV Quality Checkpoint (2026-03-04)
+
+### Completed (No-Code)
+- Updated KPI audit to quality-first scope (Efficiency explicitly deprioritized for this pass).
+- Confirmed registry scope guidance: include applicable laws, regulations, executive issuances, plans, and adopted standards/frameworks (with binding/adoption classification).
+- Added improved Register table-content recommendation set (including applicability scope and relevance notes).
+- Added Assessment MoV planning structure (Year 1 phased plan + succeeding-year maturity cycle guidance).
+- Added ICT Document Review Report template supporting national and regional scope.
+
+### Deferred to Implementation Stage
+- Backend/frontend/db/config changes required to operationalize templates and additional governance fields.
+- End-to-end testing for new flows (to be executed only after code implementation).
 
 ## 📝 NOTES
 - All branding changed from RICMS to RICTMS

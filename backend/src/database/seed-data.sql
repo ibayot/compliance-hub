@@ -4,6 +4,23 @@
 USE rictms_compliance;
 
 SET FOREIGN_KEY_CHECKS = 0;
+CREATE TABLE IF NOT EXISTS mov_artifacts (
+	id CHAR(36) NOT NULL,
+	artifact_type VARCHAR(60) NOT NULL,
+	scope VARCHAR(30) NOT NULL DEFAULT 'regional',
+	title VARCHAR(255) NOT NULL,
+	period_year INT NOT NULL,
+	quarter INT NULL,
+	unit_id INT NULL,
+	status VARCHAR(30) NOT NULL DEFAULT 'draft',
+	content_markdown LONGTEXT NOT NULL,
+	metadata_json JSON NULL,
+	created_by INT NULL,
+	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+TRUNCATE TABLE mov_artifacts;
 TRUNCATE TABLE ticket_comments;
 TRUNCATE TABLE tickets;
 TRUNCATE TABLE document_issuances;
@@ -28,9 +45,32 @@ SET FOREIGN_KEY_CHECKS = 1;
 ALTER TABLE issuances ADD COLUMN IF NOT EXISTS issuance_type VARCHAR(80) NULL AFTER description;
 ALTER TABLE issuances ADD COLUMN IF NOT EXISTS applicability_scope TEXT NULL AFTER issuance_type;
 ALTER TABLE issuances ADD COLUMN IF NOT EXISTS relevance_notes TEXT NULL AFTER applicability_scope;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS binding_nature VARCHAR(60) NULL AFTER relevance_notes;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS adoption_basis TEXT NULL AFTER binding_nature;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS applicable_provisions TEXT NULL AFTER adoption_basis;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS compliance_obligations TEXT NULL AFTER applicable_provisions;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS required_evidence TEXT NULL AFTER compliance_obligations;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS evidence_location TEXT NULL AFTER required_evidence;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS process_owner VARCHAR(160) NULL AFTER evidence_location;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS frequency_cadence VARCHAR(80) NULL AFTER process_owner;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS compliance_status VARCHAR(40) NULL AFTER frequency_cadence;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS gap_summary TEXT NULL AFTER compliance_status;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS action_required TEXT NULL AFTER gap_summary;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS target_date DATE NULL AFTER action_required;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS last_review_date DATE NULL AFTER target_date;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS quarterly_readiness VARCHAR(40) NULL AFTER last_review_date;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS q1_compliance_status VARCHAR(40) NULL AFTER quarterly_readiness;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS q2_compliance_status VARCHAR(40) NULL AFTER q1_compliance_status;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS q3_compliance_status VARCHAR(40) NULL AFTER q2_compliance_status;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS q4_compliance_status VARCHAR(40) NULL AFTER q3_compliance_status;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS register_added_at DATE NULL AFTER q4_compliance_status;
 ALTER TABLE issuances ADD COLUMN IF NOT EXISTS is_amendment TINYINT(1) NOT NULL DEFAULT 0 AFTER relevance_notes;
 ALTER TABLE issuances ADD COLUMN IF NOT EXISTS amended_issuance_number VARCHAR(100) NULL AFTER is_amendment;
 ALTER TABLE issuances ADD COLUMN IF NOT EXISTS ict_amendment_notes TEXT NULL AFTER amended_issuance_number;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS attachment_file_name VARCHAR(255) NULL AFTER source_url;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS attachment_mime_type VARCHAR(120) NULL AFTER attachment_file_name;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS attachment_blob LONGBLOB NULL AFTER attachment_mime_type;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS attachment_uploaded_at DATETIME NULL AFTER attachment_blob;
 
 -- Users: column is `active` (not is_active)
 INSERT INTO users (id, email, passwordHash, first_name, last_name, role, active, created_at, updated_at) VALUES
@@ -56,6 +96,23 @@ INSERT INTO role_definitions (`value`, `label`, `description`, `assignable`, `is
 ('technician', 'Technician', 'Operational support role with limited visibility.', 1, 1, NOW(), NOW()),
 ('auditor', 'Auditor', 'Read-only compliance and KPI access for audit.', 1, 1, NOW(), NOW());
 
+INSERT INTO mov_artifacts (id, artifact_type, scope, title, period_year, quarter, unit_id, status, content_markdown, metadata_json, created_by, created_at, updated_at) VALUES
+('mov-001', 'assessment_plan', 'regional', 'Assessment Plan Q1 2026', 2026, 1, 1, 'draft',
+'# Assessment Plan\n\n## Institutional Context\n- Identify unit processes\n- Establish governance standards\n\n## Risk Analysis\n- Technical, operational, compliance risks\n\n## Treatment\n- Corrective actions and awareness plans\n\n## Validation\n- Pilot audits and readiness checks\n',
+JSON_OBJECT('unitName', 'Information Technology Unit'), 2, NOW(), NOW()),
+('mov-002', 'review_report', 'regional', 'ICT Document Review Report Q1 2026', 2026, 1, 1, 'draft',
+'# ICT Document Review Report\n\n## Coverage\n- National and Regional\n\n## Findings\n- Relevance and validity checks\n\n## Action Plan\n| Item | Owner | Due | Status |\n|---|---|---|---|\n',
+JSON_OBJECT('unitName', 'Information Technology Unit'), 2, NOW(), NOW()),
+('mov-003', 'assessment_plan_year', 'regional', 'Year 1 - Context, Governance, Risk Foundation', 2026, NULL, 1, 'active', 'Map processes, governance standards, and baseline risk analysis with ISO/IEC 27001 and QMS alignment.', JSON_OBJECT('year_index', 1), 2, NOW(), NOW()),
+('mov-004', 'assessment_plan_year', 'regional', 'Year 2 - Control Stabilization and Standardization', 2027, NULL, 1, 'active', 'Standardize SOPs, strengthen treatment rollout, and formalize quarterly management review.', JSON_OBJECT('year_index', 2), 2, NOW(), NOW()),
+('mov-005', 'assessment_plan_year', 'regional', 'Year 3 - Integration and Capability Maturity', 2028, NULL, 1, 'active', 'Integrate cross-unit evidence traceability and mature KPI-linked control monitoring.', JSON_OBJECT('year_index', 3), 2, NOW(), NOW()),
+('mov-006', 'assessment_plan_year', 'regional', 'Year 4 - Optimization and Audit Readiness', 2029, NULL, 1, 'active', 'Optimize recurring gaps and finalize complete audit-ready evidence packs.', JSON_OBJECT('year_index', 4), 2, NOW(), NOW()),
+('mov-007', 'assessment_plan_year', 'regional', 'Year 5 - Sustainment and Continuous Improvement', 2030, NULL, 1, 'active', 'Institutionalize continuous improvement and sustain quality quarterly compliance reporting.', JSON_OBJECT('year_index', 5), 2, NOW(), NOW()),
+('mov-008', 'assessment_schedule_entry', 'regional', 'Process Mapping and Governance Setup', 2026, 1, 1, 'planned', 'Initial governance and stakeholder assignment.', JSON_OBJECT('owner', 'ICT Process Owner', 'due_date', '2026-03-31', 'sample_seed', true), 2, NOW(), NOW()),
+('mov-009', 'assessment_schedule_entry', 'regional', 'Risk Analysis and ISMS/QMS Mapping', 2026, 2, 1, 'planned', 'Quarterly risk analysis and framework mapping.', JSON_OBJECT('owner', 'Compliance Team', 'due_date', '2026-06-30', 'sample_seed', true), 2, NOW(), NOW()),
+('mov-010', 'assessment_schedule_entry', 'regional', 'Risk Treatment and Awareness Rollout', 2026, 3, 1, 'planned', 'Implement treatment plan and run awareness sessions.', JSON_OBJECT('owner', 'Unit Heads', 'due_date', '2026-09-30', 'sample_seed', true), 2, NOW(), NOW()),
+('mov-011', 'assessment_schedule_entry', 'regional', 'Pilot Audit and Readiness Validation', 2026, 4, 1, 'planned', 'Pilot audit and adjust documentation for readiness.', JSON_OBJECT('owner', 'Internal Audit Team', 'due_date', '2026-12-15', 'sample_seed', true), 2, NOW(), NOW());
+
 -- Issuances: expanded ICT baseline (laws, circulars, memorandums, IRRs, standards)
 INSERT INTO issuances (id, issuance_number, title, description, issuance_type, applicability_scope, relevance_notes, issuing_authority, issue_date, effectivity_date, source_url, is_active, created_at, updated_at) VALUES
 ('issuance-001', 'RA-10173', 'Data Privacy Act of 2012', 'Personal data protection law.', 'law', 'ICT operations, information security, data governance, safety controls', 'Core legal baseline for privacy governance and protection controls across ICT systems.', 'Congress of the Philippines', '2012-08-15', '2012-09-08', 'https://www.officialgazette.gov.ph/2012/08/15/republic-act-no-10173/', 1, NOW(), NOW()),
@@ -71,15 +128,15 @@ INSERT INTO issuances (id, issuance_number, title, description, issuance_type, a
 ('issuance-011', 'RA-9470', 'National Archives of the Philippines Act of 2007', 'Records lifecycle and archival governance.', 'law', 'Records governance, electronic records, continuity of evidence', 'Supports governance, auditability, and retention controls for ICT-managed records.', 'Congress of the Philippines', '2007-05-21', '2007-05-21', 'https://www.officialgazette.gov.ph/2007/05/21/republic-act-no-9470/', 1, NOW(), NOW()),
 ('issuance-012', 'RA-10173-IRR', 'Implementing Rules and Regulations of the Data Privacy Act of 2012', 'Operational rules for data privacy implementation.', 'irr', 'Operational privacy controls, breach handling, compliance implementation', 'Translates DPA legal requirements into operational and implementable controls.', 'National Privacy Commission', '2016-08-24', '2016-09-09', 'https://privacy.gov.ph/implementing-rules-and-regulations-of-republic-act-no-10173-known-as-the-data-privacy-act-of-2012/', 1, NOW(), NOW()),
 ('issuance-013', 'NPC-CIRCULARS', 'NPC Circulars and Advisories', 'Registry of NPC circulars and advisories including breach/privacy operations.', 'circular', 'Privacy operations, cybersecurity response, personal data handling', 'Covers operational circular-level obligations and implementation guidance.', 'National Privacy Commission', '2017-01-01', '2017-01-01', 'https://privacy.gov.ph/circulars/', 1, NOW(), NOW()),
-('issuance-014', 'DICT-ISSUANCES', 'DICT Issuances (Department Circulars / Memoranda / Orders)', 'DICT issuance repository for ICT governance directives.', 'memorandum', 'ICT governance, operations, cybersecurity, continuity directives', 'Contains operational and governance-level ICT directives and memoranda.', 'Department of Information and Communications Technology', '2017-01-01', '2017-01-01', 'https://dict.gov.ph/issuances/', 1, NOW(), NOW()),
+('issuance-014', 'DICT-ISSUANCES', 'DICT Department Circulars', 'DICT department circular repository for ICT governance directives.', 'circular', 'ICT governance, operations, cybersecurity, continuity directives', 'Contains operational and governance-level ICT directives and circular guidance.', 'Department of Information and Communications Technology', '2017-01-01', '2017-01-01', 'https://dict.gov.ph/department-circulars', 1, NOW(), NOW()),
 ('issuance-015', 'COA-CIRCULARS', 'COA Circulars and Issuances', 'COA issuance repository used for governance and audit controls.', 'circular', 'Audit governance, internal controls, ICT control assurance', 'Supports auditable governance and control compliance references.', 'Commission on Audit', '2012-01-01', '2012-01-01', 'https://www.coa.gov.ph/issuances/circulars/', 1, NOW(), NOW()),
 ('issuance-016', 'DBM-NBC-ISSUANCES', 'DBM National Budget Circulars', 'Budget circular repository including ICT-related budgeting references.', 'circular', 'ICT budgeting, procurement planning, operational spending controls', 'Applicable to budget governance and ICT program/resource planning.', 'Department of Budget and Management', '2014-01-01', '2014-01-01', 'https://www.dbm.gov.ph/index.php/issuances/national-budget-circulars', 1, NOW(), NOW()),
 ('issuance-017', 'DBM-MEMO-ISSUANCES', 'DBM Memorandum Circulars', 'Memorandum circular repository for budget and administrative implementation.', 'memorandum', 'Governance implementation, budget compliance, operations management', 'Provides memorandum-level implementation guidance relevant to ICT programs.', 'Department of Budget and Management', '2014-01-01', '2014-01-01', 'https://www.dbm.gov.ph/index.php/issuances/memorandum-circulars', 1, NOW(), NOW()),
 ('issuance-018', 'GPPB-IRR-9184', 'GPPB IRR and Procurement Policy Issuances', 'Implementing guidance and policy issuances for government procurement.', 'irr', 'ICT procurement implementation, compliance procedures, governance controls', 'Operational procurement procedures and controls impacting ICT acquisitions.', 'Government Procurement Policy Board', '2016-01-01', '2016-01-01', 'https://gppb.gov.ph/laws/', 1, NOW(), NOW()),
-('issuance-019', 'ISO-IEC-27001:2022', 'ISO/IEC 27001 Information Security Management Systems', 'International ISMS requirements for governance and control.', 'standard', 'Information security governance, risk management, control framework', 'Global baseline standard for security governance and control implementation.', 'ISO/IEC', '2022-10-25', '2022-10-25', 'https://www.iso.org/standard/82875.html', 1, NOW(), NOW()),
-('issuance-020', 'ISO-IEC-27002:2022', 'ISO/IEC 27002 Information Security Controls', 'Control guidance supporting ISO/IEC 27001 implementation.', 'standard', 'Security operations, control design, governance assurance', 'Detailed control catalog used for practical security control implementation.', 'ISO/IEC', '2022-02-15', '2022-02-15', 'https://www.iso.org/standard/75652.html', 1, NOW(), NOW()),
+('issuance-019', 'ISO-IEC-27001:2022', 'ISO/IEC 27001 Information Security Management Systems', 'International ISMS requirements for governance and control.', 'standard', 'Information security governance, risk management, control framework', 'Global baseline standard for security governance and control implementation.', 'ISO', '2022-10-25', '2022-10-25', 'https://www.iso.org/standard/82875.html', 1, NOW(), NOW()),
+('issuance-020', 'ISO-IEC-27002:2022', 'ISO/IEC 27002 Information Security Controls', 'Control guidance supporting ISO/IEC 27001 implementation.', 'standard', 'Security operations, control design, governance assurance', 'Detailed control catalog used for practical security control implementation.', 'ISO', '2022-02-15', '2022-02-15', 'https://www.iso.org/standard/75652.html', 1, NOW(), NOW()),
 ('issuance-021', 'ISO-IEC-22301:2019', 'ISO 22301 Business Continuity Management Systems', 'Business continuity management requirements.', 'standard', 'Business continuity, disaster response readiness, operational resilience', 'Supports continuity planning, disruption management, and resilience governance.', 'ISO', '2019-10-31', '2019-10-31', 'https://www.iso.org/standard/75106.html', 1, NOW(), NOW()),
-('issuance-022', 'ISO-IEC-27035', 'ISO/IEC 27035 Information Security Incident Management', 'Incident management guidance and controls.', 'standard', 'Incident response operations, cybersecurity event handling, safety posture', 'Applicable to cyber incident lifecycle and response governance.', 'ISO/IEC', '2023-01-01', '2023-01-01', 'https://www.iso.org/standard/78996.html', 1, NOW(), NOW()),
+('issuance-022', 'ISO-IEC-27035', 'ISO/IEC 27035 Information Security Incident Management', 'Incident management guidance and controls.', 'standard', 'Incident response operations, cybersecurity event handling, safety posture', 'Applicable to cyber incident lifecycle and response governance.', 'ISO', '2023-01-01', '2023-01-01', 'https://www.iso.org/standard/78996.html', 1, NOW(), NOW()),
 ('issuance-023', 'NIST-CSF-2.0', 'NIST Cybersecurity Framework 2.0', 'Risk-based cybersecurity framework.', 'standard', 'Cybersecurity governance, risk management, control maturity', 'Widely used governance framework for improving cybersecurity capability.', 'NIST', '2024-02-26', '2024-02-26', 'https://www.nist.gov/cyberframework', 1, NOW(), NOW()),
 ('issuance-024', 'NIST-SP-800-61R2', 'NIST SP 800-61r2 Computer Security Incident Handling Guide', 'Guidance for incident handling lifecycle.', 'standard', 'Incident response operations, cybersecurity procedures, escalation', 'Operational playbook reference for response process and coordination.', 'NIST', '2012-08-01', '2012-08-01', 'https://csrc.nist.gov/publications/detail/sp/800-61/rev-2/final', 1, NOW(), NOW()),
 ('issuance-025', 'NIST-SP-800-34R1', 'NIST SP 800-34r1 Contingency Planning Guide', 'Contingency planning guidance for information systems.', 'standard', 'Business continuity, disaster recovery, operations resilience', 'Supports disaster response and continuity program design and testing.', 'NIST', '2010-05-01', '2010-05-01', 'https://csrc.nist.gov/publications/detail/sp/800-34/rev-1/final', 1, NOW(), NOW()),
@@ -89,12 +146,26 @@ INSERT INTO issuances (id, issuance_number, title, description, issuance_type, a
 ('issuance-029', 'RA-11202', 'Philippine Identification System Act', 'National digital identity framework law.', 'law', 'Digital identity governance, data sharing controls, identity assurance, and service integration controls.', 'Establishes foundational digital identity and data governance controls used by ICT-enabled public services and interoperable government systems.', 'Congress of the Philippines', '2018-08-06', '2018-08-06', 'https://www.officialgazette.gov.ph/2018/08/06/republic-act-no-11202/', 1, NOW(), NOW()),
 ('issuance-030', 'RA-11659', 'Public Service Act (Amendment)', 'Liberalization update affecting telecommunications and digital infrastructure sectors.', 'law', 'Telecommunications governance, digital infrastructure investment controls, and service continuity implications for ICT operations.', 'While not originally an ICT-specific law, it has direct impact on telecom and digital infrastructure governance relevant to ICT planning and resilience.', 'Congress of the Philippines', '2022-03-21', '2022-04-10', 'https://www.officialgazette.gov.ph/2022/03/21/republic-act-no-11659/', 1, NOW(), NOW()),
 ('issuance-031', 'EO-170-2022', 'Executive Order No. 170, s. 2022', 'Mandates adoption of digital payments for government disbursements and collections.', 'executive_order', 'Government digital payments operations, platform interoperability, service security, and financial ICT controls.', 'EO-level policy direction requiring ICT-enabled digital payment channels and related governance, security, and operational compliance controls.', 'Office of the President', '2022-05-12', '2022-05-12', 'https://www.officialgazette.gov.ph/2022/05/12/executive-order-no-170-s-2022/', 1, NOW(), NOW()),
-('issuance-032', 'NCSP-2023-2028', 'National Cybersecurity Plan 2023–2028', 'National strategic cybersecurity plan for resilience and cyber capability maturity.', 'plan', 'Cybersecurity governance, incident readiness, risk management, sector coordination, and cyber resilience implementation.', 'Strategic national cyber roadmap used to align ICT security priorities, capability development, incident preparedness, and governance maturity targets.', 'Department of Information and Communications Technology', '2023-01-01', '2023-01-01', 'https://dict.gov.ph/', 1, NOW(), NOW()),
-('issuance-033', 'ISO-IEC-27701:2019', 'ISO/IEC 27701 Privacy Information Management', 'Privacy extension for ISO/IEC 27001 and ISO/IEC 27002.', 'standard', 'Privacy control design, personal data lifecycle governance, and accountability extension for information security programs.', 'Strengthens privacy governance and data protection accountability for ICT systems handling personal information.', 'ISO/IEC', '2019-08-06', '2019-08-06', 'https://www.iso.org/standard/71670.html', 1, NOW(), NOW()),
-('issuance-034', 'ISO-IEC-27017:2015', 'ISO/IEC 27017 Cloud Security Controls', 'Security controls guidance for cloud services.', 'standard', 'Cloud governance, shared responsibility controls, service security baselines, and supplier assurance for ICT operations.', 'Applicable to cloud-based ICT operations and third-party service control assurance.', 'ISO/IEC', '2015-12-15', '2015-12-15', 'https://www.iso.org/standard/43757.html', 1, NOW(), NOW()),
+('issuance-032', 'NCSP-2023-2028', 'National Cybersecurity Plan 2023–2028', 'National strategic cybersecurity plan for resilience and cyber capability maturity.', 'plan', 'Cybersecurity governance, incident readiness, risk management, sector coordination, and cyber resilience implementation.', 'Strategic national cyber roadmap used to align ICT security priorities, capability development, incident preparedness, and governance maturity targets.', 'Department of Information and Communications Technology', '2023-01-01', '2023-01-01', 'https://dict.gov.ph/national-cybersecurity-plan-2023-2028/', 1, NOW(), NOW()),
+('issuance-033', 'ISO-IEC-27701:2019', 'ISO/IEC 27701 Privacy Information Management', 'Privacy extension for ISO/IEC 27001 and ISO/IEC 27002.', 'standard', 'Privacy control design, personal data lifecycle governance, and accountability extension for information security programs.', 'Strengthens privacy governance and data protection accountability for ICT systems handling personal information.', 'ISO', '2019-08-06', '2019-08-06', 'https://www.iso.org/standard/71670.html', 1, NOW(), NOW()),
+('issuance-034', 'ISO-IEC-27017:2015', 'ISO/IEC 27017 Cloud Security Controls', 'Security controls guidance for cloud services.', 'standard', 'Cloud governance, shared responsibility controls, service security baselines, and supplier assurance for ICT operations.', 'Applicable to cloud-based ICT operations and third-party service control assurance.', 'ISO', '2015-12-15', '2015-12-15', 'https://www.iso.org/standard/43757.html', 1, NOW(), NOW()),
 ('issuance-035', 'NIST-SP-800-53R5', 'NIST SP 800-53 Rev. 5 Security and Privacy Controls', 'Comprehensive security and privacy control catalog.', 'standard', 'Security and privacy control baselines, risk management, assurance testing, and governance control mapping.', 'Provides detailed control baselines for security and privacy governance in ICT environments.', 'NIST', '2020-09-23', '2020-09-23', 'https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final', 1, NOW(), NOW()),
 ('issuance-036', 'NPC-CIRCULAR-16-03', 'NPC Circular No. 16-03 (Personal Data Breach Management)', 'Breach management and notification guidance under data privacy regime.', 'circular', 'Breach response operations, incident reporting timelines, notification governance, and evidence handling.', 'Provides concrete breach response obligations and timing controls critical to ICT incident governance and compliance.', 'National Privacy Commission', '2016-12-08', '2016-12-08', 'https://privacy.gov.ph/circulars/', 1, NOW(), NOW()),
-('issuance-037', 'DICT-CYBER-INDEX', 'DICT Cybersecurity Policies and Advisories Index', 'Reference index for DICT cybersecurity advisories and policy issuances.', 'circular', 'Cybersecurity operational guidance, sector advisories, and implementation references for ICT units.', 'Expands searchable DICT cyber references used for practical operational alignment and compliance implementation.', 'Department of Information and Communications Technology', '2017-01-01', '2017-01-01', 'https://dict.gov.ph/issuances/', 1, NOW(), NOW());
+('issuance-037', 'DICT-CYBER-INDEX', 'DICT Cybersecurity Policies and Advisories Index', 'Reference index for DICT cybersecurity advisories and policy issuances.', 'circular', 'Cybersecurity operational guidance, sector advisories, and implementation references for ICT units.', 'Expands searchable DICT cyber references used for practical operational alignment and compliance implementation.', 'Department of Information and Communications Technology', '2017-01-01', '2017-01-01', 'https://dict.gov.ph/cybersecurity/', 1, NOW(), NOW()),
+('issuance-038', 'RA-9485', 'Anti-Red Tape Act of 2007', 'Public service reform law to reduce red tape and improve frontline service delivery.', 'law', 'Public service process governance, service standards, transparency, and workflow simplification for citizen-facing offices.', 'Required by government agencies for service efficiency and anti-red-tape compliance; directly relevant to ICT-enabled service workflows and process digitization.', 'Congress of the Philippines', '2007-06-02', '2007-06-02', 'https://lawphil.net/statutes/repacts/ra2007/ra_9485_2007.html', 1, NOW(), NOW()),
+('issuance-039', 'EO-2-2016', 'Executive Order No. 2, s. 2016 (Freedom of Information)', 'Operationalizes access to information in the executive branch.', 'executive_order', 'Public information access, transparency workflows, records disclosure handling, and request-response governance in public service operations.', 'Supports public-service transparency obligations and process controls for information handling, including ICT-enabled request management and records retrieval.', 'Office of the President', '2016-07-23', '2016-07-23', 'https://www.officialgazette.gov.ph/2016/07/23/executive-order-no-2-s-2016/', 1, NOW(), NOW()),
+('issuance-040', 'RA-12254', 'E-Governance Act', 'Digital governance law for modernization of government services and interoperability.', 'law', 'Digital public service delivery, interoperability, process digitization, and service governance for government agencies.', 'Public-service relevant law for ICT-enabled government modernization and operational governance of digital service systems.', 'Congress of the Philippines', '2025-09-11', '2025-09-11', 'https://www.officialgazette.gov.ph/', 1, NOW(), NOW()),
+('issuance-041', 'AO-NO-02-S-2025', 'Administrative Order No. 02, s. 2025', 'Internal office administrative order for governance/operations implementation.', 'internal policy', 'Internal office governance controls, process compliance, and implementation guidance.', 'Included as internal policy issuance for office-level compliance and evidence tracking.', 'Department of Social Welfare and Development', '2025-01-01', '2025-01-01', NULL, 1, NOW(), NOW()),
+('issuance-042', 'AO-NO-10-S-2025', 'Administrative Order No. 10, s. 2025', 'Internal office administrative order for governance/operations implementation.', 'internal policy', 'Internal office governance controls, process compliance, and implementation guidance.', 'Included as internal policy issuance for office-level compliance and evidence tracking.', 'Department of Social Welfare and Development', '2025-01-01', '2025-01-01', NULL, 1, NOW(), NOW()),
+('issuance-043', 'AO-2015-009', 'Administrative Order 2015-009', 'Internal office administrative order for governance/operations implementation.', 'internal policy', 'Internal office governance controls, process compliance, and implementation guidance.', 'Included as internal policy issuance for office-level compliance and evidence tracking.', 'Department of Social Welfare and Development', '2015-01-01', '2015-01-01', NULL, 1, NOW(), NOW()),
+('issuance-044', 'AO-2018-001', 'Administrative Order 2018-001', 'Internal office administrative order for governance/operations implementation.', 'internal policy', 'Internal office governance controls, process compliance, and implementation guidance.', 'Included as internal policy issuance for office-level compliance and evidence tracking.', 'Department of Social Welfare and Development', '2018-01-01', '2018-01-01', NULL, 1, NOW(), NOW()),
+('issuance-045', 'AO-2019-020', 'Administrative Order 2019-020', 'Internal office administrative order for governance/operations implementation.', 'internal policy', 'Internal office governance controls, process compliance, and implementation guidance.', 'Included as internal policy issuance for office-level compliance and evidence tracking.', 'Department of Social Welfare and Development', '2019-01-01', '2019-01-01', NULL, 1, NOW(), NOW()),
+('issuance-046', 'AO-2024-002', 'Administrative Order 2024-002', 'Internal office administrative order for governance/operations implementation.', 'internal policy', 'Internal office governance controls, process compliance, and implementation guidance.', 'Included as internal policy issuance for office-level compliance and evidence tracking.', 'Department of Social Welfare and Development', '2024-01-01', '2024-01-01', NULL, 1, NOW(), NOW()),
+('issuance-047', 'AO-2024-003', 'Administrative Order 2024-003', 'Internal office administrative order for governance/operations implementation.', 'internal policy', 'Internal office governance controls, process compliance, and implementation guidance.', 'Included as internal policy issuance for office-level compliance and evidence tracking.', 'Department of Social Welfare and Development', '2024-01-01', '2024-01-01', NULL, 1, NOW(), NOW()),
+('issuance-048', 'MC-2012-020', 'Memorandum Circular 2012-020', 'Internal office memorandum circular for process and governance implementation.', 'internal policy', 'Internal process directives, operational controls, and office implementation instructions.', 'Included as internal policy issuance for office-level compliance and operational consistency.', 'Department of Social Welfare and Development', '2012-01-01', '2012-01-01', NULL, 1, NOW(), NOW()),
+('issuance-049', 'MC-2023-011', 'Memorandum Circular 2023-011', 'Internal office memorandum circular for process and governance implementation.', 'internal policy', 'Internal process directives, operational controls, and office implementation instructions.', 'Included as internal policy issuance for office-level compliance and operational consistency.', 'Department of Social Welfare and Development', '2023-01-01', '2023-01-01', NULL, 1, NOW(), NOW()),
+('issuance-050', 'MC-2024-003', 'Memorandum Circular 2024-003', 'Internal office memorandum circular for process and governance implementation.', 'internal policy', 'Internal process directives, operational controls, and office implementation instructions.', 'Included as internal policy issuance for office-level compliance and operational consistency.', 'Department of Social Welfare and Development', '2024-01-01', '2024-01-01', NULL, 1, NOW(), NOW()),
+('issuance-051', 'NPC-CIRCULAR-17-01', 'NPC Circular No. 17-01 (Registration of Data Processing Systems)', 'NPC circular containing operational obligations, including Data Protection Officer designation/registration responsibilities under privacy compliance implementation.', 'circular', 'Data privacy governance, compliance registration, accountability assignment, and DPO-related operational compliance controls.', 'Key implementation circular used in practice for DPO-related accountability and privacy compliance operations.', 'National Privacy Commission', '2017-08-21', '2017-09-09', 'https://privacy.gov.ph/circulars/', 1, NOW(), NOW());
 
 UPDATE issuances
 SET is_amendment = 1,
@@ -121,6 +192,36 @@ WHERE issuance_type = 'law';
 UPDATE issuances
 SET relevance_notes = 'Provides enforceable legal obligations that define minimum compliance expectations, accountability boundaries, and consequences for non-compliance. Used as the primary basis for control mapping, policy updates, compliance attestations, and supersession checks when newer laws amend or replace prior legal requirements. Legal issuances should be interpreted as source-of-truth requirements for mandatory controls, and every implementation decision should be traceable to a specific provision, responsible office, affected process, and supporting compliance evidence.'
 WHERE issuance_type = 'law';
+
+UPDATE issuances
+SET binding_nature = 'mandatory',
+	adoption_basis = 'Statutory and executive mandate adopted as compulsory compliance baseline for ISMS legal obligations and governance controls.',
+	applicable_provisions = 'Establish legal requirements for data protection, cybersecurity, records, procurement, and digital governance controls applicable to agency ICT operations.',
+	compliance_obligations = 'Maintain evidence of implementation, assign accountable owners, perform periodic review, and document corrective actions for identified gaps.'
+WHERE issuance_type IN ('law', 'irr', 'executive_order', 'circular', 'memorandum');
+
+UPDATE issuances
+SET binding_nature = 'adopted_policy_baseline',
+	adoption_basis = 'Adopted by management as recognized external framework/reference to support ISMS control design, assessment, and continuous improvement.',
+	applicable_provisions = 'Use framework clauses and control guidance to map applicable controls, risk treatment priorities, and monitoring checkpoints.',
+	compliance_obligations = 'Document mapped controls, maintain alignment evidence, perform regular gap reviews, and update implementation roadmap when standards change.'
+WHERE issuance_type IN ('standard', 'guideline');
+
+UPDATE issuances
+SET binding_nature = 'adopted_policy_baseline',
+	adoption_basis = 'Internal governance issuance approved by management and adopted for mandatory execution within covered units and processes.',
+	applicable_provisions = 'Defines internal policy directives, operational procedures, and governance responsibilities for covered business and ICT activities.',
+	compliance_obligations = 'Assign process owner, maintain implementation evidence, report quarterly readiness status, and close action items within approved target dates.'
+WHERE issuance_type IN ('internal policy', 'plan');
+
+UPDATE issuances
+SET register_added_at = COALESCE(register_added_at, DATE(created_at));
+
+UPDATE issuances
+SET q1_compliance_status = COALESCE(q1_compliance_status, 'compliant'),
+	q2_compliance_status = COALESCE(q2_compliance_status, 'compliant'),
+	q3_compliance_status = COALESCE(q3_compliance_status, 'compliant'),
+	q4_compliance_status = COALESCE(q4_compliance_status, 'compliant');
 
 UPDATE issuances
 SET applicability_scope = 'Applies to compliance implementation teams translating legal mandates into executable controls, procedures, and reporting routines. Covers operational interpretation, implementation timelines, required artifacts, escalation pathways, and conformance verification activities for affected ICT and business processes. Includes procedure-level definitions of who performs each control, required review cadence, documentation templates, breach/incident response checkpoints, and accountability handoffs between focal units, reviewers, and management approvers.'
@@ -319,7 +420,12 @@ INSERT INTO kpi_scoring_rules (`name`, `active`, `cap_score`, `floor_score`, `ye
 INSERT INTO kpi_thresholds (`band`, `min_score`, `max_score`, `color`, `created_at`, `updated_at`) VALUES
 ('green', 90, 100, 'success', NOW(), NOW()),
 ('amber', 75, 89.99, 'warning', NOW(), NOW()),
-('red', 0, 74.99, 'error', NOW(), NOW());
+('red', 0, 74.99, 'error', NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+	min_score = VALUES(min_score),
+	max_score = VALUES(max_score),
+	color = VALUES(color),
+	updated_at = NOW();
 
 INSERT INTO kpi_monitoring (`kpi_master_code`, `unit_id`, `period_year`, `period_month`, `actual_value`, `remarks`, `entered_by_user_id`, `entered_by_staff_id`, `entered_by_name`, `status`, `created_at`, `updated_at`) VALUES
 -- IT Unit — January 2025 (composite ≈ 100, GREEN)

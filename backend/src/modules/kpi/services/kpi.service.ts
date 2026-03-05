@@ -620,6 +620,114 @@ export class KpiService {
     });
   }
 
+  async generateActionPlans(user: AuthUser, periodYear: number, periodMonth: number, unitId?: number) {
+    const yearNum = Number(periodYear);
+    const monthNum = Number(periodMonth);
+
+    if (!Number.isFinite(yearNum) || yearNum < 2000 || yearNum > 2100) {
+      throw new BadRequestException('periodYear must be a valid year (2000-2100).');
+    }
+    if (!Number.isFinite(monthNum) || monthNum < 1 || monthNum > 12) {
+      throw new BadRequestException('periodMonth must be between 1 and 12.');
+    }
+
+    const where: any = { periodYear: yearNum, periodMonth: monthNum };
+
+    if (unitId !== undefined) {
+      const unitIdNum = Number(unitId);
+      if (!Number.isFinite(unitIdNum) || unitIdNum <= 0) {
+        throw new BadRequestException('unitId must be a positive number.');
+      }
+
+      if (!this.canViewAll(user)) {
+        const allowed = await this.getAllowedUnitIds(user);
+        if (!allowed.includes(unitIdNum)) {
+          throw new ForbiddenException('Unit access denied.');
+        }
+      }
+
+      where.unitId = unitIdNum;
+    } else if (!this.canViewAll(user)) {
+      const allowed = await this.getAllowedUnitIds(user);
+      if (allowed.length === 0) {
+        return { periodYear: yearNum, periodMonth: monthNum, items: [] };
+      }
+      where.unitId = In(allowed);
+    }
+
+    const rows = await this.kpiMonitoringRepo.find({
+      where,
+      relations: ['kpiMaster', 'unit'],
+    });
+
+    const scoringRule =
+      (await this.kpiScoringRuleRepo.findOne({ where: { active: true }, order: { id: 'DESC' } })) ||
+      this.kpiScoringRuleRepo.create({ capScore: 100, floorScore: 0, yesScore: 100, noScore: 0 });
+
+    const thresholds = await this.kpiThresholdRepo.find({ order: { minScore: 'DESC' } });
+
+    const keywordRule = (text: string) => {
+      const value = text.toLowerCase();
+      if (value.includes('incident') || value.includes('cyber') || value.includes('security')) {
+        return 'Strengthen incident response workflow, validate escalation contacts, and run targeted security awareness refreshers.';
+      }
+      if (value.includes('document') || value.includes('review') || value.includes('policy')) {
+        return 'Close document evidence gaps, complete pending reviews, and publish updated policy/review sign-offs.';
+      }
+      if (value.includes('compliance') || value.includes('regulat') || value.includes('issuance')) {
+        return 'Revalidate legal/regulatory mappings, update applicability notes, and assign closure owners for identified gaps.';
+      }
+      return 'Perform root-cause review, define corrective actions, and assign accountable process owners with target completion dates.';
+    };
+
+    const today = new Date();
+
+    const items = rows
+      .filter((row) => Boolean(row.kpiMaster))
+      .map((row) => {
+        const kpi = row.kpiMaster;
+        if (!kpi) return null;
+
+        const raw = this.computeRaw(kpi, Number(row.actualValue), scoringRule);
+        const normalized = this.clamp(raw, Number(scoringRule.floorScore), Number(scoringRule.capScore));
+        const band = this.classifyScore(normalized, thresholds);
+
+        if (band === 'green') {
+          return null;
+        }
+
+        const dueDate = new Date(today);
+        dueDate.setDate(today.getDate() + (band === 'red' ? 15 : 30));
+
+        const triggerText = `${kpi.name || ''} ${kpi.description || ''} ${row.remarks || ''}`;
+        const recommendation = keywordRule(triggerText);
+
+        return {
+          unitId: row.unitId,
+          unitName: row.unit?.name || `Unit ${row.unitId}`,
+          kpiCode: row.kpiMasterCode,
+          kpiName: kpi.name,
+          targetValue: Number(kpi.targetValue),
+          actualValue: Number(row.actualValue),
+          normalizedScore: Number(normalized.toFixed(2)),
+          band,
+          priority: band === 'red' ? 'high' : 'medium',
+          owner: row.unit?.name ? `${row.unit.name} Process Owner` : 'Process Owner',
+          recommendation,
+          suggestedDueDate: dueDate.toISOString().slice(0, 10),
+          sourceRemarks: row.remarks || null,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+    return {
+      periodYear: yearNum,
+      periodMonth: monthNum,
+      generatedAt: new Date().toISOString(),
+      items,
+    };
+  }
+
   async listThresholds() {
     await this.ensureLookups();
     return this.kpiThresholdRepo.find({ order: { minScore: 'DESC' } });

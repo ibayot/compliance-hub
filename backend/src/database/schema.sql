@@ -280,6 +280,25 @@ CREATE TABLE IF NOT EXISTS `issuances` (
   `issuance_type` varchar(80) DEFAULT NULL,
   `applicability_scope` text DEFAULT NULL,
   `relevance_notes` text DEFAULT NULL,
+  `binding_nature` varchar(60) DEFAULT NULL,
+  `adoption_basis` text DEFAULT NULL,
+  `applicable_provisions` text DEFAULT NULL,
+  `compliance_obligations` text DEFAULT NULL,
+  `required_evidence` text DEFAULT NULL,
+  `evidence_location` text DEFAULT NULL,
+  `process_owner` varchar(160) DEFAULT NULL,
+  `frequency_cadence` varchar(80) DEFAULT NULL,
+  `compliance_status` varchar(40) DEFAULT NULL,
+  `gap_summary` text DEFAULT NULL,
+  `action_required` text DEFAULT NULL,
+  `target_date` date DEFAULT NULL,
+  `last_review_date` date DEFAULT NULL,
+  `quarterly_readiness` varchar(40) DEFAULT NULL,
+  `q1_compliance_status` varchar(40) DEFAULT NULL,
+  `q2_compliance_status` varchar(40) DEFAULT NULL,
+  `q3_compliance_status` varchar(40) DEFAULT NULL,
+  `q4_compliance_status` varchar(40) DEFAULT NULL,
+  `register_added_at` date DEFAULT NULL,
   `is_amendment` tinyint(1) NOT NULL DEFAULT 0,
   `amended_issuance_number` varchar(100) DEFAULT NULL,
   `ict_amendment_notes` text DEFAULT NULL,
@@ -342,6 +361,30 @@ CREATE TABLE IF NOT EXISTS `ticket_comments` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================
+-- MOV (MEANS OF VERIFICATION) ARTIFACTS
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS `mov_artifacts` (
+  `id` varchar(36) NOT NULL,
+  `artifact_type` varchar(60) NOT NULL,
+  `scope` varchar(30) NOT NULL DEFAULT 'regional',
+  `title` varchar(255) NOT NULL,
+  `period_year` int(11) NOT NULL,
+  `quarter` int(11) DEFAULT NULL,
+  `unit_id` int(11) DEFAULT NULL,
+  `status` varchar(30) NOT NULL DEFAULT 'draft',
+  `content_markdown` longtext NOT NULL,
+  `metadata_json` json DEFAULT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `idx_mov_type_period` (`artifact_type`, `period_year`, `quarter`),
+  KEY `idx_mov_scope` (`scope`),
+  KEY `idx_mov_unit` (`unit_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
 -- INDEXES FOR PERFORMANCE
 -- =============================================
 
@@ -352,3 +395,4 @@ CREATE INDEX idx_metric_results_version_metric ON metric_results(version_id, met
 CREATE INDEX idx_reviews_document_date ON manual_reviews(document_id, reviewed_at);
 CREATE INDEX idx_tickets_assigned ON tickets(assigned_to_id, status);
 CREATE INDEX idx_kpi_monitoring_status ON kpi_monitoring(status);
+CREATE INDEX idx_mov_artifacts_period ON mov_artifacts(period_year, quarter);

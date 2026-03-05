@@ -57,7 +57,7 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('RICTMS Compliance Hub API')
     .setDescription('API documentation for the Regional Internal Compliance Tracking and Metrics System')
-    .setVersion('1.0')
+    .setVersion('1.5.0.1')
     .addBearerAuth(
       {
         type: 'http',

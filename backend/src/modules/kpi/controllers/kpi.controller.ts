@@ -82,10 +82,12 @@ export class KpiController {
   @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'section_head')
   dashboardSummary(
     @Request() req: any,
-    @Query('periodYear', new ParseIntPipe({ optional: true })) periodYear?: number,
-    @Query('periodMonth', new ParseIntPipe({ optional: true })) periodMonth?: number,
+    @Query('periodYear') periodYear?: string,
+    @Query('periodMonth') periodMonth?: string,
   ) {
-    return this.kpiService.dashboardSummary(req.user, periodYear, periodMonth);
+    const parsedYear = periodYear === undefined || periodYear === '' ? undefined : Number(periodYear);
+    const parsedMonth = periodMonth === undefined || periodMonth === '' ? undefined : Number(periodMonth);
+    return this.kpiService.dashboardSummary(req.user, parsedYear, parsedMonth);
   }
 
   @Get('dashboard/unit/:unitId')
@@ -93,10 +95,12 @@ export class KpiController {
   dashboardUnit(
     @Request() req: any,
     @Param('unitId', ParseIntPipe) unitId: number,
-    @Query('periodYear', new ParseIntPipe({ optional: true })) periodYear?: number,
-    @Query('periodMonth', new ParseIntPipe({ optional: true })) periodMonth?: number,
+    @Query('periodYear') periodYear?: string,
+    @Query('periodMonth') periodMonth?: string,
   ) {
-    return this.kpiService.dashboardUnit(req.user, unitId, periodYear, periodMonth);
+    const parsedYear = periodYear === undefined || periodYear === '' ? undefined : Number(periodYear);
+    const parsedMonth = periodMonth === undefined || periodMonth === '' ? undefined : Number(periodMonth);
+    return this.kpiService.dashboardUnit(req.user, unitId, parsedYear, parsedMonth);
   }
 
   @Get('dashboard/unit/:unitId/timeseries')
@@ -114,6 +118,21 @@ export class KpiController {
       Number(fromYear), Number(fromMonth),
       Number(toYear), Number(toMonth),
     );
+  }
+
+  @Get('action-plans')
+  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'section_head')
+  generateActionPlans(
+    @Request() req: any,
+    @Query('periodYear') periodYear: string,
+    @Query('periodMonth') periodMonth: string,
+    @Query('unitId') unitId?: string,
+  ) {
+    const parsedYear = Number(periodYear);
+    const parsedMonth = Number(periodMonth);
+    const parsedUnitId = unitId === undefined || unitId === null || unitId === '' ? undefined : Number(unitId);
+
+    return this.kpiService.generateActionPlans(req.user, parsedYear, parsedMonth, parsedUnitId);
   }
 
   @Get('lookups/thresholds')

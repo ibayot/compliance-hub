@@ -15,6 +15,7 @@ import { TicketsModule } from './modules/tickets/tickets.module';
 import { IncidentsModule } from './modules/incidents/incidents.module';
 import { CybersecurityModule } from './modules/cybersecurity/cybersecurity.module';
 import { KpiModule } from './modules/kpi/kpi.module';
+import { MovModule } from './modules/mov/mov.module';
 
 @Module({
   imports: [
@@ -92,6 +93,7 @@ import { KpiModule } from './modules/kpi/kpi.module';
     IncidentsModule,
     CybersecurityModule,
     KpiModule,
+    MovModule,
   ],
   controllers: [],
   providers: [],

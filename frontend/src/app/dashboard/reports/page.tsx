@@ -295,6 +295,11 @@ function ReportView({ params }: { params: ReportParams }) {
     queryFn: () => metricsApi.listTemplates(),
   });
 
+  const actionPlansQuery = useQuery({
+    queryKey: ['report-kpi-action-plans', year, effectiveMonth, unitId],
+    queryFn: () => kpiApi.actionPlans(year, effectiveMonth, unitId ? Number(unitId) : undefined),
+  });
+
   // ── Derived / computed ────────────────────────────────────────────────────────
 
   /** Multi-line chart data for "all units" view */
@@ -926,6 +931,56 @@ function ReportView({ params }: { params: ReportParams }) {
                           </Typography>
                         </TableCell>
                         <TableCell align="right">{item.actualValue}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          )}
+
+          {Boolean(actionPlansQuery.data?.items?.length) && (
+            <Box sx={{ mb: 4 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <ReportIcon color="warning" />
+                <Typography variant="h6" fontWeight={700} color="warning.main">
+                  Suggested KPI Action Plans
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Auto-generated recommendations based on KPI results, remarks, and risk keywords.
+              </Typography>
+              <TableContainer component={Paper} elevation={0} variant="outlined" sx={{ borderColor: 'warning.light' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      {!unitId && <TableCell><strong>Unit</strong></TableCell>}
+                      <TableCell><strong>KPI</strong></TableCell>
+                      <TableCell><strong>Priority</strong></TableCell>
+                      <TableCell><strong>Recommendation</strong></TableCell>
+                      <TableCell><strong>Owner</strong></TableCell>
+                      <TableCell><strong>Due Date</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {actionPlansQuery.data?.items.map((item, index) => (
+                      <TableRow key={`${item.kpiCode}-${index}`} hover>
+                        {!unitId && <TableCell>{item.unitName}</TableCell>}
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>{item.kpiName}</Typography>
+                          <Typography variant="caption" color="text.secondary">{item.kpiCode}</Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={item.priority.toUpperCase()}
+                            color={item.priority === 'high' ? 'error' : 'warning'}
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell>{item.recommendation}</TableCell>
+                        <TableCell>{item.owner}</TableCell>
+                        <TableCell>{item.suggestedDueDate}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

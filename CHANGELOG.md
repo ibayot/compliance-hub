@@ -6,6 +6,95 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.5.0.1] - 2026-03-04 — KPI MoV Major Update (Quality-First)
+
+### Fixed (QA Iteration 2 - 2026-03-05)
+- **Branch-safe execution:** all changes kept on `feature/kpi-mov-major-update-1.5.0.1`; no `master` changes introduced.
+- **Issuances as register+monitoring:** added per-quarter compliance tags (`Q1`/`Q2`/`Q3`/`Q4`) and `register_added_at` so the module now captures both register and monitoring context.
+- **MoV Builder reorganization:** refactored page into tabbed sections (Reports, Assessment Plan, Assessment Schedule, Artifacts) to reduce long-page scrolling.
+- **Register generation coverage:** added per-register generation mode (`legal`, `standards`, `internal`) with dedicated buttons and issuance-type-driven categorization to ensure complete table coverage per register.
+- **Register basis correction:** report “Added Entries” now uses `register_added_at` (fallback `created_at`) and quarter window; no dependency on issuance `issue_date` for this metric.
+- **Print reliability:** replaced popup-window print behavior with iframe-based print flow to avoid “unable to open print window” failures.
+- **Assessment report UX/content alignment:**
+  - button label simplified to `Generate Assessment Report`,
+  - checklist now derives from assessment plan bullet items,
+  - conformance block rewritten as human-readable narrative,
+  - failed checklist rows now use `❌` icon,
+  - section renamed from Schedule Snapshot to Assessment Schedule,
+  - schedule remarks included,
+  - KPI gap remarks now support manual override input before report generation.
+- **Assessment plan manageability:** added plan item editing, add, and delete actions with bullet-item authoring per year.
+- **Assessment schedule updates:** added in-place status and remarks updates per schedule row.
+
+### Database / Migration (QA Iteration 2)
+- Added issuance fields:
+  - `q1_compliance_status`, `q2_compliance_status`, `q3_compliance_status`, `q4_compliance_status`
+  - `register_added_at`
+- Applied runtime `ALTER TABLE ... IF NOT EXISTS` guards in Issuances service.
+- Seed updates now initialize new issuance fields and keep migration additive/non-destructive.
+
+### Verified (QA Iteration 2)
+- `npm run build` (backend) ✅
+- `npm run test -- --runInBand` (backend) ✅
+- `npm run build` (frontend) ✅
+- `smoke-test.ps1` ✅ all smoke tests passed.
+
+### Fixed (QA Polish - 2026-03-05)
+- **KPI validation hardening:** removed fragile `ParseIntPipe` usage for dashboard/action-plan query params and shifted to safe numeric parsing in controller before service validation to resolve `Validation failed (numeric string is expected)`.
+- **MoV Builder register report:** changed generated output to **HTML visual report** (no markdown-only dependency) and aligned structure to QA-required format:
+  - Header: `INFORMATION SECURITY MANAGEMENT SYSTEM` + legal/regulatory/standard subtitle.
+  - Period + summary bullets (`Active register entries`, `Marked Compliant`, `Readiness`, `Added Entries`).
+  - Table columns aligned to requested register semantics and enriched with responsible unit/review cadence context.
+  - Section split into **Legal Register**, **Standards Register**, and **Internal Policy Register**.
+  - Added register monitoring matrix (`Applicable Bases | Description/Link | Compliance Score (1st Q..4th Q)`).
+  - Removed notes block from generated register report.
+- **MoV Builder UX:** renamed module label from **MoV Planner** to **MoV Builder**, changed register filter input from numeric `Unit ID` to optional text `Unit`, and added `Print / Save PDF` action via browser print pipeline.
+- **Issuances process owner UX:** converted `Process Owner` from free text to dropdown sourced from active app users (focus roles: focal/reviewer/section_head/super_admin).
+- **Issuances seed enrichment:** added seeded context values for `binding_nature`, `adoption_basis`, `applicable_provisions`, and `compliance_obligations` by issuance category.
+
+### Added
+- **MoV Planner backend module** with secured endpoints:
+  - `GET/POST/PUT/DELETE /api/mov/artifacts`
+  - `GET /api/mov/reports/register`
+  - `GET /api/mov/reports/assessment`
+  - `GET /api/mov/register-columns`
+- **MoV artifact persistence** via new `mov_artifacts` table (`schema.sql` + runtime compatibility creation in service).
+- **5-year assessment roadmap seed** (`assessment_plan_year`) and quarter schedule seed samples (`assessment_schedule_entry`).
+- **KPI action-plan automation endpoint**: `GET /api/kpi/action-plans`.
+- **Expanded Issuances register fields** for binding nature, provisions, obligations, evidence, ownership, cadence, status, gaps, actions, and readiness.
+
+### Changed
+- **Reports page** now renders backend-generated **Suggested KPI Action Plans**.
+- **Navigation + routing** now include **MoV Planner** at `/dashboard/mov`.
+- **MoV Planner UI strategy changed** from template builder to **report builder**:
+  - Register report is auto-generated from Issuances data.
+  - Assessment report/checklist is auto-generated from plan + schedule + KPI monitoring.
+  - Assessment schedule is editable in-UI with sample seeded entries.
+- **KPI page** now visibly shows auto-generated action plans in dashboard tab.
+
+### Database / Seed
+- Added `mov_artifacts` table to `backend/src/database/schema.sql`.
+- Added `mov_artifacts` setup + sample records to `backend/src/database/seed-data.sql`.
+
+### Verified (Build/Test)
+- `npm run build` (backend) ✅
+- `npm run test -- --runInBand` (backend) ✅
+- `npm run build` (frontend) ✅
+- `smoke-test.ps1` ✅ all smoke tests passed.
+
+### Migration / Rollback Notes (QA Polish)
+- Migration is additive/content-only:
+  - SQL seed updates only enrich issuance text/context fields.
+  - No destructive schema change introduced in this QA polish pass.
+- Rollback:
+  - Revert KPI controller parsing changes in `backend/src/modules/kpi/controllers/kpi.controller.ts`.
+  - Revert HTML report generation changes in `backend/src/modules/mov/services/mov.service.ts` + `backend/src/modules/mov/controllers/mov.controller.ts`.
+  - Revert frontend MoV builder updates in `frontend/src/app/dashboard/mov/page.tsx`, `frontend/src/app/api/mov.ts`, and sidebar label update.
+  - Revert Issuances process-owner dropdown update in `frontend/src/app/dashboard/issuances/page.tsx` and seed enrichment in `backend/src/database/seed-data.sql`.
+
+### Rollback
+- Revert `backend/src/modules/mov/**`, KPI action-plan endpoint changes, frontend MoV page/route/sidebar/report changes, and `mov_artifacts` schema/seed additions.
+
 ## [1.4.0] - 2026-03-03 — Issuances Expanded Regulatory Coverage + Amendment Tracking
 
 ### Added
@@ -26,15 +115,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Add/Edit form supports amendment-specific fields.
   - Applicability/Relevance modal now includes amendment metadata and ICT amendment narrative.
 - **Issuance type options** expanded to include `executive_order` and `plan` for broader issuance classification.
+- **Issuance filtering UX** upgraded to persistent checkbox multi-select dropdowns for Authority and Category, so selected options remain visible and usable while filters are active.
+- **Second-pass reassessment policy update**: all AO/MC documents are now included under INTERNAL_POLICY categories instead of removal tagging.
+- **Public-service criterion added**: reassessment now explicitly includes issuances that drive public service delivery, anti-red-tape compliance, and transparency operations.
+- **Category label display normalization**: Issuances category display now renders human-readable title labels (capitalized, underscores removed in UI presentation).
+- **Issuances row actions simplified**: actions now use an ellipsis-triggered menu to reduce visual overload while preserving existing operations (view applicability, map documents, edit/delete/toggle for privileged roles).
+- **Issuances table pagination**: client-side paging controls added to avoid heavy vertical scrolling on long issuance lists.
+- **Title click resolution updated**: when `source_url` exists, title opens the link; if no link exists but an attachment is stored, title opens the attached file.
+
+### Added
+- **Manual upload-first assessment workflow** for issuance documents:
+  - Added drop folder: `issuance-file-drop/`
+  - Added classifier script: `scripts/classify_issuance_drop.py`
+  - Added generated assessment output: `issuance-file-drop/classification-results.csv`
+  - Added deep-dive report output: `issuance-file-drop/deepdive-assessment.md`
+  - CSV now includes `policy_group`, `category`, `page_count`, `title_guess`, `key_topics`, `relevance_summary`, and `external_context`.
+  - Added public-service issuances to seed baseline: `RA-9485`, `EO-2-2016`, `RA-12254`.
+- **VS Code PDF extension baseline**: `tomoki1207.pdf` installed for direct PDF viewing.
+- **Internal policy baseline rows** in `backend/src/database/seed-data.sql`: seeded AO/MC issuances (`issuance-041..050`) and DPO-related `NPC-CIRCULAR-17-01` (`issuance-051`).
+- **Issuance attachment storage and APIs**:
+  - Added DB fields: `attachment_file_name`, `attachment_mime_type`, `attachment_blob`, `attachment_uploaded_at`.
+  - Added endpoints: `POST /issuances/:id/attachment`, `DELETE /issuances/:id/attachment`, `GET /issuances/:id/attachment/view`, `GET /issuances/:id/attachment/download`.
+  - Added frontend support for upload/replace/remove and explicit attached-file view/download actions.
+- **Traceability update** in `ICT-ISSUANCE-RELEVANCE-MAP.md`:
+  - Complete applicable issuance master list for manual collection/upload.
+  - Explicit per-item exclusion/deferred reasons.
+  - Dropped-file assessment summary with Included / Mark-for-Removal / Mark-for-Review counts.
 
 ### Verified (Smoke)
 - `npm run db:seed` (backend) → success.
 - `npm run build` (backend) → success.
+- `npm run build` (frontend) → success.
 - `npx tsc --noEmit` (frontend) → success.
+- `python scripts/classify_issuance_drop.py` → processed 51 PDFs, generated `issuance-file-drop/classification-results.csv`.
+- Latest deep-dive run summary: `51` processed, `38` included, `11` marked-for-removal (deferred legal scope), `2` marked-for-review.
+- Latest deep-dive run summary after public-service criterion: `51` processed, `41` included, `10` marked-for-removal (deferred legal scope), `0` marked-for-review.
+- Manual-review adjudication captured: `RA-9485` included; `DICT Department Circular HRA-003 s2025` deferred as telecom-provider specific.
 
 ### Rollback
 - Revert seed additions and amendment metadata updates in Issuances entity/schema/UI/API.
 - Re-run `npm run db:seed` to restore prior issuance baseline.
+- Revert Issuances filter UI changes in `frontend/src/app/dashboard/issuances/page.tsx` if single-select behavior is required.
 
 ## [1.3.0.22] - 2026-03-03 — Issuances Dropdown Filters, Category/Status Controls, Deeper Applicability Notes
 

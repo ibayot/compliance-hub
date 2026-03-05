@@ -1,5 +1,89 @@
 # Compliance Hub - Complete Implementation Plan
 
+## QA Fix Execution Addendum 2 (`v1.5.0.1`, 2026-03-05)
+
+### Plan Executed
+1. Keep all implementation work on feature branch `feature/kpi-mov-major-update-1.5.0.1` and avoid `master` mutation.
+2. Extend Issuances as register + monitoring source by adding per-quarter compliance tags and register-added date.
+3. Reorganize MoV Builder to reduce scrolling and expose discrete register generation controls.
+4. Ensure register generation includes all issuances by issuance-type register grouping (legal/standards/internal) and non-issue-date basis for added-entry metrics.
+5. Refine assessment report generation (plan-based checklist, human-readable conformance text, remarks handling, icon updates).
+6. Add assessment plan CRUD (with bullet items) and schedule status/remarks updates.
+7. Revalidate with build/tests/smoke.
+
+### Risk Notes
+- **Data schema risk:** low; issuance schema changes are additive and nullable.
+- **Behavioral risk:** medium; MoV UI was significantly reorganized, mitigated with route/API compatibility and end-to-end smoke pass.
+- **Printing risk:** low; popup-print dependence removed via iframe print to reduce browser blocking issues.
+
+### Rollback
+- Revert these areas if rollback is needed:
+  - `backend/src/modules/references/*` (quarter-status/register date)
+  - `backend/src/modules/mov/*` (register/assessment generation behavior)
+  - `frontend/src/app/dashboard/mov/page.tsx`
+  - `frontend/src/app/dashboard/issuances/page.tsx`
+  - `frontend/src/app/api/mov.ts`
+  - `frontend/src/app/api/references.ts`
+  - `backend/src/database/schema.sql`
+  - `backend/src/database/seed-data.sql`
+
+## QA Fix Execution Addendum (`v1.5.0.1`, 2026-03-05)
+
+### Plan Executed
+1. Stabilize KPI query validation path to eliminate numeric-string parse failures without changing scoring behavior.
+2. Enrich Issuances seed context for register governance fields (`binding_nature`, `adoption_basis`, `applicable_provisions`, `compliance_obligations`).
+3. Convert Issuances `Process Owner` to a users/focals dropdown sourced from active app users.
+4. Refactor MoV Builder register generation to HTML visual output with QA-required header, summary, table structure, and section splits.
+5. Add print/save-to-PDF workflow for generated MoV reports.
+6. Re-run backend/frontend build, backend unit tests, and smoke script.
+
+### Risk Notes
+- **Regression risk (KPI):** low; service validation logic remains unchanged, controller parsing hardened only.
+- **Data risk (seed updates):** low; enrichment updates are additive content updates to nullable fields.
+- **Report rendering risk:** medium; HTML rendering and print behavior can vary by browser, mitigated by plain HTML/CSS and fallback report storage.
+
+### Rollback
+- Revert files touched by this addendum:
+  - `backend/src/modules/kpi/controllers/kpi.controller.ts`
+  - `backend/src/modules/mov/controllers/mov.controller.ts`
+  - `backend/src/modules/mov/services/mov.service.ts`
+  - `backend/src/database/seed-data.sql`
+  - `frontend/src/app/api/mov.ts`
+  - `frontend/src/app/dashboard/mov/page.tsx`
+  - `frontend/src/app/dashboard/issuances/page.tsx`
+  - `frontend/src/components/layout/Sidebar.tsx`
+
+## KPI MoV Execution Tranche (`v1.5.0.1`, 2026-03-04)
+
+### Scope
+- Implement quality-first MoV coverage from `KPI-MOV-AUDIT-2026-03-04.md` with minimal, backward-compatible diffs.
+
+### Implemented Work Pack
+1. **MoV planning capability**
+  - New backend `mov` module for artifact CRUD and report generation.
+  - New frontend `MoV Planner` route/page refocused as report builder.
+2. **KPI recommendation automation**
+  - New `/api/kpi/action-plans` endpoint to generate recommendation items from KPI bands + remarks context.
+  - Reports and KPI dashboard UI integration for generated action plans.
+3. **Persistence support**
+  - Added `mov_artifacts` table in schema + seed support.
+4. **Register source-of-truth enhancement**
+  - Expanded Issuances with governance/evidence/action/readiness fields required for register-level reporting.
+5. **Assessment lifecycle support**
+  - Seeded year-1 to year-5 assessment roadmap entries.
+  - Seeded quarterly schedule samples and enabled schedule entry creation in UI.
+  - Implemented assessment report/checklist generation based on plan + schedule + KPI monitoring comparison.
+
+### Risk Notes
+- **Data migration risk:** low (additive table only, no destructive schema changes).
+- **Behavioral regression risk:** low (new routes/features are additive; no existing route contract removed).
+- **Operational risk:** medium for smoke automation in environments where API host is not running during script execution.
+
+### Rollback Plan
+- Revert `mov` module files and frontend route/page wiring.
+- Revert KPI action-plan endpoint and reports rendering block.
+- Revert schema/seed `mov_artifacts` additions.
+
 > Update (`v1.1.0-dev`, 2026-02-24): plan now tracks blob-based document persistence and conversion pipeline validation as mandatory stabilization work.
 
 **Date Created:** February 23, 2026  
@@ -546,3 +630,33 @@ Next phases executable from current baseline:
 ---
 
 **Next Step:** Begin Sprint 1 - Critical UI Fixes
+
+---
+
+## KPI MoV Quality Planning Track (2026-03-04, No-Code Stage)
+
+This addendum captures audit-approved planning inputs for the next stage. No feature code changes are part of this update.
+
+### Objectives (Quality-first)
+
+1. Ensure complete MoV packages are available per quarter.
+2. Strengthen artifact readiness for Register, Assessment, KPI, and Review evidence.
+3. Preserve backward compatibility and avoid behavior changes in this stage.
+
+### Planned Fix Set (for implementation stage, not executed yet)
+
+1. Register governance enhancement (binding nature, adoption basis, scope/relevance completeness).
+2. Assessment artifact workflow foundations (Plan, Schedule/Roadmap, Checklist, Report).
+3. Recommendation/action-plan traceability extension for KPI gaps.
+4. Review-report formalization for national/regional scope.
+
+### Risk Notes
+
+- Main risk is over-expanding legal registry without clear binding/adoption tagging.
+- Main execution risk is adding new fields/workflows that could disrupt existing forms unless introduced behind backward-compatible defaults.
+- Main reporting risk is artifact incompleteness at quarter-close due to unclear ownership; mitigate by mandatory owner fields and review cadence.
+
+### Explicit Stage Boundary
+
+- ✅ Completed in this pass: audit refinement, templates, and implementation planning.
+- ❌ Not executed in this pass: backend/frontend/db/config runtime code changes.

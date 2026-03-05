@@ -2,6 +2,16 @@
 
 > **Release `v1.4.0` (2026-03-03):** Issuances module now supports broader source coverage for compliance search and applicability mapping: applicable laws, IRRs, standards, Executive Orders, DICT/NPC circular references, and NCSP planning references. Issuance records now include amendment metadata (`is_amendment`, `amended_issuance_number`, `ict_amendment_notes`) and the list view includes an `ICT Related Amendments` column for fast legal-impact scanning.
 
+> **Patch (`v1.4.0`, 2026-03-03):** Issuances now support persistent checkbox multi-select filtering for Authority and Category (selected values remain visible while active). The project also includes an upload-first issuance assessment workflow (`issuance-file-drop/` + `scripts/classify_issuance_drop.py`) that classifies dropped files into Included / Mark-for-Removal / Mark-for-Review without removing existing seeded issuances.
+
+> **Patch 2 (`v1.4.0`, 2026-03-03):** Issuance file assessment now performs deep-dive parsing (all pages, bounded extraction), adds per-file metadata (`policy_group`, `category`, `page_count`, topic hints, and external-context notes), and enforces AO/MC inclusion as `INTERNAL_POLICY` categories.
+
+> **Patch 3 (`v1.4.0`, 2026-03-03):** Reassessment now includes a dedicated **public-service criterion** for inclusion decisions. Anti-red-tape/service-delivery issuances (e.g., `RA-9485`) are included, while sector-limited issuances not generally applicable to agency public-service operations remain deferred.
+
+> **Patch 4 (`v1.4.0`, 2026-03-03):** Internal AO/MC policy artifacts are now first-class seeded issuances (`issuance-041..050`) and DPO-related operational coverage is seeded via `NPC-CIRCULAR-17-01`. Issuance category display labels are normalized to human-readable title formatting in the UI.
+
+> **Patch 5 (`v1.4.0`, 2026-03-03):** Issuances now support database-backed attachment storage per row (upload/replace/delete + inline view/download), title-click fallback to attachment when `source_url` is absent, ellipsis-based row actions, and built-in table pagination for better large-list usability.
+
 > **Release `v1.3.0.22` (2026-03-03):** Issuances module filtering now uses structured dropdown controls by Authority, Category (`issuance_type`), and Status (All/Active/Inactive). Issuance records can now be explicitly activated/deactivated (including quick row action) to support superseded or inactive regulatory references. Seed baseline also expands applicability/relevance narratives for deeper operational and governance interpretation.
 
 > **Release `v1.3.0.21` (2026-03-03):** Issuances module now supports comprehensive ICT coverage in seeded baseline data: laws, circulars, memorandums, IRRs, and international standards (ISO/NIST) relevant to operations, governance, security/cybersecurity, business continuity, disaster response, safety, and applicable use. Issuance records now include `issuance_type`, `applicability_scope`, and `relevance_notes`, and the Issuances table adds a dedicated action to open an applicability/relevance modal while preserving existing actions.
