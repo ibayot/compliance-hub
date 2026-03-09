@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.5.0.1] - 2026-03-04 — KPI MoV Major Update (Quality-First)
 
+### Fixed (Register Report QA - 2026-03-09)
+- **Register table columns refactored** (iteration 3):
+  - Removed `Responsible Unit` and `Review Frequency` columns from all register tables (deferred to Issuances module).
+  - Renamed `Implications Effectivity` → `Effectivity`; date now formatted as `mmm-dd-yyyy` (e.g., `Mar-09-2026`).
+  - Column order: `Title` now precedes `Type`.
+  - `Type` header superscript `¹` placed on second line (`Type<br/>¹`) for visual clarity.
+  - Legend format updated: `¹: L – Law / Executive Order, R – Regulatory Issuance, S – Standard / Framework / Guideline, C – Contractual Requirement` (comma-separated, no pipe characters).
+  - Table fonts: `Arial 11pt` for main `<h2>`, `Helvetica 9pt` for `<th>`, `Helvetica 10pt` for `<td>`, `Helvetica 8pt` for legend paragraph.
+  - Vertical alignment `middle` applied to all `<th>` and `<td>` cells.
+  - Summary section converted from `<ul>/<li>` bullets to plain `<div>` lines.
+- **Register Monitoring Matrix separated:** extracted from inline register report into own report type (`GET /mov/reports/monitoring-matrix`) with separate button in UI.
+- **MoV Builder access restricted** to `super_admin` and `reviewer` roles only; other roles see access-restricted alert.
+- **Print isolation:** iframe-based print already isolates report output; `buildPrintHtml()` helper now injects header images and footers before printing.
+- **Report Settings panel added:** upload up to 2 header images (base64), configure page footer, optionally configure a separate first-page footer.
+- **KPI Gap Remarks:** free-form `Additional Manual Remarks` field always visible so users can enter remarks even when no gaps are detected.
+- **Assessment Plan:** redesigned with timeline layout — vertical spine, color-coded year avatars, accent-bordered cards, per-year chip badges.
+- **Artifacts tab:** added inline status-edit capability with `Edit / Save / Cancel` controls per row; status dropdown supports `draft`, `active`, `generated`, `archived`.
+
 ### Fixed (QA Iteration 2 - 2026-03-05)
 - **Branch-safe execution:** all changes kept on `feature/kpi-mov-major-update-1.5.0.1`; no `master` changes introduced.
 - **Issuances as register+monitoring:** added per-quarter compliance tags (`Q1`/`Q2`/`Q3`/`Q4`) and `register_added_at` so the module now captures both register and monitoring context.

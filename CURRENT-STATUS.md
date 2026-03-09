@@ -1,5 +1,7 @@
 # Current Status Update - Compliance Hub
 
+> Update (`v1.5.0.1`, 2026-03-09 - Iteration 3): Register report columns refactored (remove 2 cols, rename Effectivity, font specs, vertical-align, no-bullet summary, separate Monitoring Matrix report), MoV role-gating, Report Settings (header images + footer), KPI remarks free-form, Assessment Plan timeline design, Artifacts status edit.
+
 > Update (`v1.5.0.1`, 2026-03-05 - Iteration 2): Issuances quarterly monitoring tags + register-added date, MoV Builder tabbed reorganization, per-register report buttons/coverage, assessment-plan/schedule editing enhancements, and print reliability fix.
 
 > Update (`v1.5.0.1`, 2026-03-05): QA polish pass applied for KPI validation stability, Issuances seed/context enrichment, and MoV Builder HTML register output with print/save-PDF support.

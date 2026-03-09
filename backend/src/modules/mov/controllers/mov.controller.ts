@@ -84,6 +84,22 @@ export class MovController {
     });
   }
 
+  @Get('reports/monitoring-matrix')
+  @Roles('super_admin', 'reviewer')
+  buildMonitoringMatrixReport(
+    @Query('year') year: string,
+    @Query('quarter') quarter: string,
+    @Query('scope') scope?: string,
+    @Query('unit') unit?: string,
+  ) {
+    return this.movService.generateMonitoringMatrixReport({
+      year: Number(year),
+      quarter: Number(quarter),
+      scope,
+      unit,
+    });
+  }
+
   @Get('reports/assessment')
   @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician')
   buildAssessmentReport(

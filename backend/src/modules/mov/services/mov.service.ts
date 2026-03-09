@@ -253,6 +253,17 @@ export class MovService implements OnModuleInit {
     return date.toISOString().slice(0, 10);
   }
 
+  private formatDateMmm(value?: Date | string | null): string {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const m = months[date.getUTCMonth()];
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    const y = date.getUTCFullYear();
+    return `${m}-${d}-${y}`;
+  }
+
   private normalizeIssuanceType(value?: string | null): string {
     return (value || '').trim().toLowerCase();
   }
@@ -289,8 +300,7 @@ export class MovService implements OnModuleInit {
   }
 
   private implicationsEffectivity(item: Issuance): string {
-    const effectivity = this.formatDate(item.effectivity_date);
-    return effectivity === '-' ? '-' : `Effective ${effectivity}`;
+    return this.formatDateMmm(item.effectivity_date);
   }
 
   private quarterStatusScore(value?: string | null): string {
@@ -315,32 +325,27 @@ export class MovService implements OnModuleInit {
       );
       const impact = this.escapeHtml(item.applicability_scope || '-');
       const status = this.escapeHtml(item.compliance_status || '-');
-      const owner = this.escapeHtml(item.process_owner || '-');
-      const cadence = this.escapeHtml(item.frequency_cadence || '-');
       return `
         <tr>
           <td>${startingIndex + index}</td>
           <td>${this.escapeHtml(item.title)}</td>
-          <td style="white-space:nowrap;">${this.resolveRegisterTypeCode(item.issuance_type)}</td>
+          <td style="white-space:nowrap;text-align:center;">${this.resolveRegisterTypeCode(item.issuance_type)}</td>
           <td>${applicableProvisions}</td>
           <td>${this.escapeHtml(item.issuing_authority || '-')}</td>
           <td>${requirements}</td>
           <td>${evidence}</td>
           <td>${impact}</td>
-          <td>${this.escapeHtml(this.implicationsEffectivity(item))}</td>
-          <td>${status}</td>
-          <td>${owner}</td>
-          <td>${cadence}</td>
+          <td style="white-space:nowrap;text-align:center;">${this.escapeHtml(this.implicationsEffectivity(item))}</td>
+          <td style="text-align:center;">${status}</td>
         </tr>
       `;
     });
 
     const legend = `
-      <p style="font-size:11px;margin:4px 0 16px;color:#374151;">
-        <strong>Legend (Type column):</strong>
-        <sup>1</sup>L – Law / Executive Order &nbsp;|&nbsp;
-        R – Regulation / Regulatory Issuance &nbsp;|&nbsp;
-        S – Standard / Framework / Guideline &nbsp;|&nbsp;
+      <p class="register-legend">
+        <sup>1</sup>: L – Law / Executive Order,
+        R – Regulatory Issuance,
+        S – Standard / Framework / Guideline,
         C – Contractual Requirement
       </p>
     `;
@@ -351,16 +356,14 @@ export class MovService implements OnModuleInit {
           <tr>
             <th>Item No.</th>
             <th>Title</th>
-            <th>Type<sup>1</sup></th>
+            <th>Type<br/><sup>1</sup></th>
             <th>Applicable Provisions</th>
             <th>Issuing Entity</th>
             <th>Compliance Requirements (e.g., frequency of review, reportorial requirements, etc.)</th>
             <th>Evidence of Compliance (Permit No. / Output documents, etc.)</th>
             <th>Impact</th>
-            <th>Implications Effectivity</th>
+            <th>Effectivity</th>
             <th>Compliance Status</th>
-            <th>Responsible Unit</th>
-            <th>Review Frequency</th>
           </tr>
         </thead>
         <tbody>
@@ -466,14 +469,16 @@ export class MovService implements OnModuleInit {
 
     const style = `
       <style>
-        body { font-family: Arial, Helvetica, sans-serif; color: #111827; margin: 24px; }
-        h1, h2, h3 { margin: 0 0 10px; }
+        body { font-family: Arial, sans-serif; color: #111827; margin: 24px; }
+        h2 { font-family: Arial, sans-serif; font-size: 11pt; margin: 0 0 10px; }
+        h3 { margin: 0 0 10px; }
         .period { margin: 0 0 12px; color: #374151; }
-        ul { margin-top: 4px; }
-        table { border-collapse: collapse; width: 100%; margin: 10px 0 20px; font-size: 12px; }
-        th, td { border: 1px solid #d1d5db; padding: 6px; vertical-align: top; }
-        th { background: #f3f4f6; text-align: left; }
+        table { border-collapse: collapse; width: 100%; margin: 10px 0 4px; }
+        th { border: 1px solid #d1d5db; padding: 6px; vertical-align: middle; background: #f3f4f6; text-align: left; font-family: Helvetica, Arial, sans-serif; font-size: 9pt; }
+        td { border: 1px solid #d1d5db; padding: 6px; vertical-align: middle; font-family: Helvetica, Arial, sans-serif; font-size: 10pt; }
+        .register-legend { font-family: Helvetica, Arial, sans-serif; font-size: 8pt; margin: 2px 0 18px; color: #374151; }
         .section-title { margin-top: 18px; }
+        .summary-block { margin: 8px 0 16px; line-height: 1.8; }
       </style>
     `;
 
@@ -515,16 +520,14 @@ export class MovService implements OnModuleInit {
         <p class="period">Period: ${query.year} Q${query.quarter}${query.unit ? ` · Unit: ${this.escapeHtml(query.unit)}` : ''}</p>
 
         <h3>Summary</h3>
-        <ul>
-          <li>Active register entries: ${selectedEntries.length}</li>
-          <li>Marked Compliant: ${compliant}</li>
-          <li>Readiness: ${ready}</li>
-          <li>Added Entries: ${addedEntries}</li>
-        </ul>
+        <div class="summary-block">
+          Active register entries: ${selectedEntries.length}<br/>
+          Marked Compliant: ${compliant}<br/>
+          Readiness: ${ready}<br/>
+          Added Entries this Quarter: ${addedEntries}
+        </div>
 
         ${sectionHtml}
-
-        ${this.buildMonitoringTable(selectedEntries)}
       </body>
       </html>
     `;
@@ -541,6 +544,87 @@ export class MovService implements OnModuleInit {
         ready,
         addedEntries,
       },
+    };
+  }
+
+  async generateMonitoringMatrixReport(query: { year: number; quarter: number; scope?: string; unit?: string }) {
+    const issuances = await this.issuanceRepo.find({
+      where: { is_active: true },
+      order: { register_added_at: 'DESC', created_at: 'DESC' },
+    });
+
+    const scopeFilter = (query.scope || '').trim().toLowerCase();
+    const unitFilter = (query.unit || '').trim().toLowerCase();
+    const filtered = issuances.filter((item) => {
+      const scopeValue = (item.applicability_scope || '').toLowerCase();
+      const ownerValue = (item.process_owner || '').toLowerCase();
+      const titleValue = (item.title || '').toLowerCase();
+      const authorityValue = (item.issuing_authority || '').toLowerCase();
+      const scopeMatch = scopeFilter && scopeFilter !== 'all' ? scopeValue.includes(scopeFilter) : true;
+      const unitMatch = unitFilter
+        ? [scopeValue, ownerValue, titleValue, authorityValue].some((v) => v.includes(unitFilter))
+        : true;
+      return scopeMatch && unitMatch;
+    });
+
+    const style = `
+      <style>
+        body { font-family: Arial, sans-serif; color: #111827; margin: 24px; }
+        h2 { font-family: Arial, sans-serif; font-size: 11pt; margin: 0 0 10px; }
+        h3 { margin: 0 0 10px; }
+        .period { margin: 0 0 12px; color: #374151; }
+        table { border-collapse: collapse; width: 100%; margin: 10px 0 20px; }
+        th { border: 1px solid #d1d5db; padding: 6px; vertical-align: middle; background: #f3f4f6; text-align: left; font-family: Helvetica, Arial, sans-serif; font-size: 9pt; }
+        td { border: 1px solid #d1d5db; padding: 6px; vertical-align: middle; font-family: Helvetica, Arial, sans-serif; font-size: 10pt; }
+      </style>
+    `;
+
+    const rows = filtered.map((item) => {
+      const basis = this.escapeHtml(`${item.issuance_number} – ${item.title}`);
+      const source = item.source_url
+        ? `<a href="${this.escapeHtml(item.source_url)}" target="_blank" rel="noreferrer">Link</a>`
+        : '-';
+      return `
+        <tr>
+          <td>${basis}</td>
+          <td>${source}</td>
+          <td style="text-align:center;">${this.quarterStatusScore(item.q1_compliance_status)}</td>
+          <td style="text-align:center;">${this.quarterStatusScore(item.q2_compliance_status)}</td>
+          <td style="text-align:center;">${this.quarterStatusScore(item.q3_compliance_status)}</td>
+          <td style="text-align:center;">${this.quarterStatusScore(item.q4_compliance_status)}</td>
+        </tr>
+      `;
+    });
+
+    const content_html = `
+      <!DOCTYPE html>
+      <html>
+      <head><meta charset="utf-8" />${style}</head>
+      <body>
+        <h2>REGISTER MONITORING MATRIX</h2>
+        <p class="period">Period: ${query.year} Q${query.quarter}${query.unit ? ` · Unit: ${this.escapeHtml(query.unit)}` : ''}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Applicable Bases (Issuance No. – Title)</th>
+              <th>Source</th>
+              <th>Compliance Score (Q1)</th>
+              <th>Compliance Score (Q2)</th>
+              <th>Compliance Score (Q3)</th>
+              <th>Compliance Score (Q4)</th>
+            </tr>
+          </thead>
+          <tbody>${filtered.length === 0 ? '<tr><td colspan="6">No entries available.</td></tr>' : rows.join('')}</tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    return {
+      title: `Register Monitoring Matrix ${query.year} Q${query.quarter}`,
+      content_html,
+      content_markdown: content_html,
+      summary: { total: filtered.length },
     };
   }
 

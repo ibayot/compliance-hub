@@ -59,6 +59,13 @@ export interface AssessmentReportResponse {
   };
 }
 
+export interface MonitoringMatrixReportResponse {
+  title: string;
+  content_html: string;
+  content_markdown: string;
+  summary: { total: number };
+}
+
 export const movApi = {
   list: async (filters?: {
     artifact_type?: string;
@@ -123,6 +130,16 @@ export const movApi = {
     register_type?: 'legal' | 'standards' | 'internal' | 'all';
   }): Promise<RegisterReportResponse> => {
     const response = await apiClient.get('/mov/reports/register', { params: query });
+    return response.data;
+  },
+
+  generateMonitoringMatrixReport: async (query: {
+    year: number;
+    quarter: number;
+    scope?: string;
+    unit?: string;
+  }): Promise<MonitoringMatrixReportResponse> => {
+    const response = await apiClient.get('/mov/reports/monitoring-matrix', { params: query });
     return response.data;
   },
 

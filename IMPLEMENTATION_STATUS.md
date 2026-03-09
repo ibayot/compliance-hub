@@ -1,5 +1,17 @@
 # RICTMS Compliance Hub - Implementation Progress Report
 
+## 📌 QA Fix Checkpoint 3 (2026-03-09)
+
+- **Release target:** `v1.5.0.1`
+- Register report columns refactored (removed Responsible Unit + Review Frequency, added Applicable Provisions + Evidence of Compliance, Effectivity date formatted `mmm-dd-yyyy`, Type superscript, legend comma-separated, summary bullets removed, all cells `vertical-align: middle`)
+- Register Monitoring Matrix split into separate standalone report endpoint + UI button
+- MoV Builder page restricted to `super_admin` + `reviewer` roles only
+- Report Settings panel added (2 header images, page footer, optional separate first-page footer)
+- KPI Gap Remarks: all remarks overridable + new free-form "Additional Manual Remarks" field
+- Assessment Plan tab redesigned as visual timeline (colored Avatar badges, accent-bordered cards, year Chips)
+- Artifacts tab: inline status edit (Edit icon → Select dropdown → Save/Cancel)
+- Backend build: ✅ clean | Frontend build: ✅ clean | Smoke tests: ✅ 15/15 passed
+
 ## 📌 QA Fix Checkpoint 2 (2026-03-05)
 
 - **Release target:** `v1.5.0.1`

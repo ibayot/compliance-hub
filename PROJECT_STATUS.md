@@ -1,5 +1,16 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 QA Polish Checkpoint 3 (`v1.5.0.1`, 2026-03-09)
+
+- MoV Builder: Register report fully restructured (columns, fonts, date format, legend, no bullets)
+- Monitoring Matrix promoted to its own report with dedicated backend endpoint
+- MoV page access restricted to `super_admin` + `reviewer` roles
+- Report Settings panel: dual header image upload + page footer (with optional first-page variant)
+- KPI Gap Remarks: fully overridable per-gap + additional free-form remarks field
+- Assessment Plan: visual timeline redesign using MUI Avatar, Chip, and accent-bordered Cards
+- Artifacts: inline status edit (Edit → Select → Save/Cancel) per artifact row
+- All builds clean; all 15 smoke tests passed; pushed to `feature/kpi-mov-major-update-1.5.0.1`
+
 ## 🚀 QA Polish Checkpoint 2 (`v1.5.0.1`, 2026-03-05)
 
 - Issuances module now supports quarter-level compliance monitoring tags (`Q1`..`Q4`) directly in the register record.

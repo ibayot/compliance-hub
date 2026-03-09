@@ -1,16 +1,24 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Alert,
+  Avatar,
   Box,
   Button,
   Card,
   CardContent,
   CardHeader,
+  Checkbox,
   Chip,
   Divider,
   FormControl,
+  FormControlLabel,
   Grid,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
@@ -23,13 +31,30 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import {
+  Add as AddIcon,
+  Assessment as AssessmentIcon,
+  Check as CheckIcon,
+  Close as CloseIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+  ExpandMore as ExpandMoreIcon,
+  Image as ImageIcon,
+  Print as PrintIcon,
+  Save as SaveIcon,
+} from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { movApi, MovArtifact } from '@/app/api/mov';
 import { kpiApi } from '@/lib/api/kpi';
+import { useAuth } from '@/contexts/AuthContext';
+import { UserRole } from '@/lib/types/auth';
 
 type RegisterType = 'legal' | 'standards' | 'internal';
+
+const PLAN_COLORS = ['#1565c0','#2e7d32','#e65100','#6a1b9a','#00695c','#c62828','#4527a0','#00838f'];
 
 function parsePlanItems(entry: MovArtifact): string[] {
   const metadataItems = Array.isArray(entry.metadata_json?.items) ? (entry.metadata_json?.items as string[]) : [];
@@ -48,11 +73,24 @@ function toBullets(items: string[]): string {
   return items.map((item) => `- ${item.trim()}`).join('\n');
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function MovBuilderPage() {
+  const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const now = new Date();
   const currentYear = now.getFullYear();
   const [tab, setTab] = useState(0);
+
+  // ── Role Gate (render-time check) ─────────────────────────────────────────
+  const allowed = !user || [UserRole.SUPER_ADMIN, UserRole.REVIEWER].includes(user.role as UserRole);
 
   const [year, setYear] = useState<number>(currentYear);
   const [quarter, setQuarter] = useState<number>(Math.floor((now.getMonth() + 3) / 3));
@@ -62,9 +100,20 @@ export default function MovBuilderPage() {
   const [reportTitle, setReportTitle] = useState('');
   const [reportHtml, setReportHtml] = useState('');
 
+  // ── Report Settings ────────────────────────────────────────────────────────
+  const [headerImage1, setHeaderImage1] = useState('');
+  const [headerImage2, setHeaderImage2] = useState('');
+  const [pageFooter, setPageFooter] = useState('');
+  const [diffFirstFooter, setDiffFirstFooter] = useState(false);
+  const [firstPageFooter, setFirstPageFooter] = useState('');
+
   const [allArtifacts, setAllArtifacts] = useState<MovArtifact[]>([]);
   const [planEntries, setPlanEntries] = useState<MovArtifact[]>([]);
   const [scheduleEntries, setScheduleEntries] = useState<MovArtifact[]>([]);
+
+  // ── Artifact edit state ───────────────────────────────────────────────────
+  const [editingArtifactId, setEditingArtifactId] = useState<string | null>(null);
+  const [editingArtifactStatus, setEditingArtifactStatus] = useState('');
 
   const [scheduleTitle, setScheduleTitle] = useState('');
   const [scheduleOwner, setScheduleOwner] = useState('');
@@ -74,6 +123,7 @@ export default function MovBuilderPage() {
 
   const [kpiRemarks, setKpiRemarks] = useState<Record<string, string>>({});
   const [kpiGapRows, setKpiGapRows] = useState<Array<{ code: string; name: string; recommendation: string }>>([]);
+  const [additionalRemarks, setAdditionalRemarks] = useState('');
 
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [editingPlanTitle, setEditingPlanTitle] = useState('');
@@ -88,7 +138,7 @@ export default function MovBuilderPage() {
     [planEntries],
   );
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [artifacts, plans, schedule, actionPlans] = await Promise.all([
         movApi.list({ period_year: year, quarter }),
@@ -100,26 +150,26 @@ export default function MovBuilderPage() {
       setAllArtifacts(artifacts);
       setPlanEntries(plans);
       setScheduleEntries(schedule);
-      const rows = (actionPlans.items || []).map((item) => ({
+      const rows = (actionPlans.items || []).map((item: any) => ({
         code: item.kpiCode,
         name: item.kpiName,
         recommendation: item.recommendation,
       }));
       setKpiGapRows(rows);
 
-      const nextRemarks: Record<string, string> = {};
-      rows.forEach((row) => {
-        nextRemarks[row.code] = kpiRemarks[row.code] || '';
+      setKpiRemarks((prev) => {
+        const next: Record<string, string> = {};
+        rows.forEach((row: any) => { next[row.code] = prev[row.code] || ''; });
+        return next;
       });
-      setKpiRemarks(nextRemarks);
     } catch (error: any) {
       enqueueSnackbar(error?.response?.data?.message || 'Failed to load MoV Builder data.', { variant: 'error' });
     }
-  };
+  }, [year, quarter, enqueueSnackbar]);
 
   useEffect(() => {
     loadData();
-  }, [year, quarter]);
+  }, [loadData]);
 
   const generateRegisterReport = async (registerType: RegisterType) => {
     try {
@@ -139,11 +189,28 @@ export default function MovBuilderPage() {
     }
   };
 
+  const generateMonitoringMatrix = async () => {
+    try {
+      const report = await movApi.generateMonitoringMatrixReport({
+        year,
+        quarter,
+        scope: scope === 'all' ? undefined : scope,
+        unit: unitText.trim() || undefined,
+      });
+      setReportTitle(report.title);
+      setReportHtml(report.content_html || report.content_markdown);
+      enqueueSnackbar('Register Monitoring Matrix generated.', { variant: 'success' });
+    } catch (error: any) {
+      enqueueSnackbar(error?.response?.data?.message || 'Failed to generate monitoring matrix.', { variant: 'error' });
+    }
+  };
+
   const generateAssessmentReport = async () => {
     try {
-      const manualRemarks = Object.fromEntries(
-        Object.entries(kpiRemarks).filter(([, value]) => String(value || '').trim().length > 0),
-      );
+      const manualRemarks = {
+        ...Object.fromEntries(Object.entries(kpiRemarks).filter(([, value]) => String(value || '').trim().length > 0)),
+      };
+      if (additionalRemarks.trim()) manualRemarks['_additional'] = additionalRemarks.trim();
       const report = await movApi.generateAssessmentReport({
         year,
         quarter,
@@ -180,6 +247,30 @@ export default function MovBuilderPage() {
     }
   };
 
+  // Inject report settings (header images, footer) before printing
+  const buildPrintHtml = (): string => {
+    let html = reportHtml;
+    const headerParts: string[] = [];
+    if (headerImage1) headerParts.push(`<img src="${headerImage1}" style="max-width:100%;display:block;margin-bottom:6px;" alt="Header 1" />`);
+    if (headerImage2) headerParts.push(`<img src="${headerImage2}" style="max-width:100%;display:block;margin-bottom:6px;" alt="Header 2" />`);
+
+    const footerStyle = 'font-family:Helvetica,Arial,sans-serif;font-size:8pt;color:#6b7280;border-top:1px solid #d1d5db;padding:4px 8px;margin-top:16px;';
+    let footerHtml = '';
+    if (diffFirstFooter && firstPageFooter.trim()) {
+      footerHtml = `<div style="${footerStyle}" id="footer-first">${firstPageFooter.trim()}</div><div style="${footerStyle}" id="footer-rest">${pageFooter.trim()}</div>`;
+    } else if (pageFooter.trim()) {
+      footerHtml = `<div style="${footerStyle}">${pageFooter.trim()}</div>`;
+    }
+
+    if (headerParts.length > 0) {
+      html = html.replace(/<body([^>]*)>/i, (_m, attrs) => `<body${attrs}>${headerParts.join('')}`);
+    }
+    if (footerHtml) {
+      html = html.replace(/<\/body>/i, `${footerHtml}</body>`);
+    }
+    return html;
+  };
+
   const printOrSavePdf = () => {
     if (!reportHtml.trim()) {
       enqueueSnackbar('Generate a report first before printing.', { variant: 'warning' });
@@ -187,10 +278,7 @@ export default function MovBuilderPage() {
     }
 
     const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
+    iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;';
     document.body.appendChild(iframe);
 
     const frameDoc = iframe.contentDocument || iframe.contentWindow?.document;
@@ -201,7 +289,7 @@ export default function MovBuilderPage() {
     }
 
     frameDoc.open();
-    frameDoc.write(reportHtml);
+    frameDoc.write(buildPrintHtml());
     frameDoc.close();
 
     setTimeout(() => {
@@ -209,8 +297,8 @@ export default function MovBuilderPage() {
       iframe.contentWindow?.print();
       setTimeout(() => {
         document.body.removeChild(iframe);
-      }, 1200);
-    }, 300);
+      }, 1500);
+    }, 400);
   };
 
   const addScheduleEntry = async () => {
@@ -357,15 +445,44 @@ export default function MovBuilderPage() {
     }
   };
 
+  const saveArtifactStatus = async (artifact: MovArtifact) => {
+    try {
+      await movApi.update(artifact.id, { status: editingArtifactStatus });
+      setEditingArtifactId(null);
+      enqueueSnackbar('Artifact status updated.', { variant: 'success' });
+      await loadData();
+    } catch (error: any) {
+      enqueueSnackbar(error?.response?.data?.message || 'Failed to update artifact status.', { variant: 'error' });
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 1 | 2) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const base64 = await fileToBase64(file);
+    if (target === 1) setHeaderImage1(base64);
+    else setHeaderImage2(base64);
+  };
+
+// ── Role Gate ─────────────────────────────────────────────────────────────
+  if (!allowed) {
+    return (
+      <Box sx={{ p: 4 }}>
+        <Alert severity="warning" variant="filled">
+          <strong>Access Restricted.</strong> The MoV Builder is available to System Administrators and Compliance Officers (Reviewer role) only.
+        </Alert>
+      </Box>
+    );
+  }
+
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        MoV Builder
-      </Typography>
+      <Typography variant="h4" gutterBottom>MoV Builder</Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
         Organized workspace for register reporting, assessment reporting, plan updates, and schedule monitoring.
       </Typography>
 
+      {/* ── Period Filters ── */}
       <Card sx={{ mb: 2 }}>
         <CardContent>
           <Grid container spacing={2}>
@@ -401,6 +518,7 @@ export default function MovBuilderPage() {
         </CardContent>
       </Card>
 
+      {/* ── Tabs ── */}
       <Card sx={{ mb: 2 }}>
         <Tabs value={tab} onChange={(_e, value) => setTab(value)} variant="scrollable" scrollButtons="auto">
           <Tab label="Reports" />
@@ -410,35 +528,59 @@ export default function MovBuilderPage() {
         </Tabs>
       </Card>
 
+      {/* ══════════════════════════════════════════════════════════════
+          TAB 0: REPORTS
+      ══════════════════════════════════════════════════════════════ */}
       {tab === 0 && (
         <Grid container spacing={2}>
           <Grid item xs={12} md={4}>
+            {/* ── Generate Buttons ── */}
             <Card>
               <CardHeader title="Generate Reports" />
               <CardContent>
                 <Stack spacing={1.5}>
-                  <Button variant="contained" onClick={() => generateRegisterReport('legal')}>Generate Legal Register Report</Button>
-                  <Button variant="contained" onClick={() => generateRegisterReport('standards')}>Generate Standards Register Report</Button>
-                  <Button variant="contained" onClick={() => generateRegisterReport('internal')}>Generate Internal Policy Register Report</Button>
+                  <Typography variant="overline" color="text.secondary">Register Reports</Typography>
+                  <Button variant="contained" size="small" onClick={() => generateRegisterReport('legal')}>
+                    Generate Legal Register Report
+                  </Button>
+                  <Button variant="contained" size="small" onClick={() => generateRegisterReport('standards')}>
+                    Generate Standards Register Report
+                  </Button>
+                  <Button variant="contained" size="small" onClick={() => generateRegisterReport('internal')}>
+                    Generate Internal Policy Register Report
+                  </Button>
+                  <Button variant="outlined" size="small" onClick={generateMonitoringMatrix}>
+                    Generate Register Monitoring Matrix
+                  </Button>
                   <Divider />
-                  <Button variant="contained" color="secondary" onClick={generateAssessmentReport}>Generate Assessment Report</Button>
-                  <Button variant="outlined" onClick={saveGeneratedReport}>Save Generated Report</Button>
-                  <Button variant="outlined" onClick={printOrSavePdf}>Print / Save PDF</Button>
+                  <Typography variant="overline" color="text.secondary">Assessment Report</Typography>
+                  <Button variant="contained" color="secondary" onClick={generateAssessmentReport}>
+                    Generate Assessment Report
+                  </Button>
+                  <Divider />
+                  <Button variant="outlined" startIcon={<SaveIcon />} onClick={saveGeneratedReport}>Save Generated Report</Button>
+                  <Button variant="outlined" startIcon={<PrintIcon />} onClick={printOrSavePdf}>Print / Save PDF</Button>
                 </Stack>
               </CardContent>
             </Card>
 
+            {/* ── KPI Gap Remarks ── */}
             <Card sx={{ mt: 2 }}>
-              <CardHeader title="KPI Gap Remarks Override" subheader="Optional manual remarks to enrich assessment report." />
+              <CardHeader
+                title="KPI Gap Remarks Override"
+                subheader="Override remarks for all KPI gaps, or add free-form remarks."
+              />
               <CardContent>
                 <Stack spacing={1.5}>
                   {kpiGapRows.length === 0 && (
-                    <Typography variant="body2" color="text.secondary">No KPI gaps currently detected for this period.</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      No KPI gaps detected for this period. You may still add manual remarks below.
+                    </Typography>
                   )}
                   {kpiGapRows.map((row) => (
                     <TextField
                       key={row.code}
-                      label={`${row.code} - ${row.name}`}
+                      label={`${row.code} – ${row.name}`}
                       value={kpiRemarks[row.code] || ''}
                       onChange={(e) => setKpiRemarks((prev) => ({ ...prev, [row.code]: e.target.value }))}
                       multiline
@@ -447,20 +589,100 @@ export default function MovBuilderPage() {
                       fullWidth
                     />
                   ))}
+                  <TextField
+                    label="Additional Manual Remarks (appended to report)"
+                    value={additionalRemarks}
+                    onChange={(e) => setAdditionalRemarks(e.target.value)}
+                    multiline
+                    minRows={3}
+                    placeholder="Enter any additional remarks to include..."
+                    fullWidth
+                  />
                 </Stack>
               </CardContent>
             </Card>
+
+            {/* ── Report Settings ── */}
+            <Accordion sx={{ mt: 2, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2">Report Settings (Header / Footer)</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Stack spacing={2}>
+                  <Typography variant="caption" color="text.secondary">
+                    Header images are prepended to the printed output. Footers appear at the bottom.
+                  </Typography>
+
+                  {/* Header Image 1 */}
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Button variant="outlined" size="small" component="label" startIcon={<ImageIcon />}>
+                      Header Image 1
+                      <input type="file" accept="image/*" hidden onChange={(e) => handleImageUpload(e, 1)} />
+                    </Button>
+                    {headerImage1 && (
+                      <>
+                        <img src={headerImage1} alt="H1" style={{ height: 36, objectFit: 'contain', border: '1px solid #e0e0e0', borderRadius: 4 }} />
+                        <IconButton size="small" onClick={() => setHeaderImage1('')}><CloseIcon fontSize="small" /></IconButton>
+                      </>
+                    )}
+                  </Stack>
+
+                  {/* Header Image 2 */}
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Button variant="outlined" size="small" component="label" startIcon={<ImageIcon />}>
+                      Header Image 2
+                      <input type="file" accept="image/*" hidden onChange={(e) => handleImageUpload(e, 2)} />
+                    </Button>
+                    {headerImage2 && (
+                      <>
+                        <img src={headerImage2} alt="H2" style={{ height: 36, objectFit: 'contain', border: '1px solid #e0e0e0', borderRadius: 4 }} />
+                        <IconButton size="small" onClick={() => setHeaderImage2('')}><CloseIcon fontSize="small" /></IconButton>
+                      </>
+                    )}
+                  </Stack>
+
+                  <Divider />
+
+                  <FormControlLabel
+                    control={<Checkbox checked={diffFirstFooter} onChange={(e) => setDiffFirstFooter(e.target.checked)} />}
+                    label="Use a different footer for the first page"
+                  />
+                  {diffFirstFooter && (
+                    <TextField
+                      label="First Page Footer"
+                      value={firstPageFooter}
+                      onChange={(e) => setFirstPageFooter(e.target.value)}
+                      multiline
+                      minRows={2}
+                      fullWidth
+                      placeholder="Footer text for first page only..."
+                    />
+                  )}
+                  <TextField
+                    label={diffFirstFooter ? 'Subsequent Pages Footer' : 'Page Footer'}
+                    value={pageFooter}
+                    onChange={(e) => setPageFooter(e.target.value)}
+                    multiline
+                    minRows={2}
+                    fullWidth
+                    placeholder="e.g. DSWD Field Office XII · ICT Unit · Confidential"
+                  />
+                </Stack>
+              </AccordionDetails>
+            </Accordion>
           </Grid>
 
+          {/* ── Report Preview ── */}
           <Grid item xs={12} md={8}>
             <Card>
-              <CardHeader title="Generated Report Preview (HTML)" />
+              <CardHeader title="Generated Report Preview" />
               <CardContent>
                 <Stack spacing={2}>
                   <TextField label="Report Title" value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} fullWidth />
                   <Box
-                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: 520, p: 2, overflow: 'auto' }}
-                    dangerouslySetInnerHTML={{ __html: reportHtml || '<p>No report generated yet.</p>' }}
+                    id="report-preview-container"
+                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: 520, p: 2, overflow: 'auto', backgroundColor: '#fff' }}
+                    dangerouslySetInnerHTML={{ __html: reportHtml || '<p style="color:#9ca3af">No report generated yet. Use the Generate buttons on the left.</p>' }}
                   />
                 </Stack>
               </CardContent>
@@ -469,82 +691,114 @@ export default function MovBuilderPage() {
         </Grid>
       )}
 
+      {/* ══════════════════════════════════════════════════════════════
+          TAB 1: ASSESSMENT PLAN (Timeline Design)
+      ══════════════════════════════════════════════════════════════ */}
       {tab === 1 && (
-        <Grid container spacing={2}>
+        <Grid container spacing={3}>
           <Grid item xs={12}>
             <Card>
-              <CardHeader title="Assessment Plan Designer" subheader="Edit, add, and delete year plans with bulleted items." />
+              <CardHeader
+                title="Assessment Plan"
+                subheader="Multi-year compliance assessment plan. Edit, add, or delete year entries."
+                avatar={<Avatar sx={{ bgcolor: 'primary.main' }}><AssessmentIcon /></Avatar>}
+              />
               <CardContent>
-                <Grid container spacing={2}>
-                  {planByYear.map((entry) => {
-                    const items = parsePlanItems(entry);
-                    const isEditing = editingPlanId === entry.id;
-                    return (
-                      <Grid item xs={12} md={6} key={entry.id}>
-                        <Card variant="outlined" sx={{ borderLeft: '5px solid', borderColor: 'primary.main' }}>
-                          <CardContent>
-                            <Chip label={`Year ${entry.metadata_json?.year_index || '-'} · ${entry.period_year}`} size="small" sx={{ mb: 1 }} />
-                            {isEditing ? (
-                              <Stack spacing={1.5}>
-                                <TextField label="Plan Title" value={editingPlanTitle} onChange={(e) => setEditingPlanTitle(e.target.value)} fullWidth />
-                                <TextField
-                                  label="Bulleted Items (one per line)"
-                                  value={editingPlanItemsText}
-                                  onChange={(e) => setEditingPlanItemsText(e.target.value)}
-                                  multiline
-                                  minRows={6}
-                                  fullWidth
-                                />
-                                <Stack direction="row" spacing={1}>
-                                  <Button variant="contained" onClick={() => savePlanEdit(entry)}>Save</Button>
-                                  <Button variant="outlined" onClick={cancelEditPlan}>Cancel</Button>
-                                </Stack>
-                              </Stack>
-                            ) : (
-                              <Stack spacing={1}>
-                                <Typography variant="h6">{entry.title}</Typography>
-                                <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
-                                  {items.length === 0 ? <li>No bullet items yet.</li> : items.map((item, idx) => <li key={`${entry.id}-item-${idx}`}>{item}</li>)}
+                {planByYear.length === 0 ? (
+                  <Typography color="text.secondary">No plan years found. Add one below.</Typography>
+                ) : (
+                  <Box sx={{ position: 'relative' }}>
+                    {/* Timeline spine */}
+                    <Box sx={{ position: 'absolute', left: 27, top: 8, bottom: 8, width: 3, bgcolor: 'divider', zIndex: 0 }} />
+                    <Stack spacing={3}>
+                      {planByYear.map((entry, idx) => {
+                        const items = parsePlanItems(entry);
+                        const isEditing = editingPlanId === entry.id;
+                        const accentColor = PLAN_COLORS[idx % PLAN_COLORS.length];
+                        const yearLabel = entry.metadata_json?.year_index ? `Y${entry.metadata_json.year_index}` : `Y${idx + 1}`;
+                        return (
+                          <Box key={entry.id} sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, position: 'relative', zIndex: 1 }}>
+                            <Avatar sx={{ bgcolor: accentColor, width: 56, height: 56, flexShrink: 0, fontWeight: 700, fontSize: '1rem', boxShadow: 3 }}>
+                              {yearLabel}
+                            </Avatar>
+                            <Card variant="outlined" sx={{ flex: 1, borderLeft: `5px solid ${accentColor}`, borderRadius: 2, boxShadow: 1 }}>
+                              <CardContent>
+                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5, gap: 1, flexWrap: 'wrap' }}>
+                                  <Chip label={String(entry.period_year)} size="small" sx={{ bgcolor: accentColor, color: '#fff', fontWeight: 600 }} />
+                                  <Chip label={entry.status} size="small" variant="outlined" />
                                 </Box>
-                                <Stack direction="row" spacing={1}>
-                                  <Button size="small" variant="outlined" onClick={() => startEditPlan(entry)}>Edit</Button>
-                                  <Button size="small" color="error" variant="outlined" onClick={() => deletePlanEntry(entry)}>Delete</Button>
-                                </Stack>
-                              </Stack>
-                            )}
-                          </CardContent>
-                        </Card>
-                      </Grid>
-                    );
-                  })}
-                </Grid>
+                                {isEditing ? (
+                                  <Stack spacing={1.5}>
+                                    <TextField label="Plan Title" value={editingPlanTitle} onChange={(e) => setEditingPlanTitle(e.target.value)} fullWidth />
+                                    <TextField
+                                      label="Bullet Items (one per line)"
+                                      value={editingPlanItemsText}
+                                      onChange={(e) => setEditingPlanItemsText(e.target.value)}
+                                      multiline
+                                      minRows={5}
+                                      fullWidth
+                                      helperText="Each line becomes one bullet item."
+                                    />
+                                    <Stack direction="row" spacing={1}>
+                                      <Button variant="contained" size="small" startIcon={<CheckIcon />} onClick={() => savePlanEdit(entry)}>Save</Button>
+                                      <Button variant="outlined" size="small" startIcon={<CloseIcon />} onClick={cancelEditPlan}>Cancel</Button>
+                                    </Stack>
+                                  </Stack>
+                                ) : (
+                                  <Stack spacing={1}>
+                                    <Typography variant="h6" sx={{ fontWeight: 600, color: accentColor }}>{entry.title}</Typography>
+                                    <Box component="ul" sx={{ m: 0, pl: 2.5, '& li': { mb: 0.3 } }}>
+                                      {items.length === 0
+                                        ? <li><Typography variant="body2" color="text.secondary">No items yet.</Typography></li>
+                                        : items.map((item, i) => (
+                                          <li key={`${entry.id}-item-${i}`}><Typography variant="body2">{item}</Typography></li>
+                                        ))}
+                                    </Box>
+                                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                                      <Button size="small" variant="outlined" startIcon={<EditIcon />} onClick={() => startEditPlan(entry)}>Edit</Button>
+                                      <Button size="small" color="error" variant="outlined" startIcon={<DeleteIcon />} onClick={() => deletePlanEntry(entry)}>Delete</Button>
+                                    </Stack>
+                                  </Stack>
+                                )}
+                              </CardContent>
+                            </Card>
+                          </Box>
+                        );
+                      })}
+                    </Stack>
+                  </Box>
+                )}
               </CardContent>
             </Card>
           </Grid>
 
           <Grid item xs={12}>
-            <Card>
-              <CardHeader title="Add Plan Year" />
+            <Card sx={{ borderTop: '3px solid', borderColor: 'primary.main' }}>
+              <CardHeader
+                title="Add New Plan Year"
+                avatar={<Avatar sx={{ bgcolor: 'primary.light' }}><AddIcon /></Avatar>}
+              />
               <CardContent>
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={2}>
                     <TextField type="number" label="Year" value={newPlanYear} onChange={(e) => setNewPlanYear(Number(e.target.value))} fullWidth />
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <TextField label="Year Title" value={newPlanTitle} onChange={(e) => setNewPlanTitle(e.target.value)} fullWidth />
+                    <TextField label="Year Title" value={newPlanTitle} onChange={(e) => setNewPlanTitle(e.target.value)} fullWidth placeholder="e.g. Year 1 – Context & Governance" />
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <TextField
-                      label="Bulleted Items (one per line)"
+                      label="Bullet Items (one per line)"
                       value={newPlanItemsText}
                       onChange={(e) => setNewPlanItemsText(e.target.value)}
                       multiline
                       minRows={4}
                       fullWidth
+                      helperText="Enter one item per line."
                     />
                   </Grid>
                   <Grid item xs={12}>
-                    <Button variant="contained" onClick={addPlanEntry}>Add Plan Year</Button>
+                    <Button variant="contained" startIcon={<AddIcon />} onClick={addPlanEntry}>Add Plan Year</Button>
                   </Grid>
                 </Grid>
               </CardContent>
@@ -553,11 +807,14 @@ export default function MovBuilderPage() {
         </Grid>
       )}
 
+      {/* ══════════════════════════════════════════════════════════════
+          TAB 2: ASSESSMENT SCHEDULE
+      ══════════════════════════════════════════════════════════════ */}
       {tab === 2 && (
         <Grid container spacing={2}>
           <Grid item xs={12}>
             <Card>
-              <CardHeader title={`Assessment Schedule - ${year} Q${quarter}`} subheader="Update status and remarks per item." />
+              <CardHeader title={`Assessment Schedule – ${year} Q${quarter}`} subheader="Update status and remarks per activity." />
               <CardContent>
                 <Grid container spacing={2} sx={{ mb: 2 }}>
                   <Grid item xs={12} md={3}><TextField fullWidth label="Activity" value={scheduleTitle} onChange={(e) => setScheduleTitle(e.target.value)} /></Grid>
@@ -595,34 +852,17 @@ export default function MovBuilderPage() {
                     {scheduleEntries.map((entry) => (
                       <TableRow key={entry.id}>
                         <TableCell>
-                          <TextField
-                            size="small"
-                            value={entry.title}
-                            onChange={(e) => setScheduleEntries((prev) => prev.map((item) => item.id === entry.id ? { ...item, title: e.target.value } : item))}
-                          />
+                          <TextField size="small" value={entry.title} onChange={(e) => setScheduleEntries((prev) => prev.map((item) => item.id === entry.id ? { ...item, title: e.target.value } : item))} />
                         </TableCell>
                         <TableCell>
-                          <TextField
-                            size="small"
-                            value={String(entry.metadata_json?.owner || '')}
-                            onChange={(e) => setScheduleEntries((prev) => prev.map((item) => item.id === entry.id ? { ...item, metadata_json: { ...(item.metadata_json || {}), owner: e.target.value } } : item))}
-                          />
+                          <TextField size="small" value={String(entry.metadata_json?.owner || '')} onChange={(e) => setScheduleEntries((prev) => prev.map((item) => item.id === entry.id ? { ...item, metadata_json: { ...(item.metadata_json || {}), owner: e.target.value } } : item))} />
                         </TableCell>
                         <TableCell>
-                          <TextField
-                            size="small"
-                            type="date"
-                            value={String(entry.metadata_json?.due_date || '')}
-                            onChange={(e) => setScheduleEntries((prev) => prev.map((item) => item.id === entry.id ? { ...item, metadata_json: { ...(item.metadata_json || {}), due_date: e.target.value } } : item))}
-                            InputLabelProps={{ shrink: true }}
-                          />
+                          <TextField size="small" type="date" value={String(entry.metadata_json?.due_date || '')} onChange={(e) => setScheduleEntries((prev) => prev.map((item) => item.id === entry.id ? { ...item, metadata_json: { ...(item.metadata_json || {}), due_date: e.target.value } } : item))} InputLabelProps={{ shrink: true }} />
                         </TableCell>
                         <TableCell>
                           <FormControl size="small" fullWidth>
-                            <Select
-                              value={entry.status}
-                              onChange={(e) => setScheduleEntries((prev) => prev.map((item) => item.id === entry.id ? { ...item, status: e.target.value } : item))}
-                            >
+                            <Select value={entry.status} onChange={(e) => setScheduleEntries((prev) => prev.map((item) => item.id === entry.id ? { ...item, status: e.target.value } : item))}>
                               <MenuItem value="planned">Planned</MenuItem>
                               <MenuItem value="in_progress">In Progress</MenuItem>
                               <MenuItem value="completed">Completed</MenuItem>
@@ -630,24 +870,10 @@ export default function MovBuilderPage() {
                           </FormControl>
                         </TableCell>
                         <TableCell>
-                          <TextField
-                            size="small"
-                            value={String(entry.metadata_json?.remarks || '')}
-                            onChange={(e) => setScheduleEntries((prev) => prev.map((item) => item.id === entry.id ? { ...item, metadata_json: { ...(item.metadata_json || {}), remarks: e.target.value } } : item))}
-                          />
+                          <TextField size="small" value={String(entry.metadata_json?.remarks || '')} onChange={(e) => setScheduleEntries((prev) => prev.map((item) => item.id === entry.id ? { ...item, metadata_json: { ...(item.metadata_json || {}), remarks: e.target.value } } : item))} />
                         </TableCell>
                         <TableCell>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => updateScheduleEntry(entry, {
-                              title: entry.title,
-                              status: entry.status,
-                              owner: String(entry.metadata_json?.owner || ''),
-                              due_date: String(entry.metadata_json?.due_date || ''),
-                              remarks: String(entry.metadata_json?.remarks || ''),
-                            })}
-                          >
+                          <Button size="small" variant="outlined" onClick={() => updateScheduleEntry(entry, { title: entry.title, status: entry.status, owner: String(entry.metadata_json?.owner || ''), due_date: String(entry.metadata_json?.due_date || ''), remarks: String(entry.metadata_json?.remarks || '') })}>
                             Save
                           </Button>
                         </TableCell>
@@ -661,9 +887,12 @@ export default function MovBuilderPage() {
         </Grid>
       )}
 
+      {/* ══════════════════════════════════════════════════════════════
+          TAB 3: ARTIFACTS (with status edit)
+      ══════════════════════════════════════════════════════════════ */}
       {tab === 3 && (
         <Card>
-          <CardHeader title={`Saved MoV Artifacts - ${year} Q${quarter}`} />
+          <CardHeader title={`Saved MoV Artifacts – ${year} Q${quarter}`} subheader="View and edit artifact status." />
           <CardContent>
             <Table size="small">
               <TableHead>
@@ -673,21 +902,63 @@ export default function MovBuilderPage() {
                   <TableCell>Scope</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Updated</TableCell>
+                  <TableCell>Action</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {allArtifacts.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5}><Typography variant="body2" color="text.secondary">No artifacts saved for this period.</Typography></TableCell>
+                    <TableCell colSpan={6}><Typography variant="body2" color="text.secondary">No artifacts saved for this period.</Typography></TableCell>
                   </TableRow>
                 )}
                 {allArtifacts.map((artifact) => (
                   <TableRow key={artifact.id}>
-                    <TableCell>{artifact.artifact_type}</TableCell>
-                    <TableCell>{artifact.title}</TableCell>
+                    <TableCell sx={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {artifact.artifact_type}
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 200 }}>
+                      <Tooltip title={artifact.title}>
+                        <span style={{ cursor: 'default', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {artifact.title}
+                        </span>
+                      </Tooltip>
+                    </TableCell>
                     <TableCell>{artifact.scope}</TableCell>
-                    <TableCell><Chip label={artifact.status} size="small" /></TableCell>
-                    <TableCell>{new Date(artifact.updated_at).toLocaleString()}</TableCell>
+                    <TableCell>
+                      {editingArtifactId === artifact.id ? (
+                        <FormControl size="small" sx={{ minWidth: 130 }}>
+                          <Select value={editingArtifactStatus} onChange={(e) => setEditingArtifactStatus(e.target.value)}>
+                            <MenuItem value="draft">Draft</MenuItem>
+                            <MenuItem value="active">Active</MenuItem>
+                            <MenuItem value="generated">Generated</MenuItem>
+                            <MenuItem value="archived">Archived</MenuItem>
+                          </Select>
+                        </FormControl>
+                      ) : (
+                        <Chip
+                          label={artifact.status}
+                          size="small"
+                          color={artifact.status === 'active' ? 'success' : artifact.status === 'generated' ? 'primary' : 'default'}
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(artifact.updated_at).toLocaleString()}</TableCell>
+                    <TableCell>
+                      {editingArtifactId === artifact.id ? (
+                        <Stack direction="row" spacing={0.5}>
+                          <IconButton size="small" color="primary" onClick={() => saveArtifactStatus(artifact)}>
+                            <CheckIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" onClick={() => setEditingArtifactId(null)}>
+                            <CloseIcon fontSize="small" />
+                          </IconButton>
+                        </Stack>
+                      ) : (
+                        <IconButton size="small" onClick={() => { setEditingArtifactId(artifact.id); setEditingArtifactStatus(artifact.status); }}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -1,5 +1,25 @@
 # Compliance Hub - Complete Implementation Plan
 
+## QA Fix Execution Addendum 3 (`v1.5.0.1`, 2026-03-09)
+
+### Plan Executed
+
+| # | Area | Change |
+|---|------|--------|
+| 1 | Register Report | Removed Responsible Unit + Review Frequency columns |
+| 2 | Register Report | Added Applicable Provisions + Evidence of Compliance columns |
+| 3 | Register Report | Effectivity date format → `mmm-dd-yyyy` |
+| 4 | Register Report | Type header superscript `¹`, legend comma-separated, no bullets in Summary |
+| 5 | Register Report | Cell vertical-align: middle; font specs (Arial 11pt h2, Helvetica 9/10/8pt) |
+| 6 | Monitoring Matrix | Separated into standalone report (backend endpoint + frontend button) |
+| 7 | MoV Builder | Role-gated to `super_admin` + `reviewer` only |
+| 8 | Report Settings | Header image 1 + 2 upload, page footer, optional first-page footer |
+| 9 | KPI Remarks | All remarks overridable; new Additional Manual Remarks free-form field |
+| 10 | Assessment Plan | Timeline redesign: Avatar badges, accent-bordered cards, year Chips |
+| 11 | Artifacts | Inline status edit with Edit/Save/Cancel icons |
+
+### Status: ✅ Complete – All builds and smoke tests passed
+
 ## QA Fix Execution Addendum 2 (`v1.5.0.1`, 2026-03-05)
 
 ### Plan Executed
@@ -168,6 +188,7 @@
 
 ## Implementation Plan
 
+<!-- Last updated: 2026-03-09 — Register Report QA Iteration 3 complete. All register table column fixes, monitoring matrix separation, MoV role gate, report settings panel, KPI remarks, plan timeline, artifact status edit implemented and smoke-test verified. -->
 ### **PHASE 1A: Critical UI Fixes** (Priority: URGENT)
 
 #### Task 1.1: Add Navigation Menu
