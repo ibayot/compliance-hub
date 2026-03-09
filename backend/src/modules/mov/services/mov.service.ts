@@ -309,6 +309,10 @@ export class MovService implements OnModuleInit {
 
     const rows = items.map((item, index) => {
       const requirements = this.escapeHtml(this.complianceRequirement(item));
+      const applicableProvisions = this.escapeHtml(item.applicable_provisions || '-');
+      const evidence = this.escapeHtml(
+        [item.required_evidence, item.evidence_location].filter(Boolean).join('; ') || '-',
+      );
       const impact = this.escapeHtml(item.applicability_scope || '-');
       const status = this.escapeHtml(item.compliance_status || '-');
       const owner = this.escapeHtml(item.process_owner || '-');
@@ -316,10 +320,12 @@ export class MovService implements OnModuleInit {
       return `
         <tr>
           <td>${startingIndex + index}</td>
-          <td>${this.resolveRegisterTypeCode(item.issuance_type)}</td>
           <td>${this.escapeHtml(item.title)}</td>
+          <td style="white-space:nowrap;">${this.resolveRegisterTypeCode(item.issuance_type)}</td>
+          <td>${applicableProvisions}</td>
           <td>${this.escapeHtml(item.issuing_authority || '-')}</td>
           <td>${requirements}</td>
+          <td>${evidence}</td>
           <td>${impact}</td>
           <td>${this.escapeHtml(this.implicationsEffectivity(item))}</td>
           <td>${status}</td>
@@ -329,15 +335,27 @@ export class MovService implements OnModuleInit {
       `;
     });
 
+    const legend = `
+      <p style="font-size:11px;margin:4px 0 16px;color:#374151;">
+        <strong>Legend (Type column):</strong>
+        <sup>1</sup>L – Law / Executive Order &nbsp;|&nbsp;
+        R – Regulation / Regulatory Issuance &nbsp;|&nbsp;
+        S – Standard / Framework / Guideline &nbsp;|&nbsp;
+        C – Contractual Requirement
+      </p>
+    `;
+
     return `
       <table>
         <thead>
           <tr>
             <th>Item No.</th>
-            <th>Type (L/R/S/C)</th>
             <th>Title</th>
+            <th>Type<sup>1</sup></th>
+            <th>Applicable Provisions</th>
             <th>Issuing Entity</th>
-            <th>Compliance Requirements</th>
+            <th>Compliance Requirements (e.g., frequency of review, reportorial requirements, etc.)</th>
+            <th>Evidence of Compliance (Permit No. / Output documents, etc.)</th>
             <th>Impact</th>
             <th>Implications Effectivity</th>
             <th>Compliance Status</th>
@@ -349,6 +367,7 @@ export class MovService implements OnModuleInit {
           ${rows.join('')}
         </tbody>
       </table>
+      ${legend}
     `;
   }
 
