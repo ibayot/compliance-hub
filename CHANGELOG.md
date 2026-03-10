@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.5.0.1] - 2026-03-04 — KPI MoV Major Update (Quality-First)
 
+### Fixed (QA Iteration 4 - 2026-03-10)
+- **MoV Report HTML** – all main headers (`h2`) and section headers (`h3`) centered; period/summary text Arial 10pt; table headers (`th`) centered.
+- **Register + Monitoring report** – section/table names centered, Arial 10pt.
+- **Register Monitoring Matrix** renamed to “ICT Compliance Register Monitoring”; Q-column headers renamed Q1–Q4 Score; Source column shows actual URL as link text; `Applicable Bases` column parenthetical removed; colgroup widths added (Source gets 26%).
+- **KPI Gap Remarks Override panel** now only visible when the Assessment Report is currently previewed.
+- **Assessment Plan** – Print Plan button added (generates standalone HTML table in iframe, then prints).
+- **Assessment Schedule** – Print Schedule button added (same mechanism).
+- **Metrics** – Assigning Reportorial Document Type now correctly persisted in `metric_applicability` (`reportorial_doc_type_id` column was being dropped by the controller before saving).
+- **Document Uploader** – Focal users using the new Reportorial Document Type upload path no longer get “No active assignment found” error (legacy assignment check skipped when `reportorial_doc_type_id` is supplied).
+
 ### Fixed (Register Report QA - 2026-03-09)
 - **Register table columns refactored** (iteration 3):
   - Removed `Responsible Unit` and `Review Frequency` columns from all register tables (deferred to Issuances module).

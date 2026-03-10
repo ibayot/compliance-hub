@@ -1,5 +1,24 @@
 # Compliance Hub - Complete Implementation Plan
 
+## QA Fix Execution Addendum 4 (`v1.5.0.1`, 2026-03-10)
+
+### Plan Executed
+
+| # | Area | Change |
+|---|------|--------|
+| 1 | Register Report HTML | All h2 headers centered; h3 section names centered + Arial 10pt |
+| 2 | Register Report HTML | Period and summary text: Arial 10pt; th headers centered |
+| 3 | Monitoring Matrix | Renamed to “ICT Compliance Register Monitoring” in report h2 and return title |
+| 4 | Monitoring Matrix | Column headers Q1–Q4 Score; Source shows actual URL text |
+| 5 | Monitoring Matrix | Colgroup widths added; Applicable Bases parenthetical removed |
+| 6 | MoV page.tsx | KPI Gap Remarks panel shown only when lastReportKind === 'assessment' |
+| 7 | MoV page.tsx | printPlan() + Print Plan button in Assessment Plan CardHeader |
+| 8 | MoV page.tsx | printSchedule() + Print Schedule button in Assessment Schedule CardHeader |
+| 9 | metrics.controller.ts | reportorial_doc_type_id passed through to MetricApplicability on create+update |
+| 10 | document.service.ts | validateFocalSubmission skipped when reportorial_doc_type_id is present |
+
+### Status: ✅ Complete – All builds and smoke tests passed
+
 ## QA Fix Execution Addendum 3 (`v1.5.0.1`, 2026-03-09)
 
 ### Plan Executed

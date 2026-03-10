@@ -470,15 +470,15 @@ export class MovService implements OnModuleInit {
     const style = `
       <style>
         body { font-family: Arial, sans-serif; color: #111827; margin: 24px; }
-        h2 { font-family: Arial, sans-serif; font-size: 11pt; margin: 0 0 10px; }
-        h3 { margin: 0 0 10px; }
-        .period { margin: 0 0 12px; color: #374151; }
+        h2 { font-family: Arial, sans-serif; font-size: 11pt; margin: 0 0 10px; text-align: center; }
+        h3 { margin: 0 0 10px; font-family: Arial, sans-serif; font-size: 10pt; text-align: center; }
+        .period { margin: 0 0 12px; color: #374151; font-family: Arial, sans-serif; font-size: 10pt; }
         table { border-collapse: collapse; width: 100%; margin: 10px 0 4px; }
-        th { border: 1px solid #d1d5db; padding: 6px; vertical-align: middle; background: #f3f4f6; text-align: left; font-family: Helvetica, Arial, sans-serif; font-size: 9pt; }
+        th { border: 1px solid #d1d5db; padding: 6px; vertical-align: middle; background: #f3f4f6; text-align: center; font-family: Helvetica, Arial, sans-serif; font-size: 9pt; }
         td { border: 1px solid #d1d5db; padding: 6px; vertical-align: middle; font-family: Helvetica, Arial, sans-serif; font-size: 10pt; }
         .register-legend { font-family: Helvetica, Arial, sans-serif; font-size: 8pt; margin: 2px 0 18px; color: #374151; }
         .section-title { margin-top: 18px; }
-        .summary-block { margin: 8px 0 16px; line-height: 1.8; }
+        .summary-block { margin: 8px 0 16px; line-height: 1.8; font-family: Arial, sans-serif; font-size: 10pt; }
       </style>
     `;
 
@@ -570,19 +570,22 @@ export class MovService implements OnModuleInit {
     const style = `
       <style>
         body { font-family: Arial, sans-serif; color: #111827; margin: 24px; }
-        h2 { font-family: Arial, sans-serif; font-size: 11pt; margin: 0 0 10px; }
-        h3 { margin: 0 0 10px; }
-        .period { margin: 0 0 12px; color: #374151; }
-        table { border-collapse: collapse; width: 100%; margin: 10px 0 20px; }
-        th { border: 1px solid #d1d5db; padding: 6px; vertical-align: middle; background: #f3f4f6; text-align: left; font-family: Helvetica, Arial, sans-serif; font-size: 9pt; }
-        td { border: 1px solid #d1d5db; padding: 6px; vertical-align: middle; font-family: Helvetica, Arial, sans-serif; font-size: 10pt; }
+        h2 { font-family: Arial, sans-serif; font-size: 11pt; margin: 0 0 10px; text-align: center; }
+        h3 { margin: 0 0 10px; font-family: Arial, sans-serif; font-size: 10pt; text-align: center; }
+        .period { margin: 0 0 12px; color: #374151; font-family: Arial, sans-serif; font-size: 10pt; }
+        table { border-collapse: collapse; width: 100%; margin: 10px 0 20px; table-layout: fixed; }
+        .col-basis { width: 36%; }
+        .col-source { width: 26%; }
+        .col-score { width: 9.5%; }
+        th { border: 1px solid #d1d5db; padding: 6px; vertical-align: middle; background: #f3f4f6; text-align: center; font-family: Helvetica, Arial, sans-serif; font-size: 9pt; }
+        td { border: 1px solid #d1d5db; padding: 6px; vertical-align: middle; font-family: Helvetica, Arial, sans-serif; font-size: 10pt; word-break: break-word; }
       </style>
     `;
 
     const rows = filtered.map((item) => {
       const basis = this.escapeHtml(`${item.issuance_number} – ${item.title}`);
       const source = item.source_url
-        ? `<a href="${this.escapeHtml(item.source_url)}" target="_blank" rel="noreferrer">Link</a>`
+        ? `<a href="${this.escapeHtml(item.source_url)}" target="_blank" rel="noreferrer">${this.escapeHtml(item.source_url)}</a>`
         : '-';
       return `
         <tr>
@@ -601,17 +604,25 @@ export class MovService implements OnModuleInit {
       <html>
       <head><meta charset="utf-8" />${style}</head>
       <body>
-        <h2>REGISTER MONITORING MATRIX</h2>
+        <h2>ICT COMPLIANCE REGISTER MONITORING</h2>
         <p class="period">Period: ${query.year} Q${query.quarter}${query.unit ? ` · Unit: ${this.escapeHtml(query.unit)}` : ''}</p>
         <table>
+          <colgroup>
+            <col class="col-basis" />
+            <col class="col-source" />
+            <col class="col-score" />
+            <col class="col-score" />
+            <col class="col-score" />
+            <col class="col-score" />
+          </colgroup>
           <thead>
             <tr>
-              <th>Applicable Bases (Issuance No. – Title)</th>
+              <th>Applicable Bases</th>
               <th>Source</th>
-              <th>Compliance Score (Q1)</th>
-              <th>Compliance Score (Q2)</th>
-              <th>Compliance Score (Q3)</th>
-              <th>Compliance Score (Q4)</th>
+              <th>Q1 Score</th>
+              <th>Q2 Score</th>
+              <th>Q3 Score</th>
+              <th>Q4 Score</th>
             </tr>
           </thead>
           <tbody>${filtered.length === 0 ? '<tr><td colspan="6">No entries available.</td></tr>' : rows.join('')}</tbody>
@@ -621,7 +632,7 @@ export class MovService implements OnModuleInit {
     `;
 
     return {
-      title: `Register Monitoring Matrix ${query.year} Q${query.quarter}`,
+      title: `ICT Compliance Register Monitoring ${query.year} Q${query.quarter}`,
       content_html,
       content_markdown: content_html,
       summary: { total: filtered.length },

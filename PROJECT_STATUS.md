@@ -1,5 +1,15 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 QA Polish Checkpoint 4 (`v1.5.0.1`, 2026-03-10)
+
+- All HTML report headers (h2, h3) now centered; period/summary/th elements use Arial 10pt
+- Register Monitoring Matrix renamed “ICT Compliance Register Monitoring”; quarter columns renamed Q1–Q4 Score; source links display actual URLs; Applicable Bases column cleaned up; responsive colgroup widths
+- KPI Gap Remarks Override panel only shown when an Assessment Report is previewed
+- Assessment Plan and Assessment Schedule each have a standalone Print button
+- Metrics: `reportorial_doc_type_id` now correctly saved in `metric_applicability` (was silently dropped)
+- Document Upload: focal users using new Reportorial Doc Type system no longer blocked by stale legacy assignment check
+- All builds clean; all 15 smoke tests passed; pushed to `feature/kpi-mov-major-update-1.5.0.1`
+
 ## 🚀 QA Polish Checkpoint 3 (`v1.5.0.1`, 2026-03-09)
 
 - MoV Builder: Register report fully restructured (columns, fonts, date format, legend, no bullets)

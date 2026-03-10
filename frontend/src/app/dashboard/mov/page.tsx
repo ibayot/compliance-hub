@@ -124,6 +124,7 @@ export default function MovBuilderPage() {
   const [kpiRemarks, setKpiRemarks] = useState<Record<string, string>>({});
   const [kpiGapRows, setKpiGapRows] = useState<Array<{ code: string; name: string; recommendation: string }>>([]);
   const [additionalRemarks, setAdditionalRemarks] = useState('');
+  const [lastReportKind, setLastReportKind] = useState<'register' | 'monitoring' | 'assessment' | ''>('');
 
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [editingPlanTitle, setEditingPlanTitle] = useState('');
@@ -182,6 +183,7 @@ export default function MovBuilderPage() {
       });
       setReportTitle(report.title);
       setReportHtml(report.content_html || report.content_markdown);
+      setLastReportKind('register');
       enqueueSnackbar(`${registerType[0].toUpperCase()}${registerType.slice(1)} register report generated.`, { variant: 'success' });
       setTab(0);
     } catch (error: any) {
@@ -199,6 +201,7 @@ export default function MovBuilderPage() {
       });
       setReportTitle(report.title);
       setReportHtml(report.content_html || report.content_markdown);
+      setLastReportKind('monitoring');
       enqueueSnackbar('Register Monitoring Matrix generated.', { variant: 'success' });
     } catch (error: any) {
       enqueueSnackbar(error?.response?.data?.message || 'Failed to generate monitoring matrix.', { variant: 'error' });
@@ -218,6 +221,7 @@ export default function MovBuilderPage() {
       });
       setReportTitle(report.title);
       setReportHtml(report.report_html || report.report_markdown);
+      setLastReportKind('assessment');
       enqueueSnackbar('Assessment report generated.', { variant: 'success' });
       setTab(0);
     } catch (error: any) {
@@ -445,6 +449,36 @@ export default function MovBuilderPage() {
     }
   };
 
+  const printPlan = () => {
+    const rows = planByYear.map((entry, idx) => {
+      const items = parsePlanItems(entry);
+      const yearLabel = entry.metadata_json?.year_index ? `Y${entry.metadata_json.year_index}` : `Y${idx + 1}`;
+      return `<tr><td style="font-weight:600;white-space:nowrap;">${yearLabel} – ${entry.period_year}</td><td style="font-weight:600;">${entry.title}</td><td><ul style="margin:0;padding-left:18px;">${items.map((i) => `<li>${i}</li>`).join('')}</ul></td></tr>`;
+    }).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>body{font-family:Arial,sans-serif;font-size:10pt;margin:24px;}h2{font-size:11pt;text-align:center;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ccc;padding:6px;vertical-align:top;}th{background:#f3f4f6;text-align:center;font-size:9pt;}td{font-size:10pt;}</style></head><body><h2>ICT COMPLIANCE ASSESSMENT PLAN</h2><table><thead><tr><th>Year</th><th>Title</th><th>Objectives / Activities</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) { document.body.removeChild(iframe); return; }
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); setTimeout(() => document.body.removeChild(iframe), 1500); }, 400);
+  };
+
+  const printSchedule = () => {
+    const rows = scheduleEntries.map((entry) => {
+      return `<tr><td>${entry.title}</td><td>${entry.metadata_json?.owner || '-'}</td><td>${entry.metadata_json?.due_date || '-'}</td><td>${entry.status}</td><td>${entry.metadata_json?.remarks || '-'}</td></tr>`;
+    }).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>body{font-family:Arial,sans-serif;font-size:10pt;margin:24px;}h2{font-size:11pt;text-align:center;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ccc;padding:6px;vertical-align:top;}th{background:#f3f4f6;text-align:center;font-size:9pt;}td{font-size:10pt;}</style></head><body><h2>ICT COMPLIANCE ASSESSMENT SCHEDULE – ${year} Q${quarter}</h2><table><thead><tr><th>Activity</th><th>Owner</th><th>Due Date</th><th>Status</th><th>Remarks</th></tr></thead><tbody>${rows || '<tr><td colspan="5">No entries.</td></tr>'}</tbody></table></body></html>`;
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) { document.body.removeChild(iframe); return; }
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); setTimeout(() => document.body.removeChild(iframe), 1500); }, 400);
+  };
+
   const saveArtifactStatus = async (artifact: MovArtifact) => {
     try {
       await movApi.update(artifact.id, { status: editingArtifactStatus });
@@ -565,6 +599,7 @@ export default function MovBuilderPage() {
             </Card>
 
             {/* ── KPI Gap Remarks ── */}
+            {lastReportKind === 'assessment' && (
             <Card sx={{ mt: 2 }}>
               <CardHeader
                 title="KPI Gap Remarks Override"
@@ -601,8 +636,7 @@ export default function MovBuilderPage() {
                 </Stack>
               </CardContent>
             </Card>
-
-            {/* ── Report Settings ── */}
+            )}
             <Accordion sx={{ mt: 2, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Typography variant="subtitle2">Report Settings (Header / Footer)</Typography>
@@ -702,6 +736,7 @@ export default function MovBuilderPage() {
                 title="Assessment Plan"
                 subheader="Multi-year compliance assessment plan. Edit, add, or delete year entries."
                 avatar={<Avatar sx={{ bgcolor: 'primary.main' }}><AssessmentIcon /></Avatar>}
+                action={<Button size="small" variant="outlined" startIcon={<PrintIcon />} onClick={printPlan}>Print Plan</Button>}
               />
               <CardContent>
                 {planByYear.length === 0 ? (
@@ -814,7 +849,7 @@ export default function MovBuilderPage() {
         <Grid container spacing={2}>
           <Grid item xs={12}>
             <Card>
-              <CardHeader title={`Assessment Schedule – ${year} Q${quarter}`} subheader="Update status and remarks per activity." />
+              <CardHeader title={`Assessment Schedule – ${year} Q${quarter}`} subheader="Update status and remarks per activity." action={<Button size="small" variant="outlined" startIcon={<PrintIcon />} onClick={printSchedule}>Print Schedule</Button>} />
               <CardContent>
                 <Grid container spacing={2} sx={{ mb: 2 }}>
                   <Grid item xs={12} md={3}><TextField fullWidth label="Activity" value={scheduleTitle} onChange={(e) => setScheduleTitle(e.target.value)} /></Grid>

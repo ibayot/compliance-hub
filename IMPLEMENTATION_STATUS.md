@@ -1,5 +1,17 @@
 # RICTMS Compliance Hub - Implementation Progress Report
 
+## 📌 QA Fix Checkpoint 4 (2026-03-10)
+
+- **Release target:** `v1.5.0.1`
+- All HTML report headers centered; period/summary/h3/th font: Arial 10pt
+- Monitoring Matrix: renamed “ICT Compliance Register Monitoring”, Q-score column headers, actual URL links for Source, colgroup widths, parenthetical removed from Applicable Bases
+- KPI Gap Remarks Override panel visibility gated on `lastReportKind === 'assessment'`
+- Assessment Plan: Print Plan button (iframe-based standalone HTML print)
+- Assessment Schedule: Print Schedule button (same mechanism)
+- Metrics controller: `reportorial_doc_type_id` now included in applicability `appData` on create and update
+- Document service: focal upload skips legacy `validateFocalSubmission` when `reportorial_doc_type_id` is provided
+- Backend build: ✅ clean | Frontend build: ✅ clean | Smoke tests: ✅ 15/15 passed
+
 ## 📌 QA Fix Checkpoint 3 (2026-03-09)
 
 - **Release target:** `v1.5.0.1`

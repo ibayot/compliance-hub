@@ -354,7 +354,7 @@ export class DocumentService implements OnModuleInit {
 
     const normalizedDocumentType = this.normalizeDocumentType(metadata.document_type);
 
-    if (user_role === UserRole.FOCAL) {
+    if (user_role === UserRole.FOCAL && !metadata.reportorial_doc_type_id) {
       await this.validateFocalSubmission(
         { ...metadata, document_type: normalizedDocumentType, file },
         file.originalname,
