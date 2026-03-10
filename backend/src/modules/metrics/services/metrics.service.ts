@@ -38,13 +38,21 @@ export class MetricsService {
   async getApplicableMetrics(
     unitId: number,
     documentType: string,
+    reportorialDocTypeId?: number | null,
   ): Promise<MetricTemplate[]> {
     const qb = this.applicabilityRepo.createQueryBuilder('app')
       .leftJoinAndSelect('app.metric_template', 'template')
-      .where('(app.unit_id = :unitId AND app.document_type = :documentType)', { unitId, documentType })
-      .orWhere('(app.unit_id = :unitId AND app.document_type IS NULL)', { unitId })
-      .orWhere('(app.unit_id IS NULL AND app.document_type = :documentType)', { documentType })
-      .orWhere('(app.unit_id IS NULL AND app.document_type IS NULL)');
+      // unit+doctype exact match (legacy style)
+      .where('(app.unit_id = :unitId AND app.document_type = :documentType AND app.reportorial_doc_type_id IS NULL)', { unitId, documentType })
+      .orWhere('(app.unit_id = :unitId AND app.document_type IS NULL AND app.reportorial_doc_type_id IS NULL)', { unitId })
+      .orWhere('(app.unit_id IS NULL AND app.document_type = :documentType AND app.reportorial_doc_type_id IS NULL)', { documentType })
+      // truly global (all three keys NULL)
+      .orWhere('(app.unit_id IS NULL AND app.document_type IS NULL AND app.reportorial_doc_type_id IS NULL)');
+
+    // Reportorial-doc-type specific: only for documents that declare a reportorial_doc_type_id
+    if (reportorialDocTypeId) {
+      qb.orWhere('app.reportorial_doc_type_id = :reportorialDocTypeId', { reportorialDocTypeId });
+    }
 
     const applicabilities = await qb.getMany();
 
@@ -78,10 +86,11 @@ export class MetricsService {
 
     const document = version.document;
 
-    // Get applicable metrics
+    // Get applicable metrics (include reportorial-doc-type-specific ones when present)
     const applicableMetrics = await this.getApplicableMetrics(
       document.unit_id,
       document.document_type,
+      document.reportorial_doc_type_id ?? null,
     );
 
     this.logger.log(

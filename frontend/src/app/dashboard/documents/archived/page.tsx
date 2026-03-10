@@ -33,8 +33,9 @@ export default function ArchivedDocumentsPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['documents', 'archived'],
-    queryFn: () => documentsApi.listDocuments({ archived: true, limit: 200, page: 1 }),
+    queryFn: () => documentsApi.listDocuments({ archived: true, limit: 50, page: 1 }),
     enabled: isFocal,
+    staleTime: 30_000,
   });
 
   const getStatusChip = (doc: any) => {
@@ -98,7 +99,12 @@ export default function ArchivedDocumentsPage() {
                     </TableRow>
                   ) : (
                     (data?.data || []).map((doc) => (
-                      <TableRow key={doc.id} hover>
+                      <TableRow
+                        key={doc.id}
+                        hover
+                        sx={{ cursor: 'pointer' }}
+                        onClick={() => router.push(`/dashboard/documents/${doc.id}`)}
+                      >
                         <TableCell>
                           <Typography variant="body2" fontWeight={500}>
                             {doc.title}

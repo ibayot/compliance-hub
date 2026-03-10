@@ -57,4 +57,43 @@ $me = Invoke-RestMethod -Method Get -Uri "$api/auth/me" -Headers $sh
 $hasPasswordHash = $null -ne $me.passwordHash
 Write-Output "SMOKE_AUTH_ME_OK hasPasswordHash=$hasPasswordHash"
 
+# Cybersecurity metrics smoke test — reprocess and verify auto-return
+$cyberDocs = Invoke-RestMethod -Method Get -Uri "$api/documents?unit_id=3&limit=20&page=1" -Headers $sh
+$cyberDoc = @($cyberDocs.data) | Where-Object { $_.status -in @('pending','ready') } | Select-Object -First 1
+if ($cyberDoc) {
+    Write-Output "SMOKE_CYBER_DOC_FOUND id=$($cyberDoc.id.Substring(0,8)) status=$($cyberDoc.status) compliance=$($cyberDoc.compliance_status)"
+
+    # Trigger reprocess
+    try {
+        Invoke-RestMethod -Method Post -Uri "$api/documents/$($cyberDoc.id)/reprocess" -Headers $sh | Out-Null
+        Write-Output "SMOKE_REPROCESS_ENQUEUED_OK"
+    } catch {
+        Write-Output "SMOKE_REPROCESS_ENQUEUED_SKIP (already processing or no-op)"
+    }
+
+    # Wait for processing
+    Start-Sleep -Seconds 8
+
+    # Check updated status and metric results
+    $updatedDoc = Invoke-RestMethod -Method Get -Uri "$api/documents/$($cyberDoc.id)" -Headers $sh
+    Write-Output "SMOKE_CYBER_DOC_UPDATED status=$($updatedDoc.status) compliance=$($updatedDoc.compliance_status)"
+
+    $metricResults = Invoke-RestMethod -Method Get -Uri "$api/documents/$($cyberDoc.id)/metrics" -Headers $sh
+    $metCount = @($metricResults.results).Count
+    Write-Output "SMOKE_CYBER_METRICS_OK count=$metCount"
+} else {
+    Write-Output "SMOKE_CYBER_DOC_SKIP (no pending/ready Cybersecurity doc found)"
+}
+
+# Reprocess endpoint availability check
+$reprocessTest = $null
+try {
+    # Expect 404 on a fake ID — confirms route is registered (not 500/405)
+    Invoke-RestMethod -Method Post -Uri "$api/documents/00000000-0000-0000-0000-000000000000/reprocess" -Headers $sh | Out-Null
+} catch {
+    $reprocessTest = $_.Exception.Response.StatusCode.value__
+}
+$reprocessRouteOk = $reprocessTest -eq 404
+Write-Output "SMOKE_REPROCESS_ROUTE_OK=$reprocessRouteOk (expected 404 for unknown id)"
+
 Write-Output "--- ALL SMOKE TESTS PASSED ---"

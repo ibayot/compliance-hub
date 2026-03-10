@@ -533,8 +533,9 @@ export class DocumentService implements OnModuleInit {
    * Get document by ID with relations
    */
   async getDocumentById(id: string): Promise<Document> {
+    // Allow fetching archived (is_deleted=true) docs so focal can view detail on archived page
     const document = await this.documentRepo.findOne({
-      where: { id, is_deleted: false },
+      where: { id },
       relations: ['unit', 'uploader', 'versions', 'versions.uploader', 'issuances'],
     });
 
@@ -1091,6 +1092,45 @@ export class DocumentService implements OnModuleInit {
 
     await this.documentRepo.update(documentId, { is_deleted: true });
     this.logger.log(`Document archived by focal ${actorId}: ${documentId}`);
+  }
+
+  /**
+   * Admin-initiated reprocess: re-queue process-document for a stuck/failed document.
+   * Resets status to PENDING and re-enqueues the processing job for the current version.
+   */
+  async reprocessDocument(documentId: string): Promise<void> {
+    const document = await this.documentRepo.findOne({
+      where: { id: documentId },
+      relations: ['versions'],
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    const currentVersion = document.versions?.find(
+      (v) => v.version_number === document.current_version,
+    );
+
+    if (!currentVersion) {
+      throw new BadRequestException('No version found to reprocess.');
+    }
+
+    // Reset to PENDING so the processor picks it up
+    await this.documentRepo.update(documentId, { status: DocumentStatus.PENDING });
+
+    await this.documentQueue
+      .add('process-document', {
+        documentId: document.id,
+        versionId: currentVersion.id,
+      })
+      .catch((err) => {
+        this.logger.warn(`Failed to enqueue reprocess for ${documentId}: ${err?.message}`);
+        throw err;
+      });
+
+    this.logger.log(`Document reprocess enqueued: ${documentId} version=${currentVersion.id}`);
+  }
   }
 
   /**

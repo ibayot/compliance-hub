@@ -354,6 +354,17 @@ export class DocumentController {
   }
 
   /**
+   * Admin/Reviewer re-queue processing for stuck/failed documents
+   * POST /documents/:id/reprocess
+   */
+  @Post(':id/reprocess')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER)
+  async reprocessDocument(@Param('id') id: string) {
+    await this.documentService.reprocessDocument(id);
+    return { message: 'Document reprocessing enqueued.' };
+  }
+
+  /**
    * Return document for focal revision (non-destructive)
    * POST /documents/:id/return
    */

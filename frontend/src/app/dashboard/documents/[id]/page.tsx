@@ -43,6 +43,7 @@ export default function DocumentDetailsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const isFocal = user?.role === 'focal';
   const documentId = params.id as string;
 
   const { setPageTitle } = usePageTitle();
@@ -263,10 +264,19 @@ export default function DocumentDetailsPage() {
               <RefreshIcon />
             </IconButton>
           </Tooltip>
-          <Button variant="outlined" startIcon={<LinkIcon />} onClick={openReferenceDialog}>
-            Map References
-          </Button>
+          {!isFocal && (
+            <Button variant="outlined" startIcon={<LinkIcon />} onClick={openReferenceDialog}>
+              Map References
+            </Button>
+          )}
         </Box>
+
+        {/* Archived banner */}
+        {document.is_deleted && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            This document has been archived and is no longer in the active submission queue.
+          </Alert>
+        )}
 
         {/* Document Info */}
         <Paper elevation={2} sx={{ p: 3, mb: 3 }}>

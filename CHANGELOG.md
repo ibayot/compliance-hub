@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.5.0.1] - 2026-03-04 — KPI MoV Major Update (Quality-First)
 
+### Fixed (QA Iteration 7 — Cybersecurity Metrics + Archived Docs + Focal UX)
+- **Cybersecurity metrics not auto-returning** – `getApplicableMetrics` now correctly respects `reportorial_doc_type_id`; the global-match condition tightened to `(unit_id IS NULL AND document_type IS NULL AND reportorial_doc_type_id IS NULL)` and an additional `OR reportorial_doc_type_id = :id` branch added. Cybersecurity Incident Summary metrics (property_check + section_check) now run on documents with `reportorial_doc_type_id = 9`.
+- **Stuck documents (Bull job lost on restart)** – New `POST /documents/:id/reprocess` endpoint (SUPER_ADMIN + REVIEWER only) resets document status to `PENDING` and re-enqueues the `process-document` Bull job, recovering documents that lost their processing job on backend restart.
+- **Document not found after archiving** – `getDocumentById` no longer filters `is_deleted: false`; archived documents can be fetched without throwing 404, enabling the detail page to load them correctly.
+- **Map References button hidden for focal** – The "Map References" button is no longer shown on the document detail page when the signed-in user has `role = 'focal'`.
+- **Archived document ARCHIVED banner** – The document detail page now shows an info `Alert` banner when `document.is_deleted === true`, informing the user the document has been archived.
+- **Archived page performance** – `staleTime: 30_000` added to the archived documents query to prevent re-fetching on every navigation; `limit` reduced from 200 → 50. Archived table rows are now clickable, navigating to the document detail page.
+- **Smoke test — Cybersecurity metrics flow** – Smoke test extended with Cybersecurity unit document reprocess → wait → metrics count verification, plus a reprocess route availability assertion.
+
 ### Fixed (QA Iteration 6 — Documents UX + Focal Workflow Hardening)
 - **Compliant docs hidden from admin list** – Restored `NOT IN ('compliant', 'needs_revision', 'non_compliant')` filter on `listDocuments` for `super_admin`/`reviewer` when no explicit status filter is active and `archived = false`; admin queue only shows actionable documents.
 - **Compliant docs hidden from Reviews queue** – Reviews table now filters out rows where the document's latest review decision is `compliant`.

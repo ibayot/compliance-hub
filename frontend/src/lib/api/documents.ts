@@ -30,6 +30,7 @@ export interface Document {
   };
   versions?: DocumentVersion[];
   issuances?: Array<{ id: string; issuance_number: string; title: string }>;
+  is_deleted?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -291,6 +292,10 @@ export const documentsApi = {
 
   archiveDocument: async (id: string): Promise<void> => {
     await apiClient.post(`/documents/${id}/archive`);
+  },
+
+  reprocessDocument: async (id: string): Promise<void> => {
+    await apiClient.post(`/documents/${id}/reprocess`);
   },
 
   getDocumentReferences: async (documentId: string): Promise<DocumentReferenceResponse> => {
