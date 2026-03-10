@@ -1131,7 +1131,6 @@ export class DocumentService implements OnModuleInit {
 
     this.logger.log(`Document reprocess enqueued: ${documentId} version=${currentVersion.id}`);
   }
-  }
 
   /**
    * Parse a stored period string into a human-readable bucket label and sort order.
