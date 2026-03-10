@@ -15,7 +15,7 @@ import {
   DialogContent,
   DialogActions,
 } from '@mui/material';
-import { Add as AddIcon, FilterList as FilterIcon } from '@mui/icons-material';
+import { Add as AddIcon, FilterList as FilterIcon, Archive as ArchiveIcon, Inventory as ArchivedViewIcon } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { documentsApi, Document, ListDocumentsParams } from '@/lib/api/documents';
@@ -37,6 +37,8 @@ export default function DocumentsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
+  const isFocal = user?.role === 'focal';
+
   const [filters, setFilters] = useState<ListDocumentsParams>({
     page: 1,
     limit: 20,
@@ -52,11 +54,13 @@ export default function DocumentsPage() {
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [returnRemarks, setReturnRemarks] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [targetDocument, setTargetDocument] = useState<Document | null>(null);
 
   // Fetch documents
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['documents', filters],
+    staleTime: 0,
     queryFn: () => {
       const cleanFilters = { ...filters };
       // Remove empty filters
@@ -95,6 +99,15 @@ export default function DocumentsPage() {
     },
   });
 
+  const archiveMutation = useMutation({
+    mutationFn: (id: string) => documentsApi.archiveDocument(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      setArchiveDialogOpen(false);
+      setTargetDocument(null);
+    },
+  });
+
   const handleFilterChange = (field: string, value: any) => {
     setFilters((prev) => ({ ...prev, [field]: value, page: 1 }));
   };
@@ -116,6 +129,24 @@ export default function DocumentsPage() {
   const openDeleteDialog = (document: Document) => {
     setTargetDocument(document);
     setDeleteDialogOpen(true);
+  };
+
+  const openArchiveDialog = (document: Document) => {
+    setTargetDocument(document);
+    setArchiveDialogOpen(true);
+  };
+
+  const canArchiveDocument = (document: Document) => {
+    const cs = document.compliance_status;
+    if (cs === 'needs_revision' || cs === 'non_compliant') {
+      return { allowed: true };
+    }
+    return { allowed: false, reason: 'Only returned documents can be archived' };
+  };
+
+  const handleSubmitArchive = () => {
+    if (!targetDocument) return;
+    archiveMutation.mutate(targetDocument.id);
   };
 
   const handleSubmitReturn = () => {
@@ -230,6 +261,15 @@ export default function DocumentsPage() {
         >
           <Typography variant="h4">Documents</Typography>
           <Box sx={{ display: 'flex', gap: 2 }}>
+            {isFocal && (
+              <Button
+                variant="outlined"
+                startIcon={<ArchivedViewIcon />}
+                onClick={() => router.push('/dashboard/documents/archived')}
+              >
+                View Archived
+              </Button>
+            )}
             <Button
               variant="outlined"
               startIcon={<FilterIcon />}
@@ -347,11 +387,15 @@ export default function DocumentsPage() {
           loading={isLoading}
           onPageChange={handlePageChange}
           onLimitChange={handleLimitChange}
-          onReturn={openReturnDialog}
-          onDelete={openDeleteDialog}
+          onReturn={isFocal ? undefined : openReturnDialog}
+          onDelete={isFocal ? undefined : openDeleteDialog}
+          onArchive={isFocal ? openArchiveDialog : undefined}
           statusFormatter={getWorkflowStatus}
           canReturnDocument={canReturnDocument}
           canDeleteDocument={canDeleteDocument}
+          canArchiveDocument={isFocal ? canArchiveDocument : undefined}
+          hideUnitColumn={isFocal}
+          hideUploaderColumn={isFocal}
         />
       </Box>
 
@@ -380,6 +424,30 @@ export default function DocumentsPage() {
             onClick={handleSubmitReturn}
           >
             Return to Focal
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={archiveDialogOpen} onClose={() => setArchiveDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Archive Document</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            This will archive the returned document. You can view it in the Archived Documents section.
+          </Typography>
+          <Typography variant="body2">
+            {targetDocument ? `Archive "${targetDocument.title}"?` : ''}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setArchiveDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            startIcon={<ArchiveIcon />}
+            onClick={handleSubmitArchive}
+            disabled={!targetDocument || archiveMutation.isPending}
+          >
+            {archiveMutation.isPending ? 'Archiving...' : 'Archive'}
           </Button>
         </DialogActions>
       </Dialog>

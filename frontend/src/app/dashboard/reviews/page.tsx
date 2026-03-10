@@ -241,7 +241,7 @@ export default function ReviewsPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {documents.map((document) => {
+                {documents.filter((document) => latestReviewByDoc[document.id] !== 'compliant').map((document) => {
                   const reviewStatus = latestReviewByDoc[document.id] || 'not_reviewed';
                   return (
                     <TableRow key={document.id} hover>

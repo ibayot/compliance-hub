@@ -13,6 +13,7 @@ import {
   Divider,
   IconButton,
   Tooltip,
+  Alert,
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
@@ -25,6 +26,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { documentsApi, Document } from '@/lib/api/documents';
 import { usePageTitle } from '@/contexts/PageTitleContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import VersionTimeline from '@/components/documents/VersionTimeline';
 import DocumentViewer from '@/components/documents/DocumentViewer';
@@ -40,6 +42,7 @@ export default function DocumentDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const documentId = params.id as string;
 
   const { setPageTitle } = usePageTitle();
@@ -152,6 +155,20 @@ export default function DocumentDetailsPage() {
     handleRefresh();
   };
 
+  const getWorkflowStatus = (doc: Document) => {
+    const cs = doc.compliance_status;
+    const isSuperOrCompliance = user?.role === 'super_admin' || user?.role === 'reviewer';
+    if (cs === 'compliant') {
+      return { label: isSuperOrCompliance ? 'COMPLIANT' : 'Approved', color: 'success' as const };
+    }
+    if (cs === 'non_compliant' || cs === 'needs_revision') {
+      return { label: 'Returned', color: 'error' as const };
+    }
+    if (doc.status === 'processing') return { label: 'PROCESSING', color: 'info' as const };
+    if (doc.status === 'failed') return { label: 'FAILED', color: 'error' as const };
+    return { label: isSuperOrCompliance ? 'PENDING REVIEW' : 'Pending Review', color: 'warning' as const };
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
@@ -246,13 +263,6 @@ export default function DocumentDetailsPage() {
               <RefreshIcon />
             </IconButton>
           </Tooltip>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={handleDownloadCurrent}
-          >
-            Download Current
-          </Button>
           <Button variant="outlined" startIcon={<LinkIcon />} onClick={openReferenceDialog}>
             Map References
           </Button>
@@ -290,11 +300,10 @@ export default function DocumentDetailsPage() {
                 Status
               </Typography>
               <Box sx={{ mt: 0.5 }}>
-                <Chip
-                  label={document.status.toUpperCase()}
-                  color={getStatusColor(document.status) as any}
-                  size="small"
-                />
+                {(() => {
+                  const wf = getWorkflowStatus(document);
+                  return <Chip label={wf.label} color={wf.color} size="small" />;
+                })()}
               </Box>
             </Grid>
             <Grid item xs={12} md={6}>
@@ -316,6 +325,14 @@ export default function DocumentDetailsPage() {
             </Grid>
           </Grid>
         </Paper>
+
+        {/* Return Remarks banner */}
+        {document.latest_review_remarks && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" gutterBottom>Return Remarks</Typography>
+            {document.latest_review_remarks}
+          </Alert>
+        )}
 
         {/* Main Content */}
         <Grid container spacing={3}>

@@ -81,6 +81,7 @@ export class DocumentController {
     @Query('status') status?: DocumentStatus,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('archived') archived?: string,
     @CurrentUser() user?: any,
   ) {
     return this.documentService.listDocuments({
@@ -92,6 +93,7 @@ export class DocumentController {
       status,
       page: page ? Number(page) : 1,
       limit: limit ? Number(limit) : 20,
+      archived: archived === 'true',
       actor_role: user?.role,
       actor_id: user?.id,
     });
@@ -338,6 +340,17 @@ export class DocumentController {
     });
 
     return new StreamableFile(buffer);
+  }
+
+  /**
+   * Focal-initiated archive of a returned document
+   * POST /documents/:id/archive
+   */
+  @Post(':id/archive')
+  @Roles(UserRole.FOCAL)
+  async archiveDocument(@Param('id') id: string, @CurrentUser() user: any) {
+    await this.documentService.archiveDocument(id, user.id);
+    return { message: 'Document archived successfully.' };
   }
 
   /**

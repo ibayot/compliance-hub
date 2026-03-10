@@ -287,6 +287,13 @@ export default function KpiPage() {
     return units.filter((unit) => userUnitIds.includes(unit.id));
   }, [canManage, units, userUnitIds]);
 
+  // Auto-lock unit filter to focal's own unit
+  useEffect(() => {
+    if (!canManage && userUnitIds.length > 0) {
+      setFilterUnitId(userUnitIds[0]);
+    }
+  }, [canManage, userUnitIds]);
+
   const loadInitial = useCallback(async () => {
     try {
       const [unitList, masterList] = await Promise.all([unitsApi.listAll(), kpiApi.listMaster()]);
@@ -855,6 +862,7 @@ export default function KpiPage() {
                 value={filterUnitId}
                 onChange={(e) => setFilterUnitId(e.target.value === '' ? '' : Number(e.target.value))}
                 fullWidth
+                disabled={!canManage}
               >
                 <MenuItem value="">All allowed units</MenuItem>
                 {availableUnits.map((u) => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}

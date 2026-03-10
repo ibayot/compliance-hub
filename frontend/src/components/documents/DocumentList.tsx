@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React from 'react';
 import {
@@ -21,6 +21,7 @@ import {
   Visibility as ViewIcon,
   Undo as ReturnIcon,
   Delete as DeleteIcon,
+  Archive as ArchiveIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { Document } from '@/lib/api/documents';
@@ -36,9 +37,16 @@ interface DocumentListProps {
   onLimitChange: (limit: number) => void;
   onReturn?: (document: Document) => void;
   onDelete?: (document: Document) => void;
-  statusFormatter?: (document: Document) => { label: string; color: 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' };
+  onArchive?: (document: Document) => void;
+  statusFormatter?: (document: Document) => {
+    label: string;
+    color: 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success';
+  };
   canReturnDocument?: (document: Document) => { allowed: boolean; reason?: string };
   canDeleteDocument?: (document: Document) => { allowed: boolean; reason?: string };
+  canArchiveDocument?: (document: Document) => { allowed: boolean; reason?: string };
+  hideUnitColumn?: boolean;
+  hideUploaderColumn?: boolean;
 }
 
 const getStatusColor = (
@@ -68,19 +76,21 @@ export default function DocumentList({
   onLimitChange,
   onReturn,
   onDelete,
+  onArchive,
   statusFormatter,
   canReturnDocument,
   canDeleteDocument,
+  canArchiveDocument,
+  hideUnitColumn = false,
+  hideUploaderColumn = false,
 }: DocumentListProps) {
   const router = useRouter();
 
   const handleChangePage = (event: unknown, newPage: number) => {
-    onPageChange(newPage + 1); // MUI uses 0-based, our API uses 1-based
+    onPageChange(newPage + 1);
   };
 
-  const handleChangeRowsPerPage = (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     onLimitChange(parseInt(event.target.value, 10));
   };
 
@@ -90,14 +100,7 @@ export default function DocumentList({
 
   if (loading) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: 300,
-        }}
-      >
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
         <CircularProgress />
       </Box>
     );
@@ -105,14 +108,7 @@ export default function DocumentList({
 
   if (documents.length === 0) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: 300,
-        }}
-      >
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
         <Typography variant="h6" color="text.secondary">
           No documents found
         </Typography>
@@ -127,11 +123,11 @@ export default function DocumentList({
           <TableHead>
             <TableRow>
               <TableCell>Title</TableCell>
-              <TableCell>Unit</TableCell>
+              {!hideUnitColumn && <TableCell>Unit</TableCell>}
               <TableCell>Type</TableCell>
               <TableCell>Period</TableCell>
               <TableCell>Status</TableCell>
-              <TableCell>Uploaded By</TableCell>
+              {!hideUploaderColumn && <TableCell>Uploaded By</TableCell>}
               <TableCell>Date</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -144,7 +140,7 @@ export default function DocumentList({
                     {doc.title}
                   </Typography>
                 </TableCell>
-                <TableCell>{doc.unit?.name || 'N/A'}</TableCell>
+                {!hideUnitColumn && <TableCell>{doc.unit?.name || 'N/A'}</TableCell>}
                 <TableCell>{doc.document_type}</TableCell>
                 <TableCell>
                   {doc.year}-{doc.period}
@@ -154,74 +150,70 @@ export default function DocumentList({
                     const statusView = statusFormatter
                       ? statusFormatter(doc)
                       : { label: doc.status.toUpperCase(), color: getStatusColor(doc.status) };
-
                     return (
-                      <Chip
-                        label={statusView.label}
-                        color={statusView.color}
-                        size="small"
-                      />
+                      <Chip label={statusView.label} color={statusView.color} size="small" />
                     );
                   })()}
                 </TableCell>
-                <TableCell>{doc.uploader?.username || 'N/A'}</TableCell>
-                <TableCell>
-                  {format(new Date(doc.created_at), 'MMM dd, yyyy')}
-                </TableCell>
+                {!hideUploaderColumn && <TableCell>{doc.uploader?.username || 'N/A'}</TableCell>}
+                <TableCell>{format(new Date(doc.created_at), 'MMM dd, yyyy')}</TableCell>
                 <TableCell align="right">
                   <Tooltip title="View Details">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleViewDocument(doc.id)}
-                      color="primary"
-                    >
+                    <IconButton size="small" onClick={() => handleViewDocument(doc.id)} color="primary">
                       <ViewIcon />
                     </IconButton>
                   </Tooltip>
-                  {onReturn && (
-                    (() => {
-                      const permission = canReturnDocument
-                        ? canReturnDocument(doc)
-                        : { allowed: true };
-
-                      return (
-                        <Tooltip title={permission.allowed ? 'Return to Focal' : permission.reason || 'Return is not allowed'}>
-                          <span>
-                            <IconButton
-                              size="small"
-                              onClick={() => permission.allowed && onReturn(doc)}
-                              color="warning"
-                              disabled={!permission.allowed}
-                            >
-                              <ReturnIcon />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      );
-                    })()
-                  )}
-                  {onDelete && (
-                    (() => {
-                      const permission = canDeleteDocument
-                        ? canDeleteDocument(doc)
-                        : { allowed: true };
-
-                      return (
-                        <Tooltip title={permission.allowed ? 'Hard Delete' : permission.reason || 'Delete is not allowed'}>
-                          <span>
-                            <IconButton
-                              size="small"
-                              onClick={() => permission.allowed && onDelete(doc)}
-                              color="error"
-                              disabled={!permission.allowed}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      );
-                    })()
-                  )}
+                  {onReturn && (() => {
+                    const permission = canReturnDocument ? canReturnDocument(doc) : { allowed: true };
+                    return (
+                      <Tooltip title={permission.allowed ? 'Return to Focal' : permission.reason || 'Return is not allowed'}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => permission.allowed && onReturn(doc)}
+                            color="warning"
+                            disabled={!permission.allowed}
+                          >
+                            <ReturnIcon />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    );
+                  })()}
+                  {onArchive && (() => {
+                    const permission = canArchiveDocument ? canArchiveDocument(doc) : { allowed: true };
+                    return (
+                      <Tooltip title={permission.allowed ? 'Archive Document' : permission.reason || 'Archive not allowed'}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => permission.allowed && onArchive(doc)}
+                            color="default"
+                            disabled={!permission.allowed}
+                          >
+                            <ArchiveIcon />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    );
+                  })()}
+                  {onDelete && (() => {
+                    const permission = canDeleteDocument ? canDeleteDocument(doc) : { allowed: true };
+                    return (
+                      <Tooltip title={permission.allowed ? 'Hard Delete' : permission.reason || 'Delete is not allowed'}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => permission.allowed && onDelete(doc)}
+                            color="error"
+                            disabled={!permission.allowed}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    );
+                  })()}
                 </TableCell>
               </TableRow>
             ))}
@@ -238,7 +230,7 @@ export default function DocumentList({
         component="div"
         count={total}
         rowsPerPage={limit}
-        page={page - 1} // MUI uses 0-based, our API uses 1-based
+        page={page - 1}
         onPageChange={handleChangePage}
         onRowsPerPageChange={handleChangeRowsPerPage}
         labelDisplayedRows={() => {

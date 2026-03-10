@@ -48,6 +48,8 @@ export interface ListDocumentsDto {
   limit?: number;
   actor_role?: UserRole;
   actor_id?: number;
+  /** When true, return soft-deleted (archived) documents owned by actor_id (focal only) */
+  archived?: boolean;
 }
 
 @Injectable()
@@ -138,9 +140,9 @@ export class DocumentService implements OnModuleInit {
     `);
   }
 
-  private async getLatestReviewDecisionMap(
+  private async getLatestReviewMap(
     documentIds: string[],
-  ): Promise<Map<string, ReviewDecision | 'pending'>> {
+  ): Promise<Map<string, { decision: ReviewDecision | 'pending'; remarks: string | null }>> {
     if (documentIds.length === 0) {
       return new Map();
     }
@@ -152,20 +154,30 @@ export class DocumentService implements OnModuleInit {
       .addOrderBy('review.reviewed_at', 'DESC')
       .getMany();
 
-    const latestMap = new Map<string, ReviewDecision | 'pending'>();
+    const latestMap = new Map<string, { decision: ReviewDecision | 'pending'; remarks: string | null }>();
     for (const review of reviews) {
       if (!latestMap.has(review.document_id)) {
-        latestMap.set(review.document_id, review.decision);
+        latestMap.set(review.document_id, { decision: review.decision, remarks: review.remarks ?? null });
       }
     }
 
     for (const documentId of documentIds) {
       if (!latestMap.has(documentId)) {
-        latestMap.set(documentId, 'pending');
+        latestMap.set(documentId, { decision: 'pending', remarks: null });
       }
     }
 
     return latestMap;
+  }
+
+  /** @deprecated use getLatestReviewMap instead */
+  private async getLatestReviewDecisionMap(
+    documentIds: string[],
+  ): Promise<Map<string, ReviewDecision | 'pending'>> {
+    const full = await this.getLatestReviewMap(documentIds);
+    const out = new Map<string, ReviewDecision | 'pending'>();
+    full.forEach((v, k) => out.set(k, v.decision));
+    return out;
   }
 
   private async getReferenceCountMap(documentIds: string[]): Promise<Map<string, number>> {
@@ -200,12 +212,12 @@ export class DocumentService implements OnModuleInit {
   private async enrichDocumentsForWorkflow(documents: Document[]): Promise<Document[]> {
     const documentIds = documents.map((document) => document.id);
     const [reviewMap, referenceCountMap] = await Promise.all([
-      this.getLatestReviewDecisionMap(documentIds),
+      this.getLatestReviewMap(documentIds),
       this.getReferenceCountMap(documentIds),
     ]);
 
     return documents.map((document) => {
-      const complianceStatus = reviewMap.get(document.id) || 'pending';
+      const latestReview = reviewMap.get(document.id) || { decision: 'pending', remarks: null };
       const issuanceLinks = Array.isArray((document as any).issuances)
         ? (document as any).issuances.length
         : 0;
@@ -214,7 +226,8 @@ export class DocumentService implements OnModuleInit {
 
       return {
         ...document,
-        compliance_status: complianceStatus,
+        compliance_status: latestReview.decision,
+        latest_review_remarks: latestReview.remarks,
         is_linked: linkCount > 0,
         linked_count: linkCount,
       } as Document;
@@ -463,10 +476,15 @@ export class DocumentService implements OnModuleInit {
       'documents',
     );
 
-    // Create document entity
+    // Create document entity — use the display name as the title for reportorial uploads
+    const finalTitle = metadata.reportorial_doc_type_id && reportorialDocType
+      ? reportorialDocType.display_name
+      : persistedMetadata.title;
+
     const extractedText = await this.extractInitialText(file);
     const document: Document = this.documentRepo.create({
       ...persistedMetadata,
+      title: finalTitle,
       document_type: finalDocumentType,
       period: finalPeriod || persistedMetadata.period,
       year: finalYear || persistedMetadata.year,
@@ -548,6 +566,7 @@ export class DocumentService implements OnModuleInit {
       limit = 20,
       actor_role,
       actor_id,
+      archived = false,
     } = dto;
 
     const query = this.documentRepo
@@ -555,7 +574,8 @@ export class DocumentService implements OnModuleInit {
       .leftJoinAndSelect('doc.unit', 'unit')
       .leftJoinAndSelect('doc.uploader', 'uploader')
       .leftJoinAndSelect('doc.issuances', 'issuances')
-      .where('doc.is_deleted = :isDeleted', { isDeleted: false });
+      // archived mode shows soft-deleted docs for the owning focal; normal mode shows active docs
+      .where('doc.is_deleted = :isDeleted', { isDeleted: archived ? true : false });
 
     if (unit_id) {
       query.andWhere('doc.unit_id = :unit_id', { unit_id });
@@ -580,8 +600,23 @@ export class DocumentService implements OnModuleInit {
       query.andWhere('doc.uploaded_by = :actorId', { actorId: actor_id });
     }
 
-    // Super admin and reviewer see all documents (including returned ones)
-    // so they can track every submission status.
+    // Admin/reviewer list excludes already-resolved documents (compliant, returned) so only
+    // pending submissions needing attention appear. Explicit status filters bypass this.
+    if (
+      !archived &&
+      !status &&
+      (actor_role === UserRole.SUPER_ADMIN || actor_role === UserRole.REVIEWER)
+    ) {
+      query.andWhere(`
+        COALESCE((
+          SELECT mr.decision
+          FROM manual_reviews mr
+          WHERE mr.document_id = doc.id
+          ORDER BY mr.reviewed_at DESC
+          LIMIT 1
+        ), 'pending') NOT IN ('compliant', 'needs_revision', 'non_compliant')
+      `);
+    }
 
     query.orderBy('doc.created_at', 'DESC');
     query.distinct(true);
@@ -1018,6 +1053,44 @@ export class DocumentService implements OnModuleInit {
     );
 
     return review;
+  }
+
+  /**
+   * Focal-initiated archive: soft-delete a returned document so it no longer
+   * appears in the active list but remains visible in the focal's archived view.
+   */
+  async archiveDocument(documentId: string, actorId: number): Promise<void> {
+    const document = await this.documentRepo.findOne({
+      where: { id: documentId, is_deleted: false },
+      relations: ['uploader'],
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    if (document.uploaded_by !== actorId) {
+      throw new BadRequestException('You can only archive your own documents.');
+    }
+
+    // Check latest review to confirm it is actually a returned document
+    const latestReview = await this.reviewRepo.findOne({
+      where: { document_id: documentId },
+      order: { reviewed_at: 'DESC' },
+    });
+
+    const isReturned =
+      latestReview?.decision === ReviewDecision.NEEDS_REVISION ||
+      latestReview?.decision === ReviewDecision.NON_COMPLIANT;
+
+    if (!isReturned) {
+      throw new BadRequestException(
+        'Only returned (needs revision / non-compliant) documents can be archived.',
+      );
+    }
+
+    await this.documentRepo.update(documentId, { is_deleted: true });
+    this.logger.log(`Document archived by focal ${actorId}: ${documentId}`);
   }
 
   /**

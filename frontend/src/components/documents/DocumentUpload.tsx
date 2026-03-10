@@ -14,7 +14,7 @@ import {
   Typography,
 } from '@mui/material';
 import { CloudUpload as UploadIcon } from '@mui/icons-material';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import { documentsApi, UploadDocumentRequest } from '@/lib/api/documents';
 import { unitsApi } from '@/lib/api/units';
@@ -37,6 +37,7 @@ const MONTH_NAMES = [
 export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
+  const queryClient = useQueryClient();
   const isFocal = user?.role === 'focal';
 
   const now = new Date();
@@ -100,6 +101,7 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
       setReportorialDocTypeId('');
       setFile(null);
       if (!isFocal) setUnitId('');
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
       enqueueSnackbar('Document uploaded successfully!', { variant: 'success' });
       onSuccess?.();
     },

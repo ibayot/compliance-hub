@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.5.0.1] - 2026-03-04 — KPI MoV Major Update (Quality-First)
 
+### Fixed (QA Iteration 6 — Documents UX + Focal Workflow Hardening)
+- **Compliant docs hidden from admin list** – Restored `NOT IN ('compliant', 'needs_revision', 'non_compliant')` filter on `listDocuments` for `super_admin`/`reviewer` when no explicit status filter is active and `archived = false`; admin queue only shows actionable documents.
+- **Compliant docs hidden from Reviews queue** – Reviews table now filters out rows where the document's latest review decision is `compliant`.
+- **Focal Return button removed** – `onReturn` prop not passed to `DocumentList` for focal users; the UI no longer shows a Return button they cannot use.
+- **Uploaded By column hidden for focal** – `hideUploaderColumn` prop passed as `true` for focal users, removing the redundant column.
+- **Unit column hidden for focal** – `hideUnitColumn` prop passed as `true` for focal users.
+- **Document title set to Display Name** – When uploading via reportorial doc type, the document's `title` is now set to `reportorialDocType.display_name` instead of the uploaded filename.
+- **Detail page shows workflow status** – The status chip in the document detail page now uses the same `getWorkflowStatus` logic (Approved / Returned / Pending Review) instead of the raw file-processing status.
+- **Detail page shows return remarks** – An amber `Alert` banner now appears below the document info panel when `latest_review_remarks` is present, showing why the document was returned.
+- **Removed redundant Download Current button** – Header "Download Current" button removed from document detail page; per-version downloads in the Version History timeline remain.
+- **Archive returned documents** – Focal users can now archive documents that were returned (needs_revision / non_compliant). A new `POST /documents/:id/archive` endpoint soft-deletes the record. The documents list shows an Archive icon for applicable focal documents.
+- **Archived documents view** – New page at `/dashboard/documents/archived` lists all archived focal documents with title, type, period, status chip, and the return remarks. Accessible via "View Archived" button on the documents page.
+- **Upload reflects immediately** – `DocumentUpload` component now calls `queryClient.invalidateQueries({ queryKey: ['documents'] })` on success, busting the stale cache before navigating back.
+- **KPI unit filter locked for focal** – On KPI page, focal users' unit filter is auto-set to their own unit on mount and the dropdown is disabled so they cannot switch units.
+- **Metrics auto-return documents** – Works correctly now that the admin filter is restored; documents that fail metrics checks are automatically returned to focal with remarks and are no longer visible in the admin queue as pending.
+
 ### Fixed (QA Iteration 5 — Documents Workflow + Role Gates)
 - **Document initial status** – Focal uploads now create the document record with `PENDING` status instead of `READY`, so the document immediately appears in admin/compliance officer view and the Reviews queue after text extraction completes.
 - **Focal re-upload after return** – `validateFocalSubmission` (legacy path) and the new reportorial path both now allow re-upload when the existing submission has a `needs_revision` or `non_compliant` review decision; the old returned document is soft-deleted before the new one is inserted.

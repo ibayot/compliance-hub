@@ -10,6 +10,7 @@ export interface Document {
   year: string;
   status: 'pending' | 'processing' | 'ready' | 'failed';
   compliance_status?: 'pending' | 'compliant' | 'non_compliant' | 'needs_revision';
+  latest_review_remarks?: string | null;
   is_linked?: boolean;
   linked_count?: number;
   current_version: number;
@@ -121,6 +122,8 @@ export interface ListDocumentsParams {
   status?: 'pending' | 'processing' | 'ready' | 'failed';
   page?: number;
   limit?: number;
+  /** Focal only: return soft-deleted (archived) documents */
+  archived?: boolean;
 }
 
 export interface ListDocumentsResponse {
@@ -284,6 +287,10 @@ export const documentsApi = {
 
   returnDocument: async (id: string, remarks: string): Promise<void> => {
     await apiClient.post(`/documents/${id}/return`, { remarks });
+  },
+
+  archiveDocument: async (id: string): Promise<void> => {
+    await apiClient.post(`/documents/${id}/archive`);
   },
 
   getDocumentReferences: async (documentId: string): Promise<DocumentReferenceResponse> => {
