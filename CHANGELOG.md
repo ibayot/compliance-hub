@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.5.0.1] - 2026-03-04 — KPI MoV Major Update (Quality-First)
 
+### Fixed (QA Iteration 8 — Metrics pipeline reliability + archived docs end-to-end)
+- **Bull queue jobs lost on backend restart** – Added `onModuleInit` startup recovery in `DocumentService`: on every backend start, all documents with `status IN ('pending','processing')` are scanned. Those with `extracted_text` already set are immediately updated to `READY` and their `compute-metrics` job is re-queued; those without extracted text have a full `process-document` job re-queued. This ensures no document is left permanently stuck after a server restart.
+- **`reprocessDocument` smart routing** – The `POST /documents/:id/reprocess` endpoint now checks whether the document already has `extracted_text`. If so, it updates status to `READY` and queues `compute-metrics` only (skipping redundant file re-parsing). If not, it queues the full `process-document` pipeline.
+- **Cybersecurity Incident Summary metrics end-to-end (verified logic)** – Document with `reportorial_doc_type_id=9` and text `"Users Trained: 1"` is now compared against `expected_number=10` with `comparison=gte`. Result: `1 >= 10 = FAIL` → NEEDS\_REVISION auto-review created → focal sees document as "Returned".
+- **Archived documents page** – No code change needed; page was correct. The empty state was a downstream effect of metrics never running (no review → can\'t archive → nothing to show). With the pipeline fixed, the full chain now works: upload → metrics fail → auto-return → focal archives → archived page shows the document.
+
 ### Fixed (QA Iteration 7 — Cybersecurity Metrics + Archived Docs + Focal UX)
 - **Cybersecurity metrics not auto-returning** – `getApplicableMetrics` now correctly respects `reportorial_doc_type_id`; the global-match condition tightened to `(unit_id IS NULL AND document_type IS NULL AND reportorial_doc_type_id IS NULL)` and an additional `OR reportorial_doc_type_id = :id` branch added. Cybersecurity Incident Summary metrics (property_check + section_check) now run on documents with `reportorial_doc_type_id = 9`.
 - **Stuck documents (Bull job lost on restart)** – New `POST /documents/:id/reprocess` endpoint (SUPER_ADMIN + REVIEWER only) resets document status to `PENDING` and re-enqueues the `process-document` Bull job, recovering documents that lost their processing job on backend restart.

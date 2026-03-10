@@ -138,6 +138,48 @@ export class DocumentService implements OnModuleInit {
       ALTER TABLE documents
       ADD COLUMN IF NOT EXISTS file_blob LONGBLOB NULL;
     `);
+
+    // Startup recovery: re-enqueue any documents stuck in pending/processing due to
+    // a previous backend crash or restart that dropped the Bull queue jobs.
+    try {
+      const stuckDocs = await this.documentRepo
+        .createQueryBuilder('doc')
+        .leftJoinAndSelect('doc.versions', 'versions')
+        .where('doc.status IN (:...statuses)', { statuses: ['pending', 'processing'] })
+        .andWhere('doc.is_deleted = false')
+        .getMany();
+
+      if (stuckDocs.length > 0) {
+        this.logger.log(`Startup recovery: found ${stuckDocs.length} stuck document(s) — re-queuing`);
+        for (const doc of stuckDocs) {
+          const version = doc.versions?.find((v) => v.version_number === doc.current_version);
+          if (!version) {
+            this.logger.warn(`Startup recovery: doc ${doc.id} has no matching version — skipping`);
+            continue;
+          }
+          try {
+            if (doc.extracted_text !== null && doc.extracted_text !== undefined) {
+              // Text already extracted — reset to READY and run metrics only
+              await this.documentRepo.update(doc.id, { status: DocumentStatus.READY });
+              void this.documentQueue.add('compute-metrics', { versionId: version.id }).catch((e) =>
+                this.logger.warn(`Startup recovery: failed to enqueue metrics for ${doc.id}: ${e?.message}`),
+              );
+            } else {
+              // No extracted text — full reprocess needed
+              void this.documentQueue
+                .add('process-document', { documentId: doc.id, versionId: version.id })
+                .catch((e) =>
+                  this.logger.warn(`Startup recovery: failed to enqueue process for ${doc.id}: ${e?.message}`),
+                );
+            }
+          } catch (innerErr) {
+            this.logger.warn(`Startup recovery: error processing doc ${doc.id}: ${innerErr?.message}`);
+          }
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`Startup recovery failed (non-fatal): ${err?.message}`);
+    }
   }
 
   private async getLatestReviewMap(
@@ -1095,8 +1137,9 @@ export class DocumentService implements OnModuleInit {
   }
 
   /**
-   * Admin-initiated reprocess: re-queue process-document for a stuck/failed document.
-   * Resets status to PENDING and re-enqueues the processing job for the current version.
+   * Admin-initiated reprocess for a stuck/failed document.
+   * - If extracted_text already exists: update status to READY and queue compute-metrics only.
+   * - Otherwise: reset to PENDING and queue the full process-document pipeline.
    */
   async reprocessDocument(documentId: string): Promise<void> {
     const document = await this.documentRepo.findOne({
@@ -1116,20 +1159,29 @@ export class DocumentService implements OnModuleInit {
       throw new BadRequestException('No version found to reprocess.');
     }
 
-    // Reset to PENDING so the processor picks it up
-    await this.documentRepo.update(documentId, { status: DocumentStatus.PENDING });
+    const hasText = document.extracted_text !== null && document.extracted_text !== undefined;
 
-    await this.documentQueue
-      .add('process-document', {
-        documentId: document.id,
-        versionId: currentVersion.id,
-      })
-      .catch((err) => {
-        this.logger.warn(`Failed to enqueue reprocess for ${documentId}: ${err?.message}`);
-        throw err;
-      });
-
-    this.logger.log(`Document reprocess enqueued: ${documentId} version=${currentVersion.id}`);
+    if (hasText) {
+      // Text already extracted — skip file processing, just re-run metrics
+      await this.documentRepo.update(documentId, { status: DocumentStatus.READY });
+      await this.documentQueue
+        .add('compute-metrics', { versionId: currentVersion.id })
+        .catch((err) => {
+          this.logger.warn(`Failed to enqueue metrics for ${documentId}: ${err?.message}`);
+          throw err;
+        });
+      this.logger.log(`Document metrics re-queued (text exists): ${documentId} version=${currentVersion.id}`);
+    } else {
+      // No extracted text — full reprocess
+      await this.documentRepo.update(documentId, { status: DocumentStatus.PENDING });
+      await this.documentQueue
+        .add('process-document', { documentId: document.id, versionId: currentVersion.id })
+        .catch((err) => {
+          this.logger.warn(`Failed to enqueue reprocess for ${documentId}: ${err?.message}`);
+          throw err;
+        });
+      this.logger.log(`Document full-reprocess enqueued: ${documentId} version=${currentVersion.id}`);
+    }
   }
 
   /**
