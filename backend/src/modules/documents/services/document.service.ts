@@ -317,9 +317,23 @@ export class DocumentService implements OnModuleInit {
     });
 
     if (existingSubmission) {
-      throw new ConflictException(
-        'This report type was already submitted for the selected cycle.',
-      );
+      // Allow re-upload if the document was returned for revision
+      const latestReview = await this.reviewRepo.findOne({
+        where: { document_id: existingSubmission.id },
+        order: { reviewed_at: 'DESC' },
+      });
+
+      if (
+        latestReview?.decision === ReviewDecision.NEEDS_REVISION ||
+        latestReview?.decision === ReviewDecision.NON_COMPLIANT
+      ) {
+        // Soft-delete the returned document so re-upload can proceed
+        await this.documentRepo.update(existingSubmission.id, { is_deleted: true });
+      } else {
+        throw new ConflictException(
+          'This report type was already submitted for the selected cycle.',
+        );
+      }
     }
 
     const expectedBase = this.buildExpectedFileBase(
@@ -406,6 +420,39 @@ export class DocumentService implements OnModuleInit {
       finalYear = metadata.year || String(new Date().getFullYear());
     }
 
+    // For focal users on the reportorial path, check for duplicate submissions
+    if (dto.user_role === UserRole.FOCAL && metadata.reportorial_doc_type_id) {
+      const existingReportorial = await this.documentRepo.findOne({
+        where: {
+          unit_id: Number(dto.unit_id),
+          reportorial_doc_type_id: Number(metadata.reportorial_doc_type_id),
+          period: finalPeriod || metadata.period,
+          year: finalYear || metadata.year,
+          uploaded_by: metadata.uploaded_by,
+          is_deleted: false,
+        },
+      });
+
+      if (existingReportorial) {
+        const latestReview = await this.reviewRepo.findOne({
+          where: { document_id: existingReportorial.id },
+          order: { reviewed_at: 'DESC' },
+        });
+
+        if (
+          latestReview?.decision === ReviewDecision.NEEDS_REVISION ||
+          latestReview?.decision === ReviewDecision.NON_COMPLIANT
+        ) {
+          // Soft-delete the returned document so re-upload can proceed
+          await this.documentRepo.update(existingReportorial.id, { is_deleted: true });
+        } else {
+          throw new ConflictException(
+            'This report type was already submitted for the selected cycle.',
+          );
+        }
+      }
+    }
+
     // Calculate checksum
     const checksum = this.storageService.calculateChecksum(file.buffer);
 
@@ -424,7 +471,7 @@ export class DocumentService implements OnModuleInit {
       period: finalPeriod || persistedMetadata.period,
       year: finalYear || persistedMetadata.year,
       reportorial_doc_type_id: metadata.reportorial_doc_type_id ? Number(metadata.reportorial_doc_type_id) : null,
-      status: DocumentStatus.READY,
+      status: DocumentStatus.PENDING,
       current_version: 1,
       extracted_text: extractedText,
       file_blob: file.buffer,
@@ -533,17 +580,8 @@ export class DocumentService implements OnModuleInit {
       query.andWhere('doc.uploaded_by = :actorId', { actorId: actor_id });
     }
 
-    if (actor_role === UserRole.SUPER_ADMIN || actor_role === UserRole.REVIEWER) {
-      query.andWhere(`
-        COALESCE((
-          SELECT mr.decision
-          FROM manual_reviews mr
-          WHERE mr.document_id = doc.id
-          ORDER BY mr.reviewed_at DESC
-          LIMIT 1
-        ), 'pending') NOT IN ('needs_revision', 'non_compliant')
-      `);
-    }
+    // Super admin and reviewer see all documents (including returned ones)
+    // so they can track every submission status.
 
     query.orderBy('doc.created_at', 'DESC');
     query.distinct(true);
@@ -936,8 +974,13 @@ export class DocumentService implements OnModuleInit {
       );
     }
 
-    if (document.status !== DocumentStatus.PENDING) {
-      throw new BadRequestException('Only pending documents can be returned.');
+    if (
+      document.status === DocumentStatus.PROCESSING ||
+      document.status === DocumentStatus.FAILED
+    ) {
+      throw new BadRequestException(
+        'Documents currently being processed or in failed state cannot be returned. Please wait for processing to complete.',
+      );
     }
 
     const version = await this.versionRepo.findOne({

@@ -45,7 +45,7 @@ export default function DocumentsPage() {
     document_type: '',
     period: '',
     year: '',
-    status: 'pending',
+    status: undefined,
   });
 
   const [showFilters, setShowFilters] = useState(false);
@@ -153,22 +153,18 @@ export default function DocumentsPage() {
       return { label: 'PENDING', color: 'warning' as const };
     }
 
-    if (document.status === 'processing') {
-      return { label: 'UNDER REVIEW', color: 'info' as const };
-    }
-
     if (complianceStatus === 'compliant') {
-      return { label: 'COMPLIANT', color: 'success' as const };
+      return { label: 'Approved', color: 'success' as const };
     }
 
     if (
       complianceStatus === 'non_compliant' ||
       complianceStatus === 'needs_revision'
     ) {
-      return { label: 'RETURNED', color: 'error' as const };
+      return { label: 'Returned', color: 'error' as const };
     }
 
-    return { label: 'SUBMITTED', color: 'warning' as const };
+    return { label: 'Pending Review', color: 'warning' as const };
   };
 
   const canReturnDocument = (document: Document) => {
@@ -182,8 +178,8 @@ export default function DocumentsPage() {
       return { allowed: false, reason: 'Documents uploaded by compliance/super admin require hard delete instead of return.' };
     }
 
-    if (document.status !== 'pending') {
-      return { allowed: false, reason: 'Only pending documents can be returned.' };
+    if (document.status === 'processing' || document.status === 'failed') {
+      return { allowed: false, reason: 'Documents currently being processed or in failed state cannot be returned.' };
     }
 
     if (document.compliance_status === 'compliant') {
@@ -216,7 +212,7 @@ export default function DocumentsPage() {
       document_type: '',
       period: '',
       year: '',
-      status: 'pending',
+      status: undefined,
     });
   };
 

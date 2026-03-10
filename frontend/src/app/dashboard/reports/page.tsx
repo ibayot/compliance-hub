@@ -46,6 +46,8 @@ import { kpiApi, KpiDirection } from '@/lib/api/kpi';
 import { documentsApi } from '@/lib/api/documents';
 import { unitsApi } from '@/lib/api/units';
 import { metricsApi } from '@/lib/api/metrics';
+import { useAuth } from '@/contexts/AuthContext';
+import { UserRole } from '@/lib/types/auth';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -1082,6 +1084,22 @@ function ReportView({ params }: { params: ReportParams }) {
 
 export default function ReportsPage() {
   const now = new Date();
+  const { user } = useAuth();
+  const isSuperOrReviewer =
+    user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.REVIEWER;
+
+  if (!isSuperOrReviewer) {
+    return (
+      <Box p={4}>
+        <Typography variant="h5" color="error" gutterBottom>
+          Access Restricted
+        </Typography>
+        <Typography color="text.secondary">
+          The Reports module is only accessible to Super Admins and Compliance Officers.
+        </Typography>
+      </Box>
+    );
+  }
 
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedFrequency, setSelectedFrequency] = useState<Frequency>('monthly');

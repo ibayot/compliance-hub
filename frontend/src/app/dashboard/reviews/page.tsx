@@ -25,8 +25,13 @@ import { useSnackbar } from 'notistack';
 import { documentsApi, Document } from '@/lib/api/documents';
 import { reviewsApi, ReviewDecision } from '@/lib/api/reviews';
 import DocumentViewer from '@/components/documents/DocumentViewer';
+import { useAuth } from '@/contexts/AuthContext';
+import { UserRole } from '@/lib/types/auth';
 
 export default function ReviewsPage() {
+  const { user } = useAuth();
+  const isSuperOrReviewer =
+    user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.REVIEWER;
   const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [latestReviewByDoc, setLatestReviewByDoc] = useState<Record<string, string>>({});
@@ -57,7 +62,7 @@ export default function ReviewsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const response = await documentsApi.listDocuments({ status: 'pending', limit: 200 });
+      const response = await documentsApi.listDocuments({ status: 'ready', limit: 200 });
       const docs = response.data || [];
       setDocuments(docs);
 
@@ -190,6 +195,19 @@ export default function ReviewsPage() {
       setSaving(false);
     }
   };
+
+  if (!isSuperOrReviewer) {
+    return (
+      <Box p={4}>
+        <Typography variant="h5" color="error" gutterBottom>
+          Access Restricted
+        </Typography>
+        <Typography color="text.secondary">
+          The Reviews module is only accessible to Super Admins and Compliance Officers.
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box>

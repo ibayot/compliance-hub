@@ -1,5 +1,17 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 QA Polish Checkpoint 5 (`v1.5.0.1`) — Documents Workflow + Role Gates
+
+- **Focal upload status**: documents now created as `PENDING`; processor moves them to `READY` after text extraction so they appear to admins and in the Review queue.
+- **Re-upload after return**: both legacy and reportorial upload paths now allow re-upload when the existing submission was returned (`needs_revision`/`non_compliant`); old doc is soft-deleted.
+- **Admin visibility**: removed the review-decision filter that was hiding returned documents from super admin/compliance officer list view.
+- **Return gate**: `returnDocumentForRevision` now allows returning `READY` documents (not just `PENDING`), fixing the inability to return text-extracted submissions.
+- **Focal status labels**: Documents page now shows `Pending Review` / `Approved` / `Returned` chips for focal users.
+- **Default filter**: Documents page default status filter changed to "All" so admins immediately see new uploads.
+- **Reviews role gate**: Reviews module restricted to `super_admin` and `reviewer`; Review queue filter changed to `ready` to surface text-extracted documents.
+- **Reports role gate**: Reports module restricted to `super_admin` and `reviewer`.
+- All builds clean (backend `tsc --noEmit` ✅, frontend `tsc --noEmit` ✅).
+
 ## 🚀 QA Polish Checkpoint 4 (`v1.5.0.1`, 2026-03-10)
 
 - All HTML report headers (h2, h3) now centered; period/summary/th elements use Arial 10pt

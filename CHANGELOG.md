@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.5.0.1] - 2026-03-04 — KPI MoV Major Update (Quality-First)
 
+### Fixed (QA Iteration 5 — Documents Workflow + Role Gates)
+- **Document initial status** – Focal uploads now create the document record with `PENDING` status instead of `READY`, so the document immediately appears in admin/compliance officer view and the Reviews queue after text extraction completes.
+- **Focal re-upload after return** – `validateFocalSubmission` (legacy path) and the new reportorial path both now allow re-upload when the existing submission has a `needs_revision` or `non_compliant` review decision; the old returned document is soft-deleted before the new one is inserted.
+- **Admin visibility of focal uploads** – Removed the `NOT IN ('needs_revision', 'non_compliant')` subquery filter from `listDocuments` for `super_admin`/`reviewer` roles; admins now see all submissions regardless of review decision.
+- **Return-for-revision gate** – `returnDocumentForRevision` now blocks only documents in `PROCESSING` or `FAILED` status, allowing admins to return both newly uploaded (`PENDING`) and text-extracted (`READY`) documents.
+- **Focal document status labels** – Status chip now shows **Pending Review** (awaiting or in-processing), **Approved** (compliant), or **Returned** (needs revision / non-compliant) instead of SUBMITTED / UNDER REVIEW / COMPLIANT / RETURNED.
+- **Documents page default filter** – Default status filter changed from `'pending'` to `undefined` (show all), so admins see new focal uploads immediately.
+- **Reviews module role gate** – Reviews page restricts access to `super_admin` and `reviewer` roles; other roles see an Access Restricted message. Review queue filter updated from `status: 'pending'` to `status: 'ready'`.
+- **Reports module role gate** – Reports page restricts access to `super_admin` and `reviewer` roles; other roles see an Access Restricted message.
+
 ### Fixed (QA Iteration 4 - 2026-03-10)
 - **MoV Report HTML** – all main headers (`h2`) and section headers (`h3`) centered; period/summary text Arial 10pt; table headers (`th`) centered.
 - **Register + Monitoring report** – section/table names centered, Arial 10pt.

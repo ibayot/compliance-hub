@@ -1,5 +1,7 @@
 # Current Status Update - Compliance Hub
 
+> Update (`v1.5.0.1`, QA Iteration 5): Documents workflow overhaul — focal uploads now start as `PENDING` (visible to admins); re-upload allowed after return (soft-deletes old returned doc); admin list filter no longer hides returned docs; `returnDocumentForRevision` accepts both PENDING and READY docs; focal status labels changed to Pending Review / Approved / Returned; Reviews module restricted to `super_admin` + `reviewer` with `ready` status filter; Reports module restricted to `super_admin` + `reviewer`.
+
 > Update (`v1.5.0.1`, 2026-03-10 - Iteration 4): Report headers centered, Arial fonts on period/summary/h3/th, Monitoring Matrix renamed to “ICT Compliance Register Monitoring” with Q-score columns + URL source links + colgroup widths + removed Applicable Bases parenthetical; KPI Remarks panel hidden until Assessment Report generated; Print Plan + Print Schedule buttons added; Metrics applicability bug fixed (reportorial_doc_type_id now saved); Document upload focal path fixed (no longer throws false assignment error when using new doc-type system).
 
 > Update (`v1.5.0.1`, 2026-03-09 - Iteration 3): Register report columns refactored (remove 2 cols, rename Effectivity, font specs, vertical-align, no-bullet summary, separate Monitoring Matrix report), MoV role-gating, Report Settings (header images + footer), KPI remarks free-form, Assessment Plan timeline design, Artifacts status edit.
