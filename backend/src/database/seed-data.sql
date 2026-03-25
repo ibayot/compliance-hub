@@ -76,7 +76,19 @@ ALTER TABLE issuances ADD COLUMN IF NOT EXISTS attachment_uploaded_at DATETIME N
 INSERT INTO users (id, email, passwordHash, first_name, last_name, role, active, created_at, updated_at) VALUES
 (1, 'admin@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'System', 'Admin', 'super_admin', 1, NOW(), NOW()),
 (2, 'reviewer@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'QA', 'Reviewer', 'reviewer', 1, NOW(), NOW()),
-(3, 'focal@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Unit', 'Focal', 'focal', 1, NOW(), NOW());
+(3, 'focal@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Unit', 'Focal', 'focal', 1, NOW(), NOW()),
+(4, 'desktop.tech@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Desktop', 'Technician', 'technician_desktop', 1, NOW(), NOW()),
+(5, 'it.tech@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'IT', 'Technician', 'technician_it_support', 1, NOW(), NOW()),
+(6, 'user1@example.com', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Juan', 'Dela Cruz', 'user', 1, NOW(), NOW()),
+(7, 'user2@example.com', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Maria', 'Santos', 'user', 1, NOW(), NOW());
+
+-- Seed tickets (ticket_number format: DESK-YYYYMMDD-NNNN or IT-YYYYMMDD-NNNN)
+INSERT INTO tickets (id, ticket_number, subject, description, ticket_type, priority, status, requester_id, assigned_to_id, resolution_notes, created_at, updated_at) VALUES
+(UUID(), 'DESK-20250101-0001', 'My computer won''t turn on', 'Pressed the power button but nothing happens. No lights or fans.', 'desktop_support', 'high', 'assigned', 6, 4, NULL, NOW(), NOW()),
+(UUID(), 'IT-20250101-0001', 'Cannot connect to the internet', 'Getting "No internet access" despite being connected to the office WiFi.', 'it_support', 'medium', 'assigned', 7, 5, NULL, NOW(), NOW()),
+(UUID(), 'DESK-20250101-0002', 'Printer not printing', 'Document sent to shared printer but nothing comes out. Queue shows it pending.', 'desktop_support', 'low', 'open', 6, NULL, NULL, NOW(), NOW()),
+(UUID(), 'IT-20250101-0002', 'Email not syncing on phone', 'Work email stopped syncing on my mobile device after password reset.', 'it_support', 'medium', 'resolved', 7, 5, 'Exchange profile was re-configured on the device. Issue resolved.', NOW(), NOW());
+
 
 -- Units: id is auto_increment int; columns: id, name, description, active, created_at
 INSERT INTO units (id, name, description, active, created_at) VALUES

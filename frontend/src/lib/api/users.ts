@@ -20,7 +20,7 @@ export interface UserRecord {
 
 export interface CreateUserPayload {
   email: string;
-  password: string;
+  password?: string;
   firstName?: string;
   middleName?: string;
   lastName?: string;

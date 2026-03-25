@@ -164,7 +164,31 @@ export class UsersService {
     });
 
     if (existingUser) {
+      // If no password supplied, we're adding/updating an existing account (e.g. Google SSO walk-in)
+      if (!createUserDto.password) {
+        // Update role and profile fields, leave password unchanged
+        existingUser.role = createUserDto.role ?? existingUser.role;
+        if (createUserDto.firstName !== undefined) existingUser.firstName = createUserDto.firstName;
+        if (createUserDto.lastName !== undefined) existingUser.lastName = createUserDto.lastName;
+        if ((createUserDto as any).middleName !== undefined) existingUser.middleName = (createUserDto as any).middleName;
+        if ((createUserDto as any).suffix !== undefined) existingUser.suffix = (createUserDto as any).suffix;
+        if ((createUserDto as any).staffId !== undefined) existingUser.staffId = (createUserDto as any).staffId;
+        if ((createUserDto as any).position !== undefined) existingUser.position = (createUserDto as any).position;
+        if ((createUserDto as any).positionFull !== undefined) existingUser.positionFull = (createUserDto as any).positionFull;
+        if ((createUserDto as any).designation !== undefined) existingUser.designation = (createUserDto as any).designation;
+        if ((createUserDto as any).ticketMainFocal !== undefined) existingUser.ticketMainFocal = Boolean((createUserDto as any).ticketMainFocal);
+        if ((createUserDto as any).ticketTechnician !== undefined) existingUser.ticketTechnician = Boolean((createUserDto as any).ticketTechnician);
+        if (createUserDto.unitIds && createUserDto.unitIds.length > 0) {
+          existingUser.units = await this.unitsRepository.find({ where: { id: In(createUserDto.unitIds) } });
+        }
+        return this.usersRepository.save(existingUser);
+      }
       throw new ConflictException('User with this email already exists');
+    }
+
+    // New user must provide a password
+    if (!createUserDto.password) {
+      throw new BadRequestException('Password is required when creating a new account');
     }
 
     // Hash password

@@ -123,6 +123,8 @@ export interface CreateTicketDto {
   description: string;
   ticketType: TicketType;
   priority?: TicketPriority;
+  /** Staff only: override the requester (for walk-ins / phone calls) */
+  requesterId?: number;
 }
 
 export interface UpdateTicketDto {

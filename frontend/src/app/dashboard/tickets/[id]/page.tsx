@@ -32,7 +32,6 @@ import {
   Ticket,
   TechnicianOption,
   UpdateTicketDto,
-  AssignTicketDto,
   SubmitSatisfactionDto,
 } from '@/app/api/references';
 import { ArrowBack as BackIcon, Star as StarIcon } from '@mui/icons-material';
@@ -130,7 +129,7 @@ export default function TicketDetailPage() {
     if (!comment.trim()) return;
     try {
       setSubmittingComment(true);
-      await ticketsApi.addComment(ticketId, { content: comment, isInternal: isInternal && canStaff });
+      await ticketsApi.addComment(ticketId, comment, isInternal && canStaff);
       setComment('');
       setIsInternal(false);
       fetchTicket();
@@ -158,8 +157,7 @@ export default function TicketDetailPage() {
   const handleAssign = async () => {
     if (!assignToId) return;
     try {
-      const payload: AssignTicketDto = { assignedToId: Number(assignToId) };
-      await ticketsApi.assign(ticketId, payload);
+      await ticketsApi.assign(ticketId, Number(assignToId));
       setAssignDialogOpen(false);
       fetchTicket();
       enqueueSnackbar('Ticket assigned.', { variant: 'success' });

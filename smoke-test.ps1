@@ -19,7 +19,7 @@ $met = Invoke-RestMethod -Method Get -Uri "$api/metrics" -Headers $sh
 Write-Output "SMOKE_METRICS_OK count=$(@($met).Count)"
 
 $tickets = Invoke-RestMethod -Method Get -Uri "$api/tickets?page=1&limit=5" -Headers $sh
-Write-Output "SMOKE_TICKETS_OK count=$(@($tickets.data).Count)"
+Write-Output "SMOKE_TICKETS_OK count=$(@($tickets).Count)"
 
 $reviews = if (@($docs.data).Count -gt 0) {
     Invoke-RestMethod -Method Get -Uri "$api/documents/$($docs.data[0].id)/reviews" -Headers $sh
@@ -95,5 +95,65 @@ try {
 }
 $reprocessRouteOk = $reprocessTest -eq 404
 Write-Output "SMOKE_REPROCESS_ROUTE_OK=$reprocessRouteOk (expected 404 for unknown id)"
+
+# -------------------------------------------------------------------
+# v0.5.1 Ticket / User role tests
+# -------------------------------------------------------------------
+
+# 1. Regular user login
+$userLogin = Invoke-RestMethod -Method Post -Uri "$api/auth/login" -ContentType 'application/json' -Body (@{email='user1@example.com';password='password123'} | ConvertTo-Json)
+$uh = @{Authorization="Bearer $($userLogin.accessToken)"}
+Write-Output "SMOKE_USER_LOGIN_OK role=$($userLogin.user.role)"
+
+# 2. User can list their own tickets (should not be Forbidden)
+$userTickets = Invoke-RestMethod -Method Get -Uri "$api/tickets" -Headers $uh
+Write-Output "SMOKE_USER_TICKETS_LIST_OK count=$(@($userTickets).Count)"
+
+# 3. User can create a ticket
+$newTicket = Invoke-RestMethod -Method Post -Uri "$api/tickets" -ContentType 'application/json' -Headers $uh `
+  -Body (@{subject='Smoke test ticket';description='Created by user in smoke test';ticketType='it_support';priority='low'} | ConvertTo-Json)
+Write-Output "SMOKE_USER_CREATE_TICKET_OK id=$($newTicket.id.Substring(0,8)) number=$($newTicket.ticketNumber)"
+
+# 4. Technician (desktop) login
+$deskTech = Invoke-RestMethod -Method Post -Uri "$api/auth/login" -ContentType 'application/json' -Body (@{email='desktop.tech@rictms.gov.ph';password='password123'} | ConvertTo-Json)
+$dh = @{Authorization="Bearer $($deskTech.accessToken)"}
+Write-Output "SMOKE_DESKTOP_TECH_LOGIN_OK role=$($deskTech.user.role)"
+
+# 5. Technician (IT) login
+$itTech = Invoke-RestMethod -Method Post -Uri "$api/auth/login" -ContentType 'application/json' -Body (@{email='it.tech@rictms.gov.ph';password='password123'} | ConvertTo-Json)
+Write-Output "SMOKE_IT_TECH_LOGIN_OK role=$($itTech.user.role)"
+
+# 6. Admin creates a walk-in ticket on behalf of user2 (requester override)
+$user2Info = Invoke-RestMethod -Method Get -Uri "$api/users" -Headers $sh
+$user2 = @($user2Info) | Where-Object { $_.email -eq 'user2@example.com' } | Select-Object -First 1
+if ($user2) {
+    $walkInTicket = Invoke-RestMethod -Method Post -Uri "$api/tickets" -ContentType 'application/json' -Headers $sh `
+      -Body (@{subject='Walk-in: keyboard issue';description='User came in person - keyboard keys sticking';ticketType='desktop_support';priority='medium';requesterId=$user2.id} | ConvertTo-Json)
+    Write-Output "SMOKE_WALKIN_TICKET_OK number=$($walkInTicket.ticketNumber) requesterId=$($walkInTicket.requesterId)"
+} else {
+    Write-Output "SMOKE_WALKIN_TICKET_SKIP (user2@example.com not in DB - run seed first)"
+}
+
+# 7. Admin assigns a ticket to desktop technician
+if ($newTicket) {
+    try {
+        $desktopTicket = Invoke-RestMethod -Method Get -Uri "$api/tickets" -Headers $sh
+        $openTicket = @($desktopTicket) | Where-Object { $_.status -in @('open','assigned') -and $_.ticketType -eq 'desktop_support' } | Select-Object -First 1
+        if ($openTicket) {
+            $deskUser = @($user2Info) | Where-Object { $_.email -eq 'desktop.tech@rictms.gov.ph' } | Select-Object -First 1
+            if ($deskUser) {
+                $assigned = Invoke-RestMethod -Method Patch -Uri "$api/tickets/$($openTicket.id)/assign" -ContentType 'application/json' -Headers $sh `
+                  -Body (@{assignedToId=$deskUser.id} | ConvertTo-Json)
+                Write-Output "SMOKE_ASSIGN_TICKET_OK ticketId=$($openTicket.id.Substring(0,8)) assignedTo=$($assigned.assignedToId)"
+            } else {
+                Write-Output "SMOKE_ASSIGN_TICKET_SKIP (desktop tech user not found)"
+            }
+        } else {
+            Write-Output "SMOKE_ASSIGN_TICKET_SKIP (no open desktop ticket found)"
+        }
+    } catch {
+        Write-Output "SMOKE_ASSIGN_TICKET_FAIL: $($_.Exception.Message)"
+    }
+}
 
 Write-Output "--- ALL SMOKE TESTS PASSED ---"

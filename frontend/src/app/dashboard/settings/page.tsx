@@ -423,6 +423,7 @@ function FocalUserManagementCard() {
   // Email autocomplete suggestions
   const [emailSuggestions, setEmailSuggestions] = useState<{ id: number; email: string; firstName?: string; lastName?: string }[]>([]);
   const [emailInputValue, setEmailInputValue] = useState('');
+  const [isExistingEmail, setIsExistingEmail] = useState(false);
 
   useEffect(() => {
     if (!emailInputValue || emailInputValue.length < 2) { setEmailSuggestions([]); return; }
@@ -451,12 +452,15 @@ function FocalUserManagementCard() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  const resetForm = () => setForm({
-    email: '', password: '', firstName: '', middleName: '', lastName: '',
-    suffix: '', staffId: '', role: UserRole.FOCAL, position: '', positionFull: '', designation: '',
-    ticketMainFocal: false, ticketTechnician: false,
-    unitIds: [],
-  });
+  const resetForm = () => {
+    setForm({
+      email: '', password: '', firstName: '', middleName: '', lastName: '',
+      suffix: '', staffId: '', role: UserRole.FOCAL, position: '', positionFull: '', designation: '',
+      ticketMainFocal: false, ticketTechnician: false,
+      unitIds: [],
+    });
+    setIsExistingEmail(false);
+  };
 
   const handleOpenCreate = () => { resetForm(); setEmailInputValue(''); setEmailSuggestions([]); setCreateError(null); setCreateDialogOpen(true); };
 
@@ -464,7 +468,10 @@ function FocalUserManagementCard() {
     setCreateError(null);
     try {
       setCreating(true);
-      await usersApi.create(form);
+      // Only include password in payload if it was provided (blank = no change for existing accounts)
+      const payload: any = { ...form };
+      if (!payload.password) delete payload.password;
+      await usersApi.create(payload);
       enqueueSnackbar(`User ${form.email} created successfully.`, { variant: 'success' });
       resetForm();
       setCreateDialogOpen(false);
@@ -548,11 +555,20 @@ function FocalUserManagementCard() {
                   onInputChange={(_, value) => {
                     setEmailInputValue(value);
                     setForm({ ...form, email: value });
+                    setIsExistingEmail(false);
                   }}
                   onChange={(_, value) => {
                     const v = value || '';
                     setEmailInputValue(v);
-                    setForm({ ...form, email: v });
+                    const match = emailSuggestions.find(s => s.email === v);
+                    setIsExistingEmail(!!match);
+                    setForm({
+                      ...form,
+                      email: v,
+                      firstName: match?.firstName ?? form.firstName,
+                      lastName: match?.lastName ?? form.lastName,
+                      password: '',
+                    });
                   }}
                   renderInput={(params) => (
                     <TextField
@@ -565,7 +581,7 @@ function FocalUserManagementCard() {
                 />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField label="Temporary Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} fullWidth helperText="User should change on first login" />
+                <TextField label="Temporary Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} fullWidth helperText={isExistingEmail ? 'Leave blank to keep existing password unchanged' : 'Required for new accounts — user should change on first login'} />
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField select label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })} fullWidth helperText="Determines access permissions">
@@ -638,7 +654,7 @@ function FocalUserManagementCard() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-            <Button variant="contained" startIcon={<PersonAddIcon />} onClick={handleCreate} disabled={creating || !form.email || !form.password}>
+            <Button variant="contained" startIcon={<PersonAddIcon />} onClick={handleCreate} disabled={creating || !form.email || (!form.password && !isExistingEmail)}>
               {creating ? 'Creating...' : 'Create User'}
             </Button>
           </DialogActions>

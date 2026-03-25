@@ -18,6 +18,7 @@ import {
   ticketsApi, Ticket, CreateTicketDto, TicketStatus, TicketType, TicketPriority,
   TechnicianOption, SubmitSatisfactionDto,
 } from '@/app/api/references';
+import { usersApi, UserRecord } from '@/lib/api/users';
 
 const PRIORITY_COLOR: Record<string, 'default' | 'info' | 'warning' | 'error' | 'success'> = {
   low: 'info', medium: 'warning', high: 'error', urgent: 'error',
@@ -48,6 +49,7 @@ export default function TicketsPage() {
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [form, setForm] = useState<CreateTicketDto>({ subject: '', description: '', ticketType: 'it_support', priority: 'medium' });
   const [submitting, setSubmitting] = useState(false);
+  const [allUsers, setAllUsers] = useState<UserRecord[]>([]);
 
   // Assign dialog
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
@@ -81,6 +83,12 @@ export default function TicketsPage() {
   }, [filterStatus, filterType]);
 
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
+
+  useEffect(() => {
+    if (canManageAll) {
+      usersApi.list().then(users => setAllUsers(users.filter(u => u.active))).catch(() => {});
+    }
+  }, [canManageAll]);
 
   const handleSubmitTicket = async () => {
     if (!form.subject.trim() || !form.description.trim()) {
@@ -262,12 +270,24 @@ export default function TicketsPage() {
             </TextField>
             <TextField label="Subject *" value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} fullWidth placeholder="Brief description of your issue" />
             <TextField label="Description *" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} fullWidth multiline rows={4} placeholder="Provide details: what happened, when, steps tried..." />
-            <TextField select label="Priority" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value as TicketPriority })} fullWidth>
-              <MenuItem value="low">Low — Not urgent</MenuItem>
-              <MenuItem value="medium">Medium — Normal impact</MenuItem>
-              <MenuItem value="high">High — Significant impact</MenuItem>
-              <MenuItem value="urgent">Urgent — Critical / blocking work</MenuItem>
-            </TextField>
+            {canManageAll && (
+              <TextField select label="Requester (Walk-in / Phone call)" value={form.requesterId ?? ''} onChange={e => setForm({ ...form, requesterId: e.target.value ? Number(e.target.value) : undefined })} fullWidth helperText="Leave blank to record as your own submission">
+                <MenuItem value="">— Self (logged-in user) —</MenuItem>
+                {allUsers.filter(u => u.role === 'user').map(u => (
+                  <MenuItem key={u.id} value={u.id}>
+                    {[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email} ({u.email})
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            {canManageAll && (
+              <TextField select label="Priority" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value as TicketPriority })} fullWidth>
+                <MenuItem value="low">Low — Not urgent</MenuItem>
+                <MenuItem value="medium">Medium — Normal impact</MenuItem>
+                <MenuItem value="high">High — Significant impact</MenuItem>
+                <MenuItem value="urgent">Urgent — Critical / blocking work</MenuItem>
+              </TextField>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>

@@ -19,6 +19,8 @@ export interface CreateTicketDto {
   description: string;
   ticketType: TicketType;
   priority?: TicketPriority;
+  /** Staff only: override the requester (for walk-ins / phone calls) */
+  requesterId?: number;
 }
 
 export interface UpdateTicketDto {
@@ -34,12 +36,14 @@ export interface AssignTicketDto {
 }
 
 export interface AddCommentDto {
-  comment: string;
+  /** Alias accepted from frontend (content or comment) */
+  content?: string;
+  comment?: string;
   isInternal?: boolean;
 }
 
 export interface SubmitSatisfactionDto {
-  rating: number;   // 1–5
+  rating: number;   // 1ï¿½5
   comment?: string;
 }
 
@@ -128,7 +132,18 @@ export class TicketService implements OnModuleInit {
 
   // --- Create --------------------------------------------------------------
 
-  async createTicket(dto: CreateTicketDto, requesterId: number): Promise<Ticket> {
+  async createTicket(
+    dto: CreateTicketDto,
+    callerId: number,
+    callerRole?: UserRole,
+  ): Promise<Ticket> {
+    // Determine effective requesterId:
+    // - Staff (non-user) may provide dto.requesterId to create on behalf of a user (walk-in/phone)
+    // - Regular users always use their own ID
+    const isStaff = callerRole && callerRole !== UserRole.USER;
+    const requesterId =
+      isStaff && dto.requesterId ? dto.requesterId : callerId;
+
     const requester = await this.userRepo.findOne({ where: { id: requesterId } });
     if (!requester) throw new BadRequestException('Requester not found');
 
@@ -282,9 +297,12 @@ export class TicketService implements OnModuleInit {
       throw new ForbiddenException('You can only comment on your own tickets.');
     }
 
+    const commentText = (dto.content ?? dto.comment ?? '').trim();
+    if (!commentText) throw new BadRequestException('Comment content cannot be empty.');
+
     const comment = this.commentRepo.create({
       ticketId,
-      comment: dto.comment.trim(),
+      comment: commentText,
       userId: actorId,
       isInternal: isInternal ?? false,
     });

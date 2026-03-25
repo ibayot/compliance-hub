@@ -43,7 +43,9 @@ export class TicketController {
   @Roles(...ALL_ROLES)
   @HttpCode(HttpStatus.CREATED)
   async createTicket(@Body() dto: CreateTicketDto, @Request() req: any) {
-    return this.ticketService.createTicket(dto, req.user.id ?? req.user.userId);
+    const callerId = req.user.id ?? req.user.userId;
+    const callerRole = req.user.role as UserRole;
+    return this.ticketService.createTicket(dto, callerId, callerRole);
   }
 
   /** GET /tickets - Role-scoped listing */
