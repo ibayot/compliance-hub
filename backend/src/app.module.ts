@@ -38,6 +38,12 @@ import { MovModule } from './modules/mov/mov.module';
         REDIS_PORT: Joi.number().default(6379),
         JWT_SECRET: Joi.string().min(16).required(),
         JWT_REFRESH_SECRET: Joi.string().min(16).required(),
+        JWT_ISSUER: Joi.string().default('compliance-hub-api'),
+        JWT_AUDIENCE: Joi.string().default('compliance-hub-client'),
+        GOOGLE_CLIENT_ID: Joi.string().allow('').optional(),
+        GOOGLE_CLIENT_SECRET: Joi.string().allow('').optional(),
+        GOOGLE_CALLBACK_URL: Joi.string().allow('').optional(),
+        FRONTEND_URL: Joi.string().allow('').optional(),
         CORS_ORIGIN: Joi.string().required(),
         RATE_LIMIT_WINDOW_MS: Joi.number().default(15 * 60 * 1000),
         RATE_LIMIT_MAX_REQUESTS: Joi.number().default(300),
@@ -56,16 +62,16 @@ import { MovModule } from './modules/mov/mov.module';
         const synchronizeFromEnv = configService.get<boolean>('DB_SYNCHRONIZE');
 
         return {
-        type: 'mysql',
-        host: configService.get('DB_HOST'),
-        port: configService.get('DB_PORT'),
-        username: configService.get('DB_USERNAME'),
-        password: configService.get('DB_PASSWORD'),
-        database: configService.get('DB_DATABASE'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: isDevelopment && Boolean(synchronizeFromEnv),
-        logging: Boolean(configService.get<boolean>('DB_LOGGING')),
-      };
+          type: 'mysql',
+          host: configService.get('DB_HOST'),
+          port: configService.get('DB_PORT'),
+          username: configService.get('DB_USERNAME'),
+          password: configService.get('DB_PASSWORD'),
+          database: configService.get('DB_DATABASE'),
+          autoLoadEntities: true,
+          synchronize: isDevelopment && Boolean(synchronizeFromEnv),
+          logging: Boolean(configService.get<boolean>('DB_LOGGING')),
+        };
       },
     }),
 

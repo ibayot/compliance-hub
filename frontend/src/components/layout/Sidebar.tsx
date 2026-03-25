@@ -57,24 +57,24 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
   const mainNavItems: NavItem[] = [
     { label: 'Dashboard', icon: DashboardIcon, path: '/dashboard', roles: ['all'] },
-    { label: 'Documents', icon: DocumentsIcon, path: '/dashboard/documents', roles: ['all'] },
-    { label: 'Repository', icon: RepositoryIcon, path: '/dashboard/repository', roles: ['all'] },
+    { label: 'Tickets', icon: TicketsIcon, path: '/dashboard/tickets', roles: ['all'] },
+    { label: 'Documents', icon: DocumentsIcon, path: '/dashboard/documents', roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'] },
+    { label: 'Repository', icon: RepositoryIcon, path: '/dashboard/repository', roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'] },
     { label: 'Issuances', icon: IssuancesIcon, path: '/dashboard/issuances', roles: ['super_admin', 'reviewer'] },
-    { label: 'Issues', icon: TicketsIcon, path: '/dashboard/tickets', roles: ['all'] },
   ];
 
   const adminNavItems: NavItem[] = [
     { label: 'Units', icon: UnitsIcon, path: '/dashboard/units', roles: ['super_admin'] },
     { label: 'Metrics', icon: MetricsIcon, path: '/dashboard/metrics', roles: ['super_admin', 'reviewer'] },
-    { label: 'KPI', icon: KpiIcon, path: '/dashboard/kpi', roles: ['super_admin', 'reviewer', 'focal', 'auditor', 'technician'] },
+    { label: 'KPI', icon: KpiIcon, path: '/dashboard/kpi', roles: ['super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'technician_desktop', 'technician_it_support'] },
     { label: 'Reviews', icon: SecurityIcon, path: '/dashboard/reviews', roles: ['super_admin', 'reviewer'] },
     { label: 'Reports', icon: ReportsIcon, path: '/dashboard/reports', roles: ['super_admin', 'reviewer', 'focal'] },
     { label: 'MoV Builder', icon: MovIcon, path: '/dashboard/mov', roles: ['super_admin', 'reviewer', 'focal'] },
   ];
 
   const settingsNavItems: NavItem[] = [
-    { label: 'User Manual', icon: ManualIcon, path: '/dashboard/user-manual', roles: ['all'] },
-    { label: 'Settings', icon: SettingsIcon, path: '/dashboard/settings', roles: ['all'] },
+    { label: 'User Manual', icon: ManualIcon, path: '/dashboard/user-manual', roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'] },
+    { label: 'Settings', icon: SettingsIcon, path: '/dashboard/settings', roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'] },
   ];
 
   const hasAccess = (roles: string[]) => {

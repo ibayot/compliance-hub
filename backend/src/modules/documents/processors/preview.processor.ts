@@ -21,6 +21,37 @@ interface GeneratePreviewJob {
 export class PreviewGenerator {
   private readonly logger = new Logger(PreviewGenerator.name);
 
+  private escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  private normalizeLeadingFilenameHeading(
+    htmlBody: string,
+    fileName: string,
+    displayTitle: string,
+  ): string {
+    const escapedDisplayTitle = displayTitle
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    const fullNamePattern = this.escapeRegExp(fileName.trim());
+    const baseName = fileName.replace(/\.[^.]+$/, '').trim();
+    const baseNamePattern = this.escapeRegExp(baseName);
+
+    const fullHeadingRegex = new RegExp(`(<h1\\b[^>]*>)\\s*${fullNamePattern}\\s*(<\\/h1>)`, 'i');
+    if (fullHeadingRegex.test(htmlBody)) {
+      return htmlBody.replace(fullHeadingRegex, `$1${escapedDisplayTitle}$2`);
+    }
+
+    const baseHeadingRegex = new RegExp(`(<h1\\b[^>]*>)\\s*${baseNamePattern}\\s*(<\\/h1>)`, 'i');
+    if (baseHeadingRegex.test(htmlBody)) {
+      return htmlBody.replace(baseHeadingRegex, `$1${escapedDisplayTitle}$2`);
+    }
+
+    return htmlBody;
+  }
+
   constructor(
     @InjectRepository(DocumentVersion)
     private versionRepo: Repository<DocumentVersion>,
@@ -38,6 +69,7 @@ export class PreviewGenerator {
       // Get version to access file path
       const version = await this.versionRepo
         .createQueryBuilder('version')
+        .leftJoinAndSelect('version.document', 'document')
         .addSelect(['version.file_blob', 'version.preview_blob'])
         .where('version.id = :versionId', { versionId })
         .getOne();
@@ -127,9 +159,10 @@ export class PreviewGenerator {
 
       // Final fallback: generate a plain HTML preview from extracted text
       try {
-        const version = await this.versionRepo.findOne({ where: { id: versionId } });
+        const version = await this.versionRepo.findOne({ where: { id: versionId }, relations: ['document'] });
         if (version) {
-          await this.generateTextFallbackPreview(versionId, version.file_name, version.extracted_text || '');
+          const displayTitle = version.document?.title || version.document?.document_type || version.file_name;
+          await this.generateTextFallbackPreview(versionId, displayTitle, version.extracted_text || '');
         }
       } catch {
         this.logger.warn('All preview generation attempts failed, document is still usable without preview.');
@@ -164,7 +197,9 @@ export class PreviewGenerator {
         htmlBody = `<p><em>Preview not available for file type: ${version.mime_type}.</em></p>`;
       }
 
-      const htmlContent = this.buildStyledHtml(version.file_name, htmlBody);
+      const displayTitle = version.document?.title || version.document?.document_type || version.file_name;
+      htmlBody = this.normalizeLeadingFilenameHeading(htmlBody, version.file_name, displayTitle);
+      const htmlContent = this.buildStyledHtml(displayTitle, htmlBody);
       const htmlBuffer = Buffer.from(htmlContent, 'utf-8');
 
       await this.versionRepo.update(versionId, {
@@ -242,13 +277,13 @@ export class PreviewGenerator {
       margin-bottom: 24px;
       border-radius: 0 4px 4px 0;
     }
-    .document-header .filename { font-size: 0.85em; color: #555; margin-top: 4px; }
+    .document-header .display-name { font-size: 0.85em; color: #555; margin-top: 4px; }
   </style>
 </head>
 <body>
   <div class="document-header">
     <strong>Document Viewer</strong>
-    <div class="filename">${title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+    <div class="display-name">${title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
   </div>
   ${body}
 </body>

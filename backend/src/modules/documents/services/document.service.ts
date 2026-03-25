@@ -21,8 +21,11 @@ import { UserRole } from '../../users/entities/user.entity';
 import { ManualReview, ReviewDecision } from '../../reviews/entities/manual-review.entity';
 import { DocumentReference } from '../entities/document-reference.entity';
 import * as mammoth from 'mammoth';
+import pdfParse from 'pdf-parse';
+import * as net from 'net';
 import { ReportorialDocumentType } from '../entities/reportorial-document-type.entity';
 import { ReportorialDocTypeService } from './reportorial-doc-type.service';
+import { MetricsService } from '../../metrics/services/metrics.service';
 
 export interface UploadDocumentDto {
   title: string;
@@ -35,6 +38,19 @@ export interface UploadDocumentDto {
   file: Express.Multer.File;
   /** Optional: link to a ReportorialDocumentType record */
   reportorial_doc_type_id?: number;
+}
+
+export interface UploadGoogleDocDto {
+  title: string;
+  document_type: string;
+  period: string;
+  year: string;
+  unit_id: number;
+  uploaded_by: number;
+  user_role: UserRole;
+  reportorial_doc_type_id?: number;
+  google_doc_url: string;
+  file_name?: string;
 }
 
 export interface ListDocumentsDto {
@@ -55,6 +71,20 @@ export interface ListDocumentsDto {
 @Injectable()
 export class DocumentService implements OnModuleInit {
   private readonly logger = new Logger(DocumentService.name);
+
+  private extractGoogleDocId(inputUrl: string): string | null {
+    try {
+      const parsed = new URL(inputUrl);
+      if (parsed.hostname !== 'docs.google.com') {
+        return null;
+      }
+
+      const match = parsed.pathname.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
+      return match?.[1] || null;
+    } catch {
+      return null;
+    }
+  }
 
   private async extractInitialText(file: Express.Multer.File): Promise<string> {
     if (file.originalname.toLowerCase().endsWith('.docx')) {
@@ -84,8 +114,199 @@ export class DocumentService implements OnModuleInit {
     private reportorialDocTypeRepo: Repository<ReportorialDocumentType>,
     private storageService: StorageService,
     @InjectQueue('document-processing') private documentQueue: Queue,
+    private metricsService: MetricsService,
     private dataSource: DataSource,
   ) {}
+
+  private async enqueueMetricsOrFallback(versionId: string, source: string): Promise<void> {
+    const queueReachable = await this.isRedisReachable();
+    if (!queueReachable) {
+      this.logger.warn(
+        `${source}: Redis unavailable, using inline compute-metrics fallback for version ${versionId}`,
+      );
+      await this.metricsService.computeMetricsAndAutoReview(versionId);
+      return;
+    }
+
+    try {
+      await this.documentQueue.add('compute-metrics', { versionId });
+      this.scheduleMetricsWatchdog(versionId, source);
+    } catch (error: any) {
+      this.logger.warn(
+        `${source}: queue unavailable for compute-metrics(${versionId}), using inline fallback: ${error?.message || 'unknown error'}`,
+      );
+      await this.metricsService.computeMetricsAndAutoReview(versionId);
+    }
+  }
+
+  private async processDocumentInline(documentId: string, versionId: string): Promise<void> {
+    await this.documentRepo.update(documentId, {
+      status: DocumentStatus.PROCESSING,
+    });
+
+    const version = await this.versionRepo
+      .createQueryBuilder('version')
+      .addSelect('version.file_blob')
+      .where('version.id = :versionId', { versionId })
+      .getOne();
+
+    if (!version) {
+      throw new NotFoundException('Version not found for inline processing');
+    }
+
+    const fileBuffer =
+      version.file_blob ??
+      (await this.storageService.readFile(version.file_path));
+
+    if (!version.file_blob) {
+      await this.versionRepo.update(versionId, { file_blob: fileBuffer });
+    }
+
+    let extractedText = '';
+    try {
+      if (
+        version.mime_type === 'application/pdf' ||
+        version.file_name.toLowerCase().endsWith('.pdf')
+      ) {
+        const pdfResult = await pdfParse(fileBuffer);
+        extractedText = pdfResult.text || '';
+      } else {
+        const result = await mammoth.extractRawText({ buffer: fileBuffer });
+        extractedText = result.value || '';
+      }
+    } catch (error: any) {
+      extractedText = '';
+      this.logger.warn(
+        `Inline extraction failed for version ${versionId}. Continuing with empty extracted_text: ${error?.message || 'unknown error'}`,
+      );
+    }
+
+    await this.documentRepo.update(documentId, {
+      extracted_text: extractedText,
+      status: DocumentStatus.READY,
+    });
+
+    await this.versionRepo.update(versionId, {
+      extracted_text: extractedText,
+    });
+
+    try {
+      await this.documentQueue.add('generate-preview', { versionId });
+    } catch (error: any) {
+      this.logger.warn(
+        `Inline fallback: unable to enqueue preview for version ${versionId}: ${error?.message || 'unknown error'}`,
+      );
+    }
+
+    await this.metricsService.computeMetricsAndAutoReview(versionId);
+  }
+
+  private async enqueueProcessOrFallback(
+    documentId: string,
+    versionId: string,
+    source: string,
+  ): Promise<void> {
+    const queueReachable = await this.isRedisReachable();
+    if (!queueReachable) {
+      this.logger.warn(
+        `${source}: Redis unavailable, using inline process-document fallback for document ${documentId}`,
+      );
+      await this.processDocumentInline(documentId, versionId);
+      return;
+    }
+
+    try {
+      await this.documentQueue.add('process-document', { documentId, versionId });
+      this.scheduleProcessWatchdog(documentId, versionId, source);
+    } catch (error: any) {
+      this.logger.warn(
+        `${source}: queue unavailable for process-document(${documentId}), using inline fallback: ${error?.message || 'unknown error'}`,
+      );
+      await this.processDocumentInline(documentId, versionId);
+    }
+  }
+
+  private kickOffProcessOrFallback(
+    documentId: string,
+    versionId: string,
+    source: string,
+  ): void {
+    void this.enqueueProcessOrFallback(documentId, versionId, source).catch(async (error: any) => {
+      this.logger.error(
+        `${source}: background processing failed for document ${documentId}: ${error?.message || 'unknown error'}`,
+      );
+      await this.documentRepo.update(documentId, { status: DocumentStatus.FAILED });
+    });
+  }
+
+  private kickOffMetricsOrFallback(versionId: string, source: string): void {
+    void this.enqueueMetricsOrFallback(versionId, source).catch((error: any) => {
+      this.logger.error(
+        `${source}: background metrics failed for version ${versionId}: ${error?.message || 'unknown error'}`,
+      );
+    });
+  }
+
+  private scheduleProcessWatchdog(documentId: string, versionId: string, source: string): void {
+    setTimeout(() => {
+      void (async () => {
+        const doc = await this.documentRepo.findOne({ where: { id: documentId } });
+        if (!doc || doc.is_deleted) {
+          return;
+        }
+
+        if (doc.status === DocumentStatus.PENDING) {
+          this.logger.warn(
+            `${source}: process-document watchdog triggered for ${documentId}; queue job not consumed in time, using inline fallback`,
+          );
+          await this.processDocumentInline(documentId, versionId);
+        }
+      })().catch((error: any) => {
+        this.logger.warn(
+          `${source}: process watchdog fallback failed for ${documentId}: ${error?.message || 'unknown error'}`,
+        );
+      });
+    }, 10_000);
+  }
+
+  private scheduleMetricsWatchdog(versionId: string, source: string): void {
+    setTimeout(() => {
+      void (async () => {
+        const existingResults = await this.metricsService.getMetricResults(versionId);
+        if (existingResults.length > 0) {
+          return;
+        }
+
+        this.logger.warn(
+          `${source}: compute-metrics watchdog triggered for version ${versionId}; queue job not consumed in time, using inline fallback`,
+        );
+        await this.metricsService.computeMetricsAndAutoReview(versionId);
+      })().catch((error: any) => {
+        this.logger.warn(
+          `${source}: metrics watchdog fallback failed for version ${versionId}: ${error?.message || 'unknown error'}`,
+        );
+      });
+    }, 10_000);
+  }
+
+  private async isRedisReachable(): Promise<boolean> {
+    const host = process.env.REDIS_HOST || 'localhost';
+    const port = Number(process.env.REDIS_PORT || 6379);
+
+    return new Promise((resolve) => {
+      const socket = net.createConnection({ host, port });
+      const done = (ok: boolean) => {
+        socket.removeAllListeners();
+        socket.destroy();
+        resolve(ok);
+      };
+
+      socket.setTimeout(1000);
+      socket.once('connect', () => done(true));
+      socket.once('timeout', () => done(false));
+      socket.once('error', () => done(false));
+    });
+  }
 
   async onModuleInit(): Promise<void> {
     await this.dataSource.query(`
@@ -161,16 +382,10 @@ export class DocumentService implements OnModuleInit {
             if (doc.extracted_text !== null && doc.extracted_text !== undefined) {
               // Text already extracted — reset to READY and run metrics only
               await this.documentRepo.update(doc.id, { status: DocumentStatus.READY });
-              void this.documentQueue.add('compute-metrics', { versionId: version.id }).catch((e) =>
-                this.logger.warn(`Startup recovery: failed to enqueue metrics for ${doc.id}: ${e?.message}`),
-              );
+              await this.enqueueMetricsOrFallback(version.id, `Startup recovery doc=${doc.id}`);
             } else {
               // No extracted text — full reprocess needed
-              void this.documentQueue
-                .add('process-document', { documentId: doc.id, versionId: version.id })
-                .catch((e) =>
-                  this.logger.warn(`Startup recovery: failed to enqueue process for ${doc.id}: ${e?.message}`),
-                );
+              await this.enqueueProcessOrFallback(doc.id, version.id, `Startup recovery doc=${doc.id}`);
             }
           } catch (innerErr) {
             this.logger.warn(`Startup recovery: error processing doc ${doc.id}: ${innerErr?.message}`);
@@ -554,21 +769,92 @@ export class DocumentService implements OnModuleInit {
       uploaded_by: metadata.uploaded_by,
     } as any);
 
-    // Queue document processing job
-    void this.documentQueue
-      .add('process-document', {
-        documentId: document.id,
-        versionId: version.id,
-      })
-      .catch((error) => {
-        this.logger.warn(
-          `Background processing queue unavailable for document ${document.id}: ${error?.message || 'unknown error'}`,
-        );
-      });
+    if ((extractedText || '').trim().length > 0) {
+      // DOCX path already has extracted text from upload; skip full process queue.
+      await this.documentRepo.update(document.id, { status: DocumentStatus.READY });
+      this.kickOffMetricsOrFallback(version.id, `Upload document=${document.id}`);
+    } else {
+      // Queue document processing job in background so upload response is not blocked
+      this.kickOffProcessOrFallback(
+        document.id,
+        version.id,
+        `Upload document=${document.id}`,
+      );
+    }
 
     this.logger.log(`Document uploaded: ${document.id}`);
 
-    return document;
+    const responseDocument = await this.documentRepo.findOne({
+      where: { id: document.id },
+      relations: ['unit', 'uploader'],
+    });
+
+    return responseDocument || document;
+  }
+
+  async uploadGoogleDoc(dto: UploadGoogleDocDto): Promise<Document> {
+    const documentId = this.extractGoogleDocId(dto.google_doc_url);
+    if (!documentId) {
+      throw new BadRequestException('Invalid Google Docs URL. Use a valid docs.google.com/document link.');
+    }
+
+    const exportUrl = `https://docs.google.com/document/d/${documentId}/export?format=docx`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
+    let docxBuffer: Buffer;
+    try {
+      const response = await fetch(exportUrl, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new BadRequestException('Unable to export Google Doc. Ensure the document is accessible for export.');
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      docxBuffer = Buffer.from(arrayBuffer);
+    } catch (error: any) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `Failed to fetch Google Doc for import: ${error?.message || 'unknown error'}`,
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (docxBuffer.length > 50 * 1024 * 1024) {
+      throw new BadRequestException('Google Doc export exceeds 50 MB limit.');
+    }
+
+    const normalizedName = (dto.file_name || '').trim();
+    const fileName = normalizedName
+      ? (normalizedName.toLowerCase().endsWith('.docx') ? normalizedName : `${normalizedName}.docx`)
+      : `google-doc-${documentId}.docx`;
+
+    const file = {
+      fieldname: 'file',
+      originalname: fileName,
+      encoding: '7bit',
+      mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      size: docxBuffer.length,
+      buffer: docxBuffer,
+    } as Express.Multer.File;
+
+    return this.uploadDocument({
+      title: dto.title,
+      document_type: dto.document_type,
+      period: dto.period,
+      year: dto.year,
+      unit_id: Number(dto.unit_id),
+      uploaded_by: dto.uploaded_by,
+      user_role: dto.user_role,
+      reportorial_doc_type_id: dto.reportorial_doc_type_id,
+      file,
+    });
   }
 
   /**
@@ -1164,22 +1450,12 @@ export class DocumentService implements OnModuleInit {
     if (hasText) {
       // Text already extracted — skip file processing, just re-run metrics
       await this.documentRepo.update(documentId, { status: DocumentStatus.READY });
-      await this.documentQueue
-        .add('compute-metrics', { versionId: currentVersion.id })
-        .catch((err) => {
-          this.logger.warn(`Failed to enqueue metrics for ${documentId}: ${err?.message}`);
-          throw err;
-        });
+      await this.enqueueMetricsOrFallback(currentVersion.id, `Reprocess document=${documentId}`);
       this.logger.log(`Document metrics re-queued (text exists): ${documentId} version=${currentVersion.id}`);
     } else {
       // No extracted text — full reprocess
       await this.documentRepo.update(documentId, { status: DocumentStatus.PENDING });
-      await this.documentQueue
-        .add('process-document', { documentId: document.id, versionId: currentVersion.id })
-        .catch((err) => {
-          this.logger.warn(`Failed to enqueue reprocess for ${documentId}: ${err?.message}`);
-          throw err;
-        });
+      await this.enqueueProcessOrFallback(document.id, currentVersion.id, `Reprocess document=${documentId}`);
       this.logger.log(`Document full-reprocess enqueued: ${documentId} version=${currentVersion.id}`);
     }
   }
@@ -1260,7 +1536,9 @@ export class DocumentService implements OnModuleInit {
     qb.orderBy('doc.year', 'DESC').addOrderBy('doc.created_at', 'DESC');
 
     const docs = await qb.getMany();
-    const enriched = await this.enrichDocumentsForWorkflow(docs);
+    const enriched = (await this.enrichDocumentsForWorkflow(docs)).filter(
+      (doc: any) => doc.compliance_status === 'compliant',
+    );
 
     // Group: year → bucket-key → { label, sortOrder, documents[] }
     const yearMap = new Map<string, Map<string, { label: string; sortOrder: number; documents: Document[] }>>();

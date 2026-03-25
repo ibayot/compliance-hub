@@ -111,10 +111,16 @@ export class KeywordCheckEngine {
 
     // Generate message
     let message: string;
+    const summary = matches
+      .map((item) => `${item.keyword}: ${item.count}`)
+      .join(', ');
     if (meetsMinimum) {
-      message = `Found ${totalMatches} keyword matches (required: ${minMatches})`;
+      message = `Found ${totalMatches} keyword matches (required: ${minMatches}). Counts by keyword: ${summary}`;
     } else {
-      message = `Only ${totalMatches} keyword matches found (required: ${minMatches})`;
+      const missing = matches.filter((item) => item.count === 0).map((item) => item.keyword);
+      message = missing.length > 0
+        ? `Only ${totalMatches} keyword matches found (required: ${minMatches}). Missing keyword(s): ${missing.join(', ')}. Counts: ${summary}`
+        : `Only ${totalMatches} keyword matches found (required: ${minMatches}). Counts by keyword: ${summary}`;
     }
 
     return {

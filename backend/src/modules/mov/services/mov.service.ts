@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { MovArtifact } from '../entities/mov-artifact.entity';
@@ -11,6 +11,8 @@ import { KpiMaster } from '../../kpi/entities/kpi-master.entity';
 
 @Injectable()
 export class MovService implements OnModuleInit {
+  private readonly logger = new Logger(MovService.name);
+
   constructor(
     @InjectRepository(MovArtifact)
     private readonly movRepo: Repository<MovArtifact>,
@@ -46,7 +48,11 @@ export class MovService implements OnModuleInit {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    await this.seedDefaultAssessmentArtifacts();
+    try {
+      await this.seedDefaultAssessmentArtifacts();
+    } catch (err) {
+      this.logger.warn(`Startup seeding failed (non-fatal): ${err?.message}`);
+    }
   }
 
   private async seedDefaultAssessmentArtifacts(): Promise<void> {

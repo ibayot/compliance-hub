@@ -80,6 +80,17 @@ export interface UploadDocumentRequest {
   file: File;
 }
 
+export interface UploadGoogleDocRequest {
+  title: string;
+  document_type: string;
+  period: string;
+  year: string;
+  unit_id?: string;
+  reportorial_doc_type_id?: number;
+  google_doc_url: string;
+  file_name?: string;
+}
+
 export interface UploadOption {
   assignment_id: string;
   unit_id: number;
@@ -174,6 +185,11 @@ export const documentsApi = {
       },
     });
 
+    return response.data;
+  },
+
+  uploadGoogleDoc: async (data: UploadGoogleDocRequest): Promise<Document> => {
+    const response = await apiClient.post('/documents/google-doc', data);
     return response.data;
   },
 

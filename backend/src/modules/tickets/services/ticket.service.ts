@@ -3,62 +3,47 @@ import {
   NotFoundException,
   Logger,
   BadRequestException,
-  ConflictException,
+  ForbiddenException,
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import {
-  Ticket,
-  TicketCategory,
-  TicketStatus,
-  TicketPriority,
-  IssueType,
-} from '../entities/ticket.entity';
+import { Ticket, TicketType, TicketStatus, TicketPriority } from '../entities/ticket.entity';
 import { TicketComment } from '../entities/ticket-comment.entity';
-import { TicketIssueType } from '../entities/ticket-issue-type.entity';
-import { TicketCategoryConfig } from '../entities/ticket-category.entity';
+import { User, UserRole } from '../../users/entities/user.entity';
+
+// --- DTOs --------------------------------------------------------------------
 
 export interface CreateTicketDto {
   subject: string;
   description: string;
-  category: TicketCategory;
-  category_id?: string;
-  priority: TicketPriority;
-  issue_type?: IssueType;
-  issue_type_id?: string;
-  resolution_steps?: string;
-  resolution_date?: Date;
-  unit_id?: number;
-  reported_by_id: number;
+  ticketType: TicketType;
+  priority?: TicketPriority;
 }
 
 export interface UpdateTicketDto {
   subject?: string;
   description?: string;
-  category?: TicketCategory;
-  category_id?: string;
   status?: TicketStatus;
   priority?: TicketPriority;
-  issue_type?: IssueType;
-  issue_type_id?: string;
-  resolution_steps?: string;
-  resolution_date?: Date;
-  assigned_to_id?: number;
+  resolutionNotes?: string;
 }
 
-export interface UpsertTicketConfigDto {
-  key: string;
-  name: string;
-  description?: string;
-  is_active?: boolean;
-  category_id?: string;
+export interface AssignTicketDto {
+  assignedToId: number;
 }
 
 export interface AddCommentDto {
   comment: string;
-  user_id: number;
+  isInternal?: boolean;
 }
+
+export interface SubmitSatisfactionDto {
+  rating: number;   // 1–5
+  comment?: string;
+}
+
+// --- Service -----------------------------------------------------------------
 
 @Injectable()
 export class TicketService implements OnModuleInit {
@@ -66,682 +51,387 @@ export class TicketService implements OnModuleInit {
 
   constructor(
     @InjectRepository(Ticket)
-    private ticketRepo: Repository<Ticket>,
+    private readonly ticketRepo: Repository<Ticket>,
     @InjectRepository(TicketComment)
-    private commentRepo: Repository<TicketComment>,
-    @InjectRepository(TicketIssueType)
-    private issueTypeRepo: Repository<TicketIssueType>,
-    @InjectRepository(TicketCategoryConfig)
-    private categoryRepo: Repository<TicketCategoryConfig>,
-    private dataSource: DataSource,
+    private readonly commentRepo: Repository<TicketComment>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
+    private readonly dataSource: DataSource,
   ) {}
 
+  // --- Schema Migration ----------------------------------------------------
+
   async onModuleInit(): Promise<void> {
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS ticket_issue_types (
-        id varchar(36) NOT NULL,
-        \`key\` varchar(100) NOT NULL,
-        name varchar(150) NOT NULL,
-        description text DEFAULT NULL,
-        is_active tinyint(1) NOT NULL DEFAULT 1,
-        is_deleted tinyint(1) NOT NULL DEFAULT 0,
-        created_by int DEFAULT NULL,
-        updated_by int DEFAULT NULL,
-        category_id varchar(36) DEFAULT NULL,
-        created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-        updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-        PRIMARY KEY (id),
-        UNIQUE KEY uq_ticket_issue_types_key (\`key\`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS ticket_categories (
-        id varchar(36) NOT NULL,
-        \`key\` varchar(100) NOT NULL,
-        name varchar(150) NOT NULL,
-        description text DEFAULT NULL,
-        is_active tinyint(1) NOT NULL DEFAULT 1,
-        is_deleted tinyint(1) NOT NULL DEFAULT 0,
-        created_by int DEFAULT NULL,
-        updated_by int DEFAULT NULL,
-        created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-        updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-        PRIMARY KEY (id),
-        UNIQUE KEY uq_ticket_categories_key (\`key\`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await this.dataSource.query(`
-      ALTER TABLE tickets
-      ADD COLUMN IF NOT EXISTS issue_type_id varchar(36) NULL,
-      ADD COLUMN IF NOT EXISTS category_id varchar(36) NULL;
-    `);
-
-    await this.dataSource.query(`
-      ALTER TABLE ticket_issue_types
-      ADD COLUMN IF NOT EXISTS category_id varchar(36) NULL;
-    `);
-
-    await this.dataSource.query(`
-      ALTER TABLE tickets
-      ADD CONSTRAINT fk_tickets_issue_type_id
-      FOREIGN KEY (issue_type_id) REFERENCES ticket_issue_types(id)
-      ON DELETE SET NULL;
-    `).catch(() => undefined);
-
-    await this.dataSource.query(`
-      ALTER TABLE tickets
-      ADD CONSTRAINT fk_tickets_category_id
-      FOREIGN KEY (category_id) REFERENCES ticket_categories(id)
-      ON DELETE SET NULL;
-    `).catch(() => undefined);
-
-    await this.dataSource.query(`
-      ALTER TABLE ticket_issue_types
-      ADD CONSTRAINT fk_issue_type_category_id
-      FOREIGN KEY (category_id) REFERENCES ticket_categories(id)
-      ON DELETE SET NULL;
-    `).catch(() => undefined);
-
-    await this.seedDefaultConfigs();
-  }
-
-  private async seedDefaultConfigs(): Promise<void> {
-    const defaultIssueTypes = [
-      { key: 'policy_gap', name: 'Policy Gap' },
-      { key: 'missing_evidence', name: 'Missing Evidence' },
-      { key: 'data_inconsistency', name: 'Data Inconsistency' },
-      { key: 'late_submission', name: 'Late Submission' },
-      { key: 'security_incident', name: 'Security Incident' },
-      { key: 'other', name: 'Other' },
-    ];
-
-    const defaultCategories = [
-      { key: 'document_related', name: 'Document Related' },
-      { key: 'system_issue', name: 'System Issue' },
-      { key: 'compliance_query', name: 'Compliance Query' },
-      { key: 'training_request', name: 'Training Request' },
-      { key: 'other', name: 'Other' },
-    ];
-
-    for (const issueType of defaultIssueTypes) {
-      const existing = await this.issueTypeRepo.findOne({ where: { key: issueType.key } });
-      if (!existing) {
-        await this.issueTypeRepo.save(this.issueTypeRepo.create(issueType));
-      }
-    }
-
-    for (const category of defaultCategories) {
-      const existing = await this.categoryRepo.findOne({ where: { key: category.key } });
-      if (!existing) {
-        await this.categoryRepo.save(this.categoryRepo.create(category));
-      }
+    try {
+      await this.runMigrations();
+    } catch (err) {
+      this.logger.warn(`Ticket schema migration failed (non-fatal): ${err?.message}`);
     }
   }
 
-  private normalizeConfigKey(value: string): string {
-    return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  private async runMigrations(): Promise<void> {
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    try {
+      // Ensure new columns exist on tickets table
+      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ticket_number VARCHAR(50) NULL').catch(() => undefined);
+      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ticket_type VARCHAR(30) NOT NULL DEFAULT "it_support"').catch(() => undefined);
+      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS requester_id INT NULL').catch(() => undefined);
+      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS resolution_notes TEXT NULL').catch(() => undefined);
+      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS resolved_at DATETIME NULL').catch(() => undefined);
+      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS satisfaction_rating TINYINT NULL').catch(() => undefined);
+      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS satisfaction_comment TEXT NULL').catch(() => undefined);
+      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS satisfaction_submitted_at DATETIME NULL').catch(() => undefined);
+
+      // Backfill requester_id from legacy reported_by_id if needed
+      await qr.query(
+        'UPDATE tickets SET requester_id = reported_by_id WHERE requester_id IS NULL AND reported_by_id IS NOT NULL',
+      ).catch(() => undefined);
+
+      // Add unique index for ticket_number if not already present
+      await qr.query(
+        'CREATE UNIQUE INDEX IF NOT EXISTS uq_tickets_ticket_number ON tickets (ticket_number)',
+      ).catch(() => undefined);
+
+      // Add is_internal flag to ticket_comments
+      await qr.query(
+        'ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS is_internal TINYINT(1) NOT NULL DEFAULT 0',
+      ).catch(() => undefined);
+
+      // Rename ticket_comments columns if old names exist
+      await qr.query(
+        'ALTER TABLE ticket_comments CHANGE COLUMN ticket_id ticket_id VARCHAR(36) NOT NULL',
+      ).catch(() => undefined);
+      await qr.query(
+        'ALTER TABLE ticket_comments CHANGE COLUMN user_id user_id INT NOT NULL',
+      ).catch(() => undefined);
+
+      this.logger.log('Ticket schema migrations applied.');
+    } finally {
+      await qr.release();
+    }
   }
 
-  private async resolveIssueType(
-    issue_type_id?: string,
-    fallbackIssueType?: IssueType,
-    category_id?: string,
-  ): Promise<{ issue_type_id: string | null; issue_type: IssueType }> {
-    if (!issue_type_id) {
-      return {
-        issue_type_id: null,
-        issue_type: fallbackIssueType || IssueType.OTHER,
-      };
-    }
+  // --- Ticket Number Generator ---------------------------------------------
 
-    const issueType = await this.issueTypeRepo.findOne({
-      where: { id: issue_type_id, is_deleted: false },
-    });
-
-    if (!issueType || !issueType.is_active) {
-      throw new BadRequestException('Selected issue type is invalid or inactive.');
-    }
-
-    if (category_id && issueType.category_id && issueType.category_id !== category_id) {
-      throw new BadRequestException('Selected issue type does not belong to the selected category.');
-    }
-
-    return {
-      issue_type_id: issueType.id,
-      issue_type: IssueType.OTHER,
-    };
-  }
-
-  private async resolveCategory(
-    category_id?: string,
-    fallbackCategory?: TicketCategory,
-  ): Promise<{ category_id: string | null; category: TicketCategory }> {
-    if (!category_id) {
-      return {
-        category_id: null,
-        category: fallbackCategory || TicketCategory.OTHER,
-      };
-    }
-
-    const category = await this.categoryRepo.findOne({
-      where: { id: category_id, is_deleted: false },
-    });
-
-    if (!category || !category.is_active) {
-      throw new BadRequestException('Selected category is invalid or inactive.');
-    }
-
-    return {
-      category_id: category.id,
-      category: TicketCategory.OTHER,
-    };
-  }
-
-  /**
-   * Generate unique ticket number
-   */
   private async generateTicketNumber(): Promise<string> {
     const year = new Date().getFullYear();
-    const count = await this.ticketRepo.count();
-    const ticketNumber = `TICK-${year}-${(count + 1).toString().padStart(4, '0')}`;
-    return ticketNumber;
+    const prefix = `TKT-${year}-`;
+    // Count tickets for this year to get next sequence
+    const count = await this.ticketRepo
+      .createQueryBuilder('t')
+      .where('t.ticketNumber LIKE :prefix', { prefix: `${prefix}%` })
+      .getCount();
+    const seq = String(count + 1).padStart(4, '0');
+    return `${prefix}${seq}`;
   }
 
-  /**
-   * Create a new ticket
-   */
-  async createTicket(dto: CreateTicketDto): Promise<Ticket> {
-    const ticket_number = await this.generateTicketNumber();
+  // --- Create --------------------------------------------------------------
 
-    const resolvedCategory = await this.resolveCategory(
-      dto.category_id,
-      dto.category,
-    );
+  async createTicket(dto: CreateTicketDto, requesterId: number): Promise<Ticket> {
+    const requester = await this.userRepo.findOne({ where: { id: requesterId } });
+    if (!requester) throw new BadRequestException('Requester not found');
 
-    const resolvedIssueType = await this.resolveIssueType(
-      dto.issue_type_id,
-      dto.issue_type,
-      resolvedCategory.category_id || undefined,
-    );
+    const ticketNumber = await this.generateTicketNumber();
 
     const ticket = this.ticketRepo.create({
-      ...dto,
-      issue_type: resolvedIssueType.issue_type,
-      issue_type_id: resolvedIssueType.issue_type_id,
-      category: resolvedCategory.category,
-      category_id: resolvedCategory.category_id,
-      ticket_number,
+      ticketNumber,
+      subject: dto.subject.trim(),
+      description: dto.description.trim(),
+      ticketType: dto.ticketType,
+      priority: dto.priority ?? TicketPriority.MEDIUM,
+      status: TicketStatus.OPEN,
+      requesterId,
+      assignedToId: null,
+      resolutionNotes: null,
+      resolvedAt: null,
+      satisfactionRating: null,
+      satisfactionComment: null,
+      satisfactionSubmittedAt: null,
     });
 
-    await this.ticketRepo.save(ticket);
-
-    this.logger.log(`Created ticket: ${ticket_number}`);
-    return this.getTicket(ticket.id);
+    return this.ticketRepo.save(ticket);
   }
 
-  /**
-   * Get all tickets with filters
-   */
-  async getTickets(filters?: {
+  // --- Read ----------------------------------------------------------------
+
+  async getTickets(filters: {
     status?: TicketStatus;
-    priority?: TicketPriority;
-    category?: TicketCategory;
-    unit_id?: string;
-    assigned_to_id?: string;
-    reported_by_id?: string;
+    ticketType?: TicketType;
+    requesterId?: number;
+    assignedToId?: number;
+    viewerId?: number;
+    viewerRole?: UserRole;
   }): Promise<Ticket[]> {
-    const query = this.ticketRepo
-      .createQueryBuilder('ticket')
-      .leftJoinAndSelect('ticket.reported_by', 'reporter')
-      .leftJoinAndSelect('ticket.assigned_to', 'assignee')
-      .leftJoinAndSelect('ticket.unit', 'unit')
-      .leftJoinAndSelect('ticket.issue_type_config', 'issue_type_config')
-      .leftJoinAndSelect('ticket.category_config', 'category_config');
+    const qb = this.ticketRepo
+      .createQueryBuilder('t')
+      .leftJoinAndSelect('t.requester', 'requester')
+      .leftJoinAndSelect('t.assignedTo', 'assignedTo')
+      .leftJoinAndSelect('t.comments', 'comments')
+      .leftJoinAndSelect('comments.user', 'commentUser')
+      .orderBy('t.createdAt', 'DESC');
 
-    if (filters?.status) {
-      query.andWhere('ticket.status = :status', { status: filters.status });
+    // Role-based visibility
+    if (
+      filters.viewerRole === UserRole.USER
+    ) {
+      // Regular users see only their own tickets
+      qb.where('t.requesterId = :uid', { uid: filters.viewerId });
+    } else if (
+      filters.viewerRole === UserRole.TECHNICIAN_DESKTOP
+    ) {
+      // Desktop technicians see all desktop_support tickets
+      qb.where('t.ticketType = :type', { type: TicketType.DESKTOP_SUPPORT });
+      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
+    } else if (
+      filters.viewerRole === UserRole.TECHNICIAN_IT_SUPPORT
+    ) {
+      // IT technicians see all it_support tickets
+      qb.where('t.ticketType = :type', { type: TicketType.IT_SUPPORT });
+      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
+    } else {
+      // super_admin, reviewer, focal, auditor, technician see all
+      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
+      if (filters.ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+      if (filters.requesterId) qb.andWhere('t.requesterId = :rid', { rid: filters.requesterId });
+      if (filters.assignedToId) qb.andWhere('t.assignedToId = :aid', { aid: filters.assignedToId });
     }
 
-    if (filters?.priority) {
-      query.andWhere('ticket.priority = :priority', {
-        priority: filters.priority,
-      });
-    }
-
-    if (filters?.category) {
-      query.andWhere('ticket.category = :category', {
-        category: filters.category,
-      });
-    }
-
-    if (filters?.unit_id) {
-      query.andWhere('ticket.unit_id = :unit_id', {
-        unit_id: filters.unit_id,
-      });
-    }
-
-    if (filters?.assigned_to_id) {
-      query.andWhere('ticket.assigned_to_id = :assigned_to_id', {
-        assigned_to_id: filters.assigned_to_id,
-      });
-    }
-
-    if (filters?.reported_by_id) {
-      query.andWhere('ticket.reported_by_id = :reported_by_id', {
-        reported_by_id: filters.reported_by_id,
-      });
-    }
-
-    query.orderBy('ticket.created_at', 'DESC');
-
-    return query.getMany();
+    return qb.getMany();
   }
 
-  /**
-   * Get a single ticket by ID
-   */
-  async getTicket(id: string): Promise<Ticket> {
+  async getTicketById(id: string): Promise<Ticket> {
     const ticket = await this.ticketRepo.findOne({
       where: { id },
-      relations: [
-        'reported_by',
-        'assigned_to',
-        'unit',
-        'issue_type_config',
-        'category_config',
-        'comments',
-        'comments.user',
-      ],
+      relations: ['requester', 'assignedTo', 'comments', 'comments.user'],
     });
-
-    if (!ticket) {
-      throw new NotFoundException('Ticket not found');
-    }
-
+    if (!ticket) throw new NotFoundException(`Ticket ${id} not found`);
     return ticket;
   }
 
-  /**
-   * Update a ticket
-   */
-  async updateTicket(id: string, dto: UpdateTicketDto): Promise<Ticket> {
-    const ticket = await this.ticketRepo.findOne({ where: { id } });
+  // --- Update --------------------------------------------------------------
 
-    if (!ticket) {
-      throw new NotFoundException('Ticket not found');
+  async updateTicket(
+    id: string,
+    dto: UpdateTicketDto,
+    actorId: number,
+    actorRole: UserRole,
+  ): Promise<Ticket> {
+    const ticket = await this.getTicketById(id);
+
+    // Regular users can only edit their own open tickets (subject/description)
+    if (actorRole === UserRole.USER) {
+      if (ticket.requesterId !== actorId) {
+        throw new ForbiddenException('You can only update your own tickets.');
+      }
+      if (ticket.status !== TicketStatus.OPEN) {
+        throw new ForbiddenException('You can only edit tickets that are still open.');
+      }
+      if (dto.subject) ticket.subject = dto.subject.trim();
+      if (dto.description) ticket.description = dto.description.trim();
+      return this.ticketRepo.save(ticket);
     }
 
-    // If status is being changed to resolved, set resolved_at
-    if (dto.status === TicketStatus.RESOLVED && ticket.status !== TicketStatus.RESOLVED) {
-      (ticket as any).resolved_at = new Date();
-      if (!dto.resolution_date) {
-        dto.resolution_date = new Date();
+    // Technicians / admins can update status + resolution
+    if (dto.subject) ticket.subject = dto.subject.trim();
+    if (dto.description) ticket.description = dto.description.trim();
+    if (dto.priority) ticket.priority = dto.priority;
+    if (dto.status) {
+      ticket.status = dto.status;
+      if (dto.status === TicketStatus.RESOLVED && !ticket.resolvedAt) {
+        ticket.resolvedAt = new Date();
       }
     }
+    if (dto.resolutionNotes !== undefined) ticket.resolutionNotes = dto.resolutionNotes;
 
-    if (dto.issue_type_id !== undefined) {
-      const categoryForValidation = dto.category_id !== undefined
-        ? dto.category_id
-        : ticket.category_id || undefined;
-      const resolvedIssueType = await this.resolveIssueType(
-        dto.issue_type_id,
-        dto.issue_type,
-        categoryForValidation,
-      );
-      dto.issue_type = resolvedIssueType.issue_type;
-      dto.issue_type_id = resolvedIssueType.issue_type_id || undefined;
-    }
-
-    if (dto.category_id !== undefined) {
-      const resolvedCategory = await this.resolveCategory(
-        dto.category_id,
-        dto.category,
-      );
-      dto.category = resolvedCategory.category;
-      dto.category_id = resolvedCategory.category_id || undefined;
-    }
-
-    Object.assign(ticket, dto);
-    await this.ticketRepo.save(ticket);
-
-    this.logger.log(`Updated ticket: ${ticket.ticket_number}`);
-    return this.getTicket(id);
+    return this.ticketRepo.save(ticket);
   }
 
-  /**
-   * Add a comment to a ticket
-   */
-  async addComment(ticketId: string, dto: AddCommentDto): Promise<TicketComment> {
-    const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
+  async assignTicket(id: string, dto: AssignTicketDto, actorRole: UserRole): Promise<Ticket> {
+    if (![UserRole.SUPER_ADMIN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN].includes(actorRole)) {
+      throw new ForbiddenException('Only admins and technicians can assign tickets.');
+    }
 
-    if (!ticket) {
-      throw new NotFoundException('Ticket not found');
+    const ticket = await this.getTicketById(id);
+    const technician = await this.userRepo.findOne({ where: { id: dto.assignedToId } });
+    if (!technician) throw new NotFoundException('Technician not found');
+
+    ticket.assignedToId = dto.assignedToId;
+    if (ticket.status === TicketStatus.OPEN) {
+      ticket.status = TicketStatus.ASSIGNED;
+    }
+
+    return this.ticketRepo.save(ticket);
+  }
+
+  // --- Comments ------------------------------------------------------------
+
+  async addComment(
+    ticketId: string,
+    dto: AddCommentDto,
+    actorId: number,
+    actorRole: UserRole,
+  ): Promise<TicketComment> {
+    const ticket = await this.getTicketById(ticketId);
+
+    // Regular users cannot add internal notes
+    const isInternal = dto.isInternal && actorRole !== UserRole.USER;
+
+    // Regular users can only comment on their own tickets
+    if (actorRole === UserRole.USER && ticket.requesterId !== actorId) {
+      throw new ForbiddenException('You can only comment on your own tickets.');
     }
 
     const comment = this.commentRepo.create({
-      ticket_id: ticketId,
-      comment: dto.comment,
-      user_id: dto.user_id,
+      ticketId,
+      comment: dto.comment.trim(),
+      userId: actorId,
+      isInternal: isInternal ?? false,
     });
 
-    await this.commentRepo.save(comment);
-
-    this.logger.log(`Added comment to ticket: ${ticket.ticket_number}`);
-
-    // Return comment with user relation
-    return this.commentRepo.findOne({
-      where: { id: comment.id },
-      relations: ['user'],
-    }) as Promise<TicketComment>;
+    return this.commentRepo.save(comment);
   }
 
-  /**
-   * Delete a ticket
-   */
-  async deleteTicket(id: string): Promise<void> {
-    const result = await this.ticketRepo.delete(id);
+  // --- Client Satisfaction ------------------------------------------------
 
-    if (result.affected === 0) {
-      throw new NotFoundException('Ticket not found');
+  async submitSatisfaction(
+    id: string,
+    dto: SubmitSatisfactionDto,
+    requesterId: number,
+  ): Promise<Ticket> {
+    const ticket = await this.getTicketById(id);
+
+    if (ticket.requesterId !== requesterId) {
+      throw new ForbiddenException('Only the requester can submit satisfaction.');
+    }
+    if (ticket.status !== TicketStatus.RESOLVED && ticket.status !== TicketStatus.CLOSED) {
+      throw new BadRequestException('Satisfaction can only be submitted for resolved or closed tickets.');
+    }
+    if (ticket.satisfactionSubmittedAt) {
+      throw new BadRequestException('Satisfaction has already been submitted for this ticket.');
+    }
+    if (dto.rating < 1 || dto.rating > 5) {
+      throw new BadRequestException('Rating must be between 1 and 5.');
     }
 
-    this.logger.log(`Deleted ticket: ${id}`);
+    ticket.satisfactionRating = dto.rating;
+    ticket.satisfactionComment = dto.comment ?? null;
+    ticket.satisfactionSubmittedAt = new Date();
+
+    return this.ticketRepo.save(ticket);
   }
 
-  /**
-   * Get ticket statistics
-   */
+  // --- Statistics ----------------------------------------------------------
+
   async getStatistics(): Promise<{
     total: number;
     byStatus: Record<string, number>;
-    byPriority: Record<string, number>;
+    byType: Record<string, number>;
+    satisfactionAvg: number | null;
+    satisfactionFillRate: number;
+    resolvedTickets: number;
   }> {
-    const tickets = await this.ticketRepo.find();
-
+    const all = await this.ticketRepo.find();
     const byStatus: Record<string, number> = {};
-    const byPriority: Record<string, number> = {};
+    const byType: Record<string, number> = {};
+    let ratingSum = 0;
+    let ratingCount = 0;
+    let resolvedCount = 0;
 
-    tickets.forEach((ticket) => {
-      byStatus[ticket.status] = (byStatus[ticket.status] || 0) + 1;
-      byPriority[ticket.priority] = (byPriority[ticket.priority] || 0) + 1;
-    });
+    for (const t of all) {
+      byStatus[t.status] = (byStatus[t.status] ?? 0) + 1;
+      byType[t.ticketType] = (byType[t.ticketType] ?? 0) + 1;
+      if (t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) {
+        resolvedCount++;
+        if (t.satisfactionRating) {
+          ratingSum += t.satisfactionRating;
+          ratingCount++;
+        }
+      }
+    }
+
+    const fillRate = resolvedCount > 0 ? Math.round((ratingCount / resolvedCount) * 100) : 0;
 
     return {
-      total: tickets.length,
+      total: all.length,
       byStatus,
-      byPriority,
+      byType,
+      satisfactionAvg: ratingCount > 0 ? Math.round((ratingSum / ratingCount) * 10) / 10 : null,
+      satisfactionFillRate: fillRate,
+      resolvedTickets: resolvedCount,
     };
   }
 
-  async listIssueTypes(
-    includeInactive = true,
-    categoryId?: string,
-  ): Promise<TicketIssueType[]> {
-    const qb = this.issueTypeRepo
-      .createQueryBuilder('issueType')
-      .where('issueType.is_deleted = :isDeleted', { isDeleted: false })
-      .orderBy('issueType.name', 'ASC');
+  async getUserDashboardStats(requesterId: number): Promise<{
+    total: number;
+    open: number;
+    inProgress: number;
+    resolved: number;
+    closed: number;
+    satisfactionFillRate: number;
+    pendingSatisfactionTickets: Ticket[];
+  }> {
+    const tickets = await this.ticketRepo.find({ where: { requesterId } });
 
-    qb.leftJoinAndSelect('issueType.category', 'category');
+    let open = 0, inProgress = 0, resolved = 0, closed = 0;
+    let needsSatisfaction = 0;
+    const pendingSatisfactionTickets: Ticket[] = [];
 
-    if (!includeInactive) {
-      qb.andWhere('issueType.is_active = :isActive', { isActive: true });
+    for (const t of tickets) {
+      if (t.status === TicketStatus.OPEN) open++;
+      else if (t.status === TicketStatus.ASSIGNED || t.status === TicketStatus.IN_PROGRESS) inProgress++;
+      else if (t.status === TicketStatus.RESOLVED) {
+        resolved++;
+        needsSatisfaction++;
+        if (!t.satisfactionSubmittedAt) pendingSatisfactionTickets.push(t);
+      }
+      else if (t.status === TicketStatus.CLOSED) {
+        closed++;
+        if (t.resolvedAt) needsSatisfaction++;
+        if (!t.satisfactionSubmittedAt && t.resolvedAt) pendingSatisfactionTickets.push(t);
+      }
     }
 
-    if (categoryId) {
-      qb.andWhere('issueType.category_id = :categoryId', { categoryId });
-    }
+    const filled = tickets.filter(
+      (t) => (t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) && t.satisfactionSubmittedAt,
+    ).length;
 
-    return qb.getMany();
+    const fillRate = needsSatisfaction > 0 ? Math.round((filled / needsSatisfaction) * 100) : 0;
+
+    return {
+      total: tickets.length,
+      open,
+      inProgress,
+      resolved,
+      closed,
+      satisfactionFillRate: fillRate,
+      pendingSatisfactionTickets,
+    };
   }
 
-  async listCategories(includeInactive = true): Promise<TicketCategoryConfig[]> {
-    const qb = this.categoryRepo
-      .createQueryBuilder('category')
-      .where('category.is_deleted = :isDeleted', { isDeleted: false })
-      .orderBy('category.name', 'ASC');
+  async getTechnicianAvailability(): Promise<Array<{ id: number; email: string; firstName: string; lastName: string; role: string; openCount: number }>> {
+    const technicians = await this.userRepo.find({
+      where: [
+        { role: UserRole.TECHNICIAN_DESKTOP },
+        { role: UserRole.TECHNICIAN_IT_SUPPORT },
+        { role: UserRole.TECHNICIAN },
+      ],
+    });
 
-    if (!includeInactive) {
-      qb.andWhere('category.is_active = :isActive', { isActive: true });
-    }
-
-    return qb.getMany();
-  }
-
-  async createIssueType(
-    dto: UpsertTicketConfigDto,
-    actorId: number,
-  ): Promise<TicketIssueType> {
-    if (!dto.name?.trim()) {
-      throw new BadRequestException('Issue type name is required.');
-    }
-
-    const key = this.normalizeConfigKey(dto.key || dto.name);
-    if (!key) {
-      throw new BadRequestException('Issue type key is required.');
-    }
-
-    let categoryId: string | null = null;
-    if (dto.category_id) {
-      const category = await this.categoryRepo.findOne({
-        where: { id: dto.category_id, is_deleted: false },
+    const results = [];
+    for (const tech of technicians) {
+      const openCount = await this.ticketRepo.count({
+        where: { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
       });
-      if (!category) {
-        throw new BadRequestException('Selected category is invalid.');
-      }
-      categoryId = category.id;
+      results.push({
+        id: tech.id,
+        email: tech.email,
+        firstName: tech.firstName,
+        lastName: tech.lastName,
+        role: tech.role,
+        openCount,
+      });
     }
-
-    const existing = await this.issueTypeRepo.findOne({ where: { key } });
-    if (existing && !existing.is_deleted) {
-      throw new ConflictException('Issue type key already exists.');
-    }
-
-    if (existing?.is_deleted) {
-      existing.name = dto.name.trim();
-      existing.description = dto.description?.trim() || null;
-      existing.is_active = dto.is_active ?? true;
-      existing.is_deleted = false;
-      existing.updated_by = actorId;
-      existing.category_id = categoryId;
-      return this.issueTypeRepo.save(existing);
-    }
-
-    return this.issueTypeRepo.save(
-      this.issueTypeRepo.create({
-        key,
-        name: dto.name.trim(),
-        description: dto.description?.trim() || null,
-        is_active: dto.is_active ?? true,
-        category_id: categoryId,
-        created_by: actorId,
-        updated_by: actorId,
-      }),
-    );
-  }
-
-  async updateIssueType(
-    id: string,
-    dto: Partial<UpsertTicketConfigDto>,
-    actorId: number,
-  ): Promise<TicketIssueType> {
-    const issueType = await this.issueTypeRepo.findOne({
-      where: { id, is_deleted: false },
-    });
-
-    if (!issueType) {
-      throw new NotFoundException('Issue type not found.');
-    }
-
-    if (dto.key || dto.name) {
-      const nextKey = this.normalizeConfigKey(dto.key || dto.name || issueType.key);
-      const duplicate = await this.issueTypeRepo.findOne({ where: { key: nextKey } });
-      if (duplicate && duplicate.id !== issueType.id && !duplicate.is_deleted) {
-        throw new ConflictException('Issue type key already exists.');
-      }
-      issueType.key = nextKey;
-    }
-
-    if (dto.name !== undefined) {
-      if (!dto.name.trim()) {
-        throw new BadRequestException('Issue type name is required.');
-      }
-      issueType.name = dto.name.trim();
-    }
-
-    if (dto.description !== undefined) {
-      issueType.description = dto.description?.trim() || null;
-    }
-
-    if (dto.is_active !== undefined) {
-      issueType.is_active = dto.is_active;
-    }
-
-    if (dto.category_id !== undefined) {
-      if (!dto.category_id) {
-        issueType.category_id = null;
-      } else {
-        const category = await this.categoryRepo.findOne({
-          where: { id: dto.category_id, is_deleted: false },
-        });
-        if (!category) {
-          throw new BadRequestException('Selected category is invalid.');
-        }
-        issueType.category_id = category.id;
-      }
-    }
-
-    issueType.updated_by = actorId;
-    return this.issueTypeRepo.save(issueType);
-  }
-
-  async deactivateIssueType(id: string, actorId: number): Promise<TicketIssueType> {
-    return this.updateIssueType(id, { is_active: false }, actorId);
-  }
-
-  async softDeleteIssueType(id: string, actorId: number): Promise<void> {
-    const issueType = await this.issueTypeRepo.findOne({
-      where: { id, is_deleted: false },
-    });
-
-    if (!issueType) {
-      throw new NotFoundException('Issue type not found.');
-    }
-
-    const inUse = await this.ticketRepo.count({ where: { issue_type_id: id } });
-    if (inUse > 0) {
-      throw new BadRequestException('Issue type is in use by existing tickets and cannot be deleted.');
-    }
-
-    issueType.is_deleted = true;
-    issueType.is_active = false;
-    issueType.updated_by = actorId;
-    await this.issueTypeRepo.save(issueType);
-  }
-
-  async createCategory(
-    dto: UpsertTicketConfigDto,
-    actorId: number,
-  ): Promise<TicketCategoryConfig> {
-    if (!dto.name?.trim()) {
-      throw new BadRequestException('Category name is required.');
-    }
-
-    const key = this.normalizeConfigKey(dto.key || dto.name);
-    if (!key) {
-      throw new BadRequestException('Category key is required.');
-    }
-
-    const existing = await this.categoryRepo.findOne({ where: { key } });
-    if (existing && !existing.is_deleted) {
-      throw new ConflictException('Category key already exists.');
-    }
-
-    if (existing?.is_deleted) {
-      existing.name = dto.name.trim();
-      existing.description = dto.description?.trim() || null;
-      existing.is_active = dto.is_active ?? true;
-      existing.is_deleted = false;
-      existing.updated_by = actorId;
-      return this.categoryRepo.save(existing);
-    }
-
-    return this.categoryRepo.save(
-      this.categoryRepo.create({
-        key,
-        name: dto.name.trim(),
-        description: dto.description?.trim() || null,
-        is_active: dto.is_active ?? true,
-        created_by: actorId,
-        updated_by: actorId,
-      }),
-    );
-  }
-
-  async updateCategory(
-    id: string,
-    dto: Partial<UpsertTicketConfigDto>,
-    actorId: number,
-  ): Promise<TicketCategoryConfig> {
-    const category = await this.categoryRepo.findOne({
-      where: { id, is_deleted: false },
-    });
-
-    if (!category) {
-      throw new NotFoundException('Category not found.');
-    }
-
-    if (dto.key || dto.name) {
-      const nextKey = this.normalizeConfigKey(dto.key || dto.name || category.key);
-      const duplicate = await this.categoryRepo.findOne({ where: { key: nextKey } });
-      if (duplicate && duplicate.id !== category.id && !duplicate.is_deleted) {
-        throw new ConflictException('Category key already exists.');
-      }
-      category.key = nextKey;
-    }
-
-    if (dto.name !== undefined) {
-      if (!dto.name.trim()) {
-        throw new BadRequestException('Category name is required.');
-      }
-      category.name = dto.name.trim();
-    }
-
-    if (dto.description !== undefined) {
-      category.description = dto.description?.trim() || null;
-    }
-
-    if (dto.is_active !== undefined) {
-      category.is_active = dto.is_active;
-    }
-
-    category.updated_by = actorId;
-    return this.categoryRepo.save(category);
-  }
-
-  async deactivateCategory(id: string, actorId: number): Promise<TicketCategoryConfig> {
-    return this.updateCategory(id, { is_active: false }, actorId);
-  }
-
-  async softDeleteCategory(id: string, actorId: number): Promise<void> {
-    const category = await this.categoryRepo.findOne({
-      where: { id, is_deleted: false },
-    });
-
-    if (!category) {
-      throw new NotFoundException('Category not found.');
-    }
-
-    const inUse = await this.ticketRepo.count({ where: { category_id: id } });
-    if (inUse > 0) {
-      throw new BadRequestException('Category is in use by existing tickets and cannot be deleted.');
-    }
-
-    category.is_deleted = true;
-    category.is_active = false;
-    category.updated_by = actorId;
-    await this.categoryRepo.save(category);
+    return results;
   }
 }

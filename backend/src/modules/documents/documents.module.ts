@@ -15,6 +15,7 @@ import { ManualReview } from '../reviews/entities/manual-review.entity';
 import { ReportorialDocumentType } from './entities/reportorial-document-type.entity';
 import { ReportorialDocTypeService } from './services/reportorial-doc-type.service';
 import { ReportorialDocTypeController } from './controllers/reportorial-doc-type.controller';
+import { MetricsModule } from '../metrics/metrics.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ReportorialDocTypeController } from './controllers/reportorial-doc-type
       ManualReview,
       ReportorialDocumentType,
     ]),
+    MetricsModule,
     BullModule.registerQueue({
       name: 'document-processing',
     }),

@@ -82,71 +82,85 @@ export interface CreateIssuanceDto {
   is_active?: boolean;
 }
 
+export type TicketType = 'desktop_support' | 'it_support';
+export type TicketStatus = 'open' | 'assigned' | 'in_progress' | 'resolved' | 'closed';
+export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
+
 export interface Ticket {
   id: string;
-  ticket_number: string;
+  ticketNumber: string;
   subject: string;
   description: string;
-  issue_type: 'policy_gap' | 'missing_evidence' | 'data_inconsistency' | 'late_submission' | 'security_incident' | 'other';
-  issue_type_id?: string;
-  issue_type_config?: TicketConfigOption;
-  category: 'document_related' | 'system_issue' | 'compliance_query' | 'training_request' | 'other';
-  category_id?: string;
-  category_config?: TicketConfigOption;
-  status: 'open' | 'in_progress' | 'resolved' | 'closed';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  reported_by_id: string;
-  assigned_to_id?: string;
-  unit_id?: string;
-  resolved_at?: string;
-  resolution_steps?: string;
-  resolution_date?: string;
-  created_at: string;
-  updated_at: string;
-  reported_by?: any;
-  assigned_to?: any;
-  unit?: any;
+  ticketType: TicketType;
+  status: TicketStatus;
+  priority: TicketPriority;
+  requesterId: number;
+  requester?: { id: number; email: string; firstName?: string; lastName?: string };
+  assignedToId?: number | null;
+  assignedTo?: { id: number; email: string; firstName?: string; lastName?: string } | null;
+  resolutionNotes?: string | null;
+  resolvedAt?: string | null;
+  satisfactionRating?: number | null;
+  satisfactionComment?: string | null;
+  satisfactionSubmittedAt?: string | null;
   comments?: TicketComment[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface TicketComment {
   id: string;
-  ticket_id: string;
+  ticketId: string;
   comment: string;
-  user_id: string;
-  created_at: string;
-  user?: any;
+  userId: number;
+  isInternal: boolean;
+  createdAt: string;
+  user?: { id: number; email: string; firstName?: string; lastName?: string };
 }
 
 export interface CreateTicketDto {
   subject: string;
   description: string;
-  issue_type?: Ticket['issue_type'];
-  issue_type_id?: string;
-  category: Ticket['category'];
-  category_id?: string;
-  priority: Ticket['priority'];
-  resolution_steps?: string;
-  resolution_date?: string;
-  unit_id?: string;
+  ticketType: TicketType;
+  priority?: TicketPriority;
 }
 
-export interface TicketConfigOption {
-  id: string;
-  key: string;
-  name: string;
+export interface UpdateTicketDto {
+  subject?: string;
   description?: string;
-  is_active: boolean;
-  is_deleted?: boolean;
+  status?: TicketStatus;
+  priority?: TicketPriority;
+  resolutionNotes?: string;
 }
 
-export interface UpsertTicketConfigDto {
-  key: string;
-  name: string;
-  description?: string;
-  is_active?: boolean;
-  category_id?: string;
+export interface AssignTicketDto {
+  assignedToId: number;
 }
+
+export interface SubmitSatisfactionDto {
+  rating: number;
+  comment?: string;
+}
+
+export interface TechnicianOption {
+  id: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  openCount: number;
+}
+
+export interface TicketDashboardStats {
+  total: number;
+  open: number;
+  inProgress: number;
+  resolved: number;
+  closed: number;
+  satisfactionFillRate: number;
+  pendingSatisfactionTickets: Ticket[];
+}
+
 
 // Issuances API
 export const issuancesApi = {
@@ -235,17 +249,19 @@ export const issuancesApi = {
   },
 };
 
-// Tickets API
+// Tickets API (IT Help Desk)
 export const ticketsApi = {
-  getAll: async (
-    filters?: Partial<Pick<Ticket, 'status' | 'priority' | 'category' | 'unit_id'>>,
-  ): Promise<Ticket[]> => {
+  getAll: async (filters?: {
+    status?: TicketStatus;
+    ticketType?: TicketType;
+    requesterId?: number;
+    assignedToId?: number;
+  }): Promise<Ticket[]> => {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
-    if (filters?.priority) params.append('priority', filters.priority);
-    if (filters?.category) params.append('category', filters.category);
-    if (filters?.unit_id) params.append('unit_id', filters.unit_id);
-
+    if (filters?.ticketType) params.append('ticketType', filters.ticketType);
+    if (filters?.requesterId) params.append('requesterId', String(filters.requesterId));
+    if (filters?.assignedToId) params.append('assignedToId', String(filters.assignedToId));
     const response = await apiClient.get(`/tickets?${params}`);
     return response.data;
   },
@@ -260,26 +276,23 @@ export const ticketsApi = {
     return response.data;
   },
 
-  update: async (
-    id: string,
-    data: Partial<Ticket>,
-  ): Promise<Ticket> => {
-    const response = await apiClient.put(`/tickets/${id}`, data);
+  update: async (id: string, data: UpdateTicketDto): Promise<Ticket> => {
+    const response = await apiClient.patch(`/tickets/${id}`, data);
     return response.data;
   },
 
-  delete: async (id: string): Promise<void> => {
-    await apiClient.delete(`/tickets/${id}`);
+  assign: async (id: string, assignedToId: number): Promise<Ticket> => {
+    const response = await apiClient.patch(`/tickets/${id}/assign`, { assignedToId });
+    return response.data;
   },
 
-  addComment: async (
-    ticketId: string,
-    comment: string,
-  ): Promise<TicketComment> => {
-    const response = await apiClient.post(
-      `/tickets/${ticketId}/comments`,
-      { comment },
-    );
+  addComment: async (ticketId: string, comment: string, isInternal = false): Promise<TicketComment> => {
+    const response = await apiClient.post(`/tickets/${ticketId}/comments`, { comment, isInternal });
+    return response.data;
+  },
+
+  submitSatisfaction: async (id: string, data: SubmitSatisfactionDto): Promise<Ticket> => {
+    const response = await apiClient.post(`/tickets/${id}/satisfaction`, data);
     return response.data;
   },
 
@@ -288,54 +301,14 @@ export const ticketsApi = {
     return response.data;
   },
 
-  listIssueTypes: async (
-    activeOnly = true,
-    categoryId?: string,
-  ): Promise<TicketConfigOption[]> => {
-    const response = await apiClient.get(`/tickets/issue-types`, {
-      params: { active_only: activeOnly, category_id: categoryId },
-    });
+  getDashboardStats: async (): Promise<TicketDashboardStats> => {
+    const response = await apiClient.get(`/tickets/dashboard`);
     return response.data;
   },
 
-  createIssueType: async (data: UpsertTicketConfigDto): Promise<TicketConfigOption> => {
-    const response = await apiClient.post(`/tickets/issue-types`, data);
+  getTechnicians: async (): Promise<TechnicianOption[]> => {
+    const response = await apiClient.get(`/tickets/technicians`);
     return response.data;
-  },
-
-  updateIssueType: async (
-    id: string,
-    data: Partial<UpsertTicketConfigDto>,
-  ): Promise<TicketConfigOption> => {
-    const response = await apiClient.put(`/tickets/issue-types/${id}`, data);
-    return response.data;
-  },
-
-  deleteIssueType: async (id: string): Promise<void> => {
-    await apiClient.delete(`/tickets/issue-types/${id}`);
-  },
-
-  listCategories: async (activeOnly = true): Promise<TicketConfigOption[]> => {
-    const response = await apiClient.get(`/tickets/categories`, {
-      params: { active_only: activeOnly },
-    });
-    return response.data;
-  },
-
-  createCategory: async (data: UpsertTicketConfigDto): Promise<TicketConfigOption> => {
-    const response = await apiClient.post(`/tickets/categories`, data);
-    return response.data;
-  },
-
-  updateCategory: async (
-    id: string,
-    data: Partial<UpsertTicketConfigDto>,
-  ): Promise<TicketConfigOption> => {
-    const response = await apiClient.put(`/tickets/categories/${id}`, data);
-    return response.data;
-  },
-
-  deleteCategory: async (id: string): Promise<void> => {
-    await apiClient.delete(`/tickets/categories/${id}`);
   },
 };
+

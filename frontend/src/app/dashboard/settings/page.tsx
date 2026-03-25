@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Autocomplete,
   Badge,
   Box,
   Button,
@@ -249,6 +250,11 @@ function RoleManagementCard() {
         }
       />
       <CardContent>
+        {availableCodes.length === 0 && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Add Role Definition is disabled because all predefined role codes are already in use.
+          </Typography>
+        )}
         {loading ? (
           <Typography variant="body2" color="text.secondary">Loading roles...</Typography>
         ) : (
@@ -407,11 +413,27 @@ function FocalUserManagementCard() {
   const { enqueueSnackbar } = useSnackbar();
   const [form, setForm] = useState({
     email: '', password: '', firstName: '', middleName: '', lastName: '',
-    suffix: '', staffId: '', role: UserRole.FOCAL, position: '', designation: '',
+    suffix: '', staffId: '', role: UserRole.FOCAL, position: '', positionFull: '', designation: '',
+    ticketMainFocal: false, ticketTechnician: false,
     unitIds: [] as number[],
   });
 
   const assignableRoles = useMemo(() => roles.filter((r) => r.assignable), [roles]);
+
+  // Email autocomplete suggestions
+  const [emailSuggestions, setEmailSuggestions] = useState<{ id: number; email: string; firstName?: string; lastName?: string }[]>([]);
+  const [emailInputValue, setEmailInputValue] = useState('');
+
+  useEffect(() => {
+    if (!emailInputValue || emailInputValue.length < 2) { setEmailSuggestions([]); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const results = await usersApi.searchEmails(emailInputValue);
+        setEmailSuggestions(results);
+      } catch { setEmailSuggestions([]); }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [emailInputValue]);
 
   const reload = useCallback(async () => {
     try {
@@ -431,10 +453,12 @@ function FocalUserManagementCard() {
 
   const resetForm = () => setForm({
     email: '', password: '', firstName: '', middleName: '', lastName: '',
-    suffix: '', staffId: '', role: UserRole.FOCAL, position: '', designation: '', unitIds: [],
+    suffix: '', staffId: '', role: UserRole.FOCAL, position: '', positionFull: '', designation: '',
+    ticketMainFocal: false, ticketTechnician: false,
+    unitIds: [],
   });
 
-  const handleOpenCreate = () => { resetForm(); setCreateError(null); setCreateDialogOpen(true); };
+  const handleOpenCreate = () => { resetForm(); setEmailInputValue(''); setEmailSuggestions([]); setCreateError(null); setCreateDialogOpen(true); };
 
   const handleCreate = async () => {
     setCreateError(null);
@@ -463,7 +487,10 @@ function FocalUserManagementCard() {
         lastName: editUser.lastName,
         suffix: editUser.suffix,
         position: editUser.position,
+        positionFull: editUser.positionFull,
         designation: editUser.designation,
+        ticketMainFocal: Boolean(editUser.ticketMainFocal),
+        ticketTechnician: Boolean(editUser.ticketTechnician),
         role: editUser.role,
         unitIds: editUser.unitIds,
       });
@@ -514,7 +541,28 @@ function FocalUserManagementCard() {
             )}
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
               <Grid item xs={12} md={4}>
-                <TextField label="Email Address" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} fullWidth helperText="Login credential" />
+                <Autocomplete
+                  freeSolo
+                  options={emailSuggestions.map((s) => s.email)}
+                  inputValue={emailInputValue}
+                  onInputChange={(_, value) => {
+                    setEmailInputValue(value);
+                    setForm({ ...form, email: value });
+                  }}
+                  onChange={(_, value) => {
+                    const v = value || '';
+                    setEmailInputValue(v);
+                    setForm({ ...form, email: v });
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Email Address"
+                      fullWidth
+                      helperText="Login credential — type to search existing accounts"
+                    />
+                  )}
+                />
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField label="Temporary Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} fullWidth helperText="User should change on first login" />
@@ -542,10 +590,25 @@ function FocalUserManagementCard() {
                 <TextField label="Staff ID" value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} fullWidth helperText="Optional employee identifier" />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField label="Position" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} fullWidth />
+                <TextField label="Position (Abbreviated)" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} fullWidth helperText="e.g. ITO I" />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField label="Full Position Title" value={form.positionFull} onChange={(e) => setForm({ ...form, positionFull: e.target.value })} fullWidth helperText="e.g. Information Technology Officer I" />
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField label="Designation / Title" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} fullWidth />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <FormControlLabel
+                  control={<Switch checked={form.ticketMainFocal} onChange={(e) => setForm({ ...form, ticketMainFocal: e.target.checked })} />}
+                  label="Ticket Main Focal"
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <FormControlLabel
+                  control={<Switch checked={form.ticketTechnician} onChange={(e) => setForm({ ...form, ticketTechnician: e.target.checked })} />}
+                  label="Lower-level Ticket Technician"
+                />
               </Grid>
               <Grid item xs={12}>
                 <FormControl fullWidth>
@@ -635,7 +698,10 @@ function FocalUserManagementCard() {
                             suffix: u.suffix || '',
                             staffId: u.staffId || '',
                             position: u.position || '',
+                            positionFull: u.positionFull || '',
                             designation: u.designation || '',
+                            ticketMainFocal: Boolean(u.ticketMainFocal),
+                            ticketTechnician: Boolean(u.ticketTechnician),
                             role: u.role,
                             unitIds: Array.isArray(u.units) ? u.units.map((unit: any) => unit.id) : [],
                           });
@@ -711,10 +777,20 @@ function FocalUserManagementCard() {
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField
-                  label="Position"
+                  label="Position (Abbreviated)"
                   value={editUser?.position || ''}
                   onChange={(e) => setEditUser((prev: any) => ({ ...prev, position: e.target.value }))}
                   fullWidth
+                  helperText="e.g. ITO I"
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  label="Full Position Title"
+                  value={editUser?.positionFull || ''}
+                  onChange={(e) => setEditUser((prev: any) => ({ ...prev, positionFull: e.target.value }))}
+                  fullWidth
+                  helperText="e.g. Information Technology Officer I"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -737,6 +813,28 @@ function FocalUserManagementCard() {
                     <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
                   ))}
                 </TextField>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(editUser?.ticketMainFocal)}
+                      onChange={(e) => setEditUser((prev: any) => ({ ...prev, ticketMainFocal: e.target.checked }))}
+                    />
+                  }
+                  label="Ticket Main Focal"
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(editUser?.ticketTechnician)}
+                      onChange={(e) => setEditUser((prev: any) => ({ ...prev, ticketTechnician: e.target.checked }))}
+                    />
+                  }
+                  label="Lower-level Ticket Technician"
+                />
               </Grid>
               <Grid item xs={12}>
                 <FormControl fullWidth>

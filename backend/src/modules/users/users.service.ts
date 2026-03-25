@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException }
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { User, UserRole } from './entities/user.entity';
+import { User, UserRole, AuthProvider } from './entities/user.entity';
 import { CreateRoleDefinitionDto, UpdateRoleDefinitionDto, CreateUserDto, UpdateUserDto } from './dto';
 import { Unit } from '../units/entities/unit.entity';
 import { RoleDefinitionEntity } from './entities/role-definition.entity';
@@ -24,15 +24,29 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   },
   {
     value: UserRole.FOCAL,
-    label: 'Focal Person',
-    description: 'Unit focal person responsible for uploading and submitting compliance documents on behalf of their unit.',
+    label: 'Focal Person (RICTMS Staff)',
+    description: 'RICTMS staff member. Unit focal person responsible for uploading and submitting compliance documents on behalf of their unit. Default role for all admin-created accounts.',
     assignable: true,
     isSystem: true,
   },
   {
     value: UserRole.TECHNICIAN,
-    label: 'Technician',
-    description: 'Technical operations staff who assist in document preparation and submission.',
+    label: 'Technician (General)',
+    description: 'General technical operations staff who assist in document preparation and submission.',
+    assignable: true,
+    isSystem: true,
+  },
+  {
+    value: UserRole.TECHNICIAN_DESKTOP,
+    label: 'Technician — Desktop Support',
+    description: 'Handles desktop/hardware support tickets: workstations, printers, peripherals, and hardware troubleshooting.',
+    assignable: true,
+    isSystem: true,
+  },
+  {
+    value: UserRole.TECHNICIAN_IT_SUPPORT,
+    label: 'Technician — IT Support',
+    description: 'Handles IT/software support tickets: software, network, internet connectivity, and system-level issues.',
     assignable: true,
     isSystem: true,
   },
@@ -40,6 +54,13 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
     value: UserRole.AUDITOR,
     label: 'Auditor',
     description: 'Read-only audit access to view documents, reviews, and compliance records for inspection purposes.',
+    assignable: true,
+    isSystem: true,
+  },
+  {
+    value: UserRole.USER,
+    label: 'Regular User',
+    description: 'External or non-staff user. Can submit help desk tickets and view their own ticket history. No access to compliance modules.',
     assignable: true,
     isSystem: true,
   },
@@ -67,7 +88,17 @@ export class UsersService {
       await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS suffix VARCHAR(255) NULL');
       await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS staff_id VARCHAR(255) NULL');
       await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS position VARCHAR(255) NULL');
+      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS position_full VARCHAR(255) NULL');
       await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS designation VARCHAR(255) NULL');
+      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS ticket_main_focal TINYINT(1) NOT NULL DEFAULT 0');
+      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS ticket_technician TINYINT(1) NOT NULL DEFAULT 0');
+      await queryRunner.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider ENUM('local','google') NOT NULL DEFAULT 'local'");
+      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(255) NULL');
+      await queryRunner.query('CREATE UNIQUE INDEX IF NOT EXISTS uq_users_google_sub ON users (google_sub)');
+      // Extend the role enum to include new roles (safe: only adds values, never removes)
+      await queryRunner.query(
+        `ALTER TABLE users MODIFY COLUMN role ENUM('super_admin','reviewer','focal','technician','technician_desktop','technician_it_support','auditor','user') NOT NULL DEFAULT 'focal'`,
+      ).catch(() => undefined); // Catch if enum already has these values
     } finally {
       await queryRunner.release();
     }
@@ -156,8 +187,14 @@ export class UsersService {
       suffix: (createUserDto as any).suffix,
       staffId: (createUserDto as any).staffId,
       position: (createUserDto as any).position,
+      positionFull: (createUserDto as any).positionFull,
       designation: (createUserDto as any).designation,
-      role: createUserDto.role,
+      ticketMainFocal: Boolean((createUserDto as any).ticketMainFocal),
+      ticketTechnician: Boolean((createUserDto as any).ticketTechnician),
+      authProvider: AuthProvider.LOCAL,
+      googleSub: null,
+      // Admin-created users are always RICTMS staff → default to FOCAL unless explicitly set
+      role: createUserDto.role ?? UserRole.FOCAL,
       units,
     });
 
@@ -191,6 +228,71 @@ export class UsersService {
     });
   }
 
+  /** Autocomplete: find registered emails that start with (or contain) a query string */
+  async searchEmails(query: string, limit = 10): Promise<Array<{ id: number; email: string; firstName: string; lastName: string; role: string }>> {
+    if (!query || query.trim().length < 2) return [];
+    const clean = `%${query.trim().toLowerCase()}%`;
+    const rows = await this.usersRepository
+      .createQueryBuilder('u')
+      .select(['u.id', 'u.email', 'u.firstName', 'u.lastName', 'u.role'])
+      .where('LOWER(u.email) LIKE :q', { q: clean })
+      .orderBy('u.email', 'ASC')
+      .limit(limit)
+      .getMany();
+    return rows.map((u) => ({
+      id: u.id,
+      email: u.email,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      role: u.role,
+    }));
+  }
+
+  async findByGoogleSub(googleSub: string): Promise<User | null> {
+    return await this.usersRepository.findOne({
+      where: { googleSub },
+      relations: ['units'],
+    });
+  }
+
+  async linkGoogleIdentity(userId: number, googleSub: string): Promise<User> {
+    const user = await this.findOne(userId);
+    user.googleSub = googleSub;
+    user.authProvider = AuthProvider.GOOGLE;
+    return await this.usersRepository.save(user);
+  }
+
+  async createGoogleUser(payload: {
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    googleSub: string;
+    role?: UserRole;
+  }): Promise<User> {
+    const existingUser = await this.usersRepository.findOne({ where: { email: payload.email } });
+    if (existingUser) {
+      throw new ConflictException('User with this email already exists');
+    }
+
+    const randomPassword = `google-oauth-${payload.googleSub}-${Date.now()}`;
+    const passwordHash = await bcrypt.hash(randomPassword, 10);
+
+    const user = this.usersRepository.create({
+      email: payload.email,
+      passwordHash,
+      firstName: payload.firstName || 'Google',
+      lastName: payload.lastName || 'User',
+      role: payload.role || UserRole.FOCAL,
+      authProvider: AuthProvider.GOOGLE,
+      googleSub: payload.googleSub,
+      ticketMainFocal: false,
+      ticketTechnician: false,
+      units: [],
+    });
+
+    return await this.usersRepository.save(user);
+  }
+
   async updatePasswordHash(id: number, passwordHash: string): Promise<void> {
     await this.usersRepository.update({ id }, { passwordHash });
   }
@@ -206,7 +308,10 @@ export class UsersService {
     if (dto.lastName) user.lastName = dto.lastName;
     if (dto.suffix !== undefined) user.suffix = dto.suffix;
     if (dto.position !== undefined) user.position = dto.position;
+    if (dto.positionFull !== undefined) user.positionFull = dto.positionFull;
     if (dto.designation !== undefined) user.designation = dto.designation;
+    if (dto.ticketMainFocal !== undefined) user.ticketMainFocal = Boolean(dto.ticketMainFocal);
+    if (dto.ticketTechnician !== undefined) user.ticketTechnician = Boolean(dto.ticketTechnician);
     if (dto.role) user.role = dto.role;
     if ((dto as any).active !== undefined) user.active = (dto as any).active;
 

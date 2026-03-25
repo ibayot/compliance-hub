@@ -10,12 +10,14 @@ import {
   TextField,
   MenuItem,
   Grid,
+  Tabs,
+  Tab,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
 } from '@mui/material';
-import { Add as AddIcon, FilterList as FilterIcon, Archive as ArchiveIcon, Inventory as ArchivedViewIcon } from '@mui/icons-material';
+import { Add as AddIcon, FilterList as FilterIcon, Archive as ArchiveIcon } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { documentsApi, Document, ListDocumentsParams } from '@/lib/api/documents';
@@ -51,6 +53,7 @@ export default function DocumentsPage() {
   });
 
   const [showFilters, setShowFilters] = useState(false);
+  const [documentsTab, setDocumentsTab] = useState<'active' | 'archived'>('active');
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [returnRemarks, setReturnRemarks] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -58,9 +61,18 @@ export default function DocumentsPage() {
   const [targetDocument, setTargetDocument] = useState<Document | null>(null);
 
   // Fetch documents
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['documents', filters],
-    staleTime: 0,
+  const isArchivedTab = isFocal && documentsTab === 'archived';
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['documents', filters, documentsTab],
+    staleTime: isArchivedTab ? 30_000 : 0,
+    placeholderData: (previousData) =>
+      previousData ?? {
+        data: [],
+        total: 0,
+        page: filters.page || 1,
+        limit: filters.limit || 20,
+      },
     queryFn: () => {
       const cleanFilters = { ...filters };
       // Remove empty filters
@@ -69,6 +81,7 @@ export default function DocumentsPage() {
           delete cleanFilters[key as keyof ListDocumentsParams];
         }
       });
+      cleanFilters.archived = isArchivedTab;
       return documentsApi.listDocuments(cleanFilters);
     },
   });
@@ -261,15 +274,6 @@ export default function DocumentsPage() {
         >
           <Typography variant="h4">Documents</Typography>
           <Box sx={{ display: 'flex', gap: 2 }}>
-            {isFocal && (
-              <Button
-                variant="outlined"
-                startIcon={<ArchivedViewIcon />}
-                onClick={() => router.push('/dashboard/documents/archived')}
-              >
-                View Archived
-              </Button>
-            )}
             <Button
               variant="outlined"
               startIcon={<FilterIcon />}
@@ -287,8 +291,21 @@ export default function DocumentsPage() {
           </Box>
         </Box>
 
+        {isFocal && (
+          <Paper elevation={1} sx={{ mb: 3 }}>
+            <Tabs
+              value={documentsTab}
+              onChange={(_, value) => setDocumentsTab(value)}
+              aria-label="Documents tabs"
+            >
+              <Tab label="Active Documents" value="active" />
+              <Tab label="Archived Documents" value="archived" />
+            </Tabs>
+          </Paper>
+        )}
+
         {/* Filters */}
-        {showFilters && (
+        {showFilters && !isArchivedTab && (
           <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" gutterBottom>
               Filters
@@ -384,18 +401,19 @@ export default function DocumentsPage() {
           total={data?.total || 0}
           page={filters.page || 1}
           limit={filters.limit || 20}
-          loading={isLoading}
+          loading={isLoading && !isArchivedTab}
           onPageChange={handlePageChange}
           onLimitChange={handleLimitChange}
           onReturn={isFocal ? undefined : openReturnDialog}
           onDelete={isFocal ? undefined : openDeleteDialog}
-          onArchive={isFocal ? openArchiveDialog : undefined}
+          onArchive={isFocal && !isArchivedTab ? openArchiveDialog : undefined}
           statusFormatter={getWorkflowStatus}
           canReturnDocument={canReturnDocument}
           canDeleteDocument={canDeleteDocument}
-          canArchiveDocument={isFocal ? canArchiveDocument : undefined}
+          canArchiveDocument={isFocal && !isArchivedTab ? canArchiveDocument : undefined}
           hideUnitColumn={isFocal}
           hideUploaderColumn={isFocal}
+          archivedMode={isArchivedTab}
         />
       </Box>
 
@@ -432,7 +450,7 @@ export default function DocumentsPage() {
         <DialogTitle>Archive Document</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            This will archive the returned document. You can view it in the Archived Documents section.
+            This will archive the returned document. It will move to the Archived Documents tab.
           </Typography>
           <Typography variant="body2">
             {targetDocument ? `Archive "${targetDocument.title}"?` : ''}

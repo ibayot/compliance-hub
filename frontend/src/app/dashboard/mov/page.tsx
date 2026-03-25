@@ -73,12 +73,28 @@ function toBullets(items: string[]): string {
   return items.map((item) => `- ${item.trim()}`).join('\n');
 }
 
-function fileToBase64(file: File): Promise<string> {
+function compressImageToBase64(file: File, maxPx = 400, quality = 0.75): Promise<string> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('canvas 2d unavailable')); return; }
+      // Fill white before drawing so transparent pixels don't become black in JPEG
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+    img.src = url;
   });
 }
 
@@ -106,6 +122,19 @@ export default function MovBuilderPage() {
   const [pageFooter, setPageFooter] = useState('');
   const [diffFirstFooter, setDiffFirstFooter] = useState(false);
   const [firstPageFooter, setFirstPageFooter] = useState('');
+
+  // ── Print Presets ─────────────────────────────────────────────────────────
+  const [printPresets, setPrintPresets] = useState<MovArtifact[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState('');
+  const [presetName, setPresetName] = useState('');
+
+  // ── Signature Block (print-only) ──────────────────────────────────────────
+  const [preparedByName, setPreparedByName] = useState('');
+  const [preparedByPosition, setPreparedByPosition] = useState('');
+  const [preparedByDesignation, setPreparedByDesignation] = useState('');
+  const [approvedByName, setApprovedByName] = useState('');
+  const [approvedByPosition, setApprovedByPosition] = useState('');
+  const [approvedByDesignation, setApprovedByDesignation] = useState('');
 
   const [allArtifacts, setAllArtifacts] = useState<MovArtifact[]>([]);
   const [planEntries, setPlanEntries] = useState<MovArtifact[]>([]);
@@ -141,16 +170,18 @@ export default function MovBuilderPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [artifacts, plans, schedule, actionPlans] = await Promise.all([
+      const [artifacts, plans, schedule, actionPlans, presets] = await Promise.all([
         movApi.list({ period_year: year, quarter }),
         movApi.list({ artifact_type: 'assessment_plan_year' }),
         movApi.list({ artifact_type: 'assessment_schedule_entry', period_year: year, quarter }),
         kpiApi.actionPlans(year, quarter * 3),
+        movApi.list({ artifact_type: 'print_settings' }),
       ]);
 
       setAllArtifacts(artifacts);
       setPlanEntries(plans);
       setScheduleEntries(schedule);
+      setPrintPresets(presets);
       const rows = (actionPlans.items || []).map((item: any) => ({
         code: item.kpiCode,
         name: item.kpiName,
@@ -171,6 +202,16 @@ export default function MovBuilderPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Pre-fill "Prepared by" from the current logged-in user on first load.
+  // Uses a separate effect so it doesn't interfere with loadData / preset loading.
+  useEffect(() => {
+    if (!user) return;
+    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
+    if (fullName && !preparedByName) setPreparedByName(fullName);
+    if (user.position && !preparedByPosition) setPreparedByPosition(user.position);
+    if (user.designation && !preparedByDesignation) setPreparedByDesignation(user.designation);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const generateRegisterReport = async (registerType: RegisterType) => {
     try {
@@ -253,26 +294,198 @@ export default function MovBuilderPage() {
 
   // Inject report settings (header images, footer) before printing
   const buildPrintHtml = (): string => {
-    let html = reportHtml;
+    const escapeHtml = (value: string): string => value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    const parseFooterInput = (rawValue: string): { startPage: number; bodyHtml: string; hasAny: boolean } => {
+      const lines = String(rawValue || '')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+      if (lines.length === 0) {
+        return { startPage: 1, bodyHtml: '', hasAny: false };
+      }
+
+      let startPage = 1;
+      let bodyLines = lines;
+      const pageToken = /^(?:page\s*)?(\d+)$/i.exec(lines[0]);
+      if (pageToken) {
+        startPage = Math.max(Number.parseInt(pageToken[1], 10) || 1, 1);
+        bodyLines = lines.slice(1);
+      }
+
+      return {
+        startPage,
+        bodyHtml: bodyLines.map((line) => escapeHtml(line)).join('<br />'),
+        hasAny: true,
+      };
+    };
+
+    const bodyContent = reportHtml || '<p>No report content.</p>';
+    let normalizedBody = bodyContent;
+    let extractedStyleTags = '';
+
+    if (/<body[^>]*>/i.test(bodyContent)) {
+      normalizedBody = bodyContent.replace(/^[\s\S]*<body[^>]*>/i, '').replace(/<\/body>[\s\S]*$/i, '');
+    }
+
+    const styleMatches = bodyContent.match(/<style\b[^>]*>[\s\S]*?<\/style>/gi);
+    if (styleMatches && styleMatches.length > 0) {
+      extractedStyleTags = styleMatches.join('\n');
+    }
+
+    normalizedBody = normalizedBody.replace(/<table\b([^>]*)>([\s\S]*?)<\/table>/gi, (tableBlock) => {
+      if (/<tfoot\b/i.test(tableBlock)) {
+        return tableBlock;
+      }
+      return tableBlock.replace(
+        /<\/table>/i,
+        '<tfoot><tr><td style="border-top:1px solid #d1d5db;padding:0;height:0;line-height:0;" colspan="100%"></td></tr></tfoot></table>',
+      );
+    });
+
     const headerParts: string[] = [];
-    if (headerImage1) headerParts.push(`<img src="${headerImage1}" style="max-width:100%;display:block;margin-bottom:6px;" alt="Header 1" />`);
-    if (headerImage2) headerParts.push(`<img src="${headerImage2}" style="max-width:100%;display:block;margin-bottom:6px;" alt="Header 2" />`);
+    if (headerImage1) headerParts.push(`<img src="${headerImage1}" style="height:39px;width:auto;max-height:39px;object-fit:contain;display:inline-block;vertical-align:middle;" alt="Header 1" />`);
+    if (headerImage2) headerParts.push(`<img src="${headerImage2}" style="height:45px;width:auto;max-height:45px;object-fit:contain;display:inline-block;vertical-align:middle;" alt="Header 2" />`);
 
-    const footerStyle = 'font-family:Helvetica,Arial,sans-serif;font-size:8pt;color:#6b7280;border-top:1px solid #d1d5db;padding:4px 8px;margin-top:16px;';
-    let footerHtml = '';
-    if (diffFirstFooter && firstPageFooter.trim()) {
-      footerHtml = `<div style="${footerStyle}" id="footer-first">${firstPageFooter.trim()}</div><div style="${footerStyle}" id="footer-rest">${pageFooter.trim()}</div>`;
-    } else if (pageFooter.trim()) {
-      footerHtml = `<div style="${footerStyle}">${pageFooter.trim()}</div>`;
+    const firstPageHeaderHtml = headerParts.length > 0
+      ? `<div class="print-first-page-header" style="display:flex;flex-direction:row;align-items:center;gap:16px;">${headerParts.join('')}</div>`
+      : '';
+
+    const firstFooterConfig = parseFooterInput(diffFirstFooter ? firstPageFooter : pageFooter);
+    const subsequentFooterConfig = parseFooterInput(pageFooter);
+
+    const SIDE_MARGIN_MM = 12.7;   // 0.5in
+    const TOP_MARGIN_MM = 15;      // ~0.6in
+    const BOTTOM_MARGIN_MM = 25.4; // 1in physical bottom margin
+
+    // Counter offset: if startPage != 1, shift the CSS page counter.
+    const subOffset = subsequentFooterConfig.hasAny ? subsequentFooterConfig.startPage - 1 : 0;
+    const counterResetStyle = subOffset !== 0
+      ? `html { counter-reset: page ${subOffset}; }`
+      : '';
+
+    // Build @bottom-center CSS content string.
+    // Order per line (white-space:pre, \A = newline):
+    //   Line 1: Page X of Y
+    //   Line 2: ─────────── (separator, clipped by overflow:hidden)
+    //   Line 3: footer body text (e.g. "DSWD")
+    // counter(page)/counter(pages) only work reliably in @page margin boxes, not position:fixed HTML.
+    const SEPARATOR = '\u2500'.repeat(135); // ─ × 140; overflow:hidden clips any excess
+    const escapeCssStr = (text: string): string =>
+      text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, '\\A ');
+    const bodyHtmlToPlainLines = (bodyHtml: string): string[] =>
+      bodyHtml.split(/<br\s*\/?>\s*/i).map((l) => l.replace(/<[^>]+>/g, '').trim()).filter(Boolean);
+
+    const buildCssContent = (config: { hasAny: boolean; bodyHtml: string }): string => {
+      if (!config.hasAny) return 'none';
+      const sep = escapeCssStr(SEPARATOR);
+      const bodyLines = bodyHtmlToPlainLines(config.bodyHtml);
+      if (bodyLines.length > 0) {
+        const escaped = escapeCssStr(bodyLines.join('\n'));
+        return `"Page " counter(page) " of " counter(pages) "\\A ${sep}\\A ${escaped}"`;
+      }
+      return `"Page " counter(page) " of " counter(pages) "\\A ${sep}"`;
+    };
+
+    const subsequentCssContent = buildCssContent(subsequentFooterConfig);
+    const firstCssContent = buildCssContent(diffFirstFooter ? firstFooterConfig : subsequentFooterConfig);
+
+    const firstPageOverrideCss = diffFirstFooter && firstFooterConfig.hasAny
+      ? `@page :first { @bottom-center { content: ${firstCssContent}; line-height: 1.0; overflow: hidden; } }`
+      : '';
+    const suppressFooterCss = !subsequentFooterConfig.hasAny && !(diffFirstFooter && firstFooterConfig.hasAny)
+      ? `@page { @bottom-center { content: none !important; border: none !important; } }`
+      : '';
+
+    // Build print-only signature block (Prepared by / Approved by)
+    const buildSignatureCell = (label: string, name: string, pos: string, des: string): string => {
+      const posLine = [pos, des].filter(Boolean).join(' / ');
+      return [
+        `<td style="width:50%;text-align:center;vertical-align:top;padding:0 40px;border:none;">`,
+        `<p style="margin:0;">${escapeHtml(label)}</p>`,
+        `<br><br><br>`,
+        `<div style="border-top:1px solid #374151;margin:0 4px;"></div>`,
+        (name ? `<p style="margin:4px 0 0 0;font-weight:bold;">${escapeHtml(name.toUpperCase())}</p>` : `<p style="margin:4px 0 0 0;">&nbsp;</p>`),
+        (posLine ? `<p style="margin:0;">${escapeHtml(posLine)}</p>` : ''),
+        `</td>`,
+      ].join('');
+    };
+    const hasPreparedSig = !!(preparedByName || preparedByPosition || preparedByDesignation);
+    const hasApprovedSig = !!(approvedByName || approvedByPosition || approvedByDesignation);
+    const signatureHtml = (hasPreparedSig || hasApprovedSig)
+      ? `<div style="margin-top:32pt;page-break-inside:avoid;font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#111827;"><table style="width:100%;border:none;border-collapse:collapse;"><tr>${buildSignatureCell('Prepared by:', preparedByName, preparedByPosition, preparedByDesignation)}${buildSignatureCell('Approved by:', approvedByName, approvedByPosition, approvedByDesignation)}</tr></table></div>`
+      : '';
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    ${counterResetStyle}
+    @page {
+      size: A4 landscape;
+      margin: ${TOP_MARGIN_MM}mm ${SIDE_MARGIN_MM}mm ${BOTTOM_MARGIN_MM}mm ${SIDE_MARGIN_MM}mm;
+      /* Order: Page X of Y  \n  ─────  \n  footer body text */
+      @bottom-center {
+        content: ${subsequentCssContent};
+        font-size: 8pt;
+        line-height: 1.0;
+        color: #6b7280;
+        text-align: center;
+        white-space: pre;
+        width: 100%;
+        overflow: hidden;
+        vertical-align: top;
+      }
+    }
+    ${firstPageOverrideCss}
+    ${suppressFooterCss}
+
+    html, body { margin: 0 !important; padding: 0 !important; color: #111827; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .print-root { padding: 0; line-height: 1.15; }
+    p, h1, h2, h3, h4, h5, h6 { margin-top: 0 !important; margin-bottom: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; line-height: 1.15 !important; }
+    /* Override report-injected class styles that escaped the p/h selector net */
+    .summary-block { margin: 0 !important; line-height: 1.15 !important; }
+    /* Space after main report title h2 so content doesn't run into it */
+    h2 { margin-bottom: 10px !important; }
+    .print-first-page-header {
+      margin-top: 0;
+      margin-bottom: 10px;
+      text-align: left;
     }
 
-    if (headerParts.length > 0) {
-      html = html.replace(/<body([^>]*)>/i, (_m, attrs) => `<body${attrs}>${headerParts.join('')}`);
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #d1d5db;
+      margin: 0 !important;
+      page-break-inside: auto !important;
+      break-inside: auto !important;
     }
-    if (footerHtml) {
-      html = html.replace(/<\/body>/i, `${footerHtml}</body>`);
-    }
-    return html;
+    thead { display: table-header-group; }
+    tfoot { display: table-footer-group; }
+    tr { page-break-inside: auto !important; break-inside: auto !important; page-break-after: auto; }
+    td, th { page-break-inside: auto !important; break-inside: auto !important; }
+    th, td { border: 1px solid #d1d5db; }
+    th { background: #87CEEB !important; }
+  </style>
+  ${extractedStyleTags}
+</head>
+<body>
+  <div class="print-root">
+    ${firstPageHeaderHtml}
+    ${normalizedBody}
+    ${signatureHtml}
+  </div>
+</body>
+</html>`;
   };
 
   const printOrSavePdf = () => {
@@ -492,10 +705,67 @@ export default function MovBuilderPage() {
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 1 | 2) => {
     const file = e.target.files?.[0];
+    // Always reset so the same file can be re-selected after clearing
+    e.target.value = '';
     if (!file) return;
-    const base64 = await fileToBase64(file);
-    if (target === 1) setHeaderImage1(base64);
-    else setHeaderImage2(base64);
+    try {
+      const compressed = await compressImageToBase64(file);
+      if (target === 1) setHeaderImage1(compressed);
+      else setHeaderImage2(compressed);
+    } catch {
+      enqueueSnackbar('Failed to process image.', { variant: 'error' });
+    }
+  };
+
+  const handleSavePreset = async () => {
+    if (!presetName.trim()) { enqueueSnackbar('Enter a preset name.', { variant: 'warning' }); return; }
+    const payload = {
+      header1_data: headerImage1, header2_data: headerImage2,
+      page_footer: pageFooter, diff_first_footer: diffFirstFooter, first_page_footer: firstPageFooter,
+      prepared_by_name: preparedByName, prepared_by_position: preparedByPosition, prepared_by_designation: preparedByDesignation,
+      approved_by_name: approvedByName, approved_by_position: approvedByPosition, approved_by_designation: approvedByDesignation,
+    };
+    try {
+      const existing = printPresets.find((p) => p.title === presetName.trim());
+      if (existing) {
+        await movApi.update(existing.id, { metadata_json: payload });
+        enqueueSnackbar('Preset updated.', { variant: 'success' });
+      } else {
+        await movApi.create({ artifact_type: 'print_settings', title: presetName.trim(), scope: 'settings', period_year: new Date().getFullYear(), content_markdown: 'print_settings', metadata_json: payload });
+        enqueueSnackbar('Preset saved.', { variant: 'success' });
+      }
+      const updated = await movApi.list({ artifact_type: 'print_settings' });
+      setPrintPresets(updated);
+    } catch { enqueueSnackbar('Failed to save preset.', { variant: 'error' }); }
+  };
+
+  const handleLoadPreset = () => {
+    const preset = printPresets.find((p) => p.id === selectedPresetId);
+    if (!preset?.metadata_json) { enqueueSnackbar('Select a preset first.', { variant: 'warning' }); return; }
+    const m = preset.metadata_json as Record<string, any>;
+    if (m.header1_data !== undefined) setHeaderImage1(m.header1_data as string);
+    if (m.header2_data !== undefined) setHeaderImage2(m.header2_data as string);
+    if (m.page_footer !== undefined) setPageFooter(m.page_footer as string);
+    if (m.diff_first_footer !== undefined) setDiffFirstFooter(Boolean(m.diff_first_footer));
+    if (m.first_page_footer !== undefined) setFirstPageFooter(m.first_page_footer as string);
+    if (m.prepared_by_name !== undefined) setPreparedByName(m.prepared_by_name as string);
+    if (m.prepared_by_position !== undefined) setPreparedByPosition(m.prepared_by_position as string);
+    if (m.prepared_by_designation !== undefined) setPreparedByDesignation(m.prepared_by_designation as string);
+    if (m.approved_by_name !== undefined) setApprovedByName(m.approved_by_name as string);
+    if (m.approved_by_position !== undefined) setApprovedByPosition(m.approved_by_position as string);
+    if (m.approved_by_designation !== undefined) setApprovedByDesignation(m.approved_by_designation as string);
+    setPresetName(preset.title);
+    enqueueSnackbar(`Preset “${preset.title}” loaded.`, { variant: 'success' });
+  };
+
+  const handleDeletePreset = async () => {
+    if (!selectedPresetId) { enqueueSnackbar('Select a preset to delete.', { variant: 'warning' }); return; }
+    try {
+      await movApi.remove(selectedPresetId);
+      setPrintPresets((prev) => prev.filter((p) => p.id !== selectedPresetId));
+      setSelectedPresetId('');
+      enqueueSnackbar('Preset deleted.', { variant: 'success' });
+    } catch { enqueueSnackbar('Failed to delete preset.', { variant: 'error' }); }
   };
 
 // ── Role Gate ─────────────────────────────────────────────────────────────
@@ -647,7 +917,27 @@ export default function MovBuilderPage() {
                     Header images are prepended to the printed output. Footers appear at the bottom.
                   </Typography>
 
-                  {/* Header Image 1 */}
+                  {/* ── Saved Presets ── */}
+                  {printPresets.length > 0 && (
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                      <FormControl size="small" sx={{ minWidth: 200 }}>
+                        <InputLabel>Load Preset</InputLabel>
+                        <Select
+                          value={selectedPresetId}
+                          label="Load Preset"
+                          onChange={(e) => setSelectedPresetId(e.target.value)}
+                        >
+                          {printPresets.map((p) => (
+                            <MenuItem key={p.id} value={p.id}>{p.title}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <Button variant="outlined" size="small" onClick={handleLoadPreset}>Load</Button>
+                      <Button variant="outlined" size="small" color="error" onClick={handleDeletePreset}>Delete</Button>
+                    </Stack>
+                  )}
+
+                  <Divider />
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Button variant="outlined" size="small" component="label" startIcon={<ImageIcon />}>
                       Header Image 1
@@ -689,6 +979,7 @@ export default function MovBuilderPage() {
                       multiline
                       minRows={2}
                       fullWidth
+                      helperText="Line 1 may be page start (e.g., 1 or Page 1). Remaining line(s) are footer text."
                       placeholder="Footer text for first page only..."
                     />
                   )}
@@ -699,8 +990,60 @@ export default function MovBuilderPage() {
                     multiline
                     minRows={2}
                     fullWidth
+                    helperText="Line 1 may be page start (e.g., 1 or Page 1). Remaining line(s) are footer text."
                     placeholder="e.g. DSWD Field Office XII · ICT Unit · Confidential"
                   />
+
+                  {/* ── Signature Block ── */}
+                  <Divider />
+                  <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ display: 'block' }}>
+                    Signature Block (print-only) — auto-filled from your account
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: -1 }}>
+                    Prepared by
+                  </Typography>
+                  <Grid container spacing={1}>
+                    <Grid item xs={12} md={4}>
+                      <TextField size="small" label="Name" value={preparedByName} onChange={(e) => setPreparedByName(e.target.value)} fullWidth />
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                      <TextField size="small" label="Position" value={preparedByPosition} onChange={(e) => setPreparedByPosition(e.target.value)} fullWidth helperText="Abbreviated, e.g. ITO I" />
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                      <TextField size="small" label="Designation" value={preparedByDesignation} onChange={(e) => setPreparedByDesignation(e.target.value)} fullWidth />
+                    </Grid>
+                  </Grid>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    Approved by
+                  </Typography>
+                  <Grid container spacing={1}>
+                    <Grid item xs={12} md={4}>
+                      <TextField size="small" label="Name" value={approvedByName} onChange={(e) => setApprovedByName(e.target.value)} fullWidth />
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                      <TextField size="small" label="Position" value={approvedByPosition} onChange={(e) => setApprovedByPosition(e.target.value)} fullWidth helperText="Abbreviated, e.g. ITO II" />
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                      <TextField size="small" label="Designation" value={approvedByDesignation} onChange={(e) => setApprovedByDesignation(e.target.value)} fullWidth />
+                    </Grid>
+                  </Grid>
+
+                  <Divider />
+
+                  {/* ── Save Preset ── */}
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                    <TextField
+                      size="small"
+                      label="Save as Preset"
+                      value={presetName}
+                      onChange={(e) => setPresetName(e.target.value)}
+                      placeholder="Preset name..."
+                      sx={{ minWidth: 200 }}
+                    />
+                    <Button variant="contained" size="small" onClick={handleSavePreset}>
+                      {printPresets.some((p) => p.title === presetName.trim()) ? 'Update Preset' : 'Save Preset'}
+                    </Button>
+                  </Stack>
                 </Stack>
               </AccordionDetails>
             </Accordion>
@@ -715,7 +1058,18 @@ export default function MovBuilderPage() {
                   <TextField label="Report Title" value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} fullWidth />
                   <Box
                     id="report-preview-container"
-                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: 520, p: 2, overflow: 'auto', backgroundColor: '#fff' }}
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 1,
+                      minHeight: 520,
+                      p: 2,
+                      overflow: 'auto',
+                      backgroundColor: '#fff',
+                      color: '#111',
+                      '&, & *': { color: '#111' },
+                      '& th': { backgroundColor: '#87CEEB !important' },
+                    }}
                     dangerouslySetInnerHTML={{ __html: reportHtml || '<p style="color:#9ca3af">No report generated yet. Use the Generate buttons on the left.</p>' }}
                   />
                 </Stack>

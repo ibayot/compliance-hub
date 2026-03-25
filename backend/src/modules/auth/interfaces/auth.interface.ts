@@ -17,7 +17,10 @@ export interface AuthResponse {
     suffix?: string;
     staffId?: string;
     position?: string;
+    positionFull?: string;
     designation?: string;
+    ticketMainFocal?: boolean;
+    ticketTechnician?: boolean;
     role: string;
     units: { id: number; name: string }[];
   };

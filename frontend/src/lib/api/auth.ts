@@ -7,6 +7,11 @@ export const authApi = {
     return response.data;
   },
 
+  loginWithGoogle: async (payload: { idToken: string }): Promise<AuthResponse> => {
+    const response = await apiClient.post<AuthResponse>('/auth/google-login', payload);
+    return response.data;
+  },
+
   logout: async (): Promise<void> => {
     await apiClient.post('/auth/logout');
   },

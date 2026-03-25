@@ -10,10 +10,48 @@ import { SectionCheckEngine } from '../engines/section-check.engine';
 import { KeywordCheckEngine } from '../engines/keyword-check.engine';
 import { PropertyCheckEngine } from '../engines/property-check.engine';
 import { DateCheckEngine } from '../engines/date-check.engine';
+import { ManualReview, ReviewDecision } from '../../reviews/entities/manual-review.entity';
+import { IsNull } from 'typeorm';
 
 @Injectable()
 export class MetricsService {
   private readonly logger = new Logger(MetricsService.name);
+
+  private toOperatorSymbol(operator?: string): string {
+    switch (operator) {
+      case 'gte':
+        return '>=';
+      case 'lte':
+        return '<=';
+      case 'gt':
+        return '>';
+      case 'lt':
+        return '<';
+      case 'eq':
+        return '=';
+      default:
+        return operator || '=';
+    }
+  }
+
+  private buildAutoReviewLine(result: MetricResult): string {
+    if (result.metric_template?.metric_type !== 'property_check') {
+      return result.message || 'Automated validation failed.';
+    }
+
+    const checks = Array.isArray(result.evidence?.checks)
+      ? result.evidence.checks
+      : [];
+
+    const failedChecks = checks.filter((check: any) => check?.matches === false && check?.extracted !== null && check?.extracted !== undefined);
+    if (failedChecks.length === 0) {
+      return result.message || 'Automated validation failed.';
+    }
+
+    return failedChecks
+      .map((check: any) => `${check.keyword}: ${check.extracted} did not satisfy ${this.toOperatorSymbol(check.comparison)} ${check.expected}`)
+      .join('; ');
+  }
 
   constructor(
     @InjectRepository(MetricTemplate)
@@ -26,6 +64,8 @@ export class MetricsService {
     private versionRepo: Repository<DocumentVersion>,
     @InjectRepository(Document)
     private documentRepo: Repository<Document>,
+    @InjectRepository(ManualReview)
+    private reviewRepo: Repository<ManualReview>,
     private sectionCheckEngine: SectionCheckEngine,
     private keywordCheckEngine: KeywordCheckEngine,
     private propertyCheckEngine: PropertyCheckEngine,
@@ -130,6 +170,64 @@ export class MetricsService {
 
     this.logger.log(`Computed ${results.length} metrics for version ${versionId}`);
     return results;
+  }
+
+  async computeMetricsAndAutoReview(versionId: string): Promise<{
+    results: MetricResult[];
+    aggregate: ReturnType<MetricsService['calculateAggregateScore']>;
+  }> {
+    const results = await this.computeMetrics(versionId);
+    const aggregate = this.calculateAggregateScore(results);
+
+    if (aggregate.failed > 0 || aggregate.errors > 0) {
+      const failedResults = results.filter(
+        (result) => result.status === 'fail' || result.status === 'error',
+      );
+
+      const findings = failedResults.map((result) => ({
+        category: result.metric_template?.name || 'Automated Check',
+        description: result.message || 'Automated validation failed.',
+        severity: 'medium' as const,
+      }));
+
+      const version = await this.versionRepo.findOne({
+        where: { id: versionId },
+        relations: ['document'],
+      });
+
+      if (version?.document) {
+        const existingAutoReview = await this.reviewRepo.findOne({
+          where: {
+            document_id: version.document.id,
+            version_id: versionId,
+            reviewer_id: IsNull(),
+          },
+        });
+
+        const remarks = failedResults
+          .map((result) => `• ${this.buildAutoReviewLine(result)}`)
+          .join('\n');
+
+        if (existingAutoReview) {
+          existingAutoReview.decision = ReviewDecision.NEEDS_REVISION;
+          existingAutoReview.remarks = `Automated checks flagged this submission for revision:\n${remarks}`;
+          existingAutoReview.findings = findings;
+          await this.reviewRepo.save(existingAutoReview);
+        } else {
+          const autoReview = this.reviewRepo.create({
+            document_id: version.document.id,
+            version_id: versionId,
+            decision: ReviewDecision.NEEDS_REVISION,
+            remarks: `Automated checks flagged this submission for revision:\n${remarks}`,
+            findings,
+            reviewer_id: null,
+          });
+          await this.reviewRepo.save(autoReview);
+        }
+      }
+    }
+
+    return { results, aggregate };
   }
 
   /**
@@ -270,6 +368,14 @@ export class MetricsService {
       return 'quarterly';
     }
 
+    if (/^\d{6}-\d{2}$/.test(normalized)) {
+      return 'quarterly';
+    }
+
+    if (/^\d{6}$/.test(normalized)) {
+      return 'monthly';
+    }
+
     if (/^\d{4}-\d{1,2}$/.test(normalized)) {
       return 'monthly';
     }
@@ -286,6 +392,16 @@ export class MetricsService {
     const normalized = period.trim();
 
     if (submissionFrequency === 'quarterly') {
+      const compactQuarterRangeMatch = /^(\d{4})(\d{2})-(\d{2})$/.exec(normalized);
+      if (compactQuarterRangeMatch) {
+        const parsedYear = Number.parseInt(compactQuarterRangeMatch[1], 10);
+        const endMonth = Number.parseInt(compactQuarterRangeMatch[3], 10) - 1;
+        return {
+          baseYear: parsedYear,
+          baseMonthIndex: Math.min(Math.max(endMonth, 0), 11),
+        };
+      }
+
       const quarterlyWithYearMatch = /^(\d{4})-?Q([1-4])$/i.exec(normalized);
       if (quarterlyWithYearMatch) {
         const parsedYear = Number.parseInt(quarterlyWithYearMatch[1], 10);
@@ -307,6 +423,16 @@ export class MetricsService {
     }
 
     if (submissionFrequency === 'monthly') {
+      const compactMonthlyMatch = /^(\d{4})(\d{2})$/.exec(normalized);
+      if (compactMonthlyMatch) {
+        const parsedYear = Number.parseInt(compactMonthlyMatch[1], 10);
+        const parsedMonth = Number.parseInt(compactMonthlyMatch[2], 10) - 1;
+        return {
+          baseYear: parsedYear,
+          baseMonthIndex: Math.min(Math.max(parsedMonth, 0), 11),
+        };
+      }
+
       const monthlyWithYearMatch = /^(\d{4})-(\d{1,2})$/.exec(normalized);
       if (monthlyWithYearMatch) {
         const parsedYear = Number.parseInt(monthlyWithYearMatch[1], 10);

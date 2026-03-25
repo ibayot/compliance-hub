@@ -26,6 +26,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { Document } from '@/lib/api/documents';
 import { format } from 'date-fns';
+import { formatDocumentPeriod } from '@/lib/utils/documentPeriod';
 
 interface DocumentListProps {
   documents: Document[];
@@ -47,6 +48,7 @@ interface DocumentListProps {
   canArchiveDocument?: (document: Document) => { allowed: boolean; reason?: string };
   hideUnitColumn?: boolean;
   hideUploaderColumn?: boolean;
+  archivedMode?: boolean;
 }
 
 const getStatusColor = (
@@ -83,6 +85,7 @@ export default function DocumentList({
   canArchiveDocument,
   hideUnitColumn = false,
   hideUploaderColumn = false,
+  archivedMode = false,
 }: DocumentListProps) {
   const router = useRouter();
 
@@ -110,7 +113,7 @@ export default function DocumentList({
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
         <Typography variant="h6" color="text.secondary">
-          No documents found
+          {archivedMode ? 'No archived documents found' : 'No documents found'}
         </Typography>
       </Box>
     );
@@ -123,12 +126,13 @@ export default function DocumentList({
           <TableHead>
             <TableRow>
               <TableCell>Title</TableCell>
-              {!hideUnitColumn && <TableCell>Unit</TableCell>}
+              {!archivedMode && !hideUnitColumn && <TableCell>Unit</TableCell>}
               <TableCell>Type</TableCell>
               <TableCell>Period</TableCell>
               <TableCell>Status</TableCell>
-              {!hideUploaderColumn && <TableCell>Uploaded By</TableCell>}
-              <TableCell>Date</TableCell>
+              {!archivedMode && !hideUploaderColumn && <TableCell>Uploaded By</TableCell>}
+              {archivedMode ? <TableCell>Return Remarks</TableCell> : null}
+              <TableCell>{archivedMode ? 'Archived Date' : 'Date'}</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -140,10 +144,10 @@ export default function DocumentList({
                     {doc.title}
                   </Typography>
                 </TableCell>
-                {!hideUnitColumn && <TableCell>{doc.unit?.name || 'N/A'}</TableCell>}
+                {!archivedMode && !hideUnitColumn && <TableCell>{doc.unit?.name || 'N/A'}</TableCell>}
                 <TableCell>{doc.document_type}</TableCell>
                 <TableCell>
-                  {doc.year}-{doc.period}
+                  {formatDocumentPeriod(doc.year, doc.period)}
                 </TableCell>
                 <TableCell>
                   {(() => {
@@ -155,15 +159,30 @@ export default function DocumentList({
                     );
                   })()}
                 </TableCell>
-                {!hideUploaderColumn && <TableCell>{doc.uploader?.username || 'N/A'}</TableCell>}
-                <TableCell>{format(new Date(doc.created_at), 'MMM dd, yyyy')}</TableCell>
+                {!archivedMode && !hideUploaderColumn && <TableCell>{doc.uploader?.username || 'N/A'}</TableCell>}
+                {archivedMode ? (
+                  <TableCell>
+                    {doc.latest_review_remarks ? (
+                      <Box sx={{ px: 1.25, py: 0.75, borderRadius: 1, bgcolor: 'action.hover' }}>
+                        <Typography variant="body2" color="text.primary" sx={{ maxWidth: 400, whiteSpace: 'pre-line' }}>
+                          {doc.latest_review_remarks}
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" color="text.disabled">
+                        No remarks recorded
+                      </Typography>
+                    )}
+                  </TableCell>
+                ) : null}
+                <TableCell>{format(new Date(archivedMode ? (doc.updated_at || doc.created_at) : doc.created_at), 'MMM dd, yyyy')}</TableCell>
                 <TableCell align="right">
                   <Tooltip title="View Details">
                     <IconButton size="small" onClick={() => handleViewDocument(doc.id)} color="primary">
                       <ViewIcon />
                     </IconButton>
                   </Tooltip>
-                  {onReturn && (() => {
+                  {!archivedMode && onReturn && (() => {
                     const permission = canReturnDocument ? canReturnDocument(doc) : { allowed: true };
                     return (
                       <Tooltip title={permission.allowed ? 'Return to Focal' : permission.reason || 'Return is not allowed'}>
@@ -180,7 +199,7 @@ export default function DocumentList({
                       </Tooltip>
                     );
                   })()}
-                  {onArchive && (() => {
+                  {!archivedMode && onArchive && (() => {
                     const permission = canArchiveDocument ? canArchiveDocument(doc) : { allowed: true };
                     return (
                       <Tooltip title={permission.allowed ? 'Archive Document' : permission.reason || 'Archive not allowed'}>
@@ -197,7 +216,7 @@ export default function DocumentList({
                       </Tooltip>
                     );
                   })()}
-                  {onDelete && (() => {
+                  {!archivedMode && onDelete && (() => {
                     const permission = canDeleteDocument ? canDeleteDocument(doc) : { allowed: true };
                     return (
                       <Tooltip title={permission.allowed ? 'Hard Delete' : permission.reason || 'Delete is not allowed'}>

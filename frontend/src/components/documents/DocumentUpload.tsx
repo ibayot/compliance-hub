@@ -46,6 +46,7 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
   const [unitId, setUnitId] = useState('');
   const [reportorialDocTypeId, setReportorialDocTypeId] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [googleDocUrl, setGoogleDocUrl] = useState('');
 
   // Period picker state
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
@@ -100,6 +101,7 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
       setTitle('');
       setReportorialDocTypeId('');
       setFile(null);
+      setGoogleDocUrl('');
       if (!isFocal) setUnitId('');
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       enqueueSnackbar('Document uploaded successfully!', { variant: 'success' });
@@ -136,7 +138,7 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
       const fileBaseName = selectedFile.name.replace(/\.(docx|pdf)$/i, '');
       if (fileBaseName !== expectedFilename) {
         enqueueSnackbar(
-          `Filename does not match expected pattern.\nExpected: "${expectedFilename}.docx" (or .pdf)\nGot: "${selectedFile.name}"`,
+          `Invalid filename. Use "${expectedFilename}.docx" or "${expectedFilename}.pdf".`,
           { variant: 'error' },
         );
         return;
@@ -181,6 +183,48 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
     });
   };
 
+  const handleGoogleDocUpload = async () => {
+    if (!googleDocUrl.trim()) {
+      enqueueSnackbar('Please enter a Google Docs link', { variant: 'error' });
+      return;
+    }
+    if (!unitId) { enqueueSnackbar('Please select a unit', { variant: 'error' }); return; }
+    if (!reportorialDocTypeId) { enqueueSnackbar('Please select a document type', { variant: 'error' }); return; }
+
+    let periodToken = '';
+    if (selectedDocType) {
+      if (selectedDocType.submission_frequency === 'monthly') {
+        periodToken = String(selectedMonth).padStart(2, '0');
+      } else if (selectedDocType.submission_frequency === 'quarterly') {
+        periodToken = `Q${selectedQuarter}`;
+      }
+    }
+
+    try {
+      await documentsApi.uploadGoogleDoc({
+        title,
+        unit_id: unitId,
+        document_type: selectedDocType?.display_name || '',
+        reportorial_doc_type_id: Number(reportorialDocTypeId),
+        period: periodToken,
+        year: String(selectedYear),
+        google_doc_url: googleDocUrl.trim(),
+        file_name: expectedFilename ? `${expectedFilename}.docx` : undefined,
+      });
+
+      setTitle('');
+      setReportorialDocTypeId('');
+      setFile(null);
+      setGoogleDocUrl('');
+      if (!isFocal) setUnitId('');
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      enqueueSnackbar('Google Doc imported successfully!', { variant: 'success' });
+      onSuccess?.();
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to import Google Doc', { variant: 'error' });
+    }
+  };
+
   const unitOptions: { id: number; name: string }[] = isFocal
     ? ((user?.units ?? []) as any[])
     : (unitsResponse?.data ?? []);
@@ -220,7 +264,28 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
                 Size: {(file.size / 1024 / 1024).toFixed(2)} MB
               </Typography>
             )}
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+              You may upload a local DOCX/PDF file or import from a Google Docs link below.
+            </Typography>
           </Box>
+
+          <TextField
+            label="Google Docs Link (Optional)"
+            value={googleDocUrl}
+            onChange={(e) => setGoogleDocUrl(e.target.value)}
+            fullWidth
+            placeholder="https://docs.google.com/document/d/.../edit"
+            helperText="For private docs, make sure the backend can access/export the file."
+          />
+
+          <Button
+            type="button"
+            variant="outlined"
+            disabled={uploadMutation.isPending}
+            onClick={handleGoogleDocUpload}
+          >
+            Import from Google Docs
+          </Button>
 
           {/* Title */}
           <TextField

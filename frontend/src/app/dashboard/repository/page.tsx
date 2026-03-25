@@ -346,7 +346,11 @@ export default function RepositoryPage() {
               <CircularProgress size={28} />
             </Box>
           ) : previewBlobUrl ? (
-            <DocumentViewer pdfUrl={previewBlobUrl} mimeType={previewMimeType} />
+            <DocumentViewer
+              pdfUrl={previewBlobUrl}
+              mimeType={previewMimeType}
+              viewerTitle={previewDoc?.title || 'Document Preview'}
+            />
           ) : (
             <Typography color="text.secondary">Preview is not available for this document.</Typography>
           )}

@@ -21,7 +21,7 @@ import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { UserRole } from '../../users/entities/user.entity';
-import { DocumentService, UploadDocumentDto } from '../services/document.service';
+import { DocumentService, UploadDocumentDto, UploadGoogleDocDto } from '../services/document.service';
 import { VersionService, CreateVersionDto } from '../services/version.service';
 import { Document, DocumentStatus } from '../entities/document.entity';
 import { SubmissionFrequency } from '../entities/document-assignment.entity';
@@ -65,6 +65,31 @@ export class DocumentController {
     };
 
     return this.documentService.uploadDocument(dto);
+  }
+
+  /**
+   * Import and upload a Google Doc via URL export
+   * POST /documents/google-doc
+   */
+  @Post('google-doc')
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.REVIEWER,
+    UserRole.FOCAL,
+    UserRole.TECHNICIAN,
+  )
+  async uploadGoogleDoc(
+    @Body() body: Omit<UploadGoogleDocDto, 'uploaded_by' | 'user_role' | 'unit_id'> & { unit_id: number | string },
+    @CurrentUser() user: any,
+  ): Promise<Document> {
+    const dto: UploadGoogleDocDto = {
+      ...body,
+      unit_id: Number(body.unit_id),
+      uploaded_by: user.id,
+      user_role: user.role,
+    };
+
+    return this.documentService.uploadGoogleDoc(dto);
   }
 
   /**

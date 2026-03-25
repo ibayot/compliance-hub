@@ -2,28 +2,30 @@ import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { OAuth2Client, TokenPayload as GoogleTokenPayload } from 'google-auth-library';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload, AuthResponse } from './interfaces/auth.interface';
-import { User } from '../users/entities/user.entity';
-
+import { User, UserRole } from '../users/entities/user.entity';
 @Injectable()
 export class AuthService {
+  private readonly googleClient = new OAuth2Client();
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
 
-  async login(loginDto: LoginDto): Promise<AuthResponse> {
-    const user = await this.validateUser(loginDto.email, loginDto.password);
+  private get jwtIssuer(): string {
+    return this.configService.get<string>('JWT_ISSUER') || 'compliance-hub-api';
+  }
 
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+  private get jwtAudience(): string {
+    return this.configService.get<string>('JWT_AUDIENCE') || 'compliance-hub-client';
+  }
 
-    const tokens = await this.generateTokens(user);
-
+  private buildAuthResponse(user: User, tokens: { accessToken: string; refreshToken: string }): AuthResponse {
     return {
       ...tokens,
       user: {
@@ -35,11 +37,83 @@ export class AuthService {
         suffix: user.suffix,
         staffId: user.staffId,
         position: user.position,
+        positionFull: user.positionFull,
         designation: user.designation,
+        ticketMainFocal: user.ticketMainFocal,
+        ticketTechnician: user.ticketTechnician,
         role: user.role,
         units: user.units?.map((u) => ({ id: u.id, name: u.name })) || [],
       },
     };
+  }
+
+  private async verifyGoogleIdToken(idToken: string): Promise<GoogleTokenPayload> {
+    const clientId = String(this.configService.get<string>('GOOGLE_CLIENT_ID') || '').trim();
+    if (!clientId) {
+      throw new BadRequestException('Google login is not configured on this server.');
+    }
+
+    const ticket = await this.googleClient.verifyIdToken({
+      idToken,
+      audience: clientId,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload) {
+      throw new UnauthorizedException('Invalid Google token payload.');
+    }
+
+    if (!payload.email || !payload.email_verified) {
+      throw new UnauthorizedException('Google account must have a verified email.');
+    }
+
+    return payload;
+  }
+
+  async login(loginDto: LoginDto): Promise<AuthResponse> {
+    const user = await this.validateUser(loginDto.email, loginDto.password);
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const tokens = await this.generateTokens(user);
+    return this.buildAuthResponse(user, tokens);
+  }
+
+  async googleLogin(idToken: string): Promise<AuthResponse> {
+    const payload = await this.verifyGoogleIdToken(idToken);
+
+    const googleSub = String(payload.sub || '').trim();
+    if (!googleSub) {
+      throw new UnauthorizedException('Invalid Google subject.');
+    }
+
+    const normalizedEmail = String(payload.email || '').trim().toLowerCase();
+
+    let user = await this.usersService.findByGoogleSub(googleSub);
+    if (!user) {
+      const existingByEmail = await this.usersService.findByEmail(normalizedEmail);
+      if (existingByEmail) {
+        user = await this.usersService.linkGoogleIdentity(existingByEmail.id, googleSub);
+      } else {
+        // Brand-new Google sign-in → register as plain 'user' (no compliance access)
+        user = await this.usersService.createGoogleUser({
+          email: normalizedEmail,
+          firstName: String(payload.given_name || '').trim() || undefined,
+          lastName: String(payload.family_name || '').trim() || undefined,
+          googleSub,
+          role: UserRole.USER,
+        });
+      }
+    }
+
+    if (!user.active) {
+      throw new UnauthorizedException('Your account is inactive.');
+    }
+
+    const tokens = await this.generateTokens(user);
+    return this.buildAuthResponse(user, tokens);
   }
 
   async validateUser(email: string, password: string): Promise<User | null> {
@@ -70,10 +144,14 @@ export class AuthService {
       this.jwtService.signAsync(payload, {
         secret: this.configService.get('JWT_SECRET'),
         expiresIn: this.configService.get('JWT_EXPIRATION'),
+        issuer: this.jwtIssuer,
+        audience: this.jwtAudience,
       }),
       this.jwtService.signAsync(payload, {
         secret: this.configService.get('JWT_REFRESH_SECRET'),
         expiresIn: this.configService.get('JWT_REFRESH_EXPIRATION'),
+        issuer: this.jwtIssuer,
+        audience: this.jwtAudience,
       }),
     ]);
 
@@ -84,6 +162,8 @@ export class AuthService {
     try {
       const payload = await this.jwtService.verifyAsync(refreshToken, {
         secret: this.configService.get('JWT_REFRESH_SECRET'),
+        issuer: this.jwtIssuer,
+        audience: this.jwtAudience,
       });
 
       const user = await this.usersService.findOne(payload.sub);
@@ -98,6 +178,8 @@ export class AuthService {
         {
           secret: this.configService.get('JWT_SECRET'),
           expiresIn: this.configService.get('JWT_EXPIRATION'),
+          issuer: this.jwtIssuer,
+          audience: this.jwtAudience,
         },
       );
 

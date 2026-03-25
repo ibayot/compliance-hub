@@ -313,7 +313,13 @@ export default function ReviewsPage() {
                 <Typography color="warning.main">{previewError}</Typography>
               )}
 
-              {!previewLoading && !previewError && previewBlobUrl && <DocumentViewer pdfUrl={previewBlobUrl} mimeType={previewMimeType} />}
+              {!previewLoading && !previewError && previewBlobUrl && (
+                <DocumentViewer
+                  pdfUrl={previewBlobUrl}
+                  mimeType={previewMimeType}
+                  viewerTitle={selectedDocument?.title || 'Document Viewer'}
+                />
+              )}
             </Paper>
 
             <Paper variant="outlined" sx={{ p: 2 }}>

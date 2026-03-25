@@ -9,6 +9,7 @@ export interface PropertyCheckConfig {
   keyword?: string;
   keywords?: string[];
   comparison?: 'gte' | 'lte' | 'eq' | 'gt' | 'lt';
+  comparisons?: Array<'gte' | 'lte' | 'eq' | 'gt' | 'lt'>;
   expected_number?: number;
   expected_numbers?: number[];
   window_chars?: number;
@@ -25,6 +26,13 @@ export interface PropertyCheckResult {
     extracted_number?: number | null;
     expected_number?: number;
     comparison?: string;
+    checks?: Array<{
+      keyword: string;
+      extracted?: number | null;
+      expected?: number;
+      comparison?: string;
+      matches: boolean;
+    }>;
     matches: boolean;
   };
   message: string;
@@ -33,6 +41,23 @@ export interface PropertyCheckResult {
 
 @Injectable()
 export class PropertyCheckEngine {
+  private toOperatorSymbol(operator: 'gte' | 'lte' | 'eq' | 'gt' | 'lt'): string {
+    switch (operator) {
+      case 'gte':
+        return '>=';
+      case 'lte':
+        return '<=';
+      case 'gt':
+        return '>';
+      case 'lt':
+        return '<';
+      case 'eq':
+        return '=';
+      default:
+        return operator;
+    }
+  }
+
   /**
    * Check if document properties match criteria
    * @param documentMetadata Document metadata object
@@ -52,6 +77,14 @@ export class PropertyCheckEngine {
 
     let matches = false;
     let extractedNumber: number | null = null;
+    let numberComparison: 'gte' | 'lte' | 'eq' | 'gt' | 'lt' = 'gte';
+    let keywordExtraction: Array<{
+      keyword: string;
+      extracted: number | null;
+      expected?: number;
+      comparison: 'gte' | 'lte' | 'eq' | 'gt' | 'lt';
+      matches: boolean;
+    }> = [];
 
     if (mode === 'number_extraction') {
       const configuredKeywords = Array.isArray(ruleConfig.keywords)
@@ -64,6 +97,12 @@ export class PropertyCheckEngine {
           ? [keyword]
           : [];
       const comparison = ruleConfig.comparison || 'gte';
+      numberComparison = comparison;
+      const comparisons = Array.isArray(ruleConfig.comparisons)
+        ? ruleConfig.comparisons
+            .map((item) => String(item).trim() as 'gte' | 'lte' | 'eq' | 'gt' | 'lt')
+            .filter((item) => ['gte', 'lte', 'eq', 'gt', 'lt'].includes(item))
+        : [];
       const expectedNumber = Number(ruleConfig.expected_number);
       const expectedNumbers = Array.isArray(ruleConfig.expected_numbers)
         ? ruleConfig.expected_numbers.map((item) => Number(item))
@@ -87,7 +126,7 @@ export class PropertyCheckEngine {
         };
       }
 
-      const keywordExtraction = keywords.map((keywordValue, index) => {
+      keywordExtraction = keywords.map((keywordValue, index) => {
         const keywordIndex = extractedText.toLowerCase().indexOf(keywordValue.toLowerCase());
         let extracted: number | null = null;
 
@@ -99,19 +138,43 @@ export class PropertyCheckEngine {
           );
           const context = extractedText.slice(contextStart, contextEnd);
 
-          const numberMatch = context.match(/-?\d+(?:\.\d+)?/);
-          if (numberMatch) {
-            extracted = Number(numberMatch[0]);
+          const escapedKeyword = keywordValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const keywordValueMatch = new RegExp(`${escapedKeyword}[^\\d-]{0,24}(-?\\d[\\d,]*(?:\\.\\d+)?)`, 'i').exec(context);
+
+          if (keywordValueMatch?.[1]) {
+            extracted = Number(keywordValueMatch[1].replace(/,/g, ''));
+          } else {
+            const numericMatches = Array.from(context.matchAll(/-?\d[\d,]*(?:\.\d+)?/g));
+            if (numericMatches.length > 0) {
+              const keywordPosInContext = keywordIndex - contextStart;
+              let bestValue: number | null = null;
+              let minDistance = Number.POSITIVE_INFINITY;
+
+              for (const match of numericMatches) {
+                const raw = String(match[0] || '').replace(/,/g, '');
+                const parsed = Number(raw);
+                if (!Number.isFinite(parsed)) continue;
+                const distance = Math.abs((match.index ?? 0) - keywordPosInContext);
+                if (distance < minDistance) {
+                  minDistance = distance;
+                  bestValue = parsed;
+                }
+              }
+
+              extracted = bestValue;
+            }
           }
         }
 
         const expectedForKeyword = Number.isFinite(expectedNumbers[index])
           ? expectedNumbers[index]
           : expectedNumber;
+        const comparisonForKeyword =
+          comparisons[index] || comparison;
 
         let keywordMatches = false;
         if (extracted !== null && Number.isFinite(extracted) && Number.isFinite(expectedForKeyword)) {
-          switch (comparison) {
+          switch (comparisonForKeyword) {
             case 'gte':
               keywordMatches = extracted >= expectedForKeyword;
               break;
@@ -137,6 +200,7 @@ export class PropertyCheckEngine {
           keyword: keywordValue,
           extracted,
           expected: Number.isFinite(expectedForKeyword) ? expectedForKeyword : undefined,
+          comparison: comparisonForKeyword,
           matches: keywordMatches,
         };
       });
@@ -165,12 +229,25 @@ export class PropertyCheckEngine {
     let message: string;
     if (mode === 'number_extraction') {
       if (matches) {
-        message = 'All configured keyword-number checks passed.';
+        message = 'All configured extracted numbers satisfied their comparisons.';
       } else {
-        if (extractedNumber === null) {
-          message = 'One or more keywords were not found with a valid nearby number.';
+        const missingKeywords = keywordExtraction
+          .filter((item) => item.extracted === null)
+          .map((item) => item.keyword);
+        const failedChecks = keywordExtraction.filter((item) => !item.matches && item.extracted !== null);
+        const failedSummary = failedChecks
+          .map((item) => {
+            const operatorLabel = this.toOperatorSymbol(item.comparison);
+            return `${item.keyword}: ${item.extracted} did not satisfy ${operatorLabel} ${item.expected ?? 'n/a'}`;
+          })
+          .join('; ');
+
+        if (failedSummary) {
+          message = failedSummary;
+        } else if (missingKeywords.length > 0) {
+          message = `Missing numeric values for keyword(s): ${missingKeywords.join(', ')}`;
         } else {
-          message = 'One or more extracted numbers did not satisfy the configured comparison rule.';
+          message = `One or more extracted numbers did not satisfy comparison "${numberComparison}".`;
         }
       }
     } else {
@@ -197,7 +274,16 @@ export class PropertyCheckEngine {
         expected_number: Number.isFinite(Number(ruleConfig.expected_number))
           ? Number(ruleConfig.expected_number)
           : undefined,
-        comparison: ruleConfig.comparison,
+        comparison: numberComparison,
+        checks: mode === 'number_extraction'
+          ? keywordExtraction.map((item) => ({
+            keyword: item.keyword,
+            extracted: item.extracted,
+            expected: item.expected,
+            comparison: item.comparison,
+            matches: item.matches,
+          }))
+          : undefined,
         matches,
       },
       message,

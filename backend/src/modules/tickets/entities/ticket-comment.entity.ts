@@ -14,8 +14,8 @@ export class TicketComment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid' })
-  ticket_id: string;
+  @Column({ name: 'ticket_id', type: 'varchar', length: 36 })
+  ticketId: string;
 
   @ManyToOne(() => Ticket, (ticket) => ticket.comments, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'ticket_id' })
@@ -24,13 +24,17 @@ export class TicketComment {
   @Column({ type: 'text' })
   comment: string;
 
-  @Column({ type: 'int' })
-  user_id: number;
+  @Column({ name: 'user_id', type: 'int' })
+  userId: number;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @CreateDateColumn()
-  created_at: Date;
+  /** Internal technician note - not visible to requester */
+  @Column({ name: 'is_internal', type: 'boolean', default: false })
+  isInternal: boolean;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
 }

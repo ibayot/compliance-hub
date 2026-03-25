@@ -66,6 +66,7 @@ export default function MetricsPage() {
 
   const [extractKeywordsText, setExtractKeywordsText] = useState('total incidents\nresolved incidents\nopen incidents\nusers trained');
   const [extractComparison, setExtractComparison] = useState<'gte' | 'lte' | 'eq' | 'gt' | 'lt'>('gte');
+  const [extractComparisonsText, setExtractComparisonsText] = useState('>=\n>=\n<=\n>=');
   const [extractExpectedNumbersText, setExtractExpectedNumbersText] = useState('1\n1\n0\n10');
 
   const [deadlineDay, setDeadlineDay] = useState(5);
@@ -114,6 +115,7 @@ export default function MetricsPage() {
 
     setExtractKeywordsText('total incidents\nresolved incidents\nopen incidents\nusers trained');
     setExtractComparison('gte');
+    setExtractComparisonsText('>=\n>=\n<=\n>=');
     setExtractExpectedNumbersText('1\n1\n0\n10');
 
     setDeadlineDay(5);
@@ -177,8 +179,27 @@ export default function MetricsPage() {
         : Number.isFinite(Number(ruleConfig.expected_number))
           ? [ruleConfig.expected_number]
           : [];
+      const existingComparisons = Array.isArray(ruleConfig.comparisons)
+        ? ruleConfig.comparisons
+        : [];
       setExtractKeywordsText(existingKeywords.join('\n'));
       setExtractComparison((ruleConfig.comparison as any) || 'gte');
+      setExtractComparisonsText(
+        (existingComparisons.length > 0
+          ? existingComparisons
+          : existingKeywords.map(() => (ruleConfig.comparison as any) || 'gte'))
+          .map((item: string) => {
+            switch (String(item || '').trim()) {
+              case 'gte': return '>=';
+              case 'lte': return '<=';
+              case 'gt': return '>';
+              case 'lt': return '<';
+              case 'eq': return '=';
+              default: return '>=';
+            }
+          })
+          .join('\n'),
+      );
       setExtractExpectedNumbersText(existingExpectedNumbers.join('\n') || '1');
     }
 
@@ -229,6 +250,18 @@ export default function MetricsPage() {
       const expectedNumbers = parseListText(extractExpectedNumbersText)
         .map((item) => Number(item))
         .filter((item) => Number.isFinite(item));
+      const perKeywordComparisons = parseListText(extractComparisonsText)
+        .map((item) => {
+          const value = String(item).trim();
+          if (value === '>=') return 'gte';
+          if (value === '<=') return 'lte';
+          if (value === '>') return 'gt';
+          if (value === '<') return 'lt';
+          if (value === '=') return 'eq';
+          if (['gte', 'lte', 'gt', 'lt', 'eq'].includes(value)) return value as 'gte' | 'lte' | 'gt' | 'lt' | 'eq';
+          return null;
+        })
+        .filter((item): item is 'gte' | 'lte' | 'gt' | 'lt' | 'eq' => item !== null);
 
       return {
         rule_config: {
@@ -237,6 +270,7 @@ export default function MetricsPage() {
           keywords,
           keyword: keywords[0],
           comparison: extractComparison,
+          comparisons: perKeywordComparisons,
           expected_number: expectedNumbers[0],
           expected_numbers: expectedNumbers,
           window_chars: 120,
@@ -279,7 +313,8 @@ export default function MetricsPage() {
     }
 
     if (metricType === 'property_check') {
-      if (parseListText(extractKeywordsText).length === 0) {
+      const keywords = parseListText(extractKeywordsText);
+      if (keywords.length === 0) {
         return 'At least one keyword is required for number extraction.';
       }
       const expectedNumbers = parseListText(extractExpectedNumbersText)
@@ -287,6 +322,19 @@ export default function MetricsPage() {
         .filter((item) => Number.isFinite(item));
       if (expectedNumbers.length === 0) {
         return 'At least one expected number must be provided.';
+      }
+      if (expectedNumbers.length < keywords.length) {
+        return 'Expected numbers must match the number of keywords.';
+      }
+
+      const comparisons = parseListText(extractComparisonsText);
+      if (comparisons.length < keywords.length) {
+        return 'Comparisons must match the number of keywords.';
+      }
+
+      const invalidComparison = comparisons.find((item) => !['>=', '<=', '>', '<', '=', 'gte', 'lte', 'gt', 'lt', 'eq'].includes(item));
+      if (invalidComparison) {
+        return `Invalid comparison operator: ${invalidComparison}. Use >=, <=, >, <, or =.`;
       }
     }
 
@@ -540,7 +588,7 @@ export default function MetricsPage() {
 
           {metricType === 'property_check' && (
             <>
-              <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr 1fr' }} gap={2} mt={1}>
+              <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr 1fr 1fr' }} gap={2} mt={1}>
                 <TextField
                   label="Keywords (comma or newline separated)"
                   value={extractKeywordsText}
@@ -550,7 +598,7 @@ export default function MetricsPage() {
                 />
                 <TextField
                   select
-                  label="Comparison"
+                  label="Default Comparison"
                   value={extractComparison}
                   onChange={(event) => setExtractComparison(event.target.value as any)}
                 >
@@ -561,6 +609,14 @@ export default function MetricsPage() {
                   <MenuItem value="eq">=</MenuItem>
                 </TextField>
                 <TextField
+                  label="Comparisons (one per keyword)"
+                  value={extractComparisonsText}
+                  multiline
+                  minRows={3}
+                  onChange={(event) => setExtractComparisonsText(event.target.value)}
+                  helperText="Use >=, <=, >, <, or =; one per line to match each keyword."
+                />
+                <TextField
                   label="Expected Numbers (comma or newline separated)"
                   value={extractExpectedNumbersText}
                   multiline
@@ -569,7 +625,7 @@ export default function MetricsPage() {
                 />
               </Box>
               <Typography variant="caption" color="text.secondary">
-                Sample pairs (5): total incidents=1, resolved incidents=1, open incidents=0, users trained=10, action items closed=1
+                Sample mapping: total incidents &gt;= 1, resolved incidents &gt;= 1, open incidents &lt;= 0, users trained &gt;= 10
               </Typography>
             </>
           )}

@@ -16,7 +16,15 @@ export enum UserRole {
   REVIEWER = 'reviewer',
   FOCAL = 'focal',
   TECHNICIAN = 'technician',
+  TECHNICIAN_DESKTOP = 'technician_desktop',
+  TECHNICIAN_IT_SUPPORT = 'technician_it_support',
   AUDITOR = 'auditor',
+  USER = 'user',
+}
+
+export enum AuthProvider {
+  LOCAL = 'local',
+  GOOGLE = 'google',
 }
 
 @Entity('users')
@@ -49,8 +57,23 @@ export class User {
   @Column({ name: 'position', nullable: true })
   position: string;
 
+  @Column({ name: 'position_full', nullable: true })
+  positionFull: string;
+
   @Column({ name: 'designation', nullable: true })
   designation: string;
+
+  @Column({ name: 'ticket_main_focal', default: false })
+  ticketMainFocal: boolean;
+
+  @Column({ name: 'ticket_technician', default: false })
+  ticketTechnician: boolean;
+
+  @Column({ name: 'auth_provider', type: 'enum', enum: AuthProvider, default: AuthProvider.LOCAL })
+  authProvider: AuthProvider;
+
+  @Column({ name: 'google_sub', type: 'varchar', nullable: true, unique: true })
+  googleSub: string | null;
 
   @Column({
     type: 'enum',

@@ -1,334 +1,182 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  IconButton,
-  Chip,
-  TextField,
-  MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Stack,
+  Box, Button, Card, CardContent, Typography, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, IconButton, Chip, TextField, MenuItem,
+  Dialog, DialogTitle, DialogContent, DialogActions, Stack, CircularProgress,
+  Rating, Tooltip, Alert,
 } from '@mui/material';
-import { useSnackbar } from 'notistack';
 import {
-  Add as AddIcon,
-  Visibility as ViewIcon,
+  Add as AddIcon, Visibility as ViewIcon, AssignmentInd as AssignIcon,
+  ThumbUp as SatisfactionIcon, Computer as DesktopIcon, Wifi as ITIcon,
 } from '@mui/icons-material';
+import { useSnackbar } from 'notistack';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  ticketsApi,
-  Ticket,
-  CreateTicketDto,
-  TicketConfigOption,
+  ticketsApi, Ticket, CreateTicketDto, TicketStatus, TicketType, TicketPriority,
+  TechnicianOption, SubmitSatisfactionDto,
 } from '@/app/api/references';
 
-const priorityColors = {
-  low: 'info',
-  medium: 'warning',
-  high: 'error',
-  urgent: 'error',
-} as const;
+const PRIORITY_COLOR: Record<string, 'default' | 'info' | 'warning' | 'error' | 'success'> = {
+  low: 'info', medium: 'warning', high: 'error', urgent: 'error',
+};
+const STATUS_COLOR: Record<string, 'default' | 'info' | 'warning' | 'success' | 'error'> = {
+  open: 'info', assigned: 'warning', in_progress: 'warning', resolved: 'success', closed: 'default',
+};
+const TICKET_TYPE_LABELS: Record<TicketType, string> = {
+  desktop_support: 'Desktop Support',
+  it_support: 'IT Support',
+};
 
-const statusColors = {
-  open: 'info',
-  in_progress: 'warning',
-  resolved: 'success',
-  closed: 'default',
-} as const;
+function isStaffRole(role?: string) {
+  return ['super_admin','reviewer','focal','technician','technician_desktop','technician_it_support','auditor'].includes(role ?? '');
+}
 
 export default function TicketsPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
+
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [issueTypes, setIssueTypes] = useState<TicketConfigOption[]>([]);
-  const [categories, setCategories] = useState<TicketConfigOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [configDialogOpen, setConfigDialogOpen] = useState(false);
-  const [configType, setConfigType] = useState<'issue_type' | 'category'>('issue_type');
-  const [editingConfig, setEditingConfig] = useState<TicketConfigOption | null>(null);
-  const [configName, setConfigName] = useState('');
-  const [configKey, setConfigKey] = useState('');
-  const [configDescription, setConfigDescription] = useState('');
-  const [configActive, setConfigActive] = useState(true);
-  const [configCategoryId, setConfigCategoryId] = useState('');
-  const [formData, setFormData] = useState<CreateTicketDto>({
-    subject: '',
-    description: '',
-    issue_type: 'other',
-    category: 'other',
-    priority: 'medium',
-  });
   const [filterStatus, setFilterStatus] = useState('');
-  const [filterPriority, setFilterPriority] = useState('');
+  const [filterType, setFilterType] = useState('');
+
+  // New ticket dialog
+  const [newDialogOpen, setNewDialogOpen] = useState(false);
+  const [form, setForm] = useState<CreateTicketDto>({ subject: '', description: '', ticketType: 'it_support', priority: 'medium' });
+  const [submitting, setSubmitting] = useState(false);
+
+  // Assign dialog
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [assigningTicket, setAssigningTicket] = useState<Ticket | null>(null);
+  const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
+  const [selectedTechId, setSelectedTechId] = useState('');
+
+  // Satisfaction dialog
+  const [satDialogOpen, setSatDialogOpen] = useState(false);
+  const [satTicket, setSatTicket] = useState<Ticket | null>(null);
+  const [satRating, setSatRating] = useState<number | null>(null);
+  const [satComment, setSatComment] = useState('');
+
+  const canManageAll = isStaffRole(user?.role);
   const isSuperAdmin = user?.role === 'super_admin';
+  const isTechnician = ['technician','technician_desktop','technician_it_support'].includes(user?.role ?? '');
 
-  useEffect(() => {
-    fetchTickets();
-  }, [filterStatus, filterPriority]);
-
-  useEffect(() => {
-    fetchConfigs();
-  }, [isSuperAdmin]);
-
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
     try {
       setLoading(true);
       const data = await ticketsApi.getAll({
-        status: filterStatus as any,
-        priority: filterPriority as any,
+        status: filterStatus as TicketStatus || undefined,
+        ticketType: filterType as TicketType || undefined,
       });
       setTickets(data);
-    } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to fetch tickets', { variant: 'error' });
+    } catch {
+      enqueueSnackbar('Failed to load tickets', { variant: 'error' });
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterStatus, filterType]);
 
-  const fetchConfigs = async () => {
-    try {
-      const [issueTypeData, categoryData] = await Promise.all([
-        ticketsApi.listIssueTypes(!isSuperAdmin),
-        ticketsApi.listCategories(!isSuperAdmin),
-      ]);
+  useEffect(() => { fetchTickets(); }, [fetchTickets]);
 
-      setIssueTypes(issueTypeData || []);
-      setCategories(categoryData || []);
-    } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to load issue metadata', { variant: 'error' });
+  const handleSubmitTicket = async () => {
+    if (!form.subject.trim() || !form.description.trim()) {
+      enqueueSnackbar('Subject and description are required.', { variant: 'warning' }); return;
     }
-  };
-
-  const handleOpenDialog = () => {
-    setFormData({
-      subject: '',
-      description: '',
-      issue_type: 'other',
-      category: 'other',
-      priority: 'medium',
-      issue_type_id: undefined,
-      category_id: undefined,
-    });
-    setDialogOpen(true);
-  };
-
-  const handleCloseDialog = () => {
-    setDialogOpen(false);
-  };
-
-  const handleSubmit = async () => {
     try {
-      const payload: CreateTicketDto = {
-        ...formData,
-        issue_type: formData.issue_type_id ? 'other' : formData.issue_type,
-        category: formData.category_id ? 'other' : formData.category,
-      };
-      await ticketsApi.create(payload);
-      handleCloseDialog();
+      setSubmitting(true);
+      await ticketsApi.create(form);
+      enqueueSnackbar('Ticket submitted successfully!', { variant: 'success' });
+      setNewDialogOpen(false);
+      setForm({ subject: '', description: '', ticketType: 'it_support', priority: 'medium' });
       fetchTickets();
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to create ticket', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to submit ticket', { variant: 'error' });
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleViewTicket = (id: string) => {
-    router.push(`/dashboard/tickets/${id}`);
-  };
-
-  const openConfigDialog = (
-    type: 'issue_type' | 'category',
-    item?: TicketConfigOption,
-  ) => {
-    setConfigType(type);
-    setEditingConfig(item || null);
-    setConfigName(item?.name || '');
-    setConfigKey(item?.key || '');
-    setConfigDescription(item?.description || '');
-    setConfigActive(item?.is_active ?? true);
-    setConfigCategoryId((item as any)?.category_id || '');
-    setConfigDialogOpen(true);
-  };
-
-  const handleSaveConfig = async () => {
+  const openAssignDialog = async (ticket: Ticket) => {
+    setAssigningTicket(ticket);
+    setSelectedTechId(String(ticket.assignedToId ?? ''));
     try {
-      const payload = {
-        key: configKey,
-        name: configName,
-        description: configDescription,
-        is_active: configActive,
-        category_id: configType === 'issue_type' ? configCategoryId || undefined : undefined,
-      };
+      const techs = await ticketsApi.getTechnicians();
+      setTechnicians(techs.filter(t =>
+        ticket.ticketType === 'desktop_support'
+          ? ['technician_desktop','technician'].includes(t.role)
+          : ['technician_it_support','technician'].includes(t.role)
+      ));
+    } catch { setTechnicians([]); }
+    setAssignDialogOpen(true);
+  };
 
-      if (configType === 'issue_type') {
-        if (editingConfig) {
-          await ticketsApi.updateIssueType(editingConfig.id, payload);
-        } else {
-          await ticketsApi.createIssueType(payload);
-        }
-      } else {
-        if (editingConfig) {
-          await ticketsApi.updateCategory(editingConfig.id, payload);
-        } else {
-          await ticketsApi.createCategory(payload);
-        }
-      }
-
-      setConfigDialogOpen(false);
-      setEditingConfig(null);
-      fetchConfigs();
+  const handleAssign = async () => {
+    if (!assigningTicket || !selectedTechId) return;
+    try {
+      await ticketsApi.assign(assigningTicket.id, Number(selectedTechId));
+      enqueueSnackbar('Ticket assigned.', { variant: 'success' });
+      setAssignDialogOpen(false);
+      fetchTickets();
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to save metadata configuration', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to assign', { variant: 'error' });
     }
   };
 
-  const handleToggleConfig = async (
-    type: 'issue_type' | 'category',
-    item: TicketConfigOption,
-  ) => {
-    try {
-      if (type === 'issue_type') {
-        await ticketsApi.updateIssueType(item.id, { is_active: !item.is_active });
-      } else {
-        await ticketsApi.updateCategory(item.id, { is_active: !item.is_active });
-      }
-      fetchConfigs();
-    } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to toggle metadata status', { variant: 'error' });
-    }
+  const openSatDialog = (ticket: Ticket) => {
+    setSatTicket(ticket);
+    setSatRating(ticket.satisfactionRating ?? null);
+    setSatComment(ticket.satisfactionComment ?? '');
+    setSatDialogOpen(true);
   };
 
-  const handleDeleteConfig = async (
-    type: 'issue_type' | 'category',
-    item: TicketConfigOption,
-  ) => {
-    if (!confirm(`Delete ${item.name}? This performs a soft delete and is blocked when in use.`)) {
-      return;
-    }
-
+  const handleSubmitSatisfaction = async () => {
+    if (!satTicket || !satRating) { enqueueSnackbar('Please select a rating.', { variant: 'warning' }); return; }
     try {
-      if (type === 'issue_type') {
-        await ticketsApi.deleteIssueType(item.id);
-      } else {
-        await ticketsApi.deleteCategory(item.id);
-      }
-      fetchConfigs();
+      await ticketsApi.submitSatisfaction(satTicket.id, { rating: satRating, comment: satComment });
+      enqueueSnackbar('Thank you for your feedback!', { variant: 'success' });
+      setSatDialogOpen(false);
+      fetchTickets();
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to delete metadata option', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to submit', { variant: 'error' });
     }
   };
 
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">Issues</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleOpenDialog}
-        >
-          Create Ticket
+        <Box>
+          <Typography variant="h4" fontWeight={700}>Help Desk Tickets</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Submit and track assistance requests for Desktop &amp; IT Support
+          </Typography>
+        </Box>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setNewDialogOpen(true)}>
+          New Ticket
         </Button>
       </Box>
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box display="flex" gap={2}>
-            <TextField
-              select
-              label="Status"
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              sx={{ minWidth: 150 }}
-              size="small"
-            >
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value="open">Open</MenuItem>
-              <MenuItem value="in_progress">In Progress</MenuItem>
-              <MenuItem value="resolved">Resolved</MenuItem>
-              <MenuItem value="closed">Closed</MenuItem>
-            </TextField>
-            <TextField
-              select
-              label="Priority"
-              value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
-              sx={{ minWidth: 150 }}
-              size="small"
-            >
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value="low">Low</MenuItem>
-              <MenuItem value="medium">Medium</MenuItem>
-              <MenuItem value="high">High</MenuItem>
-              <MenuItem value="urgent">Urgent</MenuItem>
-            </TextField>
-          </Box>
-        </CardContent>
-      </Card>
-
-      {isSuperAdmin && (
-        <Card sx={{ mb: 3 }}>
+      {canManageAll && (
+        <Card sx={{ mb: 2 }}>
           <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Issue Metadata Management
-            </Typography>
-            <Stack spacing={2}>
-              <Box>
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                  <Typography variant="subtitle1">Issue Types</Typography>
-                  <Button size="small" variant="outlined" onClick={() => openConfigDialog('issue_type')}>
-                    Add Issue Type
-                  </Button>
-                </Box>
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  {issueTypes.map((item) => (
-                    <Chip
-                      key={item.id}
-                      label={`${item.name}${item.is_active ? '' : ' (inactive)'}`}
-                      onClick={() => openConfigDialog('issue_type', item)}
-                      onDelete={() => handleDeleteConfig('issue_type', item)}
-                      color={item.is_active ? 'default' : 'warning'}
-                      variant="outlined"
-                    />
-                  ))}
-                </Stack>
-              </Box>
-              <Box>
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                  <Typography variant="subtitle1">Categories</Typography>
-                  <Button size="small" variant="outlined" onClick={() => openConfigDialog('category')}>
-                    Add Category
-                  </Button>
-                </Box>
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  {categories.map((item) => (
-                    <Chip
-                      key={item.id}
-                      label={`${item.name}${item.is_active ? '' : ' (inactive)'}`}
-                      onClick={() => openConfigDialog('category', item)}
-                      onDelete={() => handleDeleteConfig('category', item)}
-                      color={item.is_active ? 'default' : 'warning'}
-                      variant="outlined"
-                    />
-                  ))}
-                </Stack>
-              </Box>
+            <Stack direction="row" spacing={2} flexWrap="wrap">
+              <TextField select label="Status" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} size="small" sx={{ minWidth: 140 }}>
+                <MenuItem value="">All Statuses</MenuItem>
+                <MenuItem value="open">Open</MenuItem>
+                <MenuItem value="assigned">Assigned</MenuItem>
+                <MenuItem value="in_progress">In Progress</MenuItem>
+                <MenuItem value="resolved">Resolved</MenuItem>
+                <MenuItem value="closed">Closed</MenuItem>
+              </TextField>
+              <TextField select label="Type" value={filterType} onChange={e => setFilterType(e.target.value)} size="small" sx={{ minWidth: 160 }}>
+                <MenuItem value="">All Types</MenuItem>
+                <MenuItem value="desktop_support">Desktop Support</MenuItem>
+                <MenuItem value="it_support">IT Support</MenuItem>
+              </TextField>
+              <Button size="small" variant="outlined" onClick={() => { setFilterStatus(''); setFilterType(''); }}>Reset</Button>
             </Stack>
           </CardContent>
         </Card>
@@ -340,250 +188,143 @@ export default function TicketsPage() {
             <TableRow>
               <TableCell>Ticket #</TableCell>
               <TableCell>Subject</TableCell>
-              <TableCell>Issue Type</TableCell>
-              <TableCell>Category</TableCell>
+              <TableCell>Type</TableCell>
               <TableCell>Priority</TableCell>
               <TableCell>Status</TableCell>
-              <TableCell>Created</TableCell>
+              {canManageAll && <TableCell>Requester</TableCell>}
+              {canManageAll && <TableCell>Assigned To</TableCell>}
+              <TableCell>Date</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={8} align="center">
-                  Loading...
-                </TableCell>
-              </TableRow>
+              <TableRow><TableCell colSpan={9} align="center"><CircularProgress size={28} /></TableCell></TableRow>
             ) : tickets.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} align="center">
-                  No tickets found
+              <TableRow><TableCell colSpan={9} align="center">
+                <Typography color="text.secondary" py={3}>No tickets found. Click "New Ticket" to submit your first request.</Typography>
+              </TableCell></TableRow>
+            ) : tickets.map(ticket => (
+              <TableRow key={ticket.id} hover>
+                <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{ticket.ticketNumber}</TableCell>
+                <TableCell sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ticket.subject}</TableCell>
+                <TableCell>
+                  <Chip size="small"
+                    icon={ticket.ticketType === 'desktop_support' ? <DesktopIcon /> : <ITIcon />}
+                    label={TICKET_TYPE_LABELS[ticket.ticketType]} variant="outlined" />
+                </TableCell>
+                <TableCell><Chip size="small" label={ticket.priority.toUpperCase()} color={PRIORITY_COLOR[ticket.priority]} /></TableCell>
+                <TableCell><Chip size="small" label={ticket.status.replace('_', ' ')} color={STATUS_COLOR[ticket.status]} /></TableCell>
+                {canManageAll && (
+                  <TableCell>{ticket.requester ? `${ticket.requester.firstName ?? ''} ${ticket.requester.lastName ?? ''}`.trim() || ticket.requester.email : '—'}</TableCell>
+                )}
+                {canManageAll && (
+                  <TableCell>{ticket.assignedTo
+                    ? `${ticket.assignedTo.firstName ?? ''} ${ticket.assignedTo.lastName ?? ''}`.trim() || ticket.assignedTo.email
+                    : <Typography color="text.disabled" variant="body2">Unassigned</Typography>}
+                  </TableCell>
+                )}
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(ticket.createdAt).toLocaleDateString()}</TableCell>
+                <TableCell align="right">
+                  <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                    <Tooltip title="View Details">
+                      <IconButton size="small" onClick={() => router.push(`/dashboard/tickets/${ticket.id}`)}><ViewIcon fontSize="small" /></IconButton>
+                    </Tooltip>
+                    {(isSuperAdmin || isTechnician) && (
+                      <Tooltip title="Assign Ticket">
+                        <IconButton size="small" color="primary" onClick={() => openAssignDialog(ticket)}><AssignIcon fontSize="small" /></IconButton>
+                      </Tooltip>
+                    )}
+                    {(ticket.status === 'resolved' || ticket.status === 'closed') && ticket.requesterId === user?.id && !ticket.satisfactionSubmittedAt && (
+                      <Tooltip title="Rate this resolution">
+                        <IconButton size="small" color="success" onClick={() => openSatDialog(ticket)}><SatisfactionIcon fontSize="small" /></IconButton>
+                      </Tooltip>
+                    )}
+                  </Stack>
                 </TableCell>
               </TableRow>
-            ) : (
-              tickets.map((ticket) => (
-                <TableRow key={ticket.id} hover>
-                  <TableCell>{ticket.ticket_number}</TableCell>
-                  <TableCell>{ticket.subject}</TableCell>
-                  <TableCell>
-                    {(ticket.issue_type_config?.name || ticket.issue_type || 'other').replace('_', ' ')}
-                  </TableCell>
-                  <TableCell>
-                    {(ticket.category_config?.name || ticket.category).replace('_', ' ')}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={ticket.priority.toUpperCase()}
-                      color={priorityColors[ticket.priority]}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={ticket.status.replace('_', ' ')}
-                      color={statusColors[ticket.status]}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {new Date(ticket.created_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleViewTicket(ticket.id)}
-                    >
-                      <ViewIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
+            ))}
           </TableBody>
         </Table>
       </TableContainer>
 
-      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-        <DialogTitle>Create Issue</DialogTitle>
+      {/* New Ticket Dialog */}
+      <Dialog open={newDialogOpen} onClose={() => setNewDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Submit a Help Desk Ticket</DialogTitle>
         <DialogContent>
-          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField
-              label="Subject"
-              value={formData.subject}
-              onChange={(e) =>
-                setFormData({ ...formData, subject: e.target.value })
-              }
-              required
-              fullWidth
-            />
-            <TextField
-              label="Description"
-              value={formData.description}
-              onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
-              multiline
-              rows={4}
-              required
-              fullWidth
-            />
-            <TextField
-              select
-              label="Issue Type"
-              value={formData.issue_type_id || formData.issue_type || 'other'}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  issue_type_id: e.target.value,
-                  issue_type: 'other',
-                })
-              }
-              required
-              fullWidth
-            >
-              {issueTypes
-                .filter((item) => !formData.category_id || (item as any).category_id === formData.category_id)
-                .filter((item) => item.is_active)
-                .map((item) => (
-                  <MenuItem key={item.id} value={item.id}>
-                    {item.name}
-                  </MenuItem>
-                ))}
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Alert severity="info">
+              Choose the support type that matches your issue. Desktop Support handles hardware/workstation problems; IT Support handles software/network issues.
+            </Alert>
+            <TextField select label="Support Type *" value={form.ticketType} onChange={e => setForm({ ...form, ticketType: e.target.value as TicketType })} fullWidth>
+              <MenuItem value="desktop_support">🖥️  Desktop Support</MenuItem>
+              <MenuItem value="it_support">💻  IT Support</MenuItem>
             </TextField>
-            <TextField
-              select
-              label="Category"
-              value={formData.category_id || formData.category}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  category_id: e.target.value,
-                  category: 'other',
-                  issue_type_id: undefined,
-                })
-              }
-              required
-              fullWidth
-            >
-              {categories
-                .filter((item) => item.is_active)
-                .map((item) => (
-                  <MenuItem key={item.id} value={item.id}>
-                    {item.name}
-                  </MenuItem>
-                ))}
+            <TextField label="Subject *" value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} fullWidth placeholder="Brief description of your issue" />
+            <TextField label="Description *" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} fullWidth multiline rows={4} placeholder="Provide details: what happened, when, steps tried..." />
+            <TextField select label="Priority" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value as TicketPriority })} fullWidth>
+              <MenuItem value="low">Low — Not urgent</MenuItem>
+              <MenuItem value="medium">Medium — Normal impact</MenuItem>
+              <MenuItem value="high">High — Significant impact</MenuItem>
+              <MenuItem value="urgent">Urgent — Critical / blocking work</MenuItem>
             </TextField>
-            <TextField
-              select
-              label="Priority"
-              value={formData.priority}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  priority: e.target.value as any,
-                })
-              }
-              required
-              fullWidth
-            >
-              <MenuItem value="low">Low</MenuItem>
-              <MenuItem value="medium">Medium</MenuItem>
-              <MenuItem value="high">High</MenuItem>
-              <MenuItem value="urgent">Urgent</MenuItem>
-            </TextField>
-            <TextField
-              label="Resolution Steps (optional)"
-              value={formData.resolution_steps || ''}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  resolution_steps: e.target.value,
-                })
-              }
-              multiline
-              rows={3}
-              fullWidth
-            />
-          </Box>
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleSubmit} variant="contained">
-            Create Ticket
+          <Button onClick={() => setNewDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleSubmitTicket} variant="contained" disabled={submitting}>
+            {submitting ? 'Submitting…' : 'Submit Ticket'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={configDialogOpen} onClose={() => setConfigDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {editingConfig ? 'Edit' : 'Create'} {configType === 'issue_type' ? 'Issue Type' : 'Category'}
-        </DialogTitle>
+      {/* Assign Dialog */}
+      <Dialog open={assignDialogOpen} onClose={() => setAssignDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Assign Ticket</DialogTitle>
         <DialogContent>
-          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField
-              label="Key"
-              value={configKey}
-              onChange={(e) => setConfigKey(e.target.value)}
-              required
-              fullWidth
-            />
-            <TextField
-              label="Name"
-              value={configName}
-              onChange={(e) => setConfigName(e.target.value)}
-              required
-              fullWidth
-            />
-            {configType === 'issue_type' && (
-              <TextField
-                select
-                label="Category"
-                value={configCategoryId}
-                onChange={(event) => setConfigCategoryId(event.target.value)}
-                fullWidth
-              >
-                <MenuItem value="">No Category</MenuItem>
-                {categories
-                  .filter((item) => item.is_active)
-                  .map((item) => (
-                    <MenuItem key={item.id} value={item.id}>
-                      {item.name}
-                    </MenuItem>
-                  ))}
-              </TextField>
-            )}
-            <TextField
-              label="Description"
-              value={configDescription}
-              onChange={(e) => setConfigDescription(e.target.value)}
-              multiline
-              rows={3}
-              fullWidth
-            />
-            {editingConfig && (
-              <Button
-                variant="outlined"
-                color={configActive ? 'warning' : 'success'}
-                onClick={() => {
-                  handleToggleConfig(configType, editingConfig);
-                  setConfigActive(!configActive);
-                }}
-              >
-                {configActive ? 'Deactivate' : 'Activate'}
-              </Button>
-            )}
-          </Box>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Ticket: <strong>{assigningTicket?.ticketNumber}</strong> — {TICKET_TYPE_LABELS[assigningTicket?.ticketType ?? 'it_support']}
+            </Typography>
+            <TextField select label="Select Technician" value={selectedTechId} onChange={e => setSelectedTechId(e.target.value)} fullWidth>
+              {technicians.length === 0
+                ? <MenuItem disabled value="">No eligible technicians found</MenuItem>
+                : technicians.map(t => (
+                  <MenuItem key={t.id} value={String(t.id)}>
+                    {t.firstName} {t.lastName} — {t.openCount} active tickets
+                  </MenuItem>
+                ))}
+            </TextField>
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfigDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleSaveConfig}
-            variant="contained"
-            disabled={!configName.trim() || !configKey.trim()}
-          >
-            Save
-          </Button>
+          <Button onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleAssign} variant="contained" disabled={!selectedTechId}>Assign</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Satisfaction Dialog */}
+      <Dialog open={satDialogOpen} onClose={() => setSatDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Rate Your Experience</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1, alignItems: 'center' }}>
+            <Typography variant="body2" color="text.secondary" textAlign="center">
+              How satisfied are you with the resolution of ticket <strong>{satTicket?.ticketNumber}</strong>?
+            </Typography>
+            {satTicket?.satisfactionSubmittedAt
+              ? <Alert severity="success">You have already rated this ticket. Thank you!</Alert>
+              : <>
+                  <Rating value={satRating} onChange={(_, v) => setSatRating(v)} size="large" sx={{ fontSize: '3rem' }} />
+                  <TextField label="Additional comments (optional)" value={satComment} onChange={e => setSatComment(e.target.value)} multiline rows={3} fullWidth />
+                </>
+            }
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSatDialogOpen(false)}>Close</Button>
+          {!satTicket?.satisfactionSubmittedAt && (
+            <Button onClick={handleSubmitSatisfaction} variant="contained" disabled={!satRating}>Submit Rating</Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

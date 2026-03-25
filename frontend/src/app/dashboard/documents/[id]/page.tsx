@@ -18,8 +18,6 @@ import {
 import {
   ArrowBack as BackIcon,
   Download as DownloadIcon,
-  Upload as UploadIcon,
-  Refresh as RefreshIcon,
   Link as LinkIcon,
   LinkOff as UnlinkIcon,
 } from '@mui/icons-material';
@@ -28,8 +26,8 @@ import { documentsApi, Document } from '@/lib/api/documents';
 import { usePageTitle } from '@/contexts/PageTitleContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
-import VersionTimeline from '@/components/documents/VersionTimeline';
 import DocumentViewer from '@/components/documents/DocumentViewer';
+import { formatDocumentPeriod } from '@/lib/utils/documentPeriod';
 import {
   Dialog,
   DialogTitle,
@@ -88,11 +86,6 @@ export default function DocumentDetailsPage() {
     router.push('/dashboard/documents');
   };
 
-  const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['document', documentId] });
-    queryClient.invalidateQueries({ queryKey: ['document-versions', documentId] });
-  };
-
   const handleViewVersion = (versionId: string) => {
     setSelectedVersionId(versionId);
   };
@@ -147,13 +140,15 @@ export default function DocumentDetailsPage() {
   const handleLinkReference = async (targetDocumentId: string) => {
     await documentsApi.linkDocumentReference(documentId, targetDocumentId);
     await openReferenceDialog();
-    handleRefresh();
+    queryClient.invalidateQueries({ queryKey: ['document', documentId] });
+    queryClient.invalidateQueries({ queryKey: ['document-versions', documentId] });
   };
 
   const handleUnlinkReference = async (targetDocumentId: string) => {
     await documentsApi.unlinkDocumentReference(documentId, targetDocumentId);
     await openReferenceDialog();
-    handleRefresh();
+    queryClient.invalidateQueries({ queryKey: ['document', documentId] });
+    queryClient.invalidateQueries({ queryKey: ['document-versions', documentId] });
   };
 
   const getWorkflowStatus = (doc: Document) => {
@@ -188,6 +183,8 @@ export default function DocumentDetailsPage() {
   const currentVersion = versions?.find(
     (v) => v.version_number === document?.current_version,
   );
+
+  const canDownloadCurrent = isFocal && !!currentVersion;
 
   useEffect(() => {
     const loadPreview = async () => {
@@ -259,11 +256,11 @@ export default function DocumentDetailsPage() {
           <Typography variant="h4" sx={{ flex: 1 }}>
             {document.title}
           </Typography>
-          <Tooltip title="Refresh">
-            <IconButton onClick={handleRefresh}>
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
+          {canDownloadCurrent && (
+            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleDownloadCurrent}>
+              Download
+            </Button>
+          )}
           {!isFocal && (
             <Button variant="outlined" startIcon={<LinkIcon />} onClick={openReferenceDialog}>
               Map References
@@ -286,7 +283,7 @@ export default function DocumentDetailsPage() {
                 Unit
               </Typography>
               <Typography variant="body1" gutterBottom>
-                {document.unit?.name} ({document.unit?.code})
+                {document.unit?.name}{document.unit?.code ? ` (${document.unit.code})` : ''}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
@@ -302,7 +299,7 @@ export default function DocumentDetailsPage() {
                 Period
               </Typography>
               <Typography variant="body1" gutterBottom>
-                {document.year}-{document.period}
+                {formatDocumentPeriod(document.year, document.period)}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
@@ -338,9 +335,15 @@ export default function DocumentDetailsPage() {
 
         {/* Return Remarks banner */}
         {document.latest_review_remarks && (
-          <Alert severity="warning" sx={{ mb: 3 }}>
+          <Alert
+            severity="error"
+            variant="filled"
+            sx={{ mb: 3, '& .MuiAlert-message': { color: 'common.white' } }}
+          >
             <Typography variant="subtitle2" gutterBottom>Return Remarks</Typography>
-            {document.latest_review_remarks}
+            <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+              {document.latest_review_remarks}
+            </Typography>
           </Alert>
         )}
 
@@ -350,7 +353,7 @@ export default function DocumentDetailsPage() {
           <Grid item xs={12} lg={8}>
             <Paper elevation={2} sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom>
-                Document Viewer
+                Document Viewer — {document.title}
               </Typography>
               {document.status === 'processing' && (
                 <Typography color="info.main" sx={{ mb: 2 }}>
@@ -363,7 +366,11 @@ export default function DocumentDetailsPage() {
                 </Typography>
               )}
               {previewBlobUrl && (document.status === 'ready' || document.status === 'pending') ? (
-                <DocumentViewer pdfUrl={previewBlobUrl} mimeType={previewMimeType} />
+                <DocumentViewer
+                  pdfUrl={previewBlobUrl}
+                  mimeType={previewMimeType}
+                  viewerTitle={document.title}
+                />
               ) : (
                 <Box
                   sx={{
@@ -383,27 +390,6 @@ export default function DocumentDetailsPage() {
             </Paper>
           </Grid>
 
-          {/* Version Timeline */}
-          <Grid item xs={12} lg={4}>
-            <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Version History
-              </Typography>
-              <Divider sx={{ my: 2 }} />
-              {versions && versions.length > 0 ? (
-                <VersionTimeline
-                  versions={versions}
-                  currentVersionId={currentVersion?.id}
-                  onViewVersion={handleViewVersion}
-                  onDownloadVersion={handleDownloadVersion}
-                />
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  No versions available
-                </Typography>
-              )}
-            </Paper>
-          </Grid>
         </Grid>
       </Box>
 
@@ -473,7 +459,7 @@ export default function DocumentDetailsPage() {
                     <Box key={doc.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                       <Box>
                         <Typography fontWeight={600}>{doc.title}</Typography>
-                        <Typography variant="caption" color="text.secondary">{doc.document_type} • {doc.year}-{doc.period}</Typography>
+                        <Typography variant="caption" color="text.secondary">{doc.document_type} • {formatDocumentPeriod(doc.year, doc.period)}</Typography>
                       </Box>
                       {linked ? (
                         <Chip size="small" color="success" label="Linked" />

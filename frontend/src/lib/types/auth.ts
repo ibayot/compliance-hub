@@ -7,7 +7,10 @@ export interface User {
   suffix?: string;
   staffId?: string;
   position?: string;
+  positionFull?: string;
   designation?: string;
+  ticketMainFocal?: boolean;
+  ticketTechnician?: boolean;
   role: UserRole;
   units?: Unit[];
 }
@@ -17,7 +20,10 @@ export enum UserRole {
   REVIEWER = 'reviewer',
   FOCAL = 'focal',
   TECHNICIAN = 'technician',
+  TECHNICIAN_DESKTOP = 'technician_desktop',
+  TECHNICIAN_IT_SUPPORT = 'technician_it_support',
   AUDITOR = 'auditor',
+  USER = 'user',
 }
 
 export interface Unit {

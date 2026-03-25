@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Box,
   Typography,
@@ -14,6 +15,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  LinearProgress,
 } from '@mui/material';
 import {
   Description as DocumentIcon,
@@ -24,17 +26,22 @@ import {
   Shield as ShieldIcon,
   VpnLock as VpnLockIcon,
   BugReport as BugIcon,
+  Star as StarIcon,
+  PendingActions as PendingIcon,
+  CheckCircleOutline as ResolvedIcon,
+  Cancel as ClosedIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { documentsApi } from '@/lib/api/documents';
-import { ticketsApi } from '@/app/api/references';
+import { ticketsApi, TicketDashboardStats } from '@/app/api/references';
 import { incidentsApi, TodayStats } from '@/lib/api/incidents';
 import { cybersecurityApi, CybersecurityMetric } from '@/lib/api/cybersecurity';
 import { DashboardSummaryResponse, kpiApi } from '@/lib/api/kpi';
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalDocuments: 0,
@@ -51,18 +58,35 @@ export default function DashboardPage() {
   const [incidentStats, setIncidentStats] = useState<TodayStats | null>(null);
   const [kpiSummary, setKpiSummary] = useState<DashboardSummaryResponse | null>(null);
 
+  // User-specific ticket dashboard stats
+  const [userTicketStats, setUserTicketStats] = useState<TicketDashboardStats | null>(null);
+
   const now = useMemo(() => new Date(), []);
   const periodYear = now.getFullYear();
   const periodMonth = now.getMonth() + 1;
 
+  const isRegularUser = user?.role === 'user';
+
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [user]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
 
+      // For regular users — only fetch ticket dashboard stats
+      if (isRegularUser) {
+        try {
+          const dashStats = await ticketsApi.getDashboardStats();
+          setUserTicketStats(dashStats);
+        } catch (err) {
+          console.error('Failed to fetch user ticket stats:', err);
+        }
+        return;
+      }
+
+      // Staff / admin: full dashboard
       const [docsResponse, metricsResult, incidentsResult, ticketStatsResult, kpiSummaryResult] =
         await Promise.allSettled([
           documentsApi.listDocuments({}),
@@ -124,6 +148,150 @@ export default function DashboardPage() {
     );
   }
 
+  // ─────────────────────────────────────────────
+  // Regular User Dashboard
+  // ─────────────────────────────────────────────
+  if (isRegularUser) {
+    const s = userTicketStats;
+    const fillRate = s?.satisfactionFillRate ?? 0;
+    const pendingCount = s?.pendingSatisfactionTickets ?? 0;
+
+    return (
+      <Box>
+        {/* Page Header */}
+        <Box mb={4}>
+          <Typography variant="h4" component="h1" gutterBottom>
+            Dashboard
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Welcome back, {user?.firstName || user?.email}!
+          </Typography>
+        </Box>
+
+        {/* Ticket Counts */}
+        <Grid container spacing={3} mb={4}>
+          <Grid item xs={6} sm={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <TicketIcon color="warning" fontSize="large" />
+                <Typography variant="h4" color="warning.main" mt={1}>
+                  {s?.open ?? 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">Open</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <PendingIcon color="info" fontSize="large" />
+                <Typography variant="h4" color="info.main" mt={1}>
+                  {s?.inProgress ?? 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">In Progress</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <ResolvedIcon color="success" fontSize="large" />
+                <Typography variant="h4" color="success.main" mt={1}>
+                  {s?.resolved ?? 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">Resolved</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <ClosedIcon color="action" fontSize="large" />
+                <Typography variant="h4" color="text.secondary" mt={1}>
+                  {s?.closed ?? 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">Closed</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* Satisfaction Fill Rate */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Box display="flex" alignItems="center" gap={2} mb={2}>
+              <StarIcon color="warning" />
+              <Typography variant="h6">Client Satisfaction</Typography>
+            </Box>
+            <Box mb={1}>
+              <Box display="flex" justifyContent="space-between" mb={0.5}>
+                <Typography variant="body2" color="text.secondary">
+                  Satisfaction forms filled
+                </Typography>
+                <Typography variant="body2" fontWeight={600}>
+                  {fillRate.toFixed(0)}%
+                </Typography>
+              </Box>
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(fillRate, 100)}
+                color={fillRate >= 80 ? 'success' : fillRate >= 50 ? 'warning' : 'error'}
+                sx={{ height: 10, borderRadius: 5 }}
+              />
+            </Box>
+            {pendingCount > 0 && (
+              <Box mt={2} display="flex" alignItems="center" justifyContent="space-between">
+                <Typography variant="body2" color="text.secondary">
+                  {pendingCount} resolved ticket{pendingCount > 1 ? 's' : ''} awaiting your satisfaction rating
+                </Typography>
+                <Button
+                  variant="contained"
+                  size="small"
+                  color="warning"
+                  startIcon={<StarIcon />}
+                  onClick={() => router.push('/dashboard/tickets?filter=pending_satisfaction')}
+                >
+                  Rate Now
+                </Button>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions */}
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>Quick Actions</Typography>
+            <Box display="flex" flexDirection="column" gap={2} mt={2}>
+              <Button
+                variant="contained"
+                fullWidth
+                startIcon={<TicketIcon />}
+                onClick={() => router.push('/dashboard/tickets')}
+              >
+                My Tickets
+              </Button>
+              {pendingCount > 0 && (
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  color="warning"
+                  startIcon={<StarIcon />}
+                  onClick={() => router.push('/dashboard/tickets?filter=pending_satisfaction')}
+                >
+                  Fill Client Satisfaction ({pendingCount})
+                </Button>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+      </Box>
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // Staff / Admin Dashboard (unchanged)
+  // ─────────────────────────────────────────────
   const complianceRate = stats.totalDocuments > 0
     ? ((stats.compliantDocuments / stats.totalDocuments) * 100).toFixed(1)
     : 0;

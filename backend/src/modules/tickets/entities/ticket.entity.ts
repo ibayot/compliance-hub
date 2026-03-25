@@ -9,21 +9,16 @@ import {
   OneToMany,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
-import { Unit } from '../../units/entities/unit.entity';
 import { TicketComment } from './ticket-comment.entity';
-import { TicketIssueType } from './ticket-issue-type.entity';
-import { TicketCategoryConfig } from './ticket-category.entity';
 
-export enum TicketCategory {
-  DOCUMENT_RELATED = 'document_related',
-  SYSTEM_ISSUE = 'system_issue',
-  COMPLIANCE_QUERY = 'compliance_query',
-  TRAINING_REQUEST = 'training_request',
-  OTHER = 'other',
+export enum TicketType {
+  DESKTOP_SUPPORT = 'desktop_support',
+  IT_SUPPORT = 'it_support',
 }
 
 export enum TicketStatus {
   OPEN = 'open',
+  ASSIGNED = 'assigned',
   IN_PROGRESS = 'in_progress',
   RESOLVED = 'resolved',
   CLOSED = 'closed',
@@ -36,22 +31,14 @@ export enum TicketPriority {
   URGENT = 'urgent',
 }
 
-export enum IssueType {
-  POLICY_GAP = 'policy_gap',
-  MISSING_EVIDENCE = 'missing_evidence',
-  DATA_INCONSISTENCY = 'data_inconsistency',
-  LATE_SUBMISSION = 'late_submission',
-  SECURITY_INCIDENT = 'security_incident',
-  OTHER = 'other',
-}
-
 @Entity('tickets')
 export class Ticket {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 50, unique: true })
-  ticket_number: string; // Auto-generated: TICK-2024-0001
+  /** Auto-generated: TKT-2026-0001 */
+  @Column({ name: 'ticket_number', type: 'varchar', length: 50, unique: true })
+  ticketNumber: string;
 
   @Column({ type: 'varchar', length: 255 })
   subject: string;
@@ -59,88 +46,61 @@ export class Ticket {
   @Column({ type: 'text' })
   description: string;
 
-  @Column({ type: 'varchar', length: 36, nullable: true })
-  issue_type_id: string | null;
+  /**
+   * Which technician pool handles this ticket.
+   * desktop_support -> technician_desktop role
+   * it_support      -> technician_it_support role
+   */
+  @Column({ name: 'ticket_type', type: 'varchar', length: 30, default: TicketType.IT_SUPPORT })
+  ticketType: TicketType;
 
-  @ManyToOne(() => TicketIssueType, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'issue_type_id' })
-  issue_type_config: TicketIssueType;
-
-  @Column({
-    type: 'enum',
-    enum: IssueType,
-    default: IssueType.OTHER,
-  })
-  issue_type: IssueType;
-
-  @Column({
-    type: 'enum',
-    enum: TicketCategory,
-    default: TicketCategory.OTHER,
-  })
-  category: TicketCategory;
-
-  @Column({ type: 'varchar', length: 36, nullable: true })
-  category_id: string | null;
-
-  @ManyToOne(() => TicketCategoryConfig, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'category_id' })
-  category_config: TicketCategoryConfig;
-
-  @Column({
-    type: 'enum',
-    enum: TicketStatus,
-    default: TicketStatus.OPEN,
-  })
+  @Column({ type: 'varchar', length: 20, default: TicketStatus.OPEN })
   status: TicketStatus;
 
-  @Column({
-    type: 'enum',
-    enum: TicketPriority,
-    default: TicketPriority.MEDIUM,
-  })
+  @Column({ type: 'varchar', length: 10, default: TicketPriority.MEDIUM })
   priority: TicketPriority;
 
-  // Reporter
-  @Column({ type: 'int' })
-  reported_by_id: number;
+  // --- Requester ---
+  @Column({ name: 'requester_id', type: 'int' })
+  requesterId: number;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'reported_by_id' })
-  reported_by: User;
+  @JoinColumn({ name: 'requester_id' })
+  requester: User;
 
-  // Assigned to (optional)
-  @Column({ type: 'int', nullable: true })
-  assigned_to_id: number;
+  // --- Assigned Technician ---
+  @Column({ name: 'assigned_to_id', type: 'int', nullable: true })
+  assignedToId: number | null;
 
-  @ManyToOne(() => User, { onDelete: 'SET NULL' })
+  @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'assigned_to_id' })
-  assigned_to: User;
+  assignedTo: User | null;
 
-  // Related unit (optional)
-  @Column({ type: 'int', nullable: true })
-  unit_id: number;
+  // --- Resolution ---
+  @Column({ name: 'resolution_notes', type: 'text', nullable: true })
+  resolutionNotes: string | null;
 
-  @ManyToOne(() => Unit, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'unit_id' })
-  unit: Unit;
+  @Column({ name: 'resolved_at', type: 'datetime', nullable: true })
+  resolvedAt: Date | null;
 
-  // Comments
-  @OneToMany(() => TicketComment, (comment) => comment.ticket)
+  // --- Client Satisfaction ---
+  /** 1-5 star rating submitted by the requester after resolution */
+  @Column({ name: 'satisfaction_rating', type: 'tinyint', nullable: true })
+  satisfactionRating: number | null;
+
+  @Column({ name: 'satisfaction_comment', type: 'text', nullable: true })
+  satisfactionComment: string | null;
+
+  @Column({ name: 'satisfaction_submitted_at', type: 'datetime', nullable: true })
+  satisfactionSubmittedAt: Date | null;
+
+  // --- Relations ---
+  @OneToMany(() => TicketComment, (c) => c.ticket, { cascade: true })
   comments: TicketComment[];
 
-  @Column({ type: 'timestamp', nullable: true })
-  resolved_at: Date;
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
 
-  @Column({ type: 'text', nullable: true })
-  resolution_steps: string;
-
-  @Column({ type: 'timestamp', nullable: true })
-  resolution_date: Date;
-
-  @CreateDateColumn()
-  created_at: Date;
-
-  @UpdateDateColumn()
-  updated_at: Date;
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }

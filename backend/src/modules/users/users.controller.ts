@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   UseGuards,
   ClassSerializerInterceptor,
   UseInterceptors,
@@ -44,6 +45,12 @@ export class UsersController {
   @Roles('super_admin')
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
+  }
+
+  @Get('search-email')
+  @Roles('super_admin')
+  searchEmail(@Query('q') q: string) {
+    return this.usersService.searchEmails(q);
   }
 
   @Get()

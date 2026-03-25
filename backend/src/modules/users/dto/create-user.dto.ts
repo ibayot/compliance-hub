@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength, IsArray, IsNumber } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString, MinLength, IsArray, IsNumber, IsBoolean } from 'class-validator';
 import { UserRole } from '../entities/user.entity';
 
 export class CreateUserDto {
@@ -35,7 +35,19 @@ export class CreateUserDto {
 
   @IsString()
   @IsOptional()
+  positionFull?: string;
+
+  @IsString()
+  @IsOptional()
   designation?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  ticketMainFocal?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  ticketTechnician?: boolean;
 
   @IsEnum(UserRole)
   role: UserRole;

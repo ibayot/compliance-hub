@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Box, Button, Typography, CircularProgress } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import {
@@ -21,18 +21,80 @@ interface DocumentViewerProps {
   pdfUrl: string;
   /** MIME type of the document content: 'application/pdf' or 'text/html' */
   mimeType?: string;
+  /** Viewer label/title for HTML iframe */
+  viewerTitle?: string;
 }
 
 /** Renders a document inline. Supports PDF (react-pdf) and HTML (styled iframe) previews. */
-export default function DocumentViewer({ pdfUrl, mimeType = 'application/pdf' }: DocumentViewerProps) {
+export default function DocumentViewer({ pdfUrl, mimeType = 'application/pdf', viewerTitle = 'Document Viewer' }: DocumentViewerProps) {
   const { enqueueSnackbar } = useSnackbar();
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [htmlPreviewUrl, setHtmlPreviewUrl] = useState<string | null>(null);
 
   const isHtml = mimeType === 'text/html' || mimeType?.startsWith('text/html');
+
+  useEffect(() => {
+    if (!isHtml) {
+      setHtmlPreviewUrl((previousUrl) => {
+        if (previousUrl && previousUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(previousUrl);
+        }
+        return null;
+      });
+      return;
+    }
+
+    let isCancelled = false;
+    const filenameHeadingRegex = /(<h1\b[^>]*>)\s*([A-Za-z0-9_.\- ]+\.(?:docx|pdf|xlsx|xls|pptx|ppt))\s*(<\/h1>)/i;
+    const headerDisplayNameRegex = /(<div\s+class="display-name"[^>]*>)([\s\S]*?)(<\/div>)/i;
+
+    (async () => {
+      try {
+        const response = await fetch(pdfUrl);
+        const htmlText = await response.text();
+        let normalizedHtml = htmlText;
+
+        if (filenameHeadingRegex.test(normalizedHtml)) {
+          normalizedHtml = normalizedHtml.replace(filenameHeadingRegex, `$1${viewerTitle}$3`);
+        }
+
+        if (headerDisplayNameRegex.test(normalizedHtml)) {
+          normalizedHtml = normalizedHtml.replace(headerDisplayNameRegex, `$1${viewerTitle}$3`);
+        }
+
+        const normalizedBlobUrl = URL.createObjectURL(new Blob([normalizedHtml], { type: 'text/html' }));
+        if (isCancelled) {
+          URL.revokeObjectURL(normalizedBlobUrl);
+          return;
+        }
+
+        setHtmlPreviewUrl((previousUrl) => {
+          if (previousUrl && previousUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(previousUrl);
+          }
+          return normalizedBlobUrl;
+        });
+      } catch {
+        if (!isCancelled) {
+          setHtmlPreviewUrl(null);
+        }
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+      setHtmlPreviewUrl((previousUrl) => {
+        if (previousUrl && previousUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(previousUrl);
+        }
+        return null;
+      });
+    };
+  }, [isHtml, pdfUrl, viewerTitle]);
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -77,8 +139,8 @@ export default function DocumentViewer({ pdfUrl, mimeType = 'application/pdf' }:
         </Box>
         <Box
           component="iframe"
-          src={pdfUrl}
-          title="Document Viewer"
+          src={htmlPreviewUrl || pdfUrl}
+          title={viewerTitle}
           sandbox="allow-same-origin allow-popups allow-scripts"
           sx={{
             width: '100%',

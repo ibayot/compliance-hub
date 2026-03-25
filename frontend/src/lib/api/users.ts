@@ -10,7 +10,10 @@ export interface UserRecord {
   suffix?: string;
   staffId?: string;
   position?: string;
+  positionFull?: string;
   designation?: string;
+  ticketMainFocal?: boolean;
+  ticketTechnician?: boolean;
   role: UserRole;
   active: boolean;
 }
@@ -25,7 +28,10 @@ export interface CreateUserPayload {
   staffId?: string;
   role: UserRole;
   position?: string;
+  positionFull?: string;
   designation?: string;
+  ticketMainFocal?: boolean;
+  ticketTechnician?: boolean;
   unitIds?: number[];
 }
 
@@ -45,7 +51,10 @@ export interface UpdateUserPayload {
   lastName?: string;
   suffix?: string;
   position?: string;
+  positionFull?: string;
   designation?: string;
+  ticketMainFocal?: boolean;
+  ticketTechnician?: boolean;
   role?: UserRole;
   active?: boolean;
   unitIds?: number[];
@@ -105,6 +114,11 @@ export const usersApi = {
 
   updateRoleDefinition: async (value: string, payload: UpdateRolePayload): Promise<RoleDefinition> => {
     const response = await apiClient.patch(`/users/roles/${value}`, payload);
+    return response.data;
+  },
+
+  searchEmails: async (q: string): Promise<{ id: number; email: string; firstName?: string; lastName?: string }[]> => {
+    const response = await apiClient.get(`/users/search-email?q=${encodeURIComponent(q)}`);
     return response.data;
   },
 };

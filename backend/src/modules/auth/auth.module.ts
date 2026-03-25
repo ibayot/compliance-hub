@@ -18,6 +18,8 @@ import { UsersModule } from '../users/users.module';
         secret: configService.get('JWT_SECRET'),
         signOptions: {
           expiresIn: configService.get('JWT_EXPIRATION'),
+          issuer: configService.get('JWT_ISSUER') || 'compliance-hub-api',
+          audience: configService.get('JWT_AUDIENCE') || 'compliance-hub-client',
         },
       }),
     }),

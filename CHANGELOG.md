@@ -6,7 +6,389 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [1.5.0.1] - 2026-03-04 — KPI MoV Major Update (Quality-First)
+## [0.5.0] - 2026 — IT Help-Desk Ticketing, Role System Overhaul, User Nav Restriction
+
+### Added
+- **New `user` role** — Plain regular user created via Google sign-in (new accounts). Sees only Dashboard and Ticketing in the navigation menu.
+- **New `technician_desktop` role** — Desktop Support technician; scoped to desktop-type tickets.
+- **New `technician_it_support` role** — IT Support technician; scoped to IT-type tickets.
+- **IT Help-Desk Ticketing Module** — Complete rewrite of the Ticketing module as a full IT help-desk system:
+  - Ticket types: Desktop Support, IT Support
+  - Statuses: Open → Assigned → In Progress → Resolved → Closed
+  - Auto-generated ticket numbers (TKT-YYYY-NNNN)
+  - Role-scoped ticket visibility (users see own, technicians see type-matched, staff see all)
+  - Technician assignment dialog filtered by ticket type
+  - Client Satisfaction rating (1–5 stars) for resolved/closed tickets
+  - Internal notes (staff-only) on ticket comments
+- **Email autocomplete in Create User** — Super Admin's "Create New User" form now suggests registered email addresses as you type.
+- **User Dashboard** — Regular `user` role sees a personalised dashboard: open/in-progress/resolved/closed ticket counts, satisfaction fill-rate progress bar, "Rate Now" button.
+- **`GET /users/search-email?q=`** backend endpoint for email suggestions (super_admin only).
+- **`GET /tickets/dashboard`** endpoint for per-user ticket stats.
+
+### Changed
+- **Admin-created users default to `focal`** (RICTMS staff); Google sign-in for existing accounts preserves the assigned role.
+- **Google sign-in new accounts** now receive the `user` role instead of `focal`.
+- **Navigation sidebar**: `user` role sees only Dashboard + Tickets; Documents, Repository, Issuances, Settings, User Manual are staff-only.
+- **Version reset to 0.5.0** — both `backend/package.json` and `frontend/package.json`.
+- **Branch `v0.5.0`** created from `feature/kpi-mov-major-update-1.5.0.1`; set as the new main branch.
+- **Role definitions** in `DEFAULT_ROLE_DEFINITIONS` extended to include all 8 roles with accurate descriptions.
+
+### Removed / Replaced
+- Old compliance-ticketing fields (`issue_type`, `category`, `unit_id`, `reported_by_id`, etc.) replaced by the new IT help-desk schema.
+- Old `listIssueTypes`, `listCategories`, `setTicketTechnician` frontend API methods removed.
+
+---
+
+## [1.5.0.1] - 2026-03-25 — Backend startup hardening + password reset
+
+### Fixed (QA Fix Checkpoint 22 — 2026-03-25 — Backend startup crash + TypeORM entity autoload + password reset)
+
+#### Root cause
+- Backend was not running — port 4000 was not listening, causing all API calls (login, Google sign-in) to fail silently as "Internal server error" or "Invalid credentials".
+- `app.module.ts` TypeORM config used `entities: [__dirname + '/**/*.entity{.ts,.js}']` (glob pattern). At runtime the glob resolved zero entity files, so TypeORM built no entity metadata. Every repository call threw `EntityMetadataNotFoundError: No metadata for "X" was found`. This affected all modules (User, Document, TicketIssueType, MovArtifact, etc.).
+- Two `onModuleInit` hooks (`TicketService`, `MovService`) called repository methods without error handling, so the unhandled `EntityMetadataNotFoundError` crashed the process before it could bind port 4000.
+
+#### Backend
+- **`autoLoadEntities: true`** added to `TypeOrmModule.forRootAsync` config in `app.module.ts`, replacing the broken glob pattern. NestJS `autoLoadEntities` registers every entity declared via `TypeOrmModule.forFeature()` automatically — no glob or explicit list required.
+- **`TicketService.onModuleInit`** — wrapped `seedDefaultConfigs()` call in `try/catch`; failure is now logged as a non-fatal WARN (`Startup seeding failed (non-fatal): …`) instead of crashing the process.
+- **`MovService.onModuleInit`** — added `private readonly logger = new Logger(MovService.name)` and wrapped `seedDefaultAssessmentArtifacts()` in `try/catch` with non-fatal WARN, matching the `DocumentService` pattern.
+
+#### Database
+- **Password reset** — all 4 user accounts reset to `password123` via bcrypt-10 hash generated in an isolated Node.js script (bypassing PowerShell `$` variable expansion). Hash `$2b$10$w0rNTO8B1FNZ7/7c1b2HHeONh0n4uNAXvtEGCqEbo3pYkLxymYzeu` applied to: `admin@rictms.gov.ph` (super_admin), `reviewer@rictms.gov.ph` (reviewer), `focal@rictms.gov.ph` (focal), `jmmmaguigad@dswd.gov.ph` (focal). Verified with `bcrypt.compare()` → `true`.
+
+#### Validation
+- Backend starts cleanly: `Nest application successfully started` ✅ — no crash, no unhandled `EntityMetadataNotFoundError`
+- Port 4000 listening ✅
+- Login test `POST /api/auth/login` with `admin@rictms.gov.ph` / `password123` → `200 OK` with `accessToken` ✅
+- Smoke suite: ✅ `ALL SMOKE TESTS PASSED`
+
+
+
+### Fixed (QA Iteration 26 — 2026-03-24 — Remove Gmail-only restriction + Gmail registration; Google sign-in as sole registration path)
+
+#### Backend
+- **Removed `@gmail.com` domain check** from `verifyGoogleIdToken()` in `auth.service.ts`. Any Google account with a verified email is now accepted (not just `@gmail.com`).
+- **Removed `POST /auth/register-gmail` endpoint** from `auth.controller.ts` and its service method `registerGmail()` from `auth.service.ts`. This route and the Gmail email+password self-registration flow are no longer available.
+- Removed `RegisterGmailDto` import from controller and service.
+
+#### Frontend
+- **Login page completely simplified** (`frontend/src/app/login/page.tsx`): removed `registerMode` toggle, First Name / Last Name fields, `handleRegister`, and the "Register with Gmail" toggle button.
+- **Google sign-in button always shown** (previously only shown when not in register mode). Single access point for Google users.
+- **`locale="en"` added** to `GoogleLogin` component to force English UI.
+- Removed "Only verified @gmail.com accounts are accepted" caption.
+- Removed `authApi` import (no longer needed on login page).
+- **Removed `registerGmail` API function** from `frontend/src/lib/api/auth.ts`.
+
+#### Validation
+- Diagnostics (`get_errors`): 4/4 changed files clean ✅
+- Smoke suite: ✅ `ALL SMOKE TESTS PASSED`
+- Frontend build: ✅ exit code 0
+
+### Fixed (QA Iteration 25 — 2026-03-24 — Runtime hotfix: TypeORM entity type + frontend env)
+
+#### Root cause and fix
+- **`DataTypeNotSupportedError` on `User.googleSub`:** `@Column({ name: 'google_sub', nullable: true, unique: true })` with TypeScript type `string | null` caused TypeORM to infer SQL type as `Object` (unsupported by MySQL / MariaDB). Fixed by adding explicit `type: 'varchar'` to the column decorator. This single error was preventing TypeORM from initialising entity metadata entirely, causing a cascade: database connection retries on every boot, and downstream `EntityMetadataNotFoundError` on `TicketIssueType` and `Document` during `onModuleInit` hooks.
+- **`VITE_GOOGLE_CLIENT_ID` blank in frontend `.env`:** The frontend `.env` file had `VITE_GOOGLE_CLIENT_ID=` (empty), so `hasGoogleClient` evaluated to `false` and the Google sign-in button was never rendered on the login / registration page. Fixed by populating the key with the matching OAuth 2.0 client ID from the backend `.env`.
+
+#### Validation
+- Backend build: ✅ `nest build` exit code 0
+- Backend startup: ✅ no `DataTypeNotSupportedError`, no `EntityMetadataNotFoundError`, port 4000 listening (PID 18176)
+- Frontend build: ✅ `vite build` exit code 0
+- Smoke suite: ✅ `ALL SMOKE TESTS PASSED` (login, roles, docs, units, metrics, tickets, reviews, KPI, auth-me)
+
+### Added / Fixed (QA Iteration 24 — Google service auth + JWT tamper-hardening)
+
+#### Google service authentication (Gmail via Google ID token)
+- **Backend endpoint added:** `POST /auth/google-login` for Google ID-token sign-in.
+- **Token validation:** Backend verifies Google ID token signature/claims server-side and requires verified `@gmail.com` account.
+- **Frontend login integration:** Added Google sign-in on login page (when `VITE_GOOGLE_CLIENT_ID` is configured).
+- **Auth context wiring:** Added `loginWithGoogle(idToken)` flow in frontend auth context and API client.
+
+#### JWT tamper protection hardening
+- **Issuer/audience enforcement on sign:** Access and refresh tokens now include configured JWT issuer/audience claims.
+- **Issuer/audience enforcement on verify:** Refresh flow and JWT strategy now verify issuer/audience and lock algorithm to `HS256`.
+- **Configuration keys added:** `JWT_ISSUER` and `JWT_AUDIENCE` in backend env schema/example.
+
+#### User schema/auth-provider support
+- **New user provider fields:** `auth_provider` (`local|google`) and `google_sub` added to user entity/service flow.
+- **Schema safety:** `UsersService.ensureSchema()` now auto-adds provider columns and unique index for `google_sub` with `IF NOT EXISTS` semantics.
+- **Identity linking behavior:** Existing local users can be linked by email to Google identity; new Google users are created with provider metadata.
+
+#### Environment/config updates
+- **Backend env entries:** added Google auth config placeholders and JWT issuer/audience defaults in `.env`/`.env.example`.
+- **Frontend env entries:** added `VITE_GOOGLE_CLIENT_ID` in `.env`/`.env.example`.
+- **Dependencies:** added `google-auth-library` (backend) and `@react-oauth/google` (frontend).
+
+### Verified (QA Iteration 24)
+- Backend diagnostics (`get_errors`) on changed auth/security files: ✅ no errors
+- Frontend diagnostics (`get_errors`) on changed auth/login files: ✅ no errors
+- `npm --prefix backend run build`: ✅
+- `npm --prefix frontend run build`: ✅
+- `./smoke-test.ps1`: ⚠️ blocked in local run (`Unable to connect to the remote server` at `/auth/login`; API process was not reachable in this environment)
+
+### Migration / Rollback Notes (QA Iteration 24)
+- **Migration impact:** user schema auto-extends with:
+  - `auth_provider ENUM('local','google') NOT NULL DEFAULT 'local'`
+  - `google_sub VARCHAR(255) NULL` (+ unique index)
+- **Rollback:**
+  1. Revert Google login endpoint/frontend integration and dependency additions.
+  2. Revert JWT issuer/audience sign+verify constraints if needed.
+  3. Optionally drop provider columns/index from `users` table after rollback.
+
+### Added / Fixed (QA Iteration 23 — Ticketing access model + Gmail self-registration + assignment governance)
+
+#### Ticketing module access and role distinctions
+- **Changed:** Ticketing/Knowledge Base is now visible in navigation for all authenticated users.
+- **Changed:** Ticket list/detail pages no longer block non-super-admin users.
+- **Retained least-privilege:** issue/category metadata management remains super-admin only.
+
+#### Gmail self-registration for ticketing users
+- **Backend:** Added `POST /auth/register-gmail` endpoint.
+- **Validation:** Only `@gmail.com` addresses are accepted for self-registration; password minimum remains 8.
+- **Provisioning behavior:** Self-registered Gmail users are created with role `focal` by default (backward-compatible with existing role enum and guards).
+- **Frontend:** Login page now includes a Gmail self-registration flow (toggle between Sign In and Register).
+
+#### Main focal technician governance + lower-level technician assignment
+- **New user flags:** `ticket_main_focal` and `ticket_technician` columns on `users` table, auto-added via `IF NOT EXISTS` in `UsersService.ensureSchema()`.
+- **New assignment rule:** Only **super admin** or users tagged `ticketMainFocal=true` can assign tickets.
+- **New assignment endpoint:** `PUT /tickets/:id/assign` (separate from generic ticket update endpoint).
+- **New technician roster endpoints:**
+  - `GET /tickets/technicians/list`
+  - `GET /tickets/technicians/candidates`
+  - `PATCH /tickets/technicians/:id` (set/unset lower-level technician)
+- **Eligibility rule:** Lower-level technicians must be active, non-super-admin, and Gmail-registered (`@gmail.com`).
+- **Safety hardening:** Generic `PUT /tickets/:id` no longer mutates `assigned_to_id`; assignment is controlled exclusively by the governed endpoint.
+
+#### Settings module: why “Add Role Definition” appears disabled for super admin
+- **Root cause confirmed:** Role Definition creation is limited to existing `UserRole` enum values; when all enum codes are already present, no additional role code is available.
+- **UX improvement:** Added explicit helper text in Settings > System Role Definitions when the Add button is disabled (`all predefined role codes are already in use`).
+
+### Verified (QA Iteration 23)
+- Backend diagnostics (`get_errors`) on changed backend files: ✅ no errors
+- Frontend diagnostics (`get_errors`) on changed frontend files: ✅ no errors
+- `cd frontend && npm run build`: ✅
+- `.\smoke-test.ps1`: ✅ all smoke tests passed
+
+### Migration / Rollback Notes (QA Iteration 23)
+- **Migration impact:** two new user columns auto-added on startup:
+  - `ticket_main_focal TINYINT(1) NOT NULL DEFAULT 0`
+  - `ticket_technician TINYINT(1) NOT NULL DEFAULT 0`
+- **Rollback:**
+  1. Revert auth register endpoint (`/auth/register-gmail`) and login-page registration UI.
+  2. Revert ticket assignment governance endpoints and controller/service checks.
+  3. Drop user columns if required: `ALTER TABLE users DROP COLUMN ticket_main_focal; ALTER TABLE users DROP COLUMN ticket_technician;`
+  4. Revert ticket navigation visibility and Settings helper text changes.
+
+### Added / Fixed (QA Iteration 22 — Print separator margin fix + signature block + positionFull user field)
+
+#### Separator line overflow fix
+- **Root cause:** `─` (U+2500) character advance width in print fonts is not constant — it varies by renderer and cannot be reliably counted to hit an exact pixel boundary. Any character-count-based separator will either overflow or fall short.
+- **Fix:** Removed `FOOTER_SEPARATOR` (`─` char string) from the CSS `content` value. Restored `border-top: 1px solid #9ca3af` on `@bottom-center` margin box. CSS constrains the border to exactly the margin box content zone (between left and right page margins) with zero overflow in all browsers.
+- **Also added:** `border-top: 1px solid #9ca3af` to `@page :first { @bottom-center { ... } }` override so the first-page footer has the same separator.
+
+#### Spacing after main document title
+- Added `h2 { margin-bottom: 10px !important; }` to the print CSS block. The report title is rendered as `<h2>` in the backend HTML; the previous blanket `margin: 0 !important` suppressed all spacing below it. The 10px bottom margin is applied only for `h2` and only in the print iframe.
+
+#### Print-only signature block — Prepared by / Approved by
+- Added 6 new state variables: `preparedByName`, `preparedByPosition`, `preparedByDesignation`, `approvedByName`, `approvedByPosition`, `approvedByDesignation`.
+- `useEffect` auto-fills the "Prepared by" section from the current logged-in user's `firstName`+`lastName`, `position`, and `designation` on page load.
+- `buildPrintHtml()` injects a `<div>` signature block after the report body when any signature field is non-empty. The block is a two-column table ("Prepared by" left / "Approved by" right), each column showing: label, 36pt blank space for physical signature, underline, NAME in all-caps bold, POSITION / DESIGNATION below.
+- Signature fields are included in print preset `metadata_json` (`prepared_by_name`, `prepared_by_position`, etc.), so save/load preserves the signature configuration.
+- Report Settings accordion now contains a "Signature Block (print-only)" section with 6 TextFields, auto-filled from the current user.
+
+#### `positionFull` database column and user management field
+- **Why:** The `position` field stores the abbreviated position (e.g., "ITO I"); a second field `positionFull` stores the official full text (e.g., "Information Technology Officer I") for use in payslips, official documents, and records.
+- **DB:** `ALTER TABLE users ADD COLUMN IF NOT EXISTS position_full VARCHAR(255) NULL` added to `users.service.ts` `ensureSchema()`. Zero-downtime, backward-compatible.
+- **Backend entity:** `@Column({ name: 'position_full', nullable: true }) positionFull: string;` added to `User` entity.
+- **DTOs:** `positionFull?: string` added to `CreateUserDto`; `UpdateUserDto` inherits via `PartialType`.
+- **Service:** `create()` and `update()` now persist/update `positionFull`.
+- **Auth login response:** `positionFull: user.positionFull` added to the login and `getProfile` return.
+- **Frontend types:** `positionFull?: string` added to `User` interface (`lib/types/auth.ts`), `UserRecord`, `CreateUserPayload`, `UpdateUserPayload` (`lib/api/users.ts`).
+- **Settings UI:** Create and Edit user dialogs now show a "Full Position Title" field (helperText: "e.g. Information Technology Officer I") between the "Position (Abbreviated)" and "Designation" fields. Position field helperText updated to "e.g. ITO I".
+
+### Verified (QA Iteration 22)
+- `cd backend && npx tsc --noEmit` ✅ (0 errors)
+- `cd frontend && npm run build` ✅ (built in 20.36s)
+- `.\smoke-test.ps1` ✅ (all smoke tests passed)
+
+### Migration / Rollback Notes (QA Iteration 22)
+- **Migration impact:** `position_full VARCHAR(255) NULL` column added automatically on backend startup via `IF NOT EXISTS` guard. No manual migration needed.
+- **Rollback:** Remove `positionFull` from entity, DTO, and service. Drop column manually: `ALTER TABLE users DROP COLUMN position_full;`. Revert `buildPrintHtml()` separator and signature block changes in `mov/page.tsx`.
+
+### Fixed (QA Iteration 21 — Print CSS specificity hardening: body margin, summary-block, table margin)
+- **`body { margin: 24px; }` extracted style override fixed:** All backend report HTML contains `body { margin: 24px; }` in inline `<style>` tags. These extracted styles are re-injected into the print document after our reset CSS; without `!important`, the later rule won and added 24px whitespace on all body sides. Fixed by adding `!important` to `html, body { margin: 0 !important; padding: 0 !important; }`.
+- **`.summary-block` line-height corrected:** Backend `mov.service.ts` defines `.summary-block { margin: 8px 0 16px; line-height: 1.8; }` on a `<div>` element. Our previous `p, h1-h6 { line-height: 1.15 !important; }` reset did not target `div` elements. Added explicit `.summary-block { margin: 0 !important; line-height: 1.15 !important; }` override in the print CSS block after the paragraph reset.
+- **`table { margin: ... }` override fixed:** Extracted styles from reports include `table { margin: 10px 0 4px; }` and `table { margin: 10px 0 20px; }`. Added `margin: 0 !important;` to the print CSS table rule so extracted table margins cannot add vertical spacing in print.
+- **Scope:** frontend only (`buildPrintHtml()` CSS block in `mov/page.tsx`); no backend or DB changes.
+
+### Verified (QA Iteration 21)
+- `cd frontend && npm run build` ✅ (built in 15.39s)
+- `.\smoke-test.ps1` ✅ (all smoke tests passed)
+
+### Migration / Rollback Notes (QA Iteration 21)
+- **Migration impact:** no DB migration required.
+- **Rollback:** remove the three `!important` additions and `.summary-block` override from `buildPrintHtml()` CSS block.
+
+### Fixed (QA Iteration 20 — Footer separator single line, logo ratio, initial line-height pass)
+- **Footer border-top removed:** the `border-top: 1px solid #9ca3af` on `@bottom-center` created a double-line (border + `─` separator). Removed `border-top`; only the embedded `─` separator is used after `Page X of Y`.
+- **Separator character count recalculated:** `─` (U+2500) has ~0.56em advance width in print fonts (not 1em). Recalculated: 768pt landscape content zone / (8pt × 0.56) ≈ 168 chars; portrait: 114 chars.
+- **DSWD logo height:** H1 (DSWD) changed to 39px = 87% of H2 (Bagong Pilipinas) 45px.
+- **DSWD logo vertical alignment:** `vertical-align:middle` added to both `<img>` elements; flex container `align-items:center` already present but inline img default `vertical-align:baseline` was misaligning logos.
+- **Line-height 1.15 first pass:** `.print-root { line-height: 1.15; }` and `p, h1-h6 { margin: 0 !important; line-height: 1.15 !important; }` added.
+
+### Verified (QA Iteration 20)
+- `cd frontend && npm run build` ✅
+- `.\smoke-test.ps1` ✅
+
+### Fixed (QA Iteration 19 — Same-file image re-upload + separator width landscape)
+- **Same-file re-upload fixed:** browser suppresses `onChange` for an input when the selected file path matches the previous value. Added `e.target.value = ''` after reading the file in `handleImageUpload()`, allowing the same file to be re-selected after clearing.
+- **Separator width updated for landscape:** corrected from portrait-oriented width to landscape-appropriate value.
+
+### Verified (QA Iteration 19)
+- `cd frontend && npm run build` ✅
+- `.\smoke-test.ps1` ✅
+
+### Fixed (QA Iteration 18 — Header images in print + save/load presets + black background + separator order)
+- **Header images in print:** `buildPrintHtml()` now prepends a flex-row header with H1 (DSWD logo) and H2 (Bagong Pilipinas logo) before report body when images are uploaded. Images compressed via canvas JPEG (max 400px, 75% quality, white prefill to prevent black backgrounds on transparent PNGs).
+- **Print preset save/load/delete:** `handleSavePreset`, `handleLoadPreset`, `handleDeletePreset` handlers added. Presets stored as `MovArtifact` with `artifact_type: 'print_settings'`; fields in `metadata_json`. `loadData()` fetches and sets `printPresets`.
+- **Preset save DTO fix:** `period_year: new Date().getFullYear()` (DTO requires `@Min(2000)`); `content_markdown: 'print_settings'` (DTO requires `@IsNotEmpty()`).
+- **Black logo background fixed:** canvas JPEG has no alpha; `ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h)` prefill added before `drawImage`.
+- **Separator order corrected:** embedded `─` separator placed after `Page X of Y` counter string; `border-top` removed.
+
+### Verified (QA Iteration 18)
+- `cd frontend && npm run build` ✅
+- `.\smoke-test.ps1` ✅
+
+### Fixed (QA Iteration 17 — CSS @page margin-box footer replacing JS overlay approach)
+- **Root cause resolved: JS overlay approach abandoned.** Hidden iframes render at `width:0; height:0`, so `root.scrollHeight` reflects 0-width content reflow (not landscape A4 layout), making `pageHeightPx` and the derived footer `top` values inaccurate. This is why the footer appeared at unstable/incorrect positions even when total-page count seemed correct.
+- **CSS `@page @bottom-center` margin box used instead.** The browser's print engine evaluates `counter(page)` and `counter(pages)` in margin boxes correctly, places the footer in the actual margin zone on every page, and requires zero DOM measurement.
+- **Landscape retained:** `@page { size: A4 landscape; }` with `margin: 1in 0.5in 1in 0.5in`.
+- **First-page separate footer** uses `@page :first { @bottom-center { content: ...; } }`.
+- **Page-number offset** (`startPage`) supported via CSS `counter-reset` on `<html>` element when `startPage != 1`.
+- **Footer body text** from multi-line footer input is embedded as a CSS content string with `\A` newlines after the `Page X of Y` line.
+- **Footer separator** rendered via `border-top: 1px solid #9ca3af` on the `@bottom-center` margin box.
+- **Removed:** `.print-overlays`, `.print-page-footer` DOM elements, all JS geometry calculation and footer injection script.
+
+### Verified (QA Iteration 17)
+- `cd frontend && npm run build` ✅
+- `.\smoke-test.ps1` ✅ (all smoke tests passed)
+
+### Migration / Rollback Notes (QA Iteration 17)
+- **Migration impact:** no DB migration required.
+- **Rollback:** revert `buildPrintHtml()` in `frontend/src/app/dashboard/mov/page.tsx` to restore JS overlay approach (not recommended; the root cause is the 0-width iframe measurement problem).
+
+### Fixed (QA Iteration 16 — Landscape orientation + footer inside content zone + row-break hardening)
+- **Landscape print orientation:** `@page { size: A4 landscape; }` applied; A4 height constant updated to `210mm` (landscape short axis) so page-height math is correct for landscape pages.
+- **Footer top calculation corrected:** footer overlays now placed at `i * pageHeightPx - footerHeight - 4px` (bottom of each page's content area) instead of the previous formula that pushed footers past the content zone into the inaccessible margin zone, which caused random / missed placement.
+- **Row page-break rules hardened:** `table`, `tr`, `td`, and `th` now carry `page-break-inside: auto !important; break-inside: auto !important;` to prevent the document's extracted styles from overriding the row-split permission.
+- **Unused JS variables cleaned:** removed `bottomMarginPx` and `footerStartFromBottomPx` from the injected print script.
+
+### Verified (QA Iteration 16)
+- `cd frontend && npm run build` ✅
+- `.\smoke-test.ps1` ✅ (all smoke tests passed)
+
+### Migration / Rollback Notes (QA Iteration 16)
+- **Migration impact:** no DB migration required.
+- **Rollback:** revert `frontend/src/app/dashboard/mov/page.tsx` — restore `A4_HEIGHT_MM = 297`, `size: A4`, old footer top formula, and remove `!important` flags.
+
+### Fixed (QA Iteration 15 — Revert-overreach + print page-margin/footer-area targeted fix)
+- **Rollback of overreaching print layout edits:** removed content-container width forcing and aggressive dynamic layout shifts that degraded report print structure.
+- **Page-margin-first strategy applied:** print now targets A4 with page-level margins (`left/right = 0.5in`, `top/bottom = 1in`) instead of changing report content container spacing.
+- **Footer-area anchoring refined:** footer top is now computed from bottom margin geometry (`0.5in` up from page bottom baseline), then expanded upward according to measured footer height.
+- **Dynamic bottom reserve retained but constrained:** bottom page margin now grows only when footer body lines require extra space, preventing content overlap while preserving prior content placement behavior.
+
+### Verified (QA Iteration 15)
+- `cd frontend && npm run build` ✅
+- `./smoke-test.ps1` ✅ (all smoke tests passed)
+
+### Migration / Rollback Notes (QA Iteration 15)
+- **Migration impact:** no DB migration required.
+- **Rollback:** revert `frontend/src/app/dashboard/mov/page.tsx` print-margin/footer-band calculations from this iteration.
+
+### Fixed (QA Iteration 14 — A4 footer placement + dynamic margin-reserve alignment)
+- **A4 print geometry aligned:** MoV print now uses A4 with explicit `0.5in` side margins and `1in` top/bottom baseline margins.
+- **Footer zone placement corrected:** footer overlays are now anchored into the bottom margin zone (starting from `0.5in` up from page bottom), instead of drifting into content flow.
+- **Dynamic footer reserve added:** when footer has multiple lines, bottom print margin is expanded automatically so content area adjusts and avoids overlap.
+- **Header offset alignment improved:** first-page header block is offset toward the top margin region to align with `0.5in` header-start guidance.
+- **Row split behavior retained for print:** table rows remain breakable across pages (`page-break-inside: auto`) to minimize whitespace caused by whole-row pushes.
+
+### Verified (QA Iteration 14)
+- `cd frontend && npm run build` ✅
+- `./smoke-test.ps1` ✅ (all smoke tests passed)
+
+### Migration / Rollback Notes (QA Iteration 14)
+- **Migration impact:** no DB migration required.
+- **Rollback:** revert MoV print A4 margin constants, dynamic bottom-margin reserve, and per-page footer top-offset calculations from this iteration.
+
+### Fixed (QA Iteration 13 — Remarks bullet readability + viewer display-title enforcement + MoV pagination formatting)
+- **Automated flagged checks now clearly bulleted:** auto-review remarks now emit explicit bullet-prefixed lines and frontend remarks rendering preserves multiline formatting for readability.
+- **Viewer display-name enforcement for existing HTML previews:** HTML preview rendering now normalizes filename-like headings to the configured display title in addition to backend fallback-title improvements.
+- **MoV footer pagination formatting adjusted:** footer input now accepts first-line page token (`1` or `Page 1`), then renders pagination line (`Page X of Y`), separator line, and footer body text; first-page note follows the same format when separate first-page footer is enabled.
+
+### Verified (QA Iteration 13)
+- `cd backend && npm run test -- src/modules/metrics/engines/property-check.engine.spec.ts src/modules/metrics/engines/date-check.engine.spec.ts` ✅
+- `cd backend && npm run build` ✅
+- `cd frontend && npm run build` ✅
+- `./smoke-test.ps1` ✅ (all smoke tests passed)
+
+### Migration / Rollback Notes (QA Iteration 13)
+- **Migration impact:** no DB migration required.
+- **Rollback:** revert metrics remarks formatting update, document remarks rendering/UI multiline styles, HTML preview title-normalization changes, and MoV footer/pagination formatting changes in this iteration.
+
+### Fixed (QA Iteration 12 — Metric comparison granularity + document detail fixes + MoV print fidelity)
+- **Number extraction failure remarks simplified:** automated return remarks for `property_check` now prioritize failed extracted-number comparisons (keyword + actual + operator + expected) instead of verbose summaries.
+- **Per-keyword comparisons supported:** metric templates for `Number Extraction` now support one comparison per keyword (`>=`, `<=`, `>`, `<`, `=`), aligned with per-keyword expected numbers.
+- **Document viewer display-name priority hardened:** preview fallback headers now prefer display-oriented fields before filename fallback.
+- **Document detail unit label fixed:** removed empty `()` rendering when unit code is not present.
+- **Download visibility restored for focal workflow:** focal users can now download current document version directly from document details, including returned items.
+- **MoV print footer/header/table styling refined:** footer centered with page-number separation lines, first-page header left aligned, print typography normalized, and table headers forced to sky-blue in app preview and print output.
+
+### Verified (QA Iteration 12)
+- `cd backend && npm run test -- src/modules/metrics/engines/property-check.engine.spec.ts src/modules/metrics/engines/date-check.engine.spec.ts` ✅
+- `cd backend && npm run build` ✅
+- `cd frontend && npm run build` ✅
+- `./smoke-test.ps1` ✅ (all smoke tests passed)
+
+### Migration / Rollback Notes (QA Iteration 12)
+- **Migration impact:** no DB migration required.
+- **Rollback:** revert updates in metrics engine/service, metrics template builder UI, document detail page, preview processor, and MoV print styling in this iteration.
+
+### Fixed (QA Iteration 11 — Documents UX + Google Docs import + MoV print layout)
+- **Document view decluttered:** removed header Refresh action and removed visible Version History panel from the document detail page.
+- **Compliant focal download path preserved:** focal users now get a direct `Download` action in document detail when the document is compliant.
+- **Return remarks urgency improved:** return remarks banner now uses a high-emphasis filled error style for stronger visibility in light/dark themes.
+- **Viewer display-name clarity:** HTML fallback preview header now explicitly renders the document display name label (not filename wording).
+- **Google Docs upload option added:** new URL-based import flow (`POST /documents/google-doc`) exports a Google Doc to `.docx` server-side and routes it through the same upload/validation/metrics/preview pipeline.
+- **MoV print fidelity improved:** print output now uses page-attached footer styling, first-page header anchoring, and stronger table print borders with repeating table header/footer groups.
+
+### Verified (QA Iteration 11)
+- `cd backend && npm run build` ✅
+- `cd frontend && npm run build` ✅
+- `cd backend && npm run test -- src/modules/metrics/engines/property-check.engine.spec.ts src/modules/metrics/engines/date-check.engine.spec.ts` ✅
+
+### Migration / Rollback Notes (QA Iteration 11)
+- **Migration impact:** additive API only (`POST /documents/google-doc`), no destructive DB/schema changes.
+- **Rollback:** revert `frontend/src/app/dashboard/documents/[id]/page.tsx`, `frontend/src/components/documents/DocumentUpload.tsx`, `frontend/src/lib/api/documents.ts`, `frontend/src/app/dashboard/mov/page.tsx`, and backend `documents` controller/service/preview processor updates from this iteration.
+
+### Fixed (QA Iteration 10 — Upload unblocks + metrics auto-run + archived tab table parity)
+- **Upload no longer hangs on fallback:** upload now returns immediately and continues processing in background; endpoint is no longer blocked by inline fallback execution.
+- **DOCX auto-metrics at upload:** when initial DOCX text extraction succeeds during upload, document is set to `READY` and metrics are kicked off immediately (no dependency on `process-document` queue consumption for this path).
+- **Queue watchdog fallback:** when jobs are enqueued but not consumed in time, watchdog fallback triggers inline processing/metrics to prevent silent no-op queue states.
+- **Response payload trimmed:** upload now returns a freshly loaded document entity (without heavy blob-bearing in-memory payload), improving client responsiveness.
+- **Archived tab table parity:** archived tab now uses explicit archived-table mode with archived-relevant columns (`Title`, `Type`, `Period`, `Status`, `Return Remarks`, `Archived Date`) and no action clutter.
+- **Archived UX loading behavior:** archived query now uses placeholder/stale cache strategy to avoid spinner-first flashes and settle quickly to either rows or empty state.
+- **Verified with provided file:** `cybersecurity_incident_summary_report_202603.docx` upload returns in ~0.18s and auto-produces metric results with expected failure (`Users Trained: 1` vs expected `>= 10`) leading to `needs_revision`.
+
+### Fixed (QA Iteration 9 — Documents tabs + queueless metrics fallback)
+- **Documents UX cleanup (requested):** focal users now manage documents in a single page with two tabs in `Documents` — **Active Documents** and **Archived Documents** — instead of navigating to a separate archived route.
+- **Archived flow retained:** existing archive behavior is unchanged; archived records are now shown through the archived tab (`archived=true`) in the same table view.
+- **Metrics processing when Redis is down:** `DocumentService` now performs explicit Redis reachability checks before queueing jobs. If Redis/Bull is unavailable, processing automatically falls back to inline execution:
+  - inline extraction + status transition (`PENDING/PROCESSING` → `READY`)
+  - inline metrics computation
+  - inline auto-review creation (`NEEDS_REVISION`) when metrics fail
+- **Centralized metrics + auto-review logic:** moved into `MetricsService.computeMetricsAndAutoReview(versionId)` and reused by both Bull processor and inline fallback path to keep behavior consistent.
+- **Queue outage hardening scope:** upload path, startup recovery path, and manual reprocess path all now use enqueue-or-fallback behavior.
+- **Operational note:** runtime validation is currently blocked by an existing `TicketIssueType` metadata startup crash in this environment (`EntityMetadataNotFoundError`), unrelated to these QA 9 diffs.
 
 ### Fixed (QA Iteration 8 — Metrics pipeline reliability + archived docs end-to-end)
 - **Bull queue jobs lost on backend restart** – Added `onModuleInit` startup recovery in `DocumentService`: on every backend start, all documents with `status IN ('pending','processing')` are scanned. Those with `extracted_text` already set are immediately updated to `READY` and their `compute-metrics` job is re-queued; those without extracted text have a full `process-document` job re-queued. This ensures no document is left permanently stuck after a server restart.
@@ -1557,3 +1939,31 @@ For issues, questions, or feature requests:
 ---
 
 *This changelog will be updated with each release. Check back regularly for updates.*
+
+---
+
+## QA Iteration 11 - Documents/Repository/Knowledge Base/MoV Hardening (2026-03-11)
+
+### Added / Changed
+- Document viewer now consistently uses display title context instead of raw filename for HTML preview headers.
+- Document detail viewer heading now shows the document display name.
+- Period rendering normalized to avoid redundant values like `2026-202603` (now rendered as `2026-03`).
+- Upload invalid-filename toast simplified to a concise expected filename message.
+- Upload form now includes Google Docs guidance (download as `.docx` or `.pdf` before upload).
+- Archived return-remarks styling improved for readability in both light and dark themes.
+- Repository now includes compliant documents only (non-compliant/needs-revision excluded).
+- Sidebar item renamed from **Issues** to **Knowledge Base** and restricted to super-admin visibility.
+- Knowledge Base list/detail pages now enforce super-admin-only access.
+- MoV generated report preview now forces dark-mode-safe text contrast on white report canvas.
+
+### Metrics Reliability / Explainability
+- Date metric period parsing now supports compact monthly/quarter formats (`YYYYMM`, `YYYYMM-MM`) to fix deadline inference reliability.
+- Property number extraction improved to capture nearest relevant numeric value instead of incidental numbers.
+- Metric failure messages now include explicit actual vs expected details for keyword/number/date checks.
+
+### Validation
+- Backend unit tests passed:
+  - `src/modules/metrics/engines/property-check.engine.spec.ts`
+  - `src/modules/metrics/engines/date-check.engine.spec.ts`
+- Frontend build passed (`npm run build`).
+- Backend build passed (`npm run build`).
