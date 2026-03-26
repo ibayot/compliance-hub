@@ -18,6 +18,8 @@ export enum UserRole {
   TECHNICIAN = 'technician',
   TECHNICIAN_DESKTOP = 'technician_desktop',
   TECHNICIAN_IT_SUPPORT = 'technician_it_support',
+  TECHNICIAN_IT_STAFF = 'technician_it_staff',
+  TECHNICIAN_DESKTOP_STAFF = 'technician_desktop_staff',
   AUDITOR = 'auditor',
   USER = 'user',
 }
@@ -92,6 +94,9 @@ export class User {
     inverseJoinColumn: { name: 'unit_id', referencedColumnName: 'id' },
   })
   units: Unit[];
+
+  @Column({ name: 'last_login', type: 'datetime', nullable: true })
+  lastLogin: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -77,6 +77,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Record login timestamp for staff activity tracking
+    await this.usersService.recordLogin(user.id);
+
     const tokens = await this.generateTokens(user);
     return this.buildAuthResponse(user, tokens);
   }
@@ -111,6 +114,9 @@ export class AuthService {
     if (!user.active) {
       throw new UnauthorizedException('Your account is inactive.');
     }
+
+    // Record login timestamp for staff activity tracking
+    await this.usersService.recordLogin(user.id);
 
     const tokens = await this.generateTokens(user);
     return this.buildAuthResponse(user, tokens);

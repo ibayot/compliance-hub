@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -10,6 +10,7 @@ import {
   ChevronLeft as PrevIcon, ChevronRight as NextIcon,
   CheckCircle as PresentIcon, Cancel as AbsentIcon,
   WbSunny as HalfDayIcon, FlightTakeoff as OOOIcon,
+  Login as LoginIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,8 +37,12 @@ function getDaysInMonth(year: number, month: number): Date[] {
   return days;
 }
 
+/** Format date as YYYY-MM-DD using local time (avoids UTC offset issues) */
 function formatDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function isWeekday(d: Date): boolean {
@@ -51,6 +56,7 @@ export default function AttendancePage() {
 
   const [tab, setTab] = useState(0);
   const now = new Date();
+  const todayStr = formatDate(now);
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
 
@@ -58,10 +64,15 @@ export default function AttendancePage() {
   const [officeDays, setOfficeDays] = useState<OfficeDay[]>([]);
   const [odLoading, setOdLoading] = useState(false);
 
-  // Attendance
+  // Attendance — default to '' (all technicians)
   const [attendance, setAttendance] = useState<TechAttendance[]>([]);
   const [attLoading, setAttLoading] = useState(false);
-  const [attType, setAttType] = useState('it_support');
+  const [attType, setAttType] = useState('');
+
+  // Staff login activity
+  const [staffLogins, setStaffLogins] = useState<any[]>([]);
+  const [staffLoginsLoading, setStaffLoginsLoading] = useState(false);
+  const [staffLoginsDate, setStaffLoginsDate] = useState(todayStr);
 
   const days = useMemo(() => getDaysInMonth(year, month), [year, month]);
   const startDate = formatDate(days[0]);
@@ -79,14 +90,24 @@ export default function AttendancePage() {
   const fetchAttendance = useCallback(async () => {
     try {
       setAttLoading(true);
-      const data = await attendanceApi.getAttendance(startDate, endDate, attType);
+      const data = await attendanceApi.getAttendance(startDate, endDate, attType || undefined);
       setAttendance(data);
     } catch { enqueueSnackbar('Failed to load attendance', { variant: 'error' }); }
     finally { setAttLoading(false); }
   }, [startDate, endDate, attType]);
 
+  const fetchStaffLogins = useCallback(async () => {
+    try {
+      setStaffLoginsLoading(true);
+      const data = await attendanceApi.getStaffLogins(staffLoginsDate);
+      setStaffLogins(data);
+    } catch { enqueueSnackbar('Failed to load staff logins', { variant: 'error' }); }
+    finally { setStaffLoginsLoading(false); }
+  }, [staffLoginsDate]);
+
   useEffect(() => { fetchOfficeDays(); }, [fetchOfficeDays]);
   useEffect(() => { if (tab === 1) fetchAttendance(); }, [tab, fetchAttendance]);
+  useEffect(() => { if (tab === 2) fetchStaffLogins(); }, [tab, fetchStaffLogins]);
 
   // Office day map: date → OfficeDay
   const odMap = useMemo(() => {
@@ -151,7 +172,7 @@ export default function AttendancePage() {
     <Box>
       <Typography variant="h4" fontWeight={700} mb={0.5}>Attendance Management</Typography>
       <Typography variant="body2" color="text.secondary" mb={3}>
-        Manage office day calendar and technician attendance
+        Manage office day calendar, technician attendance, and staff login activity
       </Typography>
 
       {/* Month Navigation */}
@@ -167,6 +188,7 @@ export default function AttendancePage() {
         <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
           <Tab label="Office Days Calendar" />
           <Tab label="Technician Attendance" />
+          <Tab label="Staff Login Activity" icon={<LoginIcon fontSize="small" />} iconPosition="start" />
         </Tabs>
 
         {/* ── Office Days Calendar ── */}
@@ -177,7 +199,7 @@ export default function AttendancePage() {
             ) : (
               <Box>
                 <Typography variant="body2" color="text.secondary" mb={2}>
-                  Click on a date to toggle it as an office day or non-office day. Weekdays default to office days.
+                  Click on a future date to toggle it as an office day or non-office day. Today and past dates cannot be changed. Weekdays default to office days.
                 </Typography>
                 <Box display="grid" gridTemplateColumns="repeat(7, 1fr)" gap={0.5}>
                   {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
@@ -187,19 +209,22 @@ export default function AttendancePage() {
                   {Array.from({ length: days[0].getDay() }).map((_, i) => <Box key={`pad-${i}`} />)}
                   {days.map(d => {
                     const isOffice = isOfficeDayForDate(d);
-                    const isPast = d < new Date(new Date().setHours(0,0,0,0));
+                    const dStr = formatDate(d);
+                    // Today and past are not clickable (today is already treated as office day)
+                    const isPastOrToday = dStr <= todayStr;
+                    const isToday = dStr === todayStr;
                     return (
                       <Box
-                        key={formatDate(d)}
-                        onClick={canManage && !isPast ? () => toggleOfficeDay(d) : undefined}
+                        key={dStr}
+                        onClick={canManage && !isPastOrToday ? () => toggleOfficeDay(d) : undefined}
                         sx={{
                           textAlign: 'center', py: 1.5, borderRadius: 1,
                           bgcolor: isOffice ? 'success.light' : 'grey.200',
                           color: isOffice ? 'success.contrastText' : 'text.disabled',
-                          cursor: canManage && !isPast ? 'pointer' : 'default',
-                          opacity: isPast ? 0.5 : 1,
-                          '&:hover': canManage && !isPast ? { opacity: 0.8 } : {},
-                          border: formatDate(d) === formatDate(now) ? '2px solid' : 'none',
+                          cursor: canManage && !isPastOrToday ? 'pointer' : 'default',
+                          opacity: isPastOrToday && !isToday ? 0.5 : 1,
+                          '&:hover': canManage && !isPastOrToday ? { opacity: 0.8 } : {},
+                          border: isToday ? '2px solid' : 'none',
                           borderColor: 'primary.main',
                         }}
                       >
@@ -218,9 +243,10 @@ export default function AttendancePage() {
         {tab === 1 && (
           <CardContent>
             <Stack direction="row" spacing={2} mb={2} alignItems="center">
-              <FormControl size="small" sx={{ minWidth: 180 }}>
+              <FormControl size="small" sx={{ minWidth: 200 }}>
                 <InputLabel>Support Type</InputLabel>
                 <Select value={attType} label="Support Type" onChange={e => setAttType(e.target.value)}>
+                  <MenuItem value="">All Technicians</MenuItem>
                   <MenuItem value="it_support">IT Support</MenuItem>
                   <MenuItem value="desktop_support">Desktop Support</MenuItem>
                 </Select>
@@ -287,6 +313,74 @@ export default function AttendancePage() {
                             </TableCell>
                           );
                         })}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </CardContent>
+        )}
+
+        {/* ── Staff Login Activity ── */}
+        {tab === 2 && (
+          <CardContent>
+            <Stack direction="row" spacing={2} mb={2} alignItems="center">
+              <TextField
+                size="small"
+                label="Date"
+                type="date"
+                value={staffLoginsDate}
+                onChange={e => setStaffLoginsDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+              <Button variant="outlined" size="small" onClick={fetchStaffLogins}>
+                Refresh
+              </Button>
+            </Stack>
+
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Shows all RICTMS staff who logged in to the system on the selected date.
+            </Typography>
+
+            {staffLoginsLoading ? (
+              <Box textAlign="center" py={4}><CircularProgress /></Box>
+            ) : staffLogins.length === 0 ? (
+              <Typography color="text.secondary" py={3} textAlign="center">
+                No staff login activity recorded for {staffLoginsDate}.
+              </Typography>
+            ) : (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>#</TableCell>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Email</TableCell>
+                      <TableCell>Role</TableCell>
+                      <TableCell>Last Login Time</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {staffLogins.map((u: any, i: number) => (
+                      <TableRow key={u.id}>
+                        <TableCell>{i + 1}</TableCell>
+                        <TableCell>
+                          {[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}
+                        </TableCell>
+                        <TableCell>{u.email}</TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={(u.role ?? '').replace(/_/g, ' ')}
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {u.lastLogin
+                            ? new Date(u.lastLogin).toLocaleString('en-PH', { hour12: true })
+                            : '—'}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

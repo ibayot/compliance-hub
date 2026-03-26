@@ -21,7 +21,7 @@ import {
 import { Close as CloseIcon } from '@mui/icons-material';
 import { useAuth } from '@/contexts/AuthContext';
 
-type ManualRole = 'super_admin' | 'reviewer' | 'focal' | 'technician' | 'auditor' | 'section_head';
+type ManualRole = 'super_admin' | 'reviewer' | 'focal' | 'technician' | 'technician_desktop' | 'technician_it_support' | 'technician_it_staff' | 'technician_desktop_staff' | 'auditor' | 'section_head' | 'user';
 
 type ManualItem = {
   title: string;
@@ -39,7 +39,7 @@ const manualItems: ManualItem[] = [
   {
     title: 'Documents Upload and Tracking',
     description: 'Upload DOCX and track only pending-for-review submissions in the Documents work queue.',
-    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'auditor'],
+    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'],
     path: '/dashboard/documents',
     details: {
       purpose:
@@ -310,7 +310,7 @@ const manualItems: ManualItem[] = [
   {
     title: 'Issue Documentation Workflow',
     description: 'Create and track issues, update resolution steps/date, and monitor closure workflow.',
-    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'auditor'],
+    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'],
     path: '/dashboard/tickets',
     details: {
       purpose:
@@ -472,7 +472,7 @@ const manualItems: ManualItem[] = [
   {
     title: 'Settings and Role Management',
     description: 'Update your profile, change password, toggle theme, and manage system users and role definitions.',
-    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'auditor'],
+    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'],
     path: '/dashboard/settings',
     details: {
       purpose:
@@ -546,7 +546,7 @@ const manualItems: ManualItem[] = [
   {
     title: 'KPI Monitoring & Dashboard',
     description: 'Track unit KPI targets, encode periodic actuals, and analyze performance through composite scoring and band classification.',
-    roles: ['super_admin', 'reviewer', 'section_head', 'focal', 'technician', 'auditor'],
+    roles: ['super_admin', 'reviewer', 'section_head', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'],
     path: '/dashboard/kpi',
     details: {
       purpose:
@@ -694,7 +694,7 @@ const manualItems: ManualItem[] = [
   {
     title: 'Report Repository',
     description: 'Browse all submitted compliance documents organized by year and period in a folder-style view.',
-    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'auditor'],
+    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'],
     path: '/dashboard/repository',
     details: {
       purpose:
@@ -726,6 +726,243 @@ const manualItems: ManualItem[] = [
           field: 'Download Action',
           explanation:
             'Downloads the latest version of the document directly from the repository. This supports reuse of prior compliant reports as a baseline for the next cycle update.',
+        },
+      ],
+    },
+  },
+  // ── New items added in v0.6.2 ──────────────────────────────────────────────
+  {
+    title: 'Dashboard',
+    description: 'Your role-specific home screen showing key compliance metrics, ticket summaries, and quick-action shortcuts.',
+    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff', 'auditor', 'section_head', 'user'],
+    path: '/dashboard',
+    details: {
+      purpose:
+        'The Dashboard is the first page you see after login. It is role-sensitive: what you see adapts to your assigned role so you only view metrics and actions relevant to your responsibilities. Admins see system-wide compliance health; focal staff see their unit\'s submission status; technicians see their assigned help desk tickets; regular users see their own ticket history.',
+      inputs: [
+        {
+          field: 'No data entry — read-only view',
+          explanation:
+            'The dashboard is an aggregated read-only snapshot. All figures are automatically computed from data across Documents, Reviews, KPI, Tickets, and Attendance modules. You do not enter data here — navigate to the relevant module to create or update records.',
+        },
+      ],
+      outputs: [
+        {
+          field: 'Compliance Health Summary (super_admin / reviewer)',
+          explanation:
+            'Document submission rate, pending review count, overdue items, and overall compliance score for the current period across all units.',
+        },
+        {
+          field: 'Unit Snapshot (focal / technician)',
+          explanation:
+            'Submission status for your assigned unit: how many required documents are submitted, pending, or overdue for the current reporting period.',
+        },
+        {
+          field: 'My Tickets (user / technician roles)',
+          explanation:
+            'Summary of your open, in-progress, and recently resolved help desk tickets. Includes a quick "New Ticket" shortcut so you can submit an issue directly from the dashboard.',
+        },
+        {
+          field: 'Recent Activity Feed',
+          explanation:
+            'A time-ordered list of the most recent actions in your accessible modules (document uploads, ticket updates, review decisions). Helps you stay current without navigating separately to each module.',
+        },
+        {
+          field: 'Quick-Action Shortcuts',
+          explanation:
+            'Role-appropriate buttons at the top of the dashboard (e.g., "Upload Document", "Submit Ticket", "Review Pending"). These route directly to the relevant module screen pre-filtered to your pending items.',
+        },
+      ],
+    },
+  },
+  {
+    title: 'IT Help Desk Ticketing',
+    description: 'Submit IT support or desktop support requests, track ticket status, and manage resolutions (technicians).',
+    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff', 'user'],
+    path: '/dashboard/tickets',
+    details: {
+      purpose:
+        'The IT Help Desk Ticketing module is RICTMS\'s centralized system for managing all IT and desktop support requests. Any system user can submit a help desk ticket. Technicians receive automated assignment notifications and manage ticket lifecycle from Open to Resolved. Admins can override assignments, manage categories, and set keyword auto-routing rules. All ticket activity is logged for audit and performance tracking.',
+      inputs: [
+        {
+          field: 'Support Type (IT Support / Desktop Support)',
+          explanation:
+            'Select the nature of your issue. IT Support covers software, network, internet connectivity, email, user accounts, and system-level issues. Desktop Support covers hardware (workstations, monitors, keyboards, mice), printers, peripherals, and physical equipment. Your selection determines which technician pool is assigned and which categories are available.',
+        },
+        {
+          field: 'Category',
+          explanation:
+            'A specific problem group within the selected support type (e.g., "Email Issues", "Printer Problem", "Network Connectivity"). Categories help technicians triage and route tickets efficiently. Only active categories are shown. If your issue does not fit any category, leave blank and describe in the subject/description.',
+        },
+        {
+          field: 'Subject',
+          explanation:
+            'A concise one-line description of the problem (e.g., "Cannot print to the 2nd floor Canon printer"). The subject is the primary identifier in all ticket lists and email notifications. Be specific — avoid generic subjects like "Technical Problem".',
+        },
+        {
+          field: 'Description',
+          explanation:
+            'A detailed explanation of the issue: what happened, when it started, what steps you already tried, and what impact it is causing. The more detail you provide, the faster the technician can diagnose the problem without needing follow-up questions.',
+        },
+        {
+          field: 'Priority',
+          explanation:
+            'Low (minor inconvenience, work continues), Medium (impacting work but a workaround exists), High (significantly impeding work, no workaround), Critical (complete work stoppage or data loss risk). Set this honestly — overusing Critical delays genuine emergencies.',
+        },
+      ],
+      outputs: [
+        {
+          field: 'Ticket Number (TKT-YYYY-XXXXXX)',
+          explanation:
+            'A unique sequential reference number assigned immediately on submission (e.g., TKT-2026-000042). Use this number in all follow-up communications with IT staff. You receive a confirmation email with the ticket number when the ticket is created.',
+        },
+        {
+          field: 'Email Confirmation (requester)',
+          explanation:
+            'An email is sent to your registered address with subject "Compliance Hub - Ticketing #TKT-... — [your subject]". The email includes ticket details, assigned technician name (if auto-assigned), and current status.',
+        },
+        {
+          field: 'Assignment Notification (technician)',
+          explanation:
+            'If a technician is available and auto-assigned, they receive an email notification with the full ticket details. If no technician is available (all absent), the ticket remains open with an "Unassigned" label until manually assigned.',
+        },
+        {
+          field: 'Keyword Auto-Routing',
+          explanation:
+            'The system applies keyword rules against the ticket subject at creation time. If the subject matches a configured keyword (e.g., "printer jam" → Desktop Support), the ticket type is automatically reclassified and routed to the correct support team — even if you initially selected the wrong type.',
+        },
+        {
+          field: 'Ticket Status Lifecycle',
+          explanation:
+            'Open → In Progress (technician accepts) → Pending Resolution → Resolved → Closed. Each transition triggers an email notification. Reopening is possible if the resolution did not solve the problem.',
+        },
+        {
+          field: 'My Tickets List',
+          explanation:
+            'All tickets you have submitted are listed in the Tickets page, filterable by status and type. You can see full ticket details, all technician notes, and the complete status history.',
+        },
+      ],
+    },
+  },
+  {
+    title: 'Ticket Settings',
+    description: 'Configure ticket categories, keyword auto-routing rules, and SMTP email settings for the Help Desk.',
+    roles: ['super_admin'],
+    path: '/dashboard/ticket-settings',
+    details: {
+      purpose:
+        'Super administrators use Ticket Settings to control how the IT Help Desk behaves: what categories are available in the ticket creation form, which keyword patterns trigger automatic ticket type reclassification, and whether the email notification system is correctly configured. Changes here affect all users immediately.',
+      inputs: [
+        {
+          field: 'Category Name',
+          explanation:
+            'A human-readable label for the category shown in the ticket creation dropdown (e.g., "Printer Problem", "Account Access"). Keep names short and self-explanatory — users select these without guidance.',
+        },
+        {
+          field: 'Support Type (for Category)',
+          explanation:
+            'Associates the category with IT Support or Desktop Support. Only categories matching the user\'s selected support type are shown in the ticket creation form. A category cannot span both types.',
+        },
+        {
+          field: 'Active / Inactive Status (for Category)',
+          explanation:
+            'Active categories appear in the ticket creation dropdown. Inactive categories are hidden from users but preserved for historical ticket records. Use Inactive instead of deleting categories to maintain data integrity.',
+        },
+        {
+          field: 'Keyword Rule: Keyword',
+          explanation:
+            'A word or phrase (case-insensitive) that, if found in a new ticket\'s subject line, triggers the auto-routing rule. Examples: "printer", "cannot print", "blue screen". Partial matches are supported (e.g., "print" matches "printing" and "printer").',
+        },
+        {
+          field: 'Keyword Rule: Target Support Type',
+          explanation:
+            'When the keyword is detected, the ticket\'s support type is overridden to this value (IT Support or Desktop Support). This reroutes the ticket to the correct technician team even if the user selected the wrong type during submission.',
+        },
+        {
+          field: 'Keyword Rule: Active / Inactive',
+          explanation:
+            'Only active rules are evaluated at ticket creation time. Inactive rules are ignored but preserved for re-activation. Deactivate a rule seasonally (e.g., during a printer upgrade period) without losing the configuration.',
+        },
+        {
+          field: 'SMTP Test Email Recipient',
+          explanation:
+            'Enter your email address and click "Send Test Email" to verify the SMTP connection is working. A test message from "DSWD FO2 Compliance Hub" is sent immediately. If it does not arrive, check the SMTP configuration in the server .env file.',
+        },
+      ],
+      outputs: [
+        {
+          field: 'Category List with Status Chips',
+          explanation:
+            'All categories (active and inactive) are shown in the management table. Each row shows the category name, support type badge, active/inactive status chip, and edit/delete actions.',
+        },
+        {
+          field: 'Keyword Rules Table',
+          explanation:
+            'All configured keyword rules with their target support type, active status, and delete action. Rules are evaluated in creation order — the first matching rule wins.',
+        },
+        {
+          field: 'Email Test Result',
+          explanation:
+            '"Test email sent successfully to [email]" confirms SMTP is working. If an error is returned, the SMTP error message is shown so the administrator can correct the configuration.',
+        },
+      ],
+    },
+  },
+  {
+    title: 'Attendance Management',
+    description: 'Track office days, manage technician attendance, and review daily staff login activity.',
+    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff'],
+    path: '/dashboard/attendance',
+    details: {
+      purpose:
+        'The Attendance Management module has three integrated views: the Office Days Calendar for planning which days require full staffing, the Technician Attendance grid for recording daily presence/absence of IT and desktop support staff (used by the auto-assignment engine), and the Staff Login Activity log showing all RICTMS users who logged in on a given day.',
+      inputs: [
+        {
+          field: 'Month / Year Navigator',
+          explanation:
+            'Use the left/right arrows to navigate to any month. All three tabs reflect the selected month for calendar and attendance data. The Staff Login Activity tab uses its own date selector.',
+        },
+        {
+          field: 'Office Day Toggle (Office Days Calendar tab)',
+          explanation:
+            'Click any future date to toggle it between Office Day (green) and Non-Office Day (grey). Today and past dates cannot be changed — they are locked. Weekdays default to Office Day. Non-office days are excluded from ticket auto-assignment (no technicians are expected to be available).',
+        },
+        {
+          field: 'Attendance Status (Technician Attendance tab)',
+          explanation:
+            'For each technician and each weekday, click the cell to cycle through: Present (✓ green), Absent (✗ red), Half Day (☀ yellow), Out of Office (✈ blue). The selected status determines whether the technician is included in the auto-assignment pool for that day.',
+        },
+        {
+          field: 'Support Type Filter (Technician Attendance tab)',
+          explanation:
+            'Filter the attendance grid to show "All Technicians", "IT Support" only, or "Desktop Support" only. Default is All Technicians, showing all tech roles including custom roles with the Ticket Technician flag enabled.',
+        },
+        {
+          field: 'Date Selector (Staff Login Activity tab)',
+          explanation:
+            'Select any date to view which RICTMS staff logged in on that day. Defaults to today. Shows login time, name, email, and role for each staff member who authenticated to the system.',
+        },
+      ],
+      outputs: [
+        {
+          field: 'Office Days Calendar Grid',
+          explanation:
+            'A monthly calendar with color-coded cells: green = office day (tech availability expected), grey = non-office day. Today is highlighted with a blue border. Past dates are shown at reduced opacity.',
+        },
+        {
+          field: 'Technician Attendance Grid',
+          explanation:
+            'A scrollable table with technicians as rows and weekdays as columns. Each cell shows the attendance status icon for that technician on that date. Empty cells indicate no record set — treated as Present by the auto-assignment engine.',
+        },
+        {
+          field: 'Staff Login Activity Table (Staff Login Activity tab)',
+          explanation:
+            'A list of all staff who logged in on the selected date, sorted by login time (most recent first). Includes name, email, role, and exact login timestamp. Useful for supervisors to verify staff attendance and for security audits.',
+        },
+        {
+          field: 'Auto-Assignment Impact',
+          explanation:
+            'Technician attendance status directly drives ticket auto-assignment. Only technicians marked Present or Half Day on the ticket\'s creation date are eligible for assignment. Absent and OOO technicians are bypassed. This ensures tickets are never silently assigned to unavailable staff.',
         },
       ],
     },

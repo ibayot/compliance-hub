@@ -188,6 +188,25 @@ Write-Output "SMOKE_CREATE_KEYWORD_RULE_OK id=$($newRule.id.Substring(0,8))"
 $allRules = Invoke-RestMethod -Method Get -Uri "$api/ticket-settings/keyword-rules" -Headers $sh
 Write-Output "SMOKE_KEYWORD_RULES_OK count=$(@($allRules).Count)"
 
+# 6b. FUNCTIONAL: Verify keyword auto-shift works (ticket with keyword "printer jam" should shift to desktop_support)
+try {
+    $kwTicket = Invoke-RestMethod -Method Post -Uri "$api/tickets" -ContentType 'application/json' -Headers $uh `
+      -Body (@{subject='printer jam in my workstation';description='The printer keeps jamming and I cannot print reports';priority='medium'} | ConvertTo-Json)
+    if ($kwTicket.ticketType -eq 'desktop_support') {
+        Write-Output "SMOKE_KEYWORD_AUTO_SHIFT_OK ticketType=$($kwTicket.ticketType) number=$($kwTicket.ticketNumber)"
+    } else {
+        Write-Output "SMOKE_KEYWORD_AUTO_SHIFT_FAIL expected=desktop_support got=$($kwTicket.ticketType) number=$($kwTicket.ticketNumber)"
+        throw "Keyword auto-shift did not work: expected ticketType=desktop_support but got $($kwTicket.ticketType)"
+    }
+    # Cleanup: delete the test ticket
+    try {
+        Invoke-RestMethod -Method Delete -Uri "$api/tickets/$($kwTicket.id)" -Headers $sh -ErrorAction SilentlyContinue
+    } catch {}
+} catch {
+    if ($_.Exception.Message -match 'Keyword auto-shift') { throw }
+    Write-Output "SMOKE_KEYWORD_AUTO_SHIFT_SKIP: $($_.Exception.Message)"
+}
+
 # 7. Office days (get for current month)
 $currentMonth = (Get-Date).Month
 $currentYear = (Get-Date).Year

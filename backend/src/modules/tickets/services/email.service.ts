@@ -29,7 +29,10 @@ export class EmailService {
     const port = this.configService.get<number>('SMTP_PORT');
     const user = this.configService.get<string>('SMTP_USER');
     const pass = this.configService.get<string>('SMTP_PASS');
-    this.fromAddress = this.configService.get<string>('SMTP_FROM') || 'noreply@rictms.gov.ph';
+    const rawFrom = this.configService.get<string>('SMTP_FROM') || 'noreply@rictms.gov.ph';
+    const fromName = this.configService.get<string>('SMTP_FROM_NAME') || 'DSWD FO2 Compliance Hub';
+    // Use "Display Name <email>" format so email clients show the friendly name
+    this.fromAddress = `"${fromName}" <${rawFrom}>`;
 
     if (host) {
       const smtpPort = parseInt(String(port || '587'), 10);
@@ -53,7 +56,7 @@ export class EmailService {
   /** Send a ticket creation confirmation email to the requester */
   async sendTicketCreatedEmail(data: TicketEmailData): Promise<void> {
     const typeLabel = data.ticketType === 'desktop_support' ? 'Desktop Support' : 'IT Support';
-    const subject = `[${data.ticketNumber}] Ticket Created — ${data.subject}`;
+    const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — ${data.subject}`;
 
     let assignedLine = '';
     if (data.assignedToName) {
@@ -105,7 +108,7 @@ export class EmailService {
 
     // Also notify the assigned tech if one was auto-assigned
     if (data.assignedToEmail) {
-      const techSubject = `[${data.ticketNumber}] New Ticket Assigned to You — ${data.subject}`;
+      const techSubject = `Compliance Hub - Ticketing #${data.ticketNumber} — Assigned to You — ${data.subject}`;
       const techHtml = html
         .replace('Ticket Created Successfully', 'New Ticket Assigned to You')
         .replace(`Hello <strong>${data.requesterName}</strong>`, `Hello <strong>${data.assignedToName}</strong>`)

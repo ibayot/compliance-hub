@@ -51,6 +51,20 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
     isSystem: true,
   },
   {
+    value: UserRole.TECHNICIAN_IT_STAFF,
+    label: 'Technician — IT Staff (Level 1)',
+    description: 'Entry-level IT support staff. Assists with basic software and connectivity issues under supervision of IT Support technicians.',
+    assignable: true,
+    isSystem: true,
+  },
+  {
+    value: UserRole.TECHNICIAN_DESKTOP_STAFF,
+    label: 'Technician — Desktop Staff (Level 1)',
+    description: 'Entry-level desktop support staff. Assists with basic hardware and peripheral issues under supervision of Desktop Support technicians.',
+    assignable: true,
+    isSystem: true,
+  },
+  {
     value: UserRole.AUDITOR,
     label: 'Auditor',
     description: 'Read-only audit access to view documents, reviews, and compliance records for inspection purposes.',
@@ -97,8 +111,10 @@ export class UsersService {
       await queryRunner.query('CREATE UNIQUE INDEX IF NOT EXISTS uq_users_google_sub ON users (google_sub)');
       // Extend the role enum to include new roles (safe: only adds values, never removes)
       await queryRunner.query(
-        `ALTER TABLE users MODIFY COLUMN role ENUM('super_admin','reviewer','focal','technician','technician_desktop','technician_it_support','auditor','user') NOT NULL DEFAULT 'focal'`,
+        `ALTER TABLE users MODIFY COLUMN role ENUM('super_admin','reviewer','focal','technician','technician_desktop','technician_it_support','technician_it_staff','technician_desktop_staff','auditor','user') NOT NULL DEFAULT 'focal'`,
       ).catch(() => undefined); // Catch if enum already has these values
+      // Add last_login column for staff activity tracking
+      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login DATETIME NULL').catch(() => undefined);
     } finally {
       await queryRunner.release();
     }
@@ -270,6 +286,11 @@ export class UsersService {
       where: { email },
       relations: ['units'],
     });
+  }
+
+  /** Record last login timestamp for staff activity tracking */
+  async recordLogin(userId: number): Promise<void> {
+    await this.usersRepository.update(userId, { lastLogin: new Date() } as Partial<User>);
   }
 
   /** Autocomplete: find registered emails that start with (or contain) a query string */

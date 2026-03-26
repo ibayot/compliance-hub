@@ -44,7 +44,8 @@ export default function TicketSettingsPage() {
   const [ruleSubmitting, setRuleSubmitting] = useState(false);
 
   const fetchCategories = useCallback(async () => {
-    try { setCatLoading(true); setCategories(await ticketSettingsApi.getCategories()); }
+    // Pass activeOnly=false so admin sees ALL categories (including inactive) for management
+    try { setCatLoading(true); setCategories(await ticketSettingsApi.getCategories(undefined, false)); }
     catch { enqueueSnackbar('Failed to load categories', { variant: 'error' }); }
     finally { setCatLoading(false); }
   }, []);

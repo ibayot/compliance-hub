@@ -92,9 +92,10 @@ export default function TicketsPage() {
   }, [canManageAll]);
 
   // Fetch categories when the New Ticket dialog opens or support type changes
+  // Pass activeOnly=true so only active categories appear in the creation dropdown
   useEffect(() => {
     if (newDialogOpen) {
-      ticketSettingsApi.getCategories(form.ticketType).then(setCategories).catch(() => setCategories([]));
+      ticketSettingsApi.getCategories(form.ticketType, true).then(setCategories).catch(() => setCategories([]));
     }
   }, [newDialogOpen, form.ticketType]);
 

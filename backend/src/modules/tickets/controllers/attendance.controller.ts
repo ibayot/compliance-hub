@@ -27,6 +27,8 @@ const FOCAL_ROLES = [
   UserRole.TECHNICIAN,         // focal-level technician
   UserRole.TECHNICIAN_DESKTOP,
   UserRole.TECHNICIAN_IT_SUPPORT,
+  UserRole.TECHNICIAN_IT_STAFF,
+  UserRole.TECHNICIAN_DESKTOP_STAFF,
 ];
 
 /** Roles that can manage office days */
@@ -44,6 +46,8 @@ const READ_ROLES = [
   UserRole.TECHNICIAN,
   UserRole.TECHNICIAN_DESKTOP,
   UserRole.TECHNICIAN_IT_SUPPORT,
+  UserRole.TECHNICIAN_IT_STAFF,
+  UserRole.TECHNICIAN_DESKTOP_STAFF,
 ];
 
 @Controller('attendance')
@@ -124,5 +128,13 @@ export class AttendanceController {
   @HttpCode(HttpStatus.OK)
   async bulkSetOfficeDays(@Body() dto: BulkSetOfficeDaysDto, @Request() req: any) {
     return this.attendanceService.bulkSetOfficeDays(dto, req.user.id ?? req.user.userId);
+  }
+
+  /** GET /attendance/staff-logins?date=YYYY-MM-DD — staff login activity for a date */
+  @Get('staff-logins')
+  @Roles(...READ_ROLES, UserRole.AUDITOR)
+  async getStaffLogins(@Query('date') date?: string) {
+    const target = date || new Date().toISOString().slice(0, 10);
+    return this.attendanceService.getStaffLoginsForDate(target);
   }
 }

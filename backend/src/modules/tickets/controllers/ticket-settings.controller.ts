@@ -51,15 +51,23 @@ export class TicketSettingsController {
 
   // ── Categories ──────────────────────────────────────────────────────────
 
-  /** GET /ticket-settings/categories — all active categories (any logged-in user can fetch for dropdowns) */
+  /** GET /ticket-settings/categories — active categories by default; pass ?all=true for admin to see all */
   @Get('categories')
   @Roles(
     UserRole.USER, UserRole.FOCAL, UserRole.TECHNICIAN,
     UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
+    UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
     UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN,
   )
-  async listCategories(@Query('ticketType') ticketType?: string, @Query('all') all?: string) {
-    if (all === 'true') return this.settingsService.listCategories(ticketType);
+  async listCategories(
+    @Query('ticketType') ticketType?: string,
+    @Query('all') all?: string,
+    @Query('activeOnly') activeOnly?: string,
+  ) {
+    // ?all=true → return everything (admin settings view)
+    // ?activeOnly=false → also return everything
+    // default (or ?activeOnly=true) → active only (ticket creation dropdown)
+    if (all === 'true' || activeOnly === 'false') return this.settingsService.listCategories(ticketType);
     return this.settingsService.listActiveCategories(ticketType);
   }
 

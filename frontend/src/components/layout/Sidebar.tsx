@@ -69,15 +69,15 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     { label: 'Units', icon: UnitsIcon, path: '/dashboard/units', roles: ['super_admin'] },
     { label: 'Metrics', icon: MetricsIcon, path: '/dashboard/metrics', roles: ['super_admin', 'reviewer'] },
     { label: 'KPI', icon: KpiIcon, path: '/dashboard/kpi', roles: ['super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'technician_desktop', 'technician_it_support'] },
-    { label: 'Ticket Settings', icon: TicketSettingsIcon, path: '/dashboard/ticket-settings', roles: ['super_admin', 'technician', 'technician_desktop', 'technician_it_support'] },
-    { label: 'Attendance', icon: AttendanceIcon, path: '/dashboard/attendance', roles: ['super_admin', 'focal', 'reviewer', 'technician', 'technician_desktop', 'technician_it_support'] },
+    { label: 'Ticket Settings', icon: TicketSettingsIcon, path: '/dashboard/ticket-settings', roles: ['super_admin', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff'] },
+    { label: 'Attendance', icon: AttendanceIcon, path: '/dashboard/attendance', roles: ['super_admin', 'focal', 'reviewer', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff'] },
     { label: 'Reviews', icon: SecurityIcon, path: '/dashboard/reviews', roles: ['super_admin', 'reviewer'] },
     { label: 'Reports', icon: ReportsIcon, path: '/dashboard/reports', roles: ['super_admin', 'reviewer', 'focal'] },
     { label: 'MoV Builder', icon: MovIcon, path: '/dashboard/mov', roles: ['super_admin', 'reviewer', 'focal'] },
   ];
 
   const settingsNavItems: NavItem[] = [
-    { label: 'User Manual', icon: ManualIcon, path: '/dashboard/user-manual', roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'] },
+    { label: 'User Manual', icon: ManualIcon, path: '/dashboard/user-manual', roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff', 'auditor', 'user'] },
     { label: 'Settings', icon: SettingsIcon, path: '/dashboard/settings', roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'] },
   ];
 

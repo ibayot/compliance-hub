@@ -366,9 +366,12 @@ export const ticketsApi = {
 // Ticket Settings API (Categories + Keyword Rules)
 export const ticketSettingsApi = {
   // Categories
-  getCategories: async (ticketType?: string): Promise<TicketCategory[]> => {
-    const params = ticketType ? `?ticketType=${ticketType}` : '';
-    const response = await apiClient.get(`/ticket-settings/categories${params}`);
+  getCategories: async (ticketType?: string, activeOnly?: boolean): Promise<TicketCategory[]> => {
+    const params = new URLSearchParams();
+    if (ticketType) params.append('ticketType', ticketType);
+    if (activeOnly) params.append('activeOnly', 'true');
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const response = await apiClient.get(`/ticket-settings/categories${qs}`);
     return response.data;
   },
   getCategoryById: async (id: string): Promise<TicketCategory> => {
@@ -424,6 +427,16 @@ export const attendanceApi = {
   },
   getAvailableTechnicians: async (ticketType: string, date: string): Promise<any[]> => {
     const response = await apiClient.get(`/attendance/technicians?ticketType=${ticketType}&date=${date}`);
+    return response.data;
+  },
+  getTechnicians: async (ticketType?: string): Promise<any[]> => {
+    const params = ticketType ? `?ticketType=${ticketType}` : '';
+    const response = await apiClient.get(`/attendance/technicians${params}`);
+    return response.data;
+  },
+  getStaffLogins: async (date?: string): Promise<any[]> => {
+    const params = date ? `?date=${date}` : '';
+    const response = await apiClient.get(`/attendance/staff-logins${params}`);
     return response.data;
   },
 

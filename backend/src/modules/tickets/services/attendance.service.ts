@@ -8,6 +8,7 @@ import { Repository, In } from 'typeorm';
 import { TechAttendance, AttendanceStatus } from '../entities/tech-attendance.entity';
 import { OfficeDay } from '../entities/office-day.entity';
 import { User, UserRole } from '../../users/entities/user.entity';
+// Note: TECHNICIAN_IT_STAFF and TECHNICIAN_DESKTOP_STAFF are accessed via UserRole enum
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -128,17 +129,32 @@ export class AttendanceService {
   /** Get technicians who are available (present or half_day) for a ticket type on a given date */
   async getAvailableTechnicians(ticketType: string, date: string): Promise<User[]> {
     // Determine which roles to check
-    const roles: UserRole[] = [UserRole.TECHNICIAN];
+    const roles: string[] = [UserRole.TECHNICIAN];
     if (ticketType === 'desktop_support') {
-      roles.push(UserRole.TECHNICIAN_DESKTOP);
+      roles.push(UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF);
     } else if (ticketType === 'it_support') {
-      roles.push(UserRole.TECHNICIAN_IT_SUPPORT);
+      roles.push(UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF);
     }
 
-    // Get all active techs with matching roles
-    const allTechs = await this.userRepo.find({
-      where: roles.map(role => ({ role, active: true })),
-    });
+    // Get all active techs with matching roles OR ticketTechnician flag
+    const byRole = await this.userRepo
+      .createQueryBuilder('u')
+      .where('u.active = :active', { active: true })
+      .andWhere('u.role IN (:...roles)', { roles })
+      .getMany();
+
+    const byFlag = await this.userRepo
+      .createQueryBuilder('u')
+      .where('u.active = :active', { active: true })
+      .andWhere('u.ticket_technician = :flag', { flag: true })
+      .andWhere('u.role NOT IN (:...roles)', { roles })
+      .getMany();
+
+    const seen = new Set<number>();
+    const allTechs: User[] = [];
+    for (const u of [...byRole, ...byFlag]) {
+      if (!seen.has(u.id)) { seen.add(u.id); allTechs.push(u); }
+    }
 
     if (allTechs.length === 0) return [];
 
@@ -153,7 +169,6 @@ export class AttendanceService {
     // Filter: only techs marked present or half_day (or no record — assume present)
     return allTechs.filter(tech => {
       const status = attendanceMap.get(tech.id);
-      // If no attendance record, treat as present (they're in the system)
       if (!status) return true;
       return status === AttendanceStatus.PRESENT || status === AttendanceStatus.HALF_DAY;
     });
@@ -161,19 +176,68 @@ export class AttendanceService {
 
   /** Get technicians filtered for the current session (all staff or filtered by type) */
   async listTechnicians(ticketType?: string): Promise<User[]> {
-    const roles: UserRole[] = [UserRole.TECHNICIAN];
+    // Always include general technician + sub-roles based on filter
+    const roles: string[] = [UserRole.TECHNICIAN];
     if (ticketType === 'desktop_support') {
-      roles.push(UserRole.TECHNICIAN_DESKTOP);
+      roles.push(UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF);
     } else if (ticketType === 'it_support') {
-      roles.push(UserRole.TECHNICIAN_IT_SUPPORT);
+      roles.push(UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF);
     } else {
-      roles.push(UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT);
+      // No filter = all tech roles
+      roles.push(
+        UserRole.TECHNICIAN_DESKTOP,
+        UserRole.TECHNICIAN_IT_SUPPORT,
+        UserRole.TECHNICIAN_IT_STAFF,
+        UserRole.TECHNICIAN_DESKTOP_STAFF,
+      );
     }
 
-    return this.userRepo.find({
-      where: roles.map(r => ({ role: r, active: true })),
-      order: { lastName: 'ASC', firstName: 'ASC' },
-    });
+    // Fetch by known roles first
+    const byRole = await this.userRepo
+      .createQueryBuilder('u')
+      .where('u.active = :active', { active: true })
+      .andWhere('u.role IN (:...roles)', { roles })
+      .orderBy('u.lastName', 'ASC')
+      .addOrderBy('u.firstName', 'ASC')
+      .getMany();
+
+    // Also include users with custom roles who have the ticketTechnician flag
+    const byFlag = await this.userRepo
+      .createQueryBuilder('u')
+      .where('u.active = :active', { active: true })
+      .andWhere('u.ticket_technician = :flag', { flag: true })
+      .andWhere('u.role NOT IN (:...roles)', { roles })
+      .orderBy('u.lastName', 'ASC')
+      .addOrderBy('u.firstName', 'ASC')
+      .getMany();
+
+    // Merge, deduplicate by id
+    const seen = new Set<number>();
+    const merged: User[] = [];
+    for (const u of [...byRole, ...byFlag]) {
+      if (!seen.has(u.id)) {
+        seen.add(u.id);
+        merged.push(u);
+      }
+    }
+
+    return merged;
+  }
+
+  /** Get all staff who logged in on a specific date (for staff activity tab) */
+  async getStaffLoginsForDate(date: string): Promise<User[]> {
+    const startOfDay = new Date(date + 'T00:00:00');
+    const endOfDay = new Date(date + 'T23:59:59.999');
+
+    return this.userRepo
+      .createQueryBuilder('u')
+      .where('u.active = :active', { active: true })
+      .andWhere('u.last_login BETWEEN :start AND :end', {
+        start: startOfDay.toISOString().replace('T', ' ').replace('Z', ''),
+        end: endOfDay.toISOString().replace('T', ' ').replace('Z', ''),
+      })
+      .orderBy('u.last_login', 'DESC')
+      .getMany();
   }
 
   // ── Office Days ─────────────────────────────────────────────────────────
