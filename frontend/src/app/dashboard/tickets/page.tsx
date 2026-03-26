@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon, Visibility as ViewIcon, AssignmentInd as AssignIcon,
-  ThumbUp as SatisfactionIcon, Computer as DesktopIcon, Wifi as ITIcon,
+  ThumbUp as SatisfactionIcon, Computer as DesktopIcon, Wifi as ITIcon, Assignment as PantawidIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useRouter } from 'next/navigation';
@@ -29,7 +29,14 @@ const STATUS_COLOR: Record<string, 'default' | 'info' | 'warning' | 'success' | 
 const TICKET_TYPE_LABELS: Record<TicketType, string> = {
   desktop_support: 'Desktop Support',
   it_support: 'IT Support',
+  pantawid_ict_support: 'Pantawid ICT Support',
 };
+
+function ticketTypeIcon(t: TicketType) {
+  if (t === 'desktop_support') return <DesktopIcon />;
+  if (t === 'pantawid_ict_support') return <PantawidIcon />;
+  return <ITIcon />;
+}
 
 function isStaffRole(role?: string) {
   return ['super_admin','reviewer','focal','technician','technician_desktop','technician_it_support','auditor'].includes(role ?? '');
@@ -66,7 +73,7 @@ export default function TicketsPage() {
 
   const canManageAll = isStaffRole(user?.role);
   const isSuperAdmin = user?.role === 'super_admin';
-  const isTechnician = ['technician','technician_desktop','technician_it_support'].includes(user?.role ?? '');
+  const isTechnician = ['technician','technician_desktop','technician_it_support','technician_it_staff','technician_desktop_staff'].includes(user?.role ?? '');
 
   const fetchTickets = useCallback(async () => {
     try {
@@ -192,6 +199,7 @@ export default function TicketsPage() {
                 <MenuItem value="">All Types</MenuItem>
                 <MenuItem value="desktop_support">Desktop Support</MenuItem>
                 <MenuItem value="it_support">IT Support</MenuItem>
+                <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
               </TextField>
               <Button size="small" variant="outlined" onClick={() => { setFilterStatus(''); setFilterType(''); }}>Reset</Button>
             </Stack>
@@ -228,7 +236,7 @@ export default function TicketsPage() {
                 <TableCell sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ticket.subject}</TableCell>
                 <TableCell>
                   <Chip size="small"
-                    icon={ticket.ticketType === 'desktop_support' ? <DesktopIcon /> : <ITIcon />}
+                    icon={ticketTypeIcon(ticket.ticketType)}
                     label={TICKET_TYPE_LABELS[ticket.ticketType]} variant="outlined" />
                 </TableCell>
                 <TableCell>
@@ -275,10 +283,11 @@ export default function TicketsPage() {
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             <Typography variant="subtitle2" color="text.secondary">Choose Support Type</Typography>
-            <Stack direction="row" spacing={2}>
+            <Stack direction="row" spacing={2} flexWrap="wrap">
               {([
                 { value: 'it_support' as TicketType, label: 'IT Support', icon: '💻', color: '#1976d2', desc: 'Software, network, email, accounts' },
                 { value: 'desktop_support' as TicketType, label: 'Desktop Support', icon: '🖥️', color: '#388e3c', desc: 'Hardware, printers, workstations' },
+                { value: 'pantawid_ict_support' as TicketType, label: 'Pantawid ICT Support', icon: '📋', color: '#7b1fa2', desc: 'Pantawid Pamilyang Program ICT requests' },
               ]).map(opt => (
                 <Card
                   key={opt.value}

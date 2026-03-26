@@ -80,14 +80,20 @@ INSERT INTO users (id, email, passwordHash, first_name, last_name, role, active,
 (4, 'desktop.tech@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Desktop', 'Technician', 'technician_desktop', 1, NOW(), NOW()),
 (5, 'it.tech@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'IT', 'Technician', 'technician_it_support', 1, NOW(), NOW()),
 (6, 'user1@example.com', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Juan', 'Dela Cruz', 'user', 1, NOW(), NOW()),
-(7, 'user2@example.com', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Maria', 'Santos', 'user', 1, NOW(), NOW());
+(7, 'user2@example.com', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Maria', 'Santos', 'user', 1, NOW(), NOW()),
+(8, 'mjdibay@dswd.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Mark John', 'Dibay', 'user', 1, NOW(), NOW());
 
 -- Seed tickets (ticket_number format: DESK-YYYYMMDD-NNNN or IT-YYYYMMDD-NNNN)
 INSERT INTO tickets (id, ticket_number, subject, description, ticket_type, priority, status, requester_id, assigned_to_id, resolution_notes, created_at, updated_at) VALUES
 (UUID(), 'DESK-20250101-0001', 'My computer won''t turn on', 'Pressed the power button but nothing happens. No lights or fans.', 'desktop_support', 'high', 'assigned', 6, 4, NULL, NOW(), NOW()),
 (UUID(), 'IT-20250101-0001', 'Cannot connect to the internet', 'Getting "No internet access" despite being connected to the office WiFi.', 'it_support', 'medium', 'assigned', 7, 5, NULL, NOW(), NOW()),
 (UUID(), 'DESK-20250101-0002', 'Printer not printing', 'Document sent to shared printer but nothing comes out. Queue shows it pending.', 'desktop_support', 'low', 'open', 6, NULL, NULL, NOW(), NOW()),
-(UUID(), 'IT-20250101-0002', 'Email not syncing on phone', 'Work email stopped syncing on my mobile device after password reset.', 'it_support', 'medium', 'resolved', 7, 5, 'Exchange profile was re-configured on the device. Issue resolved.', NOW(), NOW());
+(UUID(), 'IT-20250101-0002', 'Email not syncing on phone', 'Work email stopped syncing on my mobile device after password reset.', 'it_support', 'medium', 'resolved', 7, 5, 'Exchange profile was re-configured on the device. Issue resolved.', NOW(), NOW()),
+-- mjdibay sample tickets: keyword auto-tag correction demo
+-- "internet" keyword → auto-shifted to it_support (originally submitted as desktop_support)
+(UUID(), 'IT-20250115-0001', 'Internet connectivity issue at workstation', 'My workstation cannot access the internet. Other devices on the same desk work fine. Possibly a cable or port issue.', 'it_support', 'medium', 'open', 8, NULL, NULL, NOW(), NOW()),
+-- "printer repair" keyword → auto-shifted to desktop_support (originally submitted as it_support)
+(UUID(), 'DESK-20250115-0001', 'Printer repair request — unit 3B shared printer', 'The shared printer in unit 3B is making a grinding noise and not feeding paper properly. Needs physical inspection and repair.', 'desktop_support', 'low', 'open', 8, NULL, NULL, NOW(), NOW());
 
 
 -- Units: id is auto_increment int; columns: id, name, description, active, created_at
@@ -99,7 +105,8 @@ INSERT INTO units (id, name, description, active, created_at) VALUES
 INSERT INTO user_unit_access (user_id, unit_id) VALUES
 (1, 1), (1, 2),
 (2, 1), (2, 2),
-(3, 1);
+(3, 1),
+(8, 1);
 
 INSERT INTO role_definitions (`value`, `label`, `description`, `assignable`, `is_system`, `created_at`, `updated_at`) VALUES
 ('super_admin', 'Super Admin', 'Full system access including user and security administration.', 0, 1, NOW(), NOW()),

@@ -137,4 +137,16 @@ export class AttendanceController {
     const target = date || new Date().toISOString().slice(0, 10);
     return this.attendanceService.getStaffLoginsForDate(target);
   }
+
+  /** GET /attendance/staff-logins-monthly?startDate=&endDate= — all non-tech staff with lastLogin for monthly grid */
+  @Get('staff-logins-monthly')
+  @Roles(...READ_ROLES, UserRole.AUDITOR)
+  async getStaffLoginsMonthly(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    const start = startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+    const end = endDate || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10);
+    return this.attendanceService.getStaffLoginsMonthly(start, end);
+  }
 }

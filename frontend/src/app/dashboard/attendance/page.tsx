@@ -2,15 +2,15 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Box, Button, Card, CardContent, Typography, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow, IconButton, Chip, TextField, MenuItem,
+  Box, Card, CardContent, Typography, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, IconButton, Chip, MenuItem,
   Stack, CircularProgress, Tabs, Tab, Tooltip, Select, FormControl, InputLabel,
 } from '@mui/material';
 import {
   ChevronLeft as PrevIcon, ChevronRight as NextIcon,
   CheckCircle as PresentIcon, Cancel as AbsentIcon,
   WbSunny as HalfDayIcon, FlightTakeoff as OOOIcon,
-  Login as LoginIcon,
+  Login as LoginIcon, Check as CheckIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
@@ -69,10 +69,13 @@ export default function AttendancePage() {
   const [attLoading, setAttLoading] = useState(false);
   const [attType, setAttType] = useState('');
 
-  // Staff login activity
-  const [staffLogins, setStaffLogins] = useState<any[]>([]);
-  const [staffLoginsLoading, setStaffLoginsLoading] = useState(false);
-  const [staffLoginsDate, setStaffLoginsDate] = useState(todayStr);
+  // Technicians list (all technicians, regardless of attendance records)
+  const [technicians, setTechnicians] = useState<any[]>([]);
+  const [techLoading, setTechLoading] = useState(false);
+
+  // Staff login activity (monthly grid)
+  const [staffLoginStaff, setStaffLoginStaff] = useState<any[]>([]);
+  const [staffLoginLoading, setStaffLoginLoading] = useState(false);
 
   const days = useMemo(() => getDaysInMonth(year, month), [year, month]);
   const startDate = formatDate(days[0]);
@@ -96,18 +99,32 @@ export default function AttendancePage() {
     finally { setAttLoading(false); }
   }, [startDate, endDate, attType]);
 
-  const fetchStaffLogins = useCallback(async () => {
+  const fetchTechnicians = useCallback(async () => {
     try {
-      setStaffLoginsLoading(true);
-      const data = await attendanceApi.getStaffLogins(staffLoginsDate);
-      setStaffLogins(data);
-    } catch { enqueueSnackbar('Failed to load staff logins', { variant: 'error' }); }
-    finally { setStaffLoginsLoading(false); }
-  }, [staffLoginsDate]);
+      setTechLoading(true);
+      const data = await attendanceApi.getTechnicians(attType || undefined);
+      setTechnicians(data);
+    } catch { enqueueSnackbar('Failed to load technicians', { variant: 'error' }); }
+    finally { setTechLoading(false); }
+  }, [attType]);
+
+  const fetchStaffLoginStaff = useCallback(async () => {
+    try {
+      setStaffLoginLoading(true);
+      const data = await attendanceApi.getStaffLoginsMonthly(startDate, endDate);
+      setStaffLoginStaff(data);
+    } catch { enqueueSnackbar('Failed to load staff list', { variant: 'error' }); }
+    finally { setStaffLoginLoading(false); }
+  }, [startDate, endDate]);
 
   useEffect(() => { fetchOfficeDays(); }, [fetchOfficeDays]);
-  useEffect(() => { if (tab === 1) fetchAttendance(); }, [tab, fetchAttendance]);
-  useEffect(() => { if (tab === 2) fetchStaffLogins(); }, [tab, fetchStaffLogins]);
+  useEffect(() => {
+    if (tab === 1) {
+      fetchTechnicians();
+      fetchAttendance();
+    }
+  }, [tab, fetchTechnicians, fetchAttendance]);
+  useEffect(() => { if (tab === 2) fetchStaffLoginStaff(); }, [tab, fetchStaffLoginStaff]);
 
   // Office day map: date → OfficeDay
   const odMap = useMemo(() => {
@@ -135,12 +152,12 @@ export default function AttendancePage() {
     }
   };
 
-  // Attendance: group by user
-  const techMap = useMemo(() => {
-    const m = new Map<number, { user: TechAttendance['user']; records: Map<string, TechAttendance> }>();
+  // Attendance records map: userId → (date → TechAttendance)
+  const attRecordsMap = useMemo(() => {
+    const m = new Map<number, Map<string, TechAttendance>>();
     attendance.forEach(att => {
-      if (!m.has(att.userId)) m.set(att.userId, { user: att.user, records: new Map() });
-      m.get(att.userId)!.records.set(att.date.slice(0, 10), att);
+      if (!m.has(att.userId)) m.set(att.userId, new Map());
+      m.get(att.userId)!.set(att.date.slice(0, 10), att);
     });
     return m;
   }, [attendance]);
@@ -243,26 +260,27 @@ export default function AttendancePage() {
         {tab === 1 && (
           <CardContent>
             <Stack direction="row" spacing={2} mb={2} alignItems="center">
-              <FormControl size="small" sx={{ minWidth: 200 }}>
+              <FormControl size="small" sx={{ minWidth: 220 }}>
                 <InputLabel>Support Type</InputLabel>
                 <Select value={attType} label="Support Type" onChange={e => setAttType(e.target.value)}>
                   <MenuItem value="">All Technicians</MenuItem>
                   <MenuItem value="it_support">IT Support</MenuItem>
                   <MenuItem value="desktop_support">Desktop Support</MenuItem>
+                  <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
                 </Select>
               </FormControl>
-              <Box display="flex" gap={1}>
+              <Box display="flex" gap={1} flexWrap="wrap">
                 {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                   <Chip key={key} size="small" icon={cfg.icon as any} label={cfg.label} color={cfg.color} variant="outlined" />
                 ))}
               </Box>
             </Stack>
 
-            {attLoading ? (
+            {(attLoading || techLoading) ? (
               <Box textAlign="center" py={4}><CircularProgress /></Box>
-            ) : techMap.size === 0 ? (
+            ) : technicians.length === 0 ? (
               <Typography color="text.secondary" py={3} textAlign="center">
-                No technician attendance records for this month. Set attendance below.
+                No technicians found for this support type.
               </Typography>
             ) : (
               <TableContainer sx={{ maxHeight: 500 }}>
@@ -278,43 +296,52 @@ export default function AttendancePage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {Array.from(techMap.entries()).map(([userId, { user: techUser, records }]) => (
-                      <TableRow key={userId}>
-                        <TableCell sx={{ position: 'sticky', left: 0, zIndex: 2, bgcolor: 'background.paper' }}>
-                          <Typography variant="body2" noWrap>
-                            {techUser ? `${techUser.firstName ?? ''} ${techUser.lastName ?? ''}`.trim() || techUser.email : `User #${userId}`}
-                          </Typography>
-                        </TableCell>
-                        {weekdays.map(d => {
-                          const dateStr = formatDate(d);
-                          const rec = records.get(dateStr);
-                          const status = rec?.status;
-                          const cfg = status ? STATUS_CONFIG[status] : null;
+                    {technicians.map((tech: any) => {
+                      const userId = tech.id;
+                      const records = attRecordsMap.get(userId) ?? new Map<string, TechAttendance>();
+                      return (
+                        <TableRow key={userId}>
+                          <TableCell sx={{ position: 'sticky', left: 0, zIndex: 2, bgcolor: 'background.paper' }}>
+                            <Typography variant="body2" noWrap>
+                              {[tech.firstName, tech.lastName].filter(Boolean).join(' ') || tech.email}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" noWrap>
+                              {(tech.role ?? '').replace(/_/g, ' ')}
+                            </Typography>
+                          </TableCell>
+                          {weekdays.map(d => {
+                            const dateStr = formatDate(d);
+                            const rec = records.get(dateStr);
+                            const status = rec?.status;
+                            const cfg = status ? STATUS_CONFIG[status] : null;
 
-                          return (
-                            <TableCell key={dateStr} align="center" sx={{ px: 0.5 }}>
-                              {canManage ? (
-                                <Tooltip title={`Click to cycle: ${!status ? 'Set present' : status}`}>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => {
-                                      const cycle: AttendanceStatus[] = ['present', 'absent', 'half_day', 'out_of_office'];
-                                      const nextIdx = status ? (cycle.indexOf(status) + 1) % cycle.length : 0;
-                                      handleSetAttendance(userId, dateStr, cycle[nextIdx]);
-                                    }}
-                                    sx={{ color: cfg ? `${cfg.color}.main` : 'text.disabled' }}
-                                  >
-                                    {cfg ? cfg.icon : <Typography variant="caption">·</Typography>}
-                                  </IconButton>
-                                </Tooltip>
-                              ) : (
-                                cfg ? <Chip size="small" icon={cfg.icon as any} label="" color={cfg.color} variant="outlined" sx={{ '& .MuiChip-label': { display: 'none' } }} /> : <Typography variant="caption" color="text.disabled">·</Typography>
-                              )}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-                    ))}
+                            return (
+                              <TableCell key={dateStr} align="center" sx={{ px: 0.5 }}>
+                                {canManage ? (
+                                  <Tooltip title={`Click to cycle: ${!status ? 'Set present' : status}`}>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => {
+                                        const cycle: AttendanceStatus[] = ['present', 'absent', 'half_day', 'out_of_office'];
+                                        const nextIdx = status ? (cycle.indexOf(status) + 1) % cycle.length : 0;
+                                        handleSetAttendance(userId, dateStr, cycle[nextIdx]);
+                                      }}
+                                      sx={{ color: cfg ? `${cfg.color}.main` : 'text.disabled' }}
+                                    >
+                                      {cfg ? cfg.icon : <Typography variant="caption">·</Typography>}
+                                    </IconButton>
+                                  </Tooltip>
+                                ) : (
+                                  cfg
+                                    ? <Chip size="small" icon={cfg.icon as any} label="" color={cfg.color} variant="outlined" sx={{ '& .MuiChip-label': { display: 'none' } }} />
+                                    : <Typography variant="caption" color="text.disabled">·</Typography>
+                                )}
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -325,64 +352,60 @@ export default function AttendancePage() {
         {/* ── Staff Login Activity ── */}
         {tab === 2 && (
           <CardContent>
-            <Stack direction="row" spacing={2} mb={2} alignItems="center">
-              <TextField
-                size="small"
-                label="Date"
-                type="date"
-                value={staffLoginsDate}
-                onChange={e => setStaffLoginsDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-              <Button variant="outlined" size="small" onClick={fetchStaffLogins}>
-                Refresh
-              </Button>
-            </Stack>
-
             <Typography variant="body2" color="text.secondary" mb={2}>
-              Shows all RICTMS staff who logged in to the system on the selected date.
+              Monthly login activity for all non-technician staff. A checkmark indicates the staff member logged in on that day.
             </Typography>
 
-            {staffLoginsLoading ? (
+            {staffLoginLoading ? (
               <Box textAlign="center" py={4}><CircularProgress /></Box>
-            ) : staffLogins.length === 0 ? (
+            ) : staffLoginStaff.length === 0 ? (
               <Typography color="text.secondary" py={3} textAlign="center">
-                No staff login activity recorded for {staffLoginsDate}.
+                No staff found for login activity tracking.
               </Typography>
             ) : (
-              <TableContainer>
-                <Table size="small">
+              <TableContainer sx={{ maxHeight: 500 }}>
+                <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
-                      <TableCell>#</TableCell>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Email</TableCell>
-                      <TableCell>Role</TableCell>
-                      <TableCell>Last Login Time</TableCell>
+                      <TableCell sx={{ position: 'sticky', left: 0, zIndex: 3, bgcolor: 'background.paper', minWidth: 180 }}>Staff Member</TableCell>
+                      {weekdays.map(d => (
+                        <TableCell key={formatDate(d)} align="center" sx={{ minWidth: 36, px: 0.5 }}>
+                          <Typography variant="caption">{d.getDate()}</Typography>
+                        </TableCell>
+                      ))}
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {staffLogins.map((u: any, i: number) => (
-                      <TableRow key={u.id}>
-                        <TableCell>{i + 1}</TableCell>
-                        <TableCell>
-                          {[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}
-                        </TableCell>
-                        <TableCell>{u.email}</TableCell>
-                        <TableCell>
-                          <Chip
-                            size="small"
-                            label={(u.role ?? '').replace(/_/g, ' ')}
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {u.lastLogin
-                            ? new Date(u.lastLogin).toLocaleString('en-PH', { hour12: true })
-                            : '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {staffLoginStaff.map((u: any) => {
+                      const lastLoginDate = u.lastLogin ? u.lastLogin.slice(0, 10) : null;
+                      return (
+                        <TableRow key={u.id}>
+                          <TableCell sx={{ position: 'sticky', left: 0, zIndex: 2, bgcolor: 'background.paper' }}>
+                            <Typography variant="body2" noWrap>
+                              {[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" noWrap>
+                              {(u.role ?? '').replace(/_/g, ' ')}
+                            </Typography>
+                          </TableCell>
+                          {weekdays.map(d => {
+                            const dateStr = formatDate(d);
+                            const loggedIn = lastLoginDate === dateStr;
+                            return (
+                              <TableCell key={dateStr} align="center" sx={{ px: 0.5 }}>
+                                {loggedIn ? (
+                                  <Tooltip title={`Logged in on ${dateStr}`}>
+                                    <CheckIcon fontSize="small" color="success" />
+                                  </Tooltip>
+                                ) : (
+                                  <Typography variant="caption" color="text.disabled">–</Typography>
+                                )}
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>

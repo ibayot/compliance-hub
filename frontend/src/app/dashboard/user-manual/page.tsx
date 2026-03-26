@@ -1000,14 +1000,6 @@ export default function UserManualPage() {
                   <Typography variant="body2" color="text.secondary" mb={2}>
                     {item.description}
                   </Typography>
-                  <Box display="flex" flexWrap="wrap" gap={0.5} mb={1}>
-                    {item.roles.map((r) => (
-                      <Chip key={r} label={r.replace('_', ' ')} size="small" variant="outlined" />
-                    ))}
-                  </Box>
-                  <Typography variant="caption" color="primary.main">
-                    {item.path}
-                  </Typography>
                 </CardContent>
               </CardActionArea>
             </Card>
@@ -1079,11 +1071,6 @@ export default function UserManualPage() {
                   </ListItem>
                 ))}
               </List>
-
-              <Divider sx={{ my: 2 }} />
-              <Typography variant="caption" color="primary.main">
-                Module Path: {selectedManual.path}
-              </Typography>
             </Box>
           )}
         </DialogContent>

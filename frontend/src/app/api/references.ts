@@ -82,7 +82,7 @@ export interface CreateIssuanceDto {
   is_active?: boolean;
 }
 
-export type TicketType = 'desktop_support' | 'it_support';
+export type TicketType = 'desktop_support' | 'it_support' | 'pantawid_ict_support';
 export type TicketStatus = 'open' | 'assigned' | 'in_progress' | 'resolved' | 'closed';
 export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
 
@@ -369,7 +369,8 @@ export const ticketSettingsApi = {
   getCategories: async (ticketType?: string, activeOnly?: boolean): Promise<TicketCategory[]> => {
     const params = new URLSearchParams();
     if (ticketType) params.append('ticketType', ticketType);
-    if (activeOnly) params.append('activeOnly', 'true');
+    if (activeOnly === true) params.append('activeOnly', 'true');
+    if (activeOnly === false) params.append('activeOnly', 'false');
     const qs = params.toString() ? `?${params.toString()}` : '';
     const response = await apiClient.get(`/ticket-settings/categories${qs}`);
     return response.data;
@@ -437,6 +438,10 @@ export const attendanceApi = {
   getStaffLogins: async (date?: string): Promise<any[]> => {
     const params = date ? `?date=${date}` : '';
     const response = await apiClient.get(`/attendance/staff-logins${params}`);
+    return response.data;
+  },
+  getStaffLoginsMonthly: async (startDate: string, endDate: string): Promise<any[]> => {
+    const response = await apiClient.get(`/attendance/staff-logins-monthly?startDate=${startDate}&endDate=${endDate}`);
     return response.data;
   },
 

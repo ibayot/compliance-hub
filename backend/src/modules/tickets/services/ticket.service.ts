@@ -181,8 +181,23 @@ export class TicketService implements OnModuleInit {
         )
       `).catch(() => undefined);
 
+      // ── v0.6.3 migrations ─────────────────────────────────────────────────
+
+      // Expand ticket_type column to include pantawid_ict_support
+      await qr.query(
+        "ALTER TABLE tickets MODIFY COLUMN ticket_type VARCHAR(30) NOT NULL DEFAULT 'it_support'",
+      ).catch(() => undefined);
+
+      // Reset any weekend office-days that were accidentally set as office days
+      await qr.query(
+        "UPDATE office_days SET is_office_day = 0 WHERE DAYOFWEEK(date) IN (1, 7) AND is_office_day = 1",
+      ).catch(() => undefined);
+
       // Seed default categories if table is empty
       await this.seedDefaultCategories(qr);
+
+      // Seed default keyword rules
+      await this.seedDefaultKeywordRules(qr);
 
       this.logger.log('Ticket schema migrations applied.');
     } finally {
@@ -206,6 +221,11 @@ export class TicketService implements OnModuleInit {
       { key: 'printer_installation', name: 'Printer Installation/Configuration', type: 'desktop_support' },
       { key: 'printer_repair', name: 'Printer Repair', type: 'desktop_support' },
       { key: 'desktop_laptop_repair', name: 'Desktop/Laptop Repair', type: 'desktop_support' },
+      // Pantawid ICT Support categories
+      { key: 'pantawid_ict_support_general', name: 'Pantawid ICT Support', type: 'pantawid_ict_support' },
+      { key: 'pantawid_device_issue', name: 'Pantawid Device Issue', type: 'pantawid_ict_support' },
+      { key: 'pantawid_network_connectivity', name: 'Pantawid Network/Connectivity', type: 'pantawid_ict_support' },
+      { key: 'pantawid_system_access', name: 'Pantawid System Access', type: 'pantawid_ict_support' },
     ];
 
     let inserted = 0;
@@ -224,6 +244,29 @@ export class TicketService implements OnModuleInit {
       }
     }
     if (inserted > 0) this.logger.log(`Seeded ${inserted} default ticket categories`);
+  }
+
+  private async seedDefaultKeywordRules(qr: any): Promise<void> {
+    const rules = [
+      { keyword: 'internet', type: 'it_support' },
+      { keyword: 'printer repair', type: 'desktop_support' },
+    ];
+
+    let inserted = 0;
+    for (const r of rules) {
+      const [existing] = await qr.query(
+        'SELECT COUNT(*) AS cnt FROM ticket_keyword_rules WHERE keyword = ?', [r.keyword],
+      ).catch(() => [{ cnt: 1 }]);
+      if (Number(existing?.cnt) === 0) {
+        await qr.query(
+          `INSERT INTO ticket_keyword_rules (id, keyword, target_ticket_type, is_active, created_at, updated_at)
+           VALUES (UUID(), ?, ?, 1, NOW(), NOW())`,
+          [r.keyword, r.type],
+        ).catch(() => undefined);
+        inserted++;
+      }
+    }
+    if (inserted > 0) this.logger.log(`Seeded ${inserted} default keyword rules`);
   }
 
   // --- Ticket Number Generator ---------------------------------------------

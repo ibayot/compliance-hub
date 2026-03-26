@@ -66,12 +66,14 @@ export class AttendanceService {
 
     if (ticketType === 'desktop_support') {
       qb.andWhere('user.role IN (:...roles)', {
-        roles: [UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN],
+        roles: [UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF],
       });
     } else if (ticketType === 'it_support') {
       qb.andWhere('user.role IN (:...roles)', {
-        roles: [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN],
+        roles: [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF],
       });
+    } else if (ticketType === 'pantawid_ict_support') {
+      qb.andWhere('user.role = :role', { role: UserRole.TECHNICIAN });
     }
 
     return qb.getMany();
@@ -128,12 +130,22 @@ export class AttendanceService {
 
   /** Get technicians who are available (present or half_day) for a ticket type on a given date */
   async getAvailableTechnicians(ticketType: string, date: string): Promise<User[]> {
-    // Determine which roles to check
-    const roles: string[] = [UserRole.TECHNICIAN];
+    // Map ticket type to roles — Pantawid ICT (technician) only handles pantawid tickets
+    let roles: string[];
     if (ticketType === 'desktop_support') {
-      roles.push(UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF);
+      roles = [UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF];
     } else if (ticketType === 'it_support') {
-      roles.push(UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF);
+      roles = [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF];
+    } else if (ticketType === 'pantawid_ict_support') {
+      roles = [UserRole.TECHNICIAN];
+    } else {
+      roles = [
+        UserRole.TECHNICIAN,
+        UserRole.TECHNICIAN_DESKTOP,
+        UserRole.TECHNICIAN_IT_SUPPORT,
+        UserRole.TECHNICIAN_IT_STAFF,
+        UserRole.TECHNICIAN_DESKTOP_STAFF,
+      ];
     }
 
     // Get all active techs with matching roles OR ticketTechnician flag
@@ -176,20 +188,22 @@ export class AttendanceService {
 
   /** Get technicians filtered for the current session (all staff or filtered by type) */
   async listTechnicians(ticketType?: string): Promise<User[]> {
-    // Always include general technician + sub-roles based on filter
-    const roles: string[] = [UserRole.TECHNICIAN];
+    let roles: string[];
     if (ticketType === 'desktop_support') {
-      roles.push(UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF);
+      roles = [UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF];
     } else if (ticketType === 'it_support') {
-      roles.push(UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF);
+      roles = [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF];
+    } else if (ticketType === 'pantawid_ict_support') {
+      roles = [UserRole.TECHNICIAN];
     } else {
       // No filter = all tech roles
-      roles.push(
+      roles = [
+        UserRole.TECHNICIAN,
         UserRole.TECHNICIAN_DESKTOP,
         UserRole.TECHNICIAN_IT_SUPPORT,
         UserRole.TECHNICIAN_IT_STAFF,
         UserRole.TECHNICIAN_DESKTOP_STAFF,
-      );
+      ];
     }
 
     // Fetch by known roles first
@@ -237,6 +251,26 @@ export class AttendanceService {
         end: endOfDay.toISOString().replace('T', ' ').replace('Z', ''),
       })
       .orderBy('u.last_login', 'DESC')
+      .getMany();
+  }
+
+  /** Get all non-user, non-technician staff — returns each user with their lastLogin (for monthly grid) */
+  async getStaffLoginsMonthly(startDate: string, endDate: string): Promise<User[]> {
+    const TECHNICIAN_ROLES = [
+      UserRole.TECHNICIAN,
+      UserRole.TECHNICIAN_DESKTOP,
+      UserRole.TECHNICIAN_IT_SUPPORT,
+      UserRole.TECHNICIAN_IT_STAFF,
+      UserRole.TECHNICIAN_DESKTOP_STAFF,
+      UserRole.USER,
+    ];
+
+    return this.userRepo
+      .createQueryBuilder('u')
+      .where('u.active = :active', { active: true })
+      .andWhere('u.role NOT IN (:...excluded)', { excluded: TECHNICIAN_ROLES })
+      .orderBy('u.lastName', 'ASC')
+      .addOrderBy('u.firstName', 'ASC')
       .getMany();
   }
 

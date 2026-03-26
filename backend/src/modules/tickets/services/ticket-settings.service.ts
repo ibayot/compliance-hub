@@ -72,8 +72,8 @@ export class TicketSettingsService {
 
   async createCategory(dto: CreateCategoryDto, actorId: number): Promise<TicketCategoryConfig> {
     if (!dto.name?.trim()) throw new BadRequestException('Category name is required');
-    if (!['desktop_support', 'it_support'].includes(dto.ticketType)) {
-      throw new BadRequestException('ticketType must be desktop_support or it_support');
+    if (!['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.ticketType)) {
+      throw new BadRequestException('ticketType must be desktop_support, it_support, or pantawid_ict_support');
     }
 
     const key = dto.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
