@@ -1,6 +1,14 @@
 # RICMS Compliance Hub - Project Status
 
-## 🚀 v0.5.0 — IT Help-Desk Ticketing + Role System Overhaul (Current Release)
+## 🚀 v0.6.4 — QA Fixes: Technician Type Tag, All-Techs Count, Super-Admin Login Activity, Calendar Cascade, Auto-Refresh (Current Release)
+- **Version:** `0.6.4` in both `backend/package.json` and `frontend/package.json`
+- **Role definition technician type tag:** new `technician_type` column on `role_definitions`; Settings UI allows tagging a custom role as `it_support`, `desktop_support`, or `pantawid_ict_support` so its members appear in Technician Attendance grids.
+- **All-techs count bug fixed:** `u.ticket_technician` → `u.ticketTechnician` (TypeORM property name) in `getAvailableTechnicians` + `listTechnicians`; custom-role users now included via `getCustomRoleValues()`.
+- **Super admin excluded from Staff Login Activity** (`EXCLUDED_ROLES` in `getStaffLoginsMonthly`).
+- **Calendar toggle cascade:** toggling an office day now refreshes the attendance grid and staff login grid without a page reload.
+- **`useAutoRefresh` hook:** 30s polling + visibilitychange; applied to Attendance, Tickets, MoV, KPI pages.
+
+## 🚀 v0.5.0 — IT Help-Desk Ticketing + Role System Overhaul
 - **Branch:** `v0.5.0` (new main branch on GitHub `ibayot/compliance-hub`)
 - **Version:** `0.5.0` in both `backend/package.json` and `frontend/package.json`
 - **Ticketing module** completely rewritten as an IT help-desk system (Desktop Support / IT Support ticket types, 5 statuses, auto-numbered tickets, satisfaction ratings).

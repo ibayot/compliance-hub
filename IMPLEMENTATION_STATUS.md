@@ -1,5 +1,22 @@
 # RICTMS Compliance Hub - Implementation Progress Report
 
+## 🚀 v0.6.4 — QA Fixes (Current)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| `technician_type` column on `role_definitions` | ✅ Complete | `VARCHAR(30) NULL`; migrated via `ensureSchema()` |
+| `CreateRoleDefinitionDto` technician type field | ✅ Complete | `@IsOptional @IsIn([...])` |
+| `AttendanceService.getCustomRoleValues()` helper | ✅ Complete | Queries role_definitions for custom tech roles |
+| `RoleDefinitionEntity` in TicketsModule.forFeature | ✅ Complete | Required for AttendanceService injection |
+| `u.ticket_technician` → `u.ticketTechnician` bug fixed | ✅ Complete | TypeORM property name correctness |
+| Super admin excluded from Staff Login Activity | ✅ Complete | Added to `EXCLUDED_ROLES` |
+| Calendar toggle cascades to attendance + login grids | ✅ Complete | `fetchAttendance()` + `fetchStaffLoginStaff()` called after toggle |
+| Settings UI — technician type selector | ✅ Complete | Create + Edit dialogs in `settings/page.tsx` |
+| `useAutoRefresh` hook | ✅ Complete | `frontend/src/lib/utils/useAutoRefresh.ts` |
+| Auto-refresh applied to Attendance, Tickets, MoV, KPI pages | ✅ Complete | 30s polling + visibilitychange |
+
+---
+
 ## 🚀 v0.5.0 — IT Help-Desk Ticketing + Role System Overhaul (Current)
 
 - **Branch:** `v0.5.0` (new main)

@@ -46,6 +46,7 @@ import {
 } from 'recharts';
 import { useAuth } from '@/contexts/AuthContext';
 import { unitsApi, Unit } from '@/lib/api/units';
+import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
 import {
   DashboardSummaryResponse,
   kpiApi,
@@ -378,6 +379,7 @@ export default function KpiPage() {
     loadMonitoring();
     loadDashboard();
   }, [loadMonitoring, loadDashboard]);
+  useAutoRefresh(loadDashboard);
 
   const openCreateMaster = () => {
     setMasterEditingCode(null);

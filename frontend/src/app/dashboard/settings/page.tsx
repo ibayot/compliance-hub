@@ -178,6 +178,7 @@ function RoleManagementCard() {
     label: '',
     description: '',
     assignable: true,
+    technicianType: null as string | null,
   });
 
   const loadRoles = useCallback(async () => {
@@ -203,10 +204,10 @@ function RoleManagementCard() {
     }
     try {
       setSaving(true);
-      await usersApi.createRoleDefinition({ ...form, value: codeVal });
+      await usersApi.createRoleDefinition({ ...form, value: codeVal, technicianType: form.technicianType || null });
       enqueueSnackbar('Role definition added.', { variant: 'success' });
       setCreateOpen(false);
-      setForm({ value: '', label: '', description: '', assignable: true });
+      setForm({ value: '', label: '', description: '', assignable: true, technicianType: null });
       await loadRoles();
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to create role definition.', { variant: 'error' });
@@ -225,6 +226,7 @@ function RoleManagementCard() {
         label: selected.label,
         description: selected.description,
         assignable: selected.value === 'super_admin' ? false : selected.assignable,
+        technicianType: selected.technicianType ?? null,
       });
       enqueueSnackbar('Role definition updated.', { variant: 'success' });
       setSelected(null);
@@ -348,6 +350,20 @@ function RoleManagementCard() {
                   }
                   label="Assignable during user creation"
                 />
+                <TextField
+                  select
+                  label="Technician Type (Attendance)"
+                  value={selected?.technicianType ?? ''}
+                  onChange={(e) => setSelected((prev) => prev ? { ...prev, technicianType: e.target.value || null } : prev)}
+                  fullWidth
+                  sx={{ mt: 2 }}
+                  helperText="Tag this role so members appear in the Technician Attendance grid"
+                >
+                  <MenuItem value="">— Not a technician role —</MenuItem>
+                  <MenuItem value="it_support">IT Support</MenuItem>
+                  <MenuItem value="desktop_support">Desktop Support</MenuItem>
+                  <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
+                </TextField>
               </DialogContent>
               <DialogActions>
                 <Button onClick={() => setSelected(null)}>Close</Button>
@@ -394,6 +410,20 @@ function RoleManagementCard() {
                   }
                   label="Assignable during user creation"
                 />
+                <TextField
+                  select
+                  label="Technician Type (Attendance)"
+                  value={form.technicianType ?? ''}
+                  onChange={(e) => setForm((prev) => ({ ...prev, technicianType: e.target.value || null }))}
+                  fullWidth
+                  sx={{ mt: 2 }}
+                  helperText="Tag this role so members appear in the Technician Attendance grid"
+                >
+                  <MenuItem value="">— Not a technician role —</MenuItem>
+                  <MenuItem value="it_support">IT Support</MenuItem>
+                  <MenuItem value="desktop_support">Desktop Support</MenuItem>
+                  <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
+                </TextField>
               </DialogContent>
               <DialogActions>
                 <Button onClick={() => setCreateOpen(false)}>Cancel</Button>

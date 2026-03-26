@@ -115,6 +115,8 @@ export class UsersService {
       ).catch(() => undefined); // Catch if enum already has these values
       // Add last_login column for staff activity tracking
       await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login DATETIME NULL').catch(() => undefined);
+      // QA v0.6.4: Add technician_type to role_definitions for custom-role attendance tagging
+      await queryRunner.query('ALTER TABLE role_definitions ADD COLUMN IF NOT EXISTS technician_type VARCHAR(30) NULL DEFAULT NULL').catch(() => undefined);
     } finally {
       await queryRunner.release();
     }
@@ -150,6 +152,7 @@ export class UsersService {
       description: dto.description,
       assignable: dto.value === UserRole.SUPER_ADMIN ? false : (dto.assignable ?? true),
       isSystem: isSystemRole,
+      technicianType: dto.technicianType ?? null,
     });
 
     return this.roleDefinitionsRepository.save(role);
@@ -177,6 +180,9 @@ export class UsersService {
     if (dto.description !== undefined) role.description = dto.description;
     if (dto.assignable !== undefined) {
       role.assignable = role.value === UserRole.SUPER_ADMIN ? false : dto.assignable;
+    }
+    if (dto.technicianType !== undefined) {
+      role.technicianType = dto.technicianType ?? null;
     }
 
     return this.roleDefinitionsRepository.save(role);

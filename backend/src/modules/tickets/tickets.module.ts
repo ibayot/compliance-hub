@@ -14,6 +14,7 @@ import { TicketController } from './controllers/ticket.controller';
 import { TicketSettingsController } from './controllers/ticket-settings.controller';
 import { AttendanceController } from './controllers/attendance.controller';
 import { User } from '../users/entities/user.entity';
+import { RoleDefinitionEntity } from '../users/entities/role-definition.entity';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { User } from '../users/entities/user.entity';
       TechAttendance,
       OfficeDay,
       User,
+      RoleDefinitionEntity,
     ]),
   ],
   controllers: [TicketController, TicketSettingsController, AttendanceController],

@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   attendanceApi, TechAttendance, OfficeDay, AttendanceStatus,
 } from '@/app/api/references';
+import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
 
 const STATUS_CONFIG: Record<AttendanceStatus, { label: string; color: 'success' | 'error' | 'warning' | 'info'; icon: React.ReactNode }> = {
   present: { label: 'Present', color: 'success', icon: <PresentIcon fontSize="small" /> },
@@ -126,6 +127,18 @@ export default function AttendancePage() {
   }, [tab, fetchTechnicians, fetchAttendance]);
   useEffect(() => { if (tab === 2) fetchStaffLoginStaff(); }, [tab, fetchStaffLoginStaff]);
 
+  // ── Auto-refresh: keep active tab data fresh every 30 s (live updates across instances) ──
+  const refreshTab1 = useCallback(() => {
+    if (tab === 1) { fetchTechnicians(); fetchAttendance(); }
+  }, [tab, fetchTechnicians, fetchAttendance]);
+  const refreshTab2 = useCallback(() => {
+    if (tab === 2) fetchStaffLoginStaff();
+  }, [tab, fetchStaffLoginStaff]);
+
+  useAutoRefresh(fetchOfficeDays);
+  useAutoRefresh(refreshTab1);
+  useAutoRefresh(refreshTab2);
+
   // Office day map: date → OfficeDay
   const odMap = useMemo(() => {
     const m = new Map<string, OfficeDay>();
@@ -146,7 +159,10 @@ export default function AttendancePage() {
     const current = isOfficeDayForDate(d);
     try {
       await attendanceApi.setOfficeDay({ date: dateStr, isOfficeDay: !current });
+      // QA4: cascade the change to all tabs so they reflect the updated office day immediately
       fetchOfficeDays();
+      fetchAttendance();
+      fetchStaffLoginStaff();
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to update', { variant: 'error' });
     }

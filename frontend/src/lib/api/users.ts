@@ -42,6 +42,8 @@ export interface RoleDefinition {
   assignable: boolean;
   isSystem?: boolean;
   is_system?: boolean;
+  /** Technician type tag — includes members of this role in the attendance grid */
+  technicianType?: string | null;
 }
 
 export interface UpdateUserPayload {
@@ -65,6 +67,7 @@ export interface CreateRolePayload {
   label: string;
   description: string;
   assignable?: boolean;
+  technicianType?: string | null;
 }
 
 export interface UpdateRolePayload {
@@ -72,6 +75,7 @@ export interface UpdateRolePayload {
   label?: string;
   description?: string;
   assignable?: boolean;
+  technicianType?: string | null;
 }
 
 export const usersApi = {

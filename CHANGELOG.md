@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.6.4] - 2026-03-27 — QA Fixes: Technician Type Tag, All-Techs Count, Super-Admin Login Activity, Calendar Cascade, Auto-Refresh
+
+### Added
+- **Role definition technician type tag** — Settings › Role Management create/edit dialogs now include a "Technician Type (Attendance)" selector (`IT Support`, `Desktop Support`, `Pantawid ICT Support`). Custom roles tagged with a technician type will have their members appear in the corresponding Technician Attendance grid, regardless of role code.
+- **`technician_type` column** on `role_definitions` table — `VARCHAR(30) NULL DEFAULT NULL`; migrated via `ALTER TABLE … ADD COLUMN IF NOT EXISTS` in `ensureSchema()`.
+- **`getCustomRoleValues()` helper** in `AttendanceService` — queries `role_definitions` to include custom-role users in attendance grids alongside hardcoded built-in technician roles.
+- **`useAutoRefresh` hook** (`frontend/src/lib/utils/useAutoRefresh.ts`) — polls every 30 seconds and triggers an immediate refresh on `visibilitychange` (tab focus). Applied to: Attendance page (office days + technician grid + staff login grid), Tickets page, MoV Builder page, KPI page.
+
+### Fixed
+- **All Technicians count mismatch** — TypeORM QueryBuilder WHERE clause used the DB column name `u.ticket_technician` instead of the entity property name `u.ticketTechnician`. This caused the "All Technicians" dropdown count to be lower than the sum of individual type filters. Corrected in `getAvailableTechnicians` and `listTechnicians`.
+- **Super admin shown in Staff Login Activity** — `getStaffLoginsMonthly` now excludes `super_admin` from the monthly login grid (added to `EXCLUDED_ROLES` alongside `user`).
+- **Calendar date toggle does not cascade** — after toggling an office day ON/OFF, `fetchAttendance()` and `fetchStaffLoginStaff()` are now also called so both tabs reflect the change immediately without a manual page refresh.
+
+### Changed
+- `RoleDefinitionEntity` added to `TypeOrmModule.forFeature` in `TicketsModule` so `AttendanceService` can inject and query role definitions.
+- `create-role-definition.dto.ts` gains optional `technicianType` field validated with `@IsIn(['it_support','desktop_support','pantawid_ict_support'])`.
+- `UpdateRoleDefinitionDto` inherits `technicianType` automatically via `PartialType`.
+
+---
+
 ## [0.6.1] - 2026-03-26 — QA Fixes: Nav Links, Dashboard Metrics, Role CRUD, SMTP
 
 ### Fixed

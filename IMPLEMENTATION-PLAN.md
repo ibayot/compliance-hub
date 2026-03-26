@@ -1,5 +1,27 @@
 # Compliance Hub - Complete Implementation Plan
 
+## v0.6.4 QA Fix Execution (2026-03-27)
+
+### Plan Executed
+
+| # | Area | Change |
+|---|------|--------|
+| 1 | `role-definition.entity.ts` | Added `technicianType` column (`technician_type VARCHAR(30) NULL`) |
+| 2 | `create-role-definition.dto.ts` | Added `technicianType` optional field with `@IsIn` validation |
+| 3 | `users.service.ts` | Added `technician_type` column migration; persist `technicianType` in create + update |
+| 4 | `tickets.module.ts` | Added `RoleDefinitionEntity` to `TypeOrmModule.forFeature` |
+| 5 | `attendance.service.ts` | Fixed `u.ticket_technician` → `u.ticketTechnician`; added `getCustomRoleValues()`; excluded `super_admin` from staff logins |
+| 6 | `frontend/src/lib/api/users.ts` | Added `technicianType` to `RoleDefinition`, `CreateRolePayload`, `UpdateRolePayload` |
+| 7 | `settings/page.tsx` | Added technician type selector to create + edit dialogs |
+| 8 | `useAutoRefresh.ts` | New hook: 30s polling + visibilitychange |
+| 9 | `attendance/page.tsx` | Calendar toggle cascade + auto-refresh wired |
+| 10 | `tickets/page.tsx`, `mov/page.tsx`, `kpi/page.tsx` | `useAutoRefresh` applied |
+| 11 | Both `package.json` | Version bumped `0.6.3` → `0.6.4` |
+
+### Status: ✅ Complete
+
+---
+
 ## QA Fix Execution Addendum 4 (`v1.5.0.1`, 2026-03-10)
 
 ### Plan Executed

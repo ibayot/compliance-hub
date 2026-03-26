@@ -8,6 +8,7 @@ import { Repository, In } from 'typeorm';
 import { TechAttendance, AttendanceStatus } from '../entities/tech-attendance.entity';
 import { OfficeDay } from '../entities/office-day.entity';
 import { User, UserRole } from '../../users/entities/user.entity';
+import { RoleDefinitionEntity } from '../../users/entities/role-definition.entity';
 // Note: TECHNICIAN_IT_STAFF and TECHNICIAN_DESKTOP_STAFF are accessed via UserRole enum
 
 // --- DTOs ------------------------------------------------------------------
@@ -46,9 +47,27 @@ export class AttendanceService {
     private readonly officeDayRepo: Repository<OfficeDay>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(RoleDefinitionEntity)
+    private readonly roleDefRepo: Repository<RoleDefinitionEntity>,
   ) {}
 
   // ── Attendance ──────────────────────────────────────────────────────────
+
+  /**
+   * Get role codes from role_definitions that are tagged with a specific technician_type.
+   * Used to include users with custom roles in the technician attendance grid.
+   */
+  private async getCustomRoleValues(technicianType?: string): Promise<string[]> {
+    const qb = this.roleDefRepo
+      .createQueryBuilder('rd')
+      .select('rd.value', 'value')
+      .where('rd.technicianType IS NOT NULL');
+    if (technicianType) {
+      qb.andWhere('rd.technicianType = :t', { t: technicianType });
+    }
+    const rows = await qb.getRawMany<{ value: string }>();
+    return rows.map(r => r.value);
+  }
 
   /** Get attendance records for a date range, optionally filtered by ticket type */
   async getAttendance(
@@ -64,16 +83,20 @@ export class AttendanceService {
       .orderBy('a.date', 'ASC')
       .addOrderBy('user.lastName', 'ASC');
 
+    const customRoles = await this.getCustomRoleValues(ticketType || undefined);
+
     if (ticketType === 'desktop_support') {
-      qb.andWhere('user.role IN (:...roles)', {
-        roles: [UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF],
-      });
+      const roles = [...new Set([UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF, ...customRoles])];
+      qb.andWhere('user.role IN (:...roles)', { roles });
     } else if (ticketType === 'it_support') {
-      qb.andWhere('user.role IN (:...roles)', {
-        roles: [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF],
-      });
+      const roles = [...new Set([UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, ...customRoles])];
+      qb.andWhere('user.role IN (:...roles)', { roles });
     } else if (ticketType === 'pantawid_ict_support') {
-      qb.andWhere('user.role = :role', { role: UserRole.TECHNICIAN });
+      const roles = [...new Set([UserRole.TECHNICIAN, ...customRoles])];
+      qb.andWhere('user.role IN (:...roles)', { roles });
+    } else if (customRoles.length > 0) {
+      // No type filter but custom roles may need to be included — no additional restriction needed
+      // (all tech roles are already included by the base query with no filter)
     }
 
     return qb.getMany();
@@ -130,16 +153,18 @@ export class AttendanceService {
 
   /** Get technicians who are available (present or half_day) for a ticket type on a given date */
   async getAvailableTechnicians(ticketType: string, date: string): Promise<User[]> {
+    const customRoles = await this.getCustomRoleValues(ticketType);
+
     // Map ticket type to roles — Pantawid ICT (technician) only handles pantawid tickets
-    let roles: string[];
+    let hardcodedRoles: string[];
     if (ticketType === 'desktop_support') {
-      roles = [UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF];
+      hardcodedRoles = [UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF];
     } else if (ticketType === 'it_support') {
-      roles = [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF];
+      hardcodedRoles = [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF];
     } else if (ticketType === 'pantawid_ict_support') {
-      roles = [UserRole.TECHNICIAN];
+      hardcodedRoles = [UserRole.TECHNICIAN];
     } else {
-      roles = [
+      hardcodedRoles = [
         UserRole.TECHNICIAN,
         UserRole.TECHNICIAN_DESKTOP,
         UserRole.TECHNICIAN_IT_SUPPORT,
@@ -148,17 +173,20 @@ export class AttendanceService {
       ];
     }
 
-    // Get all active techs with matching roles OR ticketTechnician flag
+    const roles = [...new Set([...hardcodedRoles, ...customRoles])];
+
+    // Get all active techs with matching roles
     const byRole = await this.userRepo
       .createQueryBuilder('u')
       .where('u.active = :active', { active: true })
       .andWhere('u.role IN (:...roles)', { roles })
       .getMany();
 
+    // Also include users flagged individually as technicians (custom role scenario)
     const byFlag = await this.userRepo
       .createQueryBuilder('u')
       .where('u.active = :active', { active: true })
-      .andWhere('u.ticket_technician = :flag', { flag: true })
+      .andWhere('u.ticketTechnician = :flag', { flag: true })
       .andWhere('u.role NOT IN (:...roles)', { roles })
       .getMany();
 
@@ -188,16 +216,18 @@ export class AttendanceService {
 
   /** Get technicians filtered for the current session (all staff or filtered by type) */
   async listTechnicians(ticketType?: string): Promise<User[]> {
-    let roles: string[];
+    const customRoles = await this.getCustomRoleValues(ticketType || undefined);
+
+    let hardcodedRoles: string[];
     if (ticketType === 'desktop_support') {
-      roles = [UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF];
+      hardcodedRoles = [UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF];
     } else if (ticketType === 'it_support') {
-      roles = [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF];
+      hardcodedRoles = [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF];
     } else if (ticketType === 'pantawid_ict_support') {
-      roles = [UserRole.TECHNICIAN];
+      hardcodedRoles = [UserRole.TECHNICIAN];
     } else {
       // No filter = all tech roles
-      roles = [
+      hardcodedRoles = [
         UserRole.TECHNICIAN,
         UserRole.TECHNICIAN_DESKTOP,
         UserRole.TECHNICIAN_IT_SUPPORT,
@@ -206,7 +236,9 @@ export class AttendanceService {
       ];
     }
 
-    // Fetch by known roles first
+    const roles = [...new Set([...hardcodedRoles, ...customRoles])];
+
+    // Fetch by known roles (hardcoded + custom-tagged)
     const byRole = await this.userRepo
       .createQueryBuilder('u')
       .where('u.active = :active', { active: true })
@@ -215,11 +247,11 @@ export class AttendanceService {
       .addOrderBy('u.firstName', 'ASC')
       .getMany();
 
-    // Also include users with custom roles who have the ticketTechnician flag
+    // Also include users with any custom role who have the ticketTechnician flag set
     const byFlag = await this.userRepo
       .createQueryBuilder('u')
       .where('u.active = :active', { active: true })
-      .andWhere('u.ticket_technician = :flag', { flag: true })
+      .andWhere('u.ticketTechnician = :flag', { flag: true })
       .andWhere('u.role NOT IN (:...roles)', { roles })
       .orderBy('u.lastName', 'ASC')
       .addOrderBy('u.firstName', 'ASC')
@@ -254,9 +286,10 @@ export class AttendanceService {
       .getMany();
   }
 
-  /** Get all non-user, non-technician staff — returns each user with their lastLogin (for monthly grid) */
+  /** Get all non-user, non-technician, non-super-admin staff — returns each user with their lastLogin (for monthly grid) */
   async getStaffLoginsMonthly(startDate: string, endDate: string): Promise<User[]> {
-    const TECHNICIAN_ROLES = [
+    const EXCLUDED_ROLES = [
+      UserRole.SUPER_ADMIN,
       UserRole.TECHNICIAN,
       UserRole.TECHNICIAN_DESKTOP,
       UserRole.TECHNICIAN_IT_SUPPORT,
@@ -268,7 +301,7 @@ export class AttendanceService {
     return this.userRepo
       .createQueryBuilder('u')
       .where('u.active = :active', { active: true })
-      .andWhere('u.role NOT IN (:...excluded)', { excluded: TECHNICIAN_ROLES })
+      .andWhere('u.role NOT IN (:...excluded)', { excluded: EXCLUDED_ROLES })
       .orderBy('u.lastName', 'ASC')
       .addOrderBy('u.firstName', 'ASC')
       .getMany();

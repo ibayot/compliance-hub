@@ -19,6 +19,7 @@ import {
   TechnicianOption, SubmitSatisfactionDto, TicketCategory, ticketSettingsApi,
 } from '@/app/api/references';
 import { usersApi, UserRecord } from '@/lib/api/users';
+import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
 
 const PRIORITY_COLOR: Record<string, 'default' | 'info' | 'warning' | 'error' | 'success'> = {
   low: 'info', medium: 'warning', high: 'error', urgent: 'error',
@@ -91,6 +92,7 @@ export default function TicketsPage() {
   }, [filterStatus, filterType]);
 
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
+  useAutoRefresh(fetchTickets);
 
   useEffect(() => {
     if (canManageAll) {
