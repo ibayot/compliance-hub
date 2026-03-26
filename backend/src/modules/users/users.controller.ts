@@ -41,6 +41,12 @@ export class UsersController {
     return this.usersService.updateRoleDefinition(value, updateRoleDefinitionDto);
   }
 
+  @Delete('roles/:value')
+  @Roles('super_admin')
+  deleteRole(@Param('value') value: string) {
+    return this.usersService.deleteRoleDefinition(value);
+  }
+
   @Post()
   @Roles('super_admin')
   create(@Body() createUserDto: CreateUserDto) {

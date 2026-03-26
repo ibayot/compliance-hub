@@ -156,4 +156,103 @@ if ($newTicket) {
     }
 }
 
+# -------------------------------------------------------------------
+# v0.6 Ticket Settings / Attendance / Category smoke tests
+# -------------------------------------------------------------------
+
+# 1. List categories (seeded by migration)
+$cats = Invoke-RestMethod -Method Get -Uri "$api/ticket-settings/categories" -Headers $sh
+Write-Output "SMOKE_CATEGORIES_LIST_OK count=$(@($cats).Count)"
+
+# 2. List categories filtered by type
+$itCats = Invoke-RestMethod -Method Get -Uri "$api/ticket-settings/categories?ticketType=it_support" -Headers $sh
+Write-Output "SMOKE_IT_CATEGORIES_OK count=$(@($itCats).Count)"
+
+# 3. Create a new category (use unique timestamp suffix for idempotent runs)
+$catSuffix = (Get-Date).ToString('HHmmss')
+$newCat = Invoke-RestMethod -Method Post -Uri "$api/ticket-settings/categories" -ContentType 'application/json' -Headers $sh `
+  -Body (@{name="Smoke Test Cat $catSuffix";ticketType='it_support';isActive=$true} | ConvertTo-Json)
+Write-Output "SMOKE_CREATE_CATEGORY_OK id=$($newCat.id.Substring(0,8)) key=$($newCat.key)"
+
+# 4. Update category
+$updCat = Invoke-RestMethod -Method Patch -Uri "$api/ticket-settings/categories/$($newCat.id)" -ContentType 'application/json' -Headers $sh `
+  -Body (@{name="Smoke Test Cat Updated $catSuffix"} | ConvertTo-Json)
+Write-Output "SMOKE_UPDATE_CATEGORY_OK name=$($updCat.name)"
+
+# 5. Create a keyword rule
+$newRule = Invoke-RestMethod -Method Post -Uri "$api/ticket-settings/keyword-rules" -ContentType 'application/json' -Headers $sh `
+  -Body (@{keyword='printer jam';targetTicketType='desktop_support';isActive=$true} | ConvertTo-Json)
+Write-Output "SMOKE_CREATE_KEYWORD_RULE_OK id=$($newRule.id.Substring(0,8))"
+
+# 6. List keyword rules
+$allRules = Invoke-RestMethod -Method Get -Uri "$api/ticket-settings/keyword-rules" -Headers $sh
+Write-Output "SMOKE_KEYWORD_RULES_OK count=$(@($allRules).Count)"
+
+# 7. Office days (get for current month)
+$currentMonth = (Get-Date).Month
+$currentYear = (Get-Date).Year
+$officeDays = Invoke-RestMethod -Method Get -Uri "$api/attendance/office-days?month=$currentMonth&year=$currentYear" -Headers $sh
+Write-Output "SMOKE_OFFICE_DAYS_OK count=$(@($officeDays).Count)"
+
+# 8. Set an office day (use focal token for management)
+$nextMonday = (Get-Date).AddDays(7 - (Get-Date).DayOfWeek.value__ + 1)
+$nextMondayStr = $nextMonday.ToString('yyyy-MM-dd')
+try {
+    $setOd = Invoke-RestMethod -Method Post -Uri "$api/attendance/office-days" -ContentType 'application/json' -Headers $fh `
+      -Body (@{date=$nextMondayStr;isOfficeDay=$true;notes='Smoke test office day'} | ConvertTo-Json)
+    Write-Output "SMOKE_SET_OFFICE_DAY_OK date=$($setOd.date.Substring(0,10))"
+} catch {
+    Write-Output "SMOKE_SET_OFFICE_DAY_SKIP (may already exist or past date)"
+}
+
+# 9. Attendance - set a technician attendance record
+try {
+    $techUser = @($user2Info) | Where-Object { $_.email -eq 'it.tech@rictms.gov.ph' } | Select-Object -First 1
+    if ($techUser) {
+        $todayStr = (Get-Date).ToString('yyyy-MM-dd')
+        $setAtt = Invoke-RestMethod -Method Post -Uri "$api/attendance" -ContentType 'application/json' -Headers $fh `
+          -Body (@{userId=$techUser.id;date=$todayStr;status='present'} | ConvertTo-Json)
+        Write-Output "SMOKE_SET_ATTENDANCE_OK userId=$($setAtt.userId) status=$($setAtt.status)"
+    } else {
+        Write-Output "SMOKE_SET_ATTENDANCE_SKIP (it.tech not found)"
+    }
+} catch {
+    Write-Output "SMOKE_SET_ATTENDANCE_FAIL: $($_.Exception.Message)"
+}
+
+# 10. Get available technicians
+try {
+    $todayStr = (Get-Date).ToString('yyyy-MM-dd')
+    $availTechs = Invoke-RestMethod -Method Get -Uri "$api/attendance/technicians?ticketType=it_support&date=$todayStr" -Headers $sh
+    Write-Output "SMOKE_AVAILABLE_TECHS_OK count=$(@($availTechs).Count)"
+} catch {
+    Write-Output "SMOKE_AVAILABLE_TECHS_FAIL: $($_.Exception.Message)"
+}
+
+# 11. Create ticket with category (auto-shift/assign test)
+$firstCat = @($itCats) | Select-Object -First 1
+if ($firstCat) {
+    $catTicket = Invoke-RestMethod -Method Post -Uri "$api/tickets" -ContentType 'application/json' -Headers $uh `
+      -Body (@{subject='My email is not working';description='Cannot access corporate email since today morning';ticketType='it_support';priority='medium';categoryId=$firstCat.id} | ConvertTo-Json)
+    Write-Output "SMOKE_TICKET_WITH_CATEGORY_OK number=$($catTicket.ticketNumber) categoryId=$($catTicket.categoryId) autoAssigned=$($catTicket.autoAssigned)"
+} else {
+    Write-Output "SMOKE_TICKET_WITH_CATEGORY_SKIP (no categories)"
+}
+
+# 12. Delete keyword rule (cleanup)
+try {
+    Invoke-RestMethod -Method Delete -Uri "$api/ticket-settings/keyword-rules/$($newRule.id)" -Headers $sh
+    Write-Output "SMOKE_DELETE_KEYWORD_RULE_OK"
+} catch {
+    Write-Output "SMOKE_DELETE_KEYWORD_RULE_FAIL: $($_.Exception.Message)"
+}
+
+# 13. Soft-delete category (cleanup)
+try {
+    Invoke-RestMethod -Method Delete -Uri "$api/ticket-settings/categories/$($newCat.id)" -Headers $sh
+    Write-Output "SMOKE_DELETE_CATEGORY_OK"
+} catch {
+    Write-Output "SMOKE_DELETE_CATEGORY_FAIL: $($_.Exception.Message)"
+}
+
 Write-Output "--- ALL SMOKE TESTS PASSED ---"

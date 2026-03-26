@@ -16,7 +16,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ticketsApi, Ticket, CreateTicketDto, TicketStatus, TicketType, TicketPriority,
-  TechnicianOption, SubmitSatisfactionDto,
+  TechnicianOption, SubmitSatisfactionDto, TicketCategory, ticketSettingsApi,
 } from '@/app/api/references';
 import { usersApi, UserRecord } from '@/lib/api/users';
 
@@ -50,6 +50,7 @@ export default function TicketsPage() {
   const [form, setForm] = useState<CreateTicketDto>({ subject: '', description: '', ticketType: 'it_support', priority: 'medium' });
   const [submitting, setSubmitting] = useState(false);
   const [allUsers, setAllUsers] = useState<UserRecord[]>([]);
+  const [categories, setCategories] = useState<TicketCategory[]>([]);
 
   // Assign dialog
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
@@ -90,6 +91,13 @@ export default function TicketsPage() {
     }
   }, [canManageAll]);
 
+  // Fetch categories when the New Ticket dialog opens or support type changes
+  useEffect(() => {
+    if (newDialogOpen) {
+      ticketSettingsApi.getCategories(form.ticketType).then(setCategories).catch(() => setCategories([]));
+    }
+  }, [newDialogOpen, form.ticketType]);
+
   const handleSubmitTicket = async () => {
     if (!form.subject.trim() || !form.description.trim()) {
       enqueueSnackbar('Subject and description are required.', { variant: 'warning' }); return;
@@ -99,7 +107,7 @@ export default function TicketsPage() {
       await ticketsApi.create(form);
       enqueueSnackbar('Ticket submitted successfully!', { variant: 'success' });
       setNewDialogOpen(false);
-      setForm({ subject: '', description: '', ticketType: 'it_support', priority: 'medium' });
+      setForm({ subject: '', description: '', ticketType: 'it_support', priority: 'medium', categoryId: undefined });
       fetchTickets();
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to submit ticket', { variant: 'error' });
@@ -197,6 +205,7 @@ export default function TicketsPage() {
               <TableCell>Ticket #</TableCell>
               <TableCell>Subject</TableCell>
               <TableCell>Type</TableCell>
+              <TableCell>Category</TableCell>
               <TableCell>Priority</TableCell>
               <TableCell>Status</TableCell>
               {canManageAll && <TableCell>Requester</TableCell>}
@@ -207,9 +216,9 @@ export default function TicketsPage() {
           </TableHead>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={9} align="center"><CircularProgress size={28} /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} align="center"><CircularProgress size={28} /></TableCell></TableRow>
             ) : tickets.length === 0 ? (
-              <TableRow><TableCell colSpan={9} align="center">
+              <TableRow><TableCell colSpan={10} align="center">
                 <Typography color="text.secondary" py={3}>No tickets found. Click "New Ticket" to submit your first request.</Typography>
               </TableCell></TableRow>
             ) : tickets.map(ticket => (
@@ -220,6 +229,9 @@ export default function TicketsPage() {
                   <Chip size="small"
                     icon={ticket.ticketType === 'desktop_support' ? <DesktopIcon /> : <ITIcon />}
                     label={TICKET_TYPE_LABELS[ticket.ticketType]} variant="outlined" />
+                </TableCell>
+                <TableCell>
+                  <Typography variant="body2" color="text.secondary">{ticket.category?.name ?? '—'}</Typography>
                 </TableCell>
                 <TableCell><Chip size="small" label={ticket.priority.toUpperCase()} color={PRIORITY_COLOR[ticket.priority]} /></TableCell>
                 <TableCell><Chip size="small" label={ticket.status.replace('_', ' ')} color={STATUS_COLOR[ticket.status]} /></TableCell>
@@ -256,18 +268,49 @@ export default function TicketsPage() {
         </Table>
       </TableContainer>
 
-      {/* New Ticket Dialog */}
+      {/* New Ticket Dialog — Redesigned with highlighted support type cards + category dropdown */}
       <Dialog open={newDialogOpen} onClose={() => setNewDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Submit a Help Desk Ticket</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Submit a Help Desk Ticket</DialogTitle>
         <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <Alert severity="info">
-              Choose the support type that matches your issue. Desktop Support handles hardware/workstation problems; IT Support handles software/network issues.
-            </Alert>
-            <TextField select label="Support Type *" value={form.ticketType} onChange={e => setForm({ ...form, ticketType: e.target.value as TicketType })} fullWidth>
-              <MenuItem value="desktop_support">🖥️  Desktop Support</MenuItem>
-              <MenuItem value="it_support">💻  IT Support</MenuItem>
-            </TextField>
+          <Stack spacing={2.5} sx={{ pt: 1 }}>
+            <Typography variant="subtitle2" color="text.secondary">Choose Support Type</Typography>
+            <Stack direction="row" spacing={2}>
+              {([
+                { value: 'it_support' as TicketType, label: 'IT Support', icon: '💻', color: '#1976d2', desc: 'Software, network, email, accounts' },
+                { value: 'desktop_support' as TicketType, label: 'Desktop Support', icon: '🖥️', color: '#388e3c', desc: 'Hardware, printers, workstations' },
+              ]).map(opt => (
+                <Card
+                  key={opt.value}
+                  onClick={() => setForm({ ...form, ticketType: opt.value, categoryId: undefined })}
+                  sx={{
+                    flex: 1, cursor: 'pointer', textAlign: 'center', py: 2, px: 1,
+                    border: form.ticketType === opt.value ? `2.5px solid ${opt.color}` : '2px solid transparent',
+                    bgcolor: form.ticketType === opt.value ? `${opt.color}10` : 'background.paper',
+                    boxShadow: form.ticketType === opt.value ? 4 : 1,
+                    transition: 'all 0.2s',
+                    '&:hover': { boxShadow: 3, borderColor: opt.color },
+                  }}
+                >
+                  <Typography variant="h5" sx={{ mb: 0.5 }}>{opt.icon}</Typography>
+                  <Typography variant="subtitle1" fontWeight={700}>{opt.label}</Typography>
+                  <Typography variant="caption" color="text.secondary">{opt.desc}</Typography>
+                </Card>
+              ))}
+            </Stack>
+
+            {categories.length > 0 && (
+              <TextField
+                select label="Category" value={form.categoryId ?? ''} fullWidth
+                onChange={e => setForm({ ...form, categoryId: e.target.value || undefined })}
+                helperText="Select a specific category for faster routing"
+              >
+                <MenuItem value="">— No specific category —</MenuItem>
+                {categories.map(c => (
+                  <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                ))}
+              </TextField>
+            )}
+
             <TextField label="Subject *" value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} fullWidth placeholder="Brief description of your issue" />
             <TextField label="Description *" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} fullWidth multiline rows={4} placeholder="Provide details: what happened, when, steps tried..." />
             {canManageAll && (
@@ -288,6 +331,10 @@ export default function TicketsPage() {
                 <MenuItem value="urgent">Urgent — Critical / blocking work</MenuItem>
               </TextField>
             )}
+
+            <Alert severity="info" sx={{ fontSize: '0.82rem' }}>
+              Tickets are auto-assigned to available technicians. You&apos;ll receive an email confirmation with your ticket details.
+            </Alert>
           </Stack>
         </DialogContent>
         <DialogActions>

@@ -1,9 +1,11 @@
-import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
-import { UserRole } from '../entities/user.entity';
+import { IsBoolean, IsOptional, IsString, MaxLength, MinLength, Matches } from 'class-validator';
 
 export class CreateRoleDefinitionDto {
-  @IsEnum(UserRole)
-  value: UserRole;
+  @IsString()
+  @MinLength(2)
+  @MaxLength(60)
+  @Matches(/^[a-z0-9_]+$/, { message: 'Role code must be lowercase letters, digits, and underscores only' })
+  value: string;
 
   @IsString()
   @MinLength(2)

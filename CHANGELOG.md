@@ -6,6 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.6.1] - 2026-03-26 — QA Fixes: Nav Links, Dashboard Metrics, Role CRUD, SMTP
+
+### Fixed
+- **Nav links broken** — "Ticket Settings" and "Attendance" sidebar items navigated to the dashboard instead of their pages. Root cause: App.tsx (React Router) was missing `Route` declarations for `/dashboard/ticket-settings` and `/dashboard/attendance`. Two routes and imports added.
+- **SMTP port type coercion** — `ConfigService.get<number>()` returns a raw string; `"465" === 465` evaluated to `false`, so `secure` was always `false` regardless of `.env` value. Fixed with explicit `parseInt()`. `.env` `SMTP_PORT` updated to `465` (Gmail implicit-SSL; port 587 STARTTLS blocked at network level).
+- **Role CRUD — code locked to enum** — `@IsEnum(UserRole)` in `CreateRoleDefinitionDto` prevented creating roles with custom codes. Replaced with `@IsString()` + `@Matches(/^[a-z0-9_]+$/)`. `updateRoleDefinition` now allows code rename for non-system roles. System roles are protected from rename and deletion.
+- **Pre-existing TS errors** — `pendingSatisfactionTickets?.length` (was used as number but typed as `Ticket[]`) and `t.openTickets` → `t.openCount` on ticket-detail page.
+
+### Added
+- **IT Help Desk Overview** on admin/staff dashboard — status breakdown tiles (open, assigned, in_progress, resolved, closed), type split (IT Support vs Desktop Support), satisfaction average, fill-rate progress bar.
+- **`POST /ticket-settings/email-test`** endpoint (super_admin only) — sends a test email via configured SMTP to verify delivery. Returns `{ sent, message }`.
+- **Delete custom role definitions** — `DELETE /users/roles/:value` endpoint; system roles are protected. Frontend Role Management card shows delete button for non-system roles with confirmation dialog.
+- **Edit role code** — frontend Role Management edit dialog now allows renaming the code field for custom (non-system) roles.
+
+### Changed
+- `SMTP_PORT` in `.env` changed from `587` to `465` (Gmail App Password requires implicit SSL on this network).
+- `CreateRolePayload.value` in `lib/api/users.ts` widened from `UserRole` enum to `string`.
+- `UpdateRolePayload` in `lib/api/users.ts` now accepts optional `value` for code rename.
+
+---
+
+## [0.6.0] - 2026-03-26 — Ticket Categories, Auto-Shift, Auto-Assign, Email & Attendance
+
+### Added
+- **Dynamic Ticket Categories** — 10 pre-seeded categories (7 IT Support, 3 Desktop Support) with full CRUD via new Ticket Settings admin page. Categories keyed for idempotent seeding; soft-delete with reactivation on key collision.
+- **Keyword-Based Auto-Shift** — New `ticket_keyword_rules` table. When a ticket is created, subject + description are scanned against keyword rules (longest match wins) to auto-set ticket type and category.
+- **Attendance-Based Auto-Assign** — New `tech_attendance` and `office_days` tables. On ticket creation the system queries available technicians (by role + attendance + office-day calendar) and assigns the one with the fewest open tickets.
+- **Email Notifications** — `EmailService` using nodemailer. Ticket-created email sent to requester and assigned technician (fire-and-forget). Non-attendance summary email support.
+- **Attendance Management Page** — New `/dashboard/attendance` page with monthly office-day calendar (click-to-toggle, weekday defaults) and technician attendance grid (cycle through present / absent / half_day / out_of_office).
+- **Ticket Settings Page** — New `/dashboard/ticket-settings` page with tabs for Categories CRUD and Keyword Rules CRUD.
+- **Sidebar Navigation** — Added "Ticket Settings" (super_admin + technician roles) and "Attendance" (super_admin, focal, reviewer, technician roles) nav items.
+- **Backend Endpoints**:
+  - `GET/POST /ticket-settings/categories`, `GET/PATCH/DELETE /ticket-settings/categories/:id`
+  - `GET/POST /ticket-settings/keyword-rules`, `GET/PATCH/DELETE /ticket-settings/keyword-rules/:id`
+  - `GET/POST /attendance`, `POST /attendance/bulk`, `GET /attendance/technicians`
+  - `GET/POST /attendance/office-days`, `POST /attendance/office-days/bulk`
+- **13 new smoke tests** (total 37) covering categories, keyword rules, office days, attendance, auto-assign.
+
+### Changed
+- **New Ticket Dialog** redesigned with highlighted support-type cards (IT = blue, Desktop = green) and dynamic category dropdown filtered by selected type.
+- **Tickets table** now includes a "Category" column.
+- `ticket_categories` table gains `ticket_type` column (varchar 30, default `it_support`).
+- `tickets` table gains `category_id` column (varchar 36, nullable FK to `ticket_categories`).
+- `createTicket()` fully rewritten with auto-shift → auto-assign → email pipeline.
+- `getTickets()` and `getTicketById()` now join and return the ticket category.
+
+### Dependencies
+- Added `nodemailer` ^6.10.1 and `@types/nodemailer` ^6.4.17.
+
+---
+
 ## [0.5.2] - 2026-03-25 — Entity Compile Fixes & DB Schema Corrections
 
 ### Fixed

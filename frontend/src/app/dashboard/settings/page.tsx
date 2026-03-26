@@ -43,6 +43,7 @@ import {
   People as PeopleIcon,
   CheckCircle as ActiveIcon,
   Cancel as InactiveIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
@@ -173,7 +174,7 @@ function RoleManagementCard() {
   const [saving, setSaving] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
   const [form, setForm] = useState({
-    value: UserRole.FOCAL,
+    value: '',
     label: '',
     description: '',
     assignable: true,
@@ -194,17 +195,18 @@ function RoleManagementCard() {
     loadRoles();
   }, [loadRoles]);
 
-  const enumValues = Object.values(UserRole);
-  const usedValues = new Set(roles.map((r) => r.value));
-  const availableCodes = enumValues.filter((value) => !usedValues.has(value));
-
   const handleCreate = async () => {
+    const codeVal = form.value.trim().toLowerCase().replace(/\s+/g, '_');
+    if (!codeVal.match(/^[a-z0-9_]+$/)) {
+      enqueueSnackbar('Role code must use lowercase letters, digits, and underscores only.', { variant: 'error' });
+      return;
+    }
     try {
       setSaving(true);
-      await usersApi.createRoleDefinition(form);
+      await usersApi.createRoleDefinition({ ...form, value: codeVal });
       enqueueSnackbar('Role definition added.', { variant: 'success' });
       setCreateOpen(false);
-      setForm({ value: UserRole.FOCAL, label: '', description: '', assignable: true });
+      setForm({ value: '', label: '', description: '', assignable: true });
       await loadRoles();
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to create role definition.', { variant: 'error' });
@@ -217,10 +219,12 @@ function RoleManagementCard() {
     if (!selected) return;
     try {
       setSaving(true);
-      await usersApi.updateRoleDefinition(selected.value, {
+      const originalValue = (selected as any)._originalValue ?? selected.value;
+      await usersApi.updateRoleDefinition(originalValue, {
+        value: selected.value !== originalValue ? selected.value : undefined,
         label: selected.label,
         description: selected.description,
-        assignable: selected.value === UserRole.SUPER_ADMIN ? false : selected.assignable,
+        assignable: selected.value === 'super_admin' ? false : selected.assignable,
       });
       enqueueSnackbar('Role definition updated.', { variant: 'success' });
       setSelected(null);
@@ -232,29 +236,34 @@ function RoleManagementCard() {
     }
   };
 
+  const handleDelete = async (roleValue: string) => {
+    if (!window.confirm(`Delete custom role "${roleValue}"? This cannot be undone.`)) return;
+    try {
+      await usersApi.deleteRoleDefinition(roleValue);
+      enqueueSnackbar(`Role "${roleValue}" deleted.`, { variant: 'success' });
+      await loadRoles();
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to delete role.', { variant: 'error' });
+    }
+  };
+
   return (
     <Card elevation={2}>
       <CardHeader
         avatar={<RoleIcon color="primary" />}
         title="System Role Definitions"
-        subheader="View all roles available for user provisioning. System roles are pre-defined and cannot be deleted."
+        subheader="Manage roles for user provisioning. System roles cannot be deleted; custom roles can have their code renamed or deleted."
         action={
           <Button
             variant="outlined"
             size="small"
             onClick={() => setCreateOpen(true)}
-            disabled={availableCodes.length === 0}
           >
             Add Role Definition
           </Button>
         }
       />
       <CardContent>
-        {availableCodes.length === 0 && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Add Role Definition is disabled because all predefined role codes are already in use.
-          </Typography>
-        )}
         {loading ? (
           <Typography variant="body2" color="text.secondary">Loading roles...</Typography>
         ) : (
@@ -265,7 +274,7 @@ function RoleManagementCard() {
                   <TableCell><strong>Role</strong></TableCell>
                   <TableCell><strong>Code</strong></TableCell>
                   <TableCell><strong>Assignable</strong></TableCell>
-                  <TableCell align="right"><strong>Details</strong></TableCell>
+                  <TableCell align="right"><strong>Actions</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -275,7 +284,7 @@ function RoleManagementCard() {
                       <Typography variant="body2" fontWeight={600}>{role.label}</Typography>
                     </TableCell>
                     <TableCell>
-                      <Chip label={role.value} size="small" variant="outlined" />
+                      <Chip label={role.value} size="small" variant="outlined" color={role.isSystem || role.is_system ? 'default' : 'primary'} />
                     </TableCell>
                     <TableCell>
                       {role.assignable
@@ -283,11 +292,18 @@ function RoleManagementCard() {
                         : <Chip label="System Only" size="small" color="default" />}
                     </TableCell>
                     <TableCell align="right">
-                      <Tooltip title="View description">
-                        <IconButton size="small" onClick={() => setSelected(role)}>
+                      <Tooltip title="Edit">
+                        <IconButton size="small" onClick={() => setSelected({ ...role, _originalValue: role.value } as any)}>
                           <EditIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                      {!(role.isSystem || role.is_system) && (
+                        <Tooltip title="Delete custom role">
+                          <IconButton size="small" color="error" onClick={() => handleDelete(role.value)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -300,8 +316,10 @@ function RoleManagementCard() {
                 <TextField
                   label="Role Code"
                   value={selected?.value || ''}
+                  onChange={(e) => setSelected((prev) => prev ? { ...prev, value: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') } : prev)}
                   fullWidth
-                  disabled
+                  disabled={Boolean(selected?.isSystem || selected?.is_system)}
+                  helperText={(selected?.isSystem || selected?.is_system) ? 'System role codes are fixed' : 'Custom role \u2014 code can be renamed'}
                   sx={{ mb: 2 }}
                 />
                 <TextField
@@ -324,7 +342,7 @@ function RoleManagementCard() {
                   control={
                     <Switch
                       checked={Boolean(selected?.assignable)}
-                      disabled={selected?.value === UserRole.SUPER_ADMIN}
+                      disabled={selected?.value === 'super_admin'}
                       onChange={(e) => setSelected((prev) => prev ? { ...prev, assignable: e.target.checked } : prev)}
                     />
                   }
@@ -343,17 +361,13 @@ function RoleManagementCard() {
               <DialogTitle>Add Role Definition</DialogTitle>
               <DialogContent dividers>
                 <TextField
-                  select
                   label="Role Code"
                   value={form.value}
-                  onChange={(e) => setForm((prev) => ({ ...prev, value: e.target.value as UserRole }))}
+                  onChange={(e) => setForm((prev) => ({ ...prev, value: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') }))}
                   fullWidth
+                  helperText="Lowercase letters, digits, and underscores. E.g. section_head"
                   sx={{ mb: 2 }}
-                >
-                  {availableCodes.map((code) => (
-                    <MenuItem key={code} value={code}>{code}</MenuItem>
-                  ))}
-                </TextField>
+                />
                 <TextField
                   label="Role Label"
                   value={form.label}
@@ -373,8 +387,8 @@ function RoleManagementCard() {
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={form.value === UserRole.SUPER_ADMIN ? false : form.assignable}
-                      disabled={form.value === UserRole.SUPER_ADMIN}
+                      checked={form.value === 'super_admin' ? false : form.assignable}
+                      disabled={form.value === 'super_admin'}
                       onChange={(e) => setForm((prev) => ({ ...prev, assignable: e.target.checked }))}
                     />
                   }
@@ -386,7 +400,7 @@ function RoleManagementCard() {
                 <Button
                   variant="contained"
                   onClick={handleCreate}
-                  disabled={saving || !form.label || !form.description || availableCodes.length === 0}
+                  disabled={saving || !form.value || !form.label || !form.description}
                 >
                   {saving ? 'Saving...' : 'Create'}
                 </Button>

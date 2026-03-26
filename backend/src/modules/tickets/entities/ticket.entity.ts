@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { TicketComment } from './ticket-comment.entity';
+import { TicketCategoryConfig } from './ticket-category.entity';
 
 export enum TicketType {
   DESKTOP_SUPPORT = 'desktop_support',
@@ -59,6 +60,14 @@ export class Ticket {
 
   @Column({ type: 'varchar', length: 10, default: TicketPriority.MEDIUM })
   priority: TicketPriority;
+
+  // --- Category ---
+  @Column({ name: 'category_id', type: 'varchar', length: 36, nullable: true })
+  categoryId: string | null;
+
+  @ManyToOne(() => TicketCategoryConfig, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'category_id' })
+  category: TicketCategoryConfig | null;
 
   // --- Requester ---
   @Column({ name: 'requester_id', type: 'int' })

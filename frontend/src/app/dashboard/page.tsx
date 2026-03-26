@@ -30,6 +30,10 @@ import {
   PendingActions as PendingIcon,
   CheckCircleOutline as ResolvedIcon,
   Cancel as ClosedIcon,
+  Assignment as AssignedIcon,
+  PlayCircle as InProgressIcon,
+  Computer as DesktopIcon,
+  Wifi as ItSupportIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -60,6 +64,16 @@ export default function DashboardPage() {
 
   // User-specific ticket dashboard stats
   const [userTicketStats, setUserTicketStats] = useState<TicketDashboardStats | null>(null);
+
+  // Admin-level full ticket metrics
+  const [ticketMetrics, setTicketMetrics] = useState<{
+    total: number;
+    byStatus: Record<string, number>;
+    byType: Record<string, number>;
+    satisfactionAvg: number | null;
+    satisfactionFillRate: number;
+    resolvedTickets: number;
+  } | null>(null);
 
   const now = useMemo(() => new Date(), []);
   const periodYear = now.getFullYear();
@@ -102,15 +116,16 @@ export default function DashboardPage() {
       const pending = docs.filter((d: any) => d.status === 'pending' || d.status === 'processing').length;
 
       // Fetch ticket statistics
-      let ticketStats = { total: 0, byStatus: {}, byPriority: {} };
+      let ticketStats: any = { total: 0, byStatus: {}, byType: {}, satisfactionAvg: null, satisfactionFillRate: 0, resolvedTickets: 0 };
       if (ticketStatsResult.status === 'fulfilled') {
         ticketStats = ticketStatsResult.value;
       } else {
         // Statistics endpoint might not be available
         const tickets = await ticketsApi.getAll({});
         const openTickets = tickets.filter((t: any) => t.status === 'open' || t.status === 'in_progress');
-        ticketStats = { total: tickets.length, byStatus: { open: openTickets.length }, byPriority: {} };
+        ticketStats = { total: tickets.length, byStatus: { open: openTickets.length }, byType: {}, satisfactionAvg: null, satisfactionFillRate: 0, resolvedTickets: 0 };
       }
+      setTicketMetrics(ticketStats);
 
       // Fetch cybersecurity metrics from API
       if (metricsResult.status === 'fulfilled') {
@@ -154,7 +169,7 @@ export default function DashboardPage() {
   if (isRegularUser) {
     const s = userTicketStats;
     const fillRate = s?.satisfactionFillRate ?? 0;
-    const pendingCount = s?.pendingSatisfactionTickets ?? 0;
+    const pendingCount = s?.pendingSatisfactionTickets?.length ?? 0;
 
     return (
       <Box>
@@ -467,6 +482,94 @@ export default function DashboardPage() {
                 </Paper>
               </Grid>
             </Grid>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* IT Help Desk Metrics */}
+      {ticketMetrics && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent>
+            <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
+              <Box display="flex" alignItems="center" gap={2}>
+                <TicketIcon color="info" fontSize="large" />
+                <Box>
+                  <Typography variant="h6">IT Help Desk Overview</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Total: {ticketMetrics.total} tickets • Resolved: {ticketMetrics.resolvedTickets}
+                    {ticketMetrics.satisfactionAvg !== null && ` • Satisfaction: ${ticketMetrics.satisfactionAvg}/5`}
+                  </Typography>
+                </Box>
+              </Box>
+              <Button variant="outlined" size="small" href="/dashboard/tickets">View All Tickets</Button>
+            </Box>
+
+            {/* Status Breakdown */}
+            <Grid container spacing={2} mb={2}>
+              {[
+                { key: 'open', label: 'Open', color: 'warning' as const, Icon: TicketIcon },
+                { key: 'assigned', label: 'Assigned', color: 'info' as const, Icon: AssignedIcon },
+                { key: 'in_progress', label: 'In Progress', color: 'primary' as const, Icon: InProgressIcon },
+                { key: 'resolved', label: 'Resolved', color: 'success' as const, Icon: ResolvedIcon },
+                { key: 'closed', label: 'Closed', color: 'default' as const, Icon: ClosedIcon },
+              ].map(({ key, label, color, Icon }) => (
+                <Grid item xs={6} sm={4} md={2} key={key}>
+                  <Paper sx={{ p: 1.5, textAlign: 'center', border: 1, borderColor: color === 'default' ? 'divider' : `${color}.main` }}>
+                    <Icon color={color === 'default' ? 'action' : color} fontSize="small" />
+                    <Typography variant="h5" color={color === 'default' ? 'text.secondary' : `${color}.main`} mt={0.5}>
+                      {ticketMetrics.byStatus[key] ?? 0}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">{label}</Typography>
+                  </Paper>
+                </Grid>
+              ))}
+              <Grid item xs={6} sm={4} md={2}>
+                <Paper sx={{ p: 1.5, textAlign: 'center', border: 1, borderColor: 'divider' }}>
+                  <StarIcon color="warning" fontSize="small" />
+                  <Typography variant="h5" color="warning.main" mt={0.5}>
+                    {ticketMetrics.satisfactionAvg !== null ? `${ticketMetrics.satisfactionAvg}` : '—'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">Satisfaction</Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Type Breakdown */}
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5, border: 1, borderColor: 'info.main' }}>
+                  <ItSupportIcon color="info" />
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">IT Support</Typography>
+                    <Typography variant="h6" color="info.main">{ticketMetrics.byType['it_support'] ?? 0} tickets</Typography>
+                  </Box>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5, border: 1, borderColor: 'success.main' }}>
+                  <DesktopIcon color="success" />
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">Desktop Support</Typography>
+                    <Typography variant="h6" color="success.main">{ticketMetrics.byType['desktop_support'] ?? 0} tickets</Typography>
+                  </Box>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {ticketMetrics.satisfactionFillRate > 0 && (
+              <Box mt={2}>
+                <Box display="flex" justifyContent="space-between" mb={0.5}>
+                  <Typography variant="body2" color="text.secondary">Satisfaction fill rate</Typography>
+                  <Typography variant="body2" fontWeight={600}>{ticketMetrics.satisfactionFillRate}%</Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min(ticketMetrics.satisfactionFillRate, 100)}
+                  color={ticketMetrics.satisfactionFillRate >= 80 ? 'success' : ticketMetrics.satisfactionFillRate >= 50 ? 'warning' : 'error'}
+                  sx={{ height: 8, borderRadius: 4 }}
+                />
+              </Box>
+            )}
           </CardContent>
         </Card>
       )}

@@ -488,7 +488,7 @@ export default function TicketDetailPage() {
               })
               .map((t) => (
                 <MenuItem key={t.id} value={t.id}>
-                  {t.firstName} {t.lastName} ({t.openTickets} open)
+                  {t.firstName} {t.lastName} ({t.openCount} open)
                 </MenuItem>
               ))}
           </TextField>

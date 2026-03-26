@@ -94,6 +94,8 @@ export interface Ticket {
   ticketType: TicketType;
   status: TicketStatus;
   priority: TicketPriority;
+  categoryId?: string | null;
+  category?: TicketCategory | null;
   requesterId: number;
   requester?: { id: number; email: string; firstName?: string; lastName?: string };
   assignedToId?: number | null;
@@ -123,6 +125,7 @@ export interface CreateTicketDto {
   description: string;
   ticketType: TicketType;
   priority?: TicketPriority;
+  categoryId?: string;
   /** Staff only: override the requester (for walk-ins / phone calls) */
   requesterId?: number;
 }
@@ -161,6 +164,52 @@ export interface TicketDashboardStats {
   closed: number;
   satisfactionFillRate: number;
   pendingSatisfactionTickets: Ticket[];
+}
+
+// --- v0.6 Ticket Settings / Attendance types --------------------------------
+
+export interface TicketCategory {
+  id: string;
+  key: string;
+  name: string;
+  ticketType: string;
+  isActive: boolean;
+  isDeleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TicketKeywordRule {
+  id: string;
+  keyword: string;
+  targetTicketType: string;
+  targetCategoryId?: string | null;
+  category?: TicketCategory | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AttendanceStatus = 'present' | 'absent' | 'half_day' | 'out_of_office';
+
+export interface TechAttendance {
+  id: string;
+  userId: number;
+  user?: { id: number; email: string; firstName?: string; lastName?: string; role?: string };
+  date: string;
+  status: AttendanceStatus;
+  notes?: string;
+  setById?: number;
+  createdAt: string;
+}
+
+export interface OfficeDay {
+  id: string;
+  date: string;
+  isOfficeDay: boolean;
+  notes?: string;
+  setById?: number;
+  createdAt: string;
 }
 
 
@@ -314,3 +363,84 @@ export const ticketsApi = {
   },
 };
 
+// Ticket Settings API (Categories + Keyword Rules)
+export const ticketSettingsApi = {
+  // Categories
+  getCategories: async (ticketType?: string): Promise<TicketCategory[]> => {
+    const params = ticketType ? `?ticketType=${ticketType}` : '';
+    const response = await apiClient.get(`/ticket-settings/categories${params}`);
+    return response.data;
+  },
+  getCategoryById: async (id: string): Promise<TicketCategory> => {
+    const response = await apiClient.get(`/ticket-settings/categories/${id}`);
+    return response.data;
+  },
+  createCategory: async (data: { name: string; ticketType: string; isActive?: boolean }): Promise<TicketCategory> => {
+    const response = await apiClient.post(`/ticket-settings/categories`, data);
+    return response.data;
+  },
+  updateCategory: async (id: string, data: Partial<{ name: string; ticketType: string; isActive: boolean }>): Promise<TicketCategory> => {
+    const response = await apiClient.patch(`/ticket-settings/categories/${id}`, data);
+    return response.data;
+  },
+  deleteCategory: async (id: string): Promise<void> => {
+    await apiClient.delete(`/ticket-settings/categories/${id}`);
+  },
+
+  // Keyword Rules
+  getKeywordRules: async (): Promise<TicketKeywordRule[]> => {
+    const response = await apiClient.get(`/ticket-settings/keyword-rules`);
+    return response.data;
+  },
+  createKeywordRule: async (data: { keyword: string; targetTicketType: string; targetCategoryId?: string; isActive?: boolean }): Promise<TicketKeywordRule> => {
+    const response = await apiClient.post(`/ticket-settings/keyword-rules`, data);
+    return response.data;
+  },
+  updateKeywordRule: async (id: string, data: Partial<{ keyword: string; targetTicketType: string; targetCategoryId?: string; isActive: boolean }>): Promise<TicketKeywordRule> => {
+    const response = await apiClient.patch(`/ticket-settings/keyword-rules/${id}`, data);
+    return response.data;
+  },
+  deleteKeywordRule: async (id: string): Promise<void> => {
+    await apiClient.delete(`/ticket-settings/keyword-rules/${id}`);
+  },
+};
+
+// Attendance API
+export const attendanceApi = {
+  // Tech attendance
+  getAttendance: async (startDate: string, endDate: string, ticketType?: string): Promise<TechAttendance[]> => {
+    const params = new URLSearchParams({ startDate, endDate });
+    if (ticketType) params.append('ticketType', ticketType);
+    const response = await apiClient.get(`/attendance?${params}`);
+    return response.data;
+  },
+  setAttendance: async (data: { userId: number; date: string; status: AttendanceStatus; notes?: string }): Promise<TechAttendance> => {
+    const response = await apiClient.post(`/attendance`, data);
+    return response.data;
+  },
+  bulkSetAttendance: async (data: { entries: { userId: number; date: string; status: AttendanceStatus; notes?: string }[] }): Promise<TechAttendance[]> => {
+    const response = await apiClient.post(`/attendance/bulk`, data);
+    return response.data;
+  },
+  getAvailableTechnicians: async (ticketType: string, date: string): Promise<any[]> => {
+    const response = await apiClient.get(`/attendance/technicians?ticketType=${ticketType}&date=${date}`);
+    return response.data;
+  },
+
+  // Office days
+  getOfficeDays: async (month?: string, year?: string): Promise<OfficeDay[]> => {
+    const params = new URLSearchParams();
+    if (month) params.append('month', month);
+    if (year) params.append('year', year);
+    const response = await apiClient.get(`/attendance/office-days?${params}`);
+    return response.data;
+  },
+  setOfficeDay: async (data: { date: string; isOfficeDay: boolean; notes?: string }): Promise<OfficeDay> => {
+    const response = await apiClient.post(`/attendance/office-days`, data);
+    return response.data;
+  },
+  bulkSetOfficeDays: async (data: { days: { date: string; isOfficeDay: boolean; notes?: string }[] }): Promise<OfficeDay[]> => {
+    const response = await apiClient.post(`/attendance/office-days/bulk`, data);
+    return response.data;
+  },
+};

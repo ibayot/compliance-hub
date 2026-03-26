@@ -61,13 +61,14 @@ export interface UpdateUserPayload {
 }
 
 export interface CreateRolePayload {
-  value: UserRole;
+  value: string;
   label: string;
   description: string;
   assignable?: boolean;
 }
 
 export interface UpdateRolePayload {
+  value?: string;
   label?: string;
   description?: string;
   assignable?: boolean;
@@ -115,6 +116,10 @@ export const usersApi = {
   updateRoleDefinition: async (value: string, payload: UpdateRolePayload): Promise<RoleDefinition> => {
     const response = await apiClient.patch(`/users/roles/${value}`, payload);
     return response.data;
+  },
+
+  deleteRoleDefinition: async (value: string): Promise<void> => {
+    await apiClient.delete(`/users/roles/${value}`);
   },
 
   searchEmails: async (q: string): Promise<{ id: number; email: string; firstName?: string; lastName?: string }[]> => {

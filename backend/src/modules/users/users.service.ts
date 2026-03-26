@@ -127,12 +127,13 @@ export class UsersService {
       throw new ConflictException(`Role definition for '${dto.value}' already exists`);
     }
 
+    const isSystemRole = Object.values(UserRole).includes(dto.value as UserRole);
     const role = this.roleDefinitionsRepository.create({
       value: dto.value,
       label: dto.label,
       description: dto.description,
       assignable: dto.value === UserRole.SUPER_ADMIN ? false : (dto.assignable ?? true),
-      isSystem: true,
+      isSystem: isSystemRole,
     });
 
     return this.roleDefinitionsRepository.save(role);
@@ -144,8 +145,16 @@ export class UsersService {
       throw new NotFoundException(`Role definition '${value}' not found`);
     }
 
+    // Allow renaming the code only for custom (non-system) roles
     if (dto.value && dto.value !== role.value) {
-      throw new BadRequestException('Role code cannot be changed.');
+      if (role.isSystem) {
+        throw new BadRequestException('System role codes cannot be changed.');
+      }
+      const codeExists = await this.roleDefinitionsRepository.findOne({ where: { value: dto.value } });
+      if (codeExists) {
+        throw new ConflictException(`Role code '${dto.value}' is already in use.`);
+      }
+      role.value = dto.value;
     }
 
     if (dto.label !== undefined) role.label = dto.label;
@@ -155,6 +164,17 @@ export class UsersService {
     }
 
     return this.roleDefinitionsRepository.save(role);
+  }
+
+  async deleteRoleDefinition(value: string) {
+    const role = await this.roleDefinitionsRepository.findOne({ where: { value } });
+    if (!role) {
+      throw new NotFoundException(`Role definition '${value}' not found`);
+    }
+    if (role.isSystem) {
+      throw new BadRequestException(`System role '${value}' cannot be deleted. Only custom roles can be removed.`);
+    }
+    await this.roleDefinitionsRepository.remove(role);
   }
 
   async create(createUserDto: CreateUserDto): Promise<User> {

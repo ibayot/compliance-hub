@@ -17,6 +17,10 @@ export class TicketCategoryConfig {
   @Column({ type: 'varchar', length: 150 })
   name: string;
 
+  /** Which support type this category belongs to: desktop_support | it_support */
+  @Column({ name: 'ticket_type', type: 'varchar', length: 30, default: 'it_support' })
+  ticketType: string;
+
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
