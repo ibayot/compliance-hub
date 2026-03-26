@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.5.2] - 2026-03-25 — Entity Compile Fixes & DB Schema Corrections
+
+### Fixed
+- **`ticket-category.entity.ts`** — Removed invalid `@OneToMany` back-reference to `ticket.category_config` (property was never defined on `Ticket`), eliminating a TypeScript compile error that prevented the backend from starting.
+- **`ticket-issue-type.entity.ts`** — Same fix: removed orphan `@OneToMany` referencing `ticket.issue_type_config`.
+- **`tickets.status` DB enum** — Added `'assigned'` to the ENUM column (was `open,in_progress,resolved,closed`); missing value caused TypeORM to silently save empty string when a ticket was assigned.
+- **`tickets.reported_by_id` NOT NULL** — Legacy `reported_by_id INT NOT NULL` blocked all new ticket creation. Migration now runs `ALTER TABLE tickets MODIFY COLUMN reported_by_id INT(11) NULL` at startup.
+- All smoke tests now pass cleanly end-to-end including user login, ticket list, ticket create, walk-in ticket, and assign ticket tests.
+
+---
+
+## [0.5.1] - 2026-03-25 — QA Fixes: Ticket Creation, User Roles, Settings UX
+
+### Added
+- Smoke tests for `user` role login, ticket list, ticket create, walk-in ticket creation, technician assign.
+- Seed accounts: `desktop.tech@rictms.gov.ph`, `it.tech@rictms.gov.ph`, `user1@example.com`, `user2@example.com`.
+
+### Fixed
+- `GET /tickets` returned 403 for `user` role (guard config corrected, stale backend process killed).
+- `POST /tickets` returned 400 — `CreateTicketDto` now accepts `ticketType`, `requesterId`, correct field names.
+- User role now hidden from priority selector on ticket creation form.
+- `handleAddComment` and `handleAssign` frontend calls fixed (were passing objects, now pass correct primitives).
+- Settings page "Create User" — password field now optional for existing email accounts.
+
+---
+
 ## [0.5.0] - 2026 — IT Help-Desk Ticketing, Role System Overhaul, User Nav Restriction
 
 ### Added

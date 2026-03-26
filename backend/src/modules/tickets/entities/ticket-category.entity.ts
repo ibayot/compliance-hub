@@ -4,9 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany,
 } from 'typeorm';
-import { Ticket } from './ticket.entity';
 
 @Entity('ticket_categories')
 export class TicketCategoryConfig {
@@ -33,9 +31,6 @@ export class TicketCategoryConfig {
 
   @Column({ type: 'int', nullable: true })
   updated_by: number | null;
-
-  @OneToMany(() => Ticket, (ticket) => ticket.category_config)
-  tickets: Ticket[];
 
   @CreateDateColumn()
   created_at: Date;

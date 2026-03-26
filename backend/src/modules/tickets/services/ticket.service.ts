@@ -87,6 +87,16 @@ export class TicketService implements OnModuleInit {
       await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS satisfaction_comment TEXT NULL').catch(() => undefined);
       await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS satisfaction_submitted_at DATETIME NULL').catch(() => undefined);
 
+      // Make legacy reported_by_id nullable so new tickets only need requester_id
+      await qr.query(
+        'ALTER TABLE tickets MODIFY COLUMN reported_by_id INT(11) NULL',
+      ).catch(() => undefined);
+
+      // Ensure status enum includes all current values (add 'assigned' if missing)
+      await qr.query(
+        "ALTER TABLE tickets MODIFY COLUMN status ENUM('open','assigned','in_progress','resolved','closed') NOT NULL DEFAULT 'open'",
+      ).catch(() => undefined);
+
       // Backfill requester_id from legacy reported_by_id if needed
       await qr.query(
         'UPDATE tickets SET requester_id = reported_by_id WHERE requester_id IS NULL AND reported_by_id IS NOT NULL',
