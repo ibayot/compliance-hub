@@ -53,19 +53,19 @@ export class TicketSettingsService {
   // ── Categories ──────────────────────────────────────────────────────────
 
   async listCategories(ticketType?: string): Promise<TicketCategoryConfig[]> {
-    const where: any = { is_deleted: false };
+    const where: any = { isDeleted: false };
     if (ticketType) where.ticketType = ticketType;
     return this.categoryRepo.find({ where, order: { name: 'ASC' } });
   }
 
   async listActiveCategories(ticketType?: string): Promise<TicketCategoryConfig[]> {
-    const where: any = { is_active: true, is_deleted: false };
+    const where: any = { isActive: true, isDeleted: false };
     if (ticketType) where.ticketType = ticketType;
     return this.categoryRepo.find({ where, order: { name: 'ASC' } });
   }
 
   async getCategoryById(id: string): Promise<TicketCategoryConfig> {
-    const cat = await this.categoryRepo.findOne({ where: { id, is_deleted: false } });
+    const cat = await this.categoryRepo.findOne({ where: { id, isDeleted: false } });
     if (!cat) throw new NotFoundException(`Category ${id} not found`);
     return cat;
   }
@@ -78,17 +78,17 @@ export class TicketSettingsService {
 
     const key = dto.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
 
-    const existing = await this.categoryRepo.findOne({ where: { key, is_deleted: false } });
+    const existing = await this.categoryRepo.findOne({ where: { key, isDeleted: false } });
     if (existing) throw new BadRequestException(`Category key "${key}" already exists`);
 
     // Reactivate soft-deleted category with same key if it exists
-    const softDeleted = await this.categoryRepo.findOne({ where: { key, is_deleted: true } });
+    const softDeleted = await this.categoryRepo.findOne({ where: { key, isDeleted: true } });
     if (softDeleted) {
       softDeleted.name = dto.name.trim();
       softDeleted.ticketType = dto.ticketType;
       softDeleted.description = dto.description?.trim() || null;
-      softDeleted.is_active = true;
-      softDeleted.is_deleted = false;
+      softDeleted.isActive = true;
+      softDeleted.isDeleted = false;
       softDeleted.created_by = actorId;
       softDeleted.updated_by = actorId;
       return this.categoryRepo.save(softDeleted);
@@ -99,8 +99,8 @@ export class TicketSettingsService {
       name: dto.name.trim(),
       ticketType: dto.ticketType,
       description: dto.description?.trim() || null,
-      is_active: true,
-      is_deleted: false,
+      isActive: true,
+      isDeleted: false,
       created_by: actorId,
       updated_by: actorId,
     });
@@ -121,7 +121,7 @@ export class TicketSettingsService {
       cat.ticketType = dto.ticketType;
     }
     if (dto.description !== undefined) cat.description = dto.description?.trim() || null;
-    if (dto.isActive !== undefined) cat.is_active = dto.isActive;
+    if (dto.isActive !== undefined) cat.isActive = dto.isActive;
     cat.updated_by = actorId;
 
     return this.categoryRepo.save(cat);
@@ -129,8 +129,8 @@ export class TicketSettingsService {
 
   async deleteCategory(id: string, actorId: number): Promise<void> {
     const cat = await this.getCategoryById(id);
-    cat.is_deleted = true;
-    cat.is_active = false;
+    cat.isDeleted = true;
+    cat.isActive = false;
     cat.updated_by = actorId;
     await this.categoryRepo.save(cat);
   }

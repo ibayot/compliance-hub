@@ -127,17 +127,37 @@ export default function AttendancePage() {
   }, [tab, fetchTechnicians, fetchAttendance]);
   useEffect(() => { if (tab === 2) fetchStaffLoginStaff(); }, [tab, fetchStaffLoginStaff]);
 
-  // ── Auto-refresh: keep active tab data fresh every 30 s (live updates across instances) ──
-  const refreshTab1 = useCallback(() => {
-    if (tab === 1) { fetchTechnicians(); fetchAttendance(); }
-  }, [tab, fetchTechnicians, fetchAttendance]);
-  const refreshTab2 = useCallback(() => {
-    if (tab === 2) fetchStaffLoginStaff();
-  }, [tab, fetchStaffLoginStaff]);
+  // ── Silent auto-refresh: update data every 30s without showing loading spinners (avoids flicker) ──
+  const silentRefreshOfficeDays = useCallback(async () => {
+    try {
+      const data = await attendanceApi.getOfficeDays(String(month + 1), String(year));
+      setOfficeDays(data);
+    } catch { /* silent — do not show error on background poll */ }
+  }, [year, month]);
 
-  useAutoRefresh(fetchOfficeDays);
-  useAutoRefresh(refreshTab1);
-  useAutoRefresh(refreshTab2);
+  const silentRefreshTab1 = useCallback(async () => {
+    if (tab !== 1) return;
+    try {
+      const [techs, att] = await Promise.all([
+        attendanceApi.getTechnicians(attType || undefined),
+        attendanceApi.getAttendance(startDate, endDate, attType || undefined),
+      ]);
+      setTechnicians(techs);
+      setAttendance(att);
+    } catch { /* silent */ }
+  }, [tab, attType, startDate, endDate]);
+
+  const silentRefreshTab2 = useCallback(async () => {
+    if (tab !== 2) return;
+    try {
+      const data = await attendanceApi.getStaffLoginsMonthly(startDate, endDate);
+      setStaffLoginStaff(data);
+    } catch { /* silent */ }
+  }, [tab, startDate, endDate]);
+
+  useAutoRefresh(silentRefreshOfficeDays);
+  useAutoRefresh(silentRefreshTab1);
+  useAutoRefresh(silentRefreshTab2);
 
   // Office day map: date → OfficeDay
   const odMap = useMemo(() => {
@@ -304,11 +324,14 @@ export default function AttendancePage() {
                   <TableHead>
                     <TableRow>
                       <TableCell sx={{ position: 'sticky', left: 0, zIndex: 3, bgcolor: 'background.paper', minWidth: 160 }}>Technician</TableCell>
-                      {weekdays.map(d => (
-                        <TableCell key={formatDate(d)} align="center" sx={{ minWidth: 36, px: 0.5 }}>
-                          <Typography variant="caption">{d.getDate()}</Typography>
-                        </TableCell>
-                      ))}
+                      {weekdays.map(d => {
+                        const isOffice = isOfficeDayForDate(d);
+                        return (
+                          <TableCell key={formatDate(d)} align="center" sx={{ minWidth: 36, px: 0.5, ...(isOffice ? {} : { bgcolor: 'action.disabledBackground' }) }}>
+                            <Typography variant="caption" color={isOffice ? 'text.primary' : 'text.disabled'}>{d.getDate()}</Typography>
+                          </TableCell>
+                        );
+                      })}
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -384,11 +407,14 @@ export default function AttendancePage() {
                   <TableHead>
                     <TableRow>
                       <TableCell sx={{ position: 'sticky', left: 0, zIndex: 3, bgcolor: 'background.paper', minWidth: 180 }}>Staff Member</TableCell>
-                      {weekdays.map(d => (
-                        <TableCell key={formatDate(d)} align="center" sx={{ minWidth: 36, px: 0.5 }}>
-                          <Typography variant="caption">{d.getDate()}</Typography>
-                        </TableCell>
-                      ))}
+                      {weekdays.map(d => {
+                        const isOffice = isOfficeDayForDate(d);
+                        return (
+                          <TableCell key={formatDate(d)} align="center" sx={{ minWidth: 36, px: 0.5, ...(isOffice ? {} : { bgcolor: 'action.disabledBackground' }) }}>
+                            <Typography variant="caption" color={isOffice ? 'text.primary' : 'text.disabled'}>{d.getDate()}</Typography>
+                          </TableCell>
+                        );
+                      })}
                     </TableRow>
                   </TableHead>
                   <TableBody>

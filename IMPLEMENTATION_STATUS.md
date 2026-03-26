@@ -1,6 +1,17 @@
 # RICTMS Compliance Hub - Implementation Progress Report
 
-## 🚀 v0.6.4 — QA Fixes (Current)
+## 🚀 v0.6.5 — QA Fixes (Current)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| `ticket-category.entity.ts` `isActive`/`isDeleted` | ✅ Complete | Renamed from `is_active`/`is_deleted`; explicit `name:` column annotations added |
+| `ticket-settings.service.ts` where-clause updates | ✅ Complete | All TypeORM property refs use camelCase |
+| Office-day column indicators (attendance + login grids) | ✅ Complete | `isOfficeDayForDate()` used in column headers for visual dimming |
+| Silent auto-refresh (attendance + tickets) | ✅ Complete | `silentRefreshXxx` callbacks skip loading state on background polls |
+
+---
+
+## 🚀 v0.6.4 — QA Fixes
 
 | Area | Status | Notes |
 |------|--------|-------|

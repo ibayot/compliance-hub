@@ -1,5 +1,27 @@
 # Compliance Hub - Complete Implementation Plan
 
+## v0.6.5 QA Fix Execution (2026-03-27)
+
+### Plan Executed
+
+| # | Area | Change |
+|---|------|--------|
+| 1 | `ticket-category.entity.ts` | Renamed `is_active` → `isActive`, `is_deleted` → `isDeleted`; added `name:` column annotations |
+| 2 | `ticket-settings.service.ts` | Updated all TypeORM `where`-clause property refs to camelCase |
+| 3 | `attendance/page.tsx` | Replaced `refreshTab1`/`refreshTab2`/`useAutoRefresh(fetchOfficeDays)` with silent callbacks |
+| 4 | `attendance/page.tsx` | Column headers in tabs 1 & 2 now dim non-office days using `isOfficeDayForDate()` |
+| 5 | `tickets/page.tsx` | Replaced `useAutoRefresh(fetchTickets)` with `silentFetchTickets` wrapper |
+| 6 | Both `package.json` | Version bumped `0.6.4` → `0.6.5` |
+
+### Status: ✅ Complete
+
+### Notes
+- No DB migration needed — column names in DB unchanged; only TypeORM entity property names changed.
+- `mov/page.tsx` and `kpi/page.tsx` auto-refresh already non-flickering (those page's fetch functions don't set loading state).
+- `technician` role remains hardcoded under `pantawid_ict_support`; custom roles with `technicianType` are supported alongside.
+
+---
+
 ## v0.6.4 QA Fix Execution (2026-03-27)
 
 ### Plan Executed

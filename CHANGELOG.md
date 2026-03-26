@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.6.5] - 2026-03-27 — QA Fixes: Category Status Toggle, Office-Day Column Indicators, Silent Auto-Refresh
+
+### Fixed
+- **Category active/inactive toggle always showed "Inactive"** — `TicketCategoryConfig` entity used snake_case property names (`is_active`, `is_deleted`) which TypeORM serialized to JSON as-is. The frontend `TicketCategory` interface expected camelCase (`isActive`, `isDeleted`), so `cat.isActive` was always `undefined` (falsy). The edit switch was always unchecked and saving always wrote `isActive: false`. Fix: renamed entity properties to `isActive`/`isDeleted` with explicit `@Column({ name: 'is_active' })` / `@Column({ name: 'is_deleted' })` annotations; updated all service `where`-clause property references accordingly.
+- **Office-day toggle not reflecting in attendance/login column headers** — Technician Attendance (tab 1) and Staff Login Activity (tab 2) column headers never consumed `officeDays` state. Non-office days showed identical styling to office days. Fix: column headers now apply `bgcolor: 'action.disabledBackground'` and `color: 'text.disabled'` for dates that are marked non-office via `isOfficeDayForDate()`.
+- **Auto-refresh caused page flicker** — `useAutoRefresh` called the full fetch callbacks (which set `loading=true` → show spinner → `loading=false`), causing content to briefly disappear every 30 seconds. Fix: replaced auto-refresh calls on Attendance page and Tickets page with dedicated _silent_ callbacks (`silentRefreshOfficeDays`, `silentRefreshTab1`, `silentRefreshTab2`, `silentFetchTickets`) that update state in the background without triggering any loading spinner.
+
+### Notes
+- **Deleting seeded role definitions** — if the pre-seeded role definitions are deleted and replaced with new custom roles, attendance grids will continue to work as long as the new roles have `technicianType` set. The built-in role codes (`technician`, `technician_desktop`, etc.) remain hardcoded in `AttendanceService` and are unaffected by the `role_definitions` table.
+- **Generic `technician` role** — the `technician` role is hardcoded under `pantawid_ict_support` in `AttendanceService`. Users with this role appear in "All Technicians" and in the "Pantawid ICT Support" type filter. This is expected behavior.
+
+---
+
 ## [0.6.4] - 2026-03-27 — QA Fixes: Technician Type Tag, All-Techs Count, Super-Admin Login Activity, Calendar Cascade, Auto-Refresh
 
 ### Added

@@ -92,7 +92,18 @@ export default function TicketsPage() {
   }, [filterStatus, filterType]);
 
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
-  useAutoRefresh(fetchTickets);
+
+  // Silent auto-refresh — no loading spinner to avoid flicker on background polls
+  const silentFetchTickets = useCallback(async () => {
+    try {
+      const data = await ticketsApi.getAll({
+        status: filterStatus as TicketStatus || undefined,
+        ticketType: filterType as TicketType || undefined,
+      });
+      setTickets(data);
+    } catch { /* silent */ }
+  }, [filterStatus, filterType]);
+  useAutoRefresh(silentFetchTickets);
 
   useEffect(() => {
     if (canManageAll) {

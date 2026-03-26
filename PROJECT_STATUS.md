@@ -1,7 +1,12 @@
 # RICMS Compliance Hub - Project Status
 
-## 🚀 v0.6.4 — QA Fixes: Technician Type Tag, All-Techs Count, Super-Admin Login Activity, Calendar Cascade, Auto-Refresh (Current Release)
-- **Version:** `0.6.4` in both `backend/package.json` and `frontend/package.json`
+## 🚀 v0.6.5 — QA Fixes: Category Status, Office-Day Columns, Silent Auto-Refresh (Current Release)
+- **Version:** `0.6.5` in both `backend/package.json` and `frontend/package.json`
+- **Category active/inactive toggle fixed:** entity properties renamed `isActive`/`isDeleted` with explicit DB column names; all service references updated.
+- **Office-day column indicators:** Technician Attendance and Staff Login Activity column headers visually dim non-office days.
+- **Silent auto-refresh:** `useAutoRefresh` no longer shows loading spinners on background polls. Dedicated silent callbacks replace direct fetch calls in Attendance and Tickets pages.
+
+## 🚀 v0.6.4 — QA Fixes: Technician Type Tag, All-Techs Count, Super-Admin Login, Calendar Cascade, Auto-Refresh
 - **Role definition technician type tag:** new `technician_type` column on `role_definitions`; Settings UI allows tagging a custom role as `it_support`, `desktop_support`, or `pantawid_ict_support` so its members appear in Technician Attendance grids.
 - **All-techs count bug fixed:** `u.ticket_technician` → `u.ticketTechnician` (TypeORM property name) in `getAvailableTechnicians` + `listTechnicians`; custom-role users now included via `getCustomRoleValues()`.
 - **Super admin excluded from Staff Login Activity** (`EXCLUDED_ROLES` in `getStaffLoginsMonthly`).

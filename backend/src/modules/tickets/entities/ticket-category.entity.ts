@@ -24,11 +24,11 @@ export class TicketCategoryConfig {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
-  @Column({ type: 'boolean', default: true })
-  is_active: boolean;
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean;
 
-  @Column({ type: 'boolean', default: false })
-  is_deleted: boolean;
+  @Column({ name: 'is_deleted', type: 'boolean', default: false })
+  isDeleted: boolean;
 
   @Column({ type: 'int', nullable: true })
   created_by: number | null;
