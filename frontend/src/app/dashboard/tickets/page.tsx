@@ -119,6 +119,18 @@ export default function TicketsPage() {
     }
   }, [newDialogOpen, form.ticketType]);
 
+  // Poll categories every 10s while dialog is open so admin changes (activate/deactivate)
+  // are reflected without requiring the user to close and re-open the dialog.
+  useEffect(() => {
+    if (!newDialogOpen) return;
+    const id = setInterval(() => {
+      ticketSettingsApi.getCategories(form.ticketType, true)
+        .then(setCategories)
+        .catch(() => {}); // silent — don't show errors on background polls
+    }, 10_000);
+    return () => clearInterval(id);
+  }, [newDialogOpen, form.ticketType]);
+
   const handleSubmitTicket = async () => {
     if (!form.subject.trim() || !form.description.trim()) {
       enqueueSnackbar('Subject and description are required.', { variant: 'warning' }); return;

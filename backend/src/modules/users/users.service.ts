@@ -135,7 +135,9 @@ export class UsersService {
   }
 
   async getRoles() {
-    await this.ensureRoleDefinitions();
+    // NOTE: ensureRoleDefinitions() is intentionally NOT called here.
+    // Seeding runs once at startup (constructor). Calling it on every getRoles()
+    // caused deleted custom roles to silently reappear on the next auto-refresh.
     return this.roleDefinitionsRepository.find({ order: { label: 'ASC' } });
   }
 
@@ -285,6 +287,11 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  /** Returns user by id without throwing — returns null if not found. Used by JwtStrategy. */
+  async findByIdSafe(id: number): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { id } });
   }
 
   async findByEmail(email: string): Promise<User | null> {

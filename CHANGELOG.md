@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.6.6] - 2026-03-30 — QA Fixes: Category Realtime in Modal, Force Logout on Deletion, Roles Re-seed
+
+### Fixed
+- **Disabled category still visible in open ticket modal** — The category list in the New Ticket dialog was only fetched when the dialog opened or the ticket type changed. If a super admin disabled a category while the modal was already open, the user would still see and be able to select it. Fix: added a 10-second background polling interval (`setInterval`) while the dialog is open. Categories are re-fetched silently every 10 s; disabled categories drop from the list within one polling cycle.
+- **Deleted/deactivated account not immediately forced out** — `JwtStrategy.validate()` previously returned the JWT payload directly without checking the database. When a super admin deleted (deactivated) a user, their existing access token remained fully valid until it expired. Fix: `JwtStrategy.validate()` now calls `UsersService.findByIdSafe(payload.sub)` on every request and throws `UnauthorizedException` if the user is not found or `active = false`. The existing axios response interceptor on the frontend (`client.ts`) already handles 401 by attempting a token refresh; since the refresh endpoint also rejects inactive users, the chain results in token clearance and redirect to `/login` automatically.
+- **Deleted custom role definition reappears on every page reload** — `UsersService.getRoles()` called `ensureRoleDefinitions()` on every invocation. Combined with the 30-second `useAutoRefresh` on the Settings page, this meant deleting a custom role caused it to reappear within 30 seconds (on the next auto-refresh poll). Fix: removed the `ensureRoleDefinitions()` call from `getRoles()`. Seeding now runs only once at module startup (in the constructor). Deliberately deleted roles remain deleted until the next backend process restart.
+
+### Added
+- `UsersService.findByIdSafe(id)` — lightweight DB lookup that returns `null` instead of throwing, used by `JwtStrategy` to avoid exception handling overhead on the hot path.
+
+---
+
 ## [0.6.5] - 2026-03-27 — QA Fixes: Category Status Toggle, Office-Day Column Indicators, Silent Auto-Refresh
 
 ### Fixed

@@ -1,6 +1,13 @@
 # RICMS Compliance Hub - Project Status
 
-## 🚀 v0.6.5 — QA Fixes: Category Status, Office-Day Columns, Silent Auto-Refresh (Current Release)
+## 🚀 v0.6.6 — QA Fixes: Category Realtime, Force Logout, Roles Re-seed (Current Release)
+- **Version:** `0.6.6` in both `backend/package.json` and `frontend/package.json`
+- **Category realtime in modal:** 10 s polling interval while New Ticket dialog is open; admin changes to category status reflect within one cycle.
+- **Force logout on account deletion:** `JwtStrategy.validate()` performs a DB lookup on every authenticated request; deactivated users are rejected immediately.
+- **Roles re-seeding fixed:** `getRoles()` no longer calls `ensureRoleDefinitions()`; seeding is startup-only so deleted roles stay deleted.
+- New helper: `UsersService.findByIdSafe()` — null-safe user lookup for the JWT strategy.
+
+## 🚀 v0.6.5 — QA Fixes: Category Status, Office-Day Columns, Silent Auto-Refresh
 - **Version:** `0.6.5` in both `backend/package.json` and `frontend/package.json`
 - **Category active/inactive toggle fixed:** entity properties renamed `isActive`/`isDeleted` with explicit DB column names; all service references updated.
 - **Office-day column indicators:** Technician Attendance and Staff Login Activity column headers visually dim non-office days.

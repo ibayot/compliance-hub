@@ -1,5 +1,29 @@
 # Compliance Hub - Complete Implementation Plan
 
+## v0.6.6 QA Fix Execution (2026-03-30)
+
+### Plan Executed
+
+| # | Area | Change |
+|---|------|--------|
+| 1 | `tickets/page.tsx` | Added 10 s `setInterval` in `useEffect` while `newDialogOpen`; silently re-fetches active categories |
+| 2 | `jwt.strategy.ts` | Injected `UsersService`; added DB lookup in `validate()`; throws 401 if user not found or inactive |
+| 3 | `users.service.ts` | Removed `ensureRoleDefinitions()` call from `getRoles()` |
+| 4 | `users.service.ts` | Added `findByIdSafe(id)` helper returning `null` instead of throwing |
+| 5 | Both `package.json` | Version bumped `0.6.5` → `0.6.6` |
+
+### Risks
+- **JWT strategy DB lookup** adds one DB query per authenticated request. At low/medium traffic this is acceptable; for high-traffic scenarios consider a Redis user-active cache.
+- **Startup-only seeding** means intentionally deleted system roles are restored on backend restart. This is by design — system roles cannot be deleted via the API anyway.
+
+### Rollback
+- Revert `jwt.strategy.ts` to payload-only return if DB lookup causes latency issues
+- Re-add `ensureRoleDefinitions()` to `getRoles()` if more aggressive seeding is needed
+
+### Status: ✅ Complete
+
+---
+
 ## v0.6.5 QA Fix Execution (2026-03-27)
 
 ### Plan Executed

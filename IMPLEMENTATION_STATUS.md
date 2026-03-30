@@ -1,6 +1,17 @@
 # RICTMS Compliance Hub - Implementation Progress Report
 
-## 🚀 v0.6.5 — QA Fixes (Current)
+## 🚀 v0.6.6 — QA Fixes (Current)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| `tickets/page.tsx` — 10 s category polling while dialog open | ✅ Complete | `setInterval` in `useEffect([newDialogOpen, form.ticketType])` |
+| `jwt.strategy.ts` — DB user lookup on every request | ✅ Complete | `findByIdSafe()` + `UnauthorizedException` if inactive |
+| `users.service.ts` — remove `ensureRoleDefinitions()` from `getRoles()` | ✅ Complete | Seeding now startup-only |
+| `users.service.ts` — new `findByIdSafe()` helper | ✅ Complete | Returns `null` instead of throwing |
+
+---
+
+## 🚀 v0.6.5 — QA Fixes
 
 | Area | Status | Notes |
 |------|--------|-------|
