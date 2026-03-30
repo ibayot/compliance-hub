@@ -83,7 +83,7 @@ export interface CreateIssuanceDto {
 }
 
 export type TicketType = 'desktop_support' | 'it_support' | 'pantawid_ict_support';
-export type TicketStatus = 'open' | 'assigned' | 'in_progress' | 'resolved' | 'closed';
+export type TicketStatus = 'open' | 'assigned' | 'in_progress' | 'resolved' | 'closed' | 'freeze' | 'duplicate';
 export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
 
 export interface Ticket {
@@ -105,6 +105,8 @@ export interface Ticket {
   satisfactionRating?: number | null;
   satisfactionComment?: string | null;
   satisfactionSubmittedAt?: string | null;
+  /** UUID of the original ticket when status = 'duplicate' */
+  duplicateOfId?: string | null;
   comments?: TicketComment[];
   createdAt: string;
   updatedAt: string;
@@ -136,6 +138,8 @@ export interface UpdateTicketDto {
   status?: TicketStatus;
   priority?: TicketPriority;
   resolutionNotes?: string;
+  /** Required when status = 'duplicate' */
+  duplicateOfId?: string;
 }
 
 export interface AssignTicketDto {
@@ -184,6 +188,9 @@ export interface TicketKeywordRule {
   keyword: string;
   targetTicketType: string;
   targetCategoryId?: string | null;
+  /** Populated relation — backend serialises as targetCategory */
+  targetCategory?: TicketCategory | null;
+  /** Legacy alias kept for compatibility */
   category?: TicketCategory | null;
   isActive: boolean;
   createdAt: string;
@@ -359,6 +366,12 @@ export const ticketsApi = {
 
   getTechnicians: async (): Promise<TechnicianOption[]> => {
     const response = await apiClient.get(`/tickets/technicians`);
+    return response.data;
+  },
+
+  /** Get open (non-closed, non-duplicate) tickets for a specific requester — used for Duplicate picker */
+  getOpenTicketsForRequester: async (requesterId: number): Promise<Ticket[]> => {
+    const response = await apiClient.get(`/tickets/requester/${requesterId}/open`);
     return response.data;
   },
 };

@@ -24,6 +24,10 @@ export enum TicketStatus {
   IN_PROGRESS = 'in_progress',
   RESOLVED = 'resolved',
   CLOSED = 'closed',
+  /** Ticket is temporarily put on hold (e.g. awaiting parts or info) */
+  FREEZE = 'freeze',
+  /** Ticket is a duplicate of an existing open ticket — auto-closes */
+  DUPLICATE = 'duplicate',
 }
 
 export enum TicketPriority {
@@ -92,6 +96,10 @@ export class Ticket {
 
   @Column({ name: 'resolved_at', type: 'datetime', nullable: true })
   resolvedAt: Date | null;
+
+  /** If status=duplicate, points to the original ticket that this duplicates */
+  @Column({ name: 'duplicate_of_id', type: 'varchar', length: 36, nullable: true })
+  duplicateOfId: string | null;
 
   // --- Client Satisfaction ---
   /** 1-5 star rating submitted by the requester after resolution */

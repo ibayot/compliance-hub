@@ -35,6 +35,8 @@ export interface UpdateTicketDto {
   status?: TicketStatus;
   priority?: TicketPriority;
   resolutionNotes?: string;
+  /** Required when status = DUPLICATE: UUID of the original ticket */
+  duplicateOfId?: string;
 }
 
 export interface AssignTicketDto {
@@ -96,14 +98,17 @@ export class TicketService implements OnModuleInit {
       await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS satisfaction_comment TEXT NULL').catch(() => undefined);
       await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS satisfaction_submitted_at DATETIME NULL').catch(() => undefined);
 
+      // v0.6.7 migrations
+      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS duplicate_of_id VARCHAR(36) NULL').catch(() => undefined);
+
       // Make legacy reported_by_id nullable so new tickets only need requester_id
       await qr.query(
         'ALTER TABLE tickets MODIFY COLUMN reported_by_id INT(11) NULL',
       ).catch(() => undefined);
 
-      // Ensure status enum includes all current values (add 'assigned' if missing)
+      // Ensure status enum includes all current values
       await qr.query(
-        "ALTER TABLE tickets MODIFY COLUMN status ENUM('open','assigned','in_progress','resolved','closed') NOT NULL DEFAULT 'open'",
+        "ALTER TABLE tickets MODIFY COLUMN status ENUM('open','assigned','in_progress','resolved','closed','freeze','duplicate') NOT NULL DEFAULT 'open'",
       ).catch(() => undefined);
 
       // Backfill requester_id from legacy reported_by_id if needed
@@ -496,11 +501,39 @@ export class TicketService implements OnModuleInit {
     // Technicians / admins can update status + resolution
     if (dto.subject) ticket.subject = dto.subject.trim();
     if (dto.description) ticket.description = dto.description.trim();
-    if (dto.priority) ticket.priority = dto.priority;
+
+    // Priority changes restricted to Focal, Reviewer, and Super Admin
+    if (dto.priority !== undefined) {
+      const priorityRoles = [UserRole.FOCAL, UserRole.REVIEWER, UserRole.SUPER_ADMIN];
+      if (!priorityRoles.includes(actorRole)) {
+        throw new ForbiddenException('Only Technician Focal, Compliance Officers, and Super Admins can change ticket priority.');
+      }
+      ticket.priority = dto.priority;
+    }
+
     if (dto.status) {
-      ticket.status = dto.status;
-      if (dto.status === TicketStatus.RESOLVED && !ticket.resolvedAt) {
-        ticket.resolvedAt = new Date();
+      // If ticket is OPEN (not yet assigned), only FREEZE or DUPLICATE are valid transitions
+      if (ticket.status === TicketStatus.OPEN) {
+        if (dto.status !== TicketStatus.FREEZE && dto.status !== TicketStatus.DUPLICATE) {
+          throw new ForbiddenException('An OPEN (unassigned) ticket can only be marked as Freeze or Duplicate. Assign it first before changing to other statuses.');
+        }
+      }
+
+      if (dto.status === TicketStatus.DUPLICATE) {
+        if (!dto.duplicateOfId) {
+          throw new BadRequestException('duplicateOfId is required when marking a ticket as Duplicate.');
+        }
+        const original = await this.ticketRepo.findOne({ where: { id: dto.duplicateOfId } });
+        if (!original) throw new BadRequestException(`Original ticket ${dto.duplicateOfId} not found.`);
+        ticket.duplicateOfId = dto.duplicateOfId;
+        ticket.status = TicketStatus.DUPLICATE;
+        // Duplicate tickets are terminal — treat like closed
+        if (!ticket.resolvedAt) ticket.resolvedAt = new Date();
+      } else {
+        ticket.status = dto.status;
+        if (dto.status === TicketStatus.RESOLVED && !ticket.resolvedAt) {
+          ticket.resolvedAt = new Date();
+        }
       }
     }
     if (dto.resolutionNotes !== undefined) ticket.resolutionNotes = dto.resolutionNotes;
@@ -509,8 +542,8 @@ export class TicketService implements OnModuleInit {
   }
 
   async assignTicket(id: string, dto: AssignTicketDto, actorRole: UserRole): Promise<Ticket> {
-    if (![UserRole.SUPER_ADMIN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN].includes(actorRole)) {
-      throw new ForbiddenException('Only admins and technicians can assign tickets.');
+    if (![UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN].includes(actorRole)) {
+      throw new ForbiddenException('Only admins, focal persons, and technicians can assign tickets.');
     }
 
     const ticket = await this.getTicketById(id);
@@ -679,14 +712,20 @@ export class TicketService implements OnModuleInit {
         { role: UserRole.TECHNICIAN_DESKTOP },
         { role: UserRole.TECHNICIAN_IT_SUPPORT },
         { role: UserRole.TECHNICIAN },
+        { role: UserRole.FOCAL, ticketMainFocal: true },
       ],
     });
 
     const results = [];
     for (const tech of technicians) {
-      const openCount = await this.ticketRepo.count({
-        where: { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
-      });
+      // "open" = anything that isn't CLOSED or DUPLICATE (terminal states)
+      const openCount = await this.ticketRepo
+        .createQueryBuilder('t')
+        .where('t.assignedToId = :id', { id: tech.id })
+        .andWhere('t.status NOT IN (:...closed)', {
+          closed: [TicketStatus.CLOSED, TicketStatus.DUPLICATE],
+        })
+        .getCount();
       results.push({
         id: tech.id,
         email: tech.email,
@@ -698,4 +737,15 @@ export class TicketService implements OnModuleInit {
     }
     return results;
   }
-}
+
+  /** Returns all non-closed, non-duplicate tickets for a given requester (used in Duplicate picker) */
+  async getOpenTicketsForRequester(requesterId: number): Promise<Ticket[]> {
+    return this.ticketRepo
+      .createQueryBuilder('t')
+      .where('t.requesterId = :rid', { rid: requesterId })
+      .andWhere('t.status NOT IN (:...terminal)', {
+        terminal: [TicketStatus.CLOSED, TicketStatus.DUPLICATE],
+      })
+      .orderBy('t.createdAt', 'DESC')
+      .getMany();
+  }}

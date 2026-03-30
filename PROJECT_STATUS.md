@@ -1,6 +1,19 @@
 # RICMS Compliance Hub - Project Status
 
-## 🚀 v0.6.6 — QA Fixes: Category Realtime, Force Logout, Roles Re-seed (Current Release)
+## 🚀 v0.6.7 — QA Fixes: Freeze/Duplicate Statuses, OPEN Restriction, Comments Fix, Keyword Category, FOCAL Assign, Priority Roles (Current Release)
+- **Version:** `0.6.7` in both `backend/package.json` and `frontend/package.json`
+- **Freeze/Duplicate ticket statuses:** new `TicketStatus` enum values (`freeze`, `duplicate`) with `duplicate_of_id` column; DB migration runs on startup.
+- **OPEN status restriction:** tickets in `open` can only move to `freeze` or `duplicate` (backend + frontend enforced).
+- **Duplicate picker dialog:** staff select the canonical ticket when marking as duplicate; backend validates the original exists and sets `resolvedAt`.
+- **Comment display fix:** `{c.content}` → `{c.comment}` in ticket detail; comments now render correctly.
+- **Live updates (10 s polling):** ticket detail now polls every 10 s so comments and status refreshes without a manual reload.
+- **Keyword rule Target Category bug:** frontend interface mismatch (`category` vs `targetCategory`) — fixed; `pantawid_ict_support` added to keyword rule validation.
+- **Staff name in assign dialog / FOCAL assign:** `getTechnicianAvailability` includes FOCAL users with `ticketMainFocal=true`; `openCount` now counts all non-closed/non-duplicate statuses. Frontend assign button shown to FOCAL users.
+- **Priority update restricted:** only FOCAL, REVIEWER, SUPER_ADMIN can change ticket priority (backend enforced + UI field shown only to those roles).
+- **Unrated ticket warning:** regular users see a prompt before opening New Ticket if they have unrated resolved/closed tickets.
+- **401 refresh guard:** `isRefreshing`+`failedQueue` in `client.ts` prevents flood of concurrent refresh calls and duplicate error snackbars on force logout.
+
+## 🚀 v0.6.6 — QA Fixes: Category Realtime, Force Logout, Roles Re-seed
 - **Version:** `0.6.6` in both `backend/package.json` and `frontend/package.json`
 - **Category realtime in modal:** 10 s polling interval while New Ticket dialog is open; admin changes to category status reflect within one cycle.
 - **Force logout on account deletion:** `JwtStrategy.validate()` performs a DB lookup on every authenticated request; deactivated users are rejected immediately.

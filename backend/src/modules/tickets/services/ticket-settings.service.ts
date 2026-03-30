@@ -152,8 +152,8 @@ export class TicketSettingsService {
 
   async createKeywordRule(dto: CreateKeywordRuleDto, actorId: number): Promise<TicketKeywordRule> {
     if (!dto.keyword?.trim()) throw new BadRequestException('Keyword is required');
-    if (!['desktop_support', 'it_support'].includes(dto.targetTicketType)) {
-      throw new BadRequestException('targetTicketType must be desktop_support or it_support');
+    if (!['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.targetTicketType)) {
+      throw new BadRequestException('targetTicketType must be desktop_support, it_support, or pantawid_ict_support');
     }
 
     const rule = this.keywordRepo.create({
@@ -171,8 +171,8 @@ export class TicketSettingsService {
 
     if (dto.keyword !== undefined) rule.keyword = dto.keyword.trim().toLowerCase();
     if (dto.targetTicketType !== undefined) {
-      if (!['desktop_support', 'it_support'].includes(dto.targetTicketType)) {
-        throw new BadRequestException('targetTicketType must be desktop_support or it_support');
+      if (!['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.targetTicketType)) {
+        throw new BadRequestException('targetTicketType must be desktop_support, it_support, or pantawid_ict_support');
       }
       rule.targetTicketType = dto.targetTicketType;
     }

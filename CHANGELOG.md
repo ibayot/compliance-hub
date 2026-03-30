@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.6.7] - 2026-03-31 — QA Fixes: Freeze/Duplicate Statuses, OPEN Restriction, Comment Fix, Keyword Category, FOCAL Assign, Priority Roles, Unrated Warning, 401 Refresh Guard
+
+### Fixed
+- **Comments not rendering in ticket detail** — the comments list used `{c.content}` but the `TicketComment` entity field is named `comment`. All comment bodies were `undefined`. Fixed to `{c.comment}`.
+- **No live comment updates** — ticket detail page had no polling. Added a 10-second `setInterval` in a dedicated `useEffect` to silently re-fetch the ticket (including its comments) while the page is open.
+- **Keyword rule Target Category not saving / displaying "—"** — the `TicketKeywordRule` frontend interface used `category` but the backend serialises the relation as `targetCategory`. The rules list always showed "—" for the target category column, and changes appeared not to save. Fixed by adding `targetCategory` to the `TicketKeywordRule` interface; display now checks `(rule.targetCategory ?? rule.category)?.name`.
+- **`pantawid_ict_support` not accepted in keyword rule validation** — `updateKeywordRule` in `ticket-settings.service.ts` validated `ticketType` against only `['desktop_support', 'it_support']`, rejecting Pantawid rules with a 400. Fixed to include `'pantawid_ict_support'`.
+- **Staff name change not reflected in Assign Ticket dialog** — `getTechnicianAvailability` queried the `users` table each time but used stale full-name snapshots. Additionally, users with the `focal` role and `ticketMainFocal = true` were excluded from the available technician list. Fixed: FOCAL users with `ticketMainFocal = true` now appear in the technician availability response. The dialog always fetches fresh data from the DB.
+- **Reassign shows 0 open tickets** — `getTechnicianAvailability` counted `openCount` using only `status = 'in_progress'`. All tickets in `open` or `assigned` states were invisible to the count. Fixed: `openCount` now counts all statuses except `closed` and `duplicate`.
+- **Force logout shows multiple "Failed to load" snackbars** — when the backend deactivates a user, all in-flight requests receive 401 simultaneously. The axios interceptor triggered a separate token-refresh attempt per request, each failing and each calling `enqueueSnackbar`. Fixed with an `isRefreshing` flag + `failedQueue` pattern: only one refresh call goes out; concurrent 401 requests are queued and resolved/rejected once the refresh completes. If there is no refresh token at all, the redirect to `/login` is immediate.
+
+### Added
+- **Ticket status `freeze`** — new `FREEZE = 'freeze'` value in the `TicketStatus` enum. Represents a ticket put on hold. Frontend status filter, status-update dropdown, and status chips all include Freeze with a `secondary` color. Database migration adds `freeze` and `duplicate` to the status ENUM and adds the `duplicate_of_id` column on first boot.
+- **Ticket status `duplicate`** — new `DUPLICATE = 'duplicate'` value. Marking a ticket as duplicate requires selecting the original ticket (from the requester's open tickets). The service sets `resolvedAt` automatically and treats the status as terminal (equivalent to `closed` for most queries). A new **Duplicate Picker dialog** in the ticket detail page lists the requester's open tickets for selection.
+- **OPEN status restriction** — tickets in `open` status can only transition to `freeze` or `duplicate`. Any other status change on an `open` ticket is rejected by the backend with a 400. The frontend status dropdown for `open` tickets also filters to only these two options.
+- **Priority update in ticket detail** — users with `focal`, `reviewer`, or `super_admin` roles now see a Priority dropdown in the Update Ticket inline editor. The backend enforces the same restriction: only these three roles can change ticket priority via `updateTicket`.
+- **Unrated ticket warning before new ticket** — when a regular user opens the New Ticket dialog, the system first checks if they have any resolved/closed tickets without a satisfaction rating. If so, a confirmation prompt appears asking them to rate first.
+- **FOCAL role can assign tickets** — `assignTicket` and `getTechnicians` endpoints now include `UserRole.FOCAL` in the allowed roles list. The frontend assign button is now shown to FOCAL users as well.
+- **Pantawid ICT Support type label** — `TYPE_LABELS` map added to ticket detail page; type chip now displays "Pantawid ICT Support" instead of falling back to the raw enum value.
+- **`GET /tickets/requester/:requesterId/open`** — new endpoint returning all non-closed, non-duplicate tickets for a given requester, used by the Duplicate picker.
+
+---
+
 ## [0.6.6] - 2026-03-30 — QA Fixes: Category Realtime in Modal, Force Logout on Deletion, Roles Re-seed
 
 ### Fixed

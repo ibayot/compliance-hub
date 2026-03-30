@@ -19,6 +19,7 @@ import {
 const TYPE_LABELS: Record<string, string> = {
   it_support: 'IT Support',
   desktop_support: 'Desktop Support',
+  pantawid_ict_support: 'Pantawid ICT Support',
 };
 
 export default function TicketSettingsPage() {
@@ -222,7 +223,7 @@ export default function TicketSettingsPage() {
                     <TableRow key={rule.id} hover>
                       <TableCell><Typography fontFamily="monospace">&quot;{rule.keyword}&quot;</Typography></TableCell>
                       <TableCell><Chip size="small" label={TYPE_LABELS[rule.targetTicketType] ?? rule.targetTicketType} variant="outlined" /></TableCell>
-                      <TableCell>{rule.category?.name ?? '—'}</TableCell>
+                      <TableCell>{(rule.targetCategory ?? rule.category)?.name ?? '—'}</TableCell>
                       <TableCell><Chip size="small" label={rule.isActive ? 'Active' : 'Inactive'} color={rule.isActive ? 'success' : 'default'} /></TableCell>
                       <TableCell align="right">
                         <Tooltip title="Edit"><IconButton size="small" onClick={() => openRuleDialog(rule)}><EditIcon fontSize="small" /></IconButton></Tooltip>
@@ -265,6 +266,7 @@ export default function TicketSettingsPage() {
             <TextField select label="Target Support Type *" value={ruleForm.targetTicketType} onChange={e => setRuleForm({ ...ruleForm, targetTicketType: e.target.value, targetCategoryId: '' })} fullWidth>
               <MenuItem value="it_support">IT Support</MenuItem>
               <MenuItem value="desktop_support">Desktop Support</MenuItem>
+              <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
             </TextField>
             <TextField select label="Target Category (optional)" value={ruleForm.targetCategoryId} onChange={e => setRuleForm({ ...ruleForm, targetCategoryId: e.target.value })} fullWidth>
               <MenuItem value="">— None —</MenuItem>

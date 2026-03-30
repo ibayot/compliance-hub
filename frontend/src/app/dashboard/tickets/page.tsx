@@ -24,8 +24,9 @@ import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
 const PRIORITY_COLOR: Record<string, 'default' | 'info' | 'warning' | 'error' | 'success'> = {
   low: 'info', medium: 'warning', high: 'error', urgent: 'error',
 };
-const STATUS_COLOR: Record<string, 'default' | 'info' | 'warning' | 'success' | 'error'> = {
+const STATUS_COLOR: Record<string, 'default' | 'info' | 'warning' | 'success' | 'error' | 'secondary'> = {
   open: 'info', assigned: 'warning', in_progress: 'warning', resolved: 'success', closed: 'default',
+  freeze: 'secondary', duplicate: 'default',
 };
 const TICKET_TYPE_LABELS: Record<TicketType, string> = {
   desktop_support: 'Desktop Support',
@@ -72,9 +73,14 @@ export default function TicketsPage() {
   const [satRating, setSatRating] = useState<number | null>(null);
   const [satComment, setSatComment] = useState('');
 
+  // Pending satisfaction ratings — loaded once for USER role to show warning before new ticket
+  const [pendingSatCount, setPendingSatCount] = useState(0);
+
   const canManageAll = isStaffRole(user?.role);
   const isSuperAdmin = user?.role === 'super_admin';
   const isTechnician = ['technician','technician_desktop','technician_it_support','technician_it_staff','technician_desktop_staff'].includes(user?.role ?? '');
+  const isFocal = user?.role === 'focal';
+  const canAssign = isSuperAdmin || isTechnician || isFocal;
 
   const fetchTickets = useCallback(async () => {
     try {
@@ -92,6 +98,15 @@ export default function TicketsPage() {
   }, [filterStatus, filterType]);
 
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
+
+  // For regular users: load pending satisfaction count to warn before new ticket
+  useEffect(() => {
+    if (!canManageAll) {
+      ticketsApi.getDashboardStats().then(stats => {
+        setPendingSatCount(stats.pendingSatisfactionTickets?.length ?? 0);
+      }).catch(() => {});
+    }
+  }, [canManageAll]);
 
   // Silent auto-refresh — no loading spinner to avoid flicker on background polls
   const silentFetchTickets = useCallback(async () => {
@@ -141,12 +156,23 @@ export default function TicketsPage() {
       enqueueSnackbar('Ticket submitted successfully!', { variant: 'success' });
       setNewDialogOpen(false);
       setForm({ subject: '', description: '', ticketType: 'it_support', priority: 'medium', categoryId: undefined });
+      setPendingSatCount(0);
       fetchTickets();
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to submit ticket', { variant: 'error' });
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleOpenNewTicket = () => {
+    if (!canManageAll && pendingSatCount > 0) {
+      enqueueSnackbar(
+        `You have ${pendingSatCount} closed ticket${pendingSatCount > 1 ? 's' : ''} with an unfilled satisfaction rating. Please rate them before submitting a new ticket.`,
+        { variant: 'warning', autoHideDuration: 6000 }
+      );
+    }
+    setNewDialogOpen(true);
   };
 
   const openAssignDialog = async (ticket: Ticket) => {
@@ -203,7 +229,7 @@ export default function TicketsPage() {
             Submit and track assistance requests for Desktop &amp; IT Support
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setNewDialogOpen(true)}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenNewTicket}>
           New Ticket
         </Button>
       </Box>
@@ -219,6 +245,8 @@ export default function TicketsPage() {
                 <MenuItem value="in_progress">In Progress</MenuItem>
                 <MenuItem value="resolved">Resolved</MenuItem>
                 <MenuItem value="closed">Closed</MenuItem>
+                <MenuItem value="freeze">Freeze</MenuItem>
+                <MenuItem value="duplicate">Duplicate</MenuItem>
               </TextField>
               <TextField select label="Type" value={filterType} onChange={e => setFilterType(e.target.value)} size="small" sx={{ minWidth: 160 }}>
                 <MenuItem value="">All Types</MenuItem>
@@ -284,7 +312,7 @@ export default function TicketsPage() {
                     <Tooltip title="View Details">
                       <IconButton size="small" onClick={() => router.push(`/dashboard/tickets/${ticket.id}`)}><ViewIcon fontSize="small" /></IconButton>
                     </Tooltip>
-                    {(isSuperAdmin || isTechnician) && (
+                    {(canAssign) && (
                       <Tooltip title="Assign Ticket">
                         <IconButton size="small" color="primary" onClick={() => openAssignDialog(ticket)}><AssignIcon fontSize="small" /></IconButton>
                       </Tooltip>

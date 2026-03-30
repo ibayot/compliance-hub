@@ -74,7 +74,7 @@ export class TicketController {
 
   /** GET /tickets/technicians */
   @Get('technicians')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.REVIEWER, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT)
   async getTechnicians() { return this.ticketService.getTechnicianAvailability(); }
 
   /** GET /tickets/dashboard */
@@ -96,9 +96,16 @@ export class TicketController {
     return this.ticketService.updateTicket(id, dto, req.user.id ?? req.user.userId, req.user.role);
   }
 
+  /** GET /tickets/requester/:requesterId/open - open tickets for Duplicate picker */
+  @Get('requester/:requesterId/open')
+  @Roles(UserRole.FOCAL, UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT)
+  async getRequesterOpenTickets(@Param('requesterId') requesterId: string) {
+    return this.ticketService.getOpenTicketsForRequester(Number(requesterId));
+  }
+
   /** PATCH /tickets/:id/assign */
   @Patch(':id/assign')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT)
   async assignTicket(@Param('id') id: string, @Body() dto: AssignTicketDto, @Request() req: any) {
     return this.ticketService.assignTicket(id, dto, req.user.role);
   }

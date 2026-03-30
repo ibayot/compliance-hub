@@ -1,6 +1,32 @@
 # RICTMS Compliance Hub - Implementation Progress Report
 
-## 🚀 v0.6.6 — QA Fixes (Current)
+## 🚀 v0.6.7 — QA Fixes (Current)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| `ticket.entity.ts` — FREEZE/DUPLICATE statuses + `duplicateOfId` | ✅ Complete | `TicketStatus` enum extended; `duplicate_of_id` column added |
+| `ticket.service.ts` — OPEN status restriction | ✅ Complete | Only `freeze` or `duplicate` allowed from `open` |
+| `ticket.service.ts` — Duplicate auto-close logic | ✅ Complete | Sets `resolvedAt`; requires `duplicateOfId`; validates original exists |
+| `ticket.service.ts` — priority restriction (FOCAL/REVIEWER/SUPER_ADMIN) | ✅ Complete | Other roles cannot change priority via `updateTicket` |
+| `ticket.service.ts` — `getTechnicianAvailability` FOCAL + openCount fix | ✅ Complete | FOCAL users (ticketMainFocal=true) included; openCount excludes CLOSED/DUPLICATE |
+| `ticket.service.ts` — `getOpenTicketsForRequester` new method | ✅ Complete | Returns non-closed/non-duplicate tickets for duplicate picker |
+| `ticket.controller.ts` — FOCAL role in assign/getTechnicians | ✅ Complete | Added `UserRole.FOCAL` to guards |
+| `ticket.controller.ts` — `GET /tickets/requester/:requesterId/open` | ✅ Complete | New endpoint for duplicate picker |
+| `ticket-settings.service.ts` — pantawid validation | ✅ Complete | `updateKeywordRule` now accepts `pantawid_ict_support` |
+| `lib/api/client.ts` — `isRefreshing` + `failedQueue` 401 guard | ✅ Complete | Prevents concurrent refresh flood; immediate redirect if no token |
+| `app/api/references.ts` — TicketStatus, Ticket, UpdateTicketDto, TicketKeywordRule | ✅ Complete | `freeze`/`duplicate` added; `targetCategory` field added; `getOpenTicketsForRequester` method |
+| `ticket-settings/page.tsx` — targetCategory display fix | ✅ Complete | `(rule.targetCategory ?? rule.category)?.name`; Pantawid added to dropdown |
+| `tickets/page.tsx` — freeze/duplicate chips, pendingSatCount, FOCAL assign, unrated warning | ✅ Complete | STATUS_COLOR extended; handleOpenNewTicket; canAssign guard |
+| `tickets/[id]/page.tsx` — comment fix (`c.content` → `c.comment`) | ✅ Complete | Field name corrected |
+| `tickets/[id]/page.tsx` — 10 s polling | ✅ Complete | `setInterval` in dedicated `useEffect` |
+| `tickets/[id]/page.tsx` — OPEN restriction in status dropdown | ✅ Complete | Filters STATUS_OPTS to freeze/duplicate when ticket.status === 'open' |
+| `tickets/[id]/page.tsx` — Duplicate picker dialog | ✅ Complete | Loads requester's open tickets via `getOpenTicketsForRequester` |
+| `tickets/[id]/page.tsx` — Priority field (role-restricted) | ✅ Complete | Shown only to FOCAL/REVIEWER/SUPER_ADMIN; sent in update payload |
+| `tickets/[id]/page.tsx` — Pantawid type label in chip | ✅ Complete | `TYPE_LABELS` map used for ticket type chip |
+
+---
+
+## 🚀 v0.6.6 — QA Fixes
 
 | Area | Status | Notes |
 |------|--------|-------|

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -23,6 +23,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Alert,
 } from '@mui/material';
 import { useParams, useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
@@ -42,6 +43,8 @@ const STATUS_OPTS = [
   { value: 'in_progress', label: 'In Progress' },
   { value: 'resolved', label: 'Resolved' },
   { value: 'closed', label: 'Closed' },
+  { value: 'freeze', label: 'Freeze (on hold)' },
+  { value: 'duplicate', label: 'Duplicate' },
 ];
 
 const PRIORITY_COLOR: Record<string, 'error' | 'warning' | 'info' | 'success' | 'default'> = {
@@ -51,12 +54,20 @@ const PRIORITY_COLOR: Record<string, 'error' | 'warning' | 'info' | 'success' | 
   low: 'info',
 };
 
-const STATUS_COLOR: Record<string, 'error' | 'warning' | 'info' | 'success' | 'default'> = {
+const STATUS_COLOR: Record<string, 'error' | 'warning' | 'info' | 'success' | 'default' | 'secondary'> = {
   open: 'warning',
   assigned: 'info',
   in_progress: 'warning',
   resolved: 'success',
   closed: 'default',
+  freeze: 'secondary',
+  duplicate: 'default',
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  desktop_support: 'Desktop Support',
+  it_support: 'IT Support',
+  pantawid_ict_support: 'Pantawid ICT Support',
 };
 
 export default function TicketDetailPage() {
@@ -89,15 +100,35 @@ export default function TicketDetailPage() {
   const [satRating, setSatRating] = useState<number | null>(null);
   const [satComment, setSatComment] = useState('');
 
+  // Priority update
+  const [newPriority, setNewPriority] = useState('');
+
+  // Duplicate picker
+  const [dupDialogOpen, setDupDialogOpen] = useState(false);
+  const [requesterOpenTickets, setRequesterOpenTickets] = useState<Ticket[]>([]);
+  const [selectedDupOfId, setSelectedDupOfId] = useState('');
+
   const isRegularUser = user?.role === 'user';
   const isTechnician = user?.role === 'technician_desktop' || user?.role === 'technician_it_support' || user?.role === 'technician';
-  const isAdmin = user?.role === 'super_admin' || user?.role === 'focal' || user?.role === 'reviewer';
+  const isFocal = user?.role === 'focal';
+  const isAdmin = user?.role === 'super_admin' || isFocal || user?.role === 'reviewer';
   const canStaff = isAdmin || isTechnician;
+  const canPriority = isFocal || user?.role === 'reviewer' || user?.role === 'super_admin';
   const isRequester = ticket?.requesterId === (user as any)?.id;
   const canSatisfaction = isRequester && (ticket?.status === 'resolved' || ticket?.status === 'closed') && !ticket?.satisfactionRating;
 
   useEffect(() => {
     fetchTicket();
+  }, [ticketId]);
+
+  // Live updates – poll every 10 s
+  useEffect(() => {
+    const id = setInterval(() => {
+      ticketsApi.getById(ticketId).then(data => {
+        setTicket(data);
+      }).catch(() => {});
+    }, 10_000);
+    return () => clearInterval(id);
   }, [ticketId]);
 
   useEffect(() => {
@@ -141,12 +172,28 @@ export default function TicketDetailPage() {
     }
   };
 
-  const handleUpdateStatus = async () => {
+  const handleUpdateStatus = async (overrideDupOfId?: string) => {
+    // If marking as duplicate, open the picker first
+    if (newStatus === 'duplicate' && !overrideDupOfId) {
+      try {
+        const open = await ticketsApi.getOpenTicketsForRequester((ticket as any).requesterId);
+        setRequesterOpenTickets(open.filter((t) => t.id !== ticketId));
+      } catch {
+        setRequesterOpenTickets([]);
+      }
+      setSelectedDupOfId('');
+      setDupDialogOpen(true);
+      return;
+    }
     try {
       const payload: UpdateTicketDto = { status: newStatus as Ticket['status'] };
       if (resolutionNotes) payload.resolutionNotes = resolutionNotes;
+      if (newPriority && newPriority !== ticket?.priority) payload.priority = newPriority as any;
+      if (overrideDupOfId) payload.duplicateOfId = overrideDupOfId;
       await ticketsApi.update(ticketId, payload);
       setEditingStatus(false);
+      setDupDialogOpen(false);
+      setNewPriority('');
       fetchTicket();
       enqueueSnackbar('Ticket updated.', { variant: 'success' });
     } catch (err: any) {
@@ -220,7 +267,7 @@ export default function TicketDetailPage() {
               </Typography>
               <Box display="flex" flexWrap="wrap" gap={1}>
                 <Chip
-                  label={ticket.ticketType === 'desktop_support' ? 'Desktop Support' : 'IT Support'}
+                  label={TYPE_LABELS[ticket.ticketType] ?? ticket.ticketType}
                   color="primary"
                   size="small"
                   variant="outlined"
@@ -281,11 +328,30 @@ export default function TicketDetailPage() {
                     onChange={(e) => setNewStatus(e.target.value)}
                     size="small"
                   >
-                    {STATUS_OPTS.map((s) => (
+                    {(ticket?.status === 'open'
+                      ? STATUS_OPTS.filter((s) => s.value === 'freeze' || s.value === 'duplicate')
+                      : STATUS_OPTS
+                    ).map((s) => (
                       <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
                     ))}
                   </TextField>
                 </Grid>
+                {canPriority && (
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      select
+                      fullWidth
+                      label="Priority (optional)"
+                      value={newPriority || ticket?.priority || ''}
+                      onChange={(e) => setNewPriority(e.target.value)}
+                      size="small"
+                    >
+                      {['low', 'medium', 'high', 'urgent'].map((p) => (
+                        <MenuItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                )}
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
@@ -299,7 +365,7 @@ export default function TicketDetailPage() {
                 </Grid>
                 <Grid item xs={12}>
                   <Box display="flex" gap={1}>
-                    <Button variant="contained" size="small" onClick={handleUpdateStatus}>Save</Button>
+                    <Button variant="contained" size="small" onClick={() => handleUpdateStatus()}>Save</Button>
                     <Button size="small" onClick={() => setEditingStatus(false)}>Cancel</Button>
                   </Box>
                 </Grid>
@@ -419,7 +485,7 @@ export default function TicketDetailPage() {
                       }
                       secondary={
                         <Typography variant="body2" color="text.primary" whiteSpace="pre-wrap" mt={0.5}>
-                          {c.content}
+                          {c.comment}
                         </Typography>
                       }
                     />
@@ -433,7 +499,7 @@ export default function TicketDetailPage() {
           )}
 
           {/* Add comment */}
-          {ticket.status !== 'closed' && (
+          {ticket.status !== 'closed' && ticket.status !== 'duplicate' && (
             <Box mt={3}>
               <Divider sx={{ mb: 2 }} />
               <TextField
@@ -496,6 +562,46 @@ export default function TicketDetailPage() {
         <DialogActions>
           <Button onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleAssign} disabled={!assignToId}>Assign</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Duplicate Picker Dialog ── */}
+      <Dialog open={dupDialogOpen} onClose={() => setDupDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Mark as Duplicate Of…</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Select the original ticket that this is a duplicate of.
+          </Typography>
+          {requesterOpenTickets.length === 0 ? (
+            <Alert severity="info" sx={{ mt: 1 }}>No other open tickets found for this requester.</Alert>
+          ) : (
+            <TextField
+              select
+              fullWidth
+              label="Original Ticket"
+              value={selectedDupOfId}
+              onChange={(e) => setSelectedDupOfId(e.target.value)}
+              size="small"
+              sx={{ mt: 2 }}
+            >
+              {requesterOpenTickets.map((t) => (
+                <MenuItem key={t.id} value={t.id}>
+                  {t.ticketNumber} — {t.subject}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDupDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={() => handleUpdateStatus(selectedDupOfId)}
+            disabled={!selectedDupOfId}
+          >
+            Confirm Duplicate
+          </Button>
         </DialogActions>
       </Dialog>
 

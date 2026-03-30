@@ -1,5 +1,26 @@
 # Compliance Hub - Complete Implementation Plan
 
+## v0.6.7 QA Fix Execution (2026-03-31)
+
+### Plan Executed
+
+| # | Area | Change |
+|---|------|--------|
+| 1 | `ticket.entity.ts` | Added `FREEZE`/`DUPLICATE` to `TicketStatus` enum; added `duplicateOfId` column |
+| 2 | `ticket.service.ts` | OPEN status restriction (only freeze/duplicate); priority restriction (FOCAL/REVIEWER/SUPER_ADMIN); DUPLICATE auto-close with `resolvedAt`; `getTechnicianAvailability` FOCAL inclusion + openCount fix; `getOpenTicketsForRequester` new method |
+| 3 | `ticket.controller.ts` | Added `UserRole.FOCAL` to `assignTicket`/`getTechnicians`; added `GET /tickets/requester/:requesterId/open` |
+| 4 | `ticket-settings.service.ts` | Added `pantawid_ict_support` to `updateKeywordRule` type validation |
+| 5 | `lib/api/client.ts` | `isRefreshing` + `failedQueue` concurrency guard for 401 token refresh |
+| 6 | `app/api/references.ts` | Added `freeze`/`duplicate` to `TicketStatus`; `duplicateOfId` on `Ticket`; `targetCategory` on `TicketKeywordRule`; `getOpenTicketsForRequester` API method |
+| 7 | `ticket-settings/page.tsx` | Display fix (`targetCategory ?? category`); Pantawid added to dropdown; `pantawid_ict_support` in `TYPE_LABELS` |
+| 8 | `tickets/page.tsx` | STATUS_COLOR extended; `pendingSatCount`; `isFocal`/`canAssign`; `handleOpenNewTicket` unrated warning; Freeze/Duplicate filter options; FOCAL assign button |
+| 9 | `tickets/[id]/page.tsx` | Comment fix (`c.content` → `c.comment`); 10 s polling; OPEN restriction in dropdown; Duplicate picker dialog; priority update field; Pantawid type label; `handleUpdateStatus` overloaded |
+| 10 | Both `package.json` | Version bumped `0.6.6` → `0.6.7` |
+
+### Status: ✅ Complete
+
+---
+
 ## v0.6.6 QA Fix Execution (2026-03-30)
 
 ### Plan Executed
