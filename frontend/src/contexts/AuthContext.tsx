@@ -40,6 +40,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, []);
 
+  // ── Heartbeat: verify session every 60 s while logged in ─────────────────
+  // If the account is deactivated server-side, getProfile() returns 401 →
+  // the axios interceptor attempts a token refresh → refresh also fails for
+  // deactivated users → tokens are cleared and the user is redirected to
+  // /login?reason=session_expired automatically.
+  useEffect(() => {
+    if (!user) return;
+
+    const id = setInterval(async () => {
+      try {
+        const profile = await authApi.getProfile();
+        setUser(profile);          // also keeps displayed name/role up-to-date
+      } catch {
+        // 401 is handled by the axios interceptor; other errors are safe to ignore
+      }
+    }, 60_000);   // 60 s
+
+    return () => clearInterval(id);
+  }, [!!user]);
+
   const login = async (email: string, password: string) => {
     try {
       const response = await authApi.login({ email, password });

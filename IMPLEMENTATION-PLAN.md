@@ -1,5 +1,33 @@
 # Compliance Hub - Complete Implementation Plan
 
+## v0.6.8 QA Fix Execution (2026-03-30)
+
+### Plan Executed
+
+| # | Area | Change |
+|---|------|--------|
+| 1 | `auth.service.ts` | Distinct error message for deactivated accounts on login; `refresh()` checks `user.active` |
+| 2 | `AuthContext.tsx` | 60 s heartbeat `setInterval` calling `getProfile()` |
+| 3 | `client.ts` | Append `?reason=session_expired` to both redirect paths |
+| 4 | `login/page.tsx` | Read `?reason` param from URL; show alert banner |
+| 5 | `ticket.entity.ts` | `priority` column: `VARCHAR(10) NULL DEFAULT NULL` |
+| 6 | `ticket.service.ts` | DB migration for nullable priority; `priority: null` default; DUPLICATE guard in `updateTicket`; busy-technician guard in `assignTicket`; DUPLICATE guard in `assignTicket`; IT Staff roles in `getTechnicianAvailability` |
+| 7 | `ticket.controller.ts` | IT Staff roles added to all `@Roles` guards |
+| 8 | `tickets/[id]/page.tsx` | Duplicate confirmation modal; disable Update Status / Assign on DUPLICATE; filter assign dialog to `openCount === 0`; null priority chip |
+| 9 | `tickets/page.tsx` | Null priority chip; assign dialog filter to `openCount === 0` and IT Staff roles |
+| 10 | `references.ts` | `priority: TicketPriority \| null` |
+| 11 | `vite.config.ts` | `host: true` |
+| 12 | `main.ts` | CORS `origin: true` if no env var |
+| 13 | Both `package.json` | Version bumped `0.6.7` → `0.6.8` |
+
+### Risks
+- **CORS `origin: true`** (echoes request Origin) is acceptable for internal LAN dev. For production, `CORS_ORIGIN` env var should be set to explicit domain(s).
+- **Nullable priority** — existing tickets will keep their current priority value; the migration only changes the column default, not existing rows.
+
+### Status: ✅ Complete
+
+---
+
 ## v0.6.7 QA Fix Execution (2026-03-31)
 
 ### Plan Executed

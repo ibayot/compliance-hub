@@ -93,7 +93,7 @@ export interface Ticket {
   description: string;
   ticketType: TicketType;
   status: TicketStatus;
-  priority: TicketPriority;
+  priority: TicketPriority | null;
   categoryId?: string | null;
   category?: TicketCategory | null;
   requesterId: number;

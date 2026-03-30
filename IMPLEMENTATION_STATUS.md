@@ -1,6 +1,34 @@
 # RICTMS Compliance Hub - Implementation Progress Report
 
-## 🚀 v0.6.7 — QA Fixes (Current)
+## 🚀 v0.6.8 — QA Fixes (Current)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| `auth.service.ts` — distinct deactivated-account error on login | ✅ Complete | Separate 401 message for `active=false` accounts |
+| `auth.service.ts` — refresh rejects deactivated users | ✅ Complete | `user.active` check before issuing new token |
+| `AuthContext.tsx` — 60 s heartbeat via `setInterval` | ✅ Complete | Calls `getProfile()` every 60 s; 401 triggers client.ts redirect |
+| `login/page.tsx` — session-expired alert banner | ✅ Complete | Reads `?reason=session_expired` query param |
+| `client.ts` — append `?reason=session_expired` to redirect URLs | ✅ Complete | Both no-token and refresh-fail paths |
+| `ticket.service.ts` — IT Staff roles in `getTechnicianAvailability` | ✅ Complete | `technician_it_staff`, `technician_desktop_staff` added |
+| `ticket.controller.ts` — IT Staff roles in guards | ✅ Complete | All `@Roles` lists updated |
+| `ticket.service.ts` — busy technician guard in `assignTicket` | ✅ Complete | Rejects if `busyCount > 0` |
+| `ticket.service.ts` — DUPLICATE guard in `assignTicket` | ✅ Complete | 403 if `ticket.status === DUPLICATE` |
+| `ticket.service.ts` — DUPLICATE guard in `updateTicket` | ✅ Complete | 403 if current status is `DUPLICATE` |
+| `ticket.entity.ts` — `priority` nullable | ✅ Complete | `VARCHAR(10) NULL DEFAULT NULL` |
+| `ticket.service.ts` — DB migration for nullable priority | ✅ Complete | `MODIFY COLUMN priority VARCHAR(10) NULL DEFAULT NULL` |
+| `ticket.service.ts` — new ticket `priority: null` default | ✅ Complete | Removed `?? TicketPriority.MEDIUM` |
+| `tickets/[id]/page.tsx` — Duplicate confirmation dialog | ✅ Complete | Warning modal before picker |
+| `tickets/[id]/page.tsx` — disable Update Status for DUPLICATE tickets | ✅ Complete | `!isDuplicate` guard on button |
+| `tickets/[id]/page.tsx` — assign dialog filters to `openCount === 0` | ✅ Complete | Frontend pre-filter; backend also enforces |
+| `tickets/[id]/page.tsx` — null priority chip | ✅ Complete | Shows "Not Set" if `priority === null` |
+| `tickets/page.tsx` — null priority chip + assign dialog filter | ✅ Complete | Same guards in list page |
+| `references.ts` — `priority: TicketPriority \| null` | ✅ Complete | Interface updated |
+| `vite.config.ts` — `host: true` for LAN access | ✅ Complete | Dev server listens on 0.0.0.0 |
+| `main.ts` — CORS echoes request origin | ✅ Complete | `origin: true` when no env var set |
+
+---
+
+## 🚀 v0.6.7 — QA Fixes
 
 | Area | Status | Notes |
 |------|--------|-------|

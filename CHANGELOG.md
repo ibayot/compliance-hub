@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.6.8] - 2026-03-30 — QA Fixes: Force Logout Flow, IT Staff Assign, Priority Focal-Only, Duplicate Guards, Network Access
+
+### Fixed
+- **Force logout was only triggered on page refresh, not in background** — the previous implementation redirected only when the axios interceptor caught a 401. If the user was inactive the redirect only happened on the next API call (typically a page refresh). Fix: added a 60 s heartbeat `setInterval` in `AuthContext` that calls `getProfile()`; when the token is revoked the interceptor fires within 60 s without any user action.
+- **No alert when logged-out or when logging in with a deactivated account** — (a) login page now reads `?reason=session_expired` on its URL and shows a MUI `Alert` banner so users know why they were redirected. (b) `AuthService.login()` now distinguishes between "wrong password" (`Invalid email or password.`) and "account deactivated" (`This account has been deactivated. Please contact the administrator.`) errors. `AuthService.refresh()` now also explicitly rejects deactivated accounts, ensuring the heartbeat-triggered refresh fails immediately for deactivated sessions.
+- **Newly created IT Staff could not be assigned tickets** — `getTechnicianAvailability` and the `@Roles` guards in the ticket controller only listed four technician role codes (`technician`, `technician_desktop`, `technician_it_support`, `focal`). The `technician_it_staff` and `technician_desktop_staff` roles were missing from every list. Fixed: all six technician roles added to availability queries and controller guards.
+- **Should not be able to assign tickets to technicians with unresolved tickets** — `assignTicket` had no workload guard. Fix: the service now counts active (non-closed, non-duplicate, non-resolved) tickets for the target technician and throws a `400 Bad Request` if `busyCount > 0`. The assign dialogs in both the ticket list page and the ticket detail page now pre-filter the technician dropdown to only show those with `openCount === 0`.
+- **Duplicate ticket: should not be able to assign technician** — `assignTicket` now checks `ticket.status === DUPLICATE` and throws `403` if it is.
+- **Duplicate ticket: should not be able to update status** — `updateTicket` now throws `403 Forbidden` immediately if the ticket's current status is `DUPLICATE`.
+- **Priority should be tagged by Technician Focal, not set automatically** — default priority on new tickets changed from `'medium'` to `null`. `Ticket.priority` column is now `VARCHAR(10) NULL DEFAULT NULL`. The New Ticket form no longer pre-fills a priority (`undefined`). Only FOCAL/REVIEWER/SUPER_ADMIN can set or change it (already enforced by `updateTicket`). Ticket chips now display "Not Set" when priority is null instead of crashing.
+
+### Added
+- **Duplicate confirmation warning modal** — before the Duplicate Picker dialog opens, a confirmation dialog now appears stating clearly that the action is permanent and cannot be undone. The user must click "Yes, Continue" before the picker is shown.
+- **LAN access for external testers** — `vite.config.ts` now sets `server.host: true` so the dev server listens on `0.0.0.0`. Backend CORS now echoes the request `Origin` header (or uses the `CORS_ORIGIN` env var as a comma-separated allowlist), allowing any machine on the same network to access both frontend and API. See network access note below.
+- **Session-expired redirect with reason** — `client.ts` now appends `?reason=session_expired` to the `/login` redirect URL. The login page shows a yellow alert when this parameter is present.
+
+### Network Access
+Your machine is accessible at:
+- **Ethernet:** `http://192.168.50.226:3000` (frontend)
+- **Wi-Fi:** `http://172.31.22.47:3000` (frontend)
+- API: same IPs on port `4000`
+
+> The `VITE_API_URL` in the frontend `.env` must point to the same IP as the server machine. You can set it to `http://192.168.50.226:4000/api` (or create a second `.env.local` file with that value) before restarting the dev server.
+
+---
+
 ## [0.6.7] - 2026-03-31 — QA Fixes: Freeze/Duplicate Statuses, OPEN Restriction, Comment Fix, Keyword Category, FOCAL Assign, Priority Roles, Unrated Warning, 401 Refresh Guard
 
 ### Fixed

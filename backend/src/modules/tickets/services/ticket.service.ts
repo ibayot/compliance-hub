@@ -101,6 +101,12 @@ export class TicketService implements OnModuleInit {
       // v0.6.7 migrations
       await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS duplicate_of_id VARCHAR(36) NULL').catch(() => undefined);
 
+      // v0.6.8 migrations
+      // Make priority nullable so focals can tag it manually (not auto-set by the app)
+      await qr.query(
+        'ALTER TABLE tickets MODIFY COLUMN priority VARCHAR(10) NULL DEFAULT NULL',
+      ).catch(() => undefined);
+
       // Make legacy reported_by_id nullable so new tickets only need requester_id
       await qr.query(
         'ALTER TABLE tickets MODIFY COLUMN reported_by_id INT(11) NULL',
@@ -377,7 +383,7 @@ export class TicketService implements OnModuleInit {
       subject: dto.subject.trim(),
       description: dto.description.trim(),
       ticketType: ticketType,
-      priority: dto.priority ?? TicketPriority.MEDIUM,
+      priority: dto.priority ?? null,
       status,
       categoryId,
       requesterId,
@@ -498,6 +504,11 @@ export class TicketService implements OnModuleInit {
       return this.ticketRepo.save(ticket);
     }
 
+    // Terminal state: DUPLICATE tickets cannot be modified further
+    if (ticket.status === TicketStatus.DUPLICATE) {
+      throw new ForbiddenException('Duplicate tickets are in a terminal state and cannot be updated.');
+    }
+
     // Technicians / admins can update status + resolution
     if (dto.subject) ticket.subject = dto.subject.trim();
     if (dto.description) ticket.description = dto.description.trim();
@@ -542,13 +553,38 @@ export class TicketService implements OnModuleInit {
   }
 
   async assignTicket(id: string, dto: AssignTicketDto, actorRole: UserRole): Promise<Ticket> {
-    if (![UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN].includes(actorRole)) {
+    const allowedActors = [
+      UserRole.SUPER_ADMIN, UserRole.FOCAL,
+      UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
+      UserRole.TECHNICIAN, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
+    ];
+    if (!allowedActors.includes(actorRole)) {
       throw new ForbiddenException('Only admins, focal persons, and technicians can assign tickets.');
     }
 
     const ticket = await this.getTicketById(id);
+
+    // Duplicate tickets are terminal – assignment is not allowed
+    if (ticket.status === TicketStatus.DUPLICATE) {
+      throw new ForbiddenException('Cannot assign a technician to a ticket that is marked as Duplicate.');
+    }
+
     const technician = await this.userRepo.findOne({ where: { id: dto.assignedToId } });
     if (!technician) throw new NotFoundException('Technician not found');
+
+    // Guard: technician must have no active tickets
+    const busyCount = await this.ticketRepo
+      .createQueryBuilder('t')
+      .where('t.assignedToId = :id', { id: dto.assignedToId })
+      .andWhere('t.status NOT IN (:...terminal)', {
+        terminal: [TicketStatus.CLOSED, TicketStatus.DUPLICATE, TicketStatus.RESOLVED],
+      })
+      .getCount();
+    if (busyCount > 0) {
+      throw new BadRequestException(
+        `${technician.firstName} ${technician.lastName} still has ${busyCount} unresolved ticket(s). Resolve them before assigning a new one.`,
+      );
+    }
 
     ticket.assignedToId = dto.assignedToId;
     if (ticket.status === TicketStatus.OPEN) {
@@ -712,6 +748,8 @@ export class TicketService implements OnModuleInit {
         { role: UserRole.TECHNICIAN_DESKTOP },
         { role: UserRole.TECHNICIAN_IT_SUPPORT },
         { role: UserRole.TECHNICIAN },
+        { role: UserRole.TECHNICIAN_IT_STAFF },
+        { role: UserRole.TECHNICIAN_DESKTOP_STAFF },
         { role: UserRole.FOCAL, ticketMainFocal: true },
       ],
     });

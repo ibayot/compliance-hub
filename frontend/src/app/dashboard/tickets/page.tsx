@@ -56,7 +56,7 @@ export default function TicketsPage() {
 
   // New ticket dialog
   const [newDialogOpen, setNewDialogOpen] = useState(false);
-  const [form, setForm] = useState<CreateTicketDto>({ subject: '', description: '', ticketType: 'it_support', priority: 'medium' });
+  const [form, setForm] = useState<CreateTicketDto>({ subject: '', description: '', ticketType: 'it_support', priority: undefined });
   const [submitting, setSubmitting] = useState(false);
   const [allUsers, setAllUsers] = useState<UserRecord[]>([]);
   const [categories, setCategories] = useState<TicketCategory[]>([]);
@@ -155,7 +155,7 @@ export default function TicketsPage() {
       await ticketsApi.create(form);
       enqueueSnackbar('Ticket submitted successfully!', { variant: 'success' });
       setNewDialogOpen(false);
-      setForm({ subject: '', description: '', ticketType: 'it_support', priority: 'medium', categoryId: undefined });
+      setForm({ subject: '', description: '', ticketType: 'it_support', priority: undefined, categoryId: undefined });
       setPendingSatCount(0);
       fetchTickets();
     } catch (err: any) {
@@ -180,11 +180,13 @@ export default function TicketsPage() {
     setSelectedTechId(String(ticket.assignedToId ?? ''));
     try {
       const techs = await ticketsApi.getTechnicians();
-      setTechnicians(techs.filter(t =>
-        ticket.ticketType === 'desktop_support'
-          ? ['technician_desktop','technician'].includes(t.role)
-          : ['technician_it_support','technician'].includes(t.role)
-      ));
+      setTechnicians(techs.filter(t => {
+        // Only show available technicians (no active/unresolved tickets)
+        if (t.openCount > 0) return false;
+        if (ticket.ticketType === 'desktop_support')
+          return ['technician_desktop', 'technician', 'technician_desktop_staff'].includes(t.role);
+        return ['technician_it_support', 'technician', 'technician_it_staff'].includes(t.role);
+      }));
     } catch { setTechnicians([]); }
     setAssignDialogOpen(true);
   };
@@ -295,7 +297,7 @@ export default function TicketsPage() {
                 <TableCell>
                   <Typography variant="body2" color="text.secondary">{ticket.category?.name ?? '—'}</Typography>
                 </TableCell>
-                <TableCell><Chip size="small" label={ticket.priority.toUpperCase()} color={PRIORITY_COLOR[ticket.priority]} /></TableCell>
+                <TableCell><Chip size="small" label={(ticket.priority ?? 'not set').toUpperCase()} color={PRIORITY_COLOR[ticket.priority ?? ''] ?? 'default'} /></TableCell>
                 <TableCell><Chip size="small" label={ticket.status.replace('_', ' ')} color={STATUS_COLOR[ticket.status]} /></TableCell>
                 {canManageAll && (
                   <TableCell>{ticket.requester ? `${ticket.requester.firstName ?? ''} ${ticket.requester.lastName ?? ''}`.trim() || ticket.requester.email : '—'}</TableCell>

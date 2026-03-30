@@ -103,19 +103,23 @@ export default function TicketDetailPage() {
   // Priority update
   const [newPriority, setNewPriority] = useState('');
 
-  // Duplicate picker
+  // Duplicate picker + confirmation
+  const [dupConfirmOpen, setDupConfirmOpen] = useState(false);
   const [dupDialogOpen, setDupDialogOpen] = useState(false);
   const [requesterOpenTickets, setRequesterOpenTickets] = useState<Ticket[]>([]);
   const [selectedDupOfId, setSelectedDupOfId] = useState('');
 
   const isRegularUser = user?.role === 'user';
-  const isTechnician = user?.role === 'technician_desktop' || user?.role === 'technician_it_support' || user?.role === 'technician';
+  const isTechnician = user?.role === 'technician_desktop' || user?.role === 'technician_it_support' ||
+    user?.role === 'technician' || user?.role === 'technician_it_staff' || user?.role === 'technician_desktop_staff';
   const isFocal = user?.role === 'focal';
   const isAdmin = user?.role === 'super_admin' || isFocal || user?.role === 'reviewer';
   const canStaff = isAdmin || isTechnician;
   const canPriority = isFocal || user?.role === 'reviewer' || user?.role === 'super_admin';
   const isRequester = ticket?.requesterId === (user as any)?.id;
   const canSatisfaction = isRequester && (ticket?.status === 'resolved' || ticket?.status === 'closed') && !ticket?.satisfactionRating;
+  // Duplicate is terminal — no further modifications allowed
+  const isDuplicate = ticket?.status === 'duplicate';
 
   useEffect(() => {
     fetchTicket();
@@ -173,16 +177,9 @@ export default function TicketDetailPage() {
   };
 
   const handleUpdateStatus = async (overrideDupOfId?: string) => {
-    // If marking as duplicate, open the picker first
+    // Step 1: If marking as duplicate, show a confirmation dialog first
     if (newStatus === 'duplicate' && !overrideDupOfId) {
-      try {
-        const open = await ticketsApi.getOpenTicketsForRequester((ticket as any).requesterId);
-        setRequesterOpenTickets(open.filter((t) => t.id !== ticketId));
-      } catch {
-        setRequesterOpenTickets([]);
-      }
-      setSelectedDupOfId('');
-      setDupDialogOpen(true);
+      setDupConfirmOpen(true);
       return;
     }
     try {
@@ -193,12 +190,26 @@ export default function TicketDetailPage() {
       await ticketsApi.update(ticketId, payload);
       setEditingStatus(false);
       setDupDialogOpen(false);
+      setDupConfirmOpen(false);
       setNewPriority('');
       fetchTicket();
       enqueueSnackbar('Ticket updated.', { variant: 'success' });
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to update ticket', { variant: 'error' });
     }
+  };
+
+  const handleConfirmDuplicate = async () => {
+    // Step 2: After confirmation, load the requester's open tickets for the picker
+    try {
+      const open = await ticketsApi.getOpenTicketsForRequester((ticket as any).requesterId);
+      setRequesterOpenTickets(open.filter((t) => t.id !== ticketId));
+    } catch {
+      setRequesterOpenTickets([]);
+    }
+    setSelectedDupOfId('');
+    setDupConfirmOpen(false);
+    setDupDialogOpen(true);
   };
 
   const handleAssign = async () => {
@@ -273,8 +284,8 @@ export default function TicketDetailPage() {
                   variant="outlined"
                 />
                 <Chip
-                  label={`Priority: ${ticket.priority.toUpperCase()}`}
-                  color={PRIORITY_COLOR[ticket.priority] ?? 'default'}
+                  label={ticket.priority ? `Priority: ${ticket.priority.toUpperCase()}` : 'Priority: Not Set'}
+                  color={ticket.priority ? (PRIORITY_COLOR[ticket.priority] ?? 'default') : 'default'}
                   size="small"
                 />
                 <Chip
@@ -287,12 +298,15 @@ export default function TicketDetailPage() {
 
             {/* Actions */}
             <Box display="flex" flexDirection="column" gap={1} minWidth={160}>
-              {canStaff && !editingStatus && (
+              {canStaff && !editingStatus && !isDuplicate && (
                 <Button variant="outlined" size="small" onClick={() => setEditingStatus(true)}>
                   Update Status
                 </Button>
               )}
-              {canStaff && (
+              {isDuplicate && (
+                <Chip label="Duplicate (Terminal)" color="default" size="small" />
+              )}
+              {canStaff && !isDuplicate && (
                 <Button variant="outlined" size="small" onClick={() => {
                   setAssignToId(ticket.assignedToId || '');
                   setAssignDialogOpen(true);
@@ -548,8 +562,10 @@ export default function TicketDetailPage() {
           >
             {technicians
               .filter((t) => {
-                if (ticket.ticketType === 'desktop_support') return t.role === 'technician_desktop' || t.role === 'technician';
-                if (ticket.ticketType === 'it_support') return t.role === 'technician_it_support' || t.role === 'technician';
+                // Only show technicians with no active tickets (openCount === 0)
+                if (t.openCount > 0) return false;
+                if (ticket.ticketType === 'desktop_support') return t.role === 'technician_desktop' || t.role === 'technician' || t.role === 'technician_desktop_staff';
+                if (ticket.ticketType === 'it_support') return t.role === 'technician_it_support' || t.role === 'technician' || t.role === 'technician_it_staff';
                 return true;
               })
               .map((t) => (
@@ -562,6 +578,23 @@ export default function TicketDetailPage() {
         <DialogActions>
           <Button onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleAssign} disabled={!assignToId}>Assign</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Duplicate Confirmation Dialog ── */}
+      <Dialog open={dupConfirmOpen} onClose={() => setDupConfirmOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Mark Ticket as Duplicate?</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            This action is <strong>permanent</strong>. Once a ticket is marked as Duplicate it cannot be updated or re-assigned.
+            You will be prompted to select the original ticket in the next step.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDupConfirmOpen(false)}>Cancel</Button>
+          <Button variant="contained" color="warning" onClick={handleConfirmDuplicate}>
+            Yes, Continue
+          </Button>
         </DialogActions>
       </Dialog>
 

@@ -1,6 +1,18 @@
 # RICMS Compliance Hub - Project Status
 
-## 🚀 v0.6.7 — QA Fixes: Freeze/Duplicate Statuses, OPEN Restriction, Comments Fix, Keyword Category, FOCAL Assign, Priority Roles (Current Release)
+## 🚀 v0.6.8 — QA Fixes: Force Logout Flow, IT Staff Assign, Priority Focal-Only, Duplicate Guards, Network Access (Current Release)
+- **Version:** `0.6.8` in both `backend/package.json` and `frontend/package.json`
+- **Force logout background heartbeat:** 60 s `setInterval` in `AuthContext` calls `getProfile()`; deactivated users are redirected without waiting for a page reload.
+- **Login deactivation alert:** `login()` now returns a specific error for deactivated accounts; login page shows `?reason=session_expired` banner.
+- **Refresh rejects deactivated users:** `AuthService.refresh()` checks `user.active` before issuing a new token.
+- **IT Staff roles in assign:** `technician_it_staff` and `technician_desktop_staff` added to `getTechnicianAvailability` query and all ticket controller `@Roles` guards.
+- **Busy technician guard:** `assignTicket` counts active tickets for the target; blocks if `busyCount > 0` with a clear error message. Frontend dialogs pre-filter to available-only technicians.
+- **Priority nullable:** default changed from `medium` to `null`; only FOCAL/REVIEWER/SUPER_ADMIN can set it. UI shows "Not Set" chip.
+- **Duplicate terminal guards:** `updateTicket` and `assignTicket` both throw if current status is `DUPLICATE`.
+- **Duplicate confirmation dialog:** warning modal now precedes the Duplicate Picker.
+- **LAN / network access:** Vite `host: true`; backend CORS echoes request origin. LAN URLs: `http://192.168.50.226:3000` (Ethernet) / `http://172.31.22.47:3000` (Wi-Fi).
+
+## 🚀 v0.6.7 — QA Fixes: Freeze/Duplicate Statuses, OPEN Restriction, Comments Fix, Keyword Category, FOCAL Assign, Priority Roles
 - **Version:** `0.6.7` in both `backend/package.json` and `frontend/package.json`
 - **Freeze/Duplicate ticket statuses:** new `TicketStatus` enum values (`freeze`, `duplicate`) with `duplicate_of_id` column; DB migration runs on startup.
 - **OPEN status restriction:** tickets in `open` can only move to `freeze` or `duplicate` (backend + frontend enforced).

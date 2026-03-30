@@ -71,10 +71,16 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto): Promise<AuthResponse> {
+    // Check deactivated specifically before validating password
+    const candidate = await this.usersService.findByEmail(loginDto.email);
+    if (candidate && !candidate.active) {
+      throw new UnauthorizedException('This account has been deactivated. Please contact the administrator.');
+    }
+
     const user = await this.validateUser(loginDto.email, loginDto.password);
 
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Invalid email or password.');
     }
 
     // Record login timestamp for staff activity tracking
@@ -173,6 +179,11 @@ export class AuthService {
       });
 
       const user = await this.usersService.findOne(payload.sub);
+
+      // Refuse to issue new tokens for deactivated accounts
+      if (!user.active) {
+        throw new UnauthorizedException('Account has been deactivated.');
+      }
 
       const newAccessToken = await this.jwtService.signAsync(
         {

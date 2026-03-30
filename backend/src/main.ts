@@ -13,9 +13,12 @@ async function bootstrap() {
   // Security
   app.use(helmet());
 
-  // CORS
+  // CORS – echo back the request origin so both localhost and LAN IPs work
+  const allowedOrigin = configService.get<string>('CORS_ORIGIN');
   app.enableCors({
-    origin: configService.get('CORS_ORIGIN') || 'http://localhost:3000',
+    origin: allowedOrigin
+      ? allowedOrigin.split(',').map((o) => o.trim())
+      : true,          // true = mirrors request Origin header (safe for dev/internal)
     credentials: true,
     exposedHeaders: ['Content-Disposition', 'Content-Type', 'Content-Length'],
   });

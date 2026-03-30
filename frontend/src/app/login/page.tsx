@@ -10,9 +10,11 @@ import {
   Typography,
   Container,
   Divider,
+  Alert,
 } from '@mui/material';
 import { CredentialResponse, GoogleLogin } from '@react-oauth/google';
 import { useSnackbar } from 'notistack';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
@@ -21,6 +23,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { login, loginWithGoogle } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
+  const { search } = useLocation();
+  const reason = new URLSearchParams(search).get('reason');
   const hasGoogleClient = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim().length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,6 +76,13 @@ export default function LoginPage() {
                 Sign in to your account
               </Typography>
             </Box>
+
+            {reason === 'session_expired' && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Your session has expired or your account was deactivated. Please sign in again.
+              </Alert>
+            )}
+
             <form onSubmit={handleSubmit}>
               <TextField
                 label="Email"

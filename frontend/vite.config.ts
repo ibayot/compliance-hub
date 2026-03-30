@@ -13,5 +13,6 @@ export default defineConfig({
   server: {
     port: 3000,
     strictPort: false,
+    host: true,  // listen on 0.0.0.0 so LAN peers can reach the dev server
   },
 });

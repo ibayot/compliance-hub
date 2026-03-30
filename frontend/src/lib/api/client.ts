@@ -1,6 +1,12 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+// Dynamically resolve API host so LAN peers can access the backend.
+// When the page is served from e.g. 192.168.50.226:3000, API calls go to
+// 192.168.50.226:4000/api instead of localhost:4000/api.
+const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  `http://${hostname}:4000/api`;
 
 class ApiClient {
   private client: AxiosInstance;
@@ -52,7 +58,7 @@ class ApiClient {
         // No refresh token at all — clear access token and redirect immediately
         if (!refreshToken) {
           localStorage.removeItem('accessToken');
-          window.location.href = '/login';
+          window.location.href = '/login?reason=session_expired';
           return Promise.reject(error);
         }
 
@@ -78,11 +84,11 @@ class ApiClient {
           this.processQueue(null, accessToken);
           return this.client(originalRequest);
         } catch (refreshError) {
-          // Refresh failed (e.g. user deactivated) — log out silently
+          // Refresh failed (e.g. user deactivated) — log out and notify
           this.processQueue(refreshError, null);
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
-          window.location.href = '/login';
+          window.location.href = '/login?reason=session_expired';
           return Promise.reject(refreshError);
         } finally {
           this.isRefreshing = false;

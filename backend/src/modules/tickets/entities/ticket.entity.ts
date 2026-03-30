@@ -63,8 +63,8 @@ export class Ticket {
   @Column({ type: 'varchar', length: 20, default: TicketStatus.OPEN })
   status: TicketStatus;
 
-  @Column({ type: 'varchar', length: 10, default: TicketPriority.MEDIUM })
-  priority: TicketPriority;
+  @Column({ type: 'varchar', length: 10, nullable: true, default: null })
+  priority: TicketPriority | null;
 
   // --- Category ---
   @Column({ name: 'category_id', type: 'varchar', length: 36, nullable: true })
