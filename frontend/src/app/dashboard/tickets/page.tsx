@@ -41,7 +41,7 @@ function ticketTypeIcon(t: TicketType) {
 }
 
 function isStaffRole(role?: string) {
-  return ['super_admin','reviewer','focal','technician','technician_desktop','technician_it_support','auditor'].includes(role ?? '');
+  return ['super_admin','reviewer','focal','technician','technician_desktop','technician_it_support','technician_it_staff','technician_desktop_staff','auditor'].includes(role ?? '');
 }
 
 export default function TicketsPage() {
@@ -53,6 +53,7 @@ export default function TicketsPage() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [showMyTickets, setShowMyTickets] = useState(false);
 
   // New ticket dialog
   const [newDialogOpen, setNewDialogOpen] = useState(false);
@@ -88,6 +89,7 @@ export default function TicketsPage() {
       const data = await ticketsApi.getAll({
         status: filterStatus as TicketStatus || undefined,
         ticketType: filterType as TicketType || undefined,
+        assignedToId: showMyTickets && isTechnician ? user?.id : undefined,
       });
       setTickets(data);
     } catch {
@@ -95,7 +97,7 @@ export default function TicketsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterStatus, filterType]);
+  }, [filterStatus, filterType, showMyTickets, isTechnician, user?.id]);
 
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
 
@@ -114,10 +116,11 @@ export default function TicketsPage() {
       const data = await ticketsApi.getAll({
         status: filterStatus as TicketStatus || undefined,
         ticketType: filterType as TicketType || undefined,
+        assignedToId: showMyTickets && isTechnician ? user?.id : undefined,
       });
       setTickets(data);
     } catch { /* silent */ }
-  }, [filterStatus, filterType]);
+  }, [filterStatus, filterType, showMyTickets, isTechnician, user?.id]);
   useAutoRefresh(silentFetchTickets);
 
   useEffect(() => {
@@ -257,6 +260,32 @@ export default function TicketsPage() {
                 <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
               </TextField>
               <Button size="small" variant="outlined" onClick={() => { setFilterStatus(''); setFilterType(''); }}>Reset</Button>
+              {isTechnician && (
+                <Button
+                  size="small"
+                  variant={showMyTickets ? 'contained' : 'outlined'}
+                  color="primary"
+                  onClick={() => setShowMyTickets(v => !v)}
+                >
+                  {showMyTickets ? 'My Tickets ✓' : 'My Tickets'}
+                </Button>
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+      {!canManageAll && isTechnician && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            <Stack direction="row" spacing={2}>
+              <Button
+                size="small"
+                variant={showMyTickets ? 'contained' : 'outlined'}
+                color="primary"
+                onClick={() => setShowMyTickets(v => !v)}
+              >
+                {showMyTickets ? 'My Assigned Tickets ✓' : 'All Tickets'}
+              </Button>
             </Stack>
           </CardContent>
         </Card>
@@ -314,7 +343,7 @@ export default function TicketsPage() {
                     <Tooltip title="View Details">
                       <IconButton size="small" onClick={() => router.push(`/dashboard/tickets/${ticket.id}`)}><ViewIcon fontSize="small" /></IconButton>
                     </Tooltip>
-                    {(canAssign) && (
+                    {(canAssign && ticket.status !== 'duplicate') && (
                       <Tooltip title="Assign Ticket">
                         <IconButton size="small" color="primary" onClick={() => openAssignDialog(ticket)}><AssignIcon fontSize="small" /></IconButton>
                       </Tooltip>
@@ -388,7 +417,7 @@ export default function TicketsPage() {
                 ))}
               </TextField>
             )}
-            {canManageAll && (
+            {(canManageAll || isTechnician) && (
               <TextField select label="Priority" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value as TicketPriority })} fullWidth>
                 <MenuItem value="low">Low — Not urgent</MenuItem>
                 <MenuItem value="medium">Medium — Normal impact</MenuItem>

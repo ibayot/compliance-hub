@@ -14,5 +14,12 @@ export default defineConfig({
     port: 3000,
     strictPort: false,
     host: true,  // listen on 0.0.0.0 so LAN peers can reach the dev server
+    proxy: {
+      '/api': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        // No rewrite needed — backend is mounted at /api
+      },
+    },
   },
 });

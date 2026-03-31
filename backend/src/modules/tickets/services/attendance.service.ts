@@ -111,7 +111,7 @@ export class AttendanceService {
   }
 
   /** Set (upsert) attendance for a single user on a date */
-  async setAttendance(dto: SetAttendanceDto, setById: number): Promise<TechAttendance> {
+  async setAttendance(dto: SetAttendanceDto, setById: number, actorRole?: string): Promise<TechAttendance> {
     if (!dto.userId || !dto.date || !dto.status) {
       throw new BadRequestException('userId, date, and status are required');
     }
@@ -119,6 +119,19 @@ export class AttendanceService {
     // Validate status
     if (!Object.values(AttendanceStatus).includes(dto.status)) {
       throw new BadRequestException(`Invalid status: ${dto.status}`);
+    }
+
+    // Scope restriction: IT focal can only tag IT staff; Desktop focal can only tag Desktop staff
+    if (actorRole === UserRole.TECHNICIAN_IT_SUPPORT) {
+      const target = await this.userRepo.findOne({ where: { id: dto.userId } });
+      if (target && target.role !== UserRole.TECHNICIAN_IT_STAFF) {
+        throw new BadRequestException('IT Support focal can only manage attendance for IT Staff technicians.');
+      }
+    } else if (actorRole === UserRole.TECHNICIAN_DESKTOP) {
+      const target = await this.userRepo.findOne({ where: { id: dto.userId } });
+      if (target && target.role !== UserRole.TECHNICIAN_DESKTOP_STAFF) {
+        throw new BadRequestException('Desktop focal can only manage attendance for Desktop Staff technicians.');
+      }
     }
 
     let record = await this.attendanceRepo.findOne({
@@ -143,10 +156,10 @@ export class AttendanceService {
   }
 
   /** Bulk set attendance for multiple users */
-  async bulkSetAttendance(dto: BulkSetAttendanceDto, setById: number): Promise<TechAttendance[]> {
+  async bulkSetAttendance(dto: BulkSetAttendanceDto, setById: number, actorRole?: string): Promise<TechAttendance[]> {
     const results: TechAttendance[] = [];
     for (const entry of dto.entries) {
-      results.push(await this.setAttendance(entry, setById));
+      results.push(await this.setAttendance(entry, setById, actorRole));
     }
     return results;
   }
@@ -215,15 +228,23 @@ export class AttendanceService {
   }
 
   /** Get technicians filtered for the current session (all staff or filtered by type) */
-  async listTechnicians(ticketType?: string): Promise<User[]> {
+  async listTechnicians(ticketType?: string, actorRole?: string): Promise<User[]> {
     const customRoles = await this.getCustomRoleValues(ticketType || undefined);
 
+    // Focal technicians see only their own staff tier
+    let forcedType = ticketType;
+    if (actorRole === UserRole.TECHNICIAN_IT_SUPPORT && !ticketType) {
+      forcedType = 'it_support';
+    } else if (actorRole === UserRole.TECHNICIAN_DESKTOP && !ticketType) {
+      forcedType = 'desktop_support';
+    }
+
     let hardcodedRoles: string[];
-    if (ticketType === 'desktop_support') {
+    if (forcedType === 'desktop_support') {
       hardcodedRoles = [UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF];
-    } else if (ticketType === 'it_support') {
+    } else if (forcedType === 'it_support') {
       hardcodedRoles = [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF];
-    } else if (ticketType === 'pantawid_ict_support') {
+    } else if (forcedType === 'pantawid_ict_support') {
       hardcodedRoles = [UserRole.TECHNICIAN];
     } else {
       // No filter = all tech roles

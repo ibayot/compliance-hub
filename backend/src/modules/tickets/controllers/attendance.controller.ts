@@ -77,7 +77,7 @@ export class AttendanceController {
   @Roles(...FOCAL_ROLES, ...OFFICE_DAY_ROLES)
   @HttpCode(HttpStatus.OK)
   async setAttendance(@Body() dto: SetAttendanceDto, @Request() req: any) {
-    return this.attendanceService.setAttendance(dto, req.user.id ?? req.user.userId);
+    return this.attendanceService.setAttendance(dto, req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** POST /attendance/bulk — set multiple attendance records */
@@ -85,14 +85,14 @@ export class AttendanceController {
   @Roles(...FOCAL_ROLES, ...OFFICE_DAY_ROLES)
   @HttpCode(HttpStatus.OK)
   async bulkSetAttendance(@Body() dto: BulkSetAttendanceDto, @Request() req: any) {
-    return this.attendanceService.bulkSetAttendance(dto, req.user.id ?? req.user.userId);
+    return this.attendanceService.bulkSetAttendance(dto, req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** GET /attendance/technicians?ticketType= — list technicians (for attendance management) */
   @Get('technicians')
   @Roles(...READ_ROLES)
-  async listTechnicians(@Query('ticketType') ticketType?: string) {
-    return this.attendanceService.listTechnicians(ticketType);
+  async listTechnicians(@Query('ticketType') ticketType?: string, @Request() req?: any) {
+    return this.attendanceService.listTechnicians(ticketType, req?.user?.role);
   }
 
   // ── Office Days ─────────────────────────────────────────────────────────

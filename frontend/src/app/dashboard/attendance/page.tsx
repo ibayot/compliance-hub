@@ -53,6 +53,7 @@ function isWeekday(d: Date): boolean {
 
 export default function AttendancePage() {
   const { user } = useAuth();
+  const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
   const { enqueueSnackbar } = useSnackbar();
 
   const [tab, setTab] = useState(0);
@@ -123,8 +124,10 @@ export default function AttendancePage() {
     if (tab === 1) {
       fetchTechnicians();
       fetchAttendance();
+    } else if (isLowerLevelTech && tab === 0) {
+      fetchAttendance();
     }
-  }, [tab, fetchTechnicians, fetchAttendance]);
+  }, [tab, fetchTechnicians, fetchAttendance, isLowerLevelTech]);
   useEffect(() => { if (tab === 2) fetchStaffLoginStaff(); }, [tab, fetchStaffLoginStaff]);
 
   // ── Silent auto-refresh: update data every 30s without showing loading spinners (avoids flicker) ──
@@ -238,11 +241,13 @@ export default function AttendancePage() {
       </Stack>
 
       <Card>
+        {!isLowerLevelTech && (
         <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
           <Tab label="Office Days Calendar" />
           <Tab label="Technician Attendance" />
           <Tab label="Staff Login Activity" icon={<LoginIcon fontSize="small" />} iconPosition="start" />
         </Tabs>
+        )}
 
         {/* ── Office Days Calendar ── */}
         {tab === 0 && (
@@ -283,6 +288,18 @@ export default function AttendancePage() {
                       >
                         <Typography variant="body2" fontWeight={600}>{d.getDate()}</Typography>
                         <Typography variant="caption">{isOffice ? 'Office' : 'Off'}</Typography>
+                        {isLowerLevelTech && isOffice && (() => {
+                          const myStatus = attRecordsMap.get(user?.id ?? 0)?.get(dStr)?.status ?? null;
+                          const myCfg = myStatus ? STATUS_CONFIG[myStatus] : null;
+                          return (
+                            <Box mt={0.5}>
+                              {myCfg
+                                ? <Chip size="small" icon={myCfg.icon as any} label={myCfg.label} color={myCfg.color} sx={{ transform: 'scale(0.75)', transformOrigin: 'center' }} />
+                                : <Typography variant="caption" color="inherit">—</Typography>
+                              }
+                            </Box>
+                          );
+                        })()}
                       </Box>
                     );
                   })}

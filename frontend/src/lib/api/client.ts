@@ -1,12 +1,8 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 
-// Dynamically resolve API host so LAN peers can access the backend.
-// When the page is served from e.g. 192.168.50.226:3000, API calls go to
-// 192.168.50.226:4000/api instead of localhost:4000/api.
-const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  `http://${hostname}:4000/api`;
+// Use Vite proxy in dev (/api is proxied to localhost:4000/api by vite.config.ts).
+// VITE_API_URL can override for production deployments.
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 class ApiClient {
   private client: AxiosInstance;

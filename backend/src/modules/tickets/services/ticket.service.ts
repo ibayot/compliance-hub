@@ -355,7 +355,8 @@ export class TicketService implements OnModuleInit {
                 { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
               ],
             });
-            if (openCount < minCount) {
+            // Only consider techs with ZERO active tickets (not just fewest)
+          if (openCount === 0 && openCount < minCount) {
               minCount = openCount;
               bestTech = tech;
             }
@@ -444,21 +445,23 @@ export class TicketService implements OnModuleInit {
       .orderBy('t.createdAt', 'DESC');
 
     // Role-based visibility
-    if (
-      filters.viewerRole === UserRole.USER
-    ) {
+    if (filters.viewerRole === UserRole.USER) {
       // Regular users see only their own tickets
       qb.where('t.requesterId = :uid', { uid: filters.viewerId });
-    } else if (
-      filters.viewerRole === UserRole.TECHNICIAN_DESKTOP
-    ) {
-      // Desktop technicians see all desktop_support tickets
+    } else if (filters.viewerRole === UserRole.TECHNICIAN_IT_STAFF) {
+      // Lower-level IT staff see only tickets assigned to them
+      qb.where('t.assignedToId = :uid', { uid: filters.viewerId });
+      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
+    } else if (filters.viewerRole === UserRole.TECHNICIAN_DESKTOP_STAFF) {
+      // Lower-level Desktop staff see only tickets assigned to them
+      qb.where('t.assignedToId = :uid', { uid: filters.viewerId });
+      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
+    } else if (filters.viewerRole === UserRole.TECHNICIAN_DESKTOP) {
+      // Desktop focal technicians see all desktop_support tickets
       qb.where('t.ticketType = :type', { type: TicketType.DESKTOP_SUPPORT });
       if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
-    } else if (
-      filters.viewerRole === UserRole.TECHNICIAN_IT_SUPPORT
-    ) {
-      // IT technicians see all it_support tickets
+    } else if (filters.viewerRole === UserRole.TECHNICIAN_IT_SUPPORT) {
+      // IT focal technicians see all it_support tickets
       qb.where('t.ticketType = :type', { type: TicketType.IT_SUPPORT });
       if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
     } else {
@@ -513,11 +516,15 @@ export class TicketService implements OnModuleInit {
     if (dto.subject) ticket.subject = dto.subject.trim();
     if (dto.description) ticket.description = dto.description.trim();
 
-    // Priority changes restricted to Focal, Reviewer, and Super Admin
+    // Priority changes allowed for all technician-level roles and above
     if (dto.priority !== undefined) {
-      const priorityRoles = [UserRole.FOCAL, UserRole.REVIEWER, UserRole.SUPER_ADMIN];
+      const priorityRoles = [
+        UserRole.FOCAL, UserRole.REVIEWER, UserRole.SUPER_ADMIN,
+        UserRole.TECHNICIAN, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
+        UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
+      ];
       if (!priorityRoles.includes(actorRole)) {
-        throw new ForbiddenException('Only Technician Focal, Compliance Officers, and Super Admins can change ticket priority.');
+        throw new ForbiddenException('Only technicians and above can change ticket priority.');
       }
       ticket.priority = dto.priority;
     }
@@ -541,6 +548,12 @@ export class TicketService implements OnModuleInit {
         // Duplicate tickets are terminal — treat like closed
         if (!ticket.resolvedAt) ticket.resolvedAt = new Date();
       } else {
+        // Guard: ticket must have a priority before it can be resolved
+        if (dto.status === TicketStatus.RESOLVED && !ticket.priority && dto.priority === undefined) {
+          throw new BadRequestException(
+            'A priority must be set on this ticket before it can be marked as Resolved. Please tag the priority first.',
+          );
+        }
         ticket.status = dto.status;
         if (dto.status === TicketStatus.RESOLVED && !ticket.resolvedAt) {
           ticket.resolvedAt = new Date();
@@ -549,7 +562,32 @@ export class TicketService implements OnModuleInit {
     }
     if (dto.resolutionNotes !== undefined) ticket.resolutionNotes = dto.resolutionNotes;
 
-    return this.ticketRepo.save(ticket);
+    const saved = await this.ticketRepo.save(ticket);
+
+    // On RESOLVED: auto-assign the oldest pending OPEN ticket of the same type to this technician
+    if (dto.status === TicketStatus.RESOLVED && saved.assignedToId) {
+      try {
+        const nextTicket = await this.ticketRepo
+          .createQueryBuilder('t')
+          .where('t.status = :status', { status: TicketStatus.OPEN })
+          .andWhere('t.assignedToId IS NULL')
+          .andWhere('t.ticketType = :type', { type: saved.ticketType })
+          .orderBy('t.createdAt', 'ASC')
+          .getOne();
+        if (nextTicket) {
+          nextTicket.assignedToId = saved.assignedToId;
+          nextTicket.status = TicketStatus.ASSIGNED;
+          await this.ticketRepo.save(nextTicket);
+          this.logger.log(
+            `Auto-reassign on resolve: ticket ${nextTicket.ticketNumber} → technician #${saved.assignedToId}`,
+          );
+        }
+      } catch (err: any) {
+        this.logger.warn(`Auto-reassign on resolve failed (non-fatal): ${err?.message}`);
+      }
+    }
+
+    return saved;
   }
 
   async assignTicket(id: string, dto: AssignTicketDto, actorRole: UserRole): Promise<Ticket> {

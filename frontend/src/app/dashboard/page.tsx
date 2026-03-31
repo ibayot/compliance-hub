@@ -80,6 +80,8 @@ export default function DashboardPage() {
   const periodMonth = now.getMonth() + 1;
 
   const isRegularUser = user?.role === 'user';
+  const isTechnicianAny = ['technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
+  const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
 
   useEffect(() => {
     fetchDashboardData();
@@ -101,13 +103,14 @@ export default function DashboardPage() {
       }
 
       // Staff / admin: full dashboard
-      const [docsResponse, metricsResult, incidentsResult, ticketStatsResult, kpiSummaryResult] =
+      const [docsResponse, metricsResult, incidentsResult, ticketStatsResult, kpiSummaryResult, userDashStatsResult] =
         await Promise.allSettled([
           documentsApi.listDocuments({}),
           cybersecurityApi.getAll(),
           incidentsApi.getTodayStats(),
           ticketsApi.getStatistics(),
           kpiApi.dashboardSummary(periodYear, periodMonth),
+          ticketsApi.getDashboardStats(),
         ]);
 
       const docs =
@@ -139,6 +142,9 @@ export default function DashboardPage() {
 
       if (kpiSummaryResult.status === 'fulfilled') {
         setKpiSummary(kpiSummaryResult.value);
+      }
+      if (userDashStatsResult.status === 'fulfilled') {
+        setUserTicketStats(userDashStatsResult.value);
       }
 
       setStats({
@@ -319,9 +325,40 @@ export default function DashboardPage() {
           Dashboard
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Welcome back, {user?.firstName || user?.email}! • Role: {user?.role?.replace('_', ' ').toUpperCase()}
+          Welcome back, {user?.firstName || user?.email}!
         </Typography>
       </Box>
+
+      {/* Technician Personal Assignment Stats */}
+      {isTechnicianAny && userTicketStats && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent>
+            <Box display="flex" alignItems="center" gap={2} mb={2}>
+              <AssignedIcon color="primary" fontSize="large" />
+              <Box>
+                <Typography variant="h6">My Assigned Tickets</Typography>
+                <Typography variant="body2" color="text.secondary">Your personal ticket assignments</Typography>
+              </Box>
+            </Box>
+            <Grid container spacing={2}>
+              {([
+                { label: 'Open', value: userTicketStats.open ?? 0, color: 'warning' as const, Icon: TicketIcon },
+                { label: 'In Progress', value: userTicketStats.inProgress ?? 0, color: 'primary' as const, Icon: InProgressIcon },
+                { label: 'Resolved', value: userTicketStats.resolved ?? 0, color: 'success' as const, Icon: ResolvedIcon },
+                { label: 'Closed', value: userTicketStats.closed ?? 0, color: 'default' as const, Icon: ClosedIcon },
+              ] as const).map(({ label, value, color, Icon }) => (
+                <Grid item xs={6} sm={3} key={label}>
+                  <Paper sx={{ p: 2, textAlign: 'center', border: 1, borderColor: color === 'default' ? 'divider' : `${color}.main` }}>
+                    <Icon color={color === 'default' ? 'action' : color} fontSize="large" />
+                    <Typography variant="h4" color={color === 'default' ? 'text.secondary' : `${color}.main`} mt={1}>{value}</Typography>
+                    <Typography variant="caption" color="text.secondary">{label}</Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Main Stats */}
       <Grid container spacing={3} mb={4}>
@@ -575,6 +612,7 @@ export default function DashboardPage() {
       )}
 
       {/* Cybersecurity Metrics */}
+      {!isTechnicianAny && (
       <Card sx={{ mb: 4 }}>
         <CardContent>
           <Box display="flex" alignItems="center" gap={2} mb={3}>
@@ -632,8 +670,10 @@ export default function DashboardPage() {
           </Grid>
         </CardContent>
       </Card>
+      )}
 
       {/* KPI Overview */}
+      {!isTechnicianAny && (
       <Card sx={{ mb: 4 }}>
         <CardContent>
           <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
@@ -692,9 +732,11 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Recent Documents and Compliance Overview */}
       <Grid container spacing={3} mb={4}>
+        {!isLowerLevelTech && (
         <Grid item xs={12} md={8}>
           <Card>
             <CardContent>
@@ -733,7 +775,9 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </Grid>
+        )}
 
+        {!isTechnicianAny && (
         <Grid item xs={12} md={4}>
           <Card>
             <CardContent>
@@ -774,9 +818,11 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </Grid>
+        )}
       </Grid>
 
       {/* Quick Actions */}
+      {!isTechnicianAny && (
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
           <Card>
@@ -811,6 +857,7 @@ export default function DashboardPage() {
           </Card>
         </Grid>
       </Grid>
+      )}
     </Box>
   );
 }

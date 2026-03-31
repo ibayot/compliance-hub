@@ -8,7 +8,7 @@ export interface TicketEmailData {
   description: string;
   ticketType: string;
   categoryName?: string;
-  priority: string;
+  priority: string | null;
   status: string;
   requesterName: string;
   requesterEmail: string;
@@ -84,7 +84,7 @@ export class EmailService {
         <tr><td style="padding:6px 12px;font-weight:600;color:#555;">Subject</td><td style="padding:6px 12px;">${data.subject}</td></tr>
         <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Support Type</td><td style="padding:6px 12px;">${typeLabel}</td></tr>
         ${data.categoryName ? `<tr><td style="padding:6px 12px;font-weight:600;color:#555;">Category</td><td style="padding:6px 12px;">${data.categoryName}</td></tr>` : ''}
-        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Priority</td><td style="padding:6px 12px;">${data.priority.toUpperCase()}</td></tr>
+        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Priority</td><td style="padding:6px 12px;">${data.priority ? data.priority.toUpperCase() : 'N/A'}</td></tr>
         <tr><td style="padding:6px 12px;font-weight:600;color:#555;">Status</td><td style="padding:6px 12px;">${data.status.replace('_', ' ').toUpperCase()}</td></tr>
         ${assignedLine}
         <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Date Created</td><td style="padding:6px 12px;">${data.createdAt}</td></tr>
