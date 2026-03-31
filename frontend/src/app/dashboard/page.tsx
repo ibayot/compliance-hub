@@ -16,6 +16,9 @@ import {
   ListItem,
   ListItemText,
   LinearProgress,
+  Stack,
+  TextField,
+  MenuItem,
 } from '@mui/material';
 import {
   Description as DocumentIcon,
@@ -38,7 +41,7 @@ import {
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { documentsApi } from '@/lib/api/documents';
-import { ticketsApi, TicketDashboardStats } from '@/app/api/references';
+import { ticketsApi, TicketDashboardStats, TechAssignedStats } from '@/app/api/references';
 import { incidentsApi, TodayStats } from '@/lib/api/incidents';
 import { cybersecurityApi, CybersecurityMetric } from '@/lib/api/cybersecurity';
 import { DashboardSummaryResponse, kpiApi } from '@/lib/api/kpi';
@@ -65,6 +68,12 @@ export default function DashboardPage() {
   // User-specific ticket dashboard stats
   const [userTicketStats, setUserTicketStats] = useState<TicketDashboardStats | null>(null);
 
+  // Tech monthly assigned-ticket stats with selectable period
+  const [techAssignedStats, setTechAssignedStats] = useState<TechAssignedStats | null>(null);
+  const [techStatsYear, setTechStatsYear] = useState(() => new Date().getFullYear());
+  const [techStatsMonth, setTechStatsMonth] = useState(() => new Date().getMonth() + 1);
+  const [techStatsLoading, setTechStatsLoading] = useState(false);
+
   // Admin-level full ticket metrics
   const [ticketMetrics, setTicketMetrics] = useState<{
     total: number;
@@ -82,10 +91,24 @@ export default function DashboardPage() {
   const isRegularUser = user?.role === 'user';
   const isTechnicianAny = ['technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
   const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
+  // Compliance Officer = reviewer or any role tagged with roleCode 'compliance_officer'
+  const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer';
+  // Full dashboard: super_admin or CO; generic staff (focal, auditor, etc.) see doc cards + KPI only
+  const isFullDashboard = user?.role === 'super_admin' || isComplianceOfficer;
 
   useEffect(() => {
     fetchDashboardData();
   }, [user]);
+
+  // Fetch monthly assigned-ticket stats for technicians whenever period changes
+  useEffect(() => {
+    if (!isTechnicianAny || !user?.id) return;
+    setTechStatsLoading(true);
+    ticketsApi.getAssignedStats(techStatsYear, techStatsMonth)
+      .then(data => setTechAssignedStats(data))
+      .catch(() => {})
+      .finally(() => setTechStatsLoading(false));
+  }, [isTechnicianAny, user?.id, techStatsYear, techStatsMonth]);
 
   const fetchDashboardData = async () => {
     try {
@@ -330,37 +353,80 @@ export default function DashboardPage() {
       </Box>
 
       {/* Technician Personal Assignment Stats */}
-      {isTechnicianAny && userTicketStats && (
+      {isTechnicianAny && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
-            <Box display="flex" alignItems="center" gap={2} mb={2}>
-              <AssignedIcon color="primary" fontSize="large" />
-              <Box>
-                <Typography variant="h6">My Assigned Tickets</Typography>
-                <Typography variant="body2" color="text.secondary">Your personal ticket assignments</Typography>
+            <Box display="flex" alignItems="center" justifyContent="space-between" gap={2} mb={2} flexWrap="wrap">
+              <Box display="flex" alignItems="center" gap={2}>
+                <AssignedIcon color="primary" fontSize="large" />
+                <Box>
+                  <Typography variant="h6">My Assigned Tickets</Typography>
+                  <Typography variant="body2" color="text.secondary">Monthly statistics for tickets assigned to you</Typography>
+                </Box>
               </Box>
+              <Stack direction="row" spacing={1}>
+                <TextField
+                  select size="small" label="Month" value={techStatsMonth}
+                  onChange={e => setTechStatsMonth(Number(e.target.value))}
+                  sx={{ minWidth: 110 }}
+                >
+                  {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
+                    <MenuItem key={i + 1} value={i + 1}>{m}</MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select size="small" label="Year" value={techStatsYear}
+                  onChange={e => setTechStatsYear(Number(e.target.value))}
+                  sx={{ minWidth: 90 }}
+                >
+                  {[2024, 2025, 2026, 2027, 2028].map(y => (
+                    <MenuItem key={y} value={y}>{y}</MenuItem>
+                  ))}
+                </TextField>
+              </Stack>
             </Box>
-            <Grid container spacing={2}>
-              {([
-                { label: 'Open', value: userTicketStats.open ?? 0, color: 'warning' as const, Icon: TicketIcon },
-                { label: 'In Progress', value: userTicketStats.inProgress ?? 0, color: 'primary' as const, Icon: InProgressIcon },
-                { label: 'Resolved', value: userTicketStats.resolved ?? 0, color: 'success' as const, Icon: ResolvedIcon },
-                { label: 'Closed', value: userTicketStats.closed ?? 0, color: 'default' as const, Icon: ClosedIcon },
-              ] as const).map(({ label, value, color, Icon }) => (
-                <Grid item xs={6} sm={3} key={label}>
-                  <Paper sx={{ p: 2, textAlign: 'center', border: 1, borderColor: color === 'default' ? 'divider' : `${color}.main` }}>
-                    <Icon color={color === 'default' ? 'action' : color} fontSize="large" />
-                    <Typography variant="h4" color={color === 'default' ? 'text.secondary' : `${color}.main`} mt={1}>{value}</Typography>
-                    <Typography variant="caption" color="text.secondary">{label}</Typography>
-                  </Paper>
+            {techStatsLoading ? (
+              <Box textAlign="center" py={3}><CircularProgress size={24} /></Box>
+            ) : techAssignedStats ? (
+              <>
+                <Grid container spacing={2} mb={1}>
+                  {([
+                    { label: 'Open', value: techAssignedStats.open, color: 'warning' as const, Icon: TicketIcon },
+                    { label: 'In Progress', value: techAssignedStats.inProgress, color: 'primary' as const, Icon: InProgressIcon },
+                    { label: 'Resolved', value: techAssignedStats.resolved, color: 'success' as const, Icon: ResolvedIcon },
+                    { label: 'Closed', value: techAssignedStats.closed, color: 'default' as const, Icon: ClosedIcon },
+                  ] as const).map(({ label, value, color, Icon }) => (
+                    <Grid item xs={6} sm={3} key={label}>
+                      <Paper sx={{ p: 2, textAlign: 'center', border: 1, borderColor: color === 'default' ? 'divider' : `${color}.main` }}>
+                        <Icon color={color === 'default' ? 'action' : color} fontSize="large" />
+                        <Typography variant="h4" color={color === 'default' ? 'text.secondary' : `${color}.main`} mt={1}>{value}</Typography>
+                        <Typography variant="caption" color="text.secondary">{label}</Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
                 </Grid>
-              ))}
-            </Grid>
+                <Box display="flex" gap={4} mt={1} flexWrap="wrap">
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Total this month</Typography>
+                    <Typography variant="h6">{techAssignedStats.total}</Typography>
+                  </Box>
+                  {techAssignedStats.satisfactionAvg !== null && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Avg. Satisfaction</Typography>
+                      <Typography variant="h6" color="warning.main">{techAssignedStats.satisfactionAvg} / 5 ⭐</Typography>
+                    </Box>
+                  )}
+                </Box>
+              </>
+            ) : (
+              <Typography variant="body2" color="text.secondary" py={2} textAlign="center">No assigned tickets for this period.</Typography>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Main Stats */}
+      {/* Main Stats — hidden for all technicians */}
+      {!isTechnicianAny && (
       <Grid container spacing={3} mb={4}>
         <Grid item xs={12} md={6} lg={3}>
           <Card>
@@ -416,6 +482,7 @@ export default function DashboardPage() {
           </Card>
         </Grid>
 
+        {isFullDashboard && (
         <Grid item xs={12} md={6} lg={3}>
           <Card 
             sx={{ 
@@ -444,7 +511,9 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </Grid>
+        )}
 
+        {isFullDashboard && (
         <Grid item xs={12} md={6} lg={3}>
           <Card>
             <CardContent>
@@ -462,10 +531,12 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </Grid>
+        )}
       </Grid>
+      )}
 
       {/* Incident Response Tracking (8AM - 5PM) */}
-      {incidentStats && (
+      {!isTechnicianAny && incidentStats && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box display="flex" alignItems="center" gap={2} mb={3}>
@@ -524,7 +595,7 @@ export default function DashboardPage() {
       )}
 
       {/* IT Help Desk Metrics */}
-      {ticketMetrics && (
+      {isFullDashboard && ticketMetrics && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
@@ -612,7 +683,7 @@ export default function DashboardPage() {
       )}
 
       {/* Cybersecurity Metrics */}
-      {!isTechnicianAny && (
+      {isFullDashboard && (
       <Card sx={{ mb: 4 }}>
         <CardContent>
           <Box display="flex" alignItems="center" gap={2} mb={3}>
@@ -734,9 +805,9 @@ export default function DashboardPage() {
       </Card>
       )}
 
-      {/* Recent Documents and Compliance Overview */}
+      {/* Recent Documents and Compliance Overview — CO / super_admin only */}
+      {isFullDashboard && (
       <Grid container spacing={3} mb={4}>
-        {!isLowerLevelTech && (
         <Grid item xs={12} md={8}>
           <Card>
             <CardContent>
@@ -775,9 +846,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </Grid>
-        )}
 
-        {!isTechnicianAny && (
         <Grid item xs={12} md={4}>
           <Card>
             <CardContent>
@@ -818,11 +887,11 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </Grid>
-        )}
       </Grid>
+      )}
 
       {/* Quick Actions */}
-      {!isTechnicianAny && (
+      {isFullDashboard && (
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
           <Card>

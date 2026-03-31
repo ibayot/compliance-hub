@@ -780,6 +780,49 @@ export class TicketService implements OnModuleInit {
     };
   }
 
+  /** Monthly stats for tickets assigned to a specific technician */
+  async getTechAssignedStats(techId: number, year: number, month: number): Promise<{
+    total: number;
+    open: number;
+    inProgress: number;
+    resolved: number;
+    closed: number;
+    satisfactionAvg: number | null;
+  }> {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const tickets = await this.ticketRepo
+      .createQueryBuilder('t')
+      .where('t.assignedToId = :techId', { techId })
+      .andWhere('t.createdAt >= :startDate', { startDate })
+      .andWhere('t.createdAt <= :endDate', { endDate })
+      .getMany();
+
+    let open = 0, inProgress = 0, resolved = 0, closed = 0;
+    let totalSat = 0, countSat = 0;
+
+    for (const t of tickets) {
+      if (t.status === TicketStatus.OPEN) open++;
+      else if (t.status === TicketStatus.ASSIGNED || t.status === TicketStatus.IN_PROGRESS) inProgress++;
+      else if (t.status === TicketStatus.RESOLVED) resolved++;
+      else if (t.status === TicketStatus.CLOSED) closed++;
+      if (t.satisfactionRating != null) {
+        totalSat += t.satisfactionRating;
+        countSat++;
+      }
+    }
+
+    return {
+      total: tickets.length,
+      open,
+      inProgress,
+      resolved,
+      closed,
+      satisfactionAvg: countSat > 0 ? Math.round((totalSat / countSat) * 10) / 10 : null,
+    };
+  }
+
   async getTechnicianAvailability(): Promise<Array<{ id: number; email: string; firstName: string; lastName: string; role: string; openCount: number }>> {
     const technicians = await this.userRepo.find({
       where: [

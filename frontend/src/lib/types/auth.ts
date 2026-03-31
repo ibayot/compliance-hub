@@ -13,6 +13,9 @@ export interface User {
   ticketTechnician?: boolean;
   role: UserRole;
   units?: Unit[];
+  /** Platform role code from role_definitions — used for feature routing.
+   *  Known values: 'compliance_officer', 'section_head' */
+  roleCode?: string | null;
 }
 
 export enum UserRole {

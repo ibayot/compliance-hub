@@ -170,6 +170,15 @@ export interface TicketDashboardStats {
   pendingSatisfactionTickets: Ticket[];
 }
 
+export interface TechAssignedStats {
+  total: number;
+  open: number;
+  inProgress: number;
+  resolved: number;
+  closed: number;
+  satisfactionAvg: number | null;
+}
+
 // --- v0.6 Ticket Settings / Attendance types --------------------------------
 
 export interface TicketCategory {
@@ -361,6 +370,11 @@ export const ticketsApi = {
 
   getDashboardStats: async (): Promise<TicketDashboardStats> => {
     const response = await apiClient.get(`/tickets/dashboard`);
+    return response.data;
+  },
+
+  getAssignedStats: async (year: number, month: number): Promise<TechAssignedStats> => {
+    const response = await apiClient.get(`/tickets/assigned-stats?year=${year}&month=${month}`);
     return response.data;
   },
 

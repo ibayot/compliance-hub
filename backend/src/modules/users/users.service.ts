@@ -7,13 +7,14 @@ import { CreateRoleDefinitionDto, UpdateRoleDefinitionDto, CreateUserDto, Update
 import { Unit } from '../units/entities/unit.entity';
 import { RoleDefinitionEntity } from './entities/role-definition.entity';
 
-const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'label' | 'description' | 'assignable' | 'isSystem'>> = [
+const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'label' | 'description' | 'assignable' | 'isSystem'> & { roleCode?: string | null }> = [
   {
     value: UserRole.SUPER_ADMIN,
     label: 'Super Admin',
     description: 'Full system access: manage users, units, issuances, metrics, tickets, documents, and settings.',
     assignable: false,
     isSystem: true,
+    roleCode: null,
   },
   {
     value: UserRole.REVIEWER,
@@ -21,6 +22,7 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
     description: 'Review and tag documents as compliant, non-compliant, or for revision. Manage issuances and tickets.',
     assignable: true,
     isSystem: true,
+    roleCode: 'compliance_officer',
   },
   {
     value: UserRole.FOCAL,
@@ -28,6 +30,7 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
     description: 'RICTMS staff member. Unit focal person responsible for uploading and submitting compliance documents on behalf of their unit. Default role for all admin-created accounts.',
     assignable: true,
     isSystem: true,
+    roleCode: null,
   },
   {
     value: UserRole.TECHNICIAN,
@@ -117,6 +120,10 @@ export class UsersService {
       await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login DATETIME NULL').catch(() => undefined);
       // QA v0.6.4: Add technician_type to role_definitions for custom-role attendance tagging
       await queryRunner.query('ALTER TABLE role_definitions ADD COLUMN IF NOT EXISTS technician_type VARCHAR(30) NULL DEFAULT NULL').catch(() => undefined);
+      // QA v0.6.10: Add role_code to role_definitions for platform feature-set routing
+      await queryRunner.query('ALTER TABLE role_definitions ADD COLUMN IF NOT EXISTS role_code VARCHAR(50) NULL DEFAULT NULL').catch(() => undefined);
+      // Seed roleCode for existing system roles
+      await queryRunner.query(`UPDATE role_definitions SET role_code = 'compliance_officer' WHERE \`value\` = 'reviewer' AND role_code IS NULL`).catch(() => undefined);
     } finally {
       await queryRunner.release();
     }
@@ -155,6 +162,7 @@ export class UsersService {
       assignable: dto.value === UserRole.SUPER_ADMIN ? false : (dto.assignable ?? true),
       isSystem: isSystemRole,
       technicianType: dto.technicianType ?? null,
+      roleCode: dto.roleCode ?? null,
     });
 
     return this.roleDefinitionsRepository.save(role);
@@ -185,6 +193,9 @@ export class UsersService {
     }
     if (dto.technicianType !== undefined) {
       role.technicianType = dto.technicianType ?? null;
+    }
+    if (dto.roleCode !== undefined) {
+      role.roleCode = dto.roleCode ?? null;
     }
 
     return this.roleDefinitionsRepository.save(role);
@@ -274,6 +285,11 @@ export class UsersService {
       relations: ['units'],
       // Return all users (including inactive) so management UI can show/toggle them
     });
+  }
+
+  /** Look up a role definition by value string — returns null if not found. Used for roleCode lookups. */
+  async findRoleDefinition(value: string): Promise<RoleDefinitionEntity | null> {
+    return this.roleDefinitionsRepository.findOne({ where: { value } });
   }
 
   async findOne(id: number): Promise<User> {

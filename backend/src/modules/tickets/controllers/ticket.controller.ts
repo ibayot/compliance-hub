@@ -29,6 +29,7 @@ import { TicketStatus, TicketType } from '../entities/ticket.entity';
 const ALL_ROLES = [
   UserRole.USER, UserRole.FOCAL, UserRole.TECHNICIAN,
   UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
+  UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
   UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN,
 ];
 
@@ -82,6 +83,22 @@ export class TicketController {
   @Roles(...ALL_ROLES)
   async getDashboardStats(@Request() req: any) {
     return this.ticketService.getUserDashboardStats(req.user.id ?? req.user.userId);
+  }
+
+  /** GET /tickets/assigned-stats?year=&month= — monthly stats for tickets ASSIGNED to the caller */
+  @Get('assigned-stats')
+  @Roles(...ALL_ROLES)
+  async getAssignedStats(
+    @Request() req: any,
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+  ) {
+    const now = new Date();
+    return this.ticketService.getTechAssignedStats(
+      req.user.id ?? req.user.userId,
+      year ? Number(year) : now.getFullYear(),
+      month ? Number(month) : now.getMonth() + 1,
+    );
   }
 
   /** GET /tickets/:id */

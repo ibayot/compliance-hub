@@ -5,7 +5,7 @@ import {
   Box, Button, Card, CardContent, Typography, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, IconButton, Chip, TextField, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions, Stack, CircularProgress,
-  Rating, Tooltip, Alert,
+  Rating, Tooltip, Alert, Autocomplete,
 } from '@mui/material';
 import {
   Add as AddIcon, Visibility as ViewIcon, AssignmentInd as AssignIcon,
@@ -408,14 +408,23 @@ export default function TicketsPage() {
             <TextField label="Subject *" value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} fullWidth placeholder="Brief description of your issue" />
             <TextField label="Description *" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} fullWidth multiline rows={4} placeholder="Provide details: what happened, when, steps tried..." />
             {canManageAll && (
-              <TextField select label="Requester (Walk-in / Phone call)" value={form.requesterId ?? ''} onChange={e => setForm({ ...form, requesterId: e.target.value ? Number(e.target.value) : undefined })} fullWidth helperText="Leave blank to record as your own submission">
-                <MenuItem value="">— Self (logged-in user) —</MenuItem>
-                {allUsers.filter(u => u.role === 'user').map(u => (
-                  <MenuItem key={u.id} value={u.id}>
-                    {[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email} ({u.email})
-                  </MenuItem>
-                ))}
-              </TextField>
+              <Autocomplete
+                options={allUsers.filter(u => u.role === 'user')}
+                getOptionLabel={u => `${[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email} (${u.email})`}
+                value={allUsers.find(u => u.id === form.requesterId) ?? null}
+                onChange={(_, newValue) => setForm({ ...form, requesterId: newValue?.id ?? undefined })}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                renderInput={params => (
+                  <TextField
+                    {...params}
+                    label="Requester (Walk-in / Phone call)"
+                    helperText="Leave blank — ticket is automatically recorded as your own submission"
+                    fullWidth
+                  />
+                )}
+                clearOnEscape
+                fullWidth
+              />
             )}
             {(canManageAll || isTechnician) && (
               <TextField select label="Priority" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value as TicketPriority })} fullWidth>

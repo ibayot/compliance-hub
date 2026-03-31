@@ -206,8 +206,26 @@ export class AuthService {
     }
   }
 
-  async getProfile(userId: number): Promise<User> {
-    return await this.usersService.findOne(userId);
+  async getProfile(userId: number): Promise<Record<string, any>> {
+    const user = await this.usersService.findOne(userId);
+    const roleDef = await this.usersService.findRoleDefinition(user.role);
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      middleName: user.middleName,
+      lastName: user.lastName,
+      suffix: user.suffix,
+      staffId: user.staffId,
+      position: user.position,
+      positionFull: user.positionFull,
+      designation: user.designation,
+      ticketMainFocal: user.ticketMainFocal,
+      ticketTechnician: user.ticketTechnician,
+      role: user.role,
+      units: user.units?.map((u) => ({ id: u.id, name: u.name })) || [],
+      roleCode: roleDef?.roleCode ?? null,
+    };
   }
 
   async changePassword(

@@ -54,6 +54,8 @@ function isWeekday(d: Date): boolean {
 export default function AttendancePage() {
   const { user } = useAuth();
   const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
+  /** All RICTMS staff (everyone except super_admin and regular users) sees their own attendance in the calendar */
+  const isRICTMSStaff = !['super_admin', 'user'].includes(user?.role ?? '');
   const { enqueueSnackbar } = useSnackbar();
 
   const [tab, setTab] = useState(0);
@@ -124,10 +126,11 @@ export default function AttendancePage() {
     if (tab === 1) {
       fetchTechnicians();
       fetchAttendance();
-    } else if (isLowerLevelTech && tab === 0) {
+    } else if (isRICTMSStaff && tab === 0) {
+      // All RICTMS staff see their own presence indicator in the Office Days Calendar
       fetchAttendance();
     }
-  }, [tab, fetchTechnicians, fetchAttendance, isLowerLevelTech]);
+  }, [tab, fetchTechnicians, fetchAttendance, isRICTMSStaff]);
   useEffect(() => { if (tab === 2) fetchStaffLoginStaff(); }, [tab, fetchStaffLoginStaff]);
 
   // ── Silent auto-refresh: update data every 30s without showing loading spinners (avoids flicker) ──
@@ -161,6 +164,17 @@ export default function AttendancePage() {
   useAutoRefresh(silentRefreshOfficeDays);
   useAutoRefresh(silentRefreshTab1);
   useAutoRefresh(silentRefreshTab2);
+
+  // Live refresh for attendance data in Tab 0 — so presence indicators update in real time
+  // when a manager tags a staff member as present without requiring a page reload.
+  const silentRefreshTab0Attendance = useCallback(async () => {
+    if (tab !== 0 || !isRICTMSStaff) return;
+    try {
+      const data = await attendanceApi.getAttendance(startDate, endDate, attType || undefined);
+      setAttendance(data);
+    } catch { /* silent */ }
+  }, [tab, isRICTMSStaff, startDate, endDate, attType]);
+  useAutoRefresh(silentRefreshTab0Attendance);
 
   // Office day map: date → OfficeDay
   const odMap = useMemo(() => {
@@ -288,7 +302,7 @@ export default function AttendancePage() {
                       >
                         <Typography variant="body2" fontWeight={600}>{d.getDate()}</Typography>
                         <Typography variant="caption">{isOffice ? 'Office' : 'Off'}</Typography>
-                        {isLowerLevelTech && isOffice && (() => {
+                        {isRICTMSStaff && isOffice && (() => {
                           const myStatus = attRecordsMap.get(user?.id ?? 0)?.get(dStr)?.status ?? null;
                           const myCfg = myStatus ? STATUS_CONFIG[myStatus] : null;
                           return (
