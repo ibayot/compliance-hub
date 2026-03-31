@@ -11,6 +11,7 @@ import { DataSource, Repository } from 'typeorm';
 import { Ticket, TicketType, TicketStatus, TicketPriority } from '../entities/ticket.entity';
 import { TicketComment } from '../entities/ticket-comment.entity';
 import { TicketCategoryConfig } from '../entities/ticket-category.entity';
+import { TicketEvent } from '../entities/ticket-event.entity';
 import { User, UserRole } from '../../users/entities/user.entity';
 import { TicketSettingsService } from './ticket-settings.service';
 import { AttendanceService } from './attendance.service';
@@ -68,6 +69,8 @@ export class TicketService implements OnModuleInit {
     private readonly commentRepo: Repository<TicketComment>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(TicketEvent)
+    private readonly eventRepo: Repository<TicketEvent>,
     private readonly dataSource: DataSource,
     private readonly settingsService: TicketSettingsService,
     private readonly attendanceService: AttendanceService,
@@ -210,6 +213,21 @@ export class TicketService implements OnModuleInit {
         "UPDATE office_days SET is_office_day = 0 WHERE DAYOFWEEK(date) IN (1, 7) AND is_office_day = 1",
       ).catch(() => undefined);
 
+      // ── v0.6.16 migrations ──────────────────────────────────────────────────
+
+      // Ticket events table for timeline view
+      await qr.query(`
+        CREATE TABLE IF NOT EXISTS ticket_events (
+          id VARCHAR(36) NOT NULL PRIMARY KEY,
+          ticket_id VARCHAR(36) NOT NULL,
+          actor_id INT NULL,
+          event_type VARCHAR(50) NOT NULL,
+          meta TEXT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_te_ticket_id (ticket_id)
+        )
+      `).catch(() => undefined);
+
       // Seed default categories if table is empty
       await this.seedDefaultCategories(qr);
 
@@ -299,6 +317,46 @@ export class TicketService implements OnModuleInit {
     return `${prefix}${seq}`;
   }
 
+  // --- Event Logging -------------------------------------------------------
+
+  /** Persist a single ticket event (fire-and-forget safe) */
+  private async logEvent(
+    ticketId: string,
+    eventType: string,
+    actorId: number | null,
+    meta?: Record<string, any>,
+  ): Promise<void> {
+    try {
+      const event = this.eventRepo.create({
+        ticketId,
+        eventType,
+        actorId,
+        meta: meta ? JSON.stringify(meta) : null,
+      });
+      await this.eventRepo.save(event);
+    } catch (err: any) {
+      this.logger.warn(`logEvent failed (non-fatal): ${err?.message}`);
+    }
+  }
+
+  /** Return all events for a ticket, ordered chronologically, with actor info */
+  async getTicketEvents(ticketId: string): Promise<Array<TicketEvent & { actorName?: string }>> {
+    const events = await this.eventRepo
+      .createQueryBuilder('e')
+      .leftJoinAndSelect('e.actor', 'actor')
+      .where('e.ticketId = :id', { id: ticketId })
+      .orderBy('e.createdAt', 'ASC')
+      .getMany();
+
+    return events.map(e => ({
+      ...e,
+      meta: e.meta ? JSON.parse(e.meta) : null,
+      actorName: e.actor
+        ? [e.actor.firstName, e.actor.lastName].filter(Boolean).join(' ') || e.actor.email
+        : null,
+    }));
+  }
+
   // --- Create (with Auto-Shift, Auto-Assign, Email) -------------------------
 
   async createTicket(
@@ -342,7 +400,37 @@ export class TicketService implements OnModuleInit {
       const today = new Date().toISOString().slice(0, 10);
       const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
 
-      if (isOfficeDayToday) {
+      // ── Pantawid tickets: ALWAYS assign to pantawid_ict technician ──
+      if (ticketType === TicketType.PANTAWID_ICT_SUPPORT) {
+        // Find any active pantawid_ict user
+        const pantawidTechs = await this.userRepo.find({
+          where: [
+            { role: UserRole.PANTAWID_ICT, active: true as any },
+            { role: UserRole.TECHNICIAN, active: true as any },
+          ],
+        });
+        if (pantawidTechs.length > 0) {
+          // Pick the one with fewest open tickets
+          let bestTech: User | null = null;
+          let minCount = Infinity;
+          for (const tech of pantawidTechs) {
+            const cnt = await this.ticketRepo.count({
+              where: [
+                { assignedToId: tech.id, status: TicketStatus.OPEN },
+                { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
+                { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
+              ],
+            });
+            if (cnt <= minCount) { minCount = cnt; bestTech = tech; }
+          }
+          if (bestTech) {
+            assignedToId = bestTech.id;
+            assignedTech = bestTech;
+          }
+        } else {
+          noTechAvailable = true;
+        }
+      } else if (isOfficeDayToday) {
         const availableTechs = await this.attendanceService.getAvailableTechnicians(
           ticketType,
           today,
@@ -394,7 +482,7 @@ export class TicketService implements OnModuleInit {
           noTechAvailable = true;
           this.logger.log('Auto-assign: no technician available for this ticket type today');
         }
-      }
+      } // end else if (isOfficeDayToday)
     } catch (err: any) {
       this.logger.warn(`Auto-assign failed (non-fatal): ${err?.message}`);
     }
@@ -420,6 +508,20 @@ export class TicketService implements OnModuleInit {
     });
 
     const saved = await this.ticketRepo.save(ticket);
+
+    // Log creation event
+    this.logEvent(saved.id, 'created', callerId, {
+      ticketNumber: saved.ticketNumber,
+      ticketType: saved.ticketType,
+      status: saved.status,
+    }).catch(() => {});
+
+    if (assignedToId && assignedTech) {
+      this.logEvent(saved.id, 'auto_assigned', null, {
+        technicianId: assignedTech.id,
+        technicianName: [assignedTech.firstName, assignedTech.lastName].filter(Boolean).join(' ') || assignedTech.email,
+      }).catch(() => {});
+    }
 
     // ── Send email notification (fire-and-forget) ──────────────────────
     const categoryName = categoryId
@@ -606,6 +708,14 @@ export class TicketService implements OnModuleInit {
 
     const saved = await this.ticketRepo.save(ticket);
 
+    // Log status/priority change event
+    if (dto.status) {
+      this.logEvent(saved.id, 'status_changed', actorId, {
+        to: dto.status,
+        resolutionNotes: dto.resolutionNotes ?? undefined,
+      }).catch(() => {});
+    }
+
     // On RESOLVED: auto-assign the oldest pending OPEN ticket of the same type to this technician
     if (dto.status === TicketStatus.RESOLVED && saved.assignedToId) {
       try {
@@ -695,7 +805,44 @@ export class TicketService implements OnModuleInit {
       ticket.status = TicketStatus.ASSIGNED;
     }
 
-    return this.ticketRepo.save(ticket);
+    const assigned = await this.ticketRepo.save(ticket);
+
+    // Log assignment event
+    this.logEvent(assigned.id, 'manually_assigned', actorId ?? null, {
+      technicianId: technician.id,
+      technicianName: [technician.firstName, technician.lastName].filter(Boolean).join(' ') || technician.email,
+      previousAssignee: ticket.assignedToId !== dto.assignedToId ? ticket.assignedToId : undefined,
+    }).catch(() => {});
+
+    // Send assignment notification email (fire-and-forget)
+    this.emailService.sendTicketAssignedEmail({
+      ticketNumber: assigned.ticketNumber,
+      subject: assigned.subject,
+      ticketType: assigned.ticketType,
+      priority: assigned.priority,
+      status: assigned.status,
+      technicianName: [technician.firstName, technician.lastName].filter(Boolean).join(' ') || technician.email,
+      technicianEmail: technician.email,
+    }).catch(() => {});
+
+    return assigned;
+  }
+
+  /** Mark ticket as In Progress when the assigned technician opens the detail view */
+  async markTicketViewed(id: string, viewerId: number, viewerRole: UserRole): Promise<Ticket | null> {
+    const ticket = await this.getTicketById(id);
+    // Only auto-transition when the assigned technician views an 'assigned' ticket
+    if (
+      ticket.status === TicketStatus.ASSIGNED &&
+      ticket.assignedToId === viewerId
+    ) {
+      ticket.status = TicketStatus.IN_PROGRESS;
+      const saved = await this.ticketRepo.save(ticket);
+      this.logger.log(`Auto in_progress: ticket ${ticket.ticketNumber} viewed by technician #${viewerId}`);
+      this.logEvent(saved.id, 'in_progress', viewerId, { via: 'view' }).catch(() => {});
+      return saved;
+    }
+    return null; // no change
   }
 
   // --- Comments ------------------------------------------------------------
@@ -726,7 +873,9 @@ export class TicketService implements OnModuleInit {
       isInternal: isInternal ?? false,
     });
 
-    return this.commentRepo.save(comment);
+    const savedComment = await this.commentRepo.save(comment);
+    this.logEvent(ticketId, 'comment_added', actorId, { isInternal: isInternal ?? false }).catch(() => {});
+    return savedComment;
   }
 
   // --- Client Satisfaction ------------------------------------------------
@@ -906,6 +1055,12 @@ export class TicketService implements OnModuleInit {
         { role: UserRole.TECHNICIAN },
         { role: UserRole.TECHNICIAN_IT_STAFF },
         { role: UserRole.TECHNICIAN_DESKTOP_STAFF },
+        // v0.6.14+ named technician roles
+        { role: UserRole.PANTAWID_ICT },
+        { role: UserRole.DESKTOP_SR },
+        { role: UserRole.IT_SUPPORT_SR },
+        { role: UserRole.DESKTOP_JR },
+        { role: UserRole.IT_SUPPORT_JR },
         { role: UserRole.FOCAL, ticketMainFocal: true },
       ],
     });

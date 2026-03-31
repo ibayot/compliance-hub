@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.6.16] - 2026-04-01 — QA Fixes: Office-Day Flicker, Attendance Categories, Self-Close, Timeline, Pantawid Auto-Assign, Email Notification
+
+### Fixed
+- **Office Days calendar flicker on click** — `toggleOfficeDay()` now does an optimistic state update (sets `officeDays` immediately), calls the API, then replaces state with the server response. Removed the `fetchOfficeDays()` + `fetchAttendance()` calls that were triggering loading spinners on every click.
+- **Attendance "Support Type" label and dropdown items** — label renamed from "Support Type" to "Category". Dropdown items updated to: `All`, `ITOs`, `IT Support` (maps to `it_support_sr` + `it_support_jr`), `Desktop Support` (maps to `desktop_sr` + `desktop_jr`), `Pantawid ICT Support` (maps to `pantawid_ict`). Backend `getAttendance()`, `listTechnicians()`, and `getAvailableTechnicians()` updated with the same role mappings.
+- **User self-close button missing** — "Close Ticket" button added to ticket detail page; visible to the original requester (`isRegularUser && isRequester`) when the ticket has not already been closed/duplicated/frozen. Calls `PATCH /tickets/:id` with `{ status: 'closed' }`.
+- **Assign Technician dropdown empty in ticket detail** — technician filter updated to include the new role enums: `desktop_sr`, `desktop_jr`, `it_support_sr`, `it_support_jr`, `pantawid_ict`. Backend `getAvailableTechnicians()` also updated to match.
+- **Assign vs Reassign dialog title mismatch** — both the ticket list page and ticket detail page now show "Reassign Ticket" / "Reassign" when a technician is already assigned, and "Assign Ticket" / "Assign" when unassigned. Dialog title, tooltip, and action button text all updated consistently.
+- **Auto tag In Progress on technician view** — when the assigned technician opens the ticket detail page, the frontend calls `PATCH /tickets/:id/mark-viewed`. Backend `markTicketViewed()` transitions the ticket from `assigned` → `in_progress` and logs a `in_progress` timeline event. A `useRef` guard prevents multiple calls on re-render.
+- **Pantawid tickets incorrectly not auto-assigned** — `createTicket()` now always assigns `pantawid_ict_support` tickets to the first available `PANTAWID_ICT` (or `TECHNICIAN`) user regardless of whether today is an office day. Non-Pantawid tickets retain the existing office-day guard.
+- **Tickets left in Open status when technician should be available** — `createTicket()` now only leaves a ticket as `OPEN` when no qualified technician is found; if a technician is available it is always auto-assigned.
+
+### Added
+- **Ticket timeline** — new `ticket_events` table (entity `TicketEvent`) records all ticket lifecycle events: `created`, `auto_assigned`, `manually_assigned`, `status_changed`, `in_progress`, `resolved`, `closed`, `user_closed`, `comment_added`, `escalated`, `satisfaction_submitted`. New endpoints `PATCH /tickets/:id/mark-viewed` and `GET /tickets/:id/events`. Ticket detail page now shows a chronological Timeline card below the comments section.
+- **Clean all staff attendance (admin reset)** — new `DELETE /attendance/all` endpoint (SUPER_ADMIN only). Calls `clearAllAttendance()` which truncates `tech_attendance` and returns `{ deleted: number }`.
+- **Email notification on ticket assignment** — `EmailService.sendTicketAssignedEmail()` fires when a ticket is assigned (both auto-assign and manual assign). Sends an orange-accented HTML email to the assigned technician with ticket number, title, type, requester name, and a link to the ticket. `EMAIL_TEST_OVERRIDE` env var routes all emails to a single address for testing (currently `mjdibay@dswd.gov.ph`).
+
+---
+
 ## [0.6.8] - 2026-03-30 — QA Fixes: Force Logout Flow, IT Staff Assign, Priority Focal-Only, Duplicate Guards, Network Access
 
 ### Fixed

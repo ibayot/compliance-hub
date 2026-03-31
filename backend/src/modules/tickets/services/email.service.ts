@@ -18,11 +18,23 @@ export interface TicketEmailData {
   noTechAvailable?: boolean;
 }
 
+export interface TicketAssignedEmailData {
+  ticketNumber: string;
+  subject: string;
+  ticketType: string;
+  priority: string | null;
+  status: string;
+  technicianName: string;
+  technicianEmail: string;
+}
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter | null = null;
   private fromAddress: string;
+  /** When set, ALL outbound emails are redirected here instead of the real recipient */
+  private testOverrideTo: string | null = null;
 
   constructor(private readonly configService: ConfigService) {
     const host = this.configService.get<string>('SMTP_HOST');
@@ -50,6 +62,13 @@ export class EmailService {
       this.logger.log(`Email service initialized (SMTP: ${host}:${smtpPort}, SSL=${useSSL})`);
     } else {
       this.logger.warn('SMTP not configured — emails will be logged but not sent. Set SMTP_HOST in .env to enable.');
+    }
+
+    // Test override: when EMAIL_TEST_OVERRIDE is set, all emails go to that address
+    const override = this.configService.get<string>('EMAIL_TEST_OVERRIDE');
+    if (override) {
+      this.testOverrideTo = override;
+      this.logger.warn(`[EMAIL] TEST OVERRIDE active — all emails will be sent to ${override}`);
     }
   }
 
@@ -115,6 +134,46 @@ export class EmailService {
         .replace('Your help desk ticket has been created.', `A new ticket has been assigned to you from <strong>${data.requesterName}</strong>.`);
       await this.send(data.assignedToEmail, techSubject, techHtml);
     }
+  }
+
+  /** Send an assignment notification to the technician when a ticket is manually assigned/reassigned */
+  async sendTicketAssignedEmail(data: TicketAssignedEmailData): Promise<void> {
+    const typeLabel =
+      data.ticketType === 'desktop_support' ? 'Desktop Support' :
+      data.ticketType === 'pantawid_ict_support' ? 'Pantawid ICT Support' : 'IT Support';
+
+    const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Assigned to You — ${data.subject}`;
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
+  <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+    <div style="background:#e65100;padding:20px 24px;">
+      <h1 style="margin:0;color:#fff;font-size:18px;">RICTMS IT Help Desk</h1>
+      <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">Ticket Assigned to You</p>
+    </div>
+    <div style="padding:24px;">
+      <p style="margin:0 0 16px;">Hello <strong>${data.technicianName}</strong>,</p>
+      <p style="margin:0 0 16px;">A ticket has been assigned to you. Please action it as soon as possible.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;width:140px;">Ticket Number</td><td style="padding:6px 12px;font-weight:700;font-family:monospace;font-size:15px;">${data.ticketNumber}</td></tr>
+        <tr><td style="padding:6px 12px;font-weight:600;color:#555;">Subject</td><td style="padding:6px 12px;">${data.subject}</td></tr>
+        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Support Type</td><td style="padding:6px 12px;">${typeLabel}</td></tr>
+        <tr><td style="padding:6px 12px;font-weight:600;color:#555;">Priority</td><td style="padding:6px 12px;">${data.priority ? data.priority.toUpperCase() : 'N/A'}</td></tr>
+        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Status</td><td style="padding:6px 12px;">${data.status.replace('_', ' ').toUpperCase()}</td></tr>
+      </table>
+      <p style="margin:16px 0 0;font-size:13px;color:#888;">Please log in to the Compliance Hub portal to view the full ticket details and take action.</p>
+    </div>
+    <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
+      RICTMS Compliance Hub — IT Help Desk
+    </div>
+  </div>
+</body>
+</html>`;
+
+    await this.send(data.technicianEmail, subject, html);
   }
 
   /** Send non-attendance consolidated email to section head */
@@ -196,21 +255,27 @@ export class EmailService {
   // ── Core send ───────────────────────────────────────────────────────────
 
   private async send(to: string, subject: string, html: string): Promise<void> {
+    // Redirect to test override if configured (testing mode — all emails go to override address)
+    const effectiveTo = this.testOverrideTo ?? to;
+    if (this.testOverrideTo && this.testOverrideTo !== to) {
+      this.logger.log(`[EMAIL-OVERRIDE] Redirecting from ${to} to ${this.testOverrideTo}`);
+    }
+
     if (!this.transporter) {
-      this.logger.log(`[EMAIL-LOG] To: ${to} | Subject: ${subject}`);
+      this.logger.log(`[EMAIL-LOG] To: ${effectiveTo} | Subject: ${subject}`);
       return;
     }
 
     try {
       await this.transporter.sendMail({
         from: this.fromAddress,
-        to,
+        to: effectiveTo,
         subject,
         html,
       });
-      this.logger.log(`Email sent to ${to}: ${subject}`);
+      this.logger.log(`Email sent to ${effectiveTo}: ${subject}`);
     } catch (err: any) {
-      this.logger.error(`Failed to send email to ${to}: ${err?.message}`);
+      this.logger.error(`Failed to send email to ${effectiveTo}: ${err?.message}`);
     }
   }
 }

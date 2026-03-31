@@ -1,6 +1,19 @@
 # RICMS Compliance Hub - Project Status
 
-## 🚀 v0.6.8 — QA Fixes: Force Logout Flow, IT Staff Assign, Priority Focal-Only, Duplicate Guards, Network Access (Current Release)
+## 🚀 v0.6.16 — QA Fixes: Office-Day Flicker, Attendance Categories, Self-Close, Timeline, Pantawid Auto-Assign, Email Notification (Current Release)
+- **Version:** `0.6.16` in both `backend/package.json` and `frontend/package.json`
+- **Office Days calendar no-flicker:** `toggleOfficeDay()` optimistic update — sets state instantly, replaces with server response after API call, no loading spinners.
+- **Attendance Category dropdown:** label now "Category"; items: All, ITOs, IT Support (it_support_sr/jr), Desktop Support (desktop_sr/jr), Pantawid ICT Support (pantawid_ict). Same role mappings in backend attendance service.
+- **User self-close button:** "Close Ticket" button added for original requester on non-terminal tickets. Calls `PATCH /tickets/:id { status: 'closed' }`.
+- **Assign Technician dropdown populated:** updated role enums (desktop_sr/jr, it_support_sr/jr, pantawid_ict) in both frontend filter and backend `getAvailableTechnicians()`.
+- **Assign / Reassign consistency:** dialog title, tooltip, and action button all read "Reassign" when ticket is already assigned.
+- **Auto In-Progress on technician view:** assigned technician opening the ticket calls `PATCH /tickets/:id/mark-viewed`; backend transitions `assigned → in_progress` and logs timeline event. `useRef` guard prevents duplicate calls.
+- **Ticket timeline:** new `ticket_events` table with `TicketEvent` entity; backend records all lifecycle events; `GET /tickets/:id/events` endpoint; frontend Timeline card shown in ticket detail below comments.
+- **Clean all attendance (admin reset):** `DELETE /attendance/all` endpoint (SUPER_ADMIN only) truncates `tech_attendance`.
+- **Pantawid always auto-assigned:** `createTicket()` always assigns Pantawid tickets to a `pantawid_ict` user regardless of office days.
+- **Email on assignment:** `sendTicketAssignedEmail()` fires on every auto/manual assignment; `EMAIL_TEST_OVERRIDE=mjdibay@dswd.gov.ph` in `.env` redirects all outgoing email during testing.
+
+## 🚀 v0.6.8 — QA Fixes: Force Logout Flow, IT Staff Assign, Priority Focal-Only, Duplicate Guards, Network Access
 - **Version:** `0.6.8` in both `backend/package.json` and `frontend/package.json`
 - **Force logout background heartbeat:** 60 s `setInterval` in `AuthContext` calls `getProfile()`; deactivated users are redirected without waiting for a page reload.
 - **Login deactivation alert:** `login()` now returns a specific error for deactivated accounts; login page shows `?reason=session_expired` banner.

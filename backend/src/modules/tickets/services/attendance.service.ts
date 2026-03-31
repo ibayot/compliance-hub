@@ -86,13 +86,16 @@ export class AttendanceService {
     const customRoles = await this.getCustomRoleValues(ticketType || undefined);
 
     if (ticketType === 'desktop_support') {
-      const roles = [...new Set([UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF, ...customRoles])];
+      // Desktop Support: desktop_sr and desktop_jr ONLY
+      const roles = [...new Set([UserRole.DESKTOP_SR, UserRole.DESKTOP_JR, ...customRoles])];
       qb.andWhere('user.role IN (:...roles)', { roles });
     } else if (ticketType === 'it_support') {
-      const roles = [...new Set([UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, ...customRoles])];
+      // IT Support: it_support_sr and it_support_jr ONLY
+      const roles = [...new Set([UserRole.IT_SUPPORT_SR, UserRole.IT_SUPPORT_JR, ...customRoles])];
       qb.andWhere('user.role IN (:...roles)', { roles });
     } else if (ticketType === 'pantawid_ict_support') {
-      const roles = [...new Set([UserRole.TECHNICIAN, ...customRoles])];
+      // Pantawid ICT Support: pantawid_ict ONLY
+      const roles = [...new Set([UserRole.PANTAWID_ICT, ...customRoles])];
       qb.andWhere('user.role IN (:...roles)', { roles });
     } else if (ticketType === 'ito') {
       // ITO = all focal-equivalent + compliance/cybersec staff (excludes technicians and pantawid)
@@ -183,14 +186,17 @@ export class AttendanceService {
   async getAvailableTechnicians(ticketType: string, date: string): Promise<User[]> {
     const customRoles = await this.getCustomRoleValues(ticketType);
 
-    // Map ticket type to roles — Pantawid ICT (technician) only handles pantawid tickets
+    // Map ticket type to roles — using updated role assignments per QA spec
     let hardcodedRoles: string[];
     if (ticketType === 'desktop_support') {
-      hardcodedRoles = [UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF];
+      // Desktop Support: desktop_sr and desktop_jr (+ legacy technician_desktop_staff)
+      hardcodedRoles = [UserRole.DESKTOP_SR, UserRole.DESKTOP_JR, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF];
     } else if (ticketType === 'it_support') {
-      hardcodedRoles = [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF];
+      // IT Support: it_support_sr and it_support_jr (+ legacy technician_it_staff)
+      hardcodedRoles = [UserRole.IT_SUPPORT_SR, UserRole.IT_SUPPORT_JR, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF];
     } else if (ticketType === 'pantawid_ict_support') {
-      hardcodedRoles = [UserRole.TECHNICIAN];
+      // Pantawid ICT: pantawid_ict (+ legacy technician)
+      hardcodedRoles = [UserRole.PANTAWID_ICT, UserRole.TECHNICIAN];
     } else {
       hardcodedRoles = [
         UserRole.TECHNICIAN,
@@ -258,11 +264,14 @@ export class AttendanceService {
 
     let hardcodedRoles: string[];
     if (forcedType === 'desktop_support') {
-      hardcodedRoles = [UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF];
+      // Desktop Support: desktop_sr and desktop_jr ONLY
+      hardcodedRoles = [UserRole.DESKTOP_SR, UserRole.DESKTOP_JR];
     } else if (forcedType === 'it_support') {
-      hardcodedRoles = [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF];
+      // IT Support: it_support_sr and it_support_jr ONLY
+      hardcodedRoles = [UserRole.IT_SUPPORT_SR, UserRole.IT_SUPPORT_JR];
     } else if (forcedType === 'pantawid_ict_support') {
-      hardcodedRoles = [UserRole.TECHNICIAN];
+      // Pantawid ICT Support: pantawid_ict ONLY
+      hardcodedRoles = [UserRole.PANTAWID_ICT];
     } else if (forcedType === 'ito') {
       // ITO = all focal-equivalent + compliance/cybersec staff
       hardcodedRoles = [
@@ -417,6 +426,14 @@ export class AttendanceService {
       results.push(await this.setOfficeDay(entry, setById));
     }
     return results;
+  }
+
+  /** Delete all attendance records (admin reset — destructive) */
+  async clearAllAttendance(): Promise<{ deleted: number }> {
+    const result = await this.attendanceRepo.query('DELETE FROM tech_attendance');
+    const deleted = result?.affectedRows ?? 0;
+    this.logger.warn(`[ADMIN] Cleared all tech_attendance records (${deleted} rows deleted)`);
+    return { deleted };
   }
 
   /** Check if a specific date is an office day. Default: weekdays are office days */

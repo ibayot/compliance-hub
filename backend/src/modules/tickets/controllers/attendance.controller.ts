@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Query,
   UseGuards,
@@ -121,6 +122,14 @@ export class AttendanceController {
     return this.attendanceService.bulkSetAttendance(dto, req.user.id ?? req.user.userId, req.user.role);
   }
 
+  /** DELETE /attendance/all — super_admin only: clear all attendance records */
+  @Delete('all')
+  @Roles(UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async clearAllAttendance() {
+    return this.attendanceService.clearAllAttendance();
+  }
+
   /** GET /attendance/technicians?ticketType= — list technicians (for attendance management) */
   @Get('technicians')
   @Roles(...READ_ROLES)
@@ -169,6 +178,14 @@ export class AttendanceController {
   async getStaffLogins(@Query('date') date?: string) {
     const target = date || new Date().toISOString().slice(0, 10);
     return this.attendanceService.getStaffLoginsForDate(target);
+  }
+
+  /** DELETE /attendance/all-records — super_admin only, wipes all tech_attendance records */
+  @Delete('all-records')
+  @Roles(UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async clearAllAttendance() {
+    return this.attendanceService.clearAllAttendance();
   }
 
   /** GET /attendance/staff-logins-monthly?startDate=&endDate= — all non-tech staff with lastLogin for monthly grid */

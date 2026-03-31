@@ -86,6 +86,16 @@ export type TicketType = 'desktop_support' | 'it_support' | 'pantawid_ict_suppor
 export type TicketStatus = 'open' | 'assigned' | 'in_progress' | 'resolved' | 'closed' | 'freeze' | 'duplicate';
 export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
 
+export interface TicketEvent {
+  id: string;
+  ticketId: string;
+  actorId: number | null;
+  actorName?: string | null;
+  eventType: string;
+  meta?: Record<string, any> | null;
+  createdAt: string;
+}
+
 export interface Ticket {
   id: string;
   ticketNumber: string;
@@ -386,6 +396,18 @@ export const ticketsApi = {
   /** Get open (non-closed, non-duplicate) tickets for a specific requester — used for Duplicate picker */
   getOpenTicketsForRequester: async (requesterId: number): Promise<Ticket[]> => {
     const response = await apiClient.get(`/tickets/requester/${requesterId}/open`);
+    return response.data;
+  },
+
+  /** Mark ticket as viewed by the assigned technician — auto-transitions assigned→in_progress */
+  markViewed: async (id: string): Promise<Ticket | null> => {
+    const response = await apiClient.patch(`/tickets/${id}/mark-viewed`);
+    return response.data;
+  },
+
+  /** Get ticket timeline events */
+  getEvents: async (id: string): Promise<TicketEvent[]> => {
+    const response = await apiClient.get(`/tickets/${id}/events`);
     return response.data;
   },
 };

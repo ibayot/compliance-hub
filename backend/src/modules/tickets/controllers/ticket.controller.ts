@@ -140,6 +140,20 @@ export class TicketController {
     return this.ticketService.assignTicket(id, dto, req.user.role, req.user.id ?? req.user.userId);
   }
 
+  /** PATCH /tickets/:id/mark-viewed — auto-transition assigned→in_progress when technician views the ticket */
+  @Patch(':id/mark-viewed')
+  @Roles(...ALL_ROLES)
+  async markTicketViewed(@Param('id') id: string, @Request() req: any) {
+    return this.ticketService.markTicketViewed(id, req.user.id ?? req.user.userId, req.user.role);
+  }
+
+  /** GET /tickets/:id/events — timeline of all ticket events */
+  @Get(':id/events')
+  @Roles(...ALL_ROLES)
+  async getTicketEvents(@Param('id') id: string) {
+    return this.ticketService.getTicketEvents(id);
+  }
+
   /** POST /tickets/:id/comments */
   @Post(':id/comments')
   @Roles(UserRole.USER, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF, UserRole.REVIEWER, UserRole.SUPER_ADMIN,

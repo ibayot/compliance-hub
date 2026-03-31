@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Card,
@@ -34,6 +34,7 @@ import {
   TechnicianOption,
   UpdateTicketDto,
   SubmitSatisfactionDto,
+  TicketEvent,
 } from '@/app/api/references';
 import { ArrowBack as BackIcon, Star as StarIcon } from '@mui/icons-material';
 
@@ -81,6 +82,9 @@ export default function TicketDetailPage() {
   const [loading, setLoading] = useState(true);
   const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
 
+  // Guard: auto-view mark fires only once per ticket load
+  const viewedRef = useRef(false);
+
   // Comment form
   const [comment, setComment] = useState('');
   const [isInternal, setIsInternal] = useState(false);
@@ -103,6 +107,10 @@ export default function TicketDetailPage() {
 
   // Priority update
   const [newPriority, setNewPriority] = useState('');
+
+  // Timeline events
+  const [events, setEvents] = useState<TicketEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
 
   // Duplicate picker + confirmation
   const [dupConfirmOpen, setDupConfirmOpen] = useState(false);
@@ -133,6 +141,17 @@ export default function TicketDetailPage() {
     fetchTicket();
   }, [ticketId]);
 
+  const fetchEvents = async () => {
+    try {
+      setEventsLoading(true);
+      const data = await ticketsApi.getEvents(ticketId);
+      setEvents(data);
+    } catch { /* silent */ }
+    finally { setEventsLoading(false); }
+  };
+
+  useEffect(() => { fetchEvents(); }, [ticketId]);
+
   // Live updates – poll every 30 s (reduced from 10s to lower API rate-limit pressure)
   useEffect(() => {
     const id = setInterval(() => {
@@ -154,6 +173,19 @@ export default function TicketDetailPage() {
       setTicket(data);
       setNewStatus(data.status);
       setResolutionNotes(data.resolutionNotes || '');
+
+      // Auto-transition assigned → in_progress when the assigned technician opens the detail view
+      if (
+        !viewedRef.current &&
+        data.status === 'assigned' &&
+        data.assignedToId === (user as any)?.id &&
+        isTechnician
+      ) {
+        viewedRef.current = true;
+        ticketsApi.markViewed(ticketId).then(updated => {
+          if (updated) setTicket(updated);
+        }).catch(() => {});
+      }
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to fetch ticket', { variant: 'error' });
     } finally {
@@ -176,6 +208,7 @@ export default function TicketDetailPage() {
       setComment('');
       setIsInternal(false);
       fetchTicket();
+      fetchEvents();
       enqueueSnackbar('Comment added.', { variant: 'success' });
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to add comment', { variant: 'error' });
@@ -201,6 +234,7 @@ export default function TicketDetailPage() {
       setDupConfirmOpen(false);
       setNewPriority('');
       fetchTicket();
+      fetchEvents();
       enqueueSnackbar('Ticket updated.', { variant: 'success' });
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to update ticket', { variant: 'error' });
@@ -226,9 +260,20 @@ export default function TicketDetailPage() {
       await ticketsApi.assign(ticketId, Number(assignToId));
       setAssignDialogOpen(false);
       fetchTicket();
+      fetchEvents();
       enqueueSnackbar('Ticket assigned.', { variant: 'success' });
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to assign ticket', { variant: 'error' });
+    }
+  };
+
+  const handleSelfClose = async () => {
+    try {
+      await ticketsApi.update(ticketId, { status: 'closed' as any });
+      fetchTicket();
+      enqueueSnackbar('Ticket closed successfully.', { variant: 'success' });
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to close ticket', { variant: 'error' });
     }
   };
 
@@ -320,7 +365,7 @@ export default function TicketDetailPage() {
                   setAssignToId(ticket.assignedToId || '');
                   setAssignDialogOpen(true);
                 }}>
-                  {ticket.assignedToId ? 'Reassign' : 'Assign Technician'}
+                  {ticket.assignedToId ? 'Reassign Ticket' : 'Assign Technician'}
                 </Button>
               )}
               {canEscalate && !isDuplicate && !['closed', 'resolved'].includes(ticket.status) && (
@@ -330,6 +375,12 @@ export default function TicketDetailPage() {
                   setAssignDialogOpen(true);
                 }}>
                   Escalate Ticket
+                </Button>
+              )}
+              {/* Self-close: requester can close their own ticket from any active state */}
+              {isRegularUser && isRequester && !['closed', 'duplicate', 'freeze'].includes(ticket.status) && (
+                <Button variant="outlined" size="small" color="error" onClick={handleSelfClose}>
+                  Close Ticket
                 </Button>
               )}
               {canSatisfaction && (
@@ -565,6 +616,67 @@ export default function TicketDetailPage() {
         </CardContent>
       </Card>
 
+      {/* ── Ticket Timeline ── */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+            Timeline
+          </Typography>
+          {eventsLoading ? (
+            <Box textAlign="center" py={2}><CircularProgress size={24} /></Box>
+          ) : events.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">No events recorded yet.</Typography>
+          ) : (
+            <Box>
+              {events.map((ev, idx) => {
+                const isLast = idx === events.length - 1;
+                const EVENT_LABELS: Record<string, string> = {
+                  created: 'Ticket Created',
+                  auto_assigned: 'Auto-Assigned',
+                  manually_assigned: 'Manually Assigned',
+                  status_changed: 'Status Changed',
+                  in_progress: 'Marked In Progress',
+                  resolved: 'Resolved',
+                  closed: 'Closed',
+                  user_closed: 'Closed by Requester',
+                  comment_added: 'Comment Added',
+                  escalated: 'Escalated',
+                  satisfaction_submitted: 'Satisfaction Submitted',
+                };
+                const label = EVENT_LABELS[ev.eventType] ?? ev.eventType.replace(/_/g, ' ');
+                return (
+                  <Box key={ev.id} display="flex" gap={2} mb={isLast ? 0 : 2}>
+                    <Box display="flex" flexDirection="column" alignItems="center">
+                      <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'primary.main', mt: 0.5, flexShrink: 0 }} />
+                      {!isLast && <Box sx={{ width: 2, flex: 1, bgcolor: 'divider', mt: 0.5, minHeight: 20 }} />}
+                    </Box>
+                    <Box pb={isLast ? 0 : 1}>
+                      <Typography variant="body2" fontWeight={600}>{label}</Typography>
+                      {ev.actorName && (
+                        <Typography variant="caption" color="text.secondary">by {ev.actorName}</Typography>
+                      )}
+                      {ev.meta?.technicianName && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          → {ev.meta.technicianName}
+                        </Typography>
+                      )}
+                      {ev.meta?.to && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Status: {String(ev.meta.to).replace('_', ' ')}
+                        </Typography>
+                      )}
+                      <Typography variant="caption" color="text.disabled" display="block">
+                        {new Date(ev.createdAt).toLocaleString()}
+                      </Typography>
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+
       {/* ── Assign / Escalate Dialog ── */}
       <Dialog open={assignDialogOpen} onClose={() => setAssignDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>{isEscalateMode ? 'Escalate Ticket' : 'Assign Technician'}</DialogTitle>
@@ -586,16 +698,18 @@ export default function TicketDetailPage() {
             {technicians
               .filter((t) => {
                 if (isEscalateMode) {
-                  // Escalation: only focal-level techs (not lower-level)
-                  if (ticket.ticketType === 'desktop_support') return ['technician_desktop', 'technician'].includes(t.role);
-                  if (ticket.ticketType === 'it_support') return ['technician_it_support', 'technician'].includes(t.role);
-                  return ['technician', 'technician_desktop', 'technician_it_support'].includes(t.role);
+                  // Escalation: only focal-level techs
+                  if (ticket.ticketType === 'desktop_support') return ['technician_desktop', 'technician', 'desktop_sr'].includes(t.role);
+                  if (ticket.ticketType === 'pantawid_ict_support') return ['technician', 'pantawid_ict'].includes(t.role);
+                  return ['technician_it_support', 'technician', 'it_support_sr'].includes(t.role);
                 }
-                // Normal assign: available techs only (openCount === 0)
-                if (t.openCount > 0) return false;
-                if (ticket.ticketType === 'desktop_support') return t.role === 'technician_desktop' || t.role === 'technician' || t.role === 'technician_desktop_staff';
-                if (ticket.ticketType === 'it_support') return t.role === 'technician_it_support' || t.role === 'technician' || t.role === 'technician_it_staff';
-                return true;
+                // Normal assign: show all relevant technicians for the ticket type.
+                // Do NOT pre-filter by openCount — backend enforces the busy guard on submit.
+                if (ticket.ticketType === 'desktop_support')
+                  return ['technician_desktop', 'technician', 'technician_desktop_staff', 'desktop_sr', 'desktop_jr'].includes(t.role);
+                if (ticket.ticketType === 'pantawid_ict_support')
+                  return ['technician', 'pantawid_ict'].includes(t.role);
+                return ['technician_it_support', 'technician', 'technician_it_staff', 'it_support_sr', 'it_support_jr'].includes(t.role);
               })
               .map((t) => (
                 <MenuItem key={t.id} value={t.id}>

@@ -1,5 +1,39 @@
 # RICTMS Compliance Hub - Implementation Progress Report
 
+## 🚀 v0.6.16 — QA Fixes (Current)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| `attendance/page.tsx` — optimistic `toggleOfficeDay()` | ✅ Complete | Updates state immediately; replaces with server response; no loading spinners |
+| `attendance/page.tsx` — "Category" label + updated dropdown items | ✅ Complete | All, ITOs, IT Support, Desktop Support, Pantawid ICT Support |
+| `attendance.service.ts` — role mappings for getAttendance/listTechnicians | ✅ Complete | `it_support_sr/jr`, `desktop_sr/jr`, `pantawid_ict` role enums |
+| `attendance.service.ts` — `clearAllAttendance()` method | ✅ Complete | Deletes all `tech_attendance` rows; returns `{ deleted }` |
+| `attendance.controller.ts` — `DELETE /attendance/all` endpoint | ✅ Complete | SUPER_ADMIN only |
+| `ticket-event.entity.ts` — NEW `TicketEvent` entity | ✅ Complete | `ticket_events` table: id, ticketId, actorId, eventType, meta, createdAt |
+| `tickets.module.ts` — register `TicketEvent` entity | ✅ Complete | Added to `TypeOrmModule.forFeature([...])` |
+| `ticket.service.ts` — `logEvent()` / `getTicketEvents()` | ✅ Complete | Logs all lifecycle events; parses JSON meta; includes actorName |
+| `ticket.service.ts` — `ticket_events` table migration | ✅ Complete | `CREATE TABLE IF NOT EXISTS` in `runMigrations()` |
+| `ticket.service.ts` — `markTicketViewed()` method | ✅ Complete | `assigned → in_progress` transition + event log |
+| `ticket.service.ts` — event logging in create/assign/update/comment | ✅ Complete | `created`, `auto_assigned`, `manually_assigned`, `status_changed`, `comment_added` |
+| `ticket.service.ts` — Pantawid always auto-assigned | ✅ Complete | Bypasses office-day check for `pantawid_ict_support` tickets |
+| `ticket.service.ts` — `sendTicketAssignedEmail()` on assign | ✅ Complete | Fire-and-forget in `assignTicket()` and create auto-assign |
+| `ticket.controller.ts` — `PATCH /tickets/:id/mark-viewed` | ✅ Complete | Calls `markTicketViewed(id, userId)` |
+| `ticket.controller.ts` — `GET /tickets/:id/events` | ✅ Complete | Returns event list for Timeline |
+| `email.service.ts` — `TicketAssignedEmailData` + `sendTicketAssignedEmail()` | ✅ Complete | Orange-header HTML email to technician |
+| `email.service.ts` — `EMAIL_TEST_OVERRIDE` env var support | ✅ Complete | Routes all outgoing mail to override address |
+| `backend/.env` — `EMAIL_TEST_OVERRIDE=mjdibay@dswd.gov.ph` | ✅ Complete | Test override active |
+| `references.ts` — `TicketEvent` interface + `markViewed` / `getEvents` API | ✅ Complete | New API client methods |
+| `tickets/[id]/page.tsx` — "Close Ticket" self-close button | ✅ Complete | Visible to requester on active tickets |
+| `tickets/[id]/page.tsx` — Assign/Reassign dialog title consistency | ✅ Complete | Title + button + tooltip all updated |
+| `tickets/[id]/page.tsx` — technician dropdown role filter updated | ✅ Complete | `desktop_sr/jr`, `it_support_sr/jr`, `pantawid_ict` |
+| `tickets/[id]/page.tsx` — `markViewed` call with `useRef` guard | ✅ Complete | Fires once when assigned technician opens ticket |
+| `tickets/[id]/page.tsx` — Timeline card JSX | ✅ Complete | Chronological event list below Comments card |
+| `tickets/page.tsx` — Assign/Reassign tooltip + dialog title | ✅ Complete | Consistent with detail page |
+| `frontend/package.json` — version `0.6.16` | ✅ Complete | Bumped from `0.6.15` |
+| `backend/package.json` — version `0.6.16` | ✅ Complete | Bumped from `0.6.15` |
+
+---
+
 ## 🚀 v0.6.8 — QA Fixes (Current)
 
 | Area | Status | Notes |

@@ -173,12 +173,45 @@ export default function AttendancePage() {
   const toggleOfficeDay = async (d: Date) => {
     const dateStr = formatDate(d);
     const current = isOfficeDayForDate(d);
+    const newValue = !current;
+
+    // Optimistic update — reflect change immediately without showing loading spinner
+    setOfficeDays(prev => {
+      const idx = prev.findIndex(od => od.date.slice(0, 10) === dateStr);
+      if (idx !== -1) {
+        const arr = [...prev];
+        arr[idx] = { ...arr[idx], isOfficeDay: newValue };
+        return arr;
+      }
+      // Create a local placeholder so the UI renders instantly
+      return [
+        ...prev,
+        { id: `temp-${dateStr}`, date: dateStr, isOfficeDay: newValue, notes: null, setById: null, createdAt: '' } as any,
+      ];
+    });
+
     try {
-      await attendanceApi.setOfficeDay({ date: dateStr, isOfficeDay: !current });
-      fetchOfficeDays();
-      fetchAttendance();
+      const updated = await attendanceApi.setOfficeDay({ date: dateStr, isOfficeDay: newValue });
+      // Replace the optimistic placeholder with the real server record
+      setOfficeDays(prev => {
+        const idx = prev.findIndex(od => od.date.slice(0, 10) === dateStr);
+        if (idx !== -1) {
+          const arr = [...prev];
+          arr[idx] = updated;
+          return arr;
+        }
+        return prev;
+      });
+      // Silently refresh attendance presence indicators (no loading spinner)
+      attendanceApi.getAttendance(startDate, endDate, attType || undefined)
+        .then(data => setAttendance(data))
+        .catch(() => {});
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to update', { variant: 'error' });
+      // Rollback: re-fetch silently to restore truthful server state
+      attendanceApi.getOfficeDays(String(month + 1), String(year))
+        .then(data => setOfficeDays(data))
+        .catch(() => {});
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to update office day', { variant: 'error' });
     }
   };
 
@@ -344,9 +377,9 @@ export default function AttendancePage() {
           <CardContent>
             <Stack direction="row" spacing={2} mb={2} alignItems="center">
               <FormControl size="small" sx={{ minWidth: 220 }}>
-                <InputLabel>Support Type</InputLabel>
-                <Select value={attType} label="Support Type" onChange={e => setAttType(e.target.value)}>
-                  <MenuItem value="">All Technicians</MenuItem>
+                <InputLabel>Category</InputLabel>
+                <Select value={attType} label="Category" onChange={e => setAttType(e.target.value)}>
+                  <MenuItem value="">All</MenuItem>
                   <MenuItem value="ito">ITOs</MenuItem>
                   <MenuItem value="it_support">IT Support</MenuItem>
                   <MenuItem value="desktop_support">Desktop Support</MenuItem>
