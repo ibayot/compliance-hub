@@ -122,7 +122,7 @@ export class TicketController {
 
   /** PATCH /tickets/:id/assign */
   @Patch(':id/assign')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.REVIEWER, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF)
   async assignTicket(@Param('id') id: string, @Body() dto: AssignTicketDto, @Request() req: any) {
     return this.ticketService.assignTicket(id, dto, req.user.role);
   }

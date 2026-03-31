@@ -47,6 +47,8 @@ interface NavItem {
   icon: ElementType;
   path: string;
   roles: string[];
+  /** Optional roleCode values that also grant access (e.g. 'section_head') */
+  roleCodes?: string[];
 }
 
 export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
@@ -72,8 +74,8 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     { label: 'Ticket Settings', icon: TicketSettingsIcon, path: '/dashboard/ticket-settings', roles: ['super_admin', 'technician', 'technician_desktop', 'technician_it_support'] },
     { label: 'Attendance', icon: AttendanceIcon, path: '/dashboard/attendance', roles: ['super_admin', 'focal', 'reviewer', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff'] },
     { label: 'Reviews', icon: SecurityIcon, path: '/dashboard/reviews', roles: ['super_admin', 'reviewer'] },
-    { label: 'Reports', icon: ReportsIcon, path: '/dashboard/reports', roles: ['super_admin', 'reviewer', 'focal'] },
-    { label: 'MoV Builder', icon: MovIcon, path: '/dashboard/mov', roles: ['super_admin', 'reviewer', 'focal'] },
+    { label: 'Reports', icon: ReportsIcon, path: '/dashboard/reports', roles: ['super_admin', 'reviewer'], roleCodes: ['section_head'] },
+    { label: 'MoV Builder', icon: MovIcon, path: '/dashboard/mov', roles: ['super_admin', 'reviewer'] },
   ];
 
   const settingsNavItems: NavItem[] = [
@@ -81,10 +83,12 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     { label: 'Settings', icon: SettingsIcon, path: '/dashboard/settings', roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'] },
   ];
 
-  const hasAccess = (roles: string[]) => {
+  const hasAccess = (roles: string[], roleCodes?: string[]) => {
     if (roles.includes('all')) return true;
     if (!user) return false;
-    return roles.includes(user.role);
+    if (roles.includes(user.role)) return true;
+    if (roleCodes && user.roleCode && roleCodes.includes(user.roleCode)) return true;
+    return false;
   };
 
   const handleNavigate = (path: string) => {
@@ -163,7 +167,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         ))}
       </List>
 
-      {adminNavItems.some((item) => hasAccess(item.roles)) && (
+      {adminNavItems.some((item) => hasAccess(item.roles, item.roleCodes)) && (
         <>
           <Divider sx={{ mx: isCollapsed ? 1 : 2, my: 1 }} />
           {!isCollapsed && (
@@ -172,7 +176,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             </Typography>
           )}
           <List sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
-            {adminNavItems.filter((item) => hasAccess(item.roles)).map((item) => (
+            {adminNavItems.filter((item) => hasAccess(item.roles, item.roleCodes)).map((item) => (
               <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
                 {renderNavItem(item)}
               </ListItem>

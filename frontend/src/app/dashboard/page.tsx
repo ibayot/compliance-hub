@@ -95,6 +95,9 @@ export default function DashboardPage() {
   const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer';
   // Full dashboard: super_admin or CO; generic staff (focal, auditor, etc.) see doc cards + KPI only
   const isFullDashboard = user?.role === 'super_admin' || isComplianceOfficer;
+  // Section Head and Cybersecurity Officer — identified via roleCode
+  const isSectionHead = user?.roleCode === 'section_head';
+  const isCybersecurityOfficer = user?.roleCode === 'cybersecurity_officer';
 
   useEffect(() => {
     fetchDashboardData();
@@ -125,10 +128,13 @@ export default function DashboardPage() {
         return;
       }
 
+      // Technicians: tech stats are loaded by the dedicated useEffect above — no extra data needed
+      if (isTechnicianAny) return;
+
       // Staff / admin: full dashboard
       const [docsResponse, metricsResult, incidentsResult, ticketStatsResult, kpiSummaryResult, userDashStatsResult] =
         await Promise.allSettled([
-          documentsApi.listDocuments({}),
+          documentsApi.listDocuments({ limit: 1000 }),
           cybersecurityApi.getAll(),
           incidentsApi.getTodayStats(),
           ticketsApi.getStatistics(),
@@ -138,6 +144,7 @@ export default function DashboardPage() {
 
       const docs =
         docsResponse.status === 'fulfilled' ? docsResponse.value.data : [];
+      const totalDocsCount = docsResponse.status === 'fulfilled' ? docsResponse.value.total : docs.length;
       const compliant = docs.filter((d: any) => d.status === 'ready').length;
       const pending = docs.filter((d: any) => d.status === 'pending' || d.status === 'processing').length;
 
@@ -171,7 +178,7 @@ export default function DashboardPage() {
       }
 
       setStats({
-        totalDocuments: docs.length,
+        totalDocuments: totalDocsCount,
         compliantDocuments: compliant,
         pendingDocuments: pending,
         openTickets: (ticketStats.byStatus as any)?.open || 0,
@@ -535,8 +542,8 @@ export default function DashboardPage() {
       </Grid>
       )}
 
-      {/* Incident Response Tracking (8AM - 5PM) */}
-      {!isTechnicianAny && incidentStats && (
+      {/* Incident Response Tracking — visible only to super_admin, CO, Section Head, and Cybersecurity Officer */}
+      {(isFullDashboard || isSectionHead || isCybersecurityOfficer) && incidentStats && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box display="flex" alignItems="center" gap={2} mb={3}>

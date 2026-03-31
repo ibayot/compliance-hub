@@ -67,6 +67,7 @@ export default function TicketsPage() {
   const [assigningTicket, setAssigningTicket] = useState<Ticket | null>(null);
   const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
   const [selectedTechId, setSelectedTechId] = useState('');
+  const [isEscalateMode, setIsEscalateMode] = useState(false);
 
   // Satisfaction dialog
   const [satDialogOpen, setSatDialogOpen] = useState(false);
@@ -77,11 +78,18 @@ export default function TicketsPage() {
   // Pending satisfaction ratings — loaded once for USER role to show warning before new ticket
   const [pendingSatCount, setPendingSatCount] = useState(0);
 
-  const canManageAll = isStaffRole(user?.role);
+  const canManageAll = isStaffRole(user?.role) && !(['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? ''));
   const isSuperAdmin = user?.role === 'super_admin';
-  const isTechnician = ['technician','technician_desktop','technician_it_support','technician_it_staff','technician_desktop_staff'].includes(user?.role ?? '');
+  const isFocalTech = ['technician', 'technician_desktop', 'technician_it_support'].includes(user?.role ?? '');
+  const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
+  const isTechnician = isFocalTech || isLowerLevelTech;
   const isFocal = user?.role === 'focal';
-  const canAssign = isSuperAdmin || isTechnician || isFocal;
+  const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer';
+  const isSectionHead = user?.roleCode === 'section_head';
+  // canAssign: focal techs, CO, SH, super_admin can assign/reassign tickets
+  const canAssign = isSuperAdmin || isFocal || isFocalTech || isComplianceOfficer || isSectionHead;
+  // canEscalate: lower-level techs can escalate their assigned ticket to a focal technician
+  const canEscalate = isLowerLevelTech;
 
   const fetchTickets = useCallback(async () => {
     try {
@@ -89,7 +97,7 @@ export default function TicketsPage() {
       const data = await ticketsApi.getAll({
         status: filterStatus as TicketStatus || undefined,
         ticketType: filterType as TicketType || undefined,
-        assignedToId: showMyTickets && isTechnician ? user?.id : undefined,
+        assignedToId: showMyTickets && isFocalTech ? user?.id : undefined,
       });
       setTickets(data);
     } catch {
@@ -97,7 +105,7 @@ export default function TicketsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterStatus, filterType, showMyTickets, isTechnician, user?.id]);
+  }, [filterStatus, filterType, showMyTickets, isFocalTech, user?.id]);
 
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
 
@@ -116,11 +124,11 @@ export default function TicketsPage() {
       const data = await ticketsApi.getAll({
         status: filterStatus as TicketStatus || undefined,
         ticketType: filterType as TicketType || undefined,
-        assignedToId: showMyTickets && isTechnician ? user?.id : undefined,
+        assignedToId: showMyTickets && isFocalTech ? user?.id : undefined,
       });
       setTickets(data);
     } catch { /* silent */ }
-  }, [filterStatus, filterType, showMyTickets, isTechnician, user?.id]);
+  }, [filterStatus, filterType, showMyTickets, isFocalTech, user?.id]);
   useAutoRefresh(silentFetchTickets);
 
   useEffect(() => {
@@ -178,13 +186,20 @@ export default function TicketsPage() {
     setNewDialogOpen(true);
   };
 
-  const openAssignDialog = async (ticket: Ticket) => {
+  const openAssignDialog = async (ticket: Ticket, escalate = false) => {
+    setIsEscalateMode(escalate);
     setAssigningTicket(ticket);
     setSelectedTechId(String(ticket.assignedToId ?? ''));
     try {
       const techs = await ticketsApi.getTechnicians();
       setTechnicians(techs.filter(t => {
-        // Only show available technicians (no active/unresolved tickets)
+        // For escalation: only show focal-level technicians (not other lower-level staff)
+        if (escalate) {
+          if (ticket.ticketType === 'desktop_support')
+            return ['technician_desktop', 'technician'].includes(t.role);
+          return ['technician_it_support', 'technician'].includes(t.role);
+        }
+        // Normal assign: show all relevant available technicians
         if (t.openCount > 0) return false;
         if (ticket.ticketType === 'desktop_support')
           return ['technician_desktop', 'technician', 'technician_desktop_staff'].includes(t.role);
@@ -260,7 +275,7 @@ export default function TicketsPage() {
                 <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
               </TextField>
               <Button size="small" variant="outlined" onClick={() => { setFilterStatus(''); setFilterType(''); }}>Reset</Button>
-              {isTechnician && (
+              {isTechnician && !isLowerLevelTech && (
                 <Button
                   size="small"
                   variant={showMyTickets ? 'contained' : 'outlined'}
@@ -274,7 +289,7 @@ export default function TicketsPage() {
           </CardContent>
         </Card>
       )}
-      {!canManageAll && isTechnician && (
+      {!canManageAll && isFocalTech && (
         <Card sx={{ mb: 2 }}>
           <CardContent>
             <Stack direction="row" spacing={2}>
@@ -287,6 +302,15 @@ export default function TicketsPage() {
                 {showMyTickets ? 'My Assigned Tickets ✓' : 'All Tickets'}
               </Button>
             </Stack>
+          </CardContent>
+        </Card>
+      )}
+      {isLowerLevelTech && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            <Typography variant="body2" color="text.secondary">
+              Showing your assigned tickets. Use the Escalate button to forward a ticket to a focal technician.
+            </Typography>
           </CardContent>
         </Card>
       )}
@@ -343,9 +367,14 @@ export default function TicketsPage() {
                     <Tooltip title="View Details">
                       <IconButton size="small" onClick={() => router.push(`/dashboard/tickets/${ticket.id}`)}><ViewIcon fontSize="small" /></IconButton>
                     </Tooltip>
-                    {(canAssign && ticket.status !== 'duplicate') && (
+                    {canAssign && ticket.status !== 'duplicate' && (
                       <Tooltip title="Assign Ticket">
-                        <IconButton size="small" color="primary" onClick={() => openAssignDialog(ticket)}><AssignIcon fontSize="small" /></IconButton>
+                        <IconButton size="small" color="primary" onClick={() => openAssignDialog(ticket, false)}><AssignIcon fontSize="small" /></IconButton>
+                      </Tooltip>
+                    )}
+                    {canEscalate && !['duplicate', 'closed', 'resolved'].includes(ticket.status) && (
+                      <Tooltip title="Escalate Ticket">
+                        <IconButton size="small" color="warning" onClick={() => openAssignDialog(ticket, true)}><AssignIcon fontSize="small" /></IconButton>
                       </Tooltip>
                     )}
                     {(ticket.status === 'resolved' || ticket.status === 'closed') && ticket.requesterId === user?.id && !ticket.satisfactionSubmittedAt && (
@@ -448,15 +477,20 @@ export default function TicketsPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Assign Dialog */}
+      {/* Assign / Escalate Dialog */}
       <Dialog open={assignDialogOpen} onClose={() => setAssignDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Assign Ticket</DialogTitle>
+        <DialogTitle>{isEscalateMode ? 'Escalate Ticket' : 'Assign Ticket'}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Typography variant="body2" color="text.secondary">
               Ticket: <strong>{assigningTicket?.ticketNumber}</strong> — {TICKET_TYPE_LABELS[assigningTicket?.ticketType ?? 'it_support']}
             </Typography>
-            <TextField select label="Select Technician" value={selectedTechId} onChange={e => setSelectedTechId(e.target.value)} fullWidth>
+            {isEscalateMode && (
+              <Typography variant="caption" color="warning.main">
+                Only focal technicians are shown. Escalating will re-assign this ticket.
+              </Typography>
+            )}
+            <TextField select label={isEscalateMode ? 'Select Focal Technician' : 'Select Technician'} value={selectedTechId} onChange={e => setSelectedTechId(e.target.value)} fullWidth>
               {technicians.length === 0
                 ? <MenuItem disabled value="">No eligible technicians found</MenuItem>
                 : technicians.map(t => (
@@ -469,7 +503,7 @@ export default function TicketsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleAssign} variant="contained" disabled={!selectedTechId}>Assign</Button>
+          <Button onClick={handleAssign} variant="contained" color={isEscalateMode ? 'warning' : 'primary'} disabled={!selectedTechId}>{isEscalateMode ? 'Escalate' : 'Assign'}</Button>
         </DialogActions>
       </Dialog>
 

@@ -94,6 +94,7 @@ export default function TicketDetailPage() {
   // Assign dialog
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [assignToId, setAssignToId] = useState<number | ''>('');
+  const [isEscalateMode, setIsEscalateMode] = useState(false);
 
   // Satisfaction dialog
   const [satDialogOpen, setSatDialogOpen] = useState(false);
@@ -110,12 +111,19 @@ export default function TicketDetailPage() {
   const [selectedDupOfId, setSelectedDupOfId] = useState('');
 
   const isRegularUser = user?.role === 'user';
-  const isTechnician = user?.role === 'technician_desktop' || user?.role === 'technician_it_support' ||
-    user?.role === 'technician' || user?.role === 'technician_it_staff' || user?.role === 'technician_desktop_staff';
+  const isFocalTech = ['technician_desktop', 'technician_it_support', 'technician'].includes(user?.role ?? '');
+  const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
+  const isTechnician = isFocalTech || isLowerLevelTech;
   const isFocal = user?.role === 'focal';
   const isAdmin = user?.role === 'super_admin' || isFocal || user?.role === 'reviewer';
   const canStaff = isAdmin || isTechnician;
   const canPriority = isFocal || user?.role === 'reviewer' || user?.role === 'super_admin';
+  const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer';
+  const isSectionHead = user?.roleCode === 'section_head';
+  // canReassign: focal techs, CO, SH, super_admin can assign / reassign
+  const canReassign = user?.role === 'super_admin' || user?.role === 'focal' || isFocalTech || isComplianceOfficer || isSectionHead;
+  // canEscalate: lower-level techs can escalate their ticket to a focal technician
+  const canEscalate = isLowerLevelTech;
   const isRequester = ticket?.requesterId === (user as any)?.id;
   const canSatisfaction = isRequester && (ticket?.status === 'resolved' || ticket?.status === 'closed') && !ticket?.satisfactionRating;
   // Duplicate is terminal — no further modifications allowed
@@ -125,13 +133,13 @@ export default function TicketDetailPage() {
     fetchTicket();
   }, [ticketId]);
 
-  // Live updates – poll every 10 s
+  // Live updates – poll every 30 s (reduced from 10s to lower API rate-limit pressure)
   useEffect(() => {
     const id = setInterval(() => {
       ticketsApi.getById(ticketId).then(data => {
         setTicket(data);
       }).catch(() => {});
-    }, 10_000);
+    }, 30_000);
     return () => clearInterval(id);
   }, [ticketId]);
 
@@ -306,12 +314,22 @@ export default function TicketDetailPage() {
               {isDuplicate && (
                 <Chip label="Duplicate (Terminal)" color="default" size="small" />
               )}
-              {canStaff && !isDuplicate && (
+              {canReassign && !isDuplicate && (
                 <Button variant="outlined" size="small" onClick={() => {
+                  setIsEscalateMode(false);
                   setAssignToId(ticket.assignedToId || '');
                   setAssignDialogOpen(true);
                 }}>
                   {ticket.assignedToId ? 'Reassign' : 'Assign Technician'}
+                </Button>
+              )}
+              {canEscalate && !isDuplicate && !['closed', 'resolved'].includes(ticket.status) && (
+                <Button variant="outlined" size="small" color="warning" onClick={() => {
+                  setIsEscalateMode(true);
+                  setAssignToId('');
+                  setAssignDialogOpen(true);
+                }}>
+                  Escalate Ticket
                 </Button>
               )}
               {canSatisfaction && (
@@ -547,14 +565,19 @@ export default function TicketDetailPage() {
         </CardContent>
       </Card>
 
-      {/* ── Assign Dialog ── */}
+      {/* ── Assign / Escalate Dialog ── */}
       <Dialog open={assignDialogOpen} onClose={() => setAssignDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Assign Technician</DialogTitle>
+        <DialogTitle>{isEscalateMode ? 'Escalate Ticket' : 'Assign Technician'}</DialogTitle>
         <DialogContent>
+          {isEscalateMode && (
+            <Alert severity="warning" sx={{ mb: 1, mt: 1 }}>
+              Only focal technicians are shown. Escalating will re-assign this ticket to the selected focal tech.
+            </Alert>
+          )}
           <TextField
             select
             fullWidth
-            label="Technician"
+            label={isEscalateMode ? 'Focal Technician' : 'Technician'}
             value={assignToId}
             onChange={(e) => setAssignToId(Number(e.target.value))}
             size="small"
@@ -562,7 +585,13 @@ export default function TicketDetailPage() {
           >
             {technicians
               .filter((t) => {
-                // Only show technicians with no active tickets (openCount === 0)
+                if (isEscalateMode) {
+                  // Escalation: only focal-level techs (not lower-level)
+                  if (ticket.ticketType === 'desktop_support') return ['technician_desktop', 'technician'].includes(t.role);
+                  if (ticket.ticketType === 'it_support') return ['technician_it_support', 'technician'].includes(t.role);
+                  return ['technician', 'technician_desktop', 'technician_it_support'].includes(t.role);
+                }
+                // Normal assign: available techs only (openCount === 0)
                 if (t.openCount > 0) return false;
                 if (ticket.ticketType === 'desktop_support') return t.role === 'technician_desktop' || t.role === 'technician' || t.role === 'technician_desktop_staff';
                 if (ticket.ticketType === 'it_support') return t.role === 'technician_it_support' || t.role === 'technician' || t.role === 'technician_it_staff';
@@ -577,7 +606,9 @@ export default function TicketDetailPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleAssign} disabled={!assignToId}>Assign</Button>
+          <Button variant="contained" color={isEscalateMode ? 'warning' : 'primary'} onClick={handleAssign} disabled={!assignToId}>
+            {isEscalateMode ? 'Escalate' : 'Assign'}
+          </Button>
         </DialogActions>
       </Dialog>
 

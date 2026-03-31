@@ -46,7 +46,7 @@ import { MovModule } from './modules/mov/mov.module';
         FRONTEND_URL: Joi.string().allow('').optional(),
         CORS_ORIGIN: Joi.string().required(),
         RATE_LIMIT_WINDOW_MS: Joi.number().default(15 * 60 * 1000),
-        RATE_LIMIT_MAX_REQUESTS: Joi.number().default(300),
+        RATE_LIMIT_MAX_REQUESTS: Joi.number().default(1000),
         DB_LOGGING: Joi.boolean().default(false),
       }),
     }),

@@ -592,7 +592,7 @@ export class TicketService implements OnModuleInit {
 
   async assignTicket(id: string, dto: AssignTicketDto, actorRole: UserRole): Promise<Ticket> {
     const allowedActors = [
-      UserRole.SUPER_ADMIN, UserRole.FOCAL,
+      UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.REVIEWER,
       UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
       UserRole.TECHNICIAN, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
     ];
@@ -609,6 +609,13 @@ export class TicketService implements OnModuleInit {
 
     const technician = await this.userRepo.findOne({ where: { id: dto.assignedToId } });
     if (!technician) throw new NotFoundException('Technician not found');
+
+    // Guard: lower-level techs can only escalate to focal-level technicians
+    const lowerLevelRoles: UserRole[] = [UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF];
+    const focalTechRoles: UserRole[] = [UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT];
+    if (lowerLevelRoles.includes(actorRole) && !focalTechRoles.includes(technician.role as UserRole)) {
+      throw new ForbiddenException('Lower-level technicians may only escalate to focal-level technicians.');
+    }
 
     // Guard: technician must have no active tickets
     const busyCount = await this.ticketRepo
