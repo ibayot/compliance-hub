@@ -21,21 +21,42 @@ import {
   BulkSetOfficeDaysDto,
 } from '../services/attendance.service';
 
-/** Roles that can manage technician attendance */
+/** Roles that can manage technician attendance (set present/absent/etc.) */
 const FOCAL_ROLES = [
   UserRole.SUPER_ADMIN,
+  UserRole.FOCAL,
+  UserRole.SECTION_HEAD,
+  UserRole.REVIEWER,
   UserRole.TECHNICIAN,         // focal-level technician
   UserRole.TECHNICIAN_DESKTOP,
   UserRole.TECHNICIAN_IT_SUPPORT,
   UserRole.TECHNICIAN_IT_STAFF,
   UserRole.TECHNICIAN_DESKTOP_STAFF,
+  // v0.6.14 named roles
+  UserRole.PANTAWID_ICT,
+  UserRole.DESKTOP_SR,
+  UserRole.IT_SUPPORT_SR,
+  UserRole.DESKTOP_JR,
+  UserRole.IT_SUPPORT_JR,
+  UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+  UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
+  UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
+  UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
 ];
 
-/** Roles that can manage office days */
+/** Roles that can manage office days (set/toggle office calendar) */
 const OFFICE_DAY_ROLES = [
   UserRole.SUPER_ADMIN,
-  UserRole.REVIEWER,    // section head / alternate
-  UserRole.FOCAL,       // compliance officer
+  UserRole.REVIEWER,
+  UserRole.FOCAL,
+  UserRole.SECTION_HEAD,
+  // v0.6.14 ITO focal-equivalent roles
+  UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+  UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
+  UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
+  UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
+  // Senior tech roles may also need to manage office days for their teams
+  UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.PANTAWID_ICT,
 ];
 
 /** Roles that can read attendance */
@@ -43,11 +64,23 @@ const READ_ROLES = [
   UserRole.SUPER_ADMIN,
   UserRole.REVIEWER,
   UserRole.FOCAL,
+  UserRole.SECTION_HEAD,
+  UserRole.AUDITOR,
   UserRole.TECHNICIAN,
   UserRole.TECHNICIAN_DESKTOP,
   UserRole.TECHNICIAN_IT_SUPPORT,
   UserRole.TECHNICIAN_IT_STAFF,
   UserRole.TECHNICIAN_DESKTOP_STAFF,
+  // v0.6.14 named roles
+  UserRole.PANTAWID_ICT,
+  UserRole.DESKTOP_SR,
+  UserRole.IT_SUPPORT_SR,
+  UserRole.DESKTOP_JR,
+  UserRole.IT_SUPPORT_JR,
+  UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+  UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
+  UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
+  UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
 ];
 
 @Controller('attendance')

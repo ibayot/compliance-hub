@@ -132,6 +132,12 @@ export class TicketService implements OnModuleInit {
         'ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS is_internal TINYINT(1) NOT NULL DEFAULT 0',
       ).catch(() => undefined);
 
+      // v0.6.15 migrations
+      // Track when a ticket is explicitly closed by the requesting user
+      await qr.query(
+        'ALTER TABLE tickets ADD COLUMN IF NOT EXISTS user_closed TINYINT(1) NOT NULL DEFAULT 0',
+      ).catch(() => undefined);
+
       // Rename ticket_comments columns if old names exist
       await qr.query(
         'ALTER TABLE ticket_comments CHANGE COLUMN ticket_id ticket_id VARCHAR(36) NOT NULL',
@@ -343,6 +349,23 @@ export class TicketService implements OnModuleInit {
         );
 
         if (availableTechs.length > 0) {
+          // Sort techs by tier: junior first, then senior/focal (enables resolving lower-tier first)
+          // For Pantawid ICT, all available techs are equivalent — order by workload only.
+          const tierPriority = (role: string): number => {
+            const juniorRoles: string[] = [
+              UserRole.IT_SUPPORT_JR, UserRole.DESKTOP_JR,
+              UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
+            ];
+            const seniorRoles: string[] = [
+              UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR,
+              UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
+            ];
+            if (juniorRoles.includes(role)) return 1;
+            if (seniorRoles.includes(role)) return 2;
+            return 3; // focal / pantawid / others
+          };
+          availableTechs.sort((a, b) => tierPriority(a.role) - tierPriority(b.role));
+
           // Pick the tech with fewest open/assigned/in_progress tickets
           let bestTech: User | null = null;
           let minCount = Infinity;
@@ -495,9 +518,21 @@ export class TicketService implements OnModuleInit {
     const ticket = await this.getTicketById(id);
 
     // Regular users can only edit their own open tickets (subject/description)
+    // OR close their own ticket if it is in a resolvable state
     if (actorRole === UserRole.USER) {
       if (ticket.requesterId !== actorId) {
         throw new ForbiddenException('You can only update your own tickets.');
+      }
+      // Allow user to close their own ticket (when assigned/in_progress/resolved)
+      if (dto.status === TicketStatus.CLOSED) {
+        const closeable = [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED, TicketStatus.OPEN];
+        if (!closeable.includes(ticket.status as TicketStatus)) {
+          throw new ForbiddenException('This ticket cannot be closed in its current state.');
+        }
+        ticket.status = TicketStatus.CLOSED;
+        ticket.userClosed = true;
+        if (!ticket.resolvedAt) ticket.resolvedAt = new Date();
+        return this.ticketRepo.save(ticket);
       }
       if (ticket.status !== TicketStatus.OPEN) {
         throw new ForbiddenException('You can only edit tickets that are still open.');
@@ -597,7 +632,7 @@ export class TicketService implements OnModuleInit {
     return saved;
   }
 
-  async assignTicket(id: string, dto: AssignTicketDto, actorRole: UserRole): Promise<Ticket> {
+  async assignTicket(id: string, dto: AssignTicketDto, actorRole: UserRole, actorId?: number): Promise<Ticket> {
     const allowedActors = [
       UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER,
       UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
@@ -624,6 +659,14 @@ export class TicketService implements OnModuleInit {
     const technician = await this.userRepo.findOne({ where: { id: dto.assignedToId } });
     if (!technician) throw new NotFoundException('Technician not found');
 
+    // If the actor has ticketMainFocal=true they are empowered to re-assign freely (skip busy guard)
+    let actorIsMainFocal = false;
+    if (actorId) {
+      const actorUser = await this.userRepo.findOne({ where: { id: actorId } });
+      actorIsMainFocal = actorUser?.ticketMainFocal === true;
+    }
+    const bypassBusyGuard = actorIsMainFocal || [UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER].includes(actorRole);
+
     // Guard: lower-level techs can only escalate to focal-level technicians
     const lowerLevelRoles: UserRole[] = [UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR];
     const focalTechRoles: UserRole[] = [UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR];
@@ -631,7 +674,8 @@ export class TicketService implements OnModuleInit {
       throw new ForbiddenException('Lower-level technicians may only escalate to focal-level technicians.');
     }
 
-    // Guard: technician must have no active tickets
+    // Guard: technician must have no active tickets (unless actor is main focal / admin)
+    if (!bypassBusyGuard) {
     const busyCount = await this.ticketRepo
       .createQueryBuilder('t')
       .where('t.assignedToId = :id', { id: dto.assignedToId })
@@ -643,6 +687,7 @@ export class TicketService implements OnModuleInit {
       throw new BadRequestException(
         `${technician.firstName} ${technician.lastName} still has ${busyCount} unresolved ticket(s). Resolve them before assigning a new one.`,
       );
+    }
     }
 
     ticket.assignedToId = dto.assignedToId;
@@ -722,6 +767,7 @@ export class TicketService implements OnModuleInit {
     satisfactionAvg: number | null;
     satisfactionFillRate: number;
     resolvedTickets: number;
+    userClosedTickets: number;
   }> {
     const all = await this.ticketRepo.find();
     const byStatus: Record<string, number> = {};
@@ -729,8 +775,14 @@ export class TicketService implements OnModuleInit {
     let ratingSum = 0;
     let ratingCount = 0;
     let resolvedCount = 0;
+    let userClosedCount = 0;
 
     for (const t of all) {
+      // User-closed tickets (self-served) are tracked but excluded from operational stats
+      if (t.userClosed) {
+        userClosedCount++;
+        continue;
+      }
       byStatus[t.status] = (byStatus[t.status] ?? 0) + 1;
       byType[t.ticketType] = (byType[t.ticketType] ?? 0) + 1;
       if (t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) {
@@ -742,15 +794,17 @@ export class TicketService implements OnModuleInit {
       }
     }
 
+    const operationalTotal = all.length - userClosedCount;
     const fillRate = resolvedCount > 0 ? Math.round((ratingCount / resolvedCount) * 100) : 0;
 
     return {
-      total: all.length,
+      total: operationalTotal,
       byStatus,
       byType,
       satisfactionAvg: ratingCount > 0 ? Math.round((ratingSum / ratingCount) * 10) / 10 : null,
       satisfactionFillRate: fillRate,
       resolvedTickets: resolvedCount,
+      userClosedTickets: userClosedCount,
     };
   }
 

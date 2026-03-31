@@ -112,6 +112,13 @@ export class Ticket {
   @Column({ name: 'satisfaction_submitted_at', type: 'datetime', nullable: true })
   satisfactionSubmittedAt: Date | null;
 
+  /**
+   * Set to true when the ticket requester (role=USER) explicitly closes their own ticket.
+   * User-closed tickets are excluded from operational statistics.
+   */
+  @Column({ name: 'user_closed', type: 'tinyint', default: 0 })
+  userClosed: boolean;
+
   // --- Relations ---
   @OneToMany(() => TicketComment, (c) => c.ticket, { cascade: true })
   comments: TicketComment[];

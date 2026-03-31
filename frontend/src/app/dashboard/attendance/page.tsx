@@ -10,7 +10,6 @@ import {
   ChevronLeft as PrevIcon, ChevronRight as NextIcon,
   CheckCircle as PresentIcon, Cancel as AbsentIcon,
   WbSunny as HalfDayIcon, FlightTakeoff as OOOIcon,
-  Login as LoginIcon, Check as CheckIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
@@ -53,7 +52,10 @@ function isWeekday(d: Date): boolean {
 
 export default function AttendancePage() {
   const { user } = useAuth();
-  const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
+  const isLowerLevelTech = [
+    'technician_it_staff', 'technician_desktop_staff',
+    'it_support_jr', 'desktop_jr',
+  ].includes(user?.role ?? '');
   /** All RICTMS staff (everyone except super_admin and regular users) sees their own attendance in the calendar */
   const isRICTMSStaff = !['super_admin', 'user'].includes(user?.role ?? '');
   const { enqueueSnackbar } = useSnackbar();
@@ -76,10 +78,6 @@ export default function AttendancePage() {
   // Technicians list (all technicians, regardless of attendance records)
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [techLoading, setTechLoading] = useState(false);
-
-  // Staff login activity (monthly grid)
-  const [staffLoginStaff, setStaffLoginStaff] = useState<any[]>([]);
-  const [staffLoginLoading, setStaffLoginLoading] = useState(false);
 
   const days = useMemo(() => getDaysInMonth(year, month), [year, month]);
   const startDate = formatDate(days[0]);
@@ -112,15 +110,6 @@ export default function AttendancePage() {
     finally { setTechLoading(false); }
   }, [attType]);
 
-  const fetchStaffLoginStaff = useCallback(async () => {
-    try {
-      setStaffLoginLoading(true);
-      const data = await attendanceApi.getStaffLoginsMonthly(startDate, endDate);
-      setStaffLoginStaff(data);
-    } catch { enqueueSnackbar('Failed to load staff list', { variant: 'error' }); }
-    finally { setStaffLoginLoading(false); }
-  }, [startDate, endDate]);
-
   useEffect(() => { fetchOfficeDays(); }, [fetchOfficeDays]);
   useEffect(() => {
     if (tab === 1) {
@@ -131,7 +120,6 @@ export default function AttendancePage() {
       fetchAttendance();
     }
   }, [tab, fetchTechnicians, fetchAttendance, isRICTMSStaff]);
-  useEffect(() => { if (tab === 2) fetchStaffLoginStaff(); }, [tab, fetchStaffLoginStaff]);
 
   // ── Silent auto-refresh: update data every 30s without showing loading spinners (avoids flicker) ──
   const silentRefreshOfficeDays = useCallback(async () => {
@@ -153,17 +141,8 @@ export default function AttendancePage() {
     } catch { /* silent */ }
   }, [tab, attType, startDate, endDate]);
 
-  const silentRefreshTab2 = useCallback(async () => {
-    if (tab !== 2) return;
-    try {
-      const data = await attendanceApi.getStaffLoginsMonthly(startDate, endDate);
-      setStaffLoginStaff(data);
-    } catch { /* silent */ }
-  }, [tab, startDate, endDate]);
-
   useAutoRefresh(silentRefreshOfficeDays);
   useAutoRefresh(silentRefreshTab1);
-  useAutoRefresh(silentRefreshTab2);
 
   // Live refresh for attendance data in Tab 0 — so presence indicators update in real time
   // when a manager tags a staff member as present without requiring a page reload.
@@ -196,10 +175,8 @@ export default function AttendancePage() {
     const current = isOfficeDayForDate(d);
     try {
       await attendanceApi.setOfficeDay({ date: dateStr, isOfficeDay: !current });
-      // QA4: cascade the change to all tabs so they reflect the updated office day immediately
       fetchOfficeDays();
       fetchAttendance();
-      fetchStaffLoginStaff();
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to update', { variant: 'error' });
     }
@@ -216,10 +193,32 @@ export default function AttendancePage() {
   }, [attendance]);
 
   const handleSetAttendance = async (userId: number, date: string, status: AttendanceStatus) => {
+    // Optimistic update — immediately reflect in UI without showing loading spinner
+    setAttendance(prev => {
+      const idx = prev.findIndex(r => r.userId === userId && r.date.slice(0, 10) === date);
+      if (idx !== -1) {
+        const arr = [...prev];
+        arr[idx] = { ...arr[idx], status };
+        return arr;
+      }
+      // No record yet: create a temporary placeholder
+      return [...prev, { id: `temp-${userId}-${date}`, userId, date, status, createdAt: '' } as TechAttendance];
+    });
     try {
-      await attendanceApi.setAttendance({ userId, date, status });
-      fetchAttendance();
+      const updated = await attendanceApi.setAttendance({ userId, date, status });
+      // Replace temp record with actual server response
+      setAttendance(prev => {
+        const idx = prev.findIndex(r => r.userId === userId && r.date.slice(0, 10) === date);
+        if (idx !== -1) {
+          const arr = [...prev];
+          arr[idx] = updated;
+          return arr;
+        }
+        return prev;
+      });
     } catch (err: any) {
+      // Rollback on error by refetching
+      fetchAttendance();
       enqueueSnackbar(err?.response?.data?.message || 'Failed', { variant: 'error' });
     }
   };
@@ -233,7 +232,25 @@ export default function AttendancePage() {
     setYear(y);
   };
 
-  const canManage = ['super_admin','focal','reviewer'].includes(user?.role ?? '');
+  const canManageAttendance = [
+    'super_admin', 'focal', 'reviewer', 'section_head',
+    'it_support_sr', 'desktop_sr', 'pantawid_ict',
+    'technician', 'technician_it_support', 'technician_desktop',
+    // ITO focal-equivalent roles
+    'lead_infra', 'server_admin', 'db_admin', 'network_admin',
+    'project_mgr', 'dev_lead', 'sqa_lead', 'records_officer', 'hr_id_officer',
+    'compliance_officer', 'cybersec', 'infosec',
+  ].includes(user?.role ?? '');
+
+  const canManageOfficeDays = [
+    'super_admin', 'focal', 'reviewer', 'section_head',
+    'lead_infra', 'server_admin', 'db_admin', 'network_admin',
+    'project_mgr', 'dev_lead', 'sqa_lead', 'records_officer', 'hr_id_officer',
+    'compliance_officer', 'cybersec', 'infosec',
+    'it_support_sr', 'desktop_sr', 'pantawid_ict',
+  ].includes(user?.role ?? '');
+
+  const canManage = canManageAttendance;
 
   // Only show weekdays in the attendance grid
   const weekdays = days.filter(d => isWeekday(d));
@@ -242,7 +259,7 @@ export default function AttendancePage() {
     <Box>
       <Typography variant="h4" fontWeight={700} mb={0.5}>Attendance Management</Typography>
       <Typography variant="body2" color="text.secondary" mb={3}>
-        Manage office day calendar, technician attendance, and staff login activity
+        Manage the office day calendar and track technician attendance by support type
       </Typography>
 
       {/* Month Navigation */}
@@ -257,9 +274,8 @@ export default function AttendancePage() {
       <Card>
         {!isLowerLevelTech && (
         <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Tab label="Office Days Calendar" />
-          <Tab label="Technician Attendance" />
-          <Tab label="Staff Login Activity" icon={<LoginIcon fontSize="small" />} iconPosition="start" />
+          <Tab label="Office Days" />
+          <Tab label="Attendance" />
         </Tabs>
         )}
 
@@ -271,7 +287,7 @@ export default function AttendancePage() {
             ) : (
               <Box>
                 <Typography variant="body2" color="text.secondary" mb={2}>
-                  Click on a future date to toggle it as an office day or non-office day. Today and past dates cannot be changed. Weekdays default to office days.
+                  Click on a date to toggle it as an office day. Past dates cannot be changed. Weekdays default to office days.
                 </Typography>
                 <Box display="grid" gridTemplateColumns="repeat(7, 1fr)" gap={0.5}>
                   {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
@@ -283,19 +299,19 @@ export default function AttendancePage() {
                     const isOffice = isOfficeDayForDate(d);
                     const dStr = formatDate(d);
                     // Today and past are not clickable (today is already treated as office day)
-                    const isPastOrToday = dStr <= todayStr;
+                    const isPastOrToday = dStr < todayStr;
                     const isToday = dStr === todayStr;
                     return (
-                      <Box
+                        <Box
                         key={dStr}
-                        onClick={canManage && !isPastOrToday ? () => toggleOfficeDay(d) : undefined}
+                        onClick={canManageOfficeDays && !isPastOrToday ? () => toggleOfficeDay(d) : undefined}
                         sx={{
                           textAlign: 'center', py: 1.5, borderRadius: 1,
                           bgcolor: isOffice ? 'success.light' : 'grey.200',
                           color: isOffice ? 'success.contrastText' : 'text.disabled',
-                          cursor: canManage && !isPastOrToday ? 'pointer' : 'default',
-                          opacity: isPastOrToday && !isToday ? 0.5 : 1,
-                          '&:hover': canManage && !isPastOrToday ? { opacity: 0.8 } : {},
+                          cursor: canManageOfficeDays && !isPastOrToday ? 'pointer' : 'default',
+                          opacity: isPastOrToday ? 0.55 : 1,
+                          '&:hover': canManageOfficeDays && !isPastOrToday ? { opacity: 0.8 } : {},
                           border: isToday ? '2px solid' : 'none',
                           borderColor: 'primary.main',
                         }}
@@ -331,6 +347,7 @@ export default function AttendancePage() {
                 <InputLabel>Support Type</InputLabel>
                 <Select value={attType} label="Support Type" onChange={e => setAttType(e.target.value)}>
                   <MenuItem value="">All Technicians</MenuItem>
+                  <MenuItem value="ito">ITOs</MenuItem>
                   <MenuItem value="it_support">IT Support</MenuItem>
                   <MenuItem value="desktop_support">Desktop Support</MenuItem>
                   <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
@@ -396,15 +413,18 @@ export default function AttendancePage() {
                                         const nextIdx = status ? (cycle.indexOf(status) + 1) % cycle.length : 0;
                                         handleSetAttendance(userId, dateStr, cycle[nextIdx]);
                                       }}
-                                      sx={{ color: cfg ? `${cfg.color}.main` : 'text.disabled' }}
+                                      sx={{
+                                        color: cfg ? `${cfg.color}.main` : 'action.active',
+                                        '&:hover': { bgcolor: cfg ? `${cfg.color}.light` : 'action.hover', opacity: 0.85 },
+                                      }}
                                     >
-                                      {cfg ? cfg.icon : <Typography variant="caption">·</Typography>}
+                                      {cfg ? cfg.icon : <Typography variant="body1" sx={{ fontSize: '1.1rem', lineHeight: 1, color: 'text.secondary' }}>•</Typography>}
                                     </IconButton>
                                   </Tooltip>
                                 ) : (
                                   cfg
-                                    ? <Chip size="small" icon={cfg.icon as any} label="" color={cfg.color} variant="outlined" sx={{ '& .MuiChip-label': { display: 'none' } }} />
-                                    : <Typography variant="caption" color="text.disabled">·</Typography>
+                                    ? <Chip size="small" icon={cfg.icon as any} label={cfg.label} color={cfg.color} sx={{ transform: 'scale(0.85)', transformOrigin: 'center' }} />
+                                    : <Typography variant="body1" sx={{ fontSize: '1.1rem', lineHeight: 1, color: 'text.secondary' }}>•</Typography>
                                 )}
                               </TableCell>
                             );
@@ -419,72 +439,6 @@ export default function AttendancePage() {
           </CardContent>
         )}
 
-        {/* ── Staff Login Activity ── */}
-        {tab === 2 && (
-          <CardContent>
-            <Typography variant="body2" color="text.secondary" mb={2}>
-              Monthly login activity for all non-technician staff. A checkmark indicates the staff member logged in on that day.
-            </Typography>
-
-            {staffLoginLoading ? (
-              <Box textAlign="center" py={4}><CircularProgress /></Box>
-            ) : staffLoginStaff.length === 0 ? (
-              <Typography color="text.secondary" py={3} textAlign="center">
-                No staff found for login activity tracking.
-              </Typography>
-            ) : (
-              <TableContainer sx={{ maxHeight: 500 }}>
-                <Table size="small" stickyHeader>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ position: 'sticky', left: 0, zIndex: 3, bgcolor: 'background.paper', minWidth: 180 }}>Staff Member</TableCell>
-                      {weekdays.map(d => {
-                        const isOffice = isOfficeDayForDate(d);
-                        return (
-                          <TableCell key={formatDate(d)} align="center" sx={{ minWidth: 36, px: 0.5, ...(isOffice ? {} : { bgcolor: 'action.disabledBackground' }) }}>
-                            <Typography variant="caption" color={isOffice ? 'text.primary' : 'text.disabled'}>{d.getDate()}</Typography>
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {staffLoginStaff.map((u: any) => {
-                      const lastLoginDate = u.lastLogin ? u.lastLogin.slice(0, 10) : null;
-                      return (
-                        <TableRow key={u.id}>
-                          <TableCell sx={{ position: 'sticky', left: 0, zIndex: 2, bgcolor: 'background.paper' }}>
-                            <Typography variant="body2" noWrap>
-                              {[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" noWrap>
-                              {(u.role ?? '').replace(/_/g, ' ')}
-                            </Typography>
-                          </TableCell>
-                          {weekdays.map(d => {
-                            const dateStr = formatDate(d);
-                            const loggedIn = lastLoginDate === dateStr;
-                            return (
-                              <TableCell key={dateStr} align="center" sx={{ px: 0.5 }}>
-                                {loggedIn ? (
-                                  <Tooltip title={`Logged in on ${dateStr}`}>
-                                    <CheckIcon fontSize="small" color="success" />
-                                  </Tooltip>
-                                ) : (
-                                  <Typography variant="caption" color="text.disabled">–</Typography>
-                                )}
-                              </TableCell>
-                            );
-                          })}
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </CardContent>
-        )}
       </Card>
     </Box>
   );

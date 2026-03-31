@@ -137,7 +137,7 @@ export class TicketController {
   @Roles(UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
     UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR)
   async assignTicket(@Param('id') id: string, @Body() dto: AssignTicketDto, @Request() req: any) {
-    return this.ticketService.assignTicket(id, dto, req.user.role);
+    return this.ticketService.assignTicket(id, dto, req.user.role, req.user.id ?? req.user.userId);
   }
 
   /** POST /tickets/:id/comments */

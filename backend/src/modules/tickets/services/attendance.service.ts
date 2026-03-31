@@ -94,6 +94,17 @@ export class AttendanceService {
     } else if (ticketType === 'pantawid_ict_support') {
       const roles = [...new Set([UserRole.TECHNICIAN, ...customRoles])];
       qb.andWhere('user.role IN (:...roles)', { roles });
+    } else if (ticketType === 'ito') {
+      // ITO = all focal-equivalent + compliance/cybersec staff (excludes technicians and pantawid)
+      const itoHardcoded: string[] = [
+        UserRole.FOCAL, UserRole.SECTION_HEAD,
+        UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+        UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
+        UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
+        UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
+      ];
+      const roles = [...new Set([...itoHardcoded, ...customRoles])];
+      qb.andWhere('user.role IN (:...roles)', { roles });
     } else if (customRoles.length > 0) {
       // No type filter but custom roles may need to be included — no additional restriction needed
       // (all tech roles are already included by the base query with no filter)
@@ -121,16 +132,20 @@ export class AttendanceService {
       throw new BadRequestException(`Invalid status: ${dto.status}`);
     }
 
-    // Scope restriction: IT focal can only tag IT staff; Desktop focal can only tag Desktop staff
-    if (actorRole === UserRole.TECHNICIAN_IT_SUPPORT) {
+    // Scope restriction: lower-level tech focals can only tag their own tier's staff
+    const itFocalRoles = [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.IT_SUPPORT_SR];
+    const deskFocalRoles = [UserRole.TECHNICIAN_DESKTOP, UserRole.DESKTOP_SR];
+    if (itFocalRoles.includes(actorRole as UserRole)) {
       const target = await this.userRepo.findOne({ where: { id: dto.userId } });
-      if (target && target.role !== UserRole.TECHNICIAN_IT_STAFF) {
-        throw new BadRequestException('IT Support focal can only manage attendance for IT Staff technicians.');
+      const itStaffRoles = [UserRole.TECHNICIAN_IT_STAFF, UserRole.IT_SUPPORT_JR, UserRole.IT_SUPPORT_SR, UserRole.TECHNICIAN_IT_SUPPORT];
+      if (target && !itStaffRoles.includes(target.role as UserRole) && actorRole !== UserRole.SUPER_ADMIN) {
+        throw new BadRequestException('IT Support focal can only manage attendance for IT Support team members.');
       }
-    } else if (actorRole === UserRole.TECHNICIAN_DESKTOP) {
+    } else if (deskFocalRoles.includes(actorRole as UserRole)) {
       const target = await this.userRepo.findOne({ where: { id: dto.userId } });
-      if (target && target.role !== UserRole.TECHNICIAN_DESKTOP_STAFF) {
-        throw new BadRequestException('Desktop focal can only manage attendance for Desktop Staff technicians.');
+      const deskStaffRoles = [UserRole.TECHNICIAN_DESKTOP_STAFF, UserRole.DESKTOP_JR, UserRole.DESKTOP_SR, UserRole.TECHNICIAN_DESKTOP];
+      if (target && !deskStaffRoles.includes(target.role as UserRole) && actorRole !== UserRole.SUPER_ADMIN) {
+        throw new BadRequestException('Desktop focal can only manage attendance for Desktop Support team members.');
       }
     }
 
@@ -231,12 +246,14 @@ export class AttendanceService {
   async listTechnicians(ticketType?: string, actorRole?: string): Promise<User[]> {
     const customRoles = await this.getCustomRoleValues(ticketType || undefined);
 
-    // Focal technicians see only their own staff tier
+    // Focal technicians see only their own staff tier when no explicit filter is set
     let forcedType = ticketType;
-    if (actorRole === UserRole.TECHNICIAN_IT_SUPPORT && !ticketType) {
+    if ([UserRole.TECHNICIAN_IT_SUPPORT, UserRole.IT_SUPPORT_SR].includes(actorRole as UserRole) && !ticketType) {
       forcedType = 'it_support';
-    } else if (actorRole === UserRole.TECHNICIAN_DESKTOP && !ticketType) {
+    } else if ([UserRole.TECHNICIAN_DESKTOP, UserRole.DESKTOP_SR].includes(actorRole as UserRole) && !ticketType) {
       forcedType = 'desktop_support';
+    } else if ([UserRole.TECHNICIAN, UserRole.PANTAWID_ICT].includes(actorRole as UserRole) && !ticketType) {
+      forcedType = 'pantawid_ict_support';
     }
 
     let hardcodedRoles: string[];
@@ -246,8 +263,17 @@ export class AttendanceService {
       hardcodedRoles = [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF];
     } else if (forcedType === 'pantawid_ict_support') {
       hardcodedRoles = [UserRole.TECHNICIAN];
+    } else if (forcedType === 'ito') {
+      // ITO = all focal-equivalent + compliance/cybersec staff
+      hardcodedRoles = [
+        UserRole.FOCAL, UserRole.SECTION_HEAD,
+        UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+        UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
+        UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
+        UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
+      ];
     } else {
-      // No filter = all tech roles
+      // No filter = all tech roles (technicians + ITO staff)
       hardcodedRoles = [
         UserRole.TECHNICIAN,
         UserRole.TECHNICIAN_DESKTOP,
@@ -329,6 +355,22 @@ export class AttendanceService {
   }
 
   // ── Office Days ─────────────────────────────────────────────────────────
+
+  // ── Auto-correct attendance on login ─────────────────────────────────
+
+  /**
+   * If a technician logs in while marked absent for today, auto-correct to present.
+   * This is called from AuthService.login() / googleLogin() after recording the login timestamp.
+   */
+  async autoCorrectAbsentOnLogin(userId: number): Promise<void> {
+    const today = new Date().toISOString().slice(0, 10);
+    const record = await this.attendanceRepo.findOne({ where: { userId, date: today } });
+    if (record && record.status === AttendanceStatus.ABSENT) {
+      record.status = AttendanceStatus.PRESENT;
+      record.notes = (record.notes ? record.notes + ' | ' : '') + 'Auto-corrected: logged in while marked absent';
+      await this.attendanceRepo.save(record);
+    }
+  }
 
   /** Get office days for a date range */
   async getOfficeDays(startDate: string, endDate: string): Promise<OfficeDay[]> {
