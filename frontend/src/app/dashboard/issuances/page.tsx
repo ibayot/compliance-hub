@@ -140,7 +140,7 @@ export default function IssuancesPage() {
       const users = await usersApi.list();
       const options = users
         .filter((entry: UserRecord) => entry.active)
-        .filter((entry: UserRecord) => ['focal', 'reviewer', 'section_head', 'super_admin'].includes(String(entry.role)))
+        .filter((entry: UserRecord) => ['focal', 'reviewer', 'compliance_officer', 'section_head', 'super_admin'].includes(String(entry.role)))
         .map((entry: UserRecord) => {
           const displayName = [entry.firstName, entry.middleName, entry.lastName, entry.suffix]
             .filter(Boolean)

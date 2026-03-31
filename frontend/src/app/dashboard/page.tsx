@@ -89,8 +89,8 @@ export default function DashboardPage() {
   const periodMonth = now.getMonth() + 1;
 
   const isRegularUser = user?.role === 'user';
-  const isTechnicianAny = ['technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
-  const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
+  const isTechnicianAny = ['technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff', 'pantawid_ict', 'desktop_sr', 'it_support_sr', 'desktop_jr', 'it_support_jr'].includes(user?.role ?? '');
+  const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff', 'it_support_jr', 'desktop_jr'].includes(user?.role ?? '');
   // Compliance Officer = reviewer or any role tagged with roleCode 'compliance_officer'
   const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer';
   // Full dashboard: super_admin or CO; generic staff (focal, auditor, etc.) see doc cards + KPI only

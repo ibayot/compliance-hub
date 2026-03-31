@@ -271,7 +271,8 @@ export default function KpiPage() {
     status: 'draft' as KpiMonitoringStatus,
   });
 
-  const canManage = ['super_admin', 'reviewer', 'section_head'].includes(String(user?.role));
+  const canManage = ['super_admin', 'reviewer', 'section_head', 'compliance_officer'].includes(String(user?.role))
+    || user?.roleCode === 'compliance_officer';
   const userUnitIds = useMemo(() => ((user?.units || []) as any[]).map((u: any) => Number(u.id)).filter(Number.isFinite), [user?.units]);
 
   const effectiveMonth = useMemo(() => {

@@ -13,7 +13,7 @@ export class MovController {
   constructor(private readonly movService: MovService) {}
 
   @Get('artifacts')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician')
   list(
     @Query('artifact_type') artifact_type?: string,
     @Query('period_year') period_year?: string,
@@ -31,43 +31,43 @@ export class MovController {
   }
 
   @Get('artifacts/:id')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician')
   getById(@Param('id') id: string) {
     return this.movService.getById(id);
   }
 
   @Post('artifacts')
-  @Roles('super_admin', 'reviewer')
+  @Roles('super_admin', 'reviewer', 'compliance_officer')
   create(@Body() dto: CreateMovArtifactDto, @Request() req: any) {
     return this.movService.create(dto, req.user?.id ?? req.user?.userId);
   }
 
   @Put('artifacts/:id')
-  @Roles('super_admin', 'reviewer')
+  @Roles('super_admin', 'reviewer', 'compliance_officer')
   update(@Param('id') id: string, @Body() dto: UpdateMovArtifactDto) {
     return this.movService.update(id, dto);
   }
 
   @Delete('artifacts/:id')
-  @Roles('super_admin', 'reviewer')
+  @Roles('super_admin', 'reviewer', 'compliance_officer')
   remove(@Param('id') id: string) {
     return this.movService.remove(id);
   }
 
   @Get('templates')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician')
   getTemplate(@Query() query: TemplateQueryDto) {
     return this.movService.getTemplate(query);
   }
 
   @Get('register-columns')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician')
   registerColumns() {
     return this.movService.getRegisterColumns();
   }
 
   @Get('reports/register')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician')
   buildRegisterReport(
     @Query('year') year: string,
     @Query('quarter') quarter: string,
@@ -85,7 +85,7 @@ export class MovController {
   }
 
   @Get('reports/monitoring-matrix')
-  @Roles('super_admin', 'reviewer')
+  @Roles('super_admin', 'reviewer', 'compliance_officer')
   buildMonitoringMatrixReport(
     @Query('year') year: string,
     @Query('quarter') quarter: string,
@@ -101,7 +101,7 @@ export class MovController {
   }
 
   @Get('reports/assessment')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician')
   buildAssessmentReport(
     @Query('year') year: string,
     @Query('quarter') quarter: string,
@@ -115,7 +115,7 @@ export class MovController {
   }
 
   @Post('reports/assessment')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician')
   buildAssessmentReportPost(
     @Body() body: {
       year: number;

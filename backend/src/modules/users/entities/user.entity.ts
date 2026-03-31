@@ -23,6 +23,24 @@ export enum UserRole {
   TECHNICIAN_DESKTOP_STAFF = 'technician_desktop_staff',
   AUDITOR = 'auditor',
   USER = 'user',
+  // v0.6.14: RICTMS-specific named roles (use roleCode for feature routing)
+  COMPLIANCE_OFFICER = 'compliance_officer',
+  CYBERSEC = 'cybersec',
+  INFOSEC = 'infosec',
+  PROJECT_MGR = 'project_mgr',
+  DEV_LEAD = 'dev_lead',
+  SQA_LEAD = 'sqa_lead',
+  LEAD_INFRA = 'lead_infra',
+  SERVER_ADMIN = 'server_admin',
+  DB_ADMIN = 'db_admin',
+  NETWORK_ADMIN = 'network_admin',
+  DESKTOP_SR = 'desktop_sr',
+  IT_SUPPORT_SR = 'it_support_sr',
+  DESKTOP_JR = 'desktop_jr',
+  IT_SUPPORT_JR = 'it_support_jr',
+  PANTAWID_ICT = 'pantawid_ict',
+  RECORDS_OFFICER = 'records_officer',
+  HR_ID_OFFICER = 'hr_id_officer',
 }
 
 export enum AuthProvider {

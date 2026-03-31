@@ -24,7 +24,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('roles')
-  @Roles('super_admin', 'reviewer')
+  @Roles('super_admin', 'reviewer', 'compliance_officer')
   getRoles() {
     return this.usersService.getRoles();
   }
@@ -60,13 +60,13 @@ export class UsersController {
   }
 
   @Get()
-  @Roles('super_admin', 'reviewer')
+  @Roles('super_admin', 'reviewer', 'compliance_officer')
   findAll() {
     return this.usersService.findAll();
   }
 
   @Get(':id')
-  @Roles('super_admin', 'reviewer')
+  @Roles('super_admin', 'reviewer', 'compliance_officer')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(+id);
   }

@@ -448,20 +448,20 @@ export class TicketService implements OnModuleInit {
     if (filters.viewerRole === UserRole.USER) {
       // Regular users see only their own tickets
       qb.where('t.requesterId = :uid', { uid: filters.viewerId });
-    } else if (filters.viewerRole === UserRole.TECHNICIAN_IT_STAFF) {
+    } else if ([UserRole.TECHNICIAN_IT_STAFF, UserRole.IT_SUPPORT_JR].includes(filters.viewerRole as any)) {
       // Lower-level IT staff see only tickets assigned to them
       qb.where('t.assignedToId = :uid', { uid: filters.viewerId });
       if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
-    } else if (filters.viewerRole === UserRole.TECHNICIAN_DESKTOP_STAFF) {
+    } else if ([UserRole.TECHNICIAN_DESKTOP_STAFF, UserRole.DESKTOP_JR].includes(filters.viewerRole as any)) {
       // Lower-level Desktop staff see only tickets assigned to them
       qb.where('t.assignedToId = :uid', { uid: filters.viewerId });
       if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
-    } else if (filters.viewerRole === UserRole.TECHNICIAN_DESKTOP) {
-      // Desktop focal technicians see all desktop_support tickets
+    } else if ([UserRole.TECHNICIAN_DESKTOP, UserRole.DESKTOP_SR].includes(filters.viewerRole as any)) {
+      // Desktop-level technicians see all desktop_support tickets
       qb.where('t.ticketType = :type', { type: TicketType.DESKTOP_SUPPORT });
       if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
-    } else if (filters.viewerRole === UserRole.TECHNICIAN_IT_SUPPORT) {
-      // IT focal technicians see all it_support tickets
+    } else if ([UserRole.TECHNICIAN_IT_SUPPORT, UserRole.IT_SUPPORT_SR].includes(filters.viewerRole as any)) {
+      // IT-level technicians see all it_support tickets
       qb.where('t.ticketType = :type', { type: TicketType.IT_SUPPORT });
       if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
     } else {
@@ -522,6 +522,13 @@ export class TicketService implements OnModuleInit {
         UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER, UserRole.SUPER_ADMIN,
         UserRole.TECHNICIAN, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
         UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
+        // v0.6.14 named roles
+        UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+        UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
+        UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
+        UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
+        UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
+        UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
       ];
       if (!priorityRoles.includes(actorRole)) {
         throw new ForbiddenException('Only technicians and above can change ticket priority.');
@@ -595,6 +602,13 @@ export class TicketService implements OnModuleInit {
       UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER,
       UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
       UserRole.TECHNICIAN, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
+      // v0.6.14 named roles
+      UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+      UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
+      UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
+      UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
+      UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
+      UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
     ];
     if (!allowedActors.includes(actorRole)) {
       throw new ForbiddenException('Only admins, focal persons, and technicians can assign tickets.');
@@ -611,8 +625,8 @@ export class TicketService implements OnModuleInit {
     if (!technician) throw new NotFoundException('Technician not found');
 
     // Guard: lower-level techs can only escalate to focal-level technicians
-    const lowerLevelRoles: UserRole[] = [UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF];
-    const focalTechRoles: UserRole[] = [UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT];
+    const lowerLevelRoles: UserRole[] = [UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR];
+    const focalTechRoles: UserRole[] = [UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR];
     if (lowerLevelRoles.includes(actorRole) && !focalTechRoles.includes(technician.role as UserRole)) {
       throw new ForbiddenException('Lower-level technicians may only escalate to focal-level technicians.');
     }

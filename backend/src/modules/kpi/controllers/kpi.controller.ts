@@ -25,19 +25,19 @@ export class KpiController {
   constructor(private readonly kpiService: KpiService) {}
 
   @Get('master')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'section_head')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
   listKpiMaster(@Request() req: any) {
     return this.kpiService.listKpiMaster(req.user);
   }
 
   @Post('master')
-  @Roles('super_admin', 'reviewer', 'section_head')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'section_head')
   createKpiMaster(@Request() req: any, @Body() dto: CreateKpiMasterDto) {
     return this.kpiService.createKpiMaster(req.user, dto);
   }
 
   @Patch('master/:code')
-  @Roles('super_admin', 'reviewer', 'section_head')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'section_head')
   updateKpiMaster(@Request() req: any, @Param('code') code: string, @Body() dto: UpdateKpiMasterDto) {
     return this.kpiService.updateKpiMaster(req.user, code, dto);
   }
@@ -49,7 +49,7 @@ export class KpiController {
   }
 
   @Get('monitoring')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'section_head')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
   listMonitoring(
     @Request() req: any,
     @Query('periodYear') periodYear?: number,
@@ -61,25 +61,25 @@ export class KpiController {
   }
 
   @Post('monitoring')
-  @Roles('super_admin', 'reviewer', 'section_head')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'section_head')
   upsertMonitoring(@Request() req: any, @Body() dto: UpsertKpiMonitoringDto) {
     return this.kpiService.upsertMonitoring(req.user, dto);
   }
 
   @Patch('monitoring/:id')
-  @Roles('super_admin', 'reviewer', 'section_head')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'section_head')
   updateMonitoring(@Request() req: any, @Param('id', ParseIntPipe) id: number, @Body() dto: UpdateKpiMonitoringDto) {
     return this.kpiService.updateMonitoring(req.user, id, dto);
   }
 
   @Patch('monitoring/:id/lock')
-  @Roles('super_admin', 'reviewer', 'section_head')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'section_head')
   lockMonitoring(@Request() req: any, @Param('id', ParseIntPipe) id: number) {
     return this.kpiService.lockMonitoring(req.user, id);
   }
 
   @Get('dashboard/summary')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'section_head')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
   dashboardSummary(
     @Request() req: any,
     @Query('periodYear') periodYear?: string,
@@ -91,7 +91,7 @@ export class KpiController {
   }
 
   @Get('dashboard/unit/:unitId')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'section_head')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
   dashboardUnit(
     @Request() req: any,
     @Param('unitId', ParseIntPipe) unitId: number,
@@ -104,7 +104,7 @@ export class KpiController {
   }
 
   @Get('dashboard/unit/:unitId/timeseries')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'section_head')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
   dashboardUnitTimeseries(
     @Request() req: any,
     @Param('unitId', ParseIntPipe) unitId: number,
@@ -121,7 +121,7 @@ export class KpiController {
   }
 
   @Get('action-plans')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'section_head')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
   generateActionPlans(
     @Request() req: any,
     @Query('periodYear') periodYear: string,
@@ -136,7 +136,7 @@ export class KpiController {
   }
 
   @Get('lookups/thresholds')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'section_head')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
   listThresholds() {
     return this.kpiService.listThresholds();
   }
@@ -158,7 +158,7 @@ export class KpiController {
   }
 
   @Get('lookups/scoring-rules')
-  @Roles('super_admin', 'reviewer', 'focal', 'auditor', 'technician', 'section_head')
+  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
   listScoringRules() {
     return this.kpiService.listScoringRules();
   }

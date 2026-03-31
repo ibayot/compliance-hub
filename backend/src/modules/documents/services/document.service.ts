@@ -934,7 +934,7 @@ export class DocumentService implements OnModuleInit {
     if (
       !archived &&
       !status &&
-      (actor_role === UserRole.SUPER_ADMIN || actor_role === UserRole.REVIEWER)
+      (actor_role === UserRole.SUPER_ADMIN || actor_role === UserRole.REVIEWER || actor_role === UserRole.COMPLIANCE_OFFICER)
     ) {
       query.andWhere(`
         COALESCE((
@@ -1286,7 +1286,7 @@ export class DocumentService implements OnModuleInit {
 
     const uploaderRole = document.uploader?.role;
     const shouldHardDelete =
-      uploaderRole === UserRole.SUPER_ADMIN || uploaderRole === UserRole.REVIEWER;
+      uploaderRole === UserRole.SUPER_ADMIN || uploaderRole === UserRole.REVIEWER || uploaderRole === UserRole.COMPLIANCE_OFFICER;
 
     if (shouldHardDelete) {
       for (const version of document.versions || []) {
@@ -1331,7 +1331,8 @@ export class DocumentService implements OnModuleInit {
 
     if (
       document.uploader?.role === UserRole.SUPER_ADMIN ||
-      document.uploader?.role === UserRole.REVIEWER
+      document.uploader?.role === UserRole.REVIEWER ||
+      document.uploader?.role === UserRole.COMPLIANCE_OFFICER
     ) {
       throw new BadRequestException(
         'Documents uploaded by compliance/super admin require hard delete instead of return.',

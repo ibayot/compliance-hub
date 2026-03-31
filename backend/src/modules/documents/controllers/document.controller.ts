@@ -42,6 +42,7 @@ export class DocumentController {
   @Roles(
     UserRole.SUPER_ADMIN,
     UserRole.REVIEWER,
+    UserRole.COMPLIANCE_OFFICER,
     UserRole.FOCAL,
     UserRole.TECHNICIAN,
   )
@@ -75,6 +76,7 @@ export class DocumentController {
   @Roles(
     UserRole.SUPER_ADMIN,
     UserRole.REVIEWER,
+    UserRole.COMPLIANCE_OFFICER,
     UserRole.FOCAL,
     UserRole.TECHNICIAN,
   )
@@ -133,6 +135,7 @@ export class DocumentController {
   @Roles(
     UserRole.SUPER_ADMIN,
     UserRole.REVIEWER,
+    UserRole.COMPLIANCE_OFFICER,
     UserRole.FOCAL,
     UserRole.TECHNICIAN,
   )
@@ -148,6 +151,7 @@ export class DocumentController {
   @Roles(
     UserRole.SUPER_ADMIN,
     UserRole.REVIEWER,
+    UserRole.COMPLIANCE_OFFICER,
     UserRole.FOCAL,
     UserRole.TECHNICIAN,
   )
@@ -157,7 +161,8 @@ export class DocumentController {
     @Query('unit_id') unitId?: string,
     @Query('active_only') activeOnly?: string,
   ) {
-    const isPrivileged = user.role === UserRole.SUPER_ADMIN || user.role === UserRole.REVIEWER;
+    const isPrivileged = user.role === UserRole.SUPER_ADMIN || user.role === UserRole.REVIEWER
+      || user.role === UserRole.COMPLIANCE_OFFICER || user?.roleCode === 'compliance_officer';
     return this.documentService.listAssignments({
       user_id: isPrivileged && userId ? Number(userId) : user.id,
       unit_id: unitId ? Number(unitId) : undefined,
@@ -239,6 +244,7 @@ export class DocumentController {
   @Roles(
     UserRole.SUPER_ADMIN,
     UserRole.REVIEWER,
+    UserRole.COMPLIANCE_OFFICER,
     UserRole.FOCAL,
     UserRole.TECHNICIAN,
     UserRole.AUDITOR,
@@ -251,6 +257,7 @@ export class DocumentController {
   @Roles(
     UserRole.SUPER_ADMIN,
     UserRole.REVIEWER,
+    UserRole.COMPLIANCE_OFFICER,
     UserRole.FOCAL,
     UserRole.TECHNICIAN,
     UserRole.AUDITOR,
@@ -276,6 +283,7 @@ export class DocumentController {
   @Roles(
     UserRole.SUPER_ADMIN,
     UserRole.REVIEWER,
+    UserRole.COMPLIANCE_OFFICER,
     UserRole.FOCAL,
     UserRole.TECHNICIAN,
     UserRole.AUDITOR,
@@ -299,6 +307,7 @@ export class DocumentController {
   @Roles(
     UserRole.SUPER_ADMIN,
     UserRole.REVIEWER,
+    UserRole.COMPLIANCE_OFFICER,
     UserRole.FOCAL,
     UserRole.TECHNICIAN,
   )
@@ -383,7 +392,7 @@ export class DocumentController {
    * POST /documents/:id/reprocess
    */
   @Post(':id/reprocess')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
   async reprocessDocument(@Param('id') id: string) {
     await this.documentService.reprocessDocument(id);
     return { message: 'Document reprocessing enqueued.' };
@@ -394,7 +403,7 @@ export class DocumentController {
    * POST /documents/:id/return
    */
   @Post(':id/return')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
   async returnDocument(
     @Param('id') id: string,
     @Body() body: { remarks: string },
@@ -417,7 +426,7 @@ export class DocumentController {
    * DELETE /documents/:id
    */
   @Delete(':id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
   async deleteDocument(@Param('id') id: string) {
     await this.documentService.deleteDocument(id);
     return { message: 'Document deleted successfully' };

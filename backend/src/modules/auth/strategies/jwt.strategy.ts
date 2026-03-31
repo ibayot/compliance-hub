@@ -29,10 +29,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user || !user.active) {
       throw new UnauthorizedException('Account not found or has been deactivated');
     }
+    const roleDef = await this.usersService.findRoleDefinition(user.role).catch(() => null);
     return {
       id: user.id,
       email: user.email,
       role: user.role,
+      roleCode: roleDef?.roleCode ?? null,
       units: payload.units,
     };
   }

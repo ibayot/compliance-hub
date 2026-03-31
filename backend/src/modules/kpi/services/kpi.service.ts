@@ -19,6 +19,7 @@ import { UpsertKpiScoringRuleDto, UpsertKpiThresholdDto } from '../dto/kpi-looku
 interface AuthUser {
   id: number;
   role: string;
+  roleCode?: string | null;
   units?: Array<number | string | { id?: number | string }>;
 }
 
@@ -67,11 +68,13 @@ export class KpiService {
   }
 
   private canManage(user: AuthUser) {
-    return ['super_admin', 'reviewer', 'section_head'].includes(user.role);
+    return ['super_admin', 'reviewer', 'section_head', 'compliance_officer'].includes(user.role)
+      || user.roleCode === 'compliance_officer';
   }
 
   private canViewAll(user: AuthUser) {
-    return ['super_admin', 'reviewer', 'section_head'].includes(user.role);
+    return ['super_admin', 'reviewer', 'section_head', 'compliance_officer'].includes(user.role)
+      || user.roleCode === 'compliance_officer';
   }
 
   private normalizeUnitId(value: number | string | { id?: number | string } | undefined): number | null {

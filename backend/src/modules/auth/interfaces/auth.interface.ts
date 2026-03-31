@@ -2,6 +2,7 @@ export interface JwtPayload {
   sub: number;
   email: string;
   role: string;
+  roleCode?: string | null;
   units: number[];
 }
 
@@ -22,6 +23,7 @@ export interface AuthResponse {
     ticketMainFocal?: boolean;
     ticketTechnician?: boolean;
     role: string;
+    roleCode?: string | null;
     units: { id: number; name: string }[];
   };
 }

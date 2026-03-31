@@ -52,7 +52,7 @@ export class MetricsController {
    * POST /metrics
    */
   @Post()
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
   async createMetricTemplate(
     @Body()
     body: {
@@ -125,7 +125,7 @@ export class MetricsController {
    * PATCH /metrics/:id
    */
   @Patch(':id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
   async updateMetricTemplate(
     @Param('id') id: string,
     @Body()
