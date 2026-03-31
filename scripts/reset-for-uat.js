@@ -37,7 +37,7 @@ async function main() {
     ['Truncate ticket_keyword_rules',  'TRUNCATE TABLE ticket_keyword_rules'],
     ['Truncate tech_attendance',       'TRUNCATE TABLE tech_attendance'],
     ['Delete non-super_admin users',   "DELETE FROM users WHERE role != 'super_admin'"],
-    ['Delete custom role_definitions', 'DELETE FROM role_definitions WHERE is_system = 0 OR is_system IS NULL'],
+    ['Delete ALL role_definitions',    'DELETE FROM role_definitions'],
     ['Re-enable FK checks',            'SET FOREIGN_KEY_CHECKS = 1'],
   ];
 
@@ -57,8 +57,7 @@ async function main() {
     ['Users remaining',        'SELECT COUNT(*) AS cnt FROM users'],
     ['Tickets remaining',      'SELECT COUNT(*) AS cnt FROM tickets'],
     ['Comments remaining',     'SELECT COUNT(*) AS cnt FROM ticket_comments'],
-    ['Custom roles remaining', 'SELECT COUNT(*) AS cnt FROM role_definitions WHERE is_system = 0'],
-    ['System roles kept',      'SELECT COUNT(*) AS cnt FROM role_definitions WHERE is_system = 1'],
+    ['Total role_defs',        'SELECT COUNT(*) AS cnt FROM role_definitions'],
   ];
 
   for (const [label, sql] of checks) {

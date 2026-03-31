@@ -519,7 +519,7 @@ export class TicketService implements OnModuleInit {
     // Priority changes allowed for all technician-level roles and above
     if (dto.priority !== undefined) {
       const priorityRoles = [
-        UserRole.FOCAL, UserRole.REVIEWER, UserRole.SUPER_ADMIN,
+        UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER, UserRole.SUPER_ADMIN,
         UserRole.TECHNICIAN, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
         UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
       ];
@@ -592,7 +592,7 @@ export class TicketService implements OnModuleInit {
 
   async assignTicket(id: string, dto: AssignTicketDto, actorRole: UserRole): Promise<Ticket> {
     const allowedActors = [
-      UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.REVIEWER,
+      UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER,
       UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
       UserRole.TECHNICIAN, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
     ];

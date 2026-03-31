@@ -27,7 +27,7 @@ import {
 import { TicketStatus, TicketType } from '../entities/ticket.entity';
 
 const ALL_ROLES = [
-  UserRole.USER, UserRole.FOCAL, UserRole.TECHNICIAN,
+  UserRole.USER, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.TECHNICIAN,
   UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
   UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
   UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN,
@@ -70,12 +70,12 @@ export class TicketController {
 
   /** GET /tickets/statistics */
   @Get('statistics')
-  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.FOCAL)
+  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD)
   async getStatistics() { return this.ticketService.getStatistics(); }
 
   /** GET /tickets/technicians */
   @Get('technicians')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.REVIEWER, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF)
   async getTechnicians() { return this.ticketService.getTechnicianAvailability(); }
 
   /** GET /tickets/dashboard */
@@ -108,28 +108,28 @@ export class TicketController {
 
   /** PATCH /tickets/:id */
   @Patch(':id')
-  @Roles(UserRole.USER, UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF, UserRole.REVIEWER, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.USER, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF, UserRole.REVIEWER, UserRole.SUPER_ADMIN)
   async updateTicket(@Param('id') id: string, @Body() dto: UpdateTicketDto, @Request() req: any) {
     return this.ticketService.updateTicket(id, dto, req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** GET /tickets/requester/:requesterId/open - open tickets for Duplicate picker */
   @Get('requester/:requesterId/open')
-  @Roles(UserRole.FOCAL, UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF)
+  @Roles(UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF)
   async getRequesterOpenTickets(@Param('requesterId') requesterId: string) {
     return this.ticketService.getOpenTicketsForRequester(Number(requesterId));
   }
 
   /** PATCH /tickets/:id/assign */
   @Patch(':id/assign')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.REVIEWER, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF)
   async assignTicket(@Param('id') id: string, @Body() dto: AssignTicketDto, @Request() req: any) {
     return this.ticketService.assignTicket(id, dto, req.user.role);
   }
 
   /** POST /tickets/:id/comments */
   @Post(':id/comments')
-  @Roles(UserRole.USER, UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF, UserRole.REVIEWER, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.USER, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF, UserRole.REVIEWER, UserRole.SUPER_ADMIN)
   async addComment(@Param('id') ticketId: string, @Body() dto: AddCommentDto, @Request() req: any) {
     return this.ticketService.addComment(ticketId, dto, req.user.id ?? req.user.userId, req.user.role);
   }

@@ -25,6 +25,14 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
     roleCode: 'compliance_officer',
   },
   {
+    value: UserRole.SECTION_HEAD,
+    label: 'Section Head',
+    description: 'Unit/section leader. Has access to KPI monitoring, reports, ticket assignment, and incident response statistics across their assigned units.',
+    assignable: true,
+    isSystem: true,
+    roleCode: 'section_head',
+  },
+  {
     value: UserRole.FOCAL,
     label: 'Focal Person (RICTMS Staff)',
     description: 'RICTMS staff member. Unit focal person responsible for uploading and submitting compliance documents on behalf of their unit. Default role for all admin-created accounts.',
@@ -114,7 +122,7 @@ export class UsersService {
       await queryRunner.query('CREATE UNIQUE INDEX IF NOT EXISTS uq_users_google_sub ON users (google_sub)');
       // Extend the role enum to include new roles (safe: only adds values, never removes)
       await queryRunner.query(
-        `ALTER TABLE users MODIFY COLUMN role ENUM('super_admin','reviewer','focal','technician','technician_desktop','technician_it_support','technician_it_staff','technician_desktop_staff','auditor','user') NOT NULL DEFAULT 'focal'`,
+        `ALTER TABLE users MODIFY COLUMN role ENUM('super_admin','reviewer','section_head','focal','technician','technician_desktop','technician_it_support','technician_it_staff','technician_desktop_staff','auditor','user') NOT NULL DEFAULT 'focal'`,
       ).catch(() => undefined); // Catch if enum already has these values
       // Add last_login column for staff activity tracking
       await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login DATETIME NULL').catch(() => undefined);
@@ -124,6 +132,7 @@ export class UsersService {
       await queryRunner.query('ALTER TABLE role_definitions ADD COLUMN IF NOT EXISTS role_code VARCHAR(50) NULL DEFAULT NULL').catch(() => undefined);
       // Seed roleCode for existing system roles
       await queryRunner.query(`UPDATE role_definitions SET role_code = 'compliance_officer' WHERE \`value\` = 'reviewer' AND role_code IS NULL`).catch(() => undefined);
+      await queryRunner.query(`UPDATE role_definitions SET role_code = 'section_head' WHERE \`value\` = 'section_head' AND role_code IS NULL`).catch(() => undefined);
     } finally {
       await queryRunner.release();
     }

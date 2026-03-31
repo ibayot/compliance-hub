@@ -14,6 +14,7 @@ import { Unit } from '../../units/entities/unit.entity';
 export enum UserRole {
   SUPER_ADMIN = 'super_admin',
   REVIEWER = 'reviewer',
+  SECTION_HEAD = 'section_head',
   FOCAL = 'focal',
   TECHNICIAN = 'technician',
   TECHNICIAN_DESKTOP = 'technician_desktop',
