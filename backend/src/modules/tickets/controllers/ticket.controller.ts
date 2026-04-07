@@ -168,4 +168,11 @@ export class TicketController {
   async submitSatisfaction(@Param('id') id: string, @Body() dto: SubmitSatisfactionDto, @Request() req: any) {
     return this.ticketService.submitSatisfaction(id, dto, req.user.id ?? req.user.userId);
   }
+
+  /** GET /tickets/satisfaction/unit-suggestions — distinct unit values from past CSAT forms */
+  @Get('satisfaction/unit-suggestions')
+  @Roles(...ALL_ROLES)
+  async getSatisfactionUnitSuggestions() {
+    return this.ticketService.getSatisfactionUnitSuggestions();
+  }
 }

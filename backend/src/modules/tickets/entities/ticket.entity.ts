@@ -101,8 +101,12 @@ export class Ticket {
   @Column({ name: 'duplicate_of_id', type: 'varchar', length: 36, nullable: true })
   duplicateOfId: string | null;
 
+  /** SLA deadline — set at assignment time based on category.slaHours */
+  @Column({ name: 'sla_deadline', type: 'datetime', nullable: true })
+  slaDeadline: Date | null;
+
   // --- Client Satisfaction ---
-  /** 1-5 star rating submitted by the requester after resolution */
+  /** Overall satisfaction rating derived from CSAT form item 0 */
   @Column({ name: 'satisfaction_rating', type: 'tinyint', nullable: true })
   satisfactionRating: number | null;
 
@@ -111,6 +115,10 @@ export class Ticket {
 
   @Column({ name: 'satisfaction_submitted_at', type: 'datetime', nullable: true })
   satisfactionSubmittedAt: Date | null;
+
+  /** Full CLIENT SATISFACTION MEASUREMENT FORM data stored as JSON */
+  @Column({ name: 'satisfaction_form_data', type: 'text', nullable: true })
+  satisfactionFormData: string | null;
 
   /**
    * Set to true when the ticket requester (role=USER) explicitly closes their own ticket.

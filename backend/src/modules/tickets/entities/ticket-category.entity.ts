@@ -30,6 +30,10 @@ export class TicketCategoryConfig {
   @Column({ name: 'is_deleted', type: 'boolean', default: false })
   isDeleted: boolean;
 
+  /** SLA time limit in hours from assignment to resolved — null = no SLA */
+  @Column({ name: 'sla_hours', type: 'int', nullable: true })
+  slaHours: number | null;
+
   @Column({ type: 'int', nullable: true })
   created_by: number | null;
 

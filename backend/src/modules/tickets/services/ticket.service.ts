@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   NotFoundException,
   Logger,
@@ -51,9 +51,25 @@ export interface AddCommentDto {
   isInternal?: boolean;
 }
 
+export interface CsatFormData {
+  consentGiven: boolean;
+  unitSection: string;
+  dateOfTransaction: string;
+  clientFirstName: string;
+  clientMiddleInitial?: string;
+  clientLastName: string;
+  age?: number;
+  sex: string;
+  clientType: string;
+  contactNumber?: string;
+  technicianName: string;
+  likert: Array<number | 'NA'>; // 9 items index 0-8
+}
+
 export interface SubmitSatisfactionDto {
-  rating: number;   // 1�5
-  comment?: string;
+  rating?: number;   // Legacy 1-5 star (used if formData absent)
+  comment?: string;  // Legacy comment
+  formData?: CsatFormData; // New full CSAT form
 }
 
 // --- Service -----------------------------------------------------------------
@@ -228,6 +244,21 @@ export class TicketService implements OnModuleInit {
         )
       `).catch(() => undefined);
 
+      // ── v0.6.17 migrations ──────────────────────────────────────────────────
+
+      // SLA deadline column on tickets
+      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS sla_deadline DATETIME NULL').catch(() => undefined);
+      // Full CSAT form data column on tickets
+      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS satisfaction_form_data TEXT NULL').catch(() => undefined);
+      // SLA hours on categories
+      await qr.query('ALTER TABLE ticket_categories ADD COLUMN IF NOT EXISTS sla_hours INT NULL').catch(() => undefined);
+      // Multi-keyword support on keyword rules
+      await qr.query('ALTER TABLE ticket_keyword_rules ADD COLUMN IF NOT EXISTS keywords TEXT NULL').catch(() => undefined);
+      // Backfill keywords column from existing keyword column
+      await qr.query(
+        "UPDATE ticket_keyword_rules SET keywords = CONCAT('[\"', keyword, '\"]') WHERE keywords IS NULL"
+      ).catch(() => undefined);
+
       // Seed default categories if table is empty
       await this.seedDefaultCategories(qr);
 
@@ -353,7 +384,7 @@ export class TicketService implements OnModuleInit {
       meta: e.meta ? JSON.parse(e.meta) : null,
       actorName: e.actor
         ? [e.actor.firstName, e.actor.lastName].filter(Boolean).join(' ') || e.actor.email
-        : null,
+        : undefined,
     }));
   }
 
@@ -597,7 +628,22 @@ export class TicketService implements OnModuleInit {
       if (filters.assignedToId) qb.andWhere('t.assignedToId = :aid', { aid: filters.assignedToId });
     }
 
-    return qb.getMany();
+    const tickets = await qb.getMany();
+
+    // Augment with today's absence flag for assigned technicians (used in admin/section-head views)
+    const today = new Date().toISOString().slice(0, 10);
+    const absentRows = await this.dataSource
+      .createQueryBuilder()
+      .select('ta.user_id', 'userId')
+      .from('tech_attendance', 'ta')
+      .where('ta.date = :today', { today })
+      .andWhere("ta.status IN ('absent', 'out_of_office')")
+      .getRawMany();
+    const absentIds = new Set<number>(absentRows.map(r => Number(r.userId)));
+
+    return tickets.map(t => Object.assign(t, {
+      assignedTechAbsent: t.assignedToId ? absentIds.has(t.assignedToId) : false,
+    })) as any;
   }
 
   async getTicketById(id: string): Promise<Ticket> {
@@ -805,6 +851,13 @@ export class TicketService implements OnModuleInit {
       ticket.status = TicketStatus.ASSIGNED;
     }
 
+    // Set SLA deadline if the ticket's category has an SLA configured
+    if (ticket.category?.slaHours) {
+      const deadline = new Date();
+      deadline.setHours(deadline.getHours() + ticket.category.slaHours);
+      ticket.slaDeadline = deadline;
+    }
+
     const assigned = await this.ticketRepo.save(ticket);
 
     // Log assignment event
@@ -896,15 +949,59 @@ export class TicketService implements OnModuleInit {
     if (ticket.satisfactionSubmittedAt) {
       throw new BadRequestException('Satisfaction has already been submitted for this ticket.');
     }
-    if (dto.rating < 1 || dto.rating > 5) {
-      throw new BadRequestException('Rating must be between 1 and 5.');
+
+    if (dto.formData) {
+      // Full CSAT form submission
+      const form = dto.formData;
+      if (!form.consentGiven) {
+        throw new BadRequestException('Informed consent is required to submit the satisfaction form.');
+      }
+      if (!form.unitSection?.trim()) throw new BadRequestException('Unit/Section is required.');
+      if (!form.clientFirstName?.trim() || !form.clientLastName?.trim()) {
+        throw new BadRequestException('Client first and last name are required.');
+      }
+      if (!form.sex) throw new BadRequestException('Sex is required.');
+      if (!form.likert || form.likert.length !== 9) {
+        throw new BadRequestException('All 9 service quality items must be answered.');
+      }
+
+      // Compute satisfactionRating from item 0 (overall satisfaction)
+      const item0 = form.likert[0];
+      const derivedRating = (typeof item0 === 'number' && item0 >= 1 && item0 <= 5) ? item0 : null;
+
+      ticket.satisfactionRating = derivedRating;
+      ticket.satisfactionComment = null;
+      ticket.satisfactionFormData = JSON.stringify(form);
+    } else {
+      // Legacy star rating fallback
+      const rating = dto.rating ?? 0;
+      if (rating < 1 || rating > 5) {
+        throw new BadRequestException('Rating must be between 1 and 5.');
+      }
+      ticket.satisfactionRating = rating;
+      ticket.satisfactionComment = dto.comment ?? null;
     }
 
-    ticket.satisfactionRating = dto.rating;
-    ticket.satisfactionComment = dto.comment ?? null;
     ticket.satisfactionSubmittedAt = new Date();
-
     return this.ticketRepo.save(ticket);
+  }
+
+  /** Return distinct unit/section values from past satisfaction form submissions */
+  async getSatisfactionUnitSuggestions(): Promise<string[]> {
+    const rows = await this.ticketRepo
+      .createQueryBuilder('t')
+      .select('t.satisfactionFormData', 'formData')
+      .where('t.satisfactionFormData IS NOT NULL')
+      .getRawMany();
+
+    const units = new Set<string>();
+    for (const row of rows) {
+      try {
+        const data = JSON.parse(row.formData ?? '{}');
+        if (data.unitSection) units.add(data.unitSection);
+      } catch { /* skip malformed */ }
+    }
+    return Array.from(units).sort();
   }
 
   // --- Statistics ----------------------------------------------------------
@@ -1065,8 +1162,22 @@ export class TicketService implements OnModuleInit {
       ],
     });
 
+    // Get IDs of technicians marked absent or out_of_office today
+    const today = new Date().toISOString().slice(0, 10);
+    const absentRows = await this.dataSource
+      .createQueryBuilder()
+      .select('ta.user_id', 'userId')
+      .from('tech_attendance', 'ta')
+      .where('ta.date = :today', { today })
+      .andWhere("ta.status IN ('absent', 'out_of_office')")
+      .getRawMany();
+    const absentIds = new Set<number>(absentRows.map(r => Number(r.userId)));
+
     const results = [];
     for (const tech of technicians) {
+      // Skip absent / out-of-office technicians — they cannot be assigned
+      if (absentIds.has(tech.id)) continue;
+
       // "open" = anything that isn't CLOSED or DUPLICATE (terminal states)
       const openCount = await this.ticketRepo
         .createQueryBuilder('t')

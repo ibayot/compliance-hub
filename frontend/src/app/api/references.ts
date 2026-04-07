@@ -115,6 +115,9 @@ export interface Ticket {
   satisfactionRating?: number | null;
   satisfactionComment?: string | null;
   satisfactionSubmittedAt?: string | null;
+  satisfactionFormData?: string | null;
+  slaDeadline?: string | null;
+  assignedTechAbsent?: boolean;
   /** UUID of the original ticket when status = 'duplicate' */
   duplicateOfId?: string | null;
   comments?: TicketComment[];
@@ -156,9 +159,26 @@ export interface AssignTicketDto {
   assignedToId: number;
 }
 
+export interface CsatFormData {
+  consentGiven: boolean;
+  unitSection: string;
+  dateOfTransaction: string;
+  clientFirstName: string;
+  clientMiddleInitial?: string;
+  clientLastName: string;
+  age?: number;
+  sex: string;
+  clientType: string;
+  contactNumber?: string;
+  technicianName: string;
+  /** 9 Likert responses indexed 0–8; items 3,5,8 are pre-set to 'NA' */
+  likert: Array<number | 'NA'>;
+}
+
 export interface SubmitSatisfactionDto {
-  rating: number;
+  rating?: number;
   comment?: string;
+  formData?: CsatFormData;
 }
 
 export interface TechnicianOption {
@@ -196,6 +216,7 @@ export interface TicketCategory {
   key: string;
   name: string;
   ticketType: string;
+  slaHours?: number | null;
   isActive: boolean;
   isDeleted: boolean;
   createdAt: string;
@@ -205,6 +226,8 @@ export interface TicketCategory {
 export interface TicketKeywordRule {
   id: string;
   keyword: string;
+  /** All keywords in the rule group — parsed from JSON */
+  keywords?: string[];
   targetTicketType: string;
   targetCategoryId?: string | null;
   /** Populated relation — backend serialises as targetCategory */
@@ -410,6 +433,12 @@ export const ticketsApi = {
     const response = await apiClient.get(`/tickets/${id}/events`);
     return response.data;
   },
+
+  /** Get distinct unit section values from past CSAT form submissions */
+  getUnitSuggestions: async (): Promise<string[]> => {
+    const response = await apiClient.get(`/tickets/satisfaction/unit-suggestions`);
+    return response.data;
+  },
 };
 
 // Ticket Settings API (Categories + Keyword Rules)
@@ -428,11 +457,11 @@ export const ticketSettingsApi = {
     const response = await apiClient.get(`/ticket-settings/categories/${id}`);
     return response.data;
   },
-  createCategory: async (data: { name: string; ticketType: string; isActive?: boolean }): Promise<TicketCategory> => {
+  createCategory: async (data: { name: string; ticketType: string; slaHours?: number | null; isActive?: boolean }): Promise<TicketCategory> => {
     const response = await apiClient.post(`/ticket-settings/categories`, data);
     return response.data;
   },
-  updateCategory: async (id: string, data: Partial<{ name: string; ticketType: string; isActive: boolean }>): Promise<TicketCategory> => {
+  updateCategory: async (id: string, data: Partial<{ name: string; ticketType: string; slaHours: number | null; isActive: boolean }>): Promise<TicketCategory> => {
     const response = await apiClient.patch(`/ticket-settings/categories/${id}`, data);
     return response.data;
   },
@@ -445,11 +474,11 @@ export const ticketSettingsApi = {
     const response = await apiClient.get(`/ticket-settings/keyword-rules`);
     return response.data;
   },
-  createKeywordRule: async (data: { keyword: string; targetTicketType: string; targetCategoryId?: string; isActive?: boolean }): Promise<TicketKeywordRule> => {
+  createKeywordRule: async (data: { keywords: string[]; targetTicketType: string; targetCategoryId?: string; isActive?: boolean }): Promise<TicketKeywordRule> => {
     const response = await apiClient.post(`/ticket-settings/keyword-rules`, data);
     return response.data;
   },
-  updateKeywordRule: async (id: string, data: Partial<{ keyword: string; targetTicketType: string; targetCategoryId?: string; isActive: boolean }>): Promise<TicketKeywordRule> => {
+  updateKeywordRule: async (id: string, data: Partial<{ keywords: string[]; targetTicketType: string; targetCategoryId?: string; isActive: boolean }>): Promise<TicketKeywordRule> => {
     const response = await apiClient.patch(`/ticket-settings/keyword-rules/${id}`, data);
     return response.data;
   },

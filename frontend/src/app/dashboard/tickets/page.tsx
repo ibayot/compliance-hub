@@ -5,18 +5,21 @@ import {
   Box, Button, Card, CardContent, Typography, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, IconButton, Chip, TextField, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions, Stack, CircularProgress,
-  Rating, Tooltip, Alert, Autocomplete,
+  Rating, Tooltip, Alert, Autocomplete, ToggleButton, ToggleButtonGroup,
+  Checkbox, FormControlLabel,
 } from '@mui/material';
 import {
   Add as AddIcon, Visibility as ViewIcon, AssignmentInd as AssignIcon,
   ThumbUp as SatisfactionIcon, Computer as DesktopIcon, Wifi as ITIcon, Assignment as PantawidIcon,
+  SentimentVerySatisfied, SentimentSatisfied, SentimentNeutral, SentimentDissatisfied, SentimentVeryDissatisfied,
+  FiberManualRecord,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ticketsApi, Ticket, CreateTicketDto, TicketStatus, TicketType, TicketPriority,
-  TechnicianOption, SubmitSatisfactionDto, TicketCategory, ticketSettingsApi,
+  TechnicianOption, TicketCategory, ticketSettingsApi, CsatFormData,
 } from '@/app/api/references';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
@@ -43,6 +46,29 @@ function ticketTypeIcon(t: TicketType) {
 function isStaffRole(role?: string) {
   return ['super_admin','reviewer','focal','technician','technician_desktop','technician_it_support','technician_it_staff','technician_desktop_staff','auditor'].includes(role ?? '');
 }
+
+function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'warning' | 'breached' | null {
+  if (!ticket.slaDeadline) return null;
+  const deadline = new Date(ticket.slaDeadline).getTime();
+  const now = Date.now();
+  const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
+  if (isTerminal) {
+    const resolvedTime = ticket.resolvedAt ? new Date(ticket.resolvedAt).getTime() : now;
+    return resolvedTime <= deadline ? 'met' : 'breached';
+  }
+  if (now > deadline) return 'breached';
+  const createdAt = ticket.createdAt ? new Date(ticket.createdAt).getTime() : now;
+  const total = deadline - createdAt;
+  const remaining = deadline - now;
+  return (total > 0 && remaining / total < 0.2) ? 'warning' : 'on_track';
+}
+
+const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'warning' | 'error' }> = {
+  met: { label: 'Met', color: 'success' },
+  on_track: { label: 'On Track', color: 'info' },
+  warning: { label: 'Warning', color: 'warning' },
+  breached: { label: 'Breached', color: 'error' },
+};
 
 export default function TicketsPage() {
   const router = useRouter();
@@ -72,8 +98,13 @@ export default function TicketsPage() {
   // Satisfaction dialog
   const [satDialogOpen, setSatDialogOpen] = useState(false);
   const [satTicket, setSatTicket] = useState<Ticket | null>(null);
-  const [satRating, setSatRating] = useState<number | null>(null);
-  const [satComment, setSatComment] = useState('');
+  const [csatForm, setCsatForm] = useState<CsatFormData>({
+    consentGiven: false, unitSection: '', dateOfTransaction: '', clientFirstName: '',
+    clientMiddleInitial: '', clientLastName: '', sex: '', clientType: '',
+    contactNumber: '', technicianName: '', likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
+  });
+  const [unitSuggestions, setUnitSuggestions] = useState<string[]>([]);
+  const [csatSubmitting, setCsatSubmitting] = useState(false);
 
   // Pending satisfaction ratings — loaded once for USER role to show warning before new ticket
   const [pendingSatCount, setPendingSatCount] = useState(0);
@@ -227,20 +258,42 @@ export default function TicketsPage() {
 
   const openSatDialog = (ticket: Ticket) => {
     setSatTicket(ticket);
-    setSatRating(ticket.satisfactionRating ?? null);
-    setSatComment(ticket.satisfactionComment ?? '');
+    const assignedName = ticket.assignedTo
+      ? `${ticket.assignedTo.firstName ?? ''} ${ticket.assignedTo.lastName ?? ''}`.trim() || ticket.assignedTo.email
+      : '';
+    setCsatForm({
+      consentGiven: false,
+      unitSection: '',
+      dateOfTransaction: ticket.resolvedAt
+        ? new Date(ticket.resolvedAt).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+      clientFirstName: '', clientMiddleInitial: '', clientLastName: '',
+      sex: '', clientType: '', contactNumber: '',
+      technicianName: assignedName,
+      likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
+    });
+    ticketsApi.getUnitSuggestions().then(setUnitSuggestions).catch(() => {});
     setSatDialogOpen(true);
   };
 
   const handleSubmitSatisfaction = async () => {
-    if (!satTicket || !satRating) { enqueueSnackbar('Please select a rating.', { variant: 'warning' }); return; }
+    if (!satTicket) return;
+    if (!csatForm.consentGiven) { enqueueSnackbar('Please provide consent before submitting.', { variant: 'warning' }); return; }
+    if (!csatForm.unitSection.trim()) { enqueueSnackbar('Unit/Section is required.', { variant: 'warning' }); return; }
+    if (!csatForm.clientFirstName.trim() || !csatForm.clientLastName.trim()) { enqueueSnackbar('Client name is required.', { variant: 'warning' }); return; }
+    if (!csatForm.sex) { enqueueSnackbar('Sex is required.', { variant: 'warning' }); return; }
+    const ratedItems = csatForm.likert.filter((_, i) => ![3, 5, 8].includes(i));
+    if (ratedItems.some(v => v === 0)) { enqueueSnackbar('Please rate all applicable items.', { variant: 'warning' }); return; }
     try {
-      await ticketsApi.submitSatisfaction(satTicket.id, { rating: satRating, comment: satComment });
+      setCsatSubmitting(true);
+      await ticketsApi.submitSatisfaction(satTicket.id, { formData: csatForm });
       enqueueSnackbar('Thank you for your feedback!', { variant: 'success' });
       setSatDialogOpen(false);
       fetchTickets();
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to submit', { variant: 'error' });
+    } finally {
+      setCsatSubmitting(false);
     }
   };
 
@@ -329,6 +382,7 @@ export default function TicketsPage() {
               <TableCell>Category</TableCell>
               <TableCell>Priority</TableCell>
               <TableCell>Status</TableCell>
+              <TableCell>SLA</TableCell>
               {canManageAll && <TableCell>Requester</TableCell>}
               {canManageAll && <TableCell>Assigned To</TableCell>}
               <TableCell>Date</TableCell>
@@ -337,9 +391,9 @@ export default function TicketsPage() {
           </TableHead>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={10} align="center"><CircularProgress size={28} /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} align="center"><CircularProgress size={28} /></TableCell></TableRow>
             ) : tickets.length === 0 ? (
-              <TableRow><TableCell colSpan={10} align="center">
+              <TableRow><TableCell colSpan={11} align="center">
                 <Typography color="text.secondary" py={3}>No tickets found. Click "New Ticket" to submit your first request.</Typography>
               </TableCell></TableRow>
             ) : tickets.map(ticket => (
@@ -356,13 +410,26 @@ export default function TicketsPage() {
                 </TableCell>
                 <TableCell><Chip size="small" label={(ticket.priority ?? 'not set').toUpperCase()} color={PRIORITY_COLOR[ticket.priority ?? ''] ?? 'default'} /></TableCell>
                 <TableCell><Chip size="small" label={ticket.status.replace('_', ' ')} color={STATUS_COLOR[ticket.status]} /></TableCell>
+                <TableCell>
+                  {(() => { const s = getSlaStatus(ticket); return s ? <Chip size="small" label={SLA_CHIP[s].label} color={SLA_CHIP[s].color} /> : <Typography variant="body2" color="text.disabled">—</Typography>; })()}
+                </TableCell>
                 {canManageAll && (
                   <TableCell>{ticket.requester ? `${ticket.requester.firstName ?? ''} ${ticket.requester.lastName ?? ''}`.trim() || ticket.requester.email : '—'}</TableCell>
                 )}
                 {canManageAll && (
-                  <TableCell>{ticket.assignedTo
-                    ? `${ticket.assignedTo.firstName ?? ''} ${ticket.assignedTo.lastName ?? ''}`.trim() || ticket.assignedTo.email
-                    : <Typography color="text.disabled" variant="body2">Unassigned</Typography>}
+                  <TableCell>
+                    {ticket.assignedTo ? (
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <span>{`${ticket.assignedTo.firstName ?? ''} ${ticket.assignedTo.lastName ?? ''}`.trim() || ticket.assignedTo.email}</span>
+                        {ticket.assignedTechAbsent && (isSuperAdmin || isComplianceOfficer || isSectionHead) && (
+                          <Tooltip title="Technician is absent today">
+                            <FiberManualRecord sx={{ color: 'error.main', fontSize: 10 }} />
+                          </Tooltip>
+                        )}
+                      </Box>
+                    ) : (
+                      <Typography color="text.disabled" variant="body2">Unassigned</Typography>
+                    )}
                   </TableCell>
                 )}
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(ticket.createdAt).toLocaleDateString()}</TableCell>
@@ -513,27 +580,169 @@ export default function TicketsPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Satisfaction Dialog */}
-      <Dialog open={satDialogOpen} onClose={() => setSatDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Rate Your Experience</DialogTitle>
+      {/* Satisfaction Dialog — CLIENT SATISFACTION MEASUREMENT FORM */}
+      <Dialog open={satDialogOpen} onClose={() => setSatDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, textAlign: 'center', pb: 0 }}>
+          CLIENT SATISFACTION MEASUREMENT FORM
+          <Typography variant="body2" color="text.secondary" fontWeight={400} mt={0.5}>
+            Ticket: <strong>{satTicket?.ticketNumber}</strong>
+          </Typography>
+        </DialogTitle>
         <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1, alignItems: 'center' }}>
-            <Typography variant="body2" color="text.secondary" textAlign="center">
-              How satisfied are you with the resolution of ticket <strong>{satTicket?.ticketNumber}</strong>?
-            </Typography>
-            {satTicket?.satisfactionSubmittedAt
-              ? <Alert severity="success">You have already rated this ticket. Thank you!</Alert>
-              : <>
-                  <Rating value={satRating} onChange={(_, v) => setSatRating(v)} size="large" sx={{ fontSize: '3rem' }} />
-                  <TextField label="Additional comments (optional)" value={satComment} onChange={e => setSatComment(e.target.value)} multiline rows={3} fullWidth />
-                </>
-            }
-          </Stack>
+          {satTicket?.satisfactionSubmittedAt ? (
+            <Alert severity="success" sx={{ mt: 2 }}>You have already submitted a satisfaction rating for this ticket. Thank you!</Alert>
+          ) : (
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={csatForm.consentGiven}
+                    onChange={e => setCsatForm(f => ({ ...f, consentGiven: e.target.checked }))}
+                  />
+                }
+                label={
+                  <Typography variant="body2">
+                    I give my consent to this office to collect and process my personal information for the purposes of this survey, in compliance with Republic Act No. 10173 (Data Privacy Act of 2012).
+                  </Typography>
+                }
+              />
+
+              <Stack direction="row" spacing={2}>
+                <Autocomplete
+                  options={unitSuggestions}
+                  freeSolo
+                  fullWidth
+                  value={csatForm.unitSection}
+                  onInputChange={(_, v) => setCsatForm(f => ({ ...f, unitSection: v }))}
+                  renderInput={params => <TextField {...params} label="Unit/Section *" />}
+                />
+                <TextField
+                  label="Date of Transaction *"
+                  type="date"
+                  value={csatForm.dateOfTransaction}
+                  onChange={e => setCsatForm(f => ({ ...f, dateOfTransaction: e.target.value }))}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Stack>
+
+              <Stack direction="row" spacing={2}>
+                <TextField label="First Name *" value={csatForm.clientFirstName} onChange={e => setCsatForm(f => ({ ...f, clientFirstName: e.target.value }))} fullWidth />
+                <TextField label="M.I." value={csatForm.clientMiddleInitial ?? ''} onChange={e => setCsatForm(f => ({ ...f, clientMiddleInitial: e.target.value }))} sx={{ maxWidth: 80 }} />
+                <TextField label="Last Name *" value={csatForm.clientLastName} onChange={e => setCsatForm(f => ({ ...f, clientLastName: e.target.value }))} fullWidth />
+              </Stack>
+
+              <Stack direction="row" spacing={2} flexWrap="wrap">
+                <TextField
+                  label="Age"
+                  type="number"
+                  inputProps={{ min: 1, max: 120 }}
+                  value={csatForm.age ?? ''}
+                  onChange={e => setCsatForm(f => ({ ...f, age: e.target.value ? Number(e.target.value) : undefined }))}
+                  sx={{ maxWidth: 100 }}
+                />
+                <TextField
+                  select label="Sex *"
+                  value={csatForm.sex}
+                  onChange={e => setCsatForm(f => ({ ...f, sex: e.target.value }))}
+                  sx={{ minWidth: 120 }}
+                >
+                  <MenuItem value="Male">Male</MenuItem>
+                  <MenuItem value="Female">Female</MenuItem>
+                </TextField>
+                <TextField
+                  select label="Client Type *"
+                  value={csatForm.clientType}
+                  onChange={e => setCsatForm(f => ({ ...f, clientType: e.target.value }))}
+                  sx={{ minWidth: 160 }}
+                >
+                  <MenuItem value="Internal">Internal (Staff)</MenuItem>
+                  <MenuItem value="External">External (Visitor)</MenuItem>
+                </TextField>
+                <TextField
+                  label="Contact Number"
+                  value={csatForm.contactNumber ?? ''}
+                  onChange={e => setCsatForm(f => ({ ...f, contactNumber: e.target.value }))}
+                  sx={{ flex: 1 }}
+                />
+              </Stack>
+
+              <TextField
+                label="Technician Name"
+                value={csatForm.technicianName}
+                onChange={e => setCsatForm(f => ({ ...f, technicianName: e.target.value }))}
+                fullWidth
+              />
+
+              <Typography variant="subtitle2" fontWeight={700} mt={1}>
+                Please rate the following based on your experience:
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                5 – Very Satisfied &nbsp;|&nbsp; 4 – Satisfied &nbsp;|&nbsp; 3 – Neutral &nbsp;|&nbsp; 2 – Dissatisfied &nbsp;|&nbsp; 1 – Very Dissatisfied
+              </Typography>
+
+              {([
+                'Overall satisfaction with the service rendered',
+                'Courtesy and professionalism of the ICT staff',
+                'Promptness in resolving the issue/concern',
+                'Timeliness / acceptable waiting time',
+                'Knowledge and helpfulness of the ICT staff',
+                'Cleanliness and orderliness of the work area',
+                'Clarity of information provided during the process',
+                'Service met expectations',
+                'Availability of needed equipment/materials',
+              ] as string[]).map((item, idx) => {
+                const isNA = [3, 5, 8].includes(idx);
+                const val = csatForm.likert[idx];
+                return (
+                  <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }}>
+                      {idx + 1}. {item}
+                    </Typography>
+                    {isNA ? (
+                      <Chip size="small" label="N/A" color="default" sx={{ minWidth: 64 }} />
+                    ) : (
+                      <ToggleButtonGroup
+                        exclusive
+                        size="small"
+                        value={val === 0 ? null : val}
+                        onChange={(_, v) => {
+                          if (v !== null) {
+                            const updated = [...csatForm.likert] as Array<number | 'NA'>;
+                            updated[idx] = v as number;
+                            setCsatForm(f => ({ ...f, likert: updated }));
+                          }
+                        }}
+                      >
+                        <ToggleButton value={1} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
+                          <SentimentVeryDissatisfied sx={{ color: val === 1 ? '#d32f2f' : 'action.disabled', fontSize: 28 }} />
+                        </ToggleButton>
+                        <ToggleButton value={2} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
+                          <SentimentDissatisfied sx={{ color: val === 2 ? '#ed6c02' : 'action.disabled', fontSize: 28 }} />
+                        </ToggleButton>
+                        <ToggleButton value={3} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
+                          <SentimentNeutral sx={{ color: val === 3 ? '#f5a623' : 'action.disabled', fontSize: 28 }} />
+                        </ToggleButton>
+                        <ToggleButton value={4} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
+                          <SentimentSatisfied sx={{ color: val === 4 ? '#2e7d32' : 'action.disabled', fontSize: 28 }} />
+                        </ToggleButton>
+                        <ToggleButton value={5} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
+                          <SentimentVerySatisfied sx={{ color: val === 5 ? '#1976d2' : 'action.disabled', fontSize: 28 }} />
+                        </ToggleButton>
+                      </ToggleButtonGroup>
+                    )}
+                  </Box>
+                );
+              })}
+            </Stack>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSatDialogOpen(false)}>Close</Button>
           {!satTicket?.satisfactionSubmittedAt && (
-            <Button onClick={handleSubmitSatisfaction} variant="contained" disabled={!satRating}>Submit Rating</Button>
+            <Button onClick={handleSubmitSatisfaction} variant="contained" disabled={csatSubmitting || !csatForm.consentGiven}>
+              {csatSubmitting ? 'Submitting…' : 'Submit Feedback'}
+            </Button>
           )}
         </DialogActions>
       </Dialog>

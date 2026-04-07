@@ -13,8 +13,9 @@ import { TicketKeywordRule } from '../entities/ticket-keyword-rule.entity';
 
 export interface CreateCategoryDto {
   name: string;
-  ticketType: string; // 'desktop_support' | 'it_support'
+  ticketType: string; // 'desktop_support' | 'it_support' | 'pantawid_ict_support'
   description?: string;
+  slaHours?: number | null;
 }
 
 export interface UpdateCategoryDto {
@@ -22,16 +23,19 @@ export interface UpdateCategoryDto {
   ticketType?: string;
   description?: string;
   isActive?: boolean;
+  slaHours?: number | null;
 }
 
 export interface CreateKeywordRuleDto {
-  keyword: string;
+  keyword?: string;      // legacy single keyword — kept for compat
+  keywords?: string[];   // preferred: multiple keywords for this rule
   targetTicketType: string;
   targetCategoryId?: string;
 }
 
 export interface UpdateKeywordRuleDto {
   keyword?: string;
+  keywords?: string[];
   targetTicketType?: string;
   targetCategoryId?: string | null;
   isActive?: boolean;
@@ -99,6 +103,7 @@ export class TicketSettingsService {
       name: dto.name.trim(),
       ticketType: dto.ticketType,
       description: dto.description?.trim() || null,
+      slaHours: dto.slaHours ?? null,
       isActive: true,
       isDeleted: false,
       created_by: actorId,
@@ -122,6 +127,7 @@ export class TicketSettingsService {
     }
     if (dto.description !== undefined) cat.description = dto.description?.trim() || null;
     if (dto.isActive !== undefined) cat.isActive = dto.isActive;
+    if (dto.slaHours !== undefined) cat.slaHours = dto.slaHours ?? null;
     cat.updated_by = actorId;
 
     return this.categoryRepo.save(cat);
@@ -151,13 +157,19 @@ export class TicketSettingsService {
   }
 
   async createKeywordRule(dto: CreateKeywordRuleDto, actorId: number): Promise<TicketKeywordRule> {
-    if (!dto.keyword?.trim()) throw new BadRequestException('Keyword is required');
+    // Support both multi-keyword and single-keyword creation
+    const kwList: string[] = (dto.keywords && dto.keywords.length > 0)
+      ? dto.keywords.map(k => k.trim().toLowerCase()).filter(Boolean)
+      : (dto.keyword?.trim() ? [dto.keyword.trim().toLowerCase()] : []);
+
+    if (kwList.length === 0) throw new BadRequestException('At least one keyword is required');
     if (!['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.targetTicketType)) {
       throw new BadRequestException('targetTicketType must be desktop_support, it_support, or pantawid_ict_support');
     }
 
     const rule = this.keywordRepo.create({
-      keyword: dto.keyword.trim().toLowerCase(),
+      keyword: kwList[0],
+      keywords: JSON.stringify(kwList),
       targetTicketType: dto.targetTicketType,
       targetCategoryId: dto.targetCategoryId || null,
       isActive: true,
@@ -169,7 +181,17 @@ export class TicketSettingsService {
   async updateKeywordRule(id: string, dto: UpdateKeywordRuleDto): Promise<TicketKeywordRule> {
     const rule = await this.getKeywordRuleById(id);
 
-    if (dto.keyword !== undefined) rule.keyword = dto.keyword.trim().toLowerCase();
+    if (dto.keywords !== undefined && dto.keywords.length > 0) {
+      const kwList = dto.keywords.map(k => k.trim().toLowerCase()).filter(Boolean);
+      rule.keywords = JSON.stringify(kwList);
+      rule.keyword = kwList[0]; // keep primary keyword in sync
+    } else if (dto.keyword !== undefined) {
+      rule.keyword = dto.keyword.trim().toLowerCase();
+      // Rebuild the JSON array keeping the new primary as first
+      const existing: string[] = rule.keywords ? JSON.parse(rule.keywords) : [rule.keyword];
+      existing[0] = rule.keyword;
+      rule.keywords = JSON.stringify(existing);
+    }
     if (dto.targetTicketType !== undefined) {
       if (!['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.targetTicketType)) {
         throw new BadRequestException('targetTicketType must be desktop_support, it_support, or pantawid_ict_support');
@@ -192,17 +214,24 @@ export class TicketSettingsService {
     const rules = await this.keywordRepo.find({
       where: { isActive: true },
       relations: ['targetCategory'],
-      order: { keyword: 'DESC' }, // longer keywords first (more specific)
     });
 
     const lower = text.toLowerCase();
-    // Sort by keyword length descending so longer/more-specific rules win
-    rules.sort((a, b) => b.keyword.length - a.keyword.length);
 
+    // Build a flat list of (rule, keyword) pairs sorted by keyword length descending
+    const pairs: Array<{ rule: TicketKeywordRule; kw: string }> = [];
     for (const rule of rules) {
-      if (lower.includes(rule.keyword)) {
-        return rule;
+      const kwList: string[] = rule.keywords
+        ? JSON.parse(rule.keywords)
+        : [rule.keyword];
+      for (const kw of kwList) {
+        pairs.push({ rule, kw });
       }
+    }
+    pairs.sort((a, b) => b.kw.length - a.kw.length);
+
+    for (const { rule, kw } of pairs) {
+      if (lower.includes(kw)) return rule;
     }
     return null;
   }

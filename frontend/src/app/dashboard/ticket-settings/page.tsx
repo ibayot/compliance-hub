@@ -33,7 +33,7 @@ export default function TicketSettingsPage() {
   const [catLoading, setCatLoading] = useState(true);
   const [catDialogOpen, setCatDialogOpen] = useState(false);
   const [editCat, setEditCat] = useState<TicketCategory | null>(null);
-  const [catForm, setCatForm] = useState({ name: '', ticketType: 'it_support', isActive: true });
+  const [catForm, setCatForm] = useState<{ name: string; ticketType: string; slaHours: string; isActive: boolean }>({ name: '', ticketType: 'it_support', slaHours: '', isActive: true });
   const [catSubmitting, setCatSubmitting] = useState(false);
 
   // — Keyword Rules —
@@ -41,7 +41,8 @@ export default function TicketSettingsPage() {
   const [rulesLoading, setRulesLoading] = useState(true);
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
   const [editRule, setEditRule] = useState<TicketKeywordRule | null>(null);
-  const [ruleForm, setRuleForm] = useState({ keyword: '', targetTicketType: 'it_support', targetCategoryId: '', isActive: true });
+  const [ruleForm, setRuleForm] = useState<{ keywords: string[]; targetTicketType: string; targetCategoryId: string; isActive: boolean }>({ keywords: [], targetTicketType: 'it_support', targetCategoryId: '', isActive: true });
+  const [keywordInput, setKeywordInput] = useState('');
   const [ruleSubmitting, setRuleSubmitting] = useState(false);
 
   const fetchCategories = useCallback(async () => {
@@ -63,10 +64,10 @@ export default function TicketSettingsPage() {
   const openCatDialog = (cat?: TicketCategory) => {
     if (cat) {
       setEditCat(cat);
-      setCatForm({ name: cat.name, ticketType: cat.ticketType, isActive: cat.isActive });
+      setCatForm({ name: cat.name, ticketType: cat.ticketType, slaHours: cat.slaHours != null ? String(cat.slaHours) : '', isActive: cat.isActive });
     } else {
       setEditCat(null);
-      setCatForm({ name: '', ticketType: 'it_support', isActive: true });
+      setCatForm({ name: '', ticketType: 'it_support', slaHours: '', isActive: true });
     }
     setCatDialogOpen(true);
   };
@@ -75,11 +76,12 @@ export default function TicketSettingsPage() {
     if (!catForm.name.trim()) { enqueueSnackbar('Name is required', { variant: 'warning' }); return; }
     try {
       setCatSubmitting(true);
+      const catPayload = { name: catForm.name, ticketType: catForm.ticketType, isActive: catForm.isActive, slaHours: catForm.slaHours !== '' ? Number(catForm.slaHours) : null };
       if (editCat) {
-        await ticketSettingsApi.updateCategory(editCat.id, catForm);
+        await ticketSettingsApi.updateCategory(editCat.id, catPayload);
         enqueueSnackbar('Category updated', { variant: 'success' });
       } else {
-        await ticketSettingsApi.createCategory(catForm);
+        await ticketSettingsApi.createCategory(catPayload);
         enqueueSnackbar('Category created', { variant: 'success' });
       }
       setCatDialogOpen(false);
@@ -104,19 +106,21 @@ export default function TicketSettingsPage() {
   const openRuleDialog = (rule?: TicketKeywordRule) => {
     if (rule) {
       setEditRule(rule);
-      setRuleForm({ keyword: rule.keyword, targetTicketType: rule.targetTicketType, targetCategoryId: rule.targetCategoryId ?? '', isActive: rule.isActive });
+      const kws = rule.keywords && rule.keywords.length > 0 ? rule.keywords : [rule.keyword].filter(Boolean);
+      setRuleForm({ keywords: kws, targetTicketType: rule.targetTicketType, targetCategoryId: rule.targetCategoryId ?? '', isActive: rule.isActive });
     } else {
       setEditRule(null);
-      setRuleForm({ keyword: '', targetTicketType: 'it_support', targetCategoryId: '', isActive: true });
+      setRuleForm({ keywords: [], targetTicketType: 'it_support', targetCategoryId: '', isActive: true });
     }
+    setKeywordInput('');
     setRuleDialogOpen(true);
   };
 
   const handleSaveRule = async () => {
-    if (!ruleForm.keyword.trim()) { enqueueSnackbar('Keyword is required', { variant: 'warning' }); return; }
+    if (ruleForm.keywords.length === 0) { enqueueSnackbar('At least one keyword is required', { variant: 'warning' }); return; }
     try {
       setRuleSubmitting(true);
-      const payload = { ...ruleForm, targetCategoryId: ruleForm.targetCategoryId || undefined };
+      const payload = { keywords: ruleForm.keywords, targetTicketType: ruleForm.targetTicketType, targetCategoryId: ruleForm.targetCategoryId || undefined, isActive: ruleForm.isActive };
       if (editRule) {
         await ticketSettingsApi.updateKeywordRule(editRule.id, payload);
         enqueueSnackbar('Rule updated', { variant: 'success' });
@@ -170,20 +174,22 @@ export default function TicketSettingsPage() {
                     <TableCell>Name</TableCell>
                     <TableCell>Key</TableCell>
                     <TableCell>Support Type</TableCell>
+                    <TableCell>SLA</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {catLoading ? (
-                    <TableRow><TableCell colSpan={5} align="center"><CircularProgress size={24} /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} align="center"><CircularProgress size={24} /></TableCell></TableRow>
                   ) : categories.filter(c => !c.isDeleted).length === 0 ? (
-                    <TableRow><TableCell colSpan={5} align="center"><Typography color="text.secondary" py={2}>No categories configured.</Typography></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} align="center"><Typography color="text.secondary" py={2}>No categories configured.</Typography></TableCell></TableRow>
                   ) : categories.filter(c => !c.isDeleted).map(cat => (
                     <TableRow key={cat.id} hover>
                       <TableCell><Typography fontWeight={600}>{cat.name}</Typography></TableCell>
                       <TableCell><Typography variant="body2" color="text.secondary" fontFamily="monospace">{cat.key}</Typography></TableCell>
                       <TableCell><Chip size="small" label={TYPE_LABELS[cat.ticketType] ?? cat.ticketType} variant="outlined" /></TableCell>
+                      <TableCell>{cat.slaHours != null ? `${cat.slaHours}h` : '—'}</TableCell>
                       <TableCell><Chip size="small" label={cat.isActive ? 'Active' : 'Inactive'} color={cat.isActive ? 'success' : 'default'} /></TableCell>
                       <TableCell align="right">
                         <Tooltip title="Edit"><IconButton size="small" onClick={() => openCatDialog(cat)}><EditIcon fontSize="small" /></IconButton></Tooltip>
@@ -221,7 +227,13 @@ export default function TicketSettingsPage() {
                     <TableRow><TableCell colSpan={5} align="center"><Typography color="text.secondary" py={2}>No keyword rules configured yet.</Typography></TableCell></TableRow>
                   ) : rules.map(rule => (
                     <TableRow key={rule.id} hover>
-                      <TableCell><Typography fontFamily="monospace">&quot;{rule.keyword}&quot;</Typography></TableCell>
+                      <TableCell>
+                        <Box display="flex" gap={0.5} flexWrap="wrap">
+                          {(rule.keywords && rule.keywords.length > 0 ? rule.keywords : [rule.keyword]).map((kw, i) => (
+                            <Chip key={i} size="small" label={kw} variant="outlined" />
+                          ))}
+                        </Box>
+                      </TableCell>
                       <TableCell><Chip size="small" label={TYPE_LABELS[rule.targetTicketType] ?? rule.targetTicketType} variant="outlined" /></TableCell>
                       <TableCell>{(rule.targetCategory ?? rule.category)?.name ?? '—'}</TableCell>
                       <TableCell><Chip size="small" label={rule.isActive ? 'Active' : 'Inactive'} color={rule.isActive ? 'success' : 'default'} /></TableCell>
@@ -248,6 +260,15 @@ export default function TicketSettingsPage() {
               <MenuItem value="it_support">IT Support</MenuItem>
               <MenuItem value="desktop_support">Desktop Support</MenuItem>
             </TextField>
+            <TextField
+              label="SLA Time Limit (hours)"
+              type="number"
+              inputProps={{ min: 1 }}
+              value={catForm.slaHours}
+              onChange={e => setCatForm({ ...catForm, slaHours: e.target.value })}
+              fullWidth
+              helperText="Leave blank for no SLA"
+            />
             <FormControlLabel control={<Switch checked={catForm.isActive} onChange={e => setCatForm({ ...catForm, isActive: e.target.checked })} />} label="Active" />
           </Stack>
         </DialogContent>
@@ -262,7 +283,38 @@ export default function TicketSettingsPage() {
         <DialogTitle>{editRule ? 'Edit Keyword Rule' : 'Add Keyword Rule'}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField label="Keyword *" value={ruleForm.keyword} onChange={e => setRuleForm({ ...ruleForm, keyword: e.target.value })} fullWidth helperText="Text to match in subject/description (case-insensitive)" />
+            <Box>
+              <TextField
+                label="Keywords *"
+                value={keywordInput}
+                onChange={e => setKeywordInput(e.target.value)}
+                onKeyDown={e => {
+                  if ((e.key === 'Enter' || e.key === ',') && keywordInput.trim()) {
+                    e.preventDefault();
+                    const kw = keywordInput.trim().replace(/,+$/, '');
+                    if (kw && !ruleForm.keywords.includes(kw)) {
+                      setRuleForm(f => ({ ...f, keywords: [...f.keywords, kw] }));
+                    }
+                    setKeywordInput('');
+                  }
+                }}
+                fullWidth
+                helperText="Type a keyword and press Enter or comma to add. Multiple keywords can map to the same category."
+                placeholder="e.g. Internet"
+              />
+              {ruleForm.keywords.length > 0 && (
+                <Box display="flex" gap={0.5} flexWrap="wrap" mt={1}>
+                  {ruleForm.keywords.map((kw, i) => (
+                    <Chip
+                      key={i}
+                      label={kw}
+                      size="small"
+                      onDelete={() => setRuleForm(f => ({ ...f, keywords: f.keywords.filter((_, j) => j !== i) }))}
+                    />
+                  ))}
+                </Box>
+              )}
+            </Box>
             <TextField select label="Target Support Type *" value={ruleForm.targetTicketType} onChange={e => setRuleForm({ ...ruleForm, targetTicketType: e.target.value, targetCategoryId: '' })} fullWidth>
               <MenuItem value="it_support">IT Support</MenuItem>
               <MenuItem value="desktop_support">Desktop Support</MenuItem>

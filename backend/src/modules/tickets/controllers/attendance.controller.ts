@@ -180,13 +180,7 @@ export class AttendanceController {
     return this.attendanceService.getStaffLoginsForDate(target);
   }
 
-  /** DELETE /attendance/all-records — super_admin only, wipes all tech_attendance records */
-  @Delete('all-records')
-  @Roles(UserRole.SUPER_ADMIN)
-  @HttpCode(HttpStatus.OK)
-  async clearAllAttendance() {
-    return this.attendanceService.clearAllAttendance();
-  }
+
 
   /** GET /attendance/staff-logins-monthly?startDate=&endDate= — all non-tech staff with lastLogin for monthly grid */
   @Get('staff-logins-monthly')

@@ -14,11 +14,16 @@ export class TicketKeywordRule {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  /** Keyword / phrase to match in subject or description (case-insensitive) */
+  /** Primary keyword (first of the group, kept for display/legacy) */
   @Column({ type: 'varchar', length: 100 })
   keyword: string;
 
+  /** JSON array of all keywords/phrases in this rule (case-insensitive) */
+  @Column({ name: 'keywords', type: 'text', nullable: true })
+  keywords: string | null;
+
   /** Target ticket type when keyword matches */
+  
   @Column({ name: 'target_ticket_type', type: 'varchar', length: 30 })
   targetTicketType: string;
 
