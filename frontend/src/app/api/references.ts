@@ -168,7 +168,6 @@ export interface CsatFormData {
   clientLastName: string;
   age?: number;
   sex: string;
-  clientType: string;
   contactNumber?: string;
   technicianName: string;
   /** 9 Likert responses indexed 0–8; items 3,5,8 are pre-set to 'NA' */

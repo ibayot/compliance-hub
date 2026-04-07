@@ -60,7 +60,6 @@ export interface CsatFormData {
   clientLastName: string;
   age?: number;
   sex: string;
-  clientType: string;
   contactNumber?: string;
   technicianName: string;
   likert: Array<number | 'NA'>; // 9 items index 0-8

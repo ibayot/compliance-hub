@@ -18,12 +18,16 @@ import {
   FormControlLabel,
   Switch,
   CircularProgress,
-  Rating,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Alert,
+  Stack,
+  ToggleButton,
+  ToggleButtonGroup,
+  Checkbox,
+  Autocomplete,
 } from '@mui/material';
 import { useParams, useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
@@ -33,17 +37,16 @@ import {
   Ticket,
   TechnicianOption,
   UpdateTicketDto,
-  SubmitSatisfactionDto,
   TicketEvent,
+  CsatFormData,
 } from '@/app/api/references';
-import { ArrowBack as BackIcon, Star as StarIcon } from '@mui/icons-material';
+import { ArrowBack as BackIcon, Star as StarIcon, SentimentVerySatisfied, SentimentSatisfied, SentimentNeutral, SentimentDissatisfied, SentimentVeryDissatisfied } from '@mui/icons-material';
 
 const STATUS_OPTS = [
   { value: 'open', label: 'Open' },
   { value: 'assigned', label: 'Assigned' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'resolved', label: 'Resolved' },
-  { value: 'closed', label: 'Closed' },
   { value: 'freeze', label: 'Freeze (on hold)' },
   { value: 'duplicate', label: 'Duplicate' },
 ];
@@ -102,8 +105,13 @@ export default function TicketDetailPage() {
 
   // Satisfaction dialog
   const [satDialogOpen, setSatDialogOpen] = useState(false);
-  const [satRating, setSatRating] = useState<number | null>(null);
-  const [satComment, setSatComment] = useState('');
+  const [csatForm, setCsatForm] = useState<CsatFormData>({
+    consentGiven: false, unitSection: '', dateOfTransaction: '', clientFirstName: '',
+    clientMiddleInitial: '', clientLastName: '', sex: '',
+    contactNumber: '', technicianName: '', likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
+  });
+  const [unitSuggestions, setUnitSuggestions] = useState<string[]>([]);
+  const [csatSubmitting, setCsatSubmitting] = useState(false);
 
   // Priority update
   const [newPriority, setNewPriority] = useState('');
@@ -133,7 +141,7 @@ export default function TicketDetailPage() {
   // canEscalate: lower-level techs can escalate their ticket to a focal technician
   const canEscalate = isLowerLevelTech;
   const isRequester = ticket?.requesterId === (user as any)?.id;
-  const canSatisfaction = isRequester && (ticket?.status === 'resolved' || ticket?.status === 'closed') && !ticket?.satisfactionRating;
+  const canSatisfaction = isRequester && (ticket?.status === 'resolved' || ticket?.status === 'closed') && !ticket?.satisfactionSubmittedAt;
   // Duplicate is terminal — no further modifications allowed
   const isDuplicate = ticket?.status === 'duplicate';
 
@@ -278,18 +286,22 @@ export default function TicketDetailPage() {
   };
 
   const handleSubmitSatisfaction = async () => {
-    if (!satRating) {
-      enqueueSnackbar('Please select a rating.', { variant: 'warning' });
-      return;
-    }
+    if (!csatForm.consentGiven) { enqueueSnackbar('Please provide consent before submitting.', { variant: 'warning' }); return; }
+    if (!csatForm.unitSection.trim()) { enqueueSnackbar('Unit/Section is required.', { variant: 'warning' }); return; }
+    if (!csatForm.clientFirstName.trim() || !csatForm.clientLastName.trim()) { enqueueSnackbar('Client name is required.', { variant: 'warning' }); return; }
+    if (!csatForm.sex) { enqueueSnackbar('Sex is required.', { variant: 'warning' }); return; }
+    const ratedItems = csatForm.likert.filter((_, i) => ![3, 5, 8].includes(i));
+    if (ratedItems.some(v => v === 0)) { enqueueSnackbar('Please rate all applicable items.', { variant: 'warning' }); return; }
     try {
-      const payload: SubmitSatisfactionDto = { rating: satRating, comment: satComment || undefined };
-      await ticketsApi.submitSatisfaction(ticketId, payload);
+      setCsatSubmitting(true);
+      await ticketsApi.submitSatisfaction(ticketId, { formData: csatForm });
       setSatDialogOpen(false);
       fetchTicket();
       enqueueSnackbar('Thank you for your feedback!', { variant: 'success' });
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to submit satisfaction', { variant: 'error' });
+    } finally {
+      setCsatSubmitting(false);
     }
   };
 
@@ -389,7 +401,22 @@ export default function TicketDetailPage() {
                   size="small"
                   color="warning"
                   startIcon={<StarIcon />}
-                  onClick={() => setSatDialogOpen(true)}
+                  onClick={() => {
+                    const assignedName = ticket.assignedTo
+                      ? `${ticket.assignedTo.firstName ?? ''} ${ticket.assignedTo.lastName ?? ''}`.trim() || ticket.assignedTo.email
+                      : '';
+                    setCsatForm({
+                      consentGiven: false, unitSection: '', clientFirstName: '',
+                      clientMiddleInitial: '', clientLastName: '', sex: '',
+                      contactNumber: '', technicianName: assignedName,
+                      dateOfTransaction: ticket.resolvedAt
+                        ? new Date(ticket.resolvedAt).toISOString().split('T')[0]
+                        : new Date().toISOString().split('T')[0],
+                      likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
+                    });
+                    ticketsApi.getUnitSuggestions().then(setUnitSuggestions).catch(() => {});
+                    setSatDialogOpen(true);
+                  }}
                 >
                   Rate Resolution
                 </Button>
@@ -783,33 +810,118 @@ export default function TicketDetailPage() {
         </DialogActions>
       </Dialog>
 
-      {/* ── Satisfaction Dialog ── */}
-      <Dialog open={satDialogOpen} onClose={() => setSatDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Rate the Resolution</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            How satisfied are you with how this ticket was resolved?
+      {/* ── Satisfaction Dialog — CLIENT SATISFACTION MEASUREMENT FORM ── */}
+      <Dialog open={satDialogOpen} onClose={() => setSatDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, textAlign: 'center', pb: 0 }}>
+          CLIENT SATISFACTION MEASUREMENT FORM
+          <Typography variant="body2" color="text.secondary" fontWeight={400} mt={0.5}>
+            Ticket: <strong>{ticket.ticketNumber}</strong>
           </Typography>
-          <Box display="flex" justifyContent="center" my={2}>
-            <Rating
-              value={satRating}
-              onChange={(_, v) => setSatRating(v)}
-              size="large"
-            />
-          </Box>
-          <TextField
-            fullWidth
-            multiline
-            rows={2}
-            label="Comments (optional)"
-            value={satComment}
-            onChange={(e) => setSatComment(e.target.value)}
-            size="small"
-          />
+        </DialogTitle>
+        <DialogContent>
+          {ticket.satisfactionSubmittedAt ? (
+            <Alert severity="success" sx={{ mt: 2 }}>You have already submitted a satisfaction rating for this ticket. Thank you!</Alert>
+          ) : (
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <FormControlLabel
+                control={<Checkbox checked={csatForm.consentGiven} onChange={e => setCsatForm(f => ({ ...f, consentGiven: e.target.checked }))} />}
+                label={
+                  <Typography variant="body2">
+                    I give my consent to this office to collect and process my personal information for the purposes of this survey, in compliance with Republic Act No. 10173 (Data Privacy Act of 2012).
+                  </Typography>
+                }
+              />
+              <Stack direction="row" spacing={2}>
+                <Autocomplete
+                  options={unitSuggestions} freeSolo fullWidth value={csatForm.unitSection}
+                  onInputChange={(_, v) => setCsatForm(f => ({ ...f, unitSection: v }))}
+                  renderInput={params => <TextField {...params} label="Unit/Section *" />}
+                />
+                <TextField label="Date of Transaction *" type="date" value={csatForm.dateOfTransaction}
+                  InputProps={{ readOnly: true }} disabled fullWidth InputLabelProps={{ shrink: true }} />
+              </Stack>
+              <Stack direction="row" spacing={2}>
+                <TextField label="First Name *" value={csatForm.clientFirstName} onChange={e => setCsatForm(f => ({ ...f, clientFirstName: e.target.value }))} fullWidth />
+                <TextField label="M.I." value={csatForm.clientMiddleInitial ?? ''} onChange={e => setCsatForm(f => ({ ...f, clientMiddleInitial: e.target.value }))} sx={{ maxWidth: 80 }} />
+                <TextField label="Last Name *" value={csatForm.clientLastName} onChange={e => setCsatForm(f => ({ ...f, clientLastName: e.target.value }))} fullWidth />
+              </Stack>
+              <Stack direction="row" spacing={2} flexWrap="wrap">
+                <TextField label="Age" type="number" inputProps={{ min: 1, max: 120 }} value={csatForm.age ?? ''}
+                  onChange={e => setCsatForm(f => ({ ...f, age: e.target.value ? Number(e.target.value) : undefined }))} sx={{ maxWidth: 100 }} />
+                <TextField select label="Sex *" value={csatForm.sex} onChange={e => setCsatForm(f => ({ ...f, sex: e.target.value }))} sx={{ minWidth: 120 }}>
+                  <MenuItem value="Male">Male</MenuItem>
+                  <MenuItem value="Female">Female</MenuItem>
+                </TextField>
+                <TextField label="Contact Number" value={csatForm.contactNumber ?? ''}
+                  onChange={e => setCsatForm(f => ({ ...f, contactNumber: e.target.value }))} sx={{ flex: 1 }} />
+              </Stack>
+              <TextField label="Technician Name" value={csatForm.technicianName} InputProps={{ readOnly: true }} disabled fullWidth />
+
+              <Typography variant="subtitle2" fontWeight={700} mt={1}>
+                INSTRUCTION: For each service quality criterion listed below, please mark your level of satisfaction using the smiley scale. Items marked N/A are not applicable to this type of service.
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                5 – Highly Satisfied &nbsp;|&nbsp; 4 – Satisfied &nbsp;|&nbsp; 3 – Neutral &nbsp;|&nbsp; 2 – Dissatisfied &nbsp;|&nbsp; 1 – Highly Dissatisfied
+              </Typography>
+
+              {([
+                'I am satisfied with the service I received from this office.',
+                'The staff responded to my request promptly.',
+                'The staff was courteous and professional.',
+                'The service area was clean, comfortable, and adequately maintained.',
+                'I was properly informed of the requirements and steps I needed to follow.',
+                'I was not asked to pay any fees other than the required fees.',
+                'The service process was simple and easy to follow.',
+                'The staff was knowledgeable and able to address my concern.',
+                'The service hours of the office were convenient.',
+              ] as string[]).map((item, idx) => {
+                const isNA = [3, 5, 8].includes(idx);
+                const val = csatForm.likert[idx];
+                return (
+                  <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }}>{idx}. {item}</Typography>
+                    {isNA ? (
+                      <Chip size="small" label="N/A" color="default" sx={{ minWidth: 64 }} />
+                    ) : (
+                      <ToggleButtonGroup exclusive size="small" value={val === 0 ? null : val}
+                        onChange={(_, v) => {
+                          if (v !== null) {
+                            const updated = [...csatForm.likert] as Array<number | 'NA'>;
+                            updated[idx] = v as number;
+                            setCsatForm(f => ({ ...f, likert: updated }));
+                          }
+                        }}
+                      >
+                        <ToggleButton value={1} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
+                          <SentimentVeryDissatisfied sx={{ color: val === 1 ? '#d32f2f' : 'action.disabled', fontSize: 28 }} />
+                        </ToggleButton>
+                        <ToggleButton value={2} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
+                          <SentimentDissatisfied sx={{ color: val === 2 ? '#ed6c02' : 'action.disabled', fontSize: 28 }} />
+                        </ToggleButton>
+                        <ToggleButton value={3} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
+                          <SentimentNeutral sx={{ color: val === 3 ? '#f5a623' : 'action.disabled', fontSize: 28 }} />
+                        </ToggleButton>
+                        <ToggleButton value={4} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
+                          <SentimentSatisfied sx={{ color: val === 4 ? '#2e7d32' : 'action.disabled', fontSize: 28 }} />
+                        </ToggleButton>
+                        <ToggleButton value={5} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
+                          <SentimentVerySatisfied sx={{ color: val === 5 ? '#1976d2' : 'action.disabled', fontSize: 28 }} />
+                        </ToggleButton>
+                      </ToggleButtonGroup>
+                    )}
+                  </Box>
+                );
+              })}
+            </Stack>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSatDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSubmitSatisfaction} disabled={!satRating}>Submit</Button>
+          <Button onClick={() => setSatDialogOpen(false)}>Close</Button>
+          {!ticket.satisfactionSubmittedAt && (
+            <Button onClick={handleSubmitSatisfaction} variant="contained" color="warning" disabled={csatSubmitting || !csatForm.consentGiven}>
+              {csatSubmitting ? 'Submitting…' : 'Submit Feedback'}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

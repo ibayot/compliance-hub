@@ -100,7 +100,7 @@ export default function TicketsPage() {
   const [satTicket, setSatTicket] = useState<Ticket | null>(null);
   const [csatForm, setCsatForm] = useState<CsatFormData>({
     consentGiven: false, unitSection: '', dateOfTransaction: '', clientFirstName: '',
-    clientMiddleInitial: '', clientLastName: '', sex: '', clientType: '',
+    clientMiddleInitial: '', clientLastName: '', sex: '',
     contactNumber: '', technicianName: '', likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
   });
   const [unitSuggestions, setUnitSuggestions] = useState<string[]>([]);
@@ -268,7 +268,7 @@ export default function TicketsPage() {
         ? new Date(ticket.resolvedAt).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0],
       clientFirstName: '', clientMiddleInitial: '', clientLastName: '',
-      sex: '', clientType: '', contactNumber: '',
+      sex: '', contactNumber: '',
       technicianName: assignedName,
       likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
     });
@@ -620,7 +620,8 @@ export default function TicketsPage() {
                   label="Date of Transaction *"
                   type="date"
                   value={csatForm.dateOfTransaction}
-                  onChange={e => setCsatForm(f => ({ ...f, dateOfTransaction: e.target.value }))}
+                  InputProps={{ readOnly: true }}
+                  disabled
                   fullWidth
                   InputLabelProps={{ shrink: true }}
                 />
@@ -651,15 +652,6 @@ export default function TicketsPage() {
                   <MenuItem value="Female">Female</MenuItem>
                 </TextField>
                 <TextField
-                  select label="Client Type *"
-                  value={csatForm.clientType}
-                  onChange={e => setCsatForm(f => ({ ...f, clientType: e.target.value }))}
-                  sx={{ minWidth: 160 }}
-                >
-                  <MenuItem value="Internal">Internal (Staff)</MenuItem>
-                  <MenuItem value="External">External (Visitor)</MenuItem>
-                </TextField>
-                <TextField
                   label="Contact Number"
                   value={csatForm.contactNumber ?? ''}
                   onChange={e => setCsatForm(f => ({ ...f, contactNumber: e.target.value }))}
@@ -670,34 +662,35 @@ export default function TicketsPage() {
               <TextField
                 label="Technician Name"
                 value={csatForm.technicianName}
-                onChange={e => setCsatForm(f => ({ ...f, technicianName: e.target.value }))}
+                InputProps={{ readOnly: true }}
+                disabled
                 fullWidth
               />
 
               <Typography variant="subtitle2" fontWeight={700} mt={1}>
-                Please rate the following based on your experience:
+                INSTRUCTION: For each service quality criterion listed below, please mark your level of satisfaction using the smiley scale. Items marked N/A are not applicable to this type of service.
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                5 – Very Satisfied &nbsp;|&nbsp; 4 – Satisfied &nbsp;|&nbsp; 3 – Neutral &nbsp;|&nbsp; 2 – Dissatisfied &nbsp;|&nbsp; 1 – Very Dissatisfied
+                5 – Highly Satisfied  |  4 – Satisfied  |  3 – Neutral  |  2 – Dissatisfied  |  1 – Highly Dissatisfied
               </Typography>
 
               {([
-                'Overall satisfaction with the service rendered',
-                'Courtesy and professionalism of the ICT staff',
-                'Promptness in resolving the issue/concern',
-                'Timeliness / acceptable waiting time',
-                'Knowledge and helpfulness of the ICT staff',
-                'Cleanliness and orderliness of the work area',
-                'Clarity of information provided during the process',
-                'Service met expectations',
-                'Availability of needed equipment/materials',
+                'I am satisfied with the service I received from this office.',
+                'The staff responded to my request promptly.',
+                'The staff was courteous and professional.',
+                'The service area was clean, comfortable, and adequately maintained.',
+                'I was properly informed of the requirements and steps I needed to follow.',
+                'I was not asked to pay any fees other than the required fees.',
+                'The service process was simple and easy to follow.',
+                'The staff was knowledgeable and able to address my concern.',
+                'The service hours of the office were convenient.',
               ] as string[]).map((item, idx) => {
                 const isNA = [3, 5, 8].includes(idx);
                 const val = csatForm.likert[idx];
                 return (
                   <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }}>
-                      {idx + 1}. {item}
+                      {idx}. {item}
                     </Typography>
                     {isNA ? (
                       <Chip size="small" label="N/A" color="default" sx={{ minWidth: 64 }} />
