@@ -174,7 +174,11 @@ export default function TicketSettingsPage() {
                     <TableCell>Name</TableCell>
                     <TableCell>Key</TableCell>
                     <TableCell>Support Type</TableCell>
-                    <TableCell>SLA</TableCell>
+                    <TableCell>
+                      <Tooltip title="Set per category via the Edit button">
+                        <span>SLA Time Limit</span>
+                      </Tooltip>
+                    </TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>

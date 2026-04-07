@@ -58,6 +58,8 @@ export interface CsatFormData {
   clientFirstName: string;
   clientMiddleInitial?: string;
   clientLastName: string;
+  suffix?: string;
+  religion: string;
   age?: number;
   sex: string;
   contactNumber?: string;

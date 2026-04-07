@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -6,7 +6,7 @@ import {
   TableContainer, TableHead, TableRow, IconButton, Chip, TextField, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions, Stack, CircularProgress,
   Rating, Tooltip, Alert, Autocomplete, ToggleButton, ToggleButtonGroup,
-  Checkbox, FormControlLabel,
+  Checkbox, FormControlLabel, InputAdornment,
 } from '@mui/material';
 import {
   Add as AddIcon, Visibility as ViewIcon, AssignmentInd as AssignIcon,
@@ -100,7 +100,7 @@ export default function TicketsPage() {
   const [satTicket, setSatTicket] = useState<Ticket | null>(null);
   const [csatForm, setCsatForm] = useState<CsatFormData>({
     consentGiven: false, unitSection: '', dateOfTransaction: '', clientFirstName: '',
-    clientMiddleInitial: '', clientLastName: '', sex: '',
+    clientMiddleInitial: '', clientLastName: '', suffix: '', religion: '', sex: '',
     contactNumber: '', technicianName: '', likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
   });
   const [unitSuggestions, setUnitSuggestions] = useState<string[]>([]);
@@ -268,7 +268,7 @@ export default function TicketsPage() {
         ? new Date(ticket.resolvedAt).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0],
       clientFirstName: '', clientMiddleInitial: '', clientLastName: '',
-      sex: '', contactNumber: '',
+      suffix: '', religion: '', sex: '', contactNumber: '',
       technicianName: assignedName,
       likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
     });
@@ -281,6 +281,8 @@ export default function TicketsPage() {
     if (!csatForm.consentGiven) { enqueueSnackbar('Please provide consent before submitting.', { variant: 'warning' }); return; }
     if (!csatForm.unitSection.trim()) { enqueueSnackbar('Unit/Section is required.', { variant: 'warning' }); return; }
     if (!csatForm.clientFirstName.trim() || !csatForm.clientLastName.trim()) { enqueueSnackbar('Client name is required.', { variant: 'warning' }); return; }
+    if (!csatForm.religion.trim()) { enqueueSnackbar('Religion is required.', { variant: 'warning' }); return; }
+    if (!csatForm.age) { enqueueSnackbar('Age is required.', { variant: 'warning' }); return; }
     if (!csatForm.sex) { enqueueSnackbar('Sex is required.', { variant: 'warning' }); return; }
     const ratedItems = csatForm.likert.filter((_, i) => ![3, 5, 8].includes(i));
     if (ratedItems.some(v => v === 0)) { enqueueSnackbar('Please rate all applicable items.', { variant: 'warning' }); return; }
@@ -602,7 +604,7 @@ export default function TicketsPage() {
                 }
                 label={
                   <Typography variant="body2">
-                    I give my consent to this office to collect and process my personal information for the purposes of this survey, in compliance with Republic Act No. 10173 (Data Privacy Act of 2012).
+                    I voluntarily give my consent for the use of my personal information. I confirm that I have read the provided information, or it has been read to me. I have had the opportunity to ask questions about it, and any inquiries I made were answered to my satisfaction. I understand that any information collected will be utilized solely to enhance the basic social services provided by the DSWD.
                   </Typography>
                 }
               />
@@ -629,18 +631,25 @@ export default function TicketsPage() {
 
               <Stack direction="row" spacing={2}>
                 <TextField label="First Name *" value={csatForm.clientFirstName} onChange={e => setCsatForm(f => ({ ...f, clientFirstName: e.target.value }))} fullWidth />
-                <TextField label="M.I." value={csatForm.clientMiddleInitial ?? ''} onChange={e => setCsatForm(f => ({ ...f, clientMiddleInitial: e.target.value }))} sx={{ maxWidth: 80 }} />
+                <TextField label="M.I." value={csatForm.clientMiddleInitial ?? ''} onChange={e => setCsatForm(f => ({ ...f, clientMiddleInitial: e.target.value }))} inputProps={{ maxLength: 2 }} sx={{ maxWidth: 80 }} />
                 <TextField label="Last Name *" value={csatForm.clientLastName} onChange={e => setCsatForm(f => ({ ...f, clientLastName: e.target.value }))} fullWidth />
+                <TextField label="Suffix" value={csatForm.suffix ?? ''} onChange={e => setCsatForm(f => ({ ...f, suffix: e.target.value }))} sx={{ maxWidth: 100 }} />
               </Stack>
 
               <Stack direction="row" spacing={2} flexWrap="wrap">
                 <TextField
-                  label="Age"
+                  label="Age *"
                   type="number"
                   inputProps={{ min: 1, max: 120 }}
                   value={csatForm.age ?? ''}
                   onChange={e => setCsatForm(f => ({ ...f, age: e.target.value ? Number(e.target.value) : undefined }))}
                   sx={{ maxWidth: 100 }}
+                />
+                <TextField
+                  label="Religion *"
+                  value={csatForm.religion}
+                  onChange={e => setCsatForm(f => ({ ...f, religion: e.target.value }))}
+                  sx={{ flex: 1 }}
                 />
                 <TextField
                   select label="Sex *"
@@ -654,7 +663,12 @@ export default function TicketsPage() {
                 <TextField
                   label="Contact Number"
                   value={csatForm.contactNumber ?? ''}
-                  onChange={e => setCsatForm(f => ({ ...f, contactNumber: e.target.value }))}
+                  onChange={e => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setCsatForm(f => ({ ...f, contactNumber: digits }));
+                  }}
+                  InputProps={{ startAdornment: <InputAdornment position="start">+63</InputAdornment> }}
+                  inputProps={{ inputMode: 'numeric' }}
                   sx={{ flex: 1 }}
                 />
               </Stack>
@@ -668,22 +682,24 @@ export default function TicketsPage() {
               />
 
               <Typography variant="subtitle2" fontWeight={700} mt={1}>
-                INSTRUCTION: For each service quality criterion listed below, please mark your level of satisfaction using the smiley scale. Items marked N/A are not applicable to this type of service.
+                INSTRUCTION:
               </Typography>
-              <Typography variant="caption" color="text.secondary">
-                5 – Highly Satisfied  |  4 – Satisfied  |  3 – Neutral  |  2 – Dissatisfied  |  1 – Highly Dissatisfied
+              <Typography variant="body2">
+                For Service Quality Dimension 0-8, please select the number that best corresponds to your answer.
+              </Typography>
+              <Typography variant="caption" color="text.secondary">                5-Strongly Agree, 4-Agree, 3-Neither Agree nor Disagree, 2-Disagree, 1-Strongly Disagree, N/A-Not Applicable
               </Typography>
 
               {([
-                'I am satisfied with the service I received from this office.',
-                'The staff responded to my request promptly.',
-                'The staff was courteous and professional.',
-                'The service area was clean, comfortable, and adequately maintained.',
-                'I was properly informed of the requirements and steps I needed to follow.',
-                'I was not asked to pay any fees other than the required fees.',
-                'The service process was simple and easy to follow.',
-                'The staff was knowledgeable and able to address my concern.',
-                'The service hours of the office were convenient.',
+                'I am satisfied with the service that I availed.',
+                'I spent a reasonable amount of time for my transaction.',
+                "The office followed the transaction's requirements and steps based on the information provided",
+                'The steps (including payment) I need to do for my transaction were easy and simple.',
+                'I easily found information about my transaction from the office or its website.',
+                "I paid a reasonable amount of fees for my transaction. (If services was free, mark the 'N/A' column) (You may skip this).",
+                'I feel the office was fair to everyone, or "walang palakasan", during my transaction.',
+                'I was treated courteously by the staff, and (if asked for help) the staff was helpful.',
+                'I got what I needed from the government office, or (if denied) denial of request was sufficiently explained to me.',
               ] as string[]).map((item, idx) => {
                 const isNA = [3, 5, 8].includes(idx);
                 const val = csatForm.likert[idx];

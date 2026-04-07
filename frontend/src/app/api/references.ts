@@ -166,6 +166,8 @@ export interface CsatFormData {
   clientFirstName: string;
   clientMiddleInitial?: string;
   clientLastName: string;
+  suffix?: string;
+  religion: string;
   age?: number;
   sex: string;
   contactNumber?: string;
@@ -471,7 +473,14 @@ export const ticketSettingsApi = {
   // Keyword Rules
   getKeywordRules: async (): Promise<TicketKeywordRule[]> => {
     const response = await apiClient.get(`/ticket-settings/keyword-rules`);
-    return response.data;
+    // The backend stores keywords as a raw JSON string in a TEXT column.
+    // Parse it here so the rest of the UI always receives string[].
+    return (response.data as TicketKeywordRule[]).map(rule => ({
+      ...rule,
+      keywords: rule.keywords
+        ? (Array.isArray(rule.keywords) ? rule.keywords : JSON.parse(rule.keywords as unknown as string))
+        : (rule.keyword ? [rule.keyword] : []),
+    }));
   },
   createKeywordRule: async (data: { keywords: string[]; targetTicketType: string; targetCategoryId?: string; isActive?: boolean }): Promise<TicketKeywordRule> => {
     const response = await apiClient.post(`/ticket-settings/keyword-rules`, data);
