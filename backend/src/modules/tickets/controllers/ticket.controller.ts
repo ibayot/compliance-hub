@@ -111,6 +111,29 @@ export class TicketController {
     );
   }
 
+  /** GET /tickets/reports — satisfaction reports (QA #11) */
+  @Get('reports')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER,
+    UserRole.COMPLIANCE_OFFICER, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
+    UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR, UserRole.PANTAWID_ICT, UserRole.TECHNICIAN)
+  async getTicketReports(
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+    @Query('quarter') quarter?: string,
+    @Query('semester') semester?: string,
+    @Query('technicianId') technicianId?: string,
+    @Query('ticketType') ticketType?: string,
+  ) {
+    return this.ticketService.getTicketReports({
+      year: year ? Number(year) : undefined,
+      month: month ? Number(month) : undefined,
+      quarter: quarter ? Number(quarter) : undefined,
+      semester: semester ? Number(semester) : undefined,
+      technicianId: technicianId ? Number(technicianId) : undefined,
+      ticketType,
+    });
+  }
+
   /** GET /tickets/:id */
   @Get(':id')
   @Roles(...ALL_ROLES)

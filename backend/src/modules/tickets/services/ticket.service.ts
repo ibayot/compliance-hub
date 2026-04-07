@@ -385,7 +385,7 @@ export class TicketService implements OnModuleInit {
       meta: e.meta ? JSON.parse(e.meta) : null,
       actorName: e.actor
         ? [e.actor.firstName, e.actor.lastName].filter(Boolean).join(' ') || e.actor.email
-        : undefined,
+        : (e.eventType === 'auto_assigned' ? 'Automatic Ticket Assignment' : undefined),
     }));
   }
 
@@ -407,20 +407,22 @@ export class TicketService implements OnModuleInit {
     let categoryId = dto.categoryId || null;
     let autoShifted = false;
 
-    // ── Auto-Shift based on keyword rules ──────────────────────────────
-    try {
-      const combinedText = `${dto.subject} ${dto.description}`;
-      const matchedRule = await this.settingsService.matchKeywordRules(combinedText);
-      if (matchedRule) {
-        ticketType = matchedRule.targetTicketType as TicketType;
-        if (matchedRule.targetCategoryId) {
-          categoryId = matchedRule.targetCategoryId;
+    // ── Auto-Shift based on keyword rules (QA #13: skipped for Pantawid ICT) ────
+    if (dto.ticketType !== TicketType.PANTAWID_ICT_SUPPORT) {
+      try {
+        const combinedText = `${dto.subject} ${dto.description}`;
+        const matchedRule = await this.settingsService.matchKeywordRules(combinedText);
+        if (matchedRule) {
+          ticketType = matchedRule.targetTicketType as TicketType;
+          if (matchedRule.targetCategoryId) {
+            categoryId = matchedRule.targetCategoryId;
+          }
+          autoShifted = true;
+          this.logger.log(`Auto-shift: keyword "${matchedRule.keyword}" → type=${ticketType}, cat=${categoryId}`);
         }
-        autoShifted = true;
-        this.logger.log(`Auto-shift: keyword "${matchedRule.keyword}" → type=${ticketType}, cat=${categoryId}`);
+      } catch (err: any) {
+        this.logger.warn(`Auto-shift failed (non-fatal): ${err?.message}`);
       }
-    } catch (err: any) {
-      this.logger.warn(`Auto-shift failed (non-fatal): ${err?.message}`);
     }
 
     // ── Auto-Assign based on attendance & workload ─────────────────────
@@ -469,28 +471,29 @@ export class TicketService implements OnModuleInit {
         );
 
         if (availableTechs.length > 0) {
-          // Sort techs by tier: junior first, then senior/focal (enables resolving lower-tier first)
-          // For Pantawid ICT, all available techs are equivalent — order by workload only.
+          // QA #2: Senior technicians are NOT eligible for auto-assignment — they self-assign via admin UI
+          const SENIOR_AUTO_ASSIGN_EXCLUDED: string[] = [
+            UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR,
+            UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
+          ];
+          const eligibleTechs = availableTechs.filter(t => !SENIOR_AUTO_ASSIGN_EXCLUDED.includes(t.role));
+
+          // Sort techs by tier: junior first, then others
           const tierPriority = (role: string): number => {
             const juniorRoles: string[] = [
               UserRole.IT_SUPPORT_JR, UserRole.DESKTOP_JR,
               UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
             ];
-            const seniorRoles: string[] = [
-              UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR,
-              UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
-            ];
             if (juniorRoles.includes(role)) return 1;
-            if (seniorRoles.includes(role)) return 2;
             return 3; // focal / pantawid / others
           };
-          availableTechs.sort((a, b) => tierPriority(a.role) - tierPriority(b.role));
+          eligibleTechs.sort((a, b) => tierPriority(a.role) - tierPriority(b.role));
 
           // Pick the tech with fewest open/assigned/in_progress tickets
           let bestTech: User | null = null;
           let minCount = Infinity;
 
-          for (const tech of availableTechs) {
+          for (const tech of eligibleTechs) {
             const openCount = await this.ticketRepo.count({
               where: [
                 { assignedToId: tech.id, status: TicketStatus.OPEN },
@@ -672,11 +675,11 @@ export class TicketService implements OnModuleInit {
       if (ticket.requesterId !== actorId) {
         throw new ForbiddenException('You can only update your own tickets.');
       }
-      // Allow user to close their own ticket (when assigned/in_progress/resolved)
+      // QA #10: User can only close their own ticket when it is in Resolved status
       if (dto.status === TicketStatus.CLOSED) {
-        const closeable = [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED, TicketStatus.OPEN];
+        const closeable = [TicketStatus.RESOLVED];
         if (!closeable.includes(ticket.status as TicketStatus)) {
-          throw new ForbiddenException('This ticket cannot be closed in its current state.');
+          throw new ForbiddenException('Tickets can only be self-closed once they are in Resolved status.');
         }
         ticket.status = TicketStatus.CLOSED;
         ticket.userClosed = true;
@@ -721,10 +724,40 @@ export class TicketService implements OnModuleInit {
     }
 
     if (dto.status) {
-      // If ticket is OPEN (not yet assigned), only FREEZE or DUPLICATE are valid transitions
-      if (ticket.status === TicketStatus.OPEN) {
-        if (dto.status !== TicketStatus.FREEZE && dto.status !== TicketStatus.DUPLICATE) {
-          throw new ForbiddenException('An OPEN (unassigned) ticket can only be marked as Freeze or Duplicate. Assign it first before changing to other statuses.');
+      // QA #4/#3/#6: Full status transition matrix enforcement
+      const SENIOR_AUTHORITY_ROLES: UserRole[] = [
+        UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER,
+        UserRole.COMPLIANCE_OFFICER, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
+        UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR,
+      ];
+      const isSeniorAuthority = SENIOR_AUTHORITY_ROLES.includes(actorRole);
+
+      const ALLOWED_TRANSITIONS: Partial<Record<TicketStatus, TicketStatus[]>> = {
+        [TicketStatus.OPEN]:        [TicketStatus.FREEZE, TicketStatus.DUPLICATE],
+        [TicketStatus.ASSIGNED]:    isSeniorAuthority
+          ? [TicketStatus.IN_PROGRESS, TicketStatus.FREEZE, TicketStatus.DUPLICATE, TicketStatus.OPEN]
+          : [TicketStatus.IN_PROGRESS, TicketStatus.FREEZE, TicketStatus.DUPLICATE],
+        [TicketStatus.IN_PROGRESS]: [TicketStatus.RESOLVED],
+        [TicketStatus.RESOLVED]:    [TicketStatus.CLOSED],
+        [TicketStatus.FREEZE]:      [TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED],
+        [TicketStatus.CLOSED]:      [],
+        [TicketStatus.DUPLICATE]:   [],
+      };
+      const allowed = ALLOWED_TRANSITIONS[ticket.status as TicketStatus] ?? [];
+      if (!allowed.includes(dto.status as TicketStatus)) {
+        throw new ForbiddenException(
+          `Cannot transition ticket from '${ticket.status}' to '${dto.status}'. ` +
+          (allowed.length > 0 ? `Allowed: ${allowed.join(', ')}.` : 'This status is terminal.'),
+        );
+      }
+
+      // QA #5: Priority is mandatory before moving to In Progress
+      if (dto.status === TicketStatus.IN_PROGRESS) {
+        const effectivePriority = dto.priority ?? ticket.priority;
+        if (!effectivePriority) {
+          throw new BadRequestException(
+            'A priority must be set on this ticket before marking it as In Progress. Please tag the priority first.',
+          );
         }
       }
 
@@ -742,7 +775,7 @@ export class TicketService implements OnModuleInit {
         // Guard: ticket must have a priority before it can be resolved
         if (dto.status === TicketStatus.RESOLVED && !ticket.priority && dto.priority === undefined) {
           throw new BadRequestException(
-            'A priority must be set on this ticket before it can be marked as Resolved. Please tag the priority first.',
+            'A priority must be set on this ticket before it can be marked as Resolved. Please set the priority first.',
           );
         }
         ticket.status = dto.status;
@@ -763,23 +796,32 @@ export class TicketService implements OnModuleInit {
       }).catch(() => {});
     }
 
-    // On RESOLVED: auto-assign the oldest pending OPEN ticket of the same type to this technician
+    // QA #1/#2: On RESOLVED, auto-assign next OPEN ticket — only for non-senior techs
     if (dto.status === TicketStatus.RESOLVED && saved.assignedToId) {
       try {
-        const nextTicket = await this.ticketRepo
-          .createQueryBuilder('t')
-          .where('t.status = :status', { status: TicketStatus.OPEN })
-          .andWhere('t.assignedToId IS NULL')
-          .andWhere('t.ticketType = :type', { type: saved.ticketType })
-          .orderBy('t.createdAt', 'ASC')
-          .getOne();
-        if (nextTicket) {
-          nextTicket.assignedToId = saved.assignedToId;
-          nextTicket.status = TicketStatus.ASSIGNED;
-          await this.ticketRepo.save(nextTicket);
-          this.logger.log(
-            `Auto-reassign on resolve: ticket ${nextTicket.ticketNumber} → technician #${saved.assignedToId}`,
-          );
+        const SENIOR_AUTO_ASSIGN_EXCLUDED: string[] = [
+          UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR,
+          UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
+        ];
+        const resolvedByTech = await this.userRepo.findOne({ where: { id: saved.assignedToId } });
+        const isSeniorTech = resolvedByTech && SENIOR_AUTO_ASSIGN_EXCLUDED.includes(resolvedByTech.role);
+
+        if (!isSeniorTech) {
+          const nextTicket = await this.ticketRepo
+            .createQueryBuilder('t')
+            .where('t.status = :status', { status: TicketStatus.OPEN })
+            .andWhere('t.assignedToId IS NULL')
+            .andWhere('t.ticketType = :type', { type: saved.ticketType })
+            .orderBy('t.createdAt', 'ASC')
+            .getOne();
+          if (nextTicket) {
+            nextTicket.assignedToId = saved.assignedToId;
+            nextTicket.status = TicketStatus.ASSIGNED;
+            await this.ticketRepo.save(nextTicket);
+            this.logger.log(
+              `Auto-reassign on resolve: ticket ${nextTicket.ticketNumber} → technician #${saved.assignedToId}`,
+            );
+          }
         }
       } catch (err: any) {
         this.logger.warn(`Auto-reassign on resolve failed (non-fatal): ${err?.message}`);
@@ -886,10 +928,15 @@ export class TicketService implements OnModuleInit {
   async markTicketViewed(id: string, viewerId: number, viewerRole: UserRole): Promise<Ticket | null> {
     const ticket = await this.getTicketById(id);
     // Only auto-transition when the assigned technician views an 'assigned' ticket
+    // QA #5: Skip auto-transition if priority has not been set yet
     if (
       ticket.status === TicketStatus.ASSIGNED &&
       ticket.assignedToId === viewerId
     ) {
+      if (!ticket.priority) {
+        this.logger.log(`Auto in_progress skipped: ticket ${ticket.ticketNumber} has no priority set.`);
+        return null; // Priority must be set first
+      }
       ticket.status = TicketStatus.IN_PROGRESS;
       const saved = await this.ticketRepo.save(ticket);
       this.logger.log(`Auto in_progress: ticket ${ticket.ticketNumber} viewed by technician #${viewerId}`);
@@ -1209,4 +1256,109 @@ export class TicketService implements OnModuleInit {
       })
       .orderBy('t.createdAt', 'DESC')
       .getMany();
+  }
+
+  // --- Ticket Reports (QA #11) --------------------------------------------
+
+  async getTicketReports(filters: {
+    year?: number;
+    month?: number;
+    quarter?: number;
+    semester?: number;
+    technicianId?: number;
+    ticketType?: string;
+  }): Promise<{
+    totalTickets: number;
+    totalWithRating: number;
+    avgOverallRating: number | null;
+    avgRatingByType: Array<{ type: string; avg: number; count: number }>;
+    avgRatingByTechnician: Array<{ techId: number; techName: string; avg: number; count: number }>;
+  }> {
+    const now = new Date();
+    const year = filters.year ?? now.getFullYear();
+
+    // Build date range from filters
+    let startDate: Date;
+    let endDate: Date;
+
+    if (filters.month) {
+      startDate = new Date(year, filters.month - 1, 1);
+      endDate = new Date(year, filters.month, 0, 23, 59, 59, 999);
+    } else if (filters.quarter) {
+      const qStart = (filters.quarter - 1) * 3;
+      startDate = new Date(year, qStart, 1);
+      endDate = new Date(year, qStart + 3, 0, 23, 59, 59, 999);
+    } else if (filters.semester) {
+      const sStart = (filters.semester - 1) * 6;
+      startDate = new Date(year, sStart, 1);
+      endDate = new Date(year, sStart + 6, 0, 23, 59, 59, 999);
+    } else {
+      startDate = new Date(year, 0, 1);
+      endDate = new Date(year, 11, 31, 23, 59, 59, 999);
+    }
+
+    let qb = this.ticketRepo
+      .createQueryBuilder('t')
+      .leftJoinAndSelect('t.assignedTo', 'assignedTo')
+      .where('t.satisfactionRating IS NOT NULL')
+      .andWhere('t.createdAt >= :startDate', { startDate })
+      .andWhere('t.createdAt <= :endDate', { endDate });
+
+    if (filters.technicianId) {
+      qb = qb.andWhere('t.assignedToId = :techId', { techId: filters.technicianId });
+    }
+    if (filters.ticketType) {
+      qb = qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+    }
+
+    const tickets = await qb.getMany();
+
+    // Total tickets (any status) in the date range with optional filters
+    let totalQb = this.ticketRepo
+      .createQueryBuilder('t')
+      .where('t.createdAt >= :startDate', { startDate })
+      .andWhere('t.createdAt <= :endDate', { endDate });
+    if (filters.technicianId) totalQb = totalQb.andWhere('t.assignedToId = :techId', { techId: filters.technicianId });
+    if (filters.ticketType) totalQb = totalQb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+    const totalTickets = await totalQb.getCount();
+
+    if (tickets.length === 0) {
+      return { totalTickets, totalWithRating: 0, avgOverallRating: null, avgRatingByType: [], avgRatingByTechnician: [] };
+    }
+
+    // Overall average
+    const overallSum = tickets.reduce((s, t) => s + (t.satisfactionRating ?? 0), 0);
+    const avgOverallRating = Math.round((overallSum / tickets.length) * 10) / 10;
+
+    // Per type
+    const byTypeMap = new Map<string, { sum: number; count: number }>();
+    for (const t of tickets) {
+      const key = t.ticketType;
+      const cur = byTypeMap.get(key) ?? { sum: 0, count: 0 };
+      byTypeMap.set(key, { sum: cur.sum + (t.satisfactionRating ?? 0), count: cur.count + 1 });
+    }
+    const avgRatingByType = Array.from(byTypeMap.entries()).map(([type, { sum, count }]) => ({
+      type,
+      avg: Math.round((sum / count) * 10) / 10,
+      count,
+    }));
+
+    // Per technician
+    const byTechMap = new Map<number, { name: string; sum: number; count: number }>();
+    for (const t of tickets) {
+      if (!t.assignedToId) continue;
+      const techName = t.assignedTo
+        ? [t.assignedTo.firstName, t.assignedTo.lastName].filter(Boolean).join(' ') || t.assignedTo.email
+        : `Tech #${t.assignedToId}`;
+      const cur = byTechMap.get(t.assignedToId) ?? { name: techName, sum: 0, count: 0 };
+      byTechMap.set(t.assignedToId, { name: techName, sum: cur.sum + (t.satisfactionRating ?? 0), count: cur.count + 1 });
+    }
+    const avgRatingByTechnician = Array.from(byTechMap.entries()).map(([techId, { name, sum, count }]) => ({
+      techId,
+      techName: name,
+      avg: Math.round((sum / count) * 10) / 10,
+      count,
+    })).sort((a, b) => b.avg - a.avg);
+
+    return { totalTickets, totalWithRating: tickets.length, avgOverallRating, avgRatingByType, avgRatingByTechnician };
   }}

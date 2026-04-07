@@ -161,11 +161,14 @@ export default function TicketDetailPage() {
 
   useEffect(() => { fetchEvents(); }, [ticketId]);
 
-  // Live updates – poll every 30 s (reduced from 10s to lower API rate-limit pressure)
+  // Live updates – poll every 30 s for all users (QA #7: ensures user-side sees status changes)
   useEffect(() => {
     const id = setInterval(() => {
       ticketsApi.getById(ticketId).then(data => {
         setTicket(data);
+      }).catch(() => {});
+      ticketsApi.getEvents(ticketId).then(data => {
+        setEvents(data);
       }).catch(() => {});
     }, 30_000);
     return () => clearInterval(id);
@@ -394,8 +397,8 @@ export default function TicketDetailPage() {
                   Escalate Ticket
                 </Button>
               )}
-              {/* Self-close: requester can close their own ticket from any active state */}
-              {isRegularUser && isRequester && !['closed', 'duplicate', 'freeze'].includes(ticket.status) && (
+              {/* Self-close: requester can close their own ticket once it is Resolved */}
+              {isRegularUser && isRequester && ticket.status === 'resolved' && (
                 <Button variant="outlined" size="small" color="error" onClick={handleSelfClose}>
                   Close Ticket
                 </Button>
@@ -433,58 +436,82 @@ export default function TicketDetailPage() {
           {editingStatus && canStaff && (
             <Box mt={3} p={2} bgcolor="action.hover" borderRadius={1}>
               <Typography variant="subtitle2" gutterBottom>Update Ticket</Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    select
-                    fullWidth
-                    label="Status"
-                    value={newStatus}
-                    onChange={(e) => setNewStatus(e.target.value)}
-                    size="small"
-                  >
-                    {(ticket?.status === 'open'
-                      ? STATUS_OPTS.filter((s) => s.value === 'freeze' || s.value === 'duplicate')
-                      : STATUS_OPTS
-                    ).map((s) => (
-                      <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-                {canPriority && (
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      select
-                      fullWidth
-                      label="Priority (optional)"
-                      value={newPriority || ticket?.priority || ''}
-                      onChange={(e) => setNewPriority(e.target.value)}
-                      size="small"
-                    >
-                      {['low', 'medium', 'high', 'urgent'].map((p) => (
-                        <MenuItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</MenuItem>
-                      ))}
-                    </TextField>
+              {(() => {
+                // QA #3/#4/#6: Compute allowed next statuses based on current status and actor role
+                const isSeniorAuthority = [
+                  'super_admin', 'focal', 'reviewer', 'section_head', 'compliance_officer',
+                  'technician_it_support', 'technician_desktop', 'it_support_sr', 'desktop_sr',
+                ].includes(user?.role ?? '');
+                let allowedValues: string[] = [];
+                switch (ticket?.status) {
+                  case 'open':       allowedValues = ['freeze', 'duplicate']; break;
+                  case 'assigned':   allowedValues = isSeniorAuthority
+                    ? ['in_progress', 'freeze', 'duplicate', 'open']
+                    : ['in_progress', 'freeze', 'duplicate']; break;
+                  case 'in_progress': allowedValues = ['resolved']; break;
+                  case 'resolved':   allowedValues = ['closed']; break;
+                  case 'freeze':     allowedValues = ['open', 'assigned', 'in_progress', 'resolved']; break;
+                  default:           allowedValues = [];
+                }
+                const allowedOpts = STATUS_OPTS.filter(s => allowedValues.includes(s.value));
+                // QA #5: Disable Save when transitioning to in_progress without a priority
+                const effectivePriority = newPriority || ticket?.priority;
+                const needsPriority = newStatus === 'in_progress' && !effectivePriority;
+                return (
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        select
+                        fullWidth
+                        label="Status"
+                        value={newStatus}
+                        onChange={(e) => setNewStatus(e.target.value)}
+                        size="small"
+                      >
+                        {allowedOpts.map((s) => (
+                          <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+                    {canStaff && (
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          select
+                          fullWidth
+                          label={newStatus === 'in_progress' ? 'Priority *' : 'Priority'}
+                          value={newPriority || ticket?.priority || ''}
+                          onChange={(e) => setNewPriority(e.target.value)}
+                          size="small"
+                          required={newStatus === 'in_progress'}
+                          error={needsPriority}
+                          helperText={needsPriority ? 'Priority is required before moving to In Progress' : undefined}
+                        >
+                          {['low', 'medium', 'high', 'urgent'].map((p) => (
+                            <MenuItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</MenuItem>
+                          ))}
+                        </TextField>
+                      </Grid>
+                    )}
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        multiline
+                        rows={2}
+                        label="Resolution Notes (optional)"
+                        value={resolutionNotes}
+                        onChange={(e) => setResolutionNotes(e.target.value)}
+                        size="small"
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Box display="flex" gap={1}>
+                        <Button variant="contained" size="small" onClick={() => handleUpdateStatus()} disabled={needsPriority}>Save</Button>
+                        <Button size="small" onClick={() => setEditingStatus(false)}>Cancel</Button>
+                      </Box>
+                    </Grid>
                   </Grid>
-                )}
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    multiline
-                    rows={2}
-                    label="Resolution Notes (optional)"
-                    value={resolutionNotes}
-                    onChange={(e) => setResolutionNotes(e.target.value)}
-                    size="small"
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <Box display="flex" gap={1}>
-                    <Button variant="contained" size="small" onClick={() => handleUpdateStatus()}>Save</Button>
-                    <Button size="small" onClick={() => setEditingStatus(false)}>Cancel</Button>
-                  </Box>
-                </Grid>
-              </Grid>
+                );
+              })()}
             </Box>
           )}
         </CardContent>
@@ -660,7 +687,7 @@ export default function TicketDetailPage() {
             <Typography variant="body2" color="text.secondary">No events recorded yet.</Typography>
           ) : (
             <Box>
-              {events.map((ev, idx) => {
+              {[...events].reverse().map((ev, idx) => {
                 const isLast = idx === events.length - 1;
                 const EVENT_LABELS: Record<string, string> = {
                   created: 'Ticket Created',

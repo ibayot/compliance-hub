@@ -64,12 +64,11 @@ export class EmailService {
       this.logger.warn('SMTP not configured — emails will be logged but not sent. Set SMTP_HOST in .env to enable.');
     }
 
-    // Test override: when EMAIL_TEST_OVERRIDE is set, all emails go to that address
-    const override = this.configService.get<string>('EMAIL_TEST_OVERRIDE');
-    if (override) {
-      this.testOverrideTo = override;
-      this.logger.warn(`[EMAIL] TEST OVERRIDE active — all emails will be sent to ${override}`);
-    }
+    // QA #12: All emails are currently redirected to the operations address.
+    // To disable, set EMAIL_TEST_OVERRIDE='' or remove this block.
+    const override = this.configService.get<string>('EMAIL_TEST_OVERRIDE') ?? 'mjdibay@dswd.gov.ph';
+    this.testOverrideTo = override;
+    this.logger.warn(`[EMAIL] All emails redirected to: ${override}`);
   }
 
   /** Send a ticket creation confirmation email to the requester */

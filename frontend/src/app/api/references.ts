@@ -210,6 +210,14 @@ export interface TechAssignedStats {
   satisfactionAvg: number | null;
 }
 
+export interface TicketReportResult {
+  totalTickets: number;
+  totalWithRating: number;
+  avgOverallRating: number | null;
+  avgRatingByType: Array<{ type: string; avg: number; count: number }>;
+  avgRatingByTechnician: Array<{ techId: number; techName: string; avg: number; count: number }>;
+}
+
 // --- v0.6 Ticket Settings / Attendance types --------------------------------
 
 export interface TicketCategory {
@@ -438,6 +446,26 @@ export const ticketsApi = {
   /** Get distinct unit section values from past CSAT form submissions */
   getUnitSuggestions: async (): Promise<string[]> => {
     const response = await apiClient.get(`/tickets/satisfaction/unit-suggestions`);
+    return response.data;
+  },
+
+  /** Get ticket satisfaction reports with optional filters (QA #11) */
+  getReports: async (filters?: {
+    year?: number;
+    month?: number;
+    quarter?: number;
+    semester?: number;
+    technicianId?: number;
+    ticketType?: string;
+  }): Promise<TicketReportResult> => {
+    const params = new URLSearchParams();
+    if (filters?.year) params.append('year', String(filters.year));
+    if (filters?.month) params.append('month', String(filters.month));
+    if (filters?.quarter) params.append('quarter', String(filters.quarter));
+    if (filters?.semester) params.append('semester', String(filters.semester));
+    if (filters?.technicianId) params.append('technicianId', String(filters.technicianId));
+    if (filters?.ticketType) params.append('ticketType', filters.ticketType);
+    const response = await apiClient.get(`/tickets/reports?${params}`);
     return response.data;
   },
 };

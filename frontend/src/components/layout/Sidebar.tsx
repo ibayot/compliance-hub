@@ -32,6 +32,7 @@ import {
   FactCheck as MovIcon,
   Tune as TicketSettingsIcon,
   EventAvailable as AttendanceIcon,
+  BarChart as TicketReportsIcon,
 } from '@mui/icons-material';
 import type { ElementType } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -72,6 +73,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     { label: 'Metrics', icon: MetricsIcon, path: '/dashboard/metrics', roles: ['super_admin', 'reviewer', 'compliance_officer'] },
     { label: 'KPI', icon: KpiIcon, path: '/dashboard/kpi', roles: ['super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor'], roleCodes: ['focal'] },
     { label: 'Ticket Settings', icon: TicketSettingsIcon, path: '/dashboard/ticket-settings', roles: ['super_admin', 'technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr', 'pantawid_ict'], roleCodes: ['focal'] },
+    { label: 'Ticket Reports', icon: TicketReportsIcon, path: '/dashboard/ticket-reports', roles: ['super_admin', 'focal', 'reviewer', 'section_head', 'compliance_officer', 'technician_it_support', 'technician_desktop', 'it_support_sr', 'desktop_sr', 'pantawid_ict', 'technician'], roleCodes: ['focal'] },
     { label: 'Attendance', icon: AttendanceIcon, path: '/dashboard/attendance', roles: ['super_admin', 'focal', 'reviewer', 'compliance_officer', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff', 'desktop_sr', 'it_support_sr', 'desktop_jr', 'it_support_jr', 'pantawid_ict'], roleCodes: ['focal'] },
     { label: 'Reviews', icon: SecurityIcon, path: '/dashboard/reviews', roles: ['super_admin', 'reviewer', 'compliance_officer'] },
     { label: 'Reports', icon: ReportsIcon, path: '/dashboard/reports', roles: ['super_admin', 'reviewer', 'compliance_officer'], roleCodes: ['section_head', 'compliance_officer'] },
