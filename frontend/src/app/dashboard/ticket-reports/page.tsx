@@ -255,6 +255,39 @@ export default function TicketReportsPage() {
             </Grid>
           </Grid>
 
+          {/* ── Escalation Metrics ── */}
+          {(result.totalEscalations ?? 0) > 0 && (
+            <Grid container spacing={2} mb={3}>
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>Escalation Summary</Typography>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="caption" color="text.secondary">Total Escalations</Typography>
+                    <Typography variant="h4" fontWeight={700}>{result.totalEscalations ?? 0}</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="caption" color="text.secondary">Accepted</Typography>
+                    <Typography variant="h4" fontWeight={700} color="success.main">{result.acceptedEscalations ?? 0}</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="caption" color="text.secondary">Returned</Typography>
+                    <Typography variant="h4" fontWeight={700} color="error.main">{result.returnedEscalations ?? 0}</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          )}
+
           <Grid container spacing={3}>
             {/* ── Per Support Type ── */}
             <Grid item xs={12} md={6}>

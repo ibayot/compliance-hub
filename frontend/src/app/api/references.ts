@@ -216,6 +216,34 @@ export interface TicketReportResult {
   avgOverallRating: number | null;
   avgRatingByType: Array<{ type: string; avg: number; count: number }>;
   avgRatingByTechnician: Array<{ techId: number; techName: string; avg: number; count: number }>;
+  totalEscalations: number;
+  acceptedEscalations: number;
+  returnedEscalations: number;
+}
+
+export type EscalationStatus = 'pending' | 'accepted' | 'returned';
+
+export interface TicketEscalation {
+  id: string;
+  ticketId: string;
+  escalatedById: number;
+  escalatedToId: number;
+  escalatedBy?: { id: number; firstName?: string; lastName?: string; email: string };
+  escalatedTo?: { id: number; firstName?: string; lastName?: string; email: string };
+  status: EscalationStatus;
+  notes?: string | null;
+  returnReason?: string | null;
+  proofFiles?: string[] | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EscalationFocalConfig {
+  id: number;
+  ticketType: string;
+  roleValue: string;
+  label: string;
+  createdAt: string;
 }
 
 // --- v0.6 Ticket Settings / Attendance types --------------------------------
@@ -468,6 +496,29 @@ export const ticketsApi = {
     const response = await apiClient.get(`/tickets/reports?${params}`);
     return response.data;
   },
+
+  // --- Escalation ---
+  getEscalations: async (ticketId: string): Promise<TicketEscalation[]> => {
+    const response = await apiClient.get(`/tickets/${ticketId}/escalations`);
+    return response.data;
+  },
+
+  escalateTicket: async (ticketId: string, data: FormData): Promise<TicketEscalation> => {
+    const response = await apiClient.post(`/tickets/${ticketId}/escalate`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  acceptEscalation: async (ticketId: string, escalationId: string): Promise<TicketEscalation> => {
+    const response = await apiClient.patch(`/tickets/${ticketId}/escalation/${escalationId}/accept`);
+    return response.data;
+  },
+
+  returnEscalation: async (ticketId: string, escalationId: string, returnReason: string): Promise<TicketEscalation> => {
+    const response = await apiClient.patch(`/tickets/${ticketId}/escalation/${escalationId}/return`, { returnReason });
+    return response.data;
+  },
 };
 
 // Ticket Settings API (Categories + Keyword Rules)
@@ -520,6 +571,24 @@ export const ticketSettingsApi = {
   },
   deleteKeywordRule: async (id: string): Promise<void> => {
     await apiClient.delete(`/ticket-settings/keyword-rules/${id}`);
+  },
+
+  // Escalation Focals (QA #3, #13)
+  getEscalationFocals: async (ticketType?: string): Promise<EscalationFocalConfig[]> => {
+    const params = ticketType ? `?ticketType=${ticketType}` : '';
+    const response = await apiClient.get(`/ticket-settings/escalation-focals${params}`);
+    return response.data;
+  },
+  getAvailableEscalationRoles: async (): Promise<{ value: string; label: string }[]> => {
+    const response = await apiClient.get(`/ticket-settings/escalation-available-roles`);
+    return response.data;
+  },
+  addEscalationFocal: async (data: { ticketType: string; roleValue: string; label: string }): Promise<EscalationFocalConfig> => {
+    const response = await apiClient.post(`/ticket-settings/escalation-focals`, data);
+    return response.data;
+  },
+  removeEscalationFocal: async (id: number): Promise<void> => {
+    await apiClient.delete(`/ticket-settings/escalation-focals/${id}`);
   },
 };
 

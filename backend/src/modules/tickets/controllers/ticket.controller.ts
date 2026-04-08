@@ -11,7 +11,10 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -23,6 +26,8 @@ import {
   AssignTicketDto,
   AddCommentDto,
   SubmitSatisfactionDto,
+  EscalateTicketDto,
+  ReturnEscalationDto,
 } from '../services/ticket.service';
 import { TicketStatus, TicketType } from '../entities/ticket.entity';
 
@@ -137,7 +142,9 @@ export class TicketController {
   /** GET /tickets/:id */
   @Get(':id')
   @Roles(...ALL_ROLES)
-  async getTicket(@Param('id') id: string) { return this.ticketService.getTicketById(id); }
+  async getTicket(@Param('id') id: string, @Request() req: any) {
+    return this.ticketService.getTicketById(id, req.user?.role as UserRole);
+  }
 
   /** PATCH /tickets/:id */
   @Patch(':id')
@@ -197,5 +204,56 @@ export class TicketController {
   @Roles(...ALL_ROLES)
   async getSatisfactionUnitSuggestions() {
     return this.ticketService.getSatisfactionUnitSuggestions();
+  }
+
+  // ── Escalation ────────────────────────────────────────────────────────────
+
+  /** GET /tickets/:id/escalations */
+  @Get(':id/escalations')
+  @Roles(...ALL_ROLES)
+  async getEscalations(@Param('id') id: string) {
+    return this.ticketService.getEscalations(id);
+  }
+
+  /** POST /tickets/:id/escalate — upload proof photos (multipart/form-data) */
+  @Post(':id/escalate')
+  @Roles(
+    UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER,
+    UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
+    UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
+    UserRole.COMPLIANCE_OFFICER, UserRole.PANTAWID_ICT,
+    UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
+  )
+  @UseInterceptors(FilesInterceptor('proofFiles', 10, { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async escalateTicket(
+    @Param('id') id: string,
+    @Body() body: { escalatedToId: string; notes?: string },
+    @UploadedFiles() proofFiles: Express.Multer.File[],
+    @Request() req: any,
+  ) {
+    const dto: EscalateTicketDto = {
+      escalatedToId: Number(body.escalatedToId),
+      notes: body.notes,
+    };
+    return this.ticketService.escalateTicket(id, dto, proofFiles ?? [], req.user.id ?? req.user.userId, req.user.role);
+  }
+
+  /** PATCH /tickets/:id/escalation/:eid/accept */
+  @Patch(':id/escalation/:eid/accept')
+  @Roles(...ALL_ROLES)
+  async acceptEscalation(@Param('id') id: string, @Param('eid') eid: string, @Request() req: any) {
+    return this.ticketService.acceptEscalation(id, eid, req.user.id ?? req.user.userId);
+  }
+
+  /** PATCH /tickets/:id/escalation/:eid/return */
+  @Patch(':id/escalation/:eid/return')
+  @Roles(...ALL_ROLES)
+  async returnEscalation(
+    @Param('id') id: string,
+    @Param('eid') eid: string,
+    @Body() dto: ReturnEscalationDto,
+    @Request() req: any,
+  ) {
+    return this.ticketService.returnEscalation(id, eid, dto, req.user.id ?? req.user.userId);
   }
 }

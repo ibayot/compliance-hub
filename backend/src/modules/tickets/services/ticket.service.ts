@@ -8,10 +8,14 @@
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import * as fs from 'fs';
+import * as path from 'path';
 import { Ticket, TicketType, TicketStatus, TicketPriority } from '../entities/ticket.entity';
 import { TicketComment } from '../entities/ticket-comment.entity';
 import { TicketCategoryConfig } from '../entities/ticket-category.entity';
 import { TicketEvent } from '../entities/ticket-event.entity';
+import { TicketEscalation, EscalationStatus } from '../entities/ticket-escalation.entity';
+import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
 import { User, UserRole } from '../../users/entities/user.entity';
 import { TicketSettingsService } from './ticket-settings.service';
 import { AttendanceService } from './attendance.service';
@@ -73,6 +77,15 @@ export interface SubmitSatisfactionDto {
   formData?: CsatFormData; // New full CSAT form
 }
 
+export interface EscalateTicketDto {
+  escalatedToId: number;
+  notes?: string;
+}
+
+export interface ReturnEscalationDto {
+  returnReason: string;
+}
+
 // --- Service -----------------------------------------------------------------
 
 @Injectable()
@@ -88,6 +101,10 @@ export class TicketService implements OnModuleInit {
     private readonly userRepo: Repository<User>,
     @InjectRepository(TicketEvent)
     private readonly eventRepo: Repository<TicketEvent>,
+    @InjectRepository(TicketEscalation)
+    private readonly escalationRepo: Repository<TicketEscalation>,
+    @InjectRepository(EscalationFocalConfig)
+    private readonly escalationFocalRepo: Repository<EscalationFocalConfig>,
     private readonly dataSource: DataSource,
     private readonly settingsService: TicketSettingsService,
     private readonly attendanceService: AttendanceService,
@@ -650,12 +667,16 @@ export class TicketService implements OnModuleInit {
     })) as any;
   }
 
-  async getTicketById(id: string): Promise<Ticket> {
+  async getTicketById(id: string, viewerRole?: UserRole): Promise<Ticket> {
     const ticket = await this.ticketRepo.findOne({
       where: { id },
       relations: ['requester', 'assignedTo', 'category', 'comments', 'comments.user'],
     });
     if (!ticket) throw new NotFoundException(`Ticket ${id} not found`);
+    // Strip internal notes for regular users — they should never see staff-only comments
+    if (viewerRole === UserRole.USER && ticket.comments) {
+      (ticket as any).comments = ticket.comments.filter((c: any) => !c.isInternal);
+    }
     return ticket;
   }
 
@@ -850,9 +871,12 @@ export class TicketService implements OnModuleInit {
 
     const ticket = await this.getTicketById(id);
 
-    // Duplicate tickets are terminal – assignment is not allowed
+    // Duplicate, Resolved, and Closed tickets are terminal – assignment is not allowed
     if (ticket.status === TicketStatus.DUPLICATE) {
       throw new ForbiddenException('Cannot assign a technician to a ticket that is marked as Duplicate.');
+    }
+    if ([TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(ticket.status as TicketStatus)) {
+      throw new ForbiddenException('Resolved or closed tickets cannot be reassigned.');
     }
 
     const technician = await this.userRepo.findOne({ where: { id: dto.assignedToId } });
@@ -1273,6 +1297,9 @@ export class TicketService implements OnModuleInit {
     avgOverallRating: number | null;
     avgRatingByType: Array<{ type: string; avg: number; count: number }>;
     avgRatingByTechnician: Array<{ techId: number; techName: string; avg: number; count: number }>;
+    totalEscalations: number;
+    acceptedEscalations: number;
+    returnedEscalations: number;
   }> {
     const now = new Date();
     const year = filters.year ?? now.getFullYear();
@@ -1323,7 +1350,7 @@ export class TicketService implements OnModuleInit {
     const totalTickets = await totalQb.getCount();
 
     if (tickets.length === 0) {
-      return { totalTickets, totalWithRating: 0, avgOverallRating: null, avgRatingByType: [], avgRatingByTechnician: [] };
+      return { totalTickets, totalWithRating: 0, avgOverallRating: null, avgRatingByType: [], avgRatingByTechnician: [], totalEscalations: 0, acceptedEscalations: 0, returnedEscalations: 0 };
     }
 
     // Overall average
@@ -1360,5 +1387,150 @@ export class TicketService implements OnModuleInit {
       count,
     })).sort((a, b) => b.avg - a.avg);
 
-    return { totalTickets, totalWithRating: tickets.length, avgOverallRating, avgRatingByType, avgRatingByTechnician };
-  }}
+    // Escalation counts in the same date range
+    let escQb = this.escalationRepo
+      .createQueryBuilder('e')
+      .innerJoin('tickets', 't', 't.id = e.ticket_id')
+      .where('t.created_at >= :startDate', { startDate })
+      .andWhere('t.created_at <= :endDate', { endDate });
+    if (filters.ticketType) {
+      escQb = escQb.andWhere('t.ticket_type = :ticketType', { ticketType: filters.ticketType });
+    }
+    const totalEscalations = await escQb.getCount();
+    const acceptedEscalations = await escQb.clone().andWhere('e.status = :s', { s: EscalationStatus.ACCEPTED }).getCount();
+    const returnedEscalations = await escQb.clone().andWhere('e.status = :s', { s: EscalationStatus.RETURNED }).getCount();
+
+    return { totalTickets, totalWithRating: tickets.length, avgOverallRating, avgRatingByType, avgRatingByTechnician, totalEscalations, acceptedEscalations, returnedEscalations };
+  }
+
+  // --- Escalation ----------------------------------------------------------
+
+  /**
+   * Storage root for escalation proof photos.
+   * QA #5/#6: Photos are stored on the existing backend filesystem (not a separate DB/service).
+   */
+  private escalationStorageRoot(): string {
+    return path.join(process.cwd(), 'storage', 'escalation-proofs');
+  }
+
+  /** POST /tickets/:id/escalate — tech escalates a ticket to a focal/senior */
+  async escalateTicket(
+    ticketId: string,
+    dto: EscalateTicketDto,
+    proofFiles: Express.Multer.File[],
+    actorId: number,
+    actorRole: UserRole,
+  ): Promise<TicketEscalation> {
+    const ticket = await this.getTicketById(ticketId);
+
+    // Terminal tickets cannot be escalated
+    if ([TicketStatus.CLOSED, TicketStatus.DUPLICATE, TicketStatus.RESOLVED].includes(ticket.status as TicketStatus)) {
+      throw new ForbiddenException('Resolved, closed, or duplicate tickets cannot be escalated.');
+    }
+
+    // Verify target is a valid escalation focal for this ticket type
+    const focals = await this.escalationFocalRepo.find();
+    const focal = await this.userRepo.findOne({ where: { id: dto.escalatedToId } });
+    if (!focal) throw new NotFoundException('Escalation target user not found.');
+
+    const allowedRoles = focals
+      .filter(f => f.ticketType === ticket.ticketType || f.ticketType === 'all')
+      .map(f => f.roleValue);
+
+    if (allowedRoles.length > 0 && !allowedRoles.includes(focal.role)) {
+      throw new ForbiddenException('The selected user is not designated as an escalation focal for this ticket type.');
+    }
+
+    // Save proof photos to disk
+    const savedPaths: string[] = [];
+    if (proofFiles && proofFiles.length > 0) {
+      const dir = path.join(this.escalationStorageRoot(), ticketId);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      for (const file of proofFiles) {
+        const filename = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const fullPath = path.join(dir, filename);
+        fs.writeFileSync(fullPath, file.buffer);
+        savedPaths.push(`escalation-proofs/${ticketId}/${filename}`);
+      }
+    }
+
+    const escalation = this.escalationRepo.create({
+      ticketId,
+      escalatedById: actorId,
+      escalatedToId: dto.escalatedToId,
+      status: EscalationStatus.PENDING,
+      notes: dto.notes ?? null,
+      proofFiles: savedPaths.length > 0 ? savedPaths : null,
+    });
+    const saved = await this.escalationRepo.save(escalation);
+
+    // Re-assign ticket to the focal technician
+    ticket.assignedToId = dto.escalatedToId;
+    if (ticket.status === TicketStatus.OPEN) ticket.status = TicketStatus.ASSIGNED;
+    await this.ticketRepo.save(ticket);
+
+    this.logEvent(ticketId, 'escalated', actorId, {
+      escalatedToId: dto.escalatedToId,
+      escalatedToName: [focal.firstName, focal.lastName].filter(Boolean).join(' ') || focal.email,
+      hasProof: savedPaths.length > 0,
+    }).catch(() => {});
+
+    return saved;
+  }
+
+  /** PATCH /tickets/:id/escalation/:eid/accept — focal accepts the escalation */
+  async acceptEscalation(ticketId: string, escalationId: string, actorId: number): Promise<TicketEscalation> {
+    const escalation = await this.escalationRepo.findOne({ where: { id: escalationId, ticketId } });
+    if (!escalation) throw new NotFoundException('Escalation record not found.');
+    if (escalation.escalatedToId !== actorId) {
+      throw new ForbiddenException('Only the escalation target may accept or return this escalation.');
+    }
+    if (escalation.status !== EscalationStatus.PENDING) {
+      throw new BadRequestException('This escalation has already been processed.');
+    }
+    escalation.status = EscalationStatus.ACCEPTED;
+    return this.escalationRepo.save(escalation);
+  }
+
+  /** PATCH /tickets/:id/escalation/:eid/return — focal returns the ticket with a reason */
+  async returnEscalation(
+    ticketId: string,
+    escalationId: string,
+    dto: ReturnEscalationDto,
+    actorId: number,
+  ): Promise<TicketEscalation> {
+    const escalation = await this.escalationRepo.findOne({ where: { id: escalationId, ticketId } });
+    if (!escalation) throw new NotFoundException('Escalation record not found.');
+    if (escalation.escalatedToId !== actorId) {
+      throw new ForbiddenException('Only the escalation target may accept or return this escalation.');
+    }
+    if (escalation.status !== EscalationStatus.PENDING) {
+      throw new BadRequestException('This escalation has already been processed.');
+    }
+    if (!dto.returnReason?.trim()) {
+      throw new BadRequestException('A return reason is required.');
+    }
+    escalation.status = EscalationStatus.RETURNED;
+    escalation.returnReason = dto.returnReason.trim();
+
+    // Re-assign ticket back to the escalating technician
+    const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
+    if (ticket) {
+      ticket.assignedToId = escalation.escalatedById;
+      if (ticket.status === TicketStatus.OPEN) ticket.status = TicketStatus.ASSIGNED;
+      await this.ticketRepo.save(ticket);
+    }
+
+    this.logEvent(ticketId, 'escalation_returned', actorId, { reason: dto.returnReason }).catch(() => {});
+    return this.escalationRepo.save(escalation);
+  }
+
+  /** GET /tickets/:id/escalations — list all escalations for a ticket */
+  async getEscalations(ticketId: string): Promise<TicketEscalation[]> {
+    return this.escalationRepo.find({
+      where: { ticketId },
+      relations: ['escalatedBy', 'escalatedTo'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+}

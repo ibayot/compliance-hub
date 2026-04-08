@@ -368,13 +368,48 @@ export class AttendanceService {
   // ── Auto-correct attendance on login ─────────────────────────────────
 
   /**
-   * If a technician logs in while marked absent for today, auto-correct to present.
-   * This is called from AuthService.login() / googleLogin() after recording the login timestamp.
+   * When a technician logs in, auto-mark them PRESENT for today.
+   * - If no attendance record exists yet → create one with PRESENT status.
+   * - If they are already marked ABSENT → correct to PRESENT.
+   * - If already PRESENT / OUT_OF_OFFICE → no change.
+   * Non-technician roles are skipped so the table stays clean.
+   * Called from AuthService.login() / googleLogin() after recording the login timestamp.
    */
   async autoCorrectAbsentOnLogin(userId: number): Promise<void> {
+    // Only auto-mark attendance for technician-tier accounts
+    const techRoles = new Set<string>([
+      UserRole.DESKTOP_SR, UserRole.DESKTOP_JR,
+      UserRole.IT_SUPPORT_SR, UserRole.IT_SUPPORT_JR,
+      UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
+      UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
+      UserRole.PANTAWID_ICT,
+    ]);
+
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) return;
+
+    // Check built-in tech roles
+    if (!techRoles.has(user.role)) {
+      // Also check custom roles tagged with a technicianType in role_definitions
+      const customRoleValues = await this.getCustomRoleValues();
+      if (!customRoleValues.includes(user.role)) return;
+    }
+
     const today = new Date().toISOString().slice(0, 10);
     const record = await this.attendanceRepo.findOne({ where: { userId, date: today } });
-    if (record && record.status === AttendanceStatus.ABSENT) {
+
+    if (!record) {
+      // No record for today — create a new PRESENT record
+      await this.attendanceRepo.save(
+        this.attendanceRepo.create({
+          userId,
+          date: today,
+          status: AttendanceStatus.PRESENT,
+          notes: 'Auto-marked present on login',
+          setById: null as any,
+        }),
+      );
+    } else if (record.status === AttendanceStatus.ABSENT) {
       record.status = AttendanceStatus.PRESENT;
       record.notes = (record.notes ? record.notes + ' | ' : '') + 'Auto-corrected: logged in while marked absent';
       await this.attendanceRepo.save(record);

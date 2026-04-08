@@ -24,6 +24,7 @@ import ReportsPage from '@/app/dashboard/reports/page';
 import MovPlannerPage from '@/app/dashboard/mov/page';
 import TicketSettingsPage from '@/app/dashboard/ticket-settings/page';
 import AttendancePage from '@/app/dashboard/attendance/page';
+import TicketReportsPage from '@/app/dashboard/ticket-reports/page';
 
 function ProtectedDashboard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
@@ -198,6 +199,14 @@ export default function App() {
         element={
           <ProtectedDashboard>
             <AttendancePage />
+          </ProtectedDashboard>
+        }
+      />
+      <Route
+        path="/dashboard/ticket-reports"
+        element={
+          <ProtectedDashboard>
+            <TicketReportsPage />
           </ProtectedDashboard>
         }
       />

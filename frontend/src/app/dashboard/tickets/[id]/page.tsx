@@ -35,11 +35,14 @@ import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ticketsApi,
+  ticketSettingsApi,
   Ticket,
   TechnicianOption,
   UpdateTicketDto,
   TicketEvent,
   CsatFormData,
+  TicketEscalation,
+  EscalationFocalConfig,
 } from '@/app/api/references';
 import { ArrowBack as BackIcon, Star as StarIcon, SentimentVerySatisfied, SentimentSatisfied, SentimentNeutral, SentimentDissatisfied, SentimentVeryDissatisfied } from '@mui/icons-material';
 
@@ -104,6 +107,22 @@ export default function TicketDetailPage() {
   const [assignToId, setAssignToId] = useState<number | ''>('');
   const [isEscalateMode, setIsEscalateMode] = useState(false);
 
+  // Dedicated Escalate dialog
+  const [escalateDialogOpen, setEscalateDialogOpen] = useState(false);
+  const [escalateToId, setEscalateToId] = useState<number | ''>('');
+  const [escalateNotes, setEscalateNotes] = useState('');
+  const [escalateFiles, setEscalateFiles] = useState<File[]>([]);
+  const [escalating, setEscalating] = useState(false);
+  const [escalationFocals, setEscalationFocals] = useState<EscalationFocalConfig[]>([]);
+  const [escalationFocalUsers, setEscalationFocalUsers] = useState<TechnicianOption[]>([]);
+  const [escalations, setEscalations] = useState<TicketEscalation[]>([]);
+  const [escalationsLoading, setEscalationsLoading] = useState(false);
+
+  // Return escalation dialog
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [returnEscalationId, setReturnEscalationId] = useState('');
+  const [returnReason, setReturnReason] = useState('');
+
   // Satisfaction dialog
   const [satDialogOpen, setSatDialogOpen] = useState(false);
   const [csatForm, setCsatForm] = useState<CsatFormData>({
@@ -128,7 +147,7 @@ export default function TicketDetailPage() {
   const [selectedDupOfId, setSelectedDupOfId] = useState('');
 
   const isRegularUser = user?.role === 'user';
-  const isFocalTech = ['technician_desktop', 'technician_it_support', 'technician'].includes(user?.role ?? '');
+  const isFocalTech = ['technician_desktop', 'technician_it_support', 'technician', 'desktop_sr', 'it_support_sr'].includes(user?.role ?? '');
   const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
   const isTechnician = isFocalTech || isLowerLevelTech;
   const isFocal = user?.role === 'focal';
@@ -137,10 +156,10 @@ export default function TicketDetailPage() {
   const canPriority = isFocal || user?.role === 'reviewer' || user?.role === 'super_admin';
   const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer';
   const isSectionHead = user?.roleCode === 'section_head';
-  // canReassign: focal techs, CO, SH, super_admin can assign / reassign
+  // canReassign: focal techs (incl. desktop_sr/it_support_sr), CO, SH, super_admin can assign / reassign
   const canReassign = user?.role === 'super_admin' || user?.role === 'focal' || isFocalTech || isComplianceOfficer || isSectionHead;
-  // canEscalate: lower-level techs can escalate their ticket to a focal technician
-  const canEscalate = isLowerLevelTech;
+  // canEscalate: any technician role can escalate
+  const canEscalate = isLowerLevelTech || isFocalTech;
   const isRequester = ticket?.requesterId === (user as any)?.id;
   const canSatisfaction = isRequester && (ticket?.status === 'resolved' || ticket?.status === 'closed') && !ticket?.satisfactionSubmittedAt;
   // Duplicate is terminal — no further modifications allowed
@@ -159,7 +178,18 @@ export default function TicketDetailPage() {
     finally { setEventsLoading(false); }
   };
 
+  const fetchEscalations = async () => {
+    if (!ticketId) return;
+    try {
+      setEscalationsLoading(true);
+      const data = await ticketsApi.getEscalations(ticketId);
+      setEscalations(data);
+    } catch { /* silent */ }
+    finally { setEscalationsLoading(false); }
+  };
+
   useEffect(() => { fetchEvents(); }, [ticketId]);
+  useEffect(() => { fetchEscalations(); }, [ticketId]);
 
   // Live updates – poll every 30 s for all users (QA #7: ensures user-side sees status changes)
   useEffect(() => {
@@ -279,6 +309,74 @@ export default function TicketDetailPage() {
     }
   };
 
+  const handleEscalate = async () => {
+    if (!escalateToId) return;
+    try {
+      setEscalating(true);
+      const formData = new FormData();
+      formData.append('escalatedToId', String(escalateToId));
+      if (escalateNotes) formData.append('notes', escalateNotes);
+      escalateFiles.forEach(f => formData.append('proofFiles', f));
+      await ticketsApi.escalateTicket(ticketId, formData);
+      setEscalateDialogOpen(false);
+      setEscalateToId('');
+      setEscalateNotes('');
+      setEscalateFiles([]);
+      fetchTicket();
+      fetchEvents();
+      fetchEscalations();
+      enqueueSnackbar('Ticket escalated successfully.', { variant: 'success' });
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to escalate ticket', { variant: 'error' });
+    } finally {
+      setEscalating(false);
+    }
+  };
+
+  const handleAcceptEscalation = async (escalationId: string) => {
+    try {
+      await ticketsApi.acceptEscalation(ticketId, escalationId);
+      fetchEscalations();
+      enqueueSnackbar('Escalation accepted.', { variant: 'success' });
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to accept escalation', { variant: 'error' });
+    }
+  };
+
+  const handleReturnEscalation = async () => {
+    if (!returnReason.trim()) return;
+    try {
+      await ticketsApi.returnEscalation(ticketId, returnEscalationId, returnReason);
+      setReturnDialogOpen(false);
+      setReturnReason('');
+      fetchTicket();
+      fetchEvents();
+      fetchEscalations();
+      enqueueSnackbar('Ticket returned to escalating technician.', { variant: 'success' });
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to return escalation', { variant: 'error' });
+    }
+  };
+
+  const openEscalateDialog = async () => {
+    try {
+      const [focals, techs] = await Promise.all([
+        ticketSettingsApi.getEscalationFocals(ticket?.ticketType),
+        ticketsApi.getTechnicians(),
+      ]);
+      setEscalationFocals(focals);
+      // From all techs, keep only those whose role matches the configured escalation focal roles
+      const allowedRoles = new Set(focals.map(f => f.roleValue));
+      setEscalationFocalUsers(techs.filter(t => allowedRoles.has(t.role) || allowedRoles.size === 0));
+    } catch {
+      setEscalationFocalUsers([]);
+    }
+    setEscalateToId('');
+    setEscalateNotes('');
+    setEscalateFiles([]);
+    setEscalateDialogOpen(true);
+  };
+
   const handleSelfClose = async () => {
     try {
       await ticketsApi.update(ticketId, { status: 'closed' as any });
@@ -377,7 +475,7 @@ export default function TicketDetailPage() {
               {isDuplicate && (
                 <Chip label="Duplicate (Terminal)" color="default" size="small" />
               )}
-              {canReassign && !isDuplicate && (
+              {canReassign && !isDuplicate && !['resolved', 'closed'].includes(ticket.status) && (
                 <Button variant="outlined" size="small" onClick={async () => {
                   setIsEscalateMode(false);
                   setAssignToId(ticket.assignedToId || '');
@@ -388,12 +486,7 @@ export default function TicketDetailPage() {
                 </Button>
               )}
               {canEscalate && !isDuplicate && !['closed', 'resolved'].includes(ticket.status) && (
-                <Button variant="outlined" size="small" color="warning" onClick={async () => {
-                  setIsEscalateMode(true);
-                  setAssignToId('');
-                  await fetchTechnicians();
-                  setAssignDialogOpen(true);
-                }}>
+                <Button variant="outlined" size="small" color="warning" onClick={openEscalateDialog}>
                   Escalate Ticket
                 </Button>
               )}
@@ -736,6 +829,54 @@ export default function TicketDetailPage() {
         </CardContent>
       </Card>
 
+      {/* ── Escalation History ── */}
+      {escalations.length > 0 && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+              Escalation History ({escalations.length})
+            </Typography>
+            {escalationsLoading ? (
+              <Box textAlign="center" py={2}><CircularProgress size={24} /></Box>
+            ) : (
+              escalations.map((e) => (
+                <Box key={e.id} mb={2} p={1.5} bgcolor="action.hover" borderRadius={1}>
+                  <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+                    <Chip label={e.status.toUpperCase()} size="small"
+                      color={e.status === 'accepted' ? 'success' : e.status === 'returned' ? 'error' : 'warning'} />
+                    <Typography variant="body2">
+                      <strong>{e.escalatedBy?.firstName} {e.escalatedBy?.lastName}</strong>
+                      {' → '}
+                      <strong>{e.escalatedTo?.firstName} {e.escalatedTo?.lastName}</strong>
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {new Date(e.createdAt).toLocaleString()}
+                    </Typography>
+                  </Box>
+                  {e.notes && <Typography variant="body2" mt={0.5}>Notes: {e.notes}</Typography>}
+                  {e.returnReason && <Typography variant="body2" color="error.main" mt={0.5}>Return reason: {e.returnReason}</Typography>}
+                  {e.proofFiles && e.proofFiles.length > 0 && (
+                    <Typography variant="caption" color="text.secondary" mt={0.5} display="block">
+                      Proof files: {e.proofFiles.length} attachment(s)
+                    </Typography>
+                  )}
+                  {e.status === 'pending' && e.escalatedToId === (user as any)?.id && (
+                    <Box mt={1} display="flex" gap={1}>
+                      <Button size="small" variant="contained" color="success"
+                        onClick={() => handleAcceptEscalation(e.id)}>Accept</Button>
+                      <Button size="small" variant="outlined" color="error"
+                        onClick={() => { setReturnEscalationId(e.id); setReturnReason(''); setReturnDialogOpen(true); }}>
+                        Return
+                      </Button>
+                    </Box>
+                  )}
+                </Box>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── Assign / Escalate Dialog ── */}
       <Dialog open={assignDialogOpen} onClose={() => setAssignDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>{isEscalateMode ? 'Escalate Ticket' : 'Assign Technician'}</DialogTitle>
@@ -770,9 +911,10 @@ export default function TicketDetailPage() {
                   return ['technician', 'pantawid_ict'].includes(t.role);
                 return ['technician_it_support', 'technician', 'technician_it_staff', 'it_support_sr', 'it_support_jr'].includes(t.role);
               })
+              .filter((t) => !isEscalateMode && t.openCount === 0 || isEscalateMode)
               .map((t) => (
                 <MenuItem key={t.id} value={t.id}>
-                  {t.firstName} {t.lastName} ({t.openCount} open)
+                  {t.firstName} {t.lastName}
                 </MenuItem>
               ))}
           </TextField>
@@ -781,6 +923,69 @@ export default function TicketDetailPage() {
           <Button onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
           <Button variant="contained" color={isEscalateMode ? 'warning' : 'primary'} onClick={handleAssign} disabled={!assignToId}>
             {isEscalateMode ? 'Escalate' : 'Assign'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Dedicated Escalate Dialog ── */}
+      <Dialog open={escalateDialogOpen} onClose={() => setEscalateDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Escalate Ticket</DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
+            Escalate this ticket to a designated focal technician or senior staff.
+            You may attach photo proof of the issue.
+          </Alert>
+          <TextField
+            select fullWidth label="Escalate To" value={escalateToId}
+            onChange={(e) => setEscalateToId(Number(e.target.value))}
+            size="small" sx={{ mb: 2 }}
+          >
+            {escalationFocalUsers.length === 0 ? (
+              <MenuItem disabled value="">No escalation focals configured for this ticket type</MenuItem>
+            ) : escalationFocalUsers.map((t) => (
+              <MenuItem key={t.id} value={t.id}>{t.firstName} {t.lastName} ({t.role})</MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            fullWidth multiline rows={3} label="Reason for escalation (optional)"
+            value={escalateNotes} onChange={(e) => setEscalateNotes(e.target.value)}
+            size="small" sx={{ mb: 2 }}
+          />
+          <Box>
+            <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+              Proof photos (optional, max 10 files, 10 MB each)
+            </Typography>
+            <input type="file" multiple accept="image/*"
+              onChange={(e) => setEscalateFiles(Array.from(e.target.files ?? []))} />
+            {escalateFiles.length > 0 && (
+              <Typography variant="caption">{escalateFiles.length} file(s) selected</Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEscalateDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" color="warning" onClick={handleEscalate}
+            disabled={!escalateToId || escalating}>
+            {escalating ? 'Escalating…' : 'Escalate'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Return Escalation Dialog ── */}
+      <Dialog open={returnDialogOpen} onClose={() => setReturnDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Return Ticket</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth multiline rows={3} label="Reason for returning *"
+            value={returnReason} onChange={(e) => setReturnReason(e.target.value)}
+            size="small" sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReturnDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={handleReturnEscalation}
+            disabled={!returnReason.trim()}>
+            Return Ticket
           </Button>
         </DialogActions>
       </Dialog>

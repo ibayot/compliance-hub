@@ -22,6 +22,7 @@ import {
   UpdateCategoryDto,
   CreateKeywordRuleDto,
   UpdateKeywordRuleDto,
+  CreateEscalationFocalDto,
 } from '../services/ticket-settings.service';
 import { EmailService } from '../services/email.service';
 
@@ -129,5 +130,45 @@ export class TicketSettingsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteKeywordRule(@Param('id') id: string) {
     await this.settingsService.deleteKeywordRule(id);
+  }
+
+  // ── Escalation Focal Configuration ──────────────────────────────────────
+
+  /** GET /ticket-settings/escalation-focals */
+  @Get('escalation-focals')
+  @Roles(
+    UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER,
+    UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP,
+    UserRole.TECHNICIAN_IT_SUPPORT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
+    UserRole.REVIEWER, UserRole.PANTAWID_ICT,
+  )
+  async listEscalationFocals(@Query('ticketType') ticketType?: string) {
+    return this.settingsService.listEscalationFocals(ticketType);
+  }
+
+  /**
+   * GET /ticket-settings/escalation-available-roles
+   * QA #13: Returns roles from DB (role_definitions), excluding non-assignable platform roles.
+   */
+  @Get('escalation-available-roles')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER, UserRole.REVIEWER)
+  async listAvailableEscalationRoles() {
+    return this.settingsService.listAvailableEscalationRoles();
+  }
+
+  /** POST /ticket-settings/escalation-focals */
+  @Post('escalation-focals')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER, UserRole.REVIEWER)
+  @HttpCode(HttpStatus.CREATED)
+  async addEscalationFocal(@Body() dto: CreateEscalationFocalDto, @Request() req: any) {
+    return this.settingsService.addEscalationFocal(dto, req.user.id ?? req.user.userId);
+  }
+
+  /** DELETE /ticket-settings/escalation-focals/:id */
+  @Delete('escalation-focals/:id')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER, UserRole.REVIEWER)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeEscalationFocal(@Param('id') id: string) {
+    await this.settingsService.removeEscalationFocal(Number(id));
   }
 }

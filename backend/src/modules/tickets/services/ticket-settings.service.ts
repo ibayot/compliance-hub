@@ -8,6 +8,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TicketCategoryConfig } from '../entities/ticket-category.entity';
 import { TicketKeywordRule } from '../entities/ticket-keyword-rule.entity';
+import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
+import { RoleDefinitionEntity } from '../../users/entities/role-definition.entity';
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -41,6 +43,12 @@ export interface UpdateKeywordRuleDto {
   isActive?: boolean;
 }
 
+export interface CreateEscalationFocalDto {
+  ticketType: string;
+  roleValue: string;
+  label: string;
+}
+
 // --- Service ----------------------------------------------------------------
 
 @Injectable()
@@ -52,6 +60,10 @@ export class TicketSettingsService {
     private readonly categoryRepo: Repository<TicketCategoryConfig>,
     @InjectRepository(TicketKeywordRule)
     private readonly keywordRepo: Repository<TicketKeywordRule>,
+    @InjectRepository(EscalationFocalConfig)
+    private readonly escalationFocalRepo: Repository<EscalationFocalConfig>,
+    @InjectRepository(RoleDefinitionEntity)
+    private readonly roleDefRepo: Repository<RoleDefinitionEntity>,
   ) {}
 
   // ── Categories ──────────────────────────────────────────────────────────
@@ -234,5 +246,53 @@ export class TicketSettingsService {
       if (lower.includes(kw)) return rule;
     }
     return null;
+  }
+
+  // ── Escalation Focal Configuration ──────────────────────────────────────
+
+  /** List configured escalation focals  (QA #3, #9) */
+  async listEscalationFocals(ticketType?: string): Promise<EscalationFocalConfig[]> {
+    const where: any = {};
+    if (ticketType) where.ticketType = ticketType;
+    return this.escalationFocalRepo.find({ where, order: { ticketType: 'ASC', label: 'ASC' } });
+  }
+
+  /**
+   * List roles available to be designated as escalation focals.
+   * QA #13: Reads from role_definitions table, excludes non-assignable system roles.
+   */
+  async listAvailableEscalationRoles(): Promise<{ value: string; label: string }[]> {
+    const excluded = ['user', 'super_admin', 'section_head'];
+    const rows = await this.roleDefRepo.find({ where: { assignable: true } });
+    return rows
+      .filter(r => !excluded.includes(r.value))
+      .map(r => ({ value: r.value, label: r.label }));
+  }
+
+  /** Add a role as an escalation focal for a ticket type (QA #3, #13) */
+  async addEscalationFocal(dto: CreateEscalationFocalDto, actorId: number): Promise<EscalationFocalConfig> {
+    const validTypes = ['desktop_support', 'it_support', 'pantawid_ict_support', 'all'];
+    if (!validTypes.includes(dto.ticketType)) {
+      throw new BadRequestException(`ticketType must be one of: ${validTypes.join(', ')}`);
+    }
+    const existing = await this.escalationFocalRepo.findOne({
+      where: { ticketType: dto.ticketType, roleValue: dto.roleValue },
+    });
+    if (existing) throw new BadRequestException('This role is already configured as an escalation focal for that ticket type.');
+
+    const config = this.escalationFocalRepo.create({
+      ticketType: dto.ticketType,
+      roleValue: dto.roleValue,
+      label: dto.label?.trim() || dto.roleValue,
+      createdById: actorId,
+    });
+    return this.escalationFocalRepo.save(config);
+  }
+
+  /** Remove an escalation focal config */
+  async removeEscalationFocal(id: number): Promise<void> {
+    const config = await this.escalationFocalRepo.findOne({ where: { id } });
+    if (!config) throw new NotFoundException(`Escalation focal config ${id} not found`);
+    await this.escalationFocalRepo.remove(config);
   }
 }

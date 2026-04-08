@@ -13,7 +13,7 @@ import {
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  ticketSettingsApi, TicketCategory, TicketKeywordRule,
+  ticketSettingsApi, TicketCategory, TicketKeywordRule, EscalationFocalConfig,
 } from '@/app/api/references';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -45,7 +45,53 @@ export default function TicketSettingsPage() {
   const [keywordInput, setKeywordInput] = useState('');
   const [ruleSubmitting, setRuleSubmitting] = useState(false);
 
-  const fetchCategories = useCallback(async () => {
+  // — Escalation Focals —
+  const [focals, setFocals] = useState<EscalationFocalConfig[]>([]);
+  const [focalsLoading, setFocalsLoading] = useState(true);
+  const [focalDialogOpen, setFocalDialogOpen] = useState(false);
+  const [availableRoles, setAvailableRoles] = useState<{ value: string; label: string }[]>([]);
+  const [focalForm, setFocalForm] = useState<{ ticketType: string; roleValue: string }>({ ticketType: 'all', roleValue: '' });
+  const [focalSubmitting, setFocalSubmitting] = useState(false);
+
+  const fetchFocals = useCallback(async () => {
+    try { setFocalsLoading(true); setFocals(await ticketSettingsApi.getEscalationFocals()); }
+    catch { enqueueSnackbar('Failed to load escalation focals', { variant: 'error' }); }
+    finally { setFocalsLoading(false); }
+  }, []);
+
+  const openFocalDialog = async () => {
+    try {
+      const roles = await ticketSettingsApi.getAvailableEscalationRoles();
+      setAvailableRoles(roles);
+    } catch { setAvailableRoles([]); }
+    setFocalForm({ ticketType: 'all', roleValue: '' });
+    setFocalDialogOpen(true);
+  };
+
+  const handleSaveFocal = async () => {
+    if (!focalForm.roleValue) { enqueueSnackbar('Select a role', { variant: 'warning' }); return; }
+    try {
+      setFocalSubmitting(true);
+      const roleLabel = availableRoles.find(r => r.value === focalForm.roleValue)?.label ?? focalForm.roleValue;
+      await ticketSettingsApi.addEscalationFocal({ ticketType: focalForm.ticketType, roleValue: focalForm.roleValue, label: roleLabel });
+      enqueueSnackbar('Escalation focal added', { variant: 'success' });
+      setFocalDialogOpen(false);
+      fetchFocals();
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to save', { variant: 'error' });
+    } finally { setFocalSubmitting(false); }
+  };
+
+  const handleDeleteFocal = async (id: number) => {
+    if (!confirm('Remove this escalation focal configuration?')) return;
+    try {
+      await ticketSettingsApi.removeEscalationFocal(id);
+      enqueueSnackbar('Escalation focal removed', { variant: 'success' });
+      fetchFocals();
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed', { variant: 'error' });
+    }
+  }; = useCallback(async () => {
     // Pass activeOnly=false so admin sees ALL categories (including inactive) for management
     try { setCatLoading(true); setCategories(await ticketSettingsApi.getCategories(undefined, false)); }
     catch { enqueueSnackbar('Failed to load categories', { variant: 'error' }); }
@@ -58,7 +104,7 @@ export default function TicketSettingsPage() {
     finally { setRulesLoading(false); }
   }, []);
 
-  useEffect(() => { fetchCategories(); fetchRules(); }, [fetchCategories, fetchRules]);
+  useEffect(() => { fetchCategories(); fetchRules(); fetchFocals(); }, [fetchCategories, fetchRules, fetchFocals]);
 
   // Category CRUD
   const openCatDialog = (cat?: TicketCategory) => {
@@ -159,6 +205,7 @@ export default function TicketSettingsPage() {
         <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
           <Tab label={`Categories (${categories.filter(c => !c.isDeleted).length})`} />
           <Tab label={`Keyword Rules (${rules.length})`} />
+          <Tab label={`Escalation Focals (${focals.length})`} />
         </Tabs>
 
         {/* ── Categories Tab ── */}
@@ -252,9 +299,72 @@ export default function TicketSettingsPage() {
             </TableContainer>
           </CardContent>
         )}
+        {/* ── Escalation Focals Tab ── */}
+        {tab === 2 && (
+          <CardContent>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Typography variant="body2" color="text.secondary">
+                Configure which roles act as escalation focal points per ticket type.
+              </Typography>
+              <Button startIcon={<AddIcon />} variant="contained" size="small" onClick={openFocalDialog}>Add Focal</Button>
+            </Box>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Ticket Type</TableCell>
+                    <TableCell>Role</TableCell>
+                    <TableCell>Label</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {focalsLoading ? (
+                    <TableRow><TableCell colSpan={4} align="center"><CircularProgress size={24} /></TableCell></TableRow>
+                  ) : focals.length === 0 ? (
+                    <TableRow><TableCell colSpan={4} align="center"><Typography color="text.secondary" py={2}>No escalation focals configured.</Typography></TableCell></TableRow>
+                  ) : focals.map(f => (
+                    <TableRow key={f.id} hover>
+                      <TableCell><Chip size="small" label={TYPE_LABELS[f.ticketType] ?? f.ticketType} variant="outlined" /></TableCell>
+                      <TableCell><Typography variant="body2" fontFamily="monospace">{f.roleValue}</Typography></TableCell>
+                      <TableCell>{f.label}</TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="Remove"><IconButton size="small" color="error" onClick={() => handleDeleteFocal(f.id)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        )}
       </Card>
 
-      {/* Category Dialog */}
+      {/* Escalation Focal Dialog */}
+      <Dialog open={focalDialogOpen} onClose={() => setFocalDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Add Escalation Focal</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <TextField select label="Ticket Type *" value={focalForm.ticketType} onChange={e => setFocalForm(f => ({ ...f, ticketType: e.target.value }))} fullWidth>
+              <MenuItem value="all">All Types</MenuItem>
+              <MenuItem value="it_support">IT Support</MenuItem>
+              <MenuItem value="desktop_support">Desktop Support</MenuItem>
+              <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
+            </TextField>
+            <TextField select label="Role *" value={focalForm.roleValue} onChange={e => setFocalForm(f => ({ ...f, roleValue: e.target.value }))} fullWidth>
+              {availableRoles.length === 0 ? (
+                <MenuItem disabled value="">No roles available</MenuItem>
+              ) : availableRoles.map(r => (
+                <MenuItem key={r.value} value={r.value}>{r.label} ({r.value})</MenuItem>
+              ))}
+            </TextField>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setFocalDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleSaveFocal} variant="contained" disabled={focalSubmitting || !focalForm.roleValue}>{focalSubmitting ? 'Saving…' : 'Add'}</Button>
+        </DialogActions>
+      </Dialog>
       <Dialog open={catDialogOpen} onClose={() => setCatDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>{editCat ? 'Edit Category' : 'Add Category'}</DialogTitle>
         <DialogContent>
