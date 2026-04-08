@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { OAuth2Client, TokenPayload as GoogleTokenPayload } from 'google-auth-library';
 import { UsersService } from '../users/users.service';
 import { AttendanceService } from '../tickets/services/attendance.service';
+import { TicketService } from '../tickets/services/ticket.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload, AuthResponse } from './interfaces/auth.interface';
 import { User, UserRole } from '../users/entities/user.entity';
@@ -17,6 +18,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly attendanceService: AttendanceService,
+    private readonly ticketService: TicketService,
   ) {}
 
   private get jwtIssuer(): string {
@@ -90,6 +92,8 @@ export class AuthService {
 
     // Auto-correct: if technician was marked absent today and then logs in, set them present
     this.attendanceService.autoCorrectAbsentOnLogin(user.id).catch(() => {});
+    // QA: trigger auto-assignment for pending OPEN tickets upon technician login
+    this.ticketService.assignPendingTicketsOnLogin(user.id).catch(() => {});
 
     const tokens = await this.generateTokens(user);
     return this.buildAuthResponse(user, tokens);
@@ -131,6 +135,8 @@ export class AuthService {
 
     // Auto-correct: if user was marked absent today and logs in, set them present
     this.attendanceService.autoCorrectAbsentOnLogin(user.id).catch(() => {});
+    // QA: trigger auto-assignment for pending OPEN tickets upon technician login
+    this.ticketService.assignPendingTicketsOnLogin(user.id).catch(() => {});
 
     const tokens = await this.generateTokens(user);
     return this.buildAuthResponse(user, tokens);

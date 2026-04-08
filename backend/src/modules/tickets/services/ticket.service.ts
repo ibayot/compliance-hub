@@ -486,13 +486,10 @@ export class TicketService implements OnModuleInit {
 
       // ── Pantawid tickets: ALWAYS assign to pantawid_ict technician ──
       if (ticketType === TicketType.PANTAWID_ICT_SUPPORT) {
-        // Find any active pantawid_ict user
-        const pantawidTechs = await this.userRepo.find({
-          where: [
-            { role: UserRole.PANTAWID_ICT, active: true as any },
-            { role: UserRole.TECHNICIAN, active: true as any },
-          ],
-        });
+        // QA F3/F4: Use getAvailableTechnicians so absent Pantawid techs are excluded
+        const pantawidTechs = await this.attendanceService.getAvailableTechnicians(
+          'pantawid_ict_support', today,
+        );
         if (pantawidTechs.length > 0) {
           // Pick the one with fewest open tickets
           let bestTech: User | null = null;
@@ -833,6 +830,10 @@ export class TicketService implements OnModuleInit {
           );
         }
         ticket.status = dto.status;
+        // QA F5: When transitioning back to OPEN, remove the assigned technician
+        if (dto.status === TicketStatus.OPEN) {
+          ticket.assignedToId = null;
+        }
         if (dto.status === TicketStatus.RESOLVED && !ticket.resolvedAt) {
           ticket.resolvedAt = new Date();
         }
@@ -1313,6 +1314,97 @@ export class TicketService implements OnModuleInit {
       })
       .orderBy('t.createdAt', 'DESC')
       .getMany();
+  }
+
+  /**
+   * QA F1: When a technician logs in, auto-assign any unassigned OPEN tickets
+   * that belong to their ticket type, following the same rules as createTicket().
+   * This is fire-and-forget — called from AuthService after successful login.
+   */
+  async assignPendingTicketsOnLogin(techId: number): Promise<void> {
+    try {
+      const tech = await this.userRepo.findOne({ where: { id: techId } });
+      if (!tech) return;
+
+      // Determine which ticket types this technician handles
+      const DESKTOP_ROLES: string[] = [
+        UserRole.DESKTOP_JR, UserRole.TECHNICIAN_DESKTOP_STAFF,
+      ];
+      const IT_ROLES: string[] = [
+        UserRole.IT_SUPPORT_JR, UserRole.TECHNICIAN_IT_STAFF,
+      ];
+      const PANTAWID_ROLES: string[] = [
+        UserRole.PANTAWID_ICT, UserRole.TECHNICIAN,
+      ];
+
+      // Senior roles are excluded from auto-assignment per existing rule
+      const SENIOR_EXCLUDED: string[] = [
+        UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR,
+        UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
+      ];
+      if (SENIOR_EXCLUDED.includes(tech.role)) return;
+
+      let ticketType: string | null = null;
+      if (DESKTOP_ROLES.includes(tech.role)) ticketType = 'desktop_support';
+      else if (IT_ROLES.includes(tech.role)) ticketType = 'it_support';
+      else if (PANTAWID_ROLES.includes(tech.role)) ticketType = 'pantawid_ict_support';
+      if (!ticketType) return;
+
+      const today = new Date().toISOString().slice(0, 10);
+      const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
+      if (ticketType !== TicketType.PANTAWID_ICT_SUPPORT && !isOfficeDayToday) return;
+
+      // Guard: tech must be present (attendance check)
+      const available = await this.attendanceService.getAvailableTechnicians(ticketType, today);
+      const isPresent = available.some(t => t.id === techId);
+      if (!isPresent) return;
+
+      // Guard: tech must currently have zero active tickets
+      const currentOpen = await this.ticketRepo
+        .createQueryBuilder('t')
+        .where('t.assignedToId = :id', { id: techId })
+        .andWhere('t.status NOT IN (:...terminal)', {
+          terminal: [TicketStatus.CLOSED, TicketStatus.DUPLICATE, TicketStatus.RESOLVED],
+        })
+        .getCount();
+      if (currentOpen > 0) return;
+
+      // Find the oldest unassigned OPEN ticket of the matching type
+      const pending = await this.ticketRepo
+        .createQueryBuilder('t')
+        .where('t.status = :status', { status: TicketStatus.OPEN })
+        .andWhere('t.assignedToId IS NULL')
+        .andWhere('t.ticketType = :type', { type: ticketType })
+        .orderBy('t.createdAt', 'ASC')
+        .getOne();
+
+      if (!pending) return;
+
+      pending.assignedToId = techId;
+      pending.status = TicketStatus.ASSIGNED;
+      await this.ticketRepo.save(pending);
+
+      this.logEvent(pending.id, 'manually_assigned', techId, {
+        technicianId: techId,
+        technicianName: [tech.firstName, tech.lastName].filter(Boolean).join(' ') || tech.email,
+        via: 'login_auto_assign',
+      }).catch(() => {});
+
+      this.emailService.sendTicketAssignedEmail({
+        ticketNumber: pending.ticketNumber,
+        subject: pending.subject,
+        ticketType: pending.ticketType,
+        priority: pending.priority,
+        assignedToName: [tech.firstName, tech.lastName].filter(Boolean).join(' ') || tech.email,
+        assignedToEmail: tech.email,
+      } as any).catch(() => {});
+
+      this.logger.log(
+        `[Login Auto-Assign] Ticket ${pending.ticketNumber} → ${tech.email} on login`,
+      );
+    } catch (err: any) {
+      this.logger.warn(`[Login Auto-Assign] Failed (non-fatal): ${err?.message}`);
+    }
   }
 
   // --- Ticket Reports (QA #11) --------------------------------------------

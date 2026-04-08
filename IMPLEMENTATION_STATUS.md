@@ -1,5 +1,23 @@
 # RICTMS Compliance Hub - Implementation Progress Report
 
+## 🚀 v0.6.22 — QA Fixes (Current)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| `auth.service.ts` — login triggers pending auto-assign | ✅ Complete | `login()` and `googleLogin()` now call `assignPendingTicketsOnLogin(user.id)` after attendance auto-correct |
+| `ticket.service.ts` — Pantawid create-ticket candidate source | ✅ Complete | Pantawid auto-assign now uses `attendanceService.getAvailableTechnicians('pantawid_ict_support', today)` |
+| `ticket.service.ts` — all-absent handling | ✅ Complete | When no available Pantawid technician exists, ticket remains `OPEN` and unassigned |
+| `ticket.service.ts` — status OPEN clears assignee | ✅ Complete | `updateTicket()` sets `assignedToId = null` when `dto.status === OPEN` |
+| `ticket.service.ts` — login auto-assign office-day parity | ✅ Complete | Non-Pantawid login assignment respects office-day guard; Pantawid keeps bypass behavior |
+| `tickets/[id]/page.tsx` — escalation dropdown label cleanup | ✅ Complete | Removed role code suffix in `Escalate To` options |
+| `backend/package.json` version | ✅ Complete | `0.6.22` |
+| `frontend/package.json` version | ✅ Complete | `0.6.22` |
+
+### v0.6.22 Operations Notes
+- **Migration:** none required (behavior-only patch).
+- **Rollback:** revert the `v0.6.22` commit set.
+- **Smoke:** core API smoke passed up to KPI checks; focal-credential step failed due environment credentials, not runtime crash.
+
 ## 🚀 v0.6.16 — QA Fixes (Current)
 
 | Area | Status | Notes |

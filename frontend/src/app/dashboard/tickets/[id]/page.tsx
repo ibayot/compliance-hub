@@ -945,7 +945,7 @@ export default function TicketDetailPage() {
             {escalationFocalUsers.length === 0 ? (
               <MenuItem disabled value="">No escalation focals configured for this ticket type</MenuItem>
             ) : escalationFocalUsers.map((t) => (
-              <MenuItem key={t.id} value={t.id}>{t.firstName} {t.lastName} ({t.role})</MenuItem>
+              <MenuItem key={t.id} value={t.id}>{t.firstName} {t.lastName}</MenuItem>
             ))}
           </TextField>
           <TextField

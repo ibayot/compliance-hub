@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.6.22] - 2026-04-08 — QA Fixes: Login Auto-Assign, Attendance-Safe Pantawid Assign, OPEN Unassign, Escalation Focal Label Cleanup
+
+### Fixed
+- **Auto-assign on technician login (QA: open ticket before any technician logs in)** — `AuthService.login()` and `AuthService.googleLogin()` now trigger `TicketService.assignPendingTicketsOnLogin(user.id)` after attendance auto-correction. This immediately attempts assignment of the oldest matching `OPEN` ticket for the logging-in technician's tier using existing auto-assignment guards.
+- **Pantawid auto-assign to absent technician (QA)** — `createTicket()` no longer queries all active Pantawid users directly. It now calls `AttendanceService.getAvailableTechnicians('pantawid_ict_support', today)` so absent/out-of-office technicians are excluded.
+- **All technicians absent should keep ticket unassigned (QA)** — with the attendance-based Pantawid candidate source, `assignedToId` remains `null` when no available Pantawid technician exists.
+- **Status change to OPEN should clear assignee (QA)** — in `updateTicket()`, transitioning to `OPEN` now sets `assignedToId = null` before save.
+- **Escalation focal dropdown UI noise (QA)** — removed `({role_code})` from escalation focal dropdown labels in ticket detail page. The table still retains role code visibility.
+
+### Changed
+- **Version bump** — backend and frontend package versions are now `0.6.22` (patch-only increment; no x/y bump).
+
+### Database / Migration
+- No schema migration required for this patch.
+- Runtime behavior change only; startup migrations remain backward compatible.
+
+### How To Test
+- Start backend and frontend normally.
+- Create an `OPEN` unassigned ticket, log in as an eligible technician, verify ticket transitions to `ASSIGNED`.
+- Mark all technicians absent for a type and create a ticket, verify it stays `OPEN` and unassigned.
+- Move an assigned ticket back to `OPEN`, verify `assignedToId` clears.
+- Open escalation dialog in ticket detail and verify dropdown shows only technician names.
+
+### Rollback
+- Revert commit `v0.6.22` to restore previous behavior.
+- If rollback is partial, ensure `AuthService` calls to `assignPendingTicketsOnLogin` are removed together with the status-OPEN assignee clearing to avoid mixed workflow behavior.
+
 ## [0.6.16] - 2026-04-01 — QA Fixes: Office-Day Flicker, Attendance Categories, Self-Close, Timeline, Pantawid Auto-Assign, Email Notification
 
 ### Fixed

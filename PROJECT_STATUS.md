@@ -1,5 +1,15 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.6.22 — QA Fixes: Login Auto-Assign, Attendance-Safe Pantawid Assignment, OPEN Unassign, Escalation Label Cleanup (Current)
+- **Version:** `0.6.22` in both `backend/package.json` and `frontend/package.json`
+- **Login-triggered assignment:** successful login now triggers immediate pending-ticket auto-assignment via `assignPendingTicketsOnLogin`.
+- **Pantawid absent-tech prevention:** Pantawid auto-assignment now derives candidates from attendance-aware availability (`getAvailableTechnicians`) and excludes absent/out-of-office users.
+- **All absent guard:** when all eligible technicians are absent, ticket remains `OPEN` and unassigned.
+- **OPEN status reset:** changing ticket status to `open` now clears `assignedToId`.
+- **Escalation focal dropdown cleanup:** removed role-code suffix from dropdown labels; names only.
+- **Migration impact:** none (no schema change).
+- **Rollback:** revert `v0.6.22` commit.
+
 ## 🚀 v0.6.16 — QA Fixes: Office-Day Flicker, Attendance Categories, Self-Close, Timeline, Pantawid Auto-Assign, Email Notification (Current Release)
 - **Version:** `0.6.16` in both `backend/package.json` and `frontend/package.json`
 - **Office Days calendar no-flicker:** `toggleOfficeDay()` optimistic update — sets state instantly, replaces with server response after API call, no loading spinners.
