@@ -277,6 +277,39 @@ export class TicketService implements OnModuleInit {
         "UPDATE ticket_keyword_rules SET keywords = CONCAT('[\"', keyword, '\"]') WHERE keywords IS NULL"
       ).catch(() => undefined);
 
+      // ── v0.6.21 migrations ──────────────────────────────────────────────────
+
+      // Escalation records per ticket
+      await qr.query(`
+        CREATE TABLE IF NOT EXISTS ticket_escalations (
+          id VARCHAR(36) NOT NULL PRIMARY KEY,
+          ticket_id VARCHAR(36) NOT NULL,
+          escalated_by_id INT NOT NULL,
+          escalated_to_id INT NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'pending',
+          notes TEXT NULL,
+          return_reason TEXT NULL,
+          proof_files JSON NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_te_ticket (ticket_id),
+          CONSTRAINT fk_te_ticket FOREIGN KEY (ticket_id) REFERENCES tickets (id) ON DELETE CASCADE
+        )
+      `).catch(() => undefined);
+
+      // Escalation focal configuration (which roles can receive escalations per ticket type)
+      await qr.query(`
+        CREATE TABLE IF NOT EXISTS escalation_focal_configs (
+          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          ticket_type VARCHAR(30) NOT NULL,
+          role_value VARCHAR(50) NOT NULL,
+          label VARCHAR(100) NOT NULL,
+          created_by_id INT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_efc_type_role (ticket_type, role_value)
+        )
+      `).catch(() => undefined);
+
       // Seed default categories if table is empty
       await this.seedDefaultCategories(qr);
 

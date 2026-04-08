@@ -223,7 +223,7 @@ export default function TicketsPage() {
     setSelectedTechId(String(ticket.assignedToId ?? ''));
     try {
       const techs = await ticketsApi.getTechnicians();
-      setTechnicians(techs.filter(t => {
+      const roleFiltered = techs.filter(t => {
         // For escalation: only show focal-level technicians
         if (escalate) {
           if (ticket.ticketType === 'desktop_support')
@@ -232,14 +232,15 @@ export default function TicketsPage() {
             return ['technician', 'pantawid_ict'].includes(t.role);
           return ['technician_it_support', 'technician', 'it_support_sr'].includes(t.role);
         }
-        // Normal assign: show all relevant technicians for the ticket type.
-        // Do NOT pre-filter by openCount — backend enforces the busy guard on submit.
+        // Normal assign: filter by ticket type role
         if (ticket.ticketType === 'desktop_support')
           return ['technician_desktop', 'technician', 'technician_desktop_staff', 'desktop_sr', 'desktop_jr'].includes(t.role);
         if (ticket.ticketType === 'pantawid_ict_support')
           return ['technician', 'pantawid_ict'].includes(t.role);
         return ['technician_it_support', 'technician', 'technician_it_staff', 'it_support_sr', 'it_support_jr'].includes(t.role);
-      }));
+      });
+      // For normal assign: only show techs with no open tickets (same as ticket detail view)
+      setTechnicians(escalate ? roleFiltered : roleFiltered.filter(t => t.openCount === 0));
     } catch { setTechnicians([]); }
     setAssignDialogOpen(true);
   };
@@ -568,7 +569,7 @@ export default function TicketsPage() {
                 ? <MenuItem disabled value="">No eligible technicians found</MenuItem>
                 : technicians.map(t => (
                   <MenuItem key={t.id} value={String(t.id)}>
-                    {t.firstName} {t.lastName} — {t.openCount} active tickets
+                    {t.firstName} {t.lastName}
                   </MenuItem>
                 ))}
             </TextField>
