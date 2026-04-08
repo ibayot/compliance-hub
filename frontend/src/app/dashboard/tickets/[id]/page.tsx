@@ -630,9 +630,11 @@ export default function TicketDetailPage() {
                 <>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="subtitle1" fontWeight={600} gutterBottom>Client Satisfaction</Typography>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <Rating value={ticket.satisfactionRating} readOnly />
-                    <Typography variant="body2" color="text.secondary">
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    {Array.from({ length: 5 }, (_, i) => (
+                      <StarIcon key={i} sx={{ fontSize: 20, color: i < (ticket.satisfactionRating ?? 0) ? 'warning.main' : 'action.disabled' }} />
+                    ))}
+                    <Typography variant="body2" color="text.secondary" ml={0.5}>
                       {ticket.satisfactionRating}/5
                     </Typography>
                   </Box>

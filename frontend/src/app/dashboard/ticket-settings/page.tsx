@@ -91,7 +91,9 @@ export default function TicketSettingsPage() {
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed', { variant: 'error' });
     }
-  }; = useCallback(async () => {
+  };
+
+  const fetchCategories = useCallback(async () => {
     // Pass activeOnly=false so admin sees ALL categories (including inactive) for management
     try { setCatLoading(true); setCategories(await ticketSettingsApi.getCategories(undefined, false)); }
     catch { enqueueSnackbar('Failed to load categories', { variant: 'error' }); }
