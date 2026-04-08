@@ -34,7 +34,11 @@ export default function LoginPage() {
     try {
       await login(email, password);
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Invalid email or password', { variant: 'error' });
+      const msg = err?.response?.data?.message
+        || (err?.message === 'Network Error' || !err?.response
+          ? 'Cannot connect to server. Please make sure backend API is running on port 4000.'
+          : 'Invalid email or password');
+      enqueueSnackbar(msg, { variant: 'error' });
     } finally {
       setLoading(false);
     }
