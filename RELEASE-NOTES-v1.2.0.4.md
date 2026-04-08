@@ -1,5 +1,30 @@
 # RICTMS Compliance Hub — Release Notes v1.2.0.4
 
+## Hotfix Addendum — v0.6.23 (2026-04-08)
+
+### What Changed
+- Enforced present-only technician pool for automatic assignment logic.
+- On status revert to `OPEN`, ticket assignee is cleared.
+- After revert to `OPEN`, system immediately auto-assigns if eligible PRESENT technician is available.
+- Patch-only version bump to `0.6.23`.
+
+### Why It Changed (QA Link)
+- QA required auto-assignment to be disabled if there are no PRESENT technicians.
+- QA required OPEN revert to remove assigned technician.
+- QA required OPEN revert to auto-assign when availability exists.
+
+### How To Test
+- Validate create-ticket auto-assignment with all technicians absent (should remain unassigned).
+- Validate OPEN revert clears assignee.
+- Validate OPEN revert assigns ticket when present technician with zero active workload exists.
+- Run backend build, frontend build, backend unit tests, and smoke script.
+
+### Migration Steps
+- No schema migration required.
+
+### Rollback Steps
+- Revert `v0.6.23` commit and redeploy backend/frontend.
+
 ## Hotfix Addendum — v0.6.22 (2026-04-08)
 
 ### What Changed

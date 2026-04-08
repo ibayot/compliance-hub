@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.6.23] - 2026-04-08 — QA Fixes: Present-Only Auto Assignment + OPEN Revert Reassignment
+
+### Fixed
+- **Automatic assignment disabled when no PRESENT technicians exist** — automatic assignment paths now require explicit `present` attendance records for technicians. No attendance record and `half_day` no longer qualify for auto-assignment decisions.
+- **Revert-to-OPEN must clear assignee** — when ticket status is set to `open`, `assignedToId` is cleared first.
+- **Revert-to-OPEN should auto-assign if technician is available** — after clearing assignee on `open`, the system immediately attempts auto-assignment using present-only technician availability and existing workload guards.
+
+### Changed
+- Added `AttendanceService.getPresentTechnicians(ticketType, date)` used by auto-assignment logic.
+- Updated create-ticket auto-assignment and login-triggered assignment checks to use present-only technician pool.
+- Patch version bump only: `0.6.22` → `0.6.23` (x/y unchanged).
+
+### How To Test
+- Mark all technicians absent for a support type and create a ticket; verify ticket stays `OPEN` and unassigned.
+- Change ticket status to `OPEN`; verify assignee is cleared.
+- Ensure at least one PRESENT technician with zero active tickets, revert ticket to `OPEN`; verify immediate assignment.
+- Run unit/build/smoke validation commands.
+
+### Migration Steps
+- No database schema migration required.
+- Deploy backend/frontend build at `0.6.23`.
+
+### Rollback Steps
+- Revert `v0.6.23` commit and redeploy.
+- Re-run build and smoke tests to confirm rollback behavior.
+
 ## [0.6.22] - 2026-04-08 — QA Fixes: Login Auto-Assign, Attendance-Safe Pantawid Assign, OPEN Unassign, Escalation Focal Label Cleanup
 
 ### Fixed

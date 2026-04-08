@@ -1,5 +1,21 @@
 # RICTMS Compliance Hub - Implementation Progress Report
 
+## 🚀 v0.6.23 — QA Fixes (Current)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| `attendance.service.ts` — strict present-only selector | ✅ Complete | Added `getPresentTechnicians(ticketType, date)` for auto-assignment flows |
+| `ticket.service.ts` — create-ticket auto-assignment | ✅ Complete | Uses present-only technician pool; no PRESENT tech means no auto-assignment |
+| `ticket.service.ts` — OPEN revert behavior | ✅ Complete | Clears `assignedToId`, then attempts immediate auto-assignment when eligible PRESENT technician exists |
+| `ticket.service.ts` — login-triggered assignment check | ✅ Complete | Login auto-assignment now validates against present-only availability |
+| `backend/package.json` version | ✅ Complete | `0.6.23` |
+| `frontend/package.json` version | ✅ Complete | `0.6.23` |
+
+### v0.6.23 Operations Notes
+- **Migration:** none.
+- **Rollback:** revert `v0.6.23` commit.
+- **Validation:** backend build ✅, frontend build ✅, backend unit tests ✅, smoke suite ✅.
+
 ## 🚀 v0.6.22 — QA Fixes (Current)
 
 | Area | Status | Notes |

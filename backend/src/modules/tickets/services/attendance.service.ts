@@ -248,6 +248,25 @@ export class AttendanceService {
     });
   }
 
+  /**
+   * Strict availability for auto-assignment: only technicians with explicit PRESENT attendance.
+   * No attendance record and HALF_DAY are treated as not eligible for automatic assignment.
+   */
+  async getPresentTechnicians(ticketType: string, date: string): Promise<User[]> {
+    const available = await this.getAvailableTechnicians(ticketType, date);
+    if (available.length === 0) return [];
+
+    const presentRows = await this.attendanceRepo.find({
+      where: {
+        date,
+        status: AttendanceStatus.PRESENT,
+        userId: In(available.map((u) => u.id)),
+      },
+    });
+    const presentIds = new Set<number>(presentRows.map((r) => r.userId));
+    return available.filter((u) => presentIds.has(u.id));
+  }
+
   /** Get technicians filtered for the current session (all staff or filtered by type) */
   async listTechnicians(ticketType?: string, actorRole?: string): Promise<User[]> {
     const customRoles = await this.getCustomRoleValues(ticketType || undefined);

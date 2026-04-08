@@ -486,8 +486,8 @@ export class TicketService implements OnModuleInit {
 
       // ── Pantawid tickets: ALWAYS assign to pantawid_ict technician ──
       if (ticketType === TicketType.PANTAWID_ICT_SUPPORT) {
-        // QA F3/F4: Use getAvailableTechnicians so absent Pantawid techs are excluded
-        const pantawidTechs = await this.attendanceService.getAvailableTechnicians(
+        // QA: auto-assignment is disabled if no PRESENT technicians exist in attendance
+        const pantawidTechs = await this.attendanceService.getPresentTechnicians(
           'pantawid_ict_support', today,
         );
         if (pantawidTechs.length > 0) {
@@ -512,7 +512,7 @@ export class TicketService implements OnModuleInit {
           noTechAvailable = true;
         }
       } else if (isOfficeDayToday) {
-        const availableTechs = await this.attendanceService.getAvailableTechnicians(
+        const availableTechs = await this.attendanceService.getPresentTechnicians(
           ticketType,
           today,
         );
@@ -830,9 +830,40 @@ export class TicketService implements OnModuleInit {
           );
         }
         ticket.status = dto.status;
-        // QA F5: When transitioning back to OPEN, remove the assigned technician
+        // QA: When transitioning back to OPEN, remove the assigned technician
         if (dto.status === TicketStatus.OPEN) {
           ticket.assignedToId = null;
+
+          // QA: if there is an available PRESENT technician, auto-assign immediately
+          const today = new Date().toISOString().slice(0, 10);
+          const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
+          if (ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT || isOfficeDayToday) {
+            const presentTechs = await this.attendanceService.getPresentTechnicians(ticket.ticketType, today);
+
+            const SENIOR_AUTO_ASSIGN_EXCLUDED: string[] = [
+              UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR,
+              UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
+            ];
+            const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
+              ? presentTechs
+              : presentTechs.filter(t => !SENIOR_AUTO_ASSIGN_EXCLUDED.includes(t.role));
+
+            // Pick first eligible tech with zero active tickets
+            for (const tech of eligibleTechs) {
+              const openCount = await this.ticketRepo.count({
+                where: [
+                  { assignedToId: tech.id, status: TicketStatus.OPEN },
+                  { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
+                  { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
+                ],
+              });
+              if (openCount === 0) {
+                ticket.assignedToId = tech.id;
+                ticket.status = TicketStatus.ASSIGNED;
+                break;
+              }
+            }
+          }
         }
         if (dto.status === TicketStatus.RESOLVED && !ticket.resolvedAt) {
           ticket.resolvedAt = new Date();
@@ -1355,7 +1386,7 @@ export class TicketService implements OnModuleInit {
       if (ticketType !== TicketType.PANTAWID_ICT_SUPPORT && !isOfficeDayToday) return;
 
       // Guard: tech must be present (attendance check)
-      const available = await this.attendanceService.getAvailableTechnicians(ticketType, today);
+      const available = await this.attendanceService.getPresentTechnicians(ticketType, today);
       const isPresent = available.some(t => t.id === techId);
       if (!isPresent) return;
 

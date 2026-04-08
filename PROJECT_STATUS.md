@@ -1,5 +1,13 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.6.23 — QA Fixes: Present-Only Auto Assignment + OPEN Revert Auto-Reassignment (Current)
+- **Version:** `0.6.23` in both `backend/package.json` and `frontend/package.json`.
+- **Auto-assignment attendance guard:** automatic assignment now requires explicit `present` attendance entries.
+- **OPEN revert consistency:** reverting ticket status to `open` clears `assignedToId` first.
+- **OPEN revert immediate assignment:** if an eligible PRESENT technician is available with zero active tickets, ticket is immediately auto-assigned.
+- **Migration impact:** none.
+- **Rollback:** revert `v0.6.23` commit.
+
 ## 🚀 v0.6.22 — QA Fixes: Login Auto-Assign, Attendance-Safe Pantawid Assignment, OPEN Unassign, Escalation Label Cleanup (Current)
 - **Version:** `0.6.22` in both `backend/package.json` and `frontend/package.json`
 - **Login-triggered assignment:** successful login now triggers immediate pending-ticket auto-assignment via `assignPendingTicketsOnLogin`.
