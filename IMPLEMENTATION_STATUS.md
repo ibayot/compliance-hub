@@ -2,6 +2,21 @@
 
 ## 🚀 v0.6.24 — QA Fixes (Current)
 
+## 🚀 v0.0.2 — Microservices Transition Kickoff (`microservices` branch)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| `services/users-service` scaffold | ✅ Complete | NestJS service skeleton with `/api/health` and port `4101` |
+| `services/ticketing-service` scaffold | ✅ Complete | NestJS service skeleton with `/api/health` and port `4102` |
+| `docker-compose.yml` microservices profile | ✅ Complete | Added optional `users-service` and `ticketing-service` containers |
+| `backend/package.json` version | ✅ Complete | `0.0.2` |
+| `frontend/package.json` version | ✅ Complete | `0.0.2` |
+
+### v0.0.2 Operations Notes
+- **Migration:** none.
+- **Deployment impact:** none by default (new services are profile-gated and optional).
+- **Rollback:** revert `v0.0.2` commit and/or avoid starting `microservices` profile.
+
 ## 🚀 v0.6.26 — QA Fixes (Current)
 
 | Area | Status | Notes |

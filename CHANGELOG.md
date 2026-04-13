@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.2] - 2026-04-13 — Microservices Transition Kickoff (microservices branch)
+
+### Added
+- **Users microservice scaffold** — new `services/users-service` NestJS skeleton with `/api/health` endpoint and independent runtime port `4101`.
+- **Ticketing microservice scaffold** — new `services/ticketing-service` NestJS skeleton with `/api/health` endpoint and independent runtime port `4102`.
+- **Container orchestration profile** — `docker-compose.yml` now includes optional `users-service` and `ticketing-service` containers under `microservices` profile for separate deploy/runtime startup.
+
+### Changed
+- **Patch version bump only** — `0.0.1` → `0.0.2` (x/y unchanged) for backend and frontend in `microservices` branch.
+
+### How To Test
+- Run current monolith smoke flow unchanged (`./smoke-test.ps1`) and verify pass.
+- Validate users service scaffold by calling `GET /api/health` on port `4101` after starting the service.
+- Validate ticketing service scaffold by calling `GET /api/health` on port `4102` after starting the service.
+- Start optional service containers: `docker compose --profile microservices up users-service ticketing-service`.
+
+### Migration Steps
+- No database migration required.
+- No runtime route switch performed yet; monolith remains active.
+
+### Rollback Steps
+- Revert `v0.0.2` commit on `microservices` branch.
+- Omit `microservices` compose profile at startup.
+
 ## [0.6.26] - 2026-04-13 — QA Fixes: Tickets Reminder Scope + Unrated Row Highlight
 
 ### Fixed

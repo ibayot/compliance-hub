@@ -85,6 +85,42 @@ services:
       - ricms-network
     command: npm run dev
 
+  users-service:
+    build:
+      context: ./services/users-service
+      dockerfile: Dockerfile.dev
+    container_name: ricms_users_service
+    profiles: ['microservices']
+    ports:
+      - '4101:4101'
+    volumes:
+      - ./services/users-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=4101
+    networks:
+      - ricms-network
+    command: npm run start:dev
+
+  ticketing-service:
+    build:
+      context: ./services/ticketing-service
+      dockerfile: Dockerfile.dev
+    container_name: ricms_ticketing_service
+    profiles: ['microservices']
+    ports:
+      - '4102:4102'
+    volumes:
+      - ./services/ticketing-service:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=4102
+    networks:
+      - ricms-network
+    command: npm run start:dev
+
 volumes:
   mariadb_data:
 

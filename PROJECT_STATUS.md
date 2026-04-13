@@ -1,5 +1,14 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.0.2 — Microservices Transition Kickoff (Current on `microservices` branch)
+- **Version:** `0.0.2` in both `backend/package.json` and `frontend/package.json`.
+- **Users service scaffold created:** `services/users-service` with standalone Nest bootstrap and `/api/health` endpoint.
+- **Ticketing service scaffold created:** `services/ticketing-service` with standalone Nest bootstrap and `/api/health` endpoint.
+- **Separate container readiness:** `docker-compose.yml` now includes optional `users-service` and `ticketing-service` under `microservices` profile.
+- **Backward compatibility:** monolith app remains unchanged as default runtime path; microservice profile is opt-in.
+- **Migration impact:** none.
+- **Rollback:** revert `v0.0.2` commit or do not start microservices profile.
+
 ## 🚀 v0.6.26 — QA Fixes: Tickets Reminder Scope + Unrated Row Highlight (Current)
 - **Version:** `0.6.26` in both `backend/package.json` and `frontend/package.json`.
 - **Tickets reminder scope fix:** pending-satisfaction modal no longer auto-opens when user is already in Tickets module.
