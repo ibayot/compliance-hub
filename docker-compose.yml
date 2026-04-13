@@ -87,39 +87,69 @@ services:
 
   users-service:
     build:
-      context: ./services/users-service
+      context: ./backend
       dockerfile: Dockerfile.dev
     container_name: ricms_users_service
     profiles: ['microservices']
     ports:
       - '4101:4101'
     volumes:
-      - ./services/users-service:/app
+      - ./backend:/app
       - /app/node_modules
     environment:
       - NODE_ENV=development
-      - PORT=4101
+      - USERS_SERVICE_PORT=4101
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - DB_USERNAME=ricms_user
+      - DB_PASSWORD=ricms_password
+      - DB_DATABASE=ricms_compliance
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=dev-jwt-secret-change-in-production
+      - JWT_REFRESH_SECRET=dev-refresh-secret-change-in-production
+      - CORS_ORIGIN=http://localhost:3000
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - ricms-network
-    command: npm run start:dev
+    command: npm run start:users:dev
 
   ticketing-service:
     build:
-      context: ./services/ticketing-service
+      context: ./backend
       dockerfile: Dockerfile.dev
     container_name: ricms_ticketing_service
     profiles: ['microservices']
     ports:
       - '4102:4102'
     volumes:
-      - ./services/ticketing-service:/app
+      - ./backend:/app
       - /app/node_modules
     environment:
       - NODE_ENV=development
-      - PORT=4102
+      - TICKETING_SERVICE_PORT=4102
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - DB_USERNAME=ricms_user
+      - DB_PASSWORD=ricms_password
+      - DB_DATABASE=ricms_compliance
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=dev-jwt-secret-change-in-production
+      - JWT_REFRESH_SECRET=dev-refresh-secret-change-in-production
+      - CORS_ORIGIN=http://localhost:3000
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - ricms-network
-    command: npm run start:dev
+    command: npm run start:ticketing:dev
 
 volumes:
   mariadb_data:

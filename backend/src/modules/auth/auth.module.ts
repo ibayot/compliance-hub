@@ -11,7 +11,7 @@ import { TicketsModule } from '../tickets/tickets.module';
 @Module({
   imports: [
     UsersModule,
-    TicketsModule,
+    ...(String(process.env.AUTH_ENABLE_TICKET_HOOKS ?? 'true').toLowerCase() === 'true' ? [TicketsModule] : []),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

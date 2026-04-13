@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -17,8 +17,8 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly attendanceService: AttendanceService,
-    private readonly ticketService: TicketService,
+    @Optional() private readonly attendanceService?: AttendanceService,
+    @Optional() private readonly ticketService?: TicketService,
   ) {}
 
   private get jwtIssuer(): string {
@@ -91,9 +91,9 @@ export class AuthService {
     await this.usersService.recordLogin(user.id);
 
     // Auto-correct: if technician was marked absent today and then logs in, set them present
-    this.attendanceService.autoCorrectAbsentOnLogin(user.id).catch(() => {});
+    this.attendanceService?.autoCorrectAbsentOnLogin(user.id).catch(() => {});
     // QA: trigger auto-assignment for pending OPEN tickets upon technician login
-    this.ticketService.assignPendingTicketsOnLogin(user.id).catch(() => {});
+    this.ticketService?.assignPendingTicketsOnLogin(user.id).catch(() => {});
 
     const tokens = await this.generateTokens(user);
     return this.buildAuthResponse(user, tokens);
@@ -134,9 +134,9 @@ export class AuthService {
     await this.usersService.recordLogin(user.id);
 
     // Auto-correct: if user was marked absent today and logs in, set them present
-    this.attendanceService.autoCorrectAbsentOnLogin(user.id).catch(() => {});
+    this.attendanceService?.autoCorrectAbsentOnLogin(user.id).catch(() => {});
     // QA: trigger auto-assignment for pending OPEN tickets upon technician login
-    this.ticketService.assignPendingTicketsOnLogin(user.id).catch(() => {});
+    this.ticketService?.assignPendingTicketsOnLogin(user.id).catch(() => {});
 
     const tokens = await this.generateTokens(user);
     return this.buildAuthResponse(user, tokens);

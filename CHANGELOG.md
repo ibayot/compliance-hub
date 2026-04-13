@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.3] - 2026-04-13 — Full Users/Ticketing Microservice Runtime Split (microservices branch)
+
+### Added
+- **Users service runtime entrypoint** — `backend/src/apps/users-service.main.ts` and `backend/src/apps/users-service.module.ts` now run Users/Auth/Units domain as an independent service.
+- **Ticketing service runtime entrypoint** — `backend/src/apps/ticketing-service.main.ts` and `backend/src/apps/ticketing-service.module.ts` now run Tickets domain as an independent service.
+- **Ticketing JWT strategy** — `backend/src/apps/ticketing-jwt.strategy.ts` provides JWT validation for ticketing service without coupling to full auth module imports.
+- **Service start scripts** — backend scripts added: `start:users`, `start:users:dev`, `start:ticketing`, `start:ticketing:dev`.
+
+### Changed
+- **Auth decoupling for users service** — ticket-login hooks in auth are now optional; `AuthModule` imports `TicketsModule` only when `AUTH_ENABLE_TICKET_HOOKS=true`.
+- **Docker microservices profile** — `users-service` and `ticketing-service` containers now run full backend domain entrypoints, not placeholder stubs.
+- **Patch version bump only** — `0.0.2` → `0.0.3` (x/y unchanged).
+
+### How To Test
+- Start users service: `cd backend && npm run start:users:dev` (port `4101`).
+- Start ticketing service: `cd backend && npm run start:ticketing:dev` (port `4102`).
+- Keep frontend/main app on separate terminal as needed.
+- Run regression suite: backend build/unit/e2e + smoke script.
+
+### Migration Steps
+- No database schema migration required.
+- Ensure `.env` values are available to both services (DB/JWT/CORS).
+
+### Rollback Steps
+- Revert `v0.0.3` commit on `microservices` branch.
+- Run monolith backend (`npm run start:dev`) only.
+
 ## [0.0.2] - 2026-04-13 — Microservices Transition Kickoff (microservices branch)
 
 ### Added

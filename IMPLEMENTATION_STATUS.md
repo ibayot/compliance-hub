@@ -2,6 +2,24 @@
 
 ## 🚀 v0.6.24 — QA Fixes (Current)
 
+## 🚀 v0.0.3 — Full Users/Ticketing Microservice Runtime Split (`microservices` branch)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Users service app module + main entrypoint | ✅ Complete | `backend/src/apps/users-service.*` created; runs Auth + Users + Units on `4101` |
+| Ticketing service app module + main entrypoint | ✅ Complete | `backend/src/apps/ticketing-service.*` created; runs Tickets domain on `4102` |
+| Ticketing JWT strategy provider | ✅ Complete | `backend/src/apps/ticketing-jwt.strategy.ts` added for ticketing guard auth |
+| Auth ticket hook decoupling | ✅ Complete | Auth service ticket/attendance dependencies made optional; ticket module import is conditional |
+| Backend service start scripts | ✅ Complete | Added `start:users(:dev)` and `start:ticketing(:dev)` scripts |
+| Docker microservices profile runtime | ✅ Complete | Users/ticketing containers now run full backend domain entrypoints |
+| `backend/package.json` version | ✅ Complete | `0.0.3` |
+| `frontend/package.json` version | ✅ Complete | `0.0.3` |
+
+### v0.0.3 Operations Notes
+- **Migration:** none.
+- **Deployment impact:** users and ticketing can now be launched independently in separate terminals/containers.
+- **Rollback:** revert `v0.0.3` commit and keep monolith backend only.
+
 ## 🚀 v0.0.2 — Microservices Transition Kickoff (`microservices` branch)
 
 | Area | Status | Notes |

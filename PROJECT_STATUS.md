@@ -1,5 +1,15 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.0.3 — Full Users/Ticketing Microservice Runtime Split (Current on `microservices` branch)
+- **Version:** `0.0.3` in both `backend/package.json` and `frontend/package.json`.
+- **Users service extraction runtime:** independent backend entrypoint serving users/auth/units on port `4101`.
+- **Ticketing service extraction runtime:** independent backend entrypoint serving tickets domain on port `4102`.
+- **Auth decoupling:** users service no longer requires ticket module to boot.
+- **Independent startup scripts:** `npm run start:users:dev` and `npm run start:ticketing:dev`.
+- **Compose runtime:** `docker-compose` microservices profile runs real users/ticketing backend entrypoints.
+- **Migration impact:** none.
+- **Rollback:** revert `v0.0.3` or run monolith backend only.
+
 ## 🚀 v0.0.2 — Microservices Transition Kickoff (Current on `microservices` branch)
 - **Version:** `0.0.2` in both `backend/package.json` and `frontend/package.json`.
 - **Users service scaffold created:** `services/users-service` with standalone Nest bootstrap and `/api/health` endpoint.
