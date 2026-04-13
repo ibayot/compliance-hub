@@ -19,6 +19,11 @@ import {
   Stack,
   TextField,
   MenuItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Alert,
 } from '@mui/material';
 import {
   Description as DocumentIcon,
@@ -67,6 +72,7 @@ export default function DashboardPage() {
 
   // User-specific ticket dashboard stats
   const [userTicketStats, setUserTicketStats] = useState<TicketDashboardStats | null>(null);
+  const [pendingSatReminderOpen, setPendingSatReminderOpen] = useState(false);
 
   // Tech monthly assigned-ticket stats with selectable period
   const [techAssignedStats, setTechAssignedStats] = useState<TechAssignedStats | null>(null);
@@ -102,6 +108,14 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchDashboardData();
   }, [user]);
+
+  useEffect(() => {
+    if (!isRegularUser) return;
+    const pendingCount = userTicketStats?.pendingSatisfactionTickets?.length ?? 0;
+    if (pendingCount > 0) {
+      setPendingSatReminderOpen(true);
+    }
+  }, [isRegularUser, userTicketStats]);
 
   // Fetch monthly assigned-ticket stats for technicians whenever period changes
   useEffect(() => {
@@ -209,6 +223,29 @@ export default function DashboardPage() {
 
     return (
       <Box>
+        <Dialog open={pendingSatReminderOpen} onClose={() => setPendingSatReminderOpen(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>Pending Satisfaction Reminder</DialogTitle>
+          <DialogContent>
+            <Alert severity="warning" sx={{ mt: 1 }}>
+              You have {pendingCount} resolved/closed ticket{pendingCount > 1 ? 's' : ''} awaiting your satisfaction rating.
+              Please rate these tickets before opening a new request.
+            </Alert>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setPendingSatReminderOpen(false)}>Close</Button>
+            <Button
+              variant="contained"
+              color="warning"
+              onClick={() => {
+                setPendingSatReminderOpen(false);
+                router.push('/dashboard/tickets?filter=pending_satisfaction');
+              }}
+            >
+              Rate Now
+            </Button>
+          </DialogActions>
+        </Dialog>
+
         {/* Page Header */}
         <Box mb={4}>
           <Typography variant="h4" component="h1" gutterBottom>

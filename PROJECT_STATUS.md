@@ -1,5 +1,38 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.6.26 — QA Fixes: Tickets Reminder Scope + Unrated Row Highlight (Current)
+- **Version:** `0.6.26` in both `backend/package.json` and `frontend/package.json`.
+- **Tickets reminder scope fix:** pending-satisfaction modal no longer auto-opens when user is already in Tickets module.
+- **Unrated visibility:** requester unresolved satisfaction tickets are highlighted with warning-tinted rows and `Unrated` status chip.
+- **How to test:** open Tickets with pending satisfaction account and confirm no auto-popup; verify highlighted unrated rows.
+- **Migration impact:** none.
+- **Rollback:** revert `v0.6.26` commit.
+
+## 🚀 v0.6.25 — QA Fixes: New-Ticket Guard + Satisfaction Modal + Timeline Tie-Order + Email Freeze (Current)
+- **Version:** `0.6.25` in both `backend/package.json` and `frontend/package.json`.
+- **No-new-ticket enforcement:** requester cannot create a new ticket while any prior ticket remains unclosed.
+- **Reminder modality upgrade:** unrated satisfaction reminders now appear as modal dialogs on account open and on each new-ticket attempt.
+- **Timeline tie-order guarantee:** same-timestamp events render `created` before `auto_assigned` in ticket timeline.
+- **Email freeze active:** outbound email sending paused via `EMAIL_ENABLED=false`.
+- **Override rollback target:** `EMAIL_TEST_OVERRIDE` restored to `mjdibay@dswd.gov.ph`.
+- **How to test:** verify modal reminder display, blocked new-ticket creation with existing unclosed ticket, same-timestamp timeline order, and suppressed email delivery.
+- **Migration impact:** none (no schema change).
+- **Rollback:** set `EMAIL_ENABLED=true` and revert `v0.6.25` commit.
+
+## 🚀 v0.6.24 — QA Fixes: Attendance Completion Polling + Technician Progression + Timeline Cleanup + Port 4000 Guard (Current)
+- **Version:** `0.6.24` in both `backend/package.json` and `frontend/package.json`.
+- **Attendance completion polling:** Attendance tab keeps refreshing while any technician has no attendance status for the current day.
+- **Technician progression unblock:** staff technicians can set priority in ticket detail, enabling required transitions to `in_progress` and `resolved`.
+- **Internal note/comment ordering:** comments (including internal notes) render in chronological timestamp order.
+- **Comments removed from timeline:** comment events are excluded from timeline view and no longer logged into ticket events.
+- **Login auto-assign labeling fixed:** login-triggered assignment now records `auto_assigned` event type.
+- **Backend dev startup hardening:** new `backend/scripts/prepare-dev.js` clears stale build artifacts and attempts to free port `4000` before watch boot.
+- **Email lifecycle routing:** assignment emails notify technicians; resolved emails notify requesters with rating prompt; closed and rated events notify technicians.
+- **Current QA routing override:** `EMAIL_TEST_OVERRIDE=ibayatucv@gmail.com` redirects all outbound ticket emails to a single inbox for testing.
+- **Ticket creation stability hardening:** duplicate ticket-number collisions are handled via latest-sequence allocation and retry, preventing intermittent create-ticket 500 errors.
+- **Migration impact:** none.
+- **Rollback:** revert `v0.6.24` commit.
+
 ## 🚀 v0.6.23 — QA Fixes: Present-Only Auto Assignment + OPEN Revert Auto-Reassignment (Current)
 - **Version:** `0.6.23` in both `backend/package.json` and `frontend/package.json`.
 - **Auto-assignment attendance guard:** automatic assignment now requires explicit `present` attendance entries.

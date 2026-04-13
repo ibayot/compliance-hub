@@ -391,11 +391,17 @@ export class TicketService implements OnModuleInit {
   private async generateTicketNumber(): Promise<string> {
     const year = new Date().getFullYear();
     const prefix = `TKT-${year}-`;
-    const count = await this.ticketRepo
+    const latest = await this.ticketRepo
       .createQueryBuilder('t')
+      .select('t.ticketNumber', 'ticketNumber')
       .where('t.ticketNumber LIKE :prefix', { prefix: `${prefix}%` })
-      .getCount();
-    const seq = String(count + 1).padStart(4, '0');
+      .orderBy('t.ticketNumber', 'DESC')
+      .limit(1)
+      .getRawOne<{ ticketNumber?: string }>();
+
+    const latestNumber = latest?.ticketNumber ?? '';
+    const latestSeq = Number((latestNumber.split('-').pop() ?? '0').replace(/[^0-9]/g, '')) || 0;
+    const seq = String(latestSeq + 1).padStart(4, '0');
     return `${prefix}${seq}`;
   }
 
@@ -428,6 +434,7 @@ export class TicketService implements OnModuleInit {
       .leftJoinAndSelect('e.actor', 'actor')
       .where('e.ticketId = :id', { id: ticketId })
       .orderBy('e.createdAt', 'ASC')
+      .addOrderBy("CASE WHEN e.eventType = 'created' THEN 0 WHEN e.eventType = 'auto_assigned' THEN 1 ELSE 2 END", 'ASC')
       .getMany();
 
     return events.map(e => ({
@@ -452,6 +459,19 @@ export class TicketService implements OnModuleInit {
 
     const requester = await this.userRepo.findOne({ where: { id: requesterId } });
     if (!requester) throw new BadRequestException('Requester not found');
+
+    const unclosedCount = await this.ticketRepo
+      .createQueryBuilder('t')
+      .where('t.requesterId = :requesterId', { requesterId })
+      .andWhere('t.status NOT IN (:...terminal)', {
+        terminal: [TicketStatus.CLOSED, TicketStatus.DUPLICATE],
+      })
+      .getCount();
+    if (unclosedCount > 0) {
+      throw new BadRequestException(
+        'You still have an unclosed ticket. Please wait for it to be closed before creating a new ticket.',
+      );
+    }
 
     let ticketType = dto.ticketType;
     let categoryId = dto.categoryId || null;
@@ -589,7 +609,21 @@ export class TicketService implements OnModuleInit {
       satisfactionSubmittedAt: null,
     });
 
-    const saved = await this.ticketRepo.save(ticket);
+    let saved: Ticket | null = null;
+    // Guard against duplicate ticket numbers in concurrent creation scenarios.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        saved = await this.ticketRepo.save(ticket);
+        break;
+      } catch (err: any) {
+        const isDuplicate = /duplicate entry|ER_DUP_ENTRY/i.test(String(err?.message ?? ''));
+        if (!isDuplicate || attempt === 2) throw err;
+        ticket.ticketNumber = await this.generateTicketNumber();
+      }
+    }
+    if (!saved) {
+      throw new BadRequestException('Failed to create ticket due to ticket number allocation conflict.');
+    }
 
     // Log creation event
     this.logEvent(saved.id, 'created', callerId, {
@@ -735,7 +769,17 @@ export class TicketService implements OnModuleInit {
         ticket.status = TicketStatus.CLOSED;
         ticket.userClosed = true;
         if (!ticket.resolvedAt) ticket.resolvedAt = new Date();
-        return this.ticketRepo.save(ticket);
+        const savedClosed = await this.ticketRepo.save(ticket);
+        if (ticket.assignedTo?.email) {
+          this.emailService.sendTicketClosedOrRatedEmailToTechnician({
+            ticketNumber: savedClosed.ticketNumber,
+            subject: savedClosed.subject,
+            technicianName: [ticket.assignedTo.firstName, ticket.assignedTo.lastName].filter(Boolean).join(' ') || ticket.assignedTo.email,
+            technicianEmail: ticket.assignedTo.email,
+            action: 'closed',
+          }).catch(() => {});
+        }
+        return savedClosed;
       }
       if (ticket.status !== TicketStatus.OPEN) {
         throw new ForbiddenException('You can only edit tickets that are still open.');
@@ -880,6 +924,28 @@ export class TicketService implements OnModuleInit {
         to: dto.status,
         resolutionNotes: dto.resolutionNotes ?? undefined,
       }).catch(() => {});
+
+      if (dto.status === TicketStatus.RESOLVED && ticket.requester?.email) {
+        this.emailService.sendTicketResolvedEmailToRequester({
+          ticketNumber: saved.ticketNumber,
+          subject: saved.subject,
+          requesterName: [ticket.requester.firstName, ticket.requester.lastName].filter(Boolean).join(' ') || ticket.requester.email,
+          requesterEmail: ticket.requester.email,
+          technicianName: ticket.assignedTo
+            ? ([ticket.assignedTo.firstName, ticket.assignedTo.lastName].filter(Boolean).join(' ') || ticket.assignedTo.email)
+            : undefined,
+        }).catch(() => {});
+      }
+
+      if (dto.status === TicketStatus.CLOSED && ticket.assignedTo?.email) {
+        this.emailService.sendTicketClosedOrRatedEmailToTechnician({
+          ticketNumber: saved.ticketNumber,
+          subject: saved.subject,
+          technicianName: [ticket.assignedTo.firstName, ticket.assignedTo.lastName].filter(Boolean).join(' ') || ticket.assignedTo.email,
+          technicianEmail: ticket.assignedTo.email,
+          action: 'closed',
+        }).catch(() => {});
+      }
     }
 
     // QA #1/#2: On RESOLVED, auto-assign next OPEN ticket — only for non-senior techs
@@ -1064,7 +1130,6 @@ export class TicketService implements OnModuleInit {
     });
 
     const savedComment = await this.commentRepo.save(comment);
-    this.logEvent(ticketId, 'comment_added', actorId, { isInternal: isInternal ?? false }).catch(() => {});
     return savedComment;
   }
 
@@ -1120,7 +1185,20 @@ export class TicketService implements OnModuleInit {
     }
 
     ticket.satisfactionSubmittedAt = new Date();
-    return this.ticketRepo.save(ticket);
+    const saved = await this.ticketRepo.save(ticket);
+
+    if (ticket.assignedTo?.email) {
+      this.emailService.sendTicketClosedOrRatedEmailToTechnician({
+        ticketNumber: saved.ticketNumber,
+        subject: saved.subject,
+        technicianName: [ticket.assignedTo.firstName, ticket.assignedTo.lastName].filter(Boolean).join(' ') || ticket.assignedTo.email,
+        technicianEmail: ticket.assignedTo.email,
+        action: 'rated',
+        rating: saved.satisfactionRating,
+      }).catch(() => {});
+    }
+
+    return saved;
   }
 
   /** Return distinct unit/section values from past satisfaction form submissions */
@@ -1415,7 +1493,7 @@ export class TicketService implements OnModuleInit {
       pending.status = TicketStatus.ASSIGNED;
       await this.ticketRepo.save(pending);
 
-      this.logEvent(pending.id, 'manually_assigned', techId, {
+      this.logEvent(pending.id, 'auto_assigned', null, {
         technicianId: techId,
         technicianName: [tech.firstName, tech.lastName].filter(Boolean).join(' ') || tech.email,
         via: 'login_auto_assign',

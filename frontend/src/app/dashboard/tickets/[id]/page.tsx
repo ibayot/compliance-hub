@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Box,
   Card,
@@ -149,11 +149,12 @@ export default function TicketDetailPage() {
   const isRegularUser = user?.role === 'user';
   const isFocalTech = ['technician_desktop', 'technician_it_support', 'technician', 'desktop_sr', 'it_support_sr'].includes(user?.role ?? '');
   const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
-  const isTechnician = isFocalTech || isLowerLevelTech;
+  const isJuniorTech = ['it_support_jr', 'desktop_jr'].includes(user?.role ?? '');
+  const isTechnician = isFocalTech || isLowerLevelTech || isJuniorTech;
   const isFocal = user?.role === 'focal';
   const isAdmin = user?.role === 'super_admin' || isFocal || user?.role === 'reviewer';
   const canStaff = isAdmin || isTechnician;
-  const canPriority = isFocal || user?.role === 'reviewer' || user?.role === 'super_admin';
+  const canPriority = canStaff;
   const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer';
   const isSectionHead = user?.roleCode === 'section_head';
   // canReassign: focal techs (incl. desktop_sr/it_support_sr), CO, SH, super_admin can assign / reassign
@@ -164,6 +165,25 @@ export default function TicketDetailPage() {
   const canSatisfaction = isRequester && (ticket?.status === 'resolved' || ticket?.status === 'closed') && !ticket?.satisfactionSubmittedAt;
   // Duplicate is terminal — no further modifications allowed
   const isDuplicate = ticket?.status === 'duplicate';
+  const sortedComments = useMemo(() => {
+    const comments = [ ...(((ticket as any)?.comments ?? []) as any[]) ];
+    return comments.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }, [ticket]);
+  const timelineEvents = useMemo(() => {
+    const eventPriority = (eventType: string) => {
+      if (eventType === 'created') return 0;
+      if (eventType === 'auto_assigned') return 1;
+      return 2;
+    };
+
+    return [...events]
+      .filter((ev) => ev.eventType !== 'comment_added')
+      .sort((a, b) => {
+        const timeDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return eventPriority(a.eventType) - eventPriority(b.eventType);
+      });
+  }, [events]);
 
   useEffect(() => {
     fetchTicket();
@@ -696,12 +716,12 @@ export default function TicketDetailPage() {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-            Comments ({(ticket as any).comments?.length ?? 0})
+            Comments ({sortedComments.length})
           </Typography>
 
-          {(ticket as any).comments?.length > 0 ? (
+          {sortedComments.length > 0 ? (
             <List disablePadding>
-              {(ticket as any).comments.map((c: any, i: number) => (
+              {sortedComments.map((c: any, i: number) => (
                 <React.Fragment key={c.id ?? i}>
                   <ListItem alignItems="flex-start" disableGutters>
                     <ListItemText
@@ -727,7 +747,7 @@ export default function TicketDetailPage() {
                       }
                     />
                   </ListItem>
-                  {i < (ticket as any).comments.length - 1 && <Divider component="li" />}
+                  {i < sortedComments.length - 1 && <Divider component="li" />}
                 </React.Fragment>
               ))}
             </List>
@@ -778,12 +798,12 @@ export default function TicketDetailPage() {
           </Typography>
           {eventsLoading ? (
             <Box textAlign="center" py={2}><CircularProgress size={24} /></Box>
-          ) : events.length === 0 ? (
+          ) : timelineEvents.length === 0 ? (
             <Typography variant="body2" color="text.secondary">No events recorded yet.</Typography>
           ) : (
             <Box>
-              {[...events].reverse().map((ev, idx) => {
-                const isLast = idx === events.length - 1;
+              {timelineEvents.map((ev, idx) => {
+                const isLast = idx === timelineEvents.length - 1;
                 const EVENT_LABELS: Record<string, string> = {
                   created: 'Ticket Created',
                   auto_assigned: 'Auto-Assigned',
@@ -793,11 +813,13 @@ export default function TicketDetailPage() {
                   resolved: 'Resolved',
                   closed: 'Closed',
                   user_closed: 'Closed by Requester',
-                  comment_added: 'Comment Added',
                   escalated: 'Escalated',
                   satisfaction_submitted: 'Satisfaction Submitted',
                 };
                 const label = EVENT_LABELS[ev.eventType] ?? ev.eventType.replace(/_/g, ' ');
+                const actorLine = ev.actorName
+                  ? `by ${ev.actorName}`
+                  : (ev.eventType === 'auto_assigned' ? 'by System' : '');
                 return (
                   <Box key={ev.id} display="flex" gap={2} mb={isLast ? 0 : 2}>
                     <Box display="flex" flexDirection="column" alignItems="center">
@@ -806,8 +828,8 @@ export default function TicketDetailPage() {
                     </Box>
                     <Box pb={isLast ? 0 : 1}>
                       <Typography variant="body2" fontWeight={600}>{label}</Typography>
-                      {ev.actorName && (
-                        <Typography variant="caption" color="text.secondary">by {ev.actorName}</Typography>
+                      {actorLine && (
+                        <Typography variant="caption" color="text.secondary">{actorLine}</Typography>
                       )}
                       {ev.meta?.technicianName && (
                         <Typography variant="caption" color="text.secondary" display="block">

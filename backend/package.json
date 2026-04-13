@@ -1,6 +1,6 @@
 {
     "name": "rictms-backend",
-    "version": "0.6.23",
+    "version": "0.6.26",
     "description": "RICTMS Compliance Hub - Backend API",
     "author": "RICTMS Team",
     "private": true,
@@ -9,7 +9,7 @@
         "build": "nest build",
         "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
         "start": "nest start",
-        "start:dev": "node -e \"try{require('fs').rmSync('dist',{recursive:true,force:true})}catch(e){}\" && nest start --watch",
+        "start:dev": "node scripts/prepare-dev.js && nest start --watch",
         "start:debug": "nest start --debug --watch",
         "start:prod": "node dist/main",
         "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",

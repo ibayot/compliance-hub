@@ -108,6 +108,9 @@ export default function TicketsPage() {
 
   // Pending satisfaction ratings — loaded once for USER role to show warning before new ticket
   const [pendingSatCount, setPendingSatCount] = useState(0);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [reminderTitle, setReminderTitle] = useState('Pending Satisfaction Reminder');
+  const [reminderMessage, setReminderMessage] = useState('');
 
   const canManageAll = isStaffRole(user?.role) && !(['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? ''));
   const isSuperAdmin = user?.role === 'super_admin';
@@ -208,12 +211,36 @@ export default function TicketsPage() {
   };
 
   const handleOpenNewTicket = () => {
-    if (!canManageAll && pendingSatCount > 0) {
-      enqueueSnackbar(
-        `You have ${pendingSatCount} closed ticket${pendingSatCount > 1 ? 's' : ''} with an unfilled satisfaction rating. Please rate them before submitting a new ticket.`,
-        { variant: 'warning', autoHideDuration: 6000 }
-      );
+    if (!canManageAll) {
+      ticketsApi.getDashboardStats().then(stats => {
+        const pendingCount = stats.pendingSatisfactionTickets?.length ?? 0;
+        const unclosedCount = (stats.open ?? 0) + (stats.inProgress ?? 0) + (stats.resolved ?? 0);
+        setPendingSatCount(pendingCount);
+
+        if (pendingCount > 0) {
+          setReminderTitle('Pending Satisfaction Reminder');
+          setReminderMessage(
+            `You still have ${pendingCount} unresolved satisfaction rating${pendingCount > 1 ? 's' : ''}. Please rate your resolved tickets before opening a new request.`,
+          );
+          setReminderOpen(true);
+        }
+
+        if (unclosedCount > 0) {
+          setReminderTitle('Open Ticket Restriction');
+          setReminderMessage(
+            `You currently have ${unclosedCount} unclosed ticket${unclosedCount > 1 ? 's' : ''}. New ticket creation is disabled until your existing ticket is closed.`,
+          );
+          setReminderOpen(true);
+          return;
+        }
+
+        setNewDialogOpen(true);
+      }).catch(() => {
+        setNewDialogOpen(true);
+      });
+      return;
     }
+
     setNewDialogOpen(true);
   };
 
@@ -399,8 +426,18 @@ export default function TicketsPage() {
               <TableRow><TableCell colSpan={11} align="center">
                 <Typography color="text.secondary" py={3}>No tickets found. Click "New Ticket" to submit your first request.</Typography>
               </TableCell></TableRow>
-            ) : tickets.map(ticket => (
-              <TableRow key={ticket.id} hover>
+            ) : tickets.map(ticket => {
+              const hasPendingSatisfaction =
+                (ticket.status === 'resolved' || ticket.status === 'closed') &&
+                ticket.requesterId === user?.id &&
+                !ticket.satisfactionSubmittedAt;
+
+              return (
+              <TableRow
+                key={ticket.id}
+                hover
+                sx={hasPendingSatisfaction ? { backgroundColor: 'warning.50', '&:hover': { backgroundColor: 'warning.100' } } : undefined}
+              >
                 <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{ticket.ticketNumber}</TableCell>
                 <TableCell sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ticket.subject}</TableCell>
                 <TableCell>
@@ -412,7 +449,14 @@ export default function TicketsPage() {
                   <Typography variant="body2" color="text.secondary">{ticket.category?.name ?? '—'}</Typography>
                 </TableCell>
                 <TableCell><Chip size="small" label={(ticket.priority ?? 'not set').toUpperCase()} color={PRIORITY_COLOR[ticket.priority ?? ''] ?? 'default'} /></TableCell>
-                <TableCell><Chip size="small" label={ticket.status.replace('_', ' ')} color={STATUS_COLOR[ticket.status]} /></TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Chip size="small" label={ticket.status.replace('_', ' ')} color={STATUS_COLOR[ticket.status]} />
+                    {hasPendingSatisfaction && (
+                      <Chip size="small" label="Unrated" color="warning" variant="filled" />
+                    )}
+                  </Stack>
+                </TableCell>
                 <TableCell>
                   {(() => { const s = getSlaStatus(ticket); return s ? <Chip size="small" label={SLA_CHIP[s].label} color={SLA_CHIP[s].color} /> : <Typography variant="body2" color="text.disabled">—</Typography>; })()}
                 </TableCell>
@@ -459,7 +503,7 @@ export default function TicketsPage() {
                   </Stack>
                 </TableCell>
               </TableRow>
-            ))}
+            )})}
           </TableBody>
         </Table>
       </TableContainer>
@@ -539,7 +583,7 @@ export default function TicketsPage() {
             )}
 
             <Alert severity="info" sx={{ fontSize: '0.82rem' }}>
-              Tickets are auto-assigned to available technicians. You&apos;ll receive an email confirmation with your ticket details.
+              Tickets are auto-assigned to available technicians. Email notifications are currently paused.
             </Alert>
           </Stack>
         </DialogContent>
@@ -547,6 +591,28 @@ export default function TicketsPage() {
           <Button onClick={() => setNewDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleSubmitTicket} variant="contained" disabled={submitting}>
             {submitting ? 'Submitting…' : 'Submit Ticket'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={reminderOpen} onClose={() => setReminderOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{reminderTitle}</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            {reminderMessage}
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReminderOpen(false)}>Close</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={() => {
+              setReminderOpen(false);
+              router.push('/dashboard/tickets?filter=pending_satisfaction');
+            }}
+          >
+            Go To Tickets
           </Button>
         </DialogActions>
       </Dialog>

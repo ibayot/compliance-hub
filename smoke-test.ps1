@@ -110,9 +110,15 @@ $userTickets = Invoke-RestMethod -Method Get -Uri "$api/tickets" -Headers $uh
 Write-Output "SMOKE_USER_TICKETS_LIST_OK count=$(@($userTickets).Count)"
 
 # 3. User can create a ticket
-$newTicket = Invoke-RestMethod -Method Post -Uri "$api/tickets" -ContentType 'application/json' -Headers $uh `
-  -Body (@{subject='Smoke test ticket';description='Created by user in smoke test';ticketType='it_support';priority='low'} | ConvertTo-Json)
-Write-Output "SMOKE_USER_CREATE_TICKET_OK id=$($newTicket.id.Substring(0,8)) number=$($newTicket.ticketNumber)"
+$newTicket = $null
+ $userUnclosedCount = @($userTickets | Where-Object { $_.status -notin @('closed','duplicate') }).Count
+if ($userUnclosedCount -gt 0) {
+    Write-Output "SMOKE_USER_CREATE_TICKET_BLOCKED_EXPECTED rule=no_new_ticket_with_unclosed count=$userUnclosedCount"
+} else {
+    $newTicket = Invoke-RestMethod -Method Post -Uri "$api/tickets" -ContentType 'application/json' -Headers $uh `
+      -Body (@{subject='Smoke test ticket';description='Created by user in smoke test';ticketType='it_support';priority='low'} | ConvertTo-Json)
+    Write-Output "SMOKE_USER_CREATE_TICKET_OK id=$($newTicket.id.Substring(0,8)) number=$($newTicket.ticketNumber)"
+}
 
 # 4. Technician (desktop) login
 $deskTech = Invoke-RestMethod -Method Post -Uri "$api/auth/login" -ContentType 'application/json' -Body (@{email='desktop.tech@rictms.gov.ph';password='password123'} | ConvertTo-Json)
@@ -127,9 +133,15 @@ Write-Output "SMOKE_IT_TECH_LOGIN_OK role=$($itTech.user.role)"
 $user2Info = Invoke-RestMethod -Method Get -Uri "$api/users" -Headers $sh
 $user2 = @($user2Info) | Where-Object { $_.email -eq 'user2@example.com' } | Select-Object -First 1
 if ($user2) {
-    $walkInTicket = Invoke-RestMethod -Method Post -Uri "$api/tickets" -ContentType 'application/json' -Headers $sh `
-      -Body (@{subject='Walk-in: keyboard issue';description='User came in person - keyboard keys sticking';ticketType='desktop_support';priority='medium';requesterId=$user2.id} | ConvertTo-Json)
-    Write-Output "SMOKE_WALKIN_TICKET_OK number=$($walkInTicket.ticketNumber) requesterId=$($walkInTicket.requesterId)"
+        $user2Tickets = Invoke-RestMethod -Method Get -Uri "$api/tickets?requesterId=$($user2.id)" -Headers $sh
+        $user2UnclosedCount = @($user2Tickets | Where-Object { $_.status -notin @('closed','duplicate') }).Count
+        if ($user2UnclosedCount -gt 0) {
+                Write-Output "SMOKE_WALKIN_TICKET_BLOCKED_EXPECTED rule=no_new_ticket_with_unclosed requester=user2 count=$user2UnclosedCount"
+        } else {
+                $walkInTicket = Invoke-RestMethod -Method Post -Uri "$api/tickets" -ContentType 'application/json' -Headers $sh `
+                    -Body (@{subject='Walk-in: keyboard issue';description='User came in person - keyboard keys sticking';ticketType='desktop_support';priority='medium';requesterId=$user2.id} | ConvertTo-Json)
+                Write-Output "SMOKE_WALKIN_TICKET_OK number=$($walkInTicket.ticketNumber) requesterId=$($walkInTicket.requesterId)"
+        }
 } else {
     Write-Output "SMOKE_WALKIN_TICKET_SKIP (user2@example.com not in DB - run seed first)"
 }
@@ -251,9 +263,15 @@ try {
 # 11. Create ticket with category (auto-shift/assign test)
 $firstCat = @($itCats) | Select-Object -First 1
 if ($firstCat) {
-    $catTicket = Invoke-RestMethod -Method Post -Uri "$api/tickets" -ContentType 'application/json' -Headers $uh `
-      -Body (@{subject='My email is not working';description='Cannot access corporate email since today morning';ticketType='it_support';priority='medium';categoryId=$firstCat.id} | ConvertTo-Json)
-    Write-Output "SMOKE_TICKET_WITH_CATEGORY_OK number=$($catTicket.ticketNumber) categoryId=$($catTicket.categoryId) autoAssigned=$($catTicket.autoAssigned)"
+        $userCurrentTickets = Invoke-RestMethod -Method Get -Uri "$api/tickets" -Headers $uh
+        $userCurrentUnclosed = @($userCurrentTickets | Where-Object { $_.status -notin @('closed','duplicate') }).Count
+        if ($userCurrentUnclosed -gt 0) {
+                Write-Output "SMOKE_TICKET_WITH_CATEGORY_BLOCKED_EXPECTED rule=no_new_ticket_with_unclosed count=$userCurrentUnclosed"
+        } else {
+                $catTicket = Invoke-RestMethod -Method Post -Uri "$api/tickets" -ContentType 'application/json' -Headers $uh `
+                    -Body (@{subject='My email is not working';description='Cannot access corporate email since today morning';ticketType='it_support';priority='medium';categoryId=$firstCat.id} | ConvertTo-Json)
+                Write-Output "SMOKE_TICKET_WITH_CATEGORY_OK number=$($catTicket.ticketNumber) categoryId=$($catTicket.categoryId) autoAssigned=$($catTicket.autoAssigned)"
+        }
 } else {
     Write-Output "SMOKE_TICKET_WITH_CATEGORY_SKIP (no categories)"
 }

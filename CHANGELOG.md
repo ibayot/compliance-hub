@@ -6,6 +6,84 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.6.26] - 2026-04-13 — QA Fixes: Tickets Reminder Scope + Unrated Row Highlight
+
+### Fixed
+- **Tickets-module modal scope (QA)** — pending-satisfaction modal no longer auto-opens when user is already inside Tickets module.
+- **Unrated ticket visibility (QA)** — unresolved satisfaction rows in Tickets now use warning-tinted row background and `Unrated` status chip for easy identification.
+
+### Changed
+- **Patch version bump only** — `0.6.25` → `0.6.26` (x/y unchanged).
+
+### How To Test
+- Login as regular user with pending satisfaction tickets; dashboard reminder behavior remains unchanged.
+- Navigate to Tickets module; verify no auto-popup modal appears on page load.
+- In Tickets list, verify unresolved satisfaction tickets are visually highlighted and tagged `Unrated`.
+
+### Migration Steps
+- No database schema migration required.
+
+### Rollback Steps
+- Revert `v0.6.26` commit to restore prior tickets-page reminder and row styling behavior.
+
+## [0.6.25] - 2026-04-13 — QA Fixes: Ticket Guard, Satisfaction Modal, Timeline Tie-Order, Email Freeze
+
+### Fixed
+- **No new ticket while unclosed ticket exists (QA)** — ticket creation now fails when requester has any non-terminal ticket (`open`, `assigned`, `in_progress`, `resolved`, `freeze`).
+- **Timeline same-timestamp ordering (QA)** — when `created` and `auto_assigned` events share the same timestamp, `created` is forced before `auto_assigned`.
+- **Satisfaction reminder enforcement (QA)** — requester reminders for unrated tickets are now shown as blocking modals (account open + new request action), replacing the previous toast behavior.
+
+### Changed
+- **Email test override restored** — `EMAIL_TEST_OVERRIDE` set back to `mjdibay@dswd.gov.ph`.
+- **Email sending paused** — new `EMAIL_ENABLED=false` QA kill-switch suppresses outbound email sends globally.
+- **Patch version bump only** — `0.6.24` → `0.6.25` (x/y unchanged).
+
+### How To Test
+- Login as requester with pending satisfaction tickets; verify reminder modal appears on dashboard open.
+- Click `New Ticket` as requester with pending satisfaction; verify modal reminder appears (not toast).
+- Attempt to submit a new ticket while requester has an unclosed ticket; verify backend blocks with `400` and clear message.
+- Create ticket with auto-assignment and matching timestamps; verify timeline shows `Ticket Created` before `Automatic Ticket Assignment`.
+- Trigger any email-producing action; verify no outbound email is sent while `EMAIL_ENABLED=false`.
+
+### Migration Steps
+- No database schema migration required.
+- Apply `.env` updates: `EMAIL_TEST_OVERRIDE=mjdibay@dswd.gov.ph` and `EMAIL_ENABLED=false`.
+
+### Rollback Steps
+- Set `EMAIL_ENABLED=true` to re-enable outbound email.
+- Revert `v0.6.25` commit to restore prior ticket creation/reminder/timeline behavior.
+
+## [0.6.24] - 2026-04-08 — QA Fixes: Attendance Completion Polling, Technician Status Progression, Timeline Cleanup
+
+### Fixed
+- **Attendance live update until all staff are marked for today** — attendance tab now performs focused 5-second polling while today's viewed month still has unmarked technicians.
+- **Assigned technician could not proceed to in-progress/resolved in priority-required flow** — staff technicians can now set priority in ticket detail, matching backend permission and allowing status progression.
+- **Technician internal note behavior** — internal-note posting remains staff-enabled and user-role blocked; timeline comment noise removed so notes stay in comments only.
+- **Auto-assignment mislabeled as manual on login** — login-triggered assignment events now log as `auto_assigned`.
+- **Comments in timeline** — comment events are no longer generated for timeline history and are filtered from timeline rendering.
+- **Timestamp ordering** — ticket comments/internal notes are now rendered in explicit chronological order by `createdAt`.
+- **Backend dev port conflict** — added backend dev preflight script to clear stale `dist` and terminate listeners on port `4000` before watch startup.
+
+### Changed
+- Backend `start:dev` now runs `node scripts/prepare-dev.js && nest start --watch`.
+- Patch version bump only: `0.6.23` → `0.6.24` (x/y unchanged) for backend and frontend.
+
+### Added (Post-Release QA Addendum, no version bump)
+- **Email test override target updated for QA validation** — outbound ticket emails are currently redirected to `ibayatucv@gmail.com` via `EMAIL_TEST_OVERRIDE`.
+- **Ticket lifecycle email routing**
+  - Ticket Assignment → sends to technician.
+  - Ticket Resolved → sends to requester with explicit message to rate technician.
+  - Ticket Closed (requester close) → sends to technician.
+  - Ticket Rated / Satisfaction submitted → sends to technician.
+- **Runtime behavior clarification** — while `EMAIL_TEST_OVERRIDE` is set, all above emails are redirected to the override inbox instead of real requester/technician addresses.
+- **Regression hardening from smoke fix-loop** — ticket number generation now uses latest sequence (not row count) and create-ticket save retries on duplicate-key collision, preventing intermittent `500` on ticket creation.
+
+### Migration Steps
+- No database schema migration required.
+
+### Rollback Steps
+- Revert `v0.6.24` commit and redeploy both backend/frontend.
+
 ## [0.6.23] - 2026-04-08 — QA Fixes: Present-Only Auto Assignment + OPEN Revert Reassignment
 
 ### Fixed

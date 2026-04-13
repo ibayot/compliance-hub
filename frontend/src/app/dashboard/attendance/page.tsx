@@ -225,6 +225,21 @@ export default function AttendancePage() {
     return m;
   }, [attendance]);
 
+  const todayInViewedMonth = year === now.getFullYear() && month === now.getMonth() && isWeekday(now);
+  const hasUnmarkedTodayAttendance = useMemo(() => {
+    if (tab !== 1 || !todayInViewedMonth || technicians.length === 0) return false;
+    return technicians.some((tech: any) => !attRecordsMap.get(tech.id)?.get(todayStr));
+  }, [tab, todayInViewedMonth, technicians, attRecordsMap, todayStr]);
+
+  // Keep live-refreshing today's attendance while there are still unmarked staff.
+  useEffect(() => {
+    if (!hasUnmarkedTodayAttendance) return;
+    const id = setInterval(() => {
+      silentRefreshTab1();
+    }, 5_000);
+    return () => clearInterval(id);
+  }, [hasUnmarkedTodayAttendance, silentRefreshTab1]);
+
   const handleSetAttendance = async (userId: number, date: string, status: AttendanceStatus) => {
     // Optimistic update — immediately reflect in UI without showing loading spinner
     setAttendance(prev => {

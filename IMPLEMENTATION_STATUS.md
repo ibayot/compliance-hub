@@ -1,5 +1,65 @@
 # RICTMS Compliance Hub - Implementation Progress Report
 
+## 🚀 v0.6.24 — QA Fixes (Current)
+
+## 🚀 v0.6.26 — QA Fixes (Current)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| `tickets/page.tsx` — suppress auto reminder modal in tickets module | ✅ Complete | Removed auto-open modal behavior on tickets page load |
+| `tickets/page.tsx` — unrated row visual highlighting | ✅ Complete | Resolved/closed requester tickets without satisfaction now have warning row tint + `Unrated` chip |
+| `backend/package.json` version | ✅ Complete | `0.6.26` |
+| `frontend/package.json` version | ✅ Complete | `0.6.26` |
+
+### v0.6.26 Operations Notes
+- **Migration:** none.
+- **Rollback:** revert `v0.6.26` commit.
+- **Validation:** frontend build + full QA test matrix before push.
+
+## 🚀 v0.6.25 — QA Fixes (Current)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| `ticket.service.ts` — new-ticket guard for unclosed requester tickets | ✅ Complete | `createTicket()` now blocks if requester has any status outside `closed`/`duplicate` |
+| `ticket.service.ts` — timeline same-timestamp deterministic order | ✅ Complete | `getTicketEvents()` adds tie-breaker: `created` then `auto_assigned` |
+| `email.service.ts` — global email freeze flag | ✅ Complete | Added `EMAIL_ENABLED` support; send/test-send suppressed when `false` |
+| `email.service.ts` — default override rollback target | ✅ Complete | Override fallback restored to `mjdibay@dswd.gov.ph` |
+| `backend/.env` — outbound email freeze and override rollback | ✅ Complete | `EMAIL_ENABLED=false`, `EMAIL_TEST_OVERRIDE=mjdibay@dswd.gov.ph` |
+| `tickets/page.tsx` — unrated reminder modal on account/new-request actions | ✅ Complete | Replaced toast behavior with modal reminders and quick navigation button |
+| `dashboard/page.tsx` — unrated reminder modal on account open | ✅ Complete | Regular users now receive modal reminder when pending ratings exist |
+| `tickets/[id]/page.tsx` — timeline tie-order in UI | ✅ Complete | For equal timestamps, `created` renders before `auto_assigned` |
+| `backend/package.json` version | ✅ Complete | `0.6.25` |
+| `frontend/package.json` version | ✅ Complete | `0.6.25` |
+
+### v0.6.25 Operations Notes
+- **Migration:** none (env/config + behavior-only changes).
+- **Rollback:** set `EMAIL_ENABLED=true` and revert `v0.6.25` commit.
+- **Validation:** e2e + smoke required by QA; see latest test run section in handoff.
+
+## 🚀 v0.6.24 — QA Fixes
+
+| Area | Status | Notes |
+|------|--------|-------|
+| `attendance/page.tsx` — completion polling until all marked | ✅ Complete | Added 5-second focused live refresh while today's technicians still have missing attendance status |
+| `tickets/[id]/page.tsx` — staff priority gate alignment | ✅ Complete | `canPriority` now aligns with staff permissions so assigned technicians can complete status progression |
+| `tickets/[id]/page.tsx` — comment/internal-note ordering | ✅ Complete | Explicit chronological sort by `createdAt` before rendering |
+| `tickets/[id]/page.tsx` — timeline comment removal | ✅ Complete | Filters out `comment_added` events in timeline UI |
+| `ticket.service.ts` — stop timeline comment event generation | ✅ Complete | Removed `comment_added` event creation from `addComment()` |
+| `ticket.service.ts` — login auto-assignment event type | ✅ Complete | Changed event label from `manually_assigned` to `auto_assigned` |
+| `ticket.service.ts` — resolved notification to requester | ✅ Complete | On `RESOLVED`, sends email to requester with rate-technician prompt |
+| `ticket.service.ts` — closed/rated notifications to technician | ✅ Complete | On `CLOSED` and satisfaction submission, sends technician notification |
+| `email.service.ts` — lifecycle email templates | ✅ Complete | Added resolved-to-requester and closed/rated-to-technician templates |
+| `backend/.env` — email test override destination | ✅ Complete | `EMAIL_TEST_OVERRIDE=ibayatucv@gmail.com` for QA inbox routing |
+| `ticket.service.ts` — ticket number collision guard | ✅ Complete | Replaced count-based sequence with latest-sequence lookup + duplicate-key retry on save |
+| `backend/scripts/prepare-dev.js` — dev startup preflight | ✅ Complete | Clears `dist` and frees listeners on port `4000` before backend watch start |
+| `backend/package.json` version | ✅ Complete | `0.6.24` |
+| `frontend/package.json` version | ✅ Complete | `0.6.24` |
+
+### v0.6.24 Operations Notes
+- **Migration:** none.
+- **Rollback:** revert `v0.6.24` commit.
+- **Validation:** backend unit tests ✅, backend build ✅, frontend build ✅, smoke suite ✅.
+
 ## 🚀 v0.6.23 — QA Fixes (Current)
 
 | Area | Status | Notes |

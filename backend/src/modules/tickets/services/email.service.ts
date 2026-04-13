@@ -28,11 +28,29 @@ export interface TicketAssignedEmailData {
   technicianEmail: string;
 }
 
+export interface TicketResolvedEmailData {
+  ticketNumber: string;
+  subject: string;
+  requesterName: string;
+  requesterEmail: string;
+  technicianName?: string;
+}
+
+export interface TicketClosedOrRatedEmailData {
+  ticketNumber: string;
+  subject: string;
+  technicianName: string;
+  technicianEmail: string;
+  action: 'closed' | 'rated';
+  rating?: number | null;
+}
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter | null = null;
   private fromAddress: string;
+  private emailEnabled = true;
   /** When set, ALL outbound emails are redirected here instead of the real recipient */
   private testOverrideTo: string | null = null;
 
@@ -64,8 +82,13 @@ export class EmailService {
       this.logger.warn('SMTP not configured — emails will be logged but not sent. Set SMTP_HOST in .env to enable.');
     }
 
-    // QA #12: All emails are currently redirected to the operations address.
-    // To disable, set EMAIL_TEST_OVERRIDE='' or remove this block.
+    const emailEnabledRaw = String(this.configService.get<string>('EMAIL_ENABLED') ?? 'true').toLowerCase();
+    this.emailEnabled = !['0', 'false', 'no', 'off'].includes(emailEnabledRaw);
+    if (!this.emailEnabled) {
+      this.logger.warn('[EMAIL] Outbound email sending is disabled by EMAIL_ENABLED flag.');
+    }
+
+    // Keep a single override target for QA routing when email is enabled.
     const override = this.configService.get<string>('EMAIL_TEST_OVERRIDE') ?? 'mjdibay@dswd.gov.ph';
     this.testOverrideTo = override;
     this.logger.warn(`[EMAIL] All emails redirected to: ${override}`);
@@ -175,6 +198,78 @@ export class EmailService {
     await this.send(data.technicianEmail, subject, html);
   }
 
+  /** Notify requester that the ticket was resolved and ask for technician rating */
+  async sendTicketResolvedEmailToRequester(data: TicketResolvedEmailData): Promise<void> {
+    const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Ticket Resolved — Please Rate Technician`;
+    const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
+  <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+    <div style="background:#2e7d32;padding:20px 24px;">
+      <h1 style="margin:0;color:#fff;font-size:18px;">RICTMS IT Help Desk</h1>
+      <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">Ticket Marked as Resolved</p>
+    </div>
+    <div style="padding:24px;">
+      <p style="margin:0 0 16px;">Hello <strong>${data.requesterName}</strong>,</p>
+      <p style="margin:0 0 16px;">Your ticket has been marked as resolved.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;width:140px;">Ticket Number</td><td style="padding:6px 12px;font-weight:700;font-family:monospace;font-size:15px;">${data.ticketNumber}</td></tr>
+        <tr><td style="padding:6px 12px;font-weight:600;color:#555;">Subject</td><td style="padding:6px 12px;">${data.subject}</td></tr>
+        ${data.technicianName ? `<tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Technician</td><td style="padding:6px 12px;">${data.technicianName}</td></tr>` : ''}
+      </table>
+      <div style="background:#fff3e0;border:1px solid #ffe0b2;color:#e65100;padding:12px;border-radius:4px;">
+        Please log in to Compliance Hub and rate the technician for this resolved ticket.
+      </div>
+    </div>
+    <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
+      RICTMS Compliance Hub — IT Help Desk
+    </div>
+  </div>
+</body>
+</html>`;
+
+    await this.send(data.requesterEmail, subject, html);
+  }
+
+  /** Notify technician when ticket is closed by requester or when rating is submitted */
+  async sendTicketClosedOrRatedEmailToTechnician(data: TicketClosedOrRatedEmailData): Promise<void> {
+    const actionLabel = data.action === 'rated' ? 'Rated by Requester' : 'Closed by Requester';
+    const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — ${actionLabel}`;
+    const ratingLine = data.action === 'rated' && data.rating
+      ? `<tr><td style="padding:6px 12px;font-weight:600;color:#555;">Rating</td><td style="padding:6px 12px;">${data.rating}/5</td></tr>`
+      : '';
+    const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
+  <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+    <div style="background:#6a1b9a;padding:20px 24px;">
+      <h1 style="margin:0;color:#fff;font-size:18px;">RICTMS IT Help Desk</h1>
+      <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">${actionLabel}</p>
+    </div>
+    <div style="padding:24px;">
+      <p style="margin:0 0 16px;">Hello <strong>${data.technicianName}</strong>,</p>
+      <p style="margin:0 0 16px;">Ticket lifecycle update from the requester has been recorded.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;width:140px;">Ticket Number</td><td style="padding:6px 12px;font-weight:700;font-family:monospace;font-size:15px;">${data.ticketNumber}</td></tr>
+        <tr><td style="padding:6px 12px;font-weight:600;color:#555;">Subject</td><td style="padding:6px 12px;">${data.subject}</td></tr>
+        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Update</td><td style="padding:6px 12px;">${actionLabel}</td></tr>
+        ${ratingLine}
+      </table>
+    </div>
+    <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
+      RICTMS Compliance Hub — IT Help Desk
+    </div>
+  </div>
+</body>
+</html>`;
+
+    await this.send(data.technicianEmail, subject, html);
+  }
+
   /** Send non-attendance consolidated email to section head */
   async sendNonAttendanceEmail(
     recipientEmail: string,
@@ -241,6 +336,11 @@ export class EmailService {
       return { sent: false, message: 'SMTP not configured. Set SMTP_HOST in .env to enable email sending.' };
     }
 
+    if (!this.emailEnabled) {
+      this.logger.warn('[EMAIL-TEST] Outbound email is disabled by EMAIL_ENABLED flag.');
+      return { sent: false, message: 'Email sending is currently disabled by EMAIL_ENABLED=false.' };
+    }
+
     try {
       await this.transporter.sendMail({ from: this.fromAddress, to, subject, html });
       this.logger.log(`[EMAIL-TEST] Test email sent to ${to}`);
@@ -254,6 +354,11 @@ export class EmailService {
   // ── Core send ───────────────────────────────────────────────────────────
 
   private async send(to: string, subject: string, html: string): Promise<void> {
+    if (!this.emailEnabled) {
+      this.logger.log(`[EMAIL-DISABLED] Suppressed email to ${to}: ${subject}`);
+      return;
+    }
+
     // Redirect to test override if configured (testing mode — all emails go to override address)
     const effectiveTo = this.testOverrideTo ?? to;
     if (this.testOverrideTo && this.testOverrideTo !== to) {
