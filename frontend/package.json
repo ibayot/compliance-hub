@@ -1,6 +1,6 @@
 {
     "name": "ricms-frontend",
-    "version": "0.6.26",
+    "version": "0.0.1",
     "private": true,
     "scripts": {
         "dev": "vite",
