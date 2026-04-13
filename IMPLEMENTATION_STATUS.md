@@ -2,6 +2,23 @@
 
 ## 🚀 v0.6.24 — QA Fixes (Current)
 
+## 🚀 v0.0.4 — API Gateway on 4000 for Separated Users/Ticketing (`microservices` branch)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Gateway app module + main entrypoint | ✅ Complete | Added `backend/src/apps/gateway.*` for API proxy on `4000` |
+| Gateway startup scripts | ✅ Complete | Added `start:gateway` and `start:gateway:dev` |
+| Backend dependency | ✅ Complete | Added `http-proxy-middleware` |
+| Compose gateway container | ✅ Complete | Added `api-gateway` service in `microservices` profile |
+| Stub service cleanup | ✅ Complete | Removed obsolete `services/users-service` and `services/ticketing-service` scaffold files |
+| `backend/package.json` version | ✅ Complete | `0.0.4` |
+| `frontend/package.json` version | ✅ Complete | `0.0.4` |
+
+### v0.0.4 Operations Notes
+- **Migration:** none.
+- **Deployment impact:** separated users/ticketing requires gateway process on `4000` for frontend compatibility.
+- **Rollback:** revert `v0.0.4` commit and run monolith backend.
+
 ## 🚀 v0.0.3 — Full Users/Ticketing Microservice Runtime Split (`microservices` branch)
 
 | Area | Status | Notes |

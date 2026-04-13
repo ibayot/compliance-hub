@@ -1,5 +1,15 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.0.4 — API Gateway for Separated Services on Port 4000 (Current on `microservices` branch)
+- **Version:** `0.0.4` in both `backend/package.json` and `frontend/package.json`.
+- **Root issue addressed:** when users/ticketing services run separately, frontend could not connect because no process owned `4000`.
+- **Gateway added:** independent gateway runtime now serves `4000` and proxies users/auth/units to users service and ticket routes/settings/attendance to ticketing service.
+- **Startup scripts:** `start:gateway(:dev)`, `start:users(:dev)`, `start:ticketing(:dev)`.
+- **Compose runtime:** `api-gateway` added to `microservices` profile.
+- **Cleanup:** placeholder stubs under `services/` removed; backend app entrypoints are the canonical split runtime.
+- **Migration impact:** none.
+- **Rollback:** revert `v0.0.4` and run monolith backend only.
+
 ## 🚀 v0.0.3 — Full Users/Ticketing Microservice Runtime Split (Current on `microservices` branch)
 - **Version:** `0.0.3` in both `backend/package.json` and `frontend/package.json`.
 - **Users service extraction runtime:** independent backend entrypoint serving users/auth/units on port `4101`.

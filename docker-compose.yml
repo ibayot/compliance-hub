@@ -151,6 +151,30 @@ services:
       - ricms-network
     command: npm run start:ticketing:dev
 
+  api-gateway:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: ricms_api_gateway
+    profiles: ['microservices']
+    ports:
+      - '4000:4000'
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - CORS_ORIGIN=http://localhost:3000
+      - USERS_SERVICE_URL=http://users-service:4101
+      - TICKETING_SERVICE_URL=http://ticketing-service:4102
+    depends_on:
+      - users-service
+      - ticketing-service
+    networks:
+      - ricms-network
+    command: npm run start:gateway:dev
+
 volumes:
   mariadb_data:
 

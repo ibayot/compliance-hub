@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.4] - 2026-04-13 — API Gateway on 4000 for Separated Users/Ticketing
+
+### Fixed
+- **Cannot connect to server when only users/ticketing services are started** — added dedicated API gateway runtime on port `4000` that proxies users/auth/units to users service and tickets/attendance/ticket-settings to ticketing service.
+
+### Added
+- **Gateway runtime entrypoint** — `backend/src/apps/gateway.main.ts` and `backend/src/apps/gateway.module.ts`.
+- **Gateway startup scripts** — `start:gateway` and `start:gateway:dev`.
+- **Compose gateway service** — `api-gateway` in `microservices` profile bound to port `4000`.
+
+### Changed
+- **Service extraction cleanup** — removed old placeholder stubs under `services/users-service` and `services/ticketing-service`; active split runtime now uses backend app entrypoints only.
+- **Patch version bump only** — `0.0.3` → `0.0.4` (x/y unchanged).
+
+### How To Test
+- Start users service (`npm run start:users:dev`), ticketing service (`npm run start:ticketing:dev`), and gateway (`npm run start:gateway:dev`).
+- Verify `http://localhost:4000/api/health` responds.
+- Verify frontend calls to `/api/auth`, `/api/users`, `/api/tickets` succeed through gateway.
+
+### Migration Steps
+- No database schema migration required.
+- Run `npm install` in `backend` to install `http-proxy-middleware`.
+
+### Rollback Steps
+- Revert `v0.0.4` commit on `microservices` branch.
+- Run monolith backend only (`npm run start:dev`) on port `4000`.
+
 ## [0.0.3] - 2026-04-13 — Full Users/Ticketing Microservice Runtime Split (microservices branch)
 
 ### Added
