@@ -673,6 +673,7 @@ export class TicketService implements OnModuleInit {
     ticketType?: TicketType;
     requesterId?: number;
     assignedToId?: number;
+    escalatedToId?: number;
     viewerId?: number;
     viewerRole?: UserRole;
   }): Promise<Ticket[]> {
@@ -711,6 +712,18 @@ export class TicketService implements OnModuleInit {
       if (filters.ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
       if (filters.requesterId) qb.andWhere('t.requesterId = :rid', { rid: filters.requesterId });
       if (filters.assignedToId) qb.andWhere('t.assignedToId = :aid', { aid: filters.assignedToId });
+    }
+
+    if (filters.escalatedToId) {
+      qb.innerJoin(
+        'ticket_escalations',
+        'te',
+        'te.ticket_id = t.id AND te.escalated_to_id = :escalatedToId AND te.status IN (:...escalationStatuses)',
+        {
+          escalatedToId: filters.escalatedToId,
+          escalationStatuses: [EscalationStatus.PENDING, EscalationStatus.ACCEPTED],
+        },
+      ).distinct(true);
     }
 
     const tickets = await qb.getMany();

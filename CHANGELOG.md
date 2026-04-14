@@ -6,6 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.8] - 2026-04-14 — QA Findings Closure: Escalation Visibility + Split-DB Data Migration
+
+### Added
+- **Escalated queue filter for focal accounts** — added `escalatedToMe` query support in ticket listing API and frontend toggle button `Escalated To Me` so focal/senior accounts can explicitly view escalated tickets.
+- **One-time split DB data migration script** — added `backend/database/microservices-migrate.sql` to copy existing tables/data from legacy shared DB into `ricms_users`, `ricms_ticketing`, and `ricms_compliance`.
+
+### Changed
+- **Escalation UI discoverability** — ticket detail now shows explicit `Upload Proof Photo(s)` button in the escalate dialog (instead of raw file input only).
+- **Escalation role visibility alignment** — frontend escalation eligibility now includes junior technician roles (`desktop_jr`, `it_support_jr`) to match backend-authorized escalation roles.
+- **Compose split DB wiring correction** — fixed swapped service DB env mappings in `docker-compose.yml`:
+  - `users-service` -> `USERS_DB_DATABASE=ricms_users`
+  - `ticketing-service` -> `TICKETING_DB_DATABASE=ricms_ticketing`
+  - `compliance-service` -> `COMPLIANCE_DB_DATABASE=ricms_compliance`
+- **Patch version bump only** — `0.0.7` -> `0.0.8` (x/y unchanged).
+
+### How To Test
+- Build backend and frontend.
+- Call `/api/tickets?escalatedToMe=true` as a focal/senior account and verify escalated tickets return.
+- In Tickets page, toggle `Escalated To Me` and verify list changes accordingly.
+- Open ticket detail, verify `Escalate Ticket` action is visible for technician roles (including junior roles), and verify `Upload Proof Photo(s)` appears in escalation dialog.
+- Run `backend/database/microservices-migrate.sql` on environments with pre-split data, then verify data exists in each service DB.
+
+### Migration Steps
+- Ensure split DBs exist (`ricms_users`, `ricms_ticketing`, `ricms_compliance`).
+- Run one-time migration script:
+  - `mysql -h <host> -u <user> -p < backend/database/microservices-migrate.sql`
+- Restart users, ticketing, and compliance services.
+
+### Rollback Steps
+- Revert this release commit.
+- Revert to shared DB routing by setting services back to one `DB_DATABASE` value.
+- Disable use of `escalatedToMe` filter in clients (if rolling back frontend only).
+
 ## [0.0.7] - 2026-04-14 — QA Follow-up: Service DB Separation + Ticket Escalation Verification
 
 ### Added

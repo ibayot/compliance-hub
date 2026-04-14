@@ -1,5 +1,14 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.0.8 — Escalation Discoverability + Split-DB Data Migration (Current on `microservices` branch)
+- **Version:** `0.0.8` in backend/frontend package metadata (patch bump only, x/y unchanged).
+- **Escalation visibility fix:** ticket detail now includes explicit `Upload Proof Photo(s)` action in escalation dialog and includes junior technician roles in escalation action visibility.
+- **Focal escalation queue visibility:** tickets API supports `escalatedToMe=true`; Tickets page now includes `Escalated To Me` toggle for focal/senior queue checking.
+- **DB movement implementation:** new one-time migration script `backend/database/microservices-migrate.sql` copies legacy shared DB tables/data into service-specific schemas.
+- **Compose split DB correction:** fixed users/ticketing DB env mapping and added explicit compliance DB override in `docker-compose.yml`.
+- **Migration impact:** legacy environments require one-time execution of migration SQL.
+- **Rollback:** revert `v0.0.8` commit and route services back to single shared DB.
+
 ## 🚀 v0.0.7 — Service DB Separation + Ticket Escalation QA Confirmation (Current on `microservices` branch)
 - **Version:** `0.0.7` in backend/frontend package metadata.
 - **Per-service DB separation wiring:** users, ticketing, and compliance services now support service-specific DB env overrides with fallback compatibility.

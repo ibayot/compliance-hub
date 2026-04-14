@@ -395,12 +395,14 @@ export const ticketsApi = {
     ticketType?: TicketType;
     requesterId?: number;
     assignedToId?: number;
+    escalatedToMe?: boolean;
   }): Promise<Ticket[]> => {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
     if (filters?.ticketType) params.append('ticketType', filters.ticketType);
     if (filters?.requesterId) params.append('requesterId', String(filters.requesterId));
     if (filters?.assignedToId) params.append('assignedToId', String(filters.assignedToId));
+    if (filters?.escalatedToMe) params.append('escalatedToMe', 'true');
     const response = await apiClient.get(`/tickets?${params}`);
     return response.data;
   },

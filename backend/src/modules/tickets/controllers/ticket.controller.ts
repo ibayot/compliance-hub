@@ -70,13 +70,17 @@ export class TicketController {
     @Query('ticketType') ticketType?: TicketType,
     @Query('requesterId') requesterId?: string,
     @Query('assignedToId') assignedToId?: string,
+    @Query('escalatedToMe') escalatedToMe?: string,
     @Request() req?: any,
   ) {
+    const viewerId = req?.user?.id ?? req?.user?.userId;
+    const showEscalatedToMe = escalatedToMe === 'true' || escalatedToMe === '1';
     return this.ticketService.getTickets({
       status, ticketType,
       requesterId: requesterId ? Number(requesterId) : undefined,
       assignedToId: assignedToId ? Number(assignedToId) : undefined,
-      viewerId: req?.user?.id ?? req?.user?.userId,
+      escalatedToId: showEscalatedToMe ? viewerId : undefined,
+      viewerId,
       viewerRole: req?.user?.role,
     });
   }

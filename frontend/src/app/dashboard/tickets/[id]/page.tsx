@@ -44,7 +44,7 @@ import {
   TicketEscalation,
   EscalationFocalConfig,
 } from '@/app/api/references';
-import { ArrowBack as BackIcon, Star as StarIcon, SentimentVerySatisfied, SentimentSatisfied, SentimentNeutral, SentimentDissatisfied, SentimentVeryDissatisfied } from '@mui/icons-material';
+import { ArrowBack as BackIcon, Star as StarIcon, CloudUpload as UploadIcon, SentimentVerySatisfied, SentimentSatisfied, SentimentNeutral, SentimentDissatisfied, SentimentVeryDissatisfied } from '@mui/icons-material';
 
 const STATUS_OPTS = [
   { value: 'open', label: 'Open' },
@@ -160,7 +160,7 @@ export default function TicketDetailPage() {
   // canReassign: focal techs (incl. desktop_sr/it_support_sr), CO, SH, super_admin can assign / reassign
   const canReassign = user?.role === 'super_admin' || user?.role === 'focal' || isFocalTech || isComplianceOfficer || isSectionHead;
   // canEscalate: any technician role can escalate
-  const canEscalate = isLowerLevelTech || isFocalTech;
+  const canEscalate = isLowerLevelTech || isFocalTech || isJuniorTech;
   const isRequester = ticket?.requesterId === (user as any)?.id;
   const canSatisfaction = isRequester && (ticket?.status === 'resolved' || ticket?.status === 'closed') && !ticket?.satisfactionSubmittedAt;
   // Duplicate is terminal — no further modifications allowed
@@ -982,10 +982,15 @@ export default function TicketDetailPage() {
             <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
               Proof photos (optional, max 10 files, 10 MB each)
             </Typography>
-            <input type="file" multiple accept="image/*"
-              onChange={(e) => setEscalateFiles(Array.from(e.target.files ?? []))} />
+            <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />}>
+              Upload Proof Photo(s)
+              <input type="file" hidden multiple accept="image/*"
+                onChange={(e) => setEscalateFiles(Array.from(e.target.files ?? []))} />
+            </Button>
             {escalateFiles.length > 0 && (
-              <Typography variant="caption">{escalateFiles.length} file(s) selected</Typography>
+              <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                {escalateFiles.length} file(s) selected
+              </Typography>
             )}
           </Box>
         </DialogContent>

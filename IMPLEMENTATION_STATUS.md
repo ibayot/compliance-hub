@@ -2,6 +2,25 @@
 
 ## 🚀 v0.6.24 — QA Fixes (Current)
 
+## 🚀 v0.0.8 — QA Findings Closure: Escalation Visibility + Split DB Data Move (`microservices` branch)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Ticket list escalated queue filter | ✅ Complete | Added `escalatedToMe` query in backend controller/service and frontend API client |
+| Focal queue discoverability | ✅ Complete | Added `Escalated To Me` toggle in tickets list UI |
+| Escalation button visibility for junior roles | ✅ Complete | Included `desktop_jr` and `it_support_jr` in frontend escalation eligibility |
+| Escalation proof upload discoverability | ✅ Complete | Replaced raw file input with explicit `Upload Proof Photo(s)` button in ticket detail escalation dialog |
+| Split DB table/data migration | ✅ Complete | Added `backend/database/microservices-migrate.sql` (idempotent copy script) |
+| Compose service DB mapping correction | ✅ Complete | Fixed swapped users/ticketing DB env vars; added explicit compliance DB override |
+| `backend/package.json` version | ✅ Complete | `0.0.8` |
+| `frontend/package.json` version | ✅ Complete | `0.0.8` |
+
+### v0.0.8 Operations Notes
+- **Why it changed (QA):** users reported escalation controls were not discoverable, focal escalation queue was unclear, and existing shared-DB data needed to be moved into service-specific databases.
+- **How to test:** use Tickets page `Escalated To Me` toggle, escalate from ticket detail with proof image upload, and verify migrated data exists in each split DB schema.
+- **Migration:** run `mysql -h <host> -u <user> -p < backend/database/microservices-migrate.sql` once for legacy environments.
+- **Rollback:** revert `v0.0.8` commit and return services to shared `DB_DATABASE` routing.
+
 ## 🚀 v0.0.7 — QA Follow-up: Service DB Separation + Escalation UX Verification (`microservices` branch)
 
 | Area | Status | Notes |

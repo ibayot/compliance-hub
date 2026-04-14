@@ -80,6 +80,7 @@ export default function TicketsPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType] = useState('');
   const [showMyTickets, setShowMyTickets] = useState(false);
+  const [showEscalatedToMe, setShowEscalatedToMe] = useState(false);
 
   // New ticket dialog
   const [newDialogOpen, setNewDialogOpen] = useState(false);
@@ -114,16 +115,18 @@ export default function TicketsPage() {
 
   const canManageAll = isStaffRole(user?.role) && !(['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? ''));
   const isSuperAdmin = user?.role === 'super_admin';
-  const isFocalTech = ['technician', 'technician_desktop', 'technician_it_support'].includes(user?.role ?? '');
+  const isFocalTech = ['technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr'].includes(user?.role ?? '');
   const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
-  const isTechnician = isFocalTech || isLowerLevelTech;
+  const isJuniorTech = ['desktop_jr', 'it_support_jr'].includes(user?.role ?? '');
+  const isTechnician = isFocalTech || isLowerLevelTech || isJuniorTech;
   const isFocal = user?.role === 'focal';
   const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer';
   const isSectionHead = user?.roleCode === 'section_head';
+  const canViewEscalatedQueue = isSuperAdmin || isFocal || isFocalTech || isComplianceOfficer || isSectionHead;
   // canAssign: focal techs, CO, SH, super_admin can assign/reassign tickets
   const canAssign = isSuperAdmin || isFocal || isFocalTech || isComplianceOfficer || isSectionHead;
   // canEscalate: lower-level techs can escalate their assigned ticket to a focal technician
-  const canEscalate = isLowerLevelTech;
+  const canEscalate = isLowerLevelTech || isJuniorTech;
 
   const fetchTickets = useCallback(async () => {
     try {
@@ -131,7 +134,8 @@ export default function TicketsPage() {
       const data = await ticketsApi.getAll({
         status: filterStatus as TicketStatus || undefined,
         ticketType: filterType as TicketType || undefined,
-        assignedToId: showMyTickets && isFocalTech ? user?.id : undefined,
+        assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
+        escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
       });
       setTickets(data);
     } catch {
@@ -139,7 +143,7 @@ export default function TicketsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterStatus, filterType, showMyTickets, isFocalTech, user?.id]);
+  }, [filterStatus, filterType, showMyTickets, showEscalatedToMe, canViewEscalatedQueue, isFocalTech, user?.id]);
 
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
 
@@ -158,11 +162,12 @@ export default function TicketsPage() {
       const data = await ticketsApi.getAll({
         status: filterStatus as TicketStatus || undefined,
         ticketType: filterType as TicketType || undefined,
-        assignedToId: showMyTickets && isFocalTech ? user?.id : undefined,
+        assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
+        escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
       });
       setTickets(data);
     } catch { /* silent */ }
-  }, [filterStatus, filterType, showMyTickets, isFocalTech, user?.id]);
+  }, [filterStatus, filterType, showMyTickets, showEscalatedToMe, canViewEscalatedQueue, isFocalTech, user?.id]);
   useAutoRefresh(silentFetchTickets);
 
   useEffect(() => {
@@ -373,6 +378,19 @@ export default function TicketsPage() {
                   {showMyTickets ? 'My Tickets ✓' : 'My Tickets'}
                 </Button>
               )}
+              {canViewEscalatedQueue && (
+                <Button
+                  size="small"
+                  variant={showEscalatedToMe ? 'contained' : 'outlined'}
+                  color="warning"
+                  onClick={() => {
+                    setShowEscalatedToMe(v => !v);
+                    setShowMyTickets(false);
+                  }}
+                >
+                  {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
+                </Button>
+              )}
             </Stack>
           </CardContent>
         </Card>
@@ -389,6 +407,19 @@ export default function TicketsPage() {
               >
                 {showMyTickets ? 'My Assigned Tickets ✓' : 'All Tickets'}
               </Button>
+              {canViewEscalatedQueue && (
+                <Button
+                  size="small"
+                  variant={showEscalatedToMe ? 'contained' : 'outlined'}
+                  color="warning"
+                  onClick={() => {
+                    setShowEscalatedToMe(v => !v);
+                    setShowMyTickets(false);
+                  }}
+                >
+                  {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
+                </Button>
+              )}
             </Stack>
           </CardContent>
         </Card>
