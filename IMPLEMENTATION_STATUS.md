@@ -2,6 +2,24 @@
 
 ## 🚀 v0.6.24 — QA Fixes (Current)
 
+## 🚀 v0.0.6 — Compliance Service Extraction (`microservices` branch)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Compliance app module + main entrypoint | ✅ Complete | Added `backend/src/apps/compliance-service.*` on port `4103` |
+| Compliance JWT strategy | ✅ Complete | Added `backend/src/apps/compliance-jwt.strategy.ts` |
+| Backend compliance scripts | ✅ Complete | Added `start:compliance` and `start:compliance:dev` |
+| Gateway route split | ✅ Complete | Routed non-users/non-ticketing domains to compliance service |
+| Compose compliance service | ✅ Complete | Added `compliance-service` under `microservices` profile |
+| Gateway compliance env/dependency | ✅ Complete | Added `COMPLIANCE_SERVICE_URL` and `depends_on: compliance-service` |
+| `backend/package.json` version | ✅ Complete | `0.0.6` |
+| `frontend/package.json` version | ✅ Complete | `0.0.6` |
+
+### v0.0.6 Operations Notes
+- **Migration:** none.
+- **Deployment impact:** split runtime now requires four processes (users, ticketing, compliance, gateway) for full platform API coverage.
+- **Rollback:** revert `v0.0.6` commit.
+
 ## 🚀 v0.0.5 — QA Fixes: Reassign Eligibility + Terminal Action Controls (`microservices` branch)
 
 | Area | Status | Notes |

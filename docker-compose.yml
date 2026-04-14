@@ -151,6 +151,40 @@ services:
       - ricms-network
     command: npm run start:ticketing:dev
 
+  compliance-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: ricms_compliance_service
+    profiles: ['microservices']
+    ports:
+      - '4103:4103'
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./backend/storage:/app/storage
+    environment:
+      - NODE_ENV=development
+      - COMPLIANCE_SERVICE_PORT=4103
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - DB_USERNAME=ricms_user
+      - DB_PASSWORD=ricms_password
+      - DB_DATABASE=ricms_compliance
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=dev-jwt-secret-change-in-production
+      - JWT_REFRESH_SECRET=dev-refresh-secret-change-in-production
+      - CORS_ORIGIN=http://localhost:3000
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ricms-network
+    command: npm run start:compliance:dev
+
   api-gateway:
     build:
       context: ./backend
@@ -168,10 +202,12 @@ services:
       - CORS_ORIGIN=http://localhost:3000
       - USERS_SERVICE_URL=http://users-service:4101
       - TICKETING_SERVICE_URL=http://ticketing-service:4102
+      - COMPLIANCE_SERVICE_URL=http://compliance-service:4103
       - MICROSERVICES_STRICT=true
     depends_on:
       - users-service
       - ticketing-service
+      - compliance-service
     networks:
       - ricms-network
     command: npm run start:gateway:dev

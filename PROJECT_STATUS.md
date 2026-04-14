@@ -1,5 +1,16 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.0.6 — Three-Service Domain Split (Current on `microservices` branch)
+- **Version:** `0.0.6` in both `backend/package.json` and `frontend/package.json`.
+- **Service separation completed:**
+   - `users-service` for users/auth/units (`4101`)
+   - `ticketing-service` for tickets/attendance/ticket-settings (`4102`)
+   - `compliance-service` for all remaining compliance modules (`4103`)
+- **Gateway routing updated:** all non-users/non-ticketing domains now route to compliance service.
+- **Compose profile updated:** `microservices` profile now includes `compliance-service` and gateway dependency wiring.
+- **Migration impact:** none.
+- **Rollback:** revert `v0.0.6` commit.
+
 ## 🚀 v0.0.5 — QA Fixes for Reassign + Terminal Status Controls (Current on `microservices` branch)
 - **Version:** `0.0.5` in both `backend/package.json` and `frontend/package.json`.
 - **Absent technician reassignment fix:** backend now blocks assigning to technicians marked `absent`/`out_of_office` for today; frontend assignment picker also filters them out defensively.

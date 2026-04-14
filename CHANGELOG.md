@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.6] - 2026-04-14 — Compliance Service Extraction (Users/Ticketing/Compliance Split)
+
+### Added
+- **Compliance service runtime** — new independent backend app entrypoint for non-users/non-ticketing modules on port `4103`.
+- **Compliance JWT strategy** — token validation for compliance service routes without coupling to users/ticketing runtime.
+- **Startup scripts** — `start:compliance` and `start:compliance:dev`.
+
+### Changed
+- **Gateway routing split** — non-users/non-ticketing API domains now proxy to compliance service:
+  - `/api/documents`, `/api/document-types`, `/api/comparisons`, `/api/issuances`, `/api/metrics`, `/api/incidents`, `/api/cybersecurity`, `/api/kpi`, `/api/mov`.
+- **Compose microservices profile** — added `compliance-service` and wired gateway dependency/env for `COMPLIANCE_SERVICE_URL`.
+- **Patch version bump only** — `0.0.5` → `0.0.6` (x/y unchanged).
+
+### How To Test
+- Start users (`4101`), ticketing (`4102`), compliance (`4103`), and gateway (`4000`).
+- Verify users endpoints route through gateway to users service.
+- Verify ticketing endpoints route through gateway to ticketing service.
+- Verify document/metrics/references/incidents/kpi/mov endpoints route through gateway to compliance service.
+
+### Migration Steps
+- No database schema migration required.
+- Restart all microservice processes to load the new compliance routing layout.
+
+### Rollback Steps
+- Revert `v0.0.6` commit on `microservices` branch.
+- Run prior users/ticketing split with strict fallback for unsupported routes.
+
 ## [0.0.5] - 2026-04-14 — QA Fixes: Reassign Eligibility, Terminal Actions, Strict Split Runtime
 
 ### Fixed

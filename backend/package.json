@@ -1,6 +1,6 @@
 {
     "name": "rictms-backend",
-    "version": "0.0.5",
+    "version": "0.0.6",
     "description": "RICTMS Compliance Hub - Backend API",
     "author": "RICTMS Team",
     "private": true,
@@ -16,6 +16,8 @@
         "start:users:dev": "nest start --entryFile apps/users-service.main --watch",
         "start:ticketing": "nest start --entryFile apps/ticketing-service.main",
         "start:ticketing:dev": "nest start --entryFile apps/ticketing-service.main --watch",
+        "start:compliance": "nest start --entryFile apps/compliance-service.main",
+        "start:compliance:dev": "nest start --entryFile apps/compliance-service.main --watch",
         "start:debug": "nest start --debug --watch",
         "start:prod": "node dist/main",
         "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
