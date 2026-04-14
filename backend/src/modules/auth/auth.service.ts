@@ -236,6 +236,7 @@ export class AuthService {
       designation: user.designation,
       ticketMainFocal: user.ticketMainFocal,
       ticketTechnician: user.ticketTechnician,
+      authProvider: (user as any).authProvider,
       role: user.role,
       units: user.units?.map((u) => ({ id: u.id, name: u.name })) || [],
       roleCode: roleDef?.roleCode ?? null,
@@ -262,5 +263,23 @@ export class AuthService {
     await this.usersService.updatePasswordHash(user.id, user.passwordHash);
 
     return { message: 'Password updated successfully' };
+  }
+
+  async reauthenticate(userId: number, password: string): Promise<{ message: string }> {
+    if (!password || password.trim().length === 0) {
+      throw new BadRequestException('Password is required');
+    }
+
+    const user = await this.usersService.findOne(userId);
+    if ((user as any).authProvider === 'google') {
+      throw new BadRequestException('Password re-authentication is not available for Google accounts. Please sign in again.');
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Password is incorrect');
+    }
+
+    return { message: 'Re-authentication successful' };
   }
 }

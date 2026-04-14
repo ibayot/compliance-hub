@@ -33,4 +33,9 @@ export const authApi = {
     const response = await apiClient.post('/auth/change-password', payload);
     return response.data;
   },
+
+  reauthenticate: async (payload: { password: string }): Promise<{ message: string }> => {
+    const response = await apiClient.post('/auth/reauthenticate', payload);
+    return response.data;
+  },
 };

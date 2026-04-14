@@ -2,6 +2,28 @@
 
 ## 🚀 v0.6.24 — QA Fixes (Current)
 
+## 🚀 v0.0.13 — Inactivity Re-Authentication + Deployment/Documentation Pack (`microservices` branch)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Frontend inactivity lock timer | ✅ Complete | Session now locks after 15 minutes of inactivity in `AuthContext` |
+| Frontend unlock flow | ✅ Complete | Password re-entry dialog added for local-auth unlock |
+| Google-provider inactivity handling | ✅ Complete | Locked Google-auth users are directed to sign in again |
+| Backend re-auth API | ✅ Complete | Added `POST /auth/reauthenticate` with JWT guard |
+| Backend re-auth validation | ✅ Complete | Password verification path added in auth service |
+| Auth profile provider signal | ✅ Complete | `/auth/me` now returns `authProvider` |
+| Deployment guide | ✅ Complete | Added root `deployment.md` with step-by-step split-container flow |
+| In-house QA user stories doc | ✅ Complete | Added `INHOUSE-QA-USER-STORIES.md` |
+| Main system documentation doc | ✅ Complete | Added `MAIN-SYSTEM-DOCUMENTATION.md` |
+| `backend/package.json` version | ✅ Complete | `0.0.13` |
+| `frontend/package.json` version | ✅ Complete | `0.0.13` |
+
+### v0.0.13 Operations Notes
+- **Why it changed (QA):** findings required 15-minute inactivity re-authentication and new deployment/system QA documentation artifacts.
+- **How to test:** build backend/frontend, run backend tests, idle for 15 minutes and validate unlock behavior for local and Google-auth accounts.
+- **Migration:** none.
+- **Known validation gap:** smoke script currently fails in local runtime at login with HTTP 500.
+
 ## 🚀 v0.0.12 — Ownership Enforcement + Federated Access (`microservices` branch)
 
 | Area | Status | Notes |

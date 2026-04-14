@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.13] - 2026-04-14 - Inactivity Re-Authentication + Deployment/Documentation Baseline
+
+### Added
+- **15-minute inactivity lock workflow (frontend):** authenticated sessions are locked after 15 minutes of no user activity and require explicit unlock before continuing.
+- **Session unlock UI:** added password re-entry dialog in auth context flow for local-auth users, including validation and clear failure messaging.
+- **Backend re-auth endpoint:** added `POST /auth/reauthenticate` for password verification without full logout/login cycle.
+- **Provider-aware unlock behavior:** Google-authenticated users are prompted to sign in again when session lock is triggered.
+- **Deployment guide:** added root `deployment.md` with step-by-step, repo-based split-container deployment procedure.
+- **In-house QA user stories:** added `INHOUSE-QA-USER-STORIES.md`.
+- **Main system documentation:** added `MAIN-SYSTEM-DOCUMENTATION.md` with context diagram, system profile, specs table, DB dictionary, ERD overview, manuals, and web app link section.
+
+### Changed
+- **Auth profile payload extended:** `GET /auth/me` now includes `authProvider` for client-side lock/unlock decisioning.
+- **Patch version bump only** - `0.0.12` -> `0.0.13` (x/y unchanged).
+
+### How To Test
+- Build backend and frontend.
+- Run backend unit tests.
+- Authenticate as local account, wait 15 minutes without activity, verify lock dialog appears and valid password unlocks session.
+- Authenticate as Google account, wait 15 minutes without activity, verify sign-in-again flow prompt appears.
+
+### Migration Steps
+- No database schema migration required.
+
+### Rollback Steps
+- Revert this release commit and redeploy backend/frontend.
+
 ## [0.0.12] - 2026-04-14 — Split-DB Ownership Enforcement + Federated User Access
 
 ### Changed

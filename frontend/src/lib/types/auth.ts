@@ -11,6 +11,7 @@ export interface User {
   designation?: string;
   ticketMainFocal?: boolean;
   ticketTechnician?: boolean;
+  authProvider?: 'local' | 'google';
   role: UserRole;
   units?: Unit[];
   /** Platform role code from role_definitions — used for feature routing.

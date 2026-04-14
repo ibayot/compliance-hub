@@ -1,5 +1,17 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.0.13 — Inactivity Re-Authentication + Deployment/System Documentation Completion (Current on `microservices` branch)
+- **Version:** `0.0.13` in backend/frontend package metadata (patch bump only, x/y unchanged).
+- **Inactivity session security implemented:** frontend now enforces session lock after 15 minutes of inactivity.
+- **Password re-authentication unlock path:** local-auth users must re-enter password to unlock locked sessions.
+- **Provider-aware lock handling:** Google-auth users are prompted to sign in again when inactivity lock triggers.
+- **Backend support added:** `POST /auth/reauthenticate` endpoint verifies user password while preserving current authenticated session context.
+- **Auth profile payload extended:** `/auth/me` now includes `authProvider` to drive client behavior.
+- **Documentation deliverables added:** `deployment.md`, `INHOUSE-QA-USER-STORIES.md`, `MAIN-SYSTEM-DOCUMENTATION.md`.
+- **Validation:** backend build passed, frontend build passed, backend tests passed (4/4), smoke-test script currently fails in local runtime with login `500`.
+- **Migration impact:** none.
+- **Rollback:** revert `v0.0.13` commit and redeploy.
+
 ## 🚀 v0.0.12 — Strict DB Ownership + Federated Cross-DB Views (Current on `microservices` branch)
 - **Version:** `0.0.12` in backend/frontend package metadata (patch bump only, x/y unchanged).
 - **Ownership policy implemented:**

@@ -61,4 +61,13 @@ export class AuthController {
       dto.newPassword,
     );
   }
+
+  @Post('reauthenticate')
+  @UseGuards(JwtAuthGuard)
+  async reauthenticate(
+    @CurrentUser() user: User,
+    @Body('password') password: string,
+  ) {
+    return this.authService.reauthenticate(user.id, password);
+  }
 }

@@ -1,5 +1,33 @@
 # RICTMS Compliance Hub — Release Notes v1.2.0.4
 
+## Hotfix Addendum — v0.0.13 (2026-04-14)
+
+### What Changed
+- Added 15-minute inactivity lock in frontend session management.
+- Added password re-entry unlock flow for local-auth users.
+- Added backend `POST /auth/reauthenticate` endpoint for secure session unlock validation.
+- Added `authProvider` field to auth profile payload for provider-aware frontend lock handling.
+- Added deployment and QA/system documentation artifacts:
+  - `deployment.md`
+  - `INHOUSE-QA-USER-STORIES.md`
+  - `MAIN-SYSTEM-DOCUMENTATION.md`
+- Patch-only version bump to `0.0.13`.
+
+### Why It Changed (QA Link)
+- QA required a strict 15-minute inactivity rule with password re-entry before session continuation.
+- QA required explicit deployment/install documentation and complete in-house system documentation deliverables.
+
+### How To Test
+- Login as local-auth user, stay idle for 15 minutes, verify lock dialog and unlock with valid password.
+- Login as Google-auth user, stay idle for 15 minutes, verify sign-in-again behavior.
+- Build backend and frontend, then run backend tests.
+
+### Migration Steps
+- No schema migration required.
+
+### Rollback Steps
+- Revert `v0.0.13` commit and redeploy backend/frontend.
+
 ## Hotfix Addendum — v0.6.23 (2026-04-08)
 
 ### What Changed
