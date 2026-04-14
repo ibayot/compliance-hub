@@ -394,7 +394,7 @@ export default function AttendancePage() {
               <FormControl size="small" sx={{ minWidth: 220 }}>
                 <InputLabel>Category</InputLabel>
                 <Select value={attType} label="Category" onChange={e => setAttType(e.target.value)}>
-                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="">All (Technicians + ITOs)</MenuItem>
                   <MenuItem value="ito">ITOs</MenuItem>
                   <MenuItem value="it_support">IT Support</MenuItem>
                   <MenuItem value="desktop_support">Desktop Support</MenuItem>

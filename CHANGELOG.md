@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.9] - 2026-04-14 — QA Findings Closure: Attendance Mapping + ITO Login Marking + Escalation Focal List
+
+### Changed
+- **Attendance default scope fixed** — default attendance category now consistently means `All (Technicians + ITOs)` in backend filtering and UI label.
+- **Support-category isolation fixed** — attendance category filters no longer leak cross-category technicians due to broad fallback technician-flag inclusion.
+- **ITO login attendance automation fixed** — auto-attendance on login now includes ITO/focal-equivalent roles.
+- **Escalation dropdown focal sourcing fixed** — ticket detail escalation dialog now builds candidate users from attendance category pools (`ito` + ticket type), then filters by configured escalation focal roles.
+- **Placeholder attendance users removed from operational views** — attendance queries now exclude seeded demo placeholder identities (`desktop.tech@rictms.gov.ph`, `it.tech@rictms.gov.ph`, `focal@rictms.gov.ph`).
+- **Migration script cleanup extension** — `backend/database/microservices-migrate.sql` now includes optional post-copy cleanup that drops non-compliance tables from the source DB when `@cleanup_source_tables = 1`.
+- **Patch version bump only** — `0.0.8` -> `0.0.9` (x/y unchanged).
+
+### How To Test
+- In Attendance page, verify default category shows `All (Technicians + ITOs)` and includes ITO/focal-equivalent accounts.
+- Switch categories (`IT Support`, `Desktop Support`, `Pantawid ICT Support`, `ITOs`) and verify no cross-category leakage.
+- Login as ITO/focal-equivalent account and verify today attendance auto-marks present.
+- Open ticket detail escalation dialog and verify configured focal users are selectable.
+- Run backend/frontend build and backend tests.
+
+### Migration Steps
+- Run: `mysql -h <host> -u <user> -p < backend/database/microservices-migrate.sql`
+- Keep `SET @cleanup_source_tables = 1;` to remove users/ticketing tables from source DB after copy.
+
+### Rollback Steps
+- Revert this release commit.
+- Set `@cleanup_source_tables = 0` if you need copy-only behavior without source-table removal.
+
 ## [0.0.8] - 2026-04-14 — QA Findings Closure: Escalation Visibility + Split-DB Data Migration
 
 ### Added

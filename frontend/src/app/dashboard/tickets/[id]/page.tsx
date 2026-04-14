@@ -36,6 +36,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   ticketsApi,
   ticketSettingsApi,
+  attendanceApi,
   Ticket,
   TechnicianOption,
   UpdateTicketDto,
@@ -380,14 +381,17 @@ export default function TicketDetailPage() {
 
   const openEscalateDialog = async () => {
     try {
-      const [focals, techs] = await Promise.all([
+      const [focals, itoUsers, supportUsers] = await Promise.all([
         ticketSettingsApi.getEscalationFocals(ticket?.ticketType),
-        ticketsApi.getTechnicians(),
+        attendanceApi.getTechnicians('ito'),
+        attendanceApi.getTechnicians(ticket?.ticketType),
       ]);
       setEscalationFocals(focals);
+      const mergedUsers = [...itoUsers, ...supportUsers]
+        .filter((u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx);
       // From all techs, keep only those whose role matches the configured escalation focal roles
       const allowedRoles = new Set(focals.map(f => f.roleValue));
-      setEscalationFocalUsers(techs.filter(t => allowedRoles.has(t.role) || allowedRoles.size === 0));
+      setEscalationFocalUsers(mergedUsers.filter(t => allowedRoles.has(t.role) || allowedRoles.size === 0));
     } catch {
       setEscalationFocalUsers([]);
     }

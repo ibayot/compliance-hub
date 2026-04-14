@@ -39,6 +39,11 @@ export interface BulkSetOfficeDaysDto {
 @Injectable()
 export class AttendanceService {
   private readonly logger = new Logger(AttendanceService.name);
+  private readonly excludedAttendanceEmails = [
+    'desktop.tech@rictms.gov.ph',
+    'it.tech@rictms.gov.ph',
+    'focal@rictms.gov.ph',
+  ];
 
   constructor(
     @InjectRepository(TechAttendance)
@@ -69,6 +74,41 @@ export class AttendanceService {
     return rows.map(r => r.value);
   }
 
+  private getItoRoles(): string[] {
+    return [
+      UserRole.FOCAL,
+      UserRole.SECTION_HEAD,
+      UserRole.COMPLIANCE_OFFICER,
+      UserRole.CYBERSEC,
+      UserRole.INFOSEC,
+      UserRole.LEAD_INFRA,
+      UserRole.SERVER_ADMIN,
+      UserRole.DB_ADMIN,
+      UserRole.NETWORK_ADMIN,
+      UserRole.PROJECT_MGR,
+      UserRole.DEV_LEAD,
+      UserRole.SQA_LEAD,
+      UserRole.RECORDS_OFFICER,
+      UserRole.HR_ID_OFFICER,
+    ];
+  }
+
+  private getAllAttendanceRoles(): string[] {
+    return [
+      UserRole.TECHNICIAN,
+      UserRole.TECHNICIAN_DESKTOP,
+      UserRole.TECHNICIAN_IT_SUPPORT,
+      UserRole.TECHNICIAN_IT_STAFF,
+      UserRole.TECHNICIAN_DESKTOP_STAFF,
+      UserRole.DESKTOP_SR,
+      UserRole.DESKTOP_JR,
+      UserRole.IT_SUPPORT_SR,
+      UserRole.IT_SUPPORT_JR,
+      UserRole.PANTAWID_ICT,
+      ...this.getItoRoles(),
+    ];
+  }
+
   /** Get attendance records for a date range, optionally filtered by ticket type */
   async getAttendance(
     startDate: string,
@@ -80,6 +120,9 @@ export class AttendanceService {
       .leftJoinAndSelect('a.user', 'user')
       .leftJoinAndSelect('a.setBy', 'setBy')
       .where('a.date BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .andWhere('LOWER(user.email) NOT IN (:...excludedEmails)', {
+        excludedEmails: this.excludedAttendanceEmails,
+      })
       .orderBy('a.date', 'ASC')
       .addOrderBy('user.lastName', 'ASC');
 
@@ -99,18 +142,12 @@ export class AttendanceService {
       qb.andWhere('user.role IN (:...roles)', { roles });
     } else if (ticketType === 'ito') {
       // ITO = all focal-equivalent + compliance/cybersec staff (excludes technicians and pantawid)
-      const itoHardcoded: string[] = [
-        UserRole.FOCAL, UserRole.SECTION_HEAD,
-        UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
-        UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
-        UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
-        UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
-      ];
+      const itoHardcoded: string[] = this.getItoRoles();
       const roles = [...new Set([...itoHardcoded, ...customRoles])];
       qb.andWhere('user.role IN (:...roles)', { roles });
-    } else if (customRoles.length > 0) {
-      // No type filter but custom roles may need to be included — no additional restriction needed
-      // (all tech roles are already included by the base query with no filter)
+    } else {
+      const roles = [...new Set([...this.getAllAttendanceRoles(), ...customRoles])];
+      qb.andWhere('user.role IN (:...roles)', { roles });
     }
 
     return qb.getMany();
@@ -118,10 +155,7 @@ export class AttendanceService {
 
   /** Get attendance for a single date */
   async getAttendanceForDate(date: string): Promise<TechAttendance[]> {
-    return this.attendanceRepo.find({
-      where: { date },
-      relations: ['user', 'setBy'],
-    });
+    return this.getAttendance(date, date);
   }
 
   /** Set (upsert) attendance for a single user on a date */
@@ -214,19 +248,14 @@ export class AttendanceService {
       .createQueryBuilder('u')
       .where('u.active = :active', { active: true })
       .andWhere('u.role IN (:...roles)', { roles })
-      .getMany();
-
-    // Also include users flagged individually as technicians (custom role scenario)
-    const byFlag = await this.userRepo
-      .createQueryBuilder('u')
-      .where('u.active = :active', { active: true })
-      .andWhere('u.ticketTechnician = :flag', { flag: true })
-      .andWhere('u.role NOT IN (:...roles)', { roles })
+      .andWhere('LOWER(u.email) NOT IN (:...excludedEmails)', {
+        excludedEmails: this.excludedAttendanceEmails,
+      })
       .getMany();
 
     const seen = new Set<number>();
     const allTechs: User[] = [];
-    for (const u of [...byRole, ...byFlag]) {
+    for (const u of byRole) {
       if (!seen.has(u.id)) { seen.add(u.id); allTechs.push(u); }
     }
 
@@ -293,22 +322,10 @@ export class AttendanceService {
       hardcodedRoles = [UserRole.PANTAWID_ICT];
     } else if (forcedType === 'ito') {
       // ITO = all focal-equivalent + compliance/cybersec staff
-      hardcodedRoles = [
-        UserRole.FOCAL, UserRole.SECTION_HEAD,
-        UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
-        UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
-        UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
-        UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
-      ];
+      hardcodedRoles = this.getItoRoles();
     } else {
       // No filter = all tech roles (technicians + ITO staff)
-      hardcodedRoles = [
-        UserRole.TECHNICIAN,
-        UserRole.TECHNICIAN_DESKTOP,
-        UserRole.TECHNICIAN_IT_SUPPORT,
-        UserRole.TECHNICIAN_IT_STAFF,
-        UserRole.TECHNICIAN_DESKTOP_STAFF,
-      ];
+      hardcodedRoles = this.getAllAttendanceRoles();
     }
 
     const roles = [...new Set([...hardcodedRoles, ...customRoles])];
@@ -318,19 +335,27 @@ export class AttendanceService {
       .createQueryBuilder('u')
       .where('u.active = :active', { active: true })
       .andWhere('u.role IN (:...roles)', { roles })
+      .andWhere('LOWER(u.email) NOT IN (:...excludedEmails)', {
+        excludedEmails: this.excludedAttendanceEmails,
+      })
       .orderBy('u.lastName', 'ASC')
       .addOrderBy('u.firstName', 'ASC')
       .getMany();
 
     // Also include users with any custom role who have the ticketTechnician flag set
-    const byFlag = await this.userRepo
-      .createQueryBuilder('u')
-      .where('u.active = :active', { active: true })
-      .andWhere('u.ticketTechnician = :flag', { flag: true })
-      .andWhere('u.role NOT IN (:...roles)', { roles })
-      .orderBy('u.lastName', 'ASC')
-      .addOrderBy('u.firstName', 'ASC')
-      .getMany();
+    const byFlag = !forcedType
+      ? await this.userRepo
+        .createQueryBuilder('u')
+        .where('u.active = :active', { active: true })
+        .andWhere('u.ticketTechnician = :flag', { flag: true })
+        .andWhere('u.role NOT IN (:...roles)', { roles })
+        .andWhere('LOWER(u.email) NOT IN (:...excludedEmails)', {
+          excludedEmails: this.excludedAttendanceEmails,
+        })
+        .orderBy('u.lastName', 'ASC')
+        .addOrderBy('u.firstName', 'ASC')
+        .getMany()
+      : [];
 
     // Merge, deduplicate by id
     const seen = new Set<number>();
@@ -402,6 +427,7 @@ export class AttendanceService {
       UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
       UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
       UserRole.PANTAWID_ICT,
+      ...this.getItoRoles(),
     ]);
 
     const user = await this.userRepo.findOne({ where: { id: userId } });

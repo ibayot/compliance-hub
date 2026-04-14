@@ -1,5 +1,16 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.0.9 — Attendance Mapping + ITO Login Attendance + Escalation Focal Source (Current on `microservices` branch)
+- **Version:** `0.0.9` in backend/frontend package metadata (patch bump only, x/y unchanged).
+- **Attendance default scope corrected:** default attendance category now covers both technicians and ITO/focal-equivalent staff.
+- **Category mapping corrected:** attendance category filters now isolate IT/Desktop/Pantawid/ITO groups without cross-group leakage.
+- **ITO login attendance corrected:** login-based attendance auto-marking now includes ITO/focal-equivalent roles.
+- **Escalation dropdown corrected:** escalation target candidates are sourced from attendance pools (`ito` + current ticket type) before configured focal-role filtering.
+- **Placeholder accounts filtered:** attendance-facing queries exclude known demo placeholder users (`desktop.tech@rictms.gov.ph`, `it.tech@rictms.gov.ph`, `focal@rictms.gov.ph`).
+- **Migration script cleanup extension:** `backend/database/microservices-migrate.sql` can now optionally remove non-compliance tables from source DB after copy (`@cleanup_source_tables = 1`).
+- **Validation:** backend build passed, frontend build passed, backend tests passed (4/4).
+- **Runtime note:** direct execution of migration SQL was blocked in this environment because neither Docker CLI (`docker`) nor MySQL CLI (`mysql`/`mariadb`) is installed on PATH.
+
 ## 🚀 v0.0.8 — Escalation Discoverability + Split-DB Data Migration (Current on `microservices` branch)
 - **Version:** `0.0.8` in backend/frontend package metadata (patch bump only, x/y unchanged).
 - **Escalation visibility fix:** ticket detail now includes explicit `Upload Proof Photo(s)` action in escalation dialog and includes junior technician roles in escalation action visibility.

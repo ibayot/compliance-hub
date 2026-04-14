@@ -2,6 +2,25 @@
 
 ## 🚀 v0.6.24 — QA Fixes (Current)
 
+## 🚀 v0.0.9 — QA Findings Closure: Attendance Mapping + ITO Login Attendance + Escalation Focal Source (`microservices` branch)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Attendance default all scope | ✅ Complete | Backend default attendance roles now include technicians + ITO/focal-equivalent staff |
+| Attendance category leakage fix | ✅ Complete | Removed broad by-flag inclusion for filtered categories to prevent cross-category contamination |
+| ITO login auto-attendance | ✅ Complete | `autoCorrectAbsentOnLogin()` now includes ITO/focal-equivalent role set |
+| Placeholder attendance users cleanup | ✅ Complete | Excluded seeded demo users from attendance-facing queries |
+| Escalation focal dropdown population | ✅ Complete | Escalation dialog now merges `attendanceApi.getTechnicians('ito')` and current ticket type list before role-based focal filtering |
+| Source DB cleanup after copy | ✅ Complete | Migration script now includes optional source cleanup (`@cleanup_source_tables = 1`) to remove non-compliance tables |
+| `backend/package.json` version | ✅ Complete | `0.0.9` |
+| `frontend/package.json` version | ✅ Complete | `0.0.9` |
+
+### v0.0.9 Operations Notes
+- **Why it changed (QA):** attendance category results were mismatched, ITO login attendance auto-marking was incomplete, escalation focal dropdown could appear empty, and source DB post-copy cleanup was requested.
+- **How to test:** verify default attendance scope and category isolation, login as ITO/focal-equivalent user to confirm auto-present behavior, and open escalation dialog to confirm focal user options load.
+- **Migration:** run `backend/database/microservices-migrate.sql` with `@cleanup_source_tables = 1` for copy + source cleanup behavior.
+- **Rollback:** revert `v0.0.9` commit and set cleanup flag to `0` if source-table removal is not desired.
+
 ## 🚀 v0.0.8 — QA Findings Closure: Escalation Visibility + Split DB Data Move (`microservices` branch)
 
 | Area | Status | Notes |
