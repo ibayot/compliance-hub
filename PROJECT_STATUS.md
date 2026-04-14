@@ -1,5 +1,15 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.0.10 — Attendance Legacy-Role Removal + Centralized RoleDefinition Grouping (Current on `microservices` branch)
+- **Version:** `0.0.10` in backend/frontend package metadata (patch bump only, x/y unchanged).
+- **Legacy role removal in attendance layer:** removed attendance usage of `FOCAL`, `TECHNICIAN`, `TECHNICIAN_DESKTOP`, `TECHNICIAN_IT_SUPPORT`, `TECHNICIAN_IT_STAFF`, and `TECHNICIAN_DESKTOP_STAFF`.
+- **Centralized attendance grouping:** attendance service now uses a single grouped role map for support categories and all-attendance scope.
+- **System role definitions as source of truth:** attendance role selection now queries `role_definitions` (`assignable=true`) with explicit exclusion of `user`, `super_admin`, and removed legacy roles.
+- **Related layer alignment:** attendance controller and frontend attendance role gates updated to remove legacy roles.
+- **Validation:** backend build passed, frontend build passed, backend tests passed, smoke suite passed.
+- **Migration impact:** none (schema unchanged; relies on current `role_definitions` content).
+- **Rollback:** revert `v0.0.10` commit and restart services.
+
 ## 🚀 v0.0.9 — Attendance Mapping + ITO Login Attendance + Escalation Focal Source (Current on `microservices` branch)
 - **Version:** `0.0.9` in backend/frontend package metadata (patch bump only, x/y unchanged).
 - **Attendance default scope corrected:** default attendance category now covers both technicians and ITO/focal-equivalent staff.

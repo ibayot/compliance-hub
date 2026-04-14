@@ -53,7 +53,6 @@ function isWeekday(d: Date): boolean {
 export default function AttendancePage() {
   const { user } = useAuth();
   const isLowerLevelTech = [
-    'technician_it_staff', 'technician_desktop_staff',
     'it_support_jr', 'desktop_jr',
   ].includes(user?.role ?? '');
   /** All RICTMS staff (everyone except super_admin and regular users) sees their own attendance in the calendar */
@@ -281,9 +280,8 @@ export default function AttendancePage() {
   };
 
   const canManageAttendance = [
-    'super_admin', 'focal', 'reviewer', 'section_head',
+    'super_admin', 'reviewer', 'section_head',
     'it_support_sr', 'desktop_sr', 'pantawid_ict',
-    'technician', 'technician_it_support', 'technician_desktop',
     // ITO focal-equivalent roles
     'lead_infra', 'server_admin', 'db_admin', 'network_admin',
     'project_mgr', 'dev_lead', 'sqa_lead', 'records_officer', 'hr_id_officer',
@@ -291,7 +289,7 @@ export default function AttendancePage() {
   ].includes(user?.role ?? '');
 
   const canManageOfficeDays = [
-    'super_admin', 'focal', 'reviewer', 'section_head',
+    'super_admin', 'reviewer', 'section_head',
     'lead_infra', 'server_admin', 'db_admin', 'network_admin',
     'project_mgr', 'dev_lead', 'sqa_lead', 'records_officer', 'hr_id_officer',
     'compliance_officer', 'cybersec', 'infosec',

@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.10] - 2026-04-14 — QA Findings Closure: Attendance Legacy-Role Removal + RoleDefinition-Driven Grouping
+
+### Changed
+- **Removed legacy attendance roles from attendance logic** — eliminated direct use of `FOCAL`, `TECHNICIAN`, `TECHNICIAN_DESKTOP`, `TECHNICIAN_IT_SUPPORT`, `TECHNICIAN_IT_STAFF`, `TECHNICIAN_DESKTOP_STAFF` in attendance service/controller/frontend attendance role gates.
+- **Centralized attendance role grouping** — implemented grouped attendance role map (`desktop_support`, `it_support`, `pantawid_ict_support`, `ito`, `all`) in attendance service.
+- **RoleDefinition-driven attendance role selection** — attendance role resolution now reads from `role_definitions` (`assignable=true`) while excluding `user` and `super_admin`, plus legacy roles above.
+- **Attendance custom-role path cleanup** — removed legacy `customRoles` branching from attendance role filtering and replaced with centralized role-group resolution.
+- **Patch version bump only** — `0.0.9` -> `0.0.10` (x/y unchanged).
+
+### How To Test
+- Build backend/frontend.
+- Run backend unit tests.
+- Run repository smoke tests.
+- Verify attendance category filters return only expected role groups and legacy role accounts are not included by attendance role filters.
+
+### Migration Steps
+- No DB schema migration required.
+- Ensure `role_definitions` contains the current assignable roles used for attendance.
+
+### Rollback Steps
+- Revert this release commit.
+- Restart backend/frontend services.
+
 ## [0.0.9] - 2026-04-14 — QA Findings Closure: Attendance Mapping + ITO Login Marking + Escalation Focal List
 
 ### Changed

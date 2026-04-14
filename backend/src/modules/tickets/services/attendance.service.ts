@@ -9,7 +9,6 @@ import { TechAttendance, AttendanceStatus } from '../entities/tech-attendance.en
 import { OfficeDay } from '../entities/office-day.entity';
 import { User, UserRole } from '../../users/entities/user.entity';
 import { RoleDefinitionEntity } from '../../users/entities/role-definition.entity';
-// Note: TECHNICIAN_IT_STAFF and TECHNICIAN_DESKTOP_STAFF are accessed via UserRole enum
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -44,6 +43,16 @@ export class AttendanceService {
     'it.tech@rictms.gov.ph',
     'focal@rictms.gov.ph',
   ];
+  private readonly excludedAttendanceRoleValues = [
+    'user',
+    'super_admin',
+    'focal',
+    'technician',
+    'technician_desktop',
+    'technician_it_support',
+    'technician_it_staff',
+    'technician_desktop_staff',
+  ];
 
   constructor(
     @InjectRepository(TechAttendance)
@@ -58,25 +67,29 @@ export class AttendanceService {
 
   // ── Attendance ──────────────────────────────────────────────────────────
 
-  /**
-   * Get role codes from role_definitions that are tagged with a specific technician_type.
-   * Used to include users with custom roles in the technician attendance grid.
-   */
-  private async getCustomRoleValues(technicianType?: string): Promise<string[]> {
-    const qb = this.roleDefRepo
+  private async getAssignableAttendanceRoles(): Promise<string[]> {
+    const rows = await this.roleDefRepo
       .createQueryBuilder('rd')
       .select('rd.value', 'value')
-      .where('rd.technicianType IS NOT NULL');
-    if (technicianType) {
-      qb.andWhere('rd.technicianType = :t', { t: technicianType });
-    }
-    const rows = await qb.getRawMany<{ value: string }>();
-    return rows.map(r => r.value);
+      .where('rd.assignable = :assignable', { assignable: true })
+      .andWhere('rd.value NOT IN (:...excluded)', { excluded: this.excludedAttendanceRoleValues })
+      .getRawMany<{ value: string }>();
+    return rows.map((r) => r.value);
+  }
+
+  private async getTechnicianTypeRoles(technicianType: string): Promise<string[]> {
+    const rows = await this.roleDefRepo
+      .createQueryBuilder('rd')
+      .select('rd.value', 'value')
+      .where('rd.assignable = :assignable', { assignable: true })
+      .andWhere('rd.technicianType = :technicianType', { technicianType })
+      .andWhere('rd.value NOT IN (:...excluded)', { excluded: this.excludedAttendanceRoleValues })
+      .getRawMany<{ value: string }>();
+    return rows.map((r) => r.value);
   }
 
   private getItoRoles(): string[] {
     return [
-      UserRole.FOCAL,
       UserRole.SECTION_HEAD,
       UserRole.COMPLIANCE_OFFICER,
       UserRole.CYBERSEC,
@@ -93,20 +106,22 @@ export class AttendanceService {
     ];
   }
 
-  private getAllAttendanceRoles(): string[] {
-    return [
-      UserRole.TECHNICIAN,
-      UserRole.TECHNICIAN_DESKTOP,
-      UserRole.TECHNICIAN_IT_SUPPORT,
-      UserRole.TECHNICIAN_IT_STAFF,
-      UserRole.TECHNICIAN_DESKTOP_STAFF,
-      UserRole.DESKTOP_SR,
-      UserRole.DESKTOP_JR,
-      UserRole.IT_SUPPORT_SR,
-      UserRole.IT_SUPPORT_JR,
-      UserRole.PANTAWID_ICT,
-      ...this.getItoRoles(),
-    ];
+  // ✅ CENTRALIZED ROLE GROUPING
+  private async getRoleGroups(): Promise<Record<string, string[]>> {
+    const [desktopSupportRoles, itSupportRoles, pantawidRoles, allRoles] = await Promise.all([
+      this.getTechnicianTypeRoles('desktop_support'),
+      this.getTechnicianTypeRoles('it_support'),
+      this.getTechnicianTypeRoles('pantawid_ict_support'),
+      this.getAssignableAttendanceRoles(),
+    ]);
+
+    return {
+      desktop_support: [...new Set([UserRole.DESKTOP_SR, UserRole.DESKTOP_JR, ...desktopSupportRoles])],
+      it_support: [...new Set([UserRole.IT_SUPPORT_SR, UserRole.IT_SUPPORT_JR, ...itSupportRoles])],
+      pantawid_ict_support: [...new Set([UserRole.PANTAWID_ICT, ...pantawidRoles])],
+      ito: this.getItoRoles(),
+      all: [...new Set(allRoles)],
+    };
   }
 
   /** Get attendance records for a date range, optionally filtered by ticket type */
@@ -126,29 +141,9 @@ export class AttendanceService {
       .orderBy('a.date', 'ASC')
       .addOrderBy('user.lastName', 'ASC');
 
-    const customRoles = await this.getCustomRoleValues(ticketType || undefined);
-
-    if (ticketType === 'desktop_support') {
-      // Desktop Support: desktop_sr and desktop_jr ONLY
-      const roles = [...new Set([UserRole.DESKTOP_SR, UserRole.DESKTOP_JR, ...customRoles])];
-      qb.andWhere('user.role IN (:...roles)', { roles });
-    } else if (ticketType === 'it_support') {
-      // IT Support: it_support_sr and it_support_jr ONLY
-      const roles = [...new Set([UserRole.IT_SUPPORT_SR, UserRole.IT_SUPPORT_JR, ...customRoles])];
-      qb.andWhere('user.role IN (:...roles)', { roles });
-    } else if (ticketType === 'pantawid_ict_support') {
-      // Pantawid ICT Support: pantawid_ict ONLY
-      const roles = [...new Set([UserRole.PANTAWID_ICT, ...customRoles])];
-      qb.andWhere('user.role IN (:...roles)', { roles });
-    } else if (ticketType === 'ito') {
-      // ITO = all focal-equivalent + compliance/cybersec staff (excludes technicians and pantawid)
-      const itoHardcoded: string[] = this.getItoRoles();
-      const roles = [...new Set([...itoHardcoded, ...customRoles])];
-      qb.andWhere('user.role IN (:...roles)', { roles });
-    } else {
-      const roles = [...new Set([...this.getAllAttendanceRoles(), ...customRoles])];
-      qb.andWhere('user.role IN (:...roles)', { roles });
-    }
+    const groups = await this.getRoleGroups();
+    const roles = groups[ticketType || 'all'] || groups.all;
+    qb.andWhere('user.role IN (:...roles)', { roles });
 
     return qb.getMany();
   }
@@ -169,18 +164,18 @@ export class AttendanceService {
       throw new BadRequestException(`Invalid status: ${dto.status}`);
     }
 
-    // Scope restriction: lower-level tech focals can only tag their own tier's staff
-    const itFocalRoles = [UserRole.TECHNICIAN_IT_SUPPORT, UserRole.IT_SUPPORT_SR];
-    const deskFocalRoles = [UserRole.TECHNICIAN_DESKTOP, UserRole.DESKTOP_SR];
+    // Scope restriction: senior support roles can only tag their own staff tier
+    const itFocalRoles = [UserRole.IT_SUPPORT_SR];
+    const deskFocalRoles = [UserRole.DESKTOP_SR];
     if (itFocalRoles.includes(actorRole as UserRole)) {
       const target = await this.userRepo.findOne({ where: { id: dto.userId } });
-      const itStaffRoles = [UserRole.TECHNICIAN_IT_STAFF, UserRole.IT_SUPPORT_JR, UserRole.IT_SUPPORT_SR, UserRole.TECHNICIAN_IT_SUPPORT];
+      const itStaffRoles = [UserRole.IT_SUPPORT_JR, UserRole.IT_SUPPORT_SR];
       if (target && !itStaffRoles.includes(target.role as UserRole) && actorRole !== UserRole.SUPER_ADMIN) {
         throw new BadRequestException('IT Support focal can only manage attendance for IT Support team members.');
       }
     } else if (deskFocalRoles.includes(actorRole as UserRole)) {
       const target = await this.userRepo.findOne({ where: { id: dto.userId } });
-      const deskStaffRoles = [UserRole.TECHNICIAN_DESKTOP_STAFF, UserRole.DESKTOP_JR, UserRole.DESKTOP_SR, UserRole.TECHNICIAN_DESKTOP];
+      const deskStaffRoles = [UserRole.DESKTOP_JR, UserRole.DESKTOP_SR];
       if (target && !deskStaffRoles.includes(target.role as UserRole) && actorRole !== UserRole.SUPER_ADMIN) {
         throw new BadRequestException('Desktop focal can only manage attendance for Desktop Support team members.');
       }
@@ -218,30 +213,8 @@ export class AttendanceService {
 
   /** Get technicians who are available (present or half_day) for a ticket type on a given date */
   async getAvailableTechnicians(ticketType: string, date: string): Promise<User[]> {
-    const customRoles = await this.getCustomRoleValues(ticketType);
-
-    // Map ticket type to roles — using updated role assignments per QA spec
-    let hardcodedRoles: string[];
-    if (ticketType === 'desktop_support') {
-      // Desktop Support: desktop_sr and desktop_jr (+ legacy technician_desktop_staff)
-      hardcodedRoles = [UserRole.DESKTOP_SR, UserRole.DESKTOP_JR, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_DESKTOP_STAFF];
-    } else if (ticketType === 'it_support') {
-      // IT Support: it_support_sr and it_support_jr (+ legacy technician_it_staff)
-      hardcodedRoles = [UserRole.IT_SUPPORT_SR, UserRole.IT_SUPPORT_JR, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF];
-    } else if (ticketType === 'pantawid_ict_support') {
-      // Pantawid ICT: pantawid_ict (+ legacy technician)
-      hardcodedRoles = [UserRole.PANTAWID_ICT, UserRole.TECHNICIAN];
-    } else {
-      hardcodedRoles = [
-        UserRole.TECHNICIAN,
-        UserRole.TECHNICIAN_DESKTOP,
-        UserRole.TECHNICIAN_IT_SUPPORT,
-        UserRole.TECHNICIAN_IT_STAFF,
-        UserRole.TECHNICIAN_DESKTOP_STAFF,
-      ];
-    }
-
-    const roles = [...new Set([...hardcodedRoles, ...customRoles])];
+    const groups = await this.getRoleGroups();
+    const roles = groups[ticketType] || groups.all;
 
     // Get all active techs with matching roles
     const byRole = await this.userRepo
@@ -298,37 +271,18 @@ export class AttendanceService {
 
   /** Get technicians filtered for the current session (all staff or filtered by type) */
   async listTechnicians(ticketType?: string, actorRole?: string): Promise<User[]> {
-    const customRoles = await this.getCustomRoleValues(ticketType || undefined);
-
     // Focal technicians see only their own staff tier when no explicit filter is set
     let forcedType = ticketType;
-    if ([UserRole.TECHNICIAN_IT_SUPPORT, UserRole.IT_SUPPORT_SR].includes(actorRole as UserRole) && !ticketType) {
+    if ([UserRole.IT_SUPPORT_SR].includes(actorRole as UserRole) && !ticketType) {
       forcedType = 'it_support';
-    } else if ([UserRole.TECHNICIAN_DESKTOP, UserRole.DESKTOP_SR].includes(actorRole as UserRole) && !ticketType) {
+    } else if ([UserRole.DESKTOP_SR].includes(actorRole as UserRole) && !ticketType) {
       forcedType = 'desktop_support';
-    } else if ([UserRole.TECHNICIAN, UserRole.PANTAWID_ICT].includes(actorRole as UserRole) && !ticketType) {
+    } else if ([UserRole.PANTAWID_ICT].includes(actorRole as UserRole) && !ticketType) {
       forcedType = 'pantawid_ict_support';
     }
 
-    let hardcodedRoles: string[];
-    if (forcedType === 'desktop_support') {
-      // Desktop Support: desktop_sr and desktop_jr ONLY
-      hardcodedRoles = [UserRole.DESKTOP_SR, UserRole.DESKTOP_JR];
-    } else if (forcedType === 'it_support') {
-      // IT Support: it_support_sr and it_support_jr ONLY
-      hardcodedRoles = [UserRole.IT_SUPPORT_SR, UserRole.IT_SUPPORT_JR];
-    } else if (forcedType === 'pantawid_ict_support') {
-      // Pantawid ICT Support: pantawid_ict ONLY
-      hardcodedRoles = [UserRole.PANTAWID_ICT];
-    } else if (forcedType === 'ito') {
-      // ITO = all focal-equivalent + compliance/cybersec staff
-      hardcodedRoles = this.getItoRoles();
-    } else {
-      // No filter = all tech roles (technicians + ITO staff)
-      hardcodedRoles = this.getAllAttendanceRoles();
-    }
-
-    const roles = [...new Set([...hardcodedRoles, ...customRoles])];
+    const groups = await this.getRoleGroups();
+    const roles = groups[forcedType || 'all'] || groups.all;
 
     // Fetch by known roles (hardcoded + custom-tagged)
     const byRole = await this.userRepo
@@ -342,25 +296,10 @@ export class AttendanceService {
       .addOrderBy('u.firstName', 'ASC')
       .getMany();
 
-    // Also include users with any custom role who have the ticketTechnician flag set
-    const byFlag = !forcedType
-      ? await this.userRepo
-        .createQueryBuilder('u')
-        .where('u.active = :active', { active: true })
-        .andWhere('u.ticketTechnician = :flag', { flag: true })
-        .andWhere('u.role NOT IN (:...roles)', { roles })
-        .andWhere('LOWER(u.email) NOT IN (:...excludedEmails)', {
-          excludedEmails: this.excludedAttendanceEmails,
-        })
-        .orderBy('u.lastName', 'ASC')
-        .addOrderBy('u.firstName', 'ASC')
-        .getMany()
-      : [];
-
     // Merge, deduplicate by id
     const seen = new Set<number>();
     const merged: User[] = [];
-    for (const u of [...byRole, ...byFlag]) {
+    for (const u of byRole) {
       if (!seen.has(u.id)) {
         seen.add(u.id);
         merged.push(u);
@@ -390,11 +329,11 @@ export class AttendanceService {
   async getStaffLoginsMonthly(startDate: string, endDate: string): Promise<User[]> {
     const EXCLUDED_ROLES = [
       UserRole.SUPER_ADMIN,
-      UserRole.TECHNICIAN,
-      UserRole.TECHNICIAN_DESKTOP,
-      UserRole.TECHNICIAN_IT_SUPPORT,
-      UserRole.TECHNICIAN_IT_STAFF,
-      UserRole.TECHNICIAN_DESKTOP_STAFF,
+      UserRole.DESKTOP_SR,
+      UserRole.DESKTOP_JR,
+      UserRole.IT_SUPPORT_SR,
+      UserRole.IT_SUPPORT_JR,
+      UserRole.PANTAWID_ICT,
       UserRole.USER,
     ];
 
@@ -420,25 +359,14 @@ export class AttendanceService {
    * Called from AuthService.login() / googleLogin() after recording the login timestamp.
    */
   async autoCorrectAbsentOnLogin(userId: number): Promise<void> {
-    // Only auto-mark attendance for technician-tier accounts
-    const techRoles = new Set<string>([
-      UserRole.DESKTOP_SR, UserRole.DESKTOP_JR,
-      UserRole.IT_SUPPORT_SR, UserRole.IT_SUPPORT_JR,
-      UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
-      UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
-      UserRole.PANTAWID_ICT,
-      ...this.getItoRoles(),
-    ]);
+    // Only auto-mark attendance for roles in the attendance role groups
+    const roleGroups = await this.getRoleGroups();
+    const techRoles = new Set<string>(roleGroups.all);
 
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) return;
 
-    // Check built-in tech roles
-    if (!techRoles.has(user.role)) {
-      // Also check custom roles tagged with a technicianType in role_definitions
-      const customRoleValues = await this.getCustomRoleValues();
-      if (!customRoleValues.includes(user.role)) return;
-    }
+    if (!techRoles.has(user.role)) return;
 
     const today = new Date().toISOString().slice(0, 10);
     const record = await this.attendanceRepo.findOne({ where: { userId, date: today } });

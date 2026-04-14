@@ -25,14 +25,8 @@ import {
 /** Roles that can manage technician attendance (set present/absent/etc.) */
 const FOCAL_ROLES = [
   UserRole.SUPER_ADMIN,
-  UserRole.FOCAL,
   UserRole.SECTION_HEAD,
   UserRole.REVIEWER,
-  UserRole.TECHNICIAN,         // focal-level technician
-  UserRole.TECHNICIAN_DESKTOP,
-  UserRole.TECHNICIAN_IT_SUPPORT,
-  UserRole.TECHNICIAN_IT_STAFF,
-  UserRole.TECHNICIAN_DESKTOP_STAFF,
   // v0.6.14 named roles
   UserRole.PANTAWID_ICT,
   UserRole.DESKTOP_SR,
@@ -49,7 +43,6 @@ const FOCAL_ROLES = [
 const OFFICE_DAY_ROLES = [
   UserRole.SUPER_ADMIN,
   UserRole.REVIEWER,
-  UserRole.FOCAL,
   UserRole.SECTION_HEAD,
   // v0.6.14 ITO focal-equivalent roles
   UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
@@ -64,14 +57,8 @@ const OFFICE_DAY_ROLES = [
 const READ_ROLES = [
   UserRole.SUPER_ADMIN,
   UserRole.REVIEWER,
-  UserRole.FOCAL,
   UserRole.SECTION_HEAD,
   UserRole.AUDITOR,
-  UserRole.TECHNICIAN,
-  UserRole.TECHNICIAN_DESKTOP,
-  UserRole.TECHNICIAN_IT_SUPPORT,
-  UserRole.TECHNICIAN_IT_STAFF,
-  UserRole.TECHNICIAN_DESKTOP_STAFF,
   // v0.6.14 named roles
   UserRole.PANTAWID_ICT,
   UserRole.DESKTOP_SR,

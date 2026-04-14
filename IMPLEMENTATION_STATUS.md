@@ -2,6 +2,24 @@
 
 ## 🚀 v0.6.24 — QA Fixes (Current)
 
+## 🚀 v0.0.10 — Attendance Legacy-Role Removal + RoleDefinition Grouping (`microservices` branch)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Remove legacy roles from attendance service | ✅ Complete | Removed direct attendance role usage of `FOCAL`, `TECHNICIAN`, `TECHNICIAN_DESKTOP`, `TECHNICIAN_IT_SUPPORT`, `TECHNICIAN_IT_STAFF`, `TECHNICIAN_DESKTOP_STAFF` |
+| Centralized role grouping in attendance service | ✅ Complete | Added centralized grouped role mapping for `desktop_support`, `it_support`, `pantawid_ict_support`, `ito`, `all` |
+| Use System Role Definitions for attendance roles | ✅ Complete | Attendance role selection now queries `role_definitions` with `assignable=true` and excludes `user` / `super_admin` / legacy roles |
+| Attendance controller role gates alignment | ✅ Complete | Removed legacy roles from attendance controller `@Roles` access sets |
+| Frontend attendance role gates alignment | ✅ Complete | Removed legacy role strings from attendance page role checks |
+| `backend/package.json` version | ✅ Complete | `0.0.10` |
+| `frontend/package.json` version | ✅ Complete | `0.0.10` |
+
+### v0.0.10 Operations Notes
+- **Why it changed (QA):** attendance code still referenced legacy role constants and had fragmented role filtering paths.
+- **How to test:** run backend/frontend builds, backend tests, and smoke test; verify attendance category lists and role-gated actions still behave as expected using current role definitions.
+- **Migration:** none required; relies on existing `role_definitions` data.
+- **Rollback:** revert `v0.0.10` commit and restart services.
+
 ## 🚀 v0.0.9 — QA Findings Closure: Attendance Mapping + ITO Login Attendance + Escalation Focal Source (`microservices` branch)
 
 | Area | Status | Notes |
