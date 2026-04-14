@@ -1,5 +1,14 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.0.7 — Service DB Separation + Ticket Escalation QA Confirmation (Current on `microservices` branch)
+- **Version:** `0.0.7` in backend/frontend package metadata.
+- **Per-service DB separation wiring:** users, ticketing, and compliance services now support service-specific DB env overrides with fallback compatibility.
+- **Compose split DB targets:** users -> `ricms_users`, ticketing -> `ricms_ticketing`, compliance -> `ricms_compliance`.
+- **DB bootstrap script:** `backend/database/microservices-init.sql` creates required DBs and grants for `ricms_user` on first MariaDB initialization.
+- **Escalation QA checks confirmed in code:** ticket detail already has an `Escalate Ticket` button and multipart proof image upload workflow.
+- **Migration impact:** existing MariaDB volumes need one-time DB creation/grant step (or volume recreation).
+- **Rollback:** revert `v0.0.7` commit and use single shared DB config.
+
 ## 🚀 v0.0.6 — Three-Service Domain Split (Current on `microservices` branch)
 - **Version:** `0.0.6` in both `backend/package.json` and `frontend/package.json`.
 - **Service separation completed:**

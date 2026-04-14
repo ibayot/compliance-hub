@@ -2,6 +2,25 @@
 
 ## 🚀 v0.6.24 — QA Fixes (Current)
 
+## 🚀 v0.0.7 — QA Follow-up: Service DB Separation + Escalation UX Verification (`microservices` branch)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Users service DB override | ✅ Complete | `USERS_DB_DATABASE` optional env support added in `users-service.module.ts` |
+| Ticketing service DB override | ✅ Complete | `TICKETING_DB_DATABASE` optional env support added in `ticketing-service.module.ts` |
+| Compliance service DB override | ✅ Complete | `COMPLIANCE_DB_DATABASE` optional env support added in `compliance-service.module.ts` |
+| MariaDB init for split DBs | ✅ Complete | Added `backend/database/microservices-init.sql` (create DBs + grants) |
+| Compose DB split wiring | ✅ Complete | users/ticketing/compliance services now point to separate DB names |
+| Ticket detail escalate button | ✅ Verified Existing | `frontend/src/app/dashboard/tickets/[id]/page.tsx` includes `Escalate Ticket` action |
+| Escalation proof photo upload | ✅ Verified Existing | frontend multipart upload + backend `FilesInterceptor('proofFiles')` + disk persistence already implemented |
+| `backend/package.json` version | ✅ Complete | `0.0.7` |
+| `frontend/package.json` version | ✅ Complete | `0.0.7` |
+
+### v0.0.7 Operations Notes
+- **Migration:** for existing MariaDB volumes, create `ricms_users` and `ricms_ticketing` databases + grants (or recreate volume to run init scripts automatically).
+- **Regression risk:** ticketing currently reads user/unit entities directly; if DBs are fully isolated without synchronized user/unit records, assignment/escalation target lookups may fail.
+- **Rollback:** revert `v0.0.7` commit and restore single shared `DB_DATABASE` configuration.
+
 ## 🚀 v0.0.6 — Compliance Service Extraction (`microservices` branch)
 
 | Area | Status | Notes |

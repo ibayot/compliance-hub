@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.7] - 2026-04-14 — QA Follow-up: Service DB Separation + Ticket Escalation Verification
+
+### Added
+- **Per-service DB initialization script** — added `backend/database/microservices-init.sql` to create `ricms_users`, `ricms_ticketing`, and `ricms_compliance` databases and grant access for `ricms_user`.
+- **Service-specific DB env overrides** — added optional env support in app modules:
+  - `USERS_DB_DATABASE` (users service)
+  - `TICKETING_DB_DATABASE` (ticketing service)
+  - `COMPLIANCE_DB_DATABASE` (compliance service)
+
+### Changed
+- **Compose DB split wiring** — `users-service` now uses `ricms_users`; `ticketing-service` now uses `ricms_ticketing`; `compliance-service` remains on `ricms_compliance`.
+- **MariaDB startup init mount** — compose now mounts `backend/database/microservices-init.sql` into `/docker-entrypoint-initdb.d` for first-boot DB creation.
+- **QA verification coverage** — confirmed escalation proof-photo upload and escalate action are already implemented in ticket detail flow (`/tickets/:id/escalate` multipart + frontend escalate dialog/button).
+- **Patch version bump only** — `0.0.6` → `0.0.7`.
+
+### How To Test
+- Build backend and frontend.
+- Start `users-service`, `ticketing-service`, and `api-gateway`; verify login and ticket flows still work.
+- In ticket detail as technician, verify `Escalate Ticket` button is visible on non-terminal tickets.
+- Escalate with proof image(s) and verify escalation record contains proof attachment count.
+- For Docker first boot, verify `ricms_users`, `ricms_ticketing`, `ricms_compliance` are created.
+
+### Migration Steps
+- If using Docker with an existing MariaDB volume, run SQL once manually (or recreate volume) to create the new databases and grants.
+- Ensure service env vars point to intended DB names (defaults in compose are already set).
+
+### Rollback Steps
+- Revert this release commit.
+- Point all services back to a single shared `DB_DATABASE` value (e.g., `ricms_compliance`) and remove service-specific overrides.
+
 ## [0.0.6] - 2026-04-14 — Compliance Service Extraction (Users/Ticketing/Compliance Split)
 
 ### Added

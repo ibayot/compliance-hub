@@ -13,6 +13,7 @@ services:
       - '3306:3306'
     volumes:
       - mariadb_data:/var/lib/mysql
+      - ./backend/database/microservices-init.sql:/docker-entrypoint-initdb.d/10-microservices-init.sql:ro
     networks:
       - ricms-network
     healthcheck:
@@ -51,7 +52,8 @@ services:
       - DB_PORT=3306
       - DB_USERNAME=ricms_user
       - DB_PASSWORD=ricms_password
-      - DB_DATABASE=ricms_compliance
+      - DB_DATABASE=ricms_users
+      - USERS_DB_DATABASE=ricms_users
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=dev-jwt-secret-change-in-production
@@ -103,7 +105,8 @@ services:
       - DB_PORT=3306
       - DB_USERNAME=ricms_user
       - DB_PASSWORD=ricms_password
-      - DB_DATABASE=ricms_compliance
+      - DB_DATABASE=ricms_ticketing
+      - TICKETING_DB_DATABASE=ricms_ticketing
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=dev-jwt-secret-change-in-production
@@ -137,6 +140,7 @@ services:
       - DB_USERNAME=ricms_user
       - DB_PASSWORD=ricms_password
       - DB_DATABASE=ricms_compliance
+      - COMPLIANCE_DB_DATABASE=ricms_compliance
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=dev-jwt-secret-change-in-production
