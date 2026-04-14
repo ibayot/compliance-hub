@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.12] - 2026-04-14 — Split-DB Ownership Enforcement + Federated User Access
+
+### Changed
+- **Single-table ownership enforced (no duplicated base tables):**
+  - `users` is now owned only by `compliance_hub_users`.
+  - `units` is now owned only by `compliance_hub`.
+  - `attendance` is now owned only by `compliance_hub_users`.
+- **Backward-compatible cross-db access added via passthrough views:**
+  - `compliance_hub_ticketing.users` (VIEW) -> `compliance_hub_users.users`
+  - `compliance_hub_ticketing.units` (VIEW) -> `compliance_hub.units`
+  - `compliance_hub_ticketing.attendance` (VIEW) -> `compliance_hub_users.attendance`
+  - `compliance_hub.users` (VIEW) -> `compliance_hub_users.users`
+  - `compliance_hub_users.units` (VIEW) -> `compliance_hub.units`
+- **Migration hardening:** microservice migration SQL now supports repeated runs safely with view-aware cleanup and base-table checks.
+- **Ticketing runtime hardening:** startup migration now ensures attendance ownership in users DB and regenerates ticketing compatibility views for `users`, `units`, and `attendance`.
+- **Fallback API for cross-db user retrieval:** added `GET /api/users/federated` to return users with unit context through DB objects (works with base tables or views).
+- **Patch version bump only** — `0.0.11` -> `0.0.12` (x/y unchanged).
+
+### How To Test
+- Build backend and frontend.
+- Run backend unit tests.
+- Run migration SQL and verify ownership state:
+  - `compliance_hub_users.users` = BASE TABLE
+  - `compliance_hub.units` = BASE TABLE
+  - `compliance_hub_users.attendance` = BASE TABLE
+  - corresponding objects in other DBs are views, not duplicated tables.
+- Call `GET /api/users/federated` and verify user + unit output still resolves.
+
+### Migration Steps
+- Run `backend/database/microservices-migrate.sql` once (idempotent).
+- Restart users, ticketing, compliance, and gateway services.
+
+### Rollback Steps
+- Revert this release commit.
+- Re-run prior migration version if you need previous table-placement behavior.
+- Restart all services.
+
 ## [0.0.11] - 2026-04-14 — DB Rename + Attendance Table Rename + Service Availability UX
 
 ### Changed

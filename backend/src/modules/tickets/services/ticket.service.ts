@@ -7,7 +7,7 @@
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, QueryRunner, Repository } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Ticket, TicketType, TicketStatus, TicketPriority } from '../entities/ticket.entity';
@@ -125,6 +125,17 @@ export class TicketService implements OnModuleInit {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     try {
+      const usersDb = await this.resolveExistingSchemaName(
+        qr,
+        ['compliance_hub_users', 'ricms_users', 'rictms_users'],
+        process.env.USERS_DB_DATABASE || 'compliance_hub_users',
+      );
+      const complianceDb = await this.resolveExistingSchemaName(
+        qr,
+        ['compliance_hub', 'ricms_compliance', 'rictms_compliance'],
+        process.env.COMPLIANCE_DB_DATABASE || 'compliance_hub',
+      );
+
       // Ensure new columns exist on tickets table
       await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ticket_number VARCHAR(50) NULL').catch(() => undefined);
       await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ticket_type VARCHAR(30) NOT NULL DEFAULT "it_support"').catch(() => undefined);
@@ -209,14 +220,12 @@ export class TicketService implements OnModuleInit {
         )
       `).catch(() => undefined);
 
-      // Rename legacy table if needed
+      // Attendance is owned by users DB; keep ticketing compatibility via a passthrough view.
       await qr.query(
         'RENAME TABLE tech_attendance TO attendance',
       ).catch(() => undefined);
-
-      // Create attendance table
       await qr.query(`
-        CREATE TABLE IF NOT EXISTS attendance (
+        CREATE TABLE IF NOT EXISTS \`${usersDb}\`.attendance (
           id VARCHAR(36) NOT NULL PRIMARY KEY,
           user_id INT NOT NULL,
           date DATE NOT NULL,
@@ -227,6 +236,23 @@ export class TicketService implements OnModuleInit {
           UNIQUE KEY uq_attendance_user_date (user_id, date)
         )
       `).catch(() => undefined);
+
+      await qr.query(`
+        INSERT IGNORE INTO \`${usersDb}\`.attendance (id, user_id, date, status, set_by_id, notes, created_at)
+        SELECT id, user_id, date, status, set_by_id, notes, created_at FROM attendance
+      `).catch(() => undefined);
+      await qr.query('DROP VIEW IF EXISTS attendance').catch(() => undefined);
+      await qr.query('DROP TABLE IF EXISTS attendance').catch(() => undefined);
+      await qr.query(`CREATE VIEW attendance AS SELECT * FROM \`${usersDb}\`.attendance`).catch(() => undefined);
+
+      // Compatibility views for shared reference data (single-table ownership across DBs)
+      await qr.query('DROP VIEW IF EXISTS users').catch(() => undefined);
+      await qr.query('DROP TABLE IF EXISTS users').catch(() => undefined);
+      await qr.query(`CREATE VIEW users AS SELECT * FROM \`${usersDb}\`.users`).catch(() => undefined);
+
+      await qr.query('DROP VIEW IF EXISTS units').catch(() => undefined);
+      await qr.query('DROP TABLE IF EXISTS units').catch(() => undefined);
+      await qr.query(`CREATE VIEW units AS SELECT * FROM \`${complianceDb}\`.units`).catch(() => undefined);
 
       // Create office_days table
       await qr.query(`
@@ -325,6 +351,18 @@ export class TicketService implements OnModuleInit {
     } finally {
       await qr.release();
     }
+  }
+
+  private async resolveExistingSchemaName(
+    qr: QueryRunner,
+    candidates: string[],
+    fallback: string,
+  ): Promise<string> {
+    const quoted = candidates.map((name) => `'${name}'`).join(',');
+    const rows = await qr.query(
+      `SELECT schema_name FROM information_schema.schemata WHERE schema_name IN (${quoted}) ORDER BY schema_name ASC LIMIT 1`,
+    ) as Array<{ schema_name?: string }>;
+    return rows?.[0]?.schema_name || fallback;
   }
 
   // --- Seed Default Categories -----------------------------------------------

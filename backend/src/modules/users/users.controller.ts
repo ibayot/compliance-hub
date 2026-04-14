@@ -65,6 +65,12 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @Get('federated')
+  @Roles('super_admin', 'reviewer', 'compliance_officer')
+  getFederatedUsers() {
+    return this.usersService.getFederatedUsers();
+  }
+
   @Get(':id')
   @Roles('super_admin', 'reviewer', 'compliance_officer')
   findOne(@Param('id') id: string) {

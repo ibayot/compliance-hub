@@ -1,5 +1,19 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.0.12 — Strict DB Ownership + Federated Cross-DB Views (Current on `microservices` branch)
+- **Version:** `0.0.12` in backend/frontend package metadata (patch bump only, x/y unchanged).
+- **Ownership policy implemented:**
+   - `users` base table exists only in `compliance_hub_users`.
+   - `units` base table exists only in `compliance_hub`.
+   - `attendance` base table exists only in `compliance_hub_users`.
+- **No duplicate base tables across service DBs:** ticketing/compliance/users use passthrough views where cross-db references are required for backward compatibility.
+- **Runtime compatibility retained:** ticketing startup migration now maintains users/units/attendance compatibility views while keeping ownership boundaries.
+- **Cross-db fallback API added:** `GET /api/users/federated` for federated user retrieval through DB objects.
+- **Availability UX retained:** existing gateway/frontend service-unavailability output remains active and unchanged.
+- **Validation:** backend build passed, frontend build passed, backend tests passed, localhost ownership verification passed.
+- **Migration impact:** run updated migration SQL once; safe for reruns.
+- **Rollback:** revert `v0.0.12` commit and restart services.
+
 ## 🚀 v0.0.11 — DB Naming Standardization + Attendance Table Rename + Availability UX (Current on `microservices` branch)
 - **Version:** `0.0.11` in backend/frontend package metadata (patch bump only, x/y unchanged).
 - **DB names standardized:** split schemas now use `compliance_hub_users`, `compliance_hub_ticketing`, and `compliance_hub`.

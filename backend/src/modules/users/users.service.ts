@@ -455,6 +455,54 @@ export class UsersService {
     }));
   }
 
+  /**
+   * Cross-database compatible user listing.
+   * Works with physical tables or passthrough views depending on split-db deployment state.
+   */
+  async getFederatedUsers(): Promise<Array<{
+    id: number;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    active: boolean;
+    unitIds: number[];
+    unitNames: string[];
+  }>> {
+    const rows = await this.usersRepository.query(`
+      SELECT
+        u.id,
+        u.email,
+        u.first_name AS firstName,
+        u.last_name AS lastName,
+        u.role,
+        u.active,
+        GROUP_CONCAT(DISTINCT uu.id ORDER BY uu.id SEPARATOR ',') AS unitIds,
+        GROUP_CONCAT(DISTINCT uu.name ORDER BY uu.name SEPARATOR '|') AS unitNames
+      FROM users u
+      LEFT JOIN user_unit_access uua ON uua.user_id = u.id
+      LEFT JOIN units uu ON uu.id = uua.unit_id
+      GROUP BY u.id, u.email, u.first_name, u.last_name, u.role, u.active
+      ORDER BY u.last_name ASC, u.first_name ASC
+    `);
+
+    return (rows || []).map((row: any) => ({
+      id: Number(row.id),
+      email: String(row.email || ''),
+      firstName: String(row.firstName || ''),
+      lastName: String(row.lastName || ''),
+      role: String(row.role || ''),
+      active: Boolean(row.active),
+      unitIds: String(row.unitIds || '')
+        .split(',')
+        .filter((v) => v !== '')
+        .map((v) => Number(v)),
+      unitNames: String(row.unitNames || '')
+        .split('|')
+        .filter((v) => v !== ''),
+    }));
+  }
+
   async findByGoogleSub(googleSub: string): Promise<User | null> {
     return await this.usersRepository.findOne({
       where: { googleSub },

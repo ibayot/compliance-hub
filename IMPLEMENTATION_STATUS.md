@@ -2,6 +2,26 @@
 
 ## 🚀 v0.6.24 — QA Fixes (Current)
 
+## 🚀 v0.0.12 — Ownership Enforcement + Federated Access (`microservices` branch)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Users table ownership | ✅ Complete | `users` base table retained only in `compliance_hub_users`; ticketing/compliance now use views |
+| Units table ownership | ✅ Complete | `units` base table retained only in `compliance_hub`; users/ticketing consume passthrough views |
+| Attendance table ownership | ✅ Complete | `attendance` base table retained only in `compliance_hub_users`; ticketing uses view |
+| Migration SQL hardening | ✅ Complete | Added base-table guards, self-copy guards, view-aware cleanup, and ownership view creation |
+| Ticketing startup compatibility | ✅ Complete | Runtime migration now aligns attendance ownership and regenerates ticketing `users/units/attendance` views |
+| Federated user API fallback | ✅ Complete | Added `GET /api/users/federated` to return users with associated units via federated DB objects |
+| Microservice unavailable UX | ✅ Preserved | Gateway/frontend availability behavior kept and unchanged in this batch |
+| `backend/package.json` version | ✅ Complete | `0.0.12` |
+| `frontend/package.json` version | ✅ Complete | `0.0.12` |
+
+### v0.0.12 Operations Notes
+- **Why it changed (QA):** duplicate base tables across service DBs violated strict ownership boundaries.
+- **How to test:** run migration SQL, verify base-table ownership + view placement, call `/api/users/federated`, then run backend/frontend builds and backend unit tests.
+- **Migration:** execute `backend/database/microservices-migrate.sql` and restart services.
+- **Rollback:** revert `v0.0.12` commit and restore previous migration behavior.
+
 ## 🚀 v0.0.11 — DB Naming + Attendance Table Rename + Service Availability UX (`microservices` branch)
 
 | Area | Status | Notes |
