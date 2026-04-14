@@ -2,6 +2,25 @@
 
 ## 🚀 v0.6.24 — QA Fixes (Current)
 
+## 🚀 v0.0.5 — QA Fixes: Reassign Eligibility + Terminal Action Controls (`microservices` branch)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Backend assignment guard for absent technicians | ✅ Complete | `assignTicket()` now rejects assignee with attendance `absent` / `out_of_office` for current date |
+| Backend technician availability payload | ✅ Complete | `getTechnicianAvailability()` now includes `attendanceStatus` + `isUnavailable` metadata |
+| Tickets table reassignment state | ✅ Complete | Reassign action remains visible but disabled for `resolved`/`closed` rows |
+| Assign dialog technician filtering | ✅ Complete | Frontend now defensively excludes unavailable attendance statuses |
+| Ticket detail terminal action visibility | ✅ Complete | `Update Status` hidden for technician, section head, compliance officer, super admin on `resolved`/`closed` |
+| Gateway strict split-runtime behavior | ✅ Complete | Unsupported `/api/*` routes return explicit `503` in strict mode |
+| Compose strict-mode runtime env | ✅ Complete | Added `MICROSERVICES_STRICT=true` to gateway service |
+| `backend/package.json` version | ✅ Complete | `0.0.5` |
+| `frontend/package.json` version | ✅ Complete | `0.0.5` |
+
+### v0.0.5 Operations Notes
+- **Migration:** none.
+- **Deployment impact:** strict mode now explicitly blocks unsupported APIs in split users/ticketing runtime.
+- **Rollback:** revert `v0.0.5` commit; optionally set `MICROSERVICES_STRICT=false`.
+
 ## 🚀 v0.0.4 — API Gateway on 4000 for Separated Users/Ticketing (`microservices` branch)
 
 | Area | Status | Notes |

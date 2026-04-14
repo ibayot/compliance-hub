@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.5] - 2026-04-14 — QA Fixes: Reassign Eligibility, Terminal Actions, Strict Split Runtime
+
+### Fixed
+- **Absent technicians appearing in Reassign dialog** — added backend assignment guard and frontend defensive filter so technicians marked `absent` or `out_of_office` are not assignable.
+- **Resolved/closed tickets reassign action behavior** — tickets table now keeps the reassign icon visible but disabled for `resolved`/`closed` tickets.
+- **Terminal status action visibility** — ticket detail now hides `Update Status` for technicians, section head, compliance officer, and super admin when ticket is already `resolved`/`closed`.
+
+### Added
+- **Strict split-runtime guard** — gateway now returns explicit `503` for unsupported `/api/*` routes when running in strict microservices mode, preventing false impression that non-users/ticketing modules are available from split runtime.
+
+### Changed
+- **Technician availability payload** — backend technician list now includes attendance state metadata (`attendanceStatus`, `isUnavailable`) used by frontend filtering.
+- **Patch version bump only** — `0.0.4` → `0.0.5` (x/y unchanged).
+
+### How To Test
+- Start users (`4101`), ticketing (`4102`), and gateway (`4000`), then open tickets table and click reassign on a ticket.
+- Verify technicians marked absent/out-of-office do not appear in assign/reassign list.
+- Verify reassign icon is visible but disabled for `resolved`/`closed` rows.
+- Open ticket detail as technician/section head/compliance officer/super admin on `resolved` or `closed` ticket and verify `Update Status` is hidden.
+- Call a non-ticketing/non-users API path through gateway and verify `503` with strict-mode message.
+
+### Migration Steps
+- No database schema migration required.
+- Restart gateway to apply strict unsupported-route handling.
+
+### Rollback Steps
+- Revert `v0.0.5` commit on `microservices` branch.
+- Set `MICROSERVICES_STRICT=false` (if needed) and/or run monolith backend for full-module APIs.
+
 ## [0.0.4] - 2026-04-13 — API Gateway on 4000 for Separated Users/Ticketing
 
 ### Fixed

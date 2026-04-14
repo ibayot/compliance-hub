@@ -189,6 +189,8 @@ export interface TechnicianOption {
   lastName: string;
   role: string;
   openCount: number;
+  attendanceStatus?: AttendanceStatus | null;
+  isUnavailable?: boolean;
 }
 
 export interface TicketDashboardStats {

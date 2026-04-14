@@ -12,6 +12,7 @@ async function bootstrap() {
 
   const usersServiceUrl = process.env.USERS_SERVICE_URL || 'http://localhost:4101';
   const ticketingServiceUrl = process.env.TICKETING_SERVICE_URL || 'http://localhost:4102';
+  const strictMode = (process.env.MICROSERVICES_STRICT || 'true').toLowerCase() !== 'false';
 
   app.use(helmet());
   app.enableCors({
@@ -46,9 +47,21 @@ async function bootstrap() {
       status: 'ok',
       usersServiceUrl,
       ticketingServiceUrl,
+      strictMode,
       version: process.env.npm_package_version || '0.0.0',
     });
   });
+
+  if (strictMode) {
+    app.use('/api', (req: Request, res: Response) => {
+      res.status(503).json({
+        message: 'Endpoint not available in microservices mode. Start the monolith backend for non-users/ticketing modules.',
+        path: req.path,
+        usersServiceUrl,
+        ticketingServiceUrl,
+      });
+    });
+  }
 
   await app.listen(Number(process.env.PORT || 4000));
   console.log(`API Gateway running on http://localhost:${process.env.PORT || 4000}/api`);

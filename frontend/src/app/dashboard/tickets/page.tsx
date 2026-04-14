@@ -266,8 +266,9 @@ export default function TicketsPage() {
           return ['technician', 'pantawid_ict'].includes(t.role);
         return ['technician_it_support', 'technician', 'technician_it_staff', 'it_support_sr', 'it_support_jr'].includes(t.role);
       });
+      const availableByAttendance = roleFiltered.filter((t) => !t.isUnavailable && !['absent', 'out_of_office'].includes(t.attendanceStatus ?? ''));
       // For normal assign: only show techs with no open tickets (same as ticket detail view)
-      setTechnicians(escalate ? roleFiltered : roleFiltered.filter(t => t.openCount === 0));
+      setTechnicians(escalate ? availableByAttendance : availableByAttendance.filter(t => t.openCount === 0));
     } catch { setTechnicians([]); }
     setAssignDialogOpen(true);
   };
@@ -486,8 +487,17 @@ export default function TicketsPage() {
                       <IconButton size="small" onClick={() => router.push(`/dashboard/tickets/${ticket.id}`)}><ViewIcon fontSize="small" /></IconButton>
                     </Tooltip>
                     {canAssign && ticket.status !== 'duplicate' && (
-                      <Tooltip title={ticket.assignedToId ? 'Reassign Ticket' : 'Assign Ticket'}>
-                        <IconButton size="small" color="primary" onClick={() => openAssignDialog(ticket, false)}><AssignIcon fontSize="small" /></IconButton>
+                      <Tooltip title={['resolved', 'closed'].includes(ticket.status) ? 'Reassign disabled for resolved/closed tickets' : (ticket.assignedToId ? 'Reassign Ticket' : 'Assign Ticket')}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => openAssignDialog(ticket, false)}
+                            disabled={['resolved', 'closed'].includes(ticket.status)}
+                          >
+                            <AssignIcon fontSize="small" />
+                          </IconButton>
+                        </span>
                       </Tooltip>
                     )}
                     {canEscalate && !['duplicate', 'closed', 'resolved'].includes(ticket.status) && (

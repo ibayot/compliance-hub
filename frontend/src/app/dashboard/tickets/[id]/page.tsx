@@ -487,7 +487,10 @@ export default function TicketDetailPage() {
 
             {/* Actions */}
             <Box display="flex" flexDirection="column" gap={1} minWidth={160}>
-              {canStaff && !editingStatus && !isDuplicate && (
+              {canStaff && !editingStatus && !isDuplicate && !(
+                ['resolved', 'closed'].includes(ticket.status) &&
+                (isTechnician || isSectionHead || isComplianceOfficer || user?.role === 'super_admin')
+              ) && (
                 <Button variant="outlined" size="small" onClick={() => setEditingStatus(true)}>
                   Update Status
                 </Button>

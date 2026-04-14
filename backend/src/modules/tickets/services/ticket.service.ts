@@ -1013,6 +1013,18 @@ export class TicketService implements OnModuleInit {
     const technician = await this.userRepo.findOne({ where: { id: dto.assignedToId } });
     if (!technician) throw new NotFoundException('Technician not found');
 
+    const today = new Date().toISOString().slice(0, 10);
+    const attendanceRow = await this.dataSource
+      .createQueryBuilder()
+      .select('ta.status', 'status')
+      .from('tech_attendance', 'ta')
+      .where('ta.user_id = :userId', { userId: dto.assignedToId })
+      .andWhere('ta.date = :today', { today })
+      .getRawOne<{ status?: string }>();
+    if (attendanceRow?.status === 'absent' || attendanceRow?.status === 'out_of_office') {
+      throw new BadRequestException('Selected technician is not available today and cannot be assigned tickets.');
+    }
+
     // If the actor has ticketMainFocal=true they are empowered to re-assign freely (skip busy guard)
     let actorIsMainFocal = false;
     if (actorId) {
@@ -1359,7 +1371,7 @@ export class TicketService implements OnModuleInit {
     };
   }
 
-  async getTechnicianAvailability(): Promise<Array<{ id: number; email: string; firstName: string; lastName: string; role: string; openCount: number }>> {
+  async getTechnicianAvailability(): Promise<Array<{ id: number; email: string; firstName: string; lastName: string; role: string; openCount: number; attendanceStatus: string | null; isUnavailable: boolean }>> {
     const technicians = await this.userRepo.find({
       where: [
         { role: UserRole.TECHNICIAN_DESKTOP },
@@ -1377,21 +1389,24 @@ export class TicketService implements OnModuleInit {
       ],
     });
 
-    // Get IDs of technicians marked absent or out_of_office today
+    // Read attendance for today so assignment UI can hide unavailable technicians.
     const today = new Date().toISOString().slice(0, 10);
-    const absentRows = await this.dataSource
+    const attendanceRows = await this.dataSource
       .createQueryBuilder()
       .select('ta.user_id', 'userId')
+      .addSelect('ta.status', 'status')
       .from('tech_attendance', 'ta')
       .where('ta.date = :today', { today })
-      .andWhere("ta.status IN ('absent', 'out_of_office')")
       .getRawMany();
-    const absentIds = new Set<number>(absentRows.map(r => Number(r.userId)));
+    const attendanceMap = new Map<number, string>(attendanceRows.map((r) => [Number(r.userId), String(r.status)]));
+    const unavailableStatuses = new Set(['absent', 'out_of_office']);
 
     const results = [];
     for (const tech of technicians) {
       // Skip absent / out-of-office technicians — they cannot be assigned
-      if (absentIds.has(tech.id)) continue;
+      const attendanceStatus = attendanceMap.get(tech.id) ?? null;
+      const isUnavailable = attendanceStatus ? unavailableStatuses.has(attendanceStatus) : false;
+      if (isUnavailable) continue;
 
       // "open" = anything that isn't CLOSED or DUPLICATE (terminal states)
       const openCount = await this.ticketRepo
@@ -1408,6 +1423,8 @@ export class TicketService implements OnModuleInit {
         lastName: tech.lastName,
         role: tech.role,
         openCount,
+        attendanceStatus,
+        isUnavailable,
       });
     }
     return results;

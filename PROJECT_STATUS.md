@@ -1,5 +1,15 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.0.5 — QA Fixes for Reassign + Terminal Status Controls (Current on `microservices` branch)
+- **Version:** `0.0.5` in both `backend/package.json` and `frontend/package.json`.
+- **Absent technician reassignment fix:** backend now blocks assigning to technicians marked `absent`/`out_of_office` for today; frontend assignment picker also filters them out defensively.
+- **Tickets table action behavior:** reassign button remains visible for `resolved`/`closed` tickets but is disabled (explicitly non-actionable).
+- **Ticket detail terminal behavior:** `Update Status` is hidden for technicians, section head, compliance officer, and super admin when status is `resolved` or `closed`.
+- **Split-runtime strictness:** gateway now returns explicit `503` for unsupported API paths in microservices mode to avoid false assumption that non-users/ticketing modules are active.
+- **Compose strict mode:** `MICROSERVICES_STRICT=true` added to gateway container env.
+- **Migration impact:** none.
+- **Rollback:** revert `v0.0.5` commit and/or set `MICROSERVICES_STRICT=false`.
+
 ## 🚀 v0.0.4 — API Gateway for Separated Services on Port 4000 (Current on `microservices` branch)
 - **Version:** `0.0.4` in both `backend/package.json` and `frontend/package.json`.
 - **Root issue addressed:** when users/ticketing services run separately, frontend could not connect because no process owned `4000`.

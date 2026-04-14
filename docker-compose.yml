@@ -168,6 +168,7 @@ services:
       - CORS_ORIGIN=http://localhost:3000
       - USERS_SERVICE_URL=http://users-service:4101
       - TICKETING_SERVICE_URL=http://ticketing-service:4102
+      - MICROSERVICES_STRICT=true
     depends_on:
       - users-service
       - ticketing-service
