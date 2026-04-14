@@ -1,5 +1,34 @@
 # RICTMS Compliance Hub — Release Notes v1.2.0.4
 
+## Hotfix Addendum — v0.0.14 (2026-04-14)
+
+### What Changed
+- Replaced remaining active runtime/config/script DB defaults from `rictms_compliance` to `compliance_hub`.
+- Added/standardized split DB env keys for users/ticketing/compliance routing in backend env templates.
+- Corrected gateway ownership for attendance routes: `/api/attendance` now proxies to users service.
+- Removed attendance controller exposure from ticketing service module.
+- Added users-service attendance module wiring so attendance APIs are served by users service.
+- Removed auth static dependency that pulled ticket routes into users-service context.
+- Added users-service fallback handling for partial DB object states affecting user-unit relation joins.
+- Patch-only version bump to `0.0.14`.
+
+### Why It Changed (QA Link)
+- QA required closure of remaining runtime DB-name legacy references that can affect service boot/runtime behavior.
+- QA required strict route ownership placement so attendance APIs are served by users service, not ticketing service.
+
+### How To Test
+- Build backend and frontend; run backend tests.
+- Start gateway + users + ticketing + compliance services.
+- Verify gateway attendance access resolves against users service.
+- Verify direct ticketing `/api/attendance` returns `404` (route no longer owned by ticketing).
+
+### Migration Steps
+- No new code migration in this patch.
+- Ensure split-schema DB objects/views (`compliance_hub`, `compliance_hub_users`, `compliance_hub_ticketing`) are present before runtime verification.
+
+### Rollback Steps
+- Revert `v0.0.14` commit and redeploy backend/frontend services.
+
 ## Hotfix Addendum — v0.0.13 (2026-04-14)
 
 ### What Changed

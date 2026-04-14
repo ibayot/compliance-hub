@@ -325,6 +325,11 @@ export class UsersService {
     await this.roleDefinitionsRepository.remove(role);
   }
 
+  private isMissingUserUnitAccessError(error: unknown): boolean {
+    const message = (error as any)?.message || '';
+    return String(message).toLowerCase().includes('user_unit_access');
+  }
+
   async create(createUserDto: CreateUserDto): Promise<User> {
     // Check if user already exists
     const existingUser = await this.usersRepository.findOne({
@@ -394,10 +399,19 @@ export class UsersService {
   }
 
   async findAll(): Promise<User[]> {
-    return await this.usersRepository.find({
-      relations: ['units'],
-      // Return all users (including inactive) so management UI can show/toggle them
-    });
+    try {
+      return await this.usersRepository.find({
+        relations: ['units'],
+        // Return all users (including inactive) so management UI can show/toggle them
+      });
+    } catch (error) {
+      if (!this.isMissingUserUnitAccessError(error)) {
+        throw error;
+      }
+
+      const users = await this.usersRepository.find();
+      return users.map((user) => ({ ...user, units: [] } as User));
+    }
   }
 
   /** Look up a role definition by value string — returns null if not found. Used for roleCode lookups. */
@@ -406,10 +420,23 @@ export class UsersService {
   }
 
   async findOne(id: number): Promise<User> {
-    const user = await this.usersRepository.findOne({
-      where: { id },
-      relations: ['units'],
-    });
+    let user: User | null = null;
+
+    try {
+      user = await this.usersRepository.findOne({
+        where: { id },
+        relations: ['units'],
+      });
+    } catch (error) {
+      if (!this.isMissingUserUnitAccessError(error)) {
+        throw error;
+      }
+
+      user = await this.usersRepository.findOne({ where: { id } });
+      if (user) {
+        user.units = [];
+      }
+    }
 
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
@@ -424,10 +451,22 @@ export class UsersService {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return await this.usersRepository.findOne({
-      where: { email },
-      relations: ['units'],
-    });
+    try {
+      return await this.usersRepository.findOne({
+        where: { email },
+        relations: ['units'],
+      });
+    } catch (error) {
+      if (!this.isMissingUserUnitAccessError(error)) {
+        throw error;
+      }
+
+      const user = await this.usersRepository.findOne({ where: { email } });
+      if (user) {
+        user.units = [];
+      }
+      return user;
+    }
   }
 
   /** Record last login timestamp for staff activity tracking */
@@ -504,10 +543,22 @@ export class UsersService {
   }
 
   async findByGoogleSub(googleSub: string): Promise<User | null> {
-    return await this.usersRepository.findOne({
-      where: { googleSub },
-      relations: ['units'],
-    });
+    try {
+      return await this.usersRepository.findOne({
+        where: { googleSub },
+        relations: ['units'],
+      });
+    } catch (error) {
+      if (!this.isMissingUserUnitAccessError(error)) {
+        throw error;
+      }
+
+      const user = await this.usersRepository.findOne({ where: { googleSub } });
+      if (user) {
+        user.units = [];
+      }
+      return user;
+    }
   }
 
   async linkGoogleIdentity(userId: number, googleSub: string): Promise<User> {

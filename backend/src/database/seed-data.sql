@@ -1,7 +1,7 @@
 ﻿-- RICTMS Compliance Hub Seed Data (v1.1.2 Clean Baseline)
 -- Aligned with actual MariaDB schema (auto-detected column names).
 
-USE rictms_compliance;
+USE compliance_hub;
 
 SET FOREIGN_KEY_CHECKS = 0;
 CREATE TABLE IF NOT EXISTS mov_artifacts (

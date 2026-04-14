@@ -6,12 +6,10 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { UsersModule } from '../users/users.module';
-import { TicketsModule } from '../tickets/tickets.module';
 
 @Module({
   imports: [
     UsersModule,
-    ...(String(process.env.AUTH_ENABLE_TICKET_HOOKS ?? 'true').toLowerCase() === 'true' ? [TicketsModule] : []),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

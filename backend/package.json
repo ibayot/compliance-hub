@@ -1,6 +1,6 @@
 {
     "name": "rictms-backend",
-    "version": "0.0.13",
+    "version": "0.0.14",
     "description": "RICTMS Compliance Hub - Backend API",
     "author": "RICTMS Team",
     "private": true,
@@ -27,7 +27,7 @@
         "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
         "test:e2e": "jest --config ./test/jest-e2e.json",
         "db:create": "node -e \"require('child_process').exec('mysql -u root -p < src/database/init.sql', (err, stdout, stderr) => { if (err) console.error(err); else console.log('Database created'); })\"",
-        "db:schema": "node -e \"require('child_process').exec('mysql -u root -p rictms_compliance < src/database/schema.sql', (err, stdout, stderr) => { if (err) console.error(err); else console.log('Schema applied'); })\"",
+        "db:schema": "node -e \"require('child_process').exec('mysql -u root -p compliance_hub < src/database/schema.sql', (err, stdout, stderr) => { if (err) console.error(err); else console.log('Schema applied'); })\"",
         "db:seed": "ts-node src/database/seed.ts"
     },
     "dependencies": {

@@ -10,7 +10,7 @@ async function run() {
   const port = Number(process.env.DB_PORT || 3306);
   const user = process.env.DB_USERNAME || 'root';
   const password = process.env.DB_PASSWORD || '';
-  const database = process.env.DB_DATABASE || 'rictms_compliance';
+  const database = process.env.DB_DATABASE || 'compliance_hub';
 
   const sqlPath = join(__dirname, 'seed-data.sql');
   const sql = readFileSync(sqlPath, 'utf8').replace(/^\uFEFF/, '');

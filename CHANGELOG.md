@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.14] - 2026-04-14 - DB Reference Hardening + Attendance Route Ownership Correction
+
+### Changed
+- **Runtime DB reference hardening:** replaced remaining runtime/config/script defaults that used `rictms_compliance` with `compliance_hub`.
+- **Users/Ticketing/Compliance DB env alignment:** added explicit split DB variables in backend env templates.
+- **Attendance API ownership corrected:** gateway now routes `/api/attendance` to users service.
+- **Ticketing attendance route removed:** attendance controller is no longer exposed by ticketing service.
+- **Users service attendance API added:** users service now serves attendance endpoints via a dedicated attendance module import.
+- **Auth module decoupled from static ticket-module import:** prevents users-service from loading ticket routes by static module resolution.
+- **Patch version bump only** - `0.0.13` -> `0.0.14` (x/y unchanged).
+
+### How To Test
+- Build backend and frontend.
+- Run backend unit tests.
+- Start users, ticketing, compliance, and gateway services.
+- Verify `/api/attendance/*` works through users service routing.
+- Verify direct ticketing `/api/attendance` returns 404 (route ownership check).
+
+### Migration Steps
+- Ensure split schemas and compatibility objects are present (`compliance_hub`, `compliance_hub_users`, `compliance_hub_ticketing`).
+- Run `backend/database/microservices-init.sql` and `backend/database/microservices-migrate.sql` using a MariaDB/MySQL client in environments that have not been migrated.
+
+### Rollback Steps
+- Revert this release commit.
+- Restore previous gateway attendance proxy target if needed.
+- Redeploy users, ticketing, compliance, and gateway services.
+
 ## [0.0.13] - 2026-04-14 - Inactivity Re-Authentication + Deployment/Documentation Baseline
 
 ### Added

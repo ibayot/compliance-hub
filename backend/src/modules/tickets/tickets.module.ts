@@ -15,7 +15,6 @@ import { AttendanceService } from './services/attendance.service';
 import { EmailService } from './services/email.service';
 import { TicketController } from './controllers/ticket.controller';
 import { TicketSettingsController } from './controllers/ticket-settings.controller';
-import { AttendanceController } from './controllers/attendance.controller';
 import { User } from '../users/entities/user.entity';
 import { RoleDefinitionEntity } from '../users/entities/role-definition.entity';
 import { Unit } from '../units/entities/unit.entity';
@@ -37,7 +36,7 @@ import { Unit } from '../units/entities/unit.entity';
       RoleDefinitionEntity,
     ]),
   ],
-  controllers: [TicketController, TicketSettingsController, AttendanceController],
+  controllers: [TicketController, TicketSettingsController],
   providers: [TicketService, TicketSettingsService, AttendanceService, EmailService],
   exports: [TicketService, AttendanceService, EmailService],
 })

@@ -2,6 +2,26 @@
 
 ## 🚀 v0.6.24 — QA Fixes (Current)
 
+## 🚀 v0.0.14 — DB Reference Cleanup + Attendance Route Ownership Correction (`microservices` branch)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Runtime DB default references cleanup | ✅ Complete | Replaced active runtime/config/script fallbacks from `rictms_compliance` to `compliance_hub` |
+| Split DB env variables alignment | ✅ Complete | Added service-specific DB vars (`DB_DATABASE_USERS`, `DB_DATABASE_TICKETING`, `DB_DATABASE_COMPLIANCE`) in backend env templates |
+| Gateway attendance route ownership | ✅ Complete | `/api/attendance` now proxies to users service |
+| Ticketing attendance route removal | ✅ Complete | Ticketing module no longer exposes attendance controller route |
+| Users service attendance exposure | ✅ Complete | Added users-side attendance module wiring so attendance endpoints are served by users service |
+| Auth static tickets import decoupling | ✅ Complete | Removed auth-to-tickets static import path that loaded ticket routes in users service context |
+| DB object partial-state fallback guard | ✅ Complete | Added users-service relation fallback handling when `user_unit_access` artifacts are not present |
+| `backend/package.json` version | ✅ Complete | `0.0.14` |
+| `frontend/package.json` version | ✅ Complete | `0.0.14` |
+
+### v0.0.14 Operations Notes
+- **Why it changed (QA):** QA found remaining legacy runtime DB references and route ownership mismatches (`/api/attendance` should be users-service owned).
+- **How to test:** run backend/frontend builds + backend tests; start gateway/users/ticketing/compliance; verify `GET /api/attendance` resolves through users service and direct ticketing `/api/attendance` returns 404.
+- **Migration:** none in code package; runtime still requires split DB objects/views to exist in MariaDB.
+- **Known validation gap:** full endpoint accessibility is partially blocked in this local environment by missing DB objects/views and unavailable MySQL CLI on PATH for scripted bootstrap.
+
 ## 🚀 v0.0.13 — Inactivity Re-Authentication + Deployment/Documentation Pack (`microservices` branch)
 
 | Area | Status | Notes |

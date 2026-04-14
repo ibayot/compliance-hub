@@ -5,9 +5,9 @@
 -- =============================================
 
 -- Step 1: Create Database
-DROP DATABASE IF EXISTS rictms_compliance;
-CREATE DATABASE rictms_compliance CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE rictms_compliance;
+DROP DATABASE IF EXISTS compliance_hub;
+CREATE DATABASE compliance_hub CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE compliance_hub;
 
 SELECT 'Step 1: Database created' AS Status;
 

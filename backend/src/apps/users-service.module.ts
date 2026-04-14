@@ -5,6 +5,7 @@ import * as Joi from 'joi';
 import { AuthModule } from '../modules/auth/auth.module';
 import { UsersModule } from '../modules/users/users.module';
 import { UnitsModule } from '../modules/units/units.module';
+import { AttendanceModule } from '../modules/users/attendance.module';
 
 @Module({
   imports: [
@@ -34,7 +35,10 @@ import { UnitsModule } from '../modules/units/units.module';
         port: configService.get('DB_PORT'),
         username: configService.get('DB_USERNAME'),
         password: configService.get('DB_PASSWORD'),
-        database: configService.get('USERS_DB_DATABASE') || configService.get('DB_DATABASE'),
+        database:
+          configService.get('USERS_DB_DATABASE') ||
+          configService.get('DB_DATABASE') ||
+          'compliance_hub',
         autoLoadEntities: true,
         synchronize: false,
         logging: Boolean(configService.get<boolean>('DB_LOGGING')),
@@ -43,6 +47,7 @@ import { UnitsModule } from '../modules/units/units.module';
     AuthModule,
     UsersModule,
     UnitsModule,
+    AttendanceModule,
   ],
 })
 export class UsersServiceAppModule {}

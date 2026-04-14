@@ -1,5 +1,18 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.0.14 — DB Reference Cleanup + Attendance Ownership Correction (Current on `microservices` branch)
+- **Version:** `0.0.14` in backend/frontend package metadata (patch bump only, x/y unchanged).
+- **Legacy runtime DB defaults removed:** active runtime/config/script fallbacks now target `compliance_hub` instead of `rictms_compliance`.
+- **Per-service DB env alignment:** backend env templates now declare split database keys for users/ticketing/compliance routing.
+- **Attendance ownership corrected:** gateway `/api/attendance` now routes to users service.
+- **Ticketing boundary enforced:** ticketing service no longer exposes attendance controller route.
+- **Users service attendance exposure added:** users service now hosts attendance controller/service wiring.
+- **Auth import boundary hardened:** auth module no longer statically imports tickets module in users-service context.
+- **DB partial-state resilience:** users-service user lookup path includes fallback for missing `user_unit_access` artifacts.
+- **Validation:** backend build passed, frontend build passed, backend tests passed (4/4), route ownership checks passed (`ticketing /api/attendance` -> 404), full integration accessibility partially blocked by local split-DB object readiness.
+- **Migration impact:** no package-level migration added in this patch; environment must have required split DB objects/views.
+- **Rollback:** revert `v0.0.14` commit and redeploy.
+
 ## 🚀 v0.0.13 — Inactivity Re-Authentication + Deployment/System Documentation Completion (Current on `microservices` branch)
 - **Version:** `0.0.13` in backend/frontend package metadata (patch bump only, x/y unchanged).
 - **Inactivity session security implemented:** frontend now enforces session lock after 15 minutes of inactivity.
