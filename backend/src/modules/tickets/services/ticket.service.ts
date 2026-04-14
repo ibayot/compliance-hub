@@ -209,9 +209,14 @@ export class TicketService implements OnModuleInit {
         )
       `).catch(() => undefined);
 
-      // Create tech_attendance table
+      // Rename legacy table if needed
+      await qr.query(
+        'RENAME TABLE tech_attendance TO attendance',
+      ).catch(() => undefined);
+
+      // Create attendance table
       await qr.query(`
-        CREATE TABLE IF NOT EXISTS tech_attendance (
+        CREATE TABLE IF NOT EXISTS attendance (
           id VARCHAR(36) NOT NULL PRIMARY KEY,
           user_id INT NOT NULL,
           date DATE NOT NULL,
@@ -219,7 +224,7 @@ export class TicketService implements OnModuleInit {
           set_by_id INT NULL,
           notes TEXT NULL,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE KEY uq_tech_att_user_date (user_id, date)
+          UNIQUE KEY uq_attendance_user_date (user_id, date)
         )
       `).catch(() => undefined);
 
@@ -733,7 +738,7 @@ export class TicketService implements OnModuleInit {
     const absentRows = await this.dataSource
       .createQueryBuilder()
       .select('ta.user_id', 'userId')
-      .from('tech_attendance', 'ta')
+      .from('attendance', 'ta')
       .where('ta.date = :today', { today })
       .andWhere("ta.status IN ('absent', 'out_of_office')")
       .getRawMany();
@@ -1030,7 +1035,7 @@ export class TicketService implements OnModuleInit {
     const attendanceRow = await this.dataSource
       .createQueryBuilder()
       .select('ta.status', 'status')
-      .from('tech_attendance', 'ta')
+      .from('attendance', 'ta')
       .where('ta.user_id = :userId', { userId: dto.assignedToId })
       .andWhere('ta.date = :today', { today })
       .getRawOne<{ status?: string }>();
@@ -1408,7 +1413,7 @@ export class TicketService implements OnModuleInit {
       .createQueryBuilder()
       .select('ta.user_id', 'userId')
       .addSelect('ta.status', 'status')
-      .from('tech_attendance', 'ta')
+      .from('attendance', 'ta')
       .where('ta.date = :today', { today })
       .getRawMany();
     const attendanceMap = new Map<number, string>(attendanceRows.map((r) => [Number(r.userId), String(r.status)]));

@@ -7,10 +7,32 @@
 -- - Creates destination tables with CREATE TABLE IF NOT EXISTS ... LIKE ...
 -- - Uses INSERT IGNORE so reruns do not duplicate rows.
 
-SET @source_db = 'ricms_compliance';
-SET @users_db = 'ricms_users';
-SET @ticketing_db = 'ricms_ticketing';
-SET @compliance_db = 'ricms_compliance';
+SET @preferred_source_db = 'compliance_hub';
+SET @legacy_source_db = 'ricms_compliance';
+SET @legacy_source_db_alt = 'rictms_compliance';
+SET @preferred_has_data = EXISTS(
+  SELECT 1
+    FROM information_schema.tables
+   WHERE table_schema = @preferred_source_db
+     AND table_name IN ('users', 'tickets', 'documents')
+   LIMIT 1
+);
+SET @source_db = IF(
+  @preferred_has_data,
+  @preferred_source_db,
+  IF(
+    EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = @legacy_source_db),
+    @legacy_source_db,
+    IF(
+      EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = @legacy_source_db_alt),
+      @legacy_source_db_alt,
+      @preferred_source_db
+    )
+  )
+);
+SET @users_db = 'compliance_hub_users';
+SET @ticketing_db = 'compliance_hub_ticketing';
+SET @compliance_db = 'compliance_hub';
 SET @cleanup_source_tables = 1;
 
 DELIMITER $$
@@ -32,6 +54,32 @@ BEGIN
     DEALLOCATE PREPARE stmt_create;
 
     SET @copy_sql = CONCAT('INSERT IGNORE INTO `', dst_db, '`.`', tbl, '` SELECT * FROM `', src_db, '`.`', tbl, '`;');
+    PREPARE stmt_copy FROM @copy_sql;
+    EXECUTE stmt_copy;
+    DEALLOCATE PREPARE stmt_copy;
+  END IF;
+END $$
+DELIMITER ;
+
+DELIMITER $$
+DROP PROCEDURE IF EXISTS copy_table_to_name_if_exists $$
+CREATE PROCEDURE copy_table_to_name_if_exists(IN src_db VARCHAR(128), IN dst_db VARCHAR(128), IN src_tbl VARCHAR(128), IN dst_tbl VARCHAR(128))
+BEGIN
+  DECLARE table_exists INT DEFAULT 0;
+
+  SELECT COUNT(*)
+    INTO table_exists
+    FROM information_schema.tables
+   WHERE table_schema = src_db
+     AND table_name = src_tbl;
+
+  IF table_exists > 0 THEN
+    SET @create_sql = CONCAT('CREATE TABLE IF NOT EXISTS `', dst_db, '`.`', dst_tbl, '` LIKE `', src_db, '`.`', src_tbl, '`;');
+    PREPARE stmt_create FROM @create_sql;
+    EXECUTE stmt_create;
+    DEALLOCATE PREPARE stmt_create;
+
+    SET @copy_sql = CONCAT('INSERT IGNORE INTO `', dst_db, '`.`', dst_tbl, '` SELECT * FROM `', src_db, '`.`', src_tbl, '`;');
     PREPARE stmt_copy FROM @copy_sql;
     EXECUTE stmt_copy;
     DEALLOCATE PREPARE stmt_copy;
@@ -79,7 +127,8 @@ CALL copy_table_if_exists(@source_db, @ticketing_db, 'ticket_keyword_rules');
 CALL copy_table_if_exists(@source_db, @ticketing_db, 'ticket_issue_types');
 CALL copy_table_if_exists(@source_db, @ticketing_db, 'ticket_escalations');
 CALL copy_table_if_exists(@source_db, @ticketing_db, 'escalation_focal_configs');
-CALL copy_table_if_exists(@source_db, @ticketing_db, 'tech_attendance');
+CALL copy_table_if_exists(@source_db, @ticketing_db, 'attendance');
+CALL copy_table_to_name_if_exists(@source_db, @ticketing_db, 'tech_attendance', 'attendance');
 CALL copy_table_if_exists(@source_db, @ticketing_db, 'office_days');
 
 -- Compliance service database tables
@@ -135,6 +184,7 @@ BEGIN
     CALL drop_table_if_exists(src_db, 'ticket_issue_types');
     CALL drop_table_if_exists(src_db, 'ticket_escalations');
     CALL drop_table_if_exists(src_db, 'escalation_focal_configs');
+    CALL drop_table_if_exists(src_db, 'attendance');
     CALL drop_table_if_exists(src_db, 'tech_attendance');
     CALL drop_table_if_exists(src_db, 'office_days');
 
@@ -146,4 +196,5 @@ DELIMITER ;
 CALL cleanup_source_non_compliance_tables(@source_db, IFNULL(@cleanup_source_tables, 0));
 
 DROP PROCEDURE IF EXISTS cleanup_source_non_compliance_tables;
+DROP PROCEDURE IF EXISTS copy_table_to_name_if_exists;
 DROP PROCEDURE IF EXISTS drop_table_if_exists;

@@ -6,7 +6,7 @@ services:
     container_name: ricms_mariadb
     environment:
       MYSQL_ROOT_PASSWORD: ricms_password
-      MYSQL_DATABASE: ricms_compliance
+      MYSQL_DATABASE: compliance_hub
       MYSQL_USER: ricms_user
       MYSQL_PASSWORD: ricms_password
     ports:
@@ -52,8 +52,8 @@ services:
       - DB_PORT=3306
       - DB_USERNAME=ricms_user
       - DB_PASSWORD=ricms_password
-      - DB_DATABASE=ricms_users
-      - USERS_DB_DATABASE=ricms_users
+      - DB_DATABASE=compliance_hub_users
+      - USERS_DB_DATABASE=compliance_hub_users
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=dev-jwt-secret-change-in-production
@@ -105,8 +105,8 @@ services:
       - DB_PORT=3306
       - DB_USERNAME=ricms_user
       - DB_PASSWORD=ricms_password
-      - DB_DATABASE=ricms_users
-      - USERS_DB_DATABASE=ricms_users
+      - DB_DATABASE=compliance_hub_users
+      - USERS_DB_DATABASE=compliance_hub_users
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=dev-jwt-secret-change-in-production
@@ -139,8 +139,8 @@ services:
       - DB_PORT=3306
       - DB_USERNAME=ricms_user
       - DB_PASSWORD=ricms_password
-      - DB_DATABASE=ricms_ticketing
-      - TICKETING_DB_DATABASE=ricms_ticketing
+      - DB_DATABASE=compliance_hub_ticketing
+      - TICKETING_DB_DATABASE=compliance_hub_ticketing
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=dev-jwt-secret-change-in-production
@@ -174,8 +174,8 @@ services:
       - DB_PORT=3306
       - DB_USERNAME=ricms_user
       - DB_PASSWORD=ricms_password
-      - DB_DATABASE=ricms_compliance
-      - COMPLIANCE_DB_DATABASE=ricms_compliance
+      - DB_DATABASE=compliance_hub
+      - COMPLIANCE_DB_DATABASE=compliance_hub
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=dev-jwt-secret-change-in-production

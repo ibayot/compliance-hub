@@ -5,6 +5,40 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { GatewayAppModule } from './gateway.module';
 
+const SERVICE_UNAVAILABLE_MESSAGE = 'Service currently unavailable. Please start the service and try again.';
+
+function createServiceProxy(target: string, service: string) {
+  return createProxyMiddleware({
+    target,
+    changeOrigin: true,
+    on: {
+      error: (_err, req, res) => {
+        const response = res as Response;
+        response.status(503).json({
+          message: SERVICE_UNAVAILABLE_MESSAGE,
+          service,
+          path: req.url,
+        });
+      },
+    },
+  });
+}
+
+async function checkServiceHealth(baseUrl: string): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1500);
+    const response = await fetch(`${baseUrl}/api/health`, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(GatewayAppModule);
 
@@ -32,31 +66,42 @@ async function bootstrap() {
     }),
   );
 
-  app.use('/api/auth', createProxyMiddleware({ target: `${usersServiceUrl}/api/auth`, changeOrigin: true }));
-  app.use('/api/users', createProxyMiddleware({ target: `${usersServiceUrl}/api/users`, changeOrigin: true }));
-  app.use('/api/units', createProxyMiddleware({ target: `${usersServiceUrl}/api/units`, changeOrigin: true }));
+  app.use('/api/auth', createServiceProxy(`${usersServiceUrl}/api/auth`, 'users'));
+  app.use('/api/users', createServiceProxy(`${usersServiceUrl}/api/users`, 'users'));
+  app.use('/api/units', createServiceProxy(`${usersServiceUrl}/api/units`, 'users'));
 
-  app.use('/api/tickets', createProxyMiddleware({ target: `${ticketingServiceUrl}/api/tickets`, changeOrigin: true }));
-  app.use('/api/attendance', createProxyMiddleware({ target: `${ticketingServiceUrl}/api/attendance`, changeOrigin: true }));
-  app.use('/api/ticket-settings', createProxyMiddleware({ target: `${ticketingServiceUrl}/api/ticket-settings`, changeOrigin: true }));
+  app.use('/api/tickets', createServiceProxy(`${ticketingServiceUrl}/api/tickets`, 'ticketing'));
+  app.use('/api/attendance', createServiceProxy(`${ticketingServiceUrl}/api/attendance`, 'ticketing'));
+  app.use('/api/ticket-settings', createServiceProxy(`${ticketingServiceUrl}/api/ticket-settings`, 'ticketing'));
 
-  app.use('/api/documents', createProxyMiddleware({ target: `${complianceServiceUrl}/api/documents`, changeOrigin: true }));
-  app.use('/api/document-types', createProxyMiddleware({ target: `${complianceServiceUrl}/api/document-types`, changeOrigin: true }));
-  app.use('/api/comparisons', createProxyMiddleware({ target: `${complianceServiceUrl}/api/comparisons`, changeOrigin: true }));
-  app.use('/api/issuances', createProxyMiddleware({ target: `${complianceServiceUrl}/api/issuances`, changeOrigin: true }));
-  app.use('/api/metrics', createProxyMiddleware({ target: `${complianceServiceUrl}/api/metrics`, changeOrigin: true }));
-  app.use('/api/incidents', createProxyMiddleware({ target: `${complianceServiceUrl}/api/incidents`, changeOrigin: true }));
-  app.use('/api/cybersecurity', createProxyMiddleware({ target: `${complianceServiceUrl}/api/cybersecurity`, changeOrigin: true }));
-  app.use('/api/kpi', createProxyMiddleware({ target: `${complianceServiceUrl}/api/kpi`, changeOrigin: true }));
-  app.use('/api/mov', createProxyMiddleware({ target: `${complianceServiceUrl}/api/mov`, changeOrigin: true }));
+  app.use('/api/documents', createServiceProxy(`${complianceServiceUrl}/api/documents`, 'compliance'));
+  app.use('/api/document-types', createServiceProxy(`${complianceServiceUrl}/api/document-types`, 'compliance'));
+  app.use('/api/comparisons', createServiceProxy(`${complianceServiceUrl}/api/comparisons`, 'compliance'));
+  app.use('/api/issuances', createServiceProxy(`${complianceServiceUrl}/api/issuances`, 'compliance'));
+  app.use('/api/metrics', createServiceProxy(`${complianceServiceUrl}/api/metrics`, 'compliance'));
+  app.use('/api/incidents', createServiceProxy(`${complianceServiceUrl}/api/incidents`, 'compliance'));
+  app.use('/api/cybersecurity', createServiceProxy(`${complianceServiceUrl}/api/cybersecurity`, 'compliance'));
+  app.use('/api/kpi', createServiceProxy(`${complianceServiceUrl}/api/kpi`, 'compliance'));
+  app.use('/api/mov', createServiceProxy(`${complianceServiceUrl}/api/mov`, 'compliance'));
 
-  app.use('/api/health', (_req: Request, res: Response) => {
+  app.use('/api/health', async (_req: Request, res: Response) => {
+    const [usersAvailable, ticketingAvailable, complianceAvailable] = await Promise.all([
+      checkServiceHealth(usersServiceUrl),
+      checkServiceHealth(ticketingServiceUrl),
+      checkServiceHealth(complianceServiceUrl),
+    ]);
+
     res.json({
       service: 'api-gateway',
       status: 'ok',
       usersServiceUrl,
       ticketingServiceUrl,
       complianceServiceUrl,
+      services: {
+        users: usersAvailable,
+        ticketing: ticketingAvailable,
+        compliance: complianceAvailable,
+      },
       strictMode,
       version: process.env.npm_package_version || '0.0.0',
     });
@@ -65,7 +110,7 @@ async function bootstrap() {
   if (strictMode) {
     app.use('/api', (req: Request, res: Response) => {
       res.status(503).json({
-        message: 'Endpoint not available in microservices mode.',
+        message: 'Service currently unavailable for this endpoint in microservices mode.',
         path: req.path,
         usersServiceUrl,
         ticketingServiceUrl,

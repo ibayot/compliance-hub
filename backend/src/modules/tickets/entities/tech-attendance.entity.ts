@@ -16,7 +16,7 @@ export enum AttendanceStatus {
   OUT_OF_OFFICE = 'out_of_office',
 }
 
-@Entity('tech_attendance')
+@Entity('attendance')
 @Unique(['userId', 'date'])
 export class TechAttendance {
   @PrimaryGeneratedColumn('uuid')

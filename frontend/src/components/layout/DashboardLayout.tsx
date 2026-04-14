@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { Box, Toolbar } from '@mui/material';
+import { useLocation } from 'react-router-dom';
+import { Alert, Box, Paper, Toolbar, Typography } from '@mui/material';
 import Sidebar from './Sidebar';
 import AppBar from './AppBar';
 import { SidebarProvider } from '@/contexts/SidebarContext';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { PageTitleProvider } from '@/contexts/PageTitleContext';
+import { useServiceAvailability } from '@/lib/utils/useServiceAvailability';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -25,6 +27,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 function DashboardLayoutContent({ children }: DashboardLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { drawerWidth } = useSidebar();
+  const location = useLocation();
+  const { services } = useServiceAvailability();
+
+  const compliancePaths = [
+    '/dashboard/documents',
+    '/dashboard/repository',
+    '/dashboard/issuances',
+    '/dashboard/metrics',
+    '/dashboard/kpi',
+    '/dashboard/reviews',
+    '/dashboard/reports',
+    '/dashboard/mov',
+  ];
+  const isComplianceRoute = compliancePaths.some((p) => location.pathname === p || location.pathname.startsWith(`${p}/`));
+  const showComplianceUnavailable = isComplianceRoute && services.compliance === false;
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -66,7 +83,21 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
             py: 4,
           }}
         >
-          {children}
+          {showComplianceUnavailable ? (
+            <Paper sx={{ p: 3 }}>
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Service currently unavailable
+              </Alert>
+              <Typography variant="h6" fontWeight={700} mb={1}>
+                The Compliance service is offline.
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Start the compliance microservice, then refresh this page to continue.
+              </Typography>
+            </Paper>
+          ) : (
+            children
+          )}
         </Box>
       </Box>
     </Box>

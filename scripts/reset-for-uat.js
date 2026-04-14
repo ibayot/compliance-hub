@@ -35,7 +35,7 @@ async function main() {
     ['Clear circular FK on tickets',   'UPDATE tickets SET duplicate_of_id = NULL WHERE duplicate_of_id IS NOT NULL'],
     ['Truncate tickets',               'TRUNCATE TABLE tickets'],
     ['Truncate ticket_keyword_rules',  'TRUNCATE TABLE ticket_keyword_rules'],
-    ['Truncate tech_attendance',       'TRUNCATE TABLE tech_attendance'],
+    ['Truncate attendance',            'TRUNCATE TABLE attendance'],
     ['Delete non-super_admin users',   "DELETE FROM users WHERE role != 'super_admin'"],
     ['Delete ALL role_definitions',    'DELETE FROM role_definitions'],
     ['Re-enable FK checks',            'SET FOREIGN_KEY_CHECKS = 1'],

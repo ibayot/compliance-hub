@@ -2,6 +2,25 @@
 
 ## 🚀 v0.6.24 — QA Fixes (Current)
 
+## 🚀 v0.0.11 — DB Naming + Attendance Table Rename + Service Availability UX (`microservices` branch)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Split DB naming update | ✅ Complete | Updated init/migrate scripts and compose env vars to `compliance_hub_users` / `compliance_hub_ticketing` / `compliance_hub` |
+| Attendance table rename | ✅ Complete | Replaced runtime/entity/query/reset references from `tech_attendance` to `attendance` |
+| Migration source detection hardening | ✅ Complete | Added data-aware source selection with `ricms_compliance` / `rictms_compliance` fallback support |
+| Gateway unavailable response behavior | ✅ Complete | Added per-service proxy error `503` responses and availability details in `/api/health` |
+| Frontend unavailable-state UX | ✅ Complete | Added service-availability hook, compliance offline fallback panel, and service-aware sidebar filtering |
+| Local migration execution + verification | ✅ Complete | Confirmed localhost schemas and verified ticketing `attendance` table exists |
+| `backend/package.json` version | ✅ Complete | `0.0.11` |
+| `frontend/package.json` version | ✅ Complete | `0.0.11` |
+
+### v0.0.11 Operations Notes
+- **Why it changed (QA):** requested explicit DB/schema naming, attendance table rename, and clearer UX when one microservice is down.
+- **How to test:** build backend/frontend, run backend tests, verify `/api/health` service flags, and stop one service to confirm unavailable messaging and route gating.
+- **Migration:** run `backend/database/microservices-init.sql` then `backend/database/microservices-migrate.sql`; migration supports legacy attendance table copy into `attendance`.
+- **Rollback:** revert `v0.0.11` commit and restore previous DB/table naming if required.
+
 ## 🚀 v0.0.10 — Attendance Legacy-Role Removal + RoleDefinition Grouping (`microservices` branch)
 
 | Area | Status | Notes |

@@ -34,7 +34,7 @@ UPDATE tickets SET duplicate_of_id = NULL WHERE duplicate_of_id IS NOT NULL;
 TRUNCATE TABLE tickets;
 
 -- ── 2. Wipe attendance records ───────────────────────────────────────────────
-TRUNCATE TABLE tech_attendance;
+TRUNCATE TABLE attendance;
 
 -- ── 3. Remove all non-super_admin users ─────────────────────────────────────
 DELETE FROM users WHERE role != 'super_admin';
@@ -55,4 +55,4 @@ SELECT 'comments remaining',            COUNT(*) FROM ticket_comments
 UNION ALL
 SELECT 'role_defs remaining',           COUNT(*) FROM role_definitions
 UNION ALL
-SELECT 'attendance rows remaining',     COUNT(*) FROM tech_attendance;
+SELECT 'attendance rows remaining',     COUNT(*) FROM attendance;

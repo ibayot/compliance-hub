@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.11] - 2026-04-14 — DB Rename + Attendance Table Rename + Service Availability UX
+
+### Changed
+- **Split database naming standardized** — updated split DB naming to `compliance_hub_users`, `compliance_hub_ticketing`, and `compliance_hub` in init/migration scripts and compose service env wiring.
+- **Attendance table renamed** — ticketing attendance table now uses `attendance` instead of `tech_attendance`; backend entity/query references and UAT reset scripts were updated accordingly.
+- **Migration source DB detection hardened** — migration now selects a source schema with actual data and supports both legacy names (`ricms_compliance` and `rictms_compliance`) when `compliance_hub` exists but is empty.
+- **Service unavailable handling improved** — gateway now returns clear `503` responses with `Service currently unavailable` message for downed services and exposes per-service health booleans.
+- **Frontend availability behavior added** — dashboard/sidebar now hide or replace service-scoped views when corresponding microservice is offline.
+- **Patch version bump only** — `0.0.10` -> `0.0.11` (x/y unchanged).
+
+### How To Test
+- Build backend/frontend.
+- Run backend unit tests.
+- Run migration SQL and verify schema names include `compliance_hub*` and ticketing contains `attendance`.
+- Stop compliance service and verify compliance routes show unavailable messaging while users/ticketing routes remain accessible.
+
+### Migration Steps
+- Run `backend/database/microservices-init.sql` (for DB creation/grants).
+- Run `backend/database/microservices-migrate.sql` once to copy legacy data into split DBs with attendance compatibility copy (`tech_attendance` -> `attendance`).
+
+### Rollback Steps
+- Revert this release commit.
+- Restore previous split DB names and `tech_attendance` mapping if required by legacy runtime.
+
 ## [0.0.10] - 2026-04-14 — QA Findings Closure: Attendance Legacy-Role Removal + RoleDefinition-Driven Grouping
 
 ### Changed

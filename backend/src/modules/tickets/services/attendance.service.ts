@@ -438,9 +438,9 @@ export class AttendanceService {
 
   /** Delete all attendance records (admin reset — destructive) */
   async clearAllAttendance(): Promise<{ deleted: number }> {
-    const result = await this.attendanceRepo.query('DELETE FROM tech_attendance');
+    const result = await this.attendanceRepo.query('DELETE FROM attendance');
     const deleted = result?.affectedRows ?? 0;
-    this.logger.warn(`[ADMIN] Cleared all tech_attendance records (${deleted} rows deleted)`);
+    this.logger.warn(`[ADMIN] Cleared all attendance records (${deleted} rows deleted)`);
     return { deleted };
   }
 

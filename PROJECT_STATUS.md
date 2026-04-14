@@ -1,5 +1,16 @@
 # RICMS Compliance Hub - Project Status
 
+## 🚀 v0.0.11 — DB Naming Standardization + Attendance Table Rename + Availability UX (Current on `microservices` branch)
+- **Version:** `0.0.11` in backend/frontend package metadata (patch bump only, x/y unchanged).
+- **DB names standardized:** split schemas now use `compliance_hub_users`, `compliance_hub_ticketing`, and `compliance_hub`.
+- **Attendance table renamed:** ticketing attendance storage and runtime references now use `attendance` instead of `tech_attendance`.
+- **Migration reliability improved:** source selection is now data-aware and supports both legacy source schema names (`ricms_compliance`, `rictms_compliance`).
+- **Gateway resilience UX:** downed upstream services now return explicit `503` with `Service currently unavailable` payload.
+- **Frontend service-aware navigation/content:** sidebar filters by live service availability and compliance pages show clear unavailable fallback when compliance service is offline.
+- **Validation:** backend build passed, frontend build passed, backend tests passed (4/4), local migration execution verified schema/table outcomes.
+- **Migration impact:** one-time SQL migration needed for legacy environments; `tech_attendance` data is compatibility-copied into `attendance`.
+- **Rollback:** revert `v0.0.11` commit and restore previous DB/table naming if legacy integration depends on old identifiers.
+
 ## 🚀 v0.0.10 — Attendance Legacy-Role Removal + Centralized RoleDefinition Grouping (Current on `microservices` branch)
 - **Version:** `0.0.10` in backend/frontend package metadata (patch bump only, x/y unchanged).
 - **Legacy role removal in attendance layer:** removed attendance usage of `FOCAL`, `TECHNICIAN`, `TECHNICIAN_DESKTOP`, `TECHNICIAN_IT_SUPPORT`, `TECHNICIAN_IT_STAFF`, and `TECHNICIAN_DESKTOP_STAFF`.
