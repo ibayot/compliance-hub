@@ -18,6 +18,7 @@ import { TicketSettingsController } from './controllers/ticket-settings.controll
 import { AttendanceController } from './controllers/attendance.controller';
 import { User } from '../users/entities/user.entity';
 import { RoleDefinitionEntity } from '../users/entities/role-definition.entity';
+import { Unit } from '../units/entities/unit.entity';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { RoleDefinitionEntity } from '../users/entities/role-definition.entity';
       TicketEscalation,
       EscalationFocalConfig,
       User,
+      Unit,
       RoleDefinitionEntity,
     ]),
   ],
