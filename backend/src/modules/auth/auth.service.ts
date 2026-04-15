@@ -29,7 +29,7 @@ export class AuthService {
     return this.configService.get<string>('JWT_AUDIENCE') || 'compliance-hub-client';
   }
 
-  private buildAuthResponse(user: User, tokens: { accessToken: string; refreshToken: string }): AuthResponse {
+  private buildAuthResponse(user: User, tokens: { accessToken: string; refreshToken: string }, roleCode?: string | null): AuthResponse {
     return {
       ...tokens,
       user: {
@@ -46,6 +46,7 @@ export class AuthService {
         ticketMainFocal: user.ticketMainFocal,
         ticketTechnician: user.ticketTechnician,
         role: user.role,
+        roleCode: roleCode ?? null,
         units: user.units?.map((u) => ({ id: u.id, name: u.name })) || [],
       },
     };
@@ -96,7 +97,7 @@ export class AuthService {
     this.ticketService?.assignPendingTicketsOnLogin(user.id).catch(() => {});
 
     const tokens = await this.generateTokens(user);
-    return this.buildAuthResponse(user, tokens);
+    return this.buildAuthResponse(user, tokens, tokens.roleCode);
   }
 
   async googleLogin(idToken: string): Promise<AuthResponse> {
@@ -139,7 +140,7 @@ export class AuthService {
     this.ticketService?.assignPendingTicketsOnLogin(user.id).catch(() => {});
 
     const tokens = await this.generateTokens(user);
-    return this.buildAuthResponse(user, tokens);
+    return this.buildAuthResponse(user, tokens, tokens.roleCode);
   }
 
   async validateUser(email: string, password: string): Promise<User | null> {
@@ -158,11 +159,13 @@ export class AuthService {
     return user;
   }
 
-  async generateTokens(user: User): Promise<{ accessToken: string; refreshToken: string }> {
+  async generateTokens(user: User): Promise<{ accessToken: string; refreshToken: string; roleCode: string | null }> {
+    const roleCode = await this.usersService.getRoleCodeForRole(user.role).catch(() => null);
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
+      roleCode: roleCode ?? null,
       units: user.units?.map((unit) => unit.id) || [],
     };
 
@@ -181,7 +184,7 @@ export class AuthService {
       }),
     ]);
 
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, roleCode: roleCode ?? null };
   }
 
   async refresh(refreshToken: string): Promise<{ accessToken: string }> {
@@ -204,6 +207,7 @@ export class AuthService {
           sub: user.id,
           email: user.email,
           role: user.role,
+          roleCode: await this.usersService.getRoleCodeForRole(user.role).catch(() => null),
           units: user.units?.map((unit) => unit.id) || [],
         },
         {

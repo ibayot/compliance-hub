@@ -234,7 +234,7 @@ export default function TicketDetailPage() {
         loaders.push(
           apiClient.get(apiUrl, { responseType: 'blob' })
             .then(r => { urlMap[apiUrl] = URL.createObjectURL(r.data); })
-            .catch(() => {})
+            .catch(() => { urlMap[apiUrl] = 'error'; })
         );
       });
     });
@@ -796,7 +796,7 @@ export default function TicketDetailPage() {
                         const t2 = p[0] ?? ticketId;
                         const f2 = encodeURIComponent(p[1] ?? fp);
                         return proofBlobUrls[`/api/tickets/proof/${t2}/${f2}`];
-                      }).filter(Boolean) as string[];
+                      }).filter((u): u is string => Boolean(u) && u !== 'error');
                       return (
                         <Box
                           key={idx}
@@ -813,13 +813,15 @@ export default function TicketDetailPage() {
                             width: 80, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center',
                           }}
                         >
-                          {blobUrl ? (
+                          {blobUrl && blobUrl !== 'error' ? (
                             <Box
                               component="img"
                               src={blobUrl}
                               alt={`Proof photo ${idx + 1}`}
                               sx={{ width: 80, height: 80, objectFit: 'cover' }}
                             />
+                          ) : blobUrl === 'error' ? (
+                            <Box sx={{ color: 'text.disabled', fontSize: 32, lineHeight: 1 }}>✕</Box>
                           ) : (
                             <CircularProgress size={20} />
                           )}

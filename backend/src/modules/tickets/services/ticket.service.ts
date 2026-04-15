@@ -739,7 +739,8 @@ export class TicketService implements OnModuleInit {
     // Only these roles see ALL tickets (full management view):
     const SEE_ALL_ROLES: string[] = [
       UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.REVIEWER,
-      UserRole.COMPLIANCE_OFFICER, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
+      UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+      UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.PANTAWID_ICT,
     ];
     if (filters.viewerRole === UserRole.USER) {
       // Regular users see only their own submitted tickets
@@ -1446,7 +1447,6 @@ export class TicketService implements OnModuleInit {
         { role: UserRole.IT_SUPPORT_SR },
         { role: UserRole.DESKTOP_JR },
         { role: UserRole.IT_SUPPORT_JR },
-        { role: UserRole.FOCAL, ticketMainFocal: true },
       ],
     });
 
@@ -1593,6 +1593,72 @@ export class TicketService implements OnModuleInit {
     } catch (err: any) {
       this.logger.warn(`[Login Auto-Assign] Failed (non-fatal): ${err?.message}`);
     }
+  }
+
+  // --- Report Technicians (period-filtered for dropdown) -----------------
+
+  async getTechniciansByPeriod(filters: {
+    year?: number;
+    month?: number;
+    quarter?: number;
+    semester?: number;
+    ticketType?: string;
+  }): Promise<Array<{ id: number; firstName: string; lastName: string; role: string }>> {
+    const now = new Date();
+    const year = filters.year ?? now.getFullYear();
+
+    let startDate: Date;
+    let endDate: Date;
+
+    if (filters.month) {
+      startDate = new Date(year, filters.month - 1, 1);
+      endDate = new Date(year, filters.month, 0, 23, 59, 59, 999);
+    } else if (filters.quarter) {
+      const qStart = (filters.quarter - 1) * 3;
+      startDate = new Date(year, qStart, 1);
+      endDate = new Date(year, qStart + 3, 0, 23, 59, 59, 999);
+    } else if (filters.semester) {
+      const sStart = (filters.semester - 1) * 6;
+      startDate = new Date(year, sStart, 1);
+      endDate = new Date(year, sStart + 6, 0, 23, 59, 59, 999);
+    } else {
+      startDate = new Date(year, 0, 1);
+      endDate = new Date(year, 11, 31, 23, 59, 59, 999);
+    }
+
+    const techRoles = [
+      UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
+      UserRole.PANTAWID_ICT, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP,
+      UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
+    ];
+
+    const qb = this.ticketRepo
+      .createQueryBuilder('t')
+      .select('DISTINCT t.assignedToId', 'id')
+      .where('t.assignedToId IS NOT NULL')
+      .andWhere('t.createdAt >= :startDate', { startDate })
+      .andWhere('t.createdAt <= :endDate', { endDate });
+
+    if (filters.ticketType) {
+      qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+    }
+
+    const rows = await qb.getRawMany<{ id: number }>();
+    if (!rows.length) return [];
+
+    const ids = rows.map((r) => Number(r.id)).filter(Boolean);
+    const users = await this.userRepo
+      .createQueryBuilder('u')
+      .where('u.id IN (:...ids)', { ids })
+      .andWhere('u.role IN (:...roles)', { roles: techRoles })
+      .getMany();
+
+    return users.map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      role: u.role,
+    }));
   }
 
   // --- Ticket Reports (QA #11) --------------------------------------------
@@ -1802,7 +1868,18 @@ export class TicketService implements OnModuleInit {
       throw new BadRequestException('This escalation has already been processed.');
     }
     escalation.status = EscalationStatus.ACCEPTED;
-    return this.escalationRepo.save(escalation);
+    await this.escalationRepo.save(escalation);
+
+    // Auto-transition ticket to in_progress when escalation is accepted
+    const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
+    if (ticket && ticket.status !== TicketStatus.RESOLVED && ticket.status !== TicketStatus.CLOSED) {
+      const previousStatus = ticket.status;
+      ticket.status = TicketStatus.IN_PROGRESS;
+      await this.ticketRepo.save(ticket);
+      this.logEvent(ticketId, 'status_changed', actorId, { from: previousStatus, to: TicketStatus.IN_PROGRESS, reason: 'escalation_accepted' }).catch(() => {});
+    }
+
+    return escalation;
   }
 
   /** PATCH /tickets/:id/escalation/:eid/return — focal returns the ticket with a reason */

@@ -501,6 +501,24 @@ export const ticketsApi = {
     return response.data;
   },
 
+  /** Get technicians who had tickets in a given period (for reports dropdown) */
+  getReportTechnicians: async (filters?: {
+    year?: number;
+    month?: number;
+    quarter?: number;
+    semester?: number;
+    ticketType?: string;
+  }): Promise<Array<{ id: number; firstName: string; lastName: string; role: string }>> => {
+    const params = new URLSearchParams();
+    if (filters?.year) params.append('year', String(filters.year));
+    if (filters?.month) params.append('month', String(filters.month));
+    if (filters?.quarter) params.append('quarter', String(filters.quarter));
+    if (filters?.semester) params.append('semester', String(filters.semester));
+    if (filters?.ticketType) params.append('ticketType', filters.ticketType);
+    const response = await apiClient.get(`/tickets/report-technicians?${params}`);
+    return response.data;
+  },
+
   // --- Escalation ---
   getEscalations: async (ticketId: string): Promise<TicketEscalation[]> => {
     const response = await apiClient.get(`/tickets/${ticketId}/escalations`);

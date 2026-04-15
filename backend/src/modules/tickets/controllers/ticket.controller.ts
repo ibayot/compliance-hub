@@ -148,6 +148,25 @@ export class TicketController {
     });
   }
 
+  /** GET /tickets/report-technicians — technicians who had tickets in a given period */
+  @Get('report-technicians')
+  @Roles(...ALL_ROLES)
+  async getReportTechnicians(
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+    @Query('quarter') quarter?: string,
+    @Query('semester') semester?: string,
+    @Query('ticketType') ticketType?: string,
+  ) {
+    return this.ticketService.getTechniciansByPeriod({
+      year: year ? Number(year) : undefined,
+      month: month ? Number(month) : undefined,
+      quarter: quarter ? Number(quarter) : undefined,
+      semester: semester ? Number(semester) : undefined,
+      ticketType,
+    });
+  }
+
   /** GET /tickets/:id */
   @Get(':id')
   @Roles(...ALL_ROLES)
@@ -277,10 +296,15 @@ export class TicketController {
     // Sanitize inputs — prevent path traversal
     const safeTicketId = path.basename(ticketId);
     const safeFilename = path.basename(filename);
-    const filePath = path.join(process.cwd(), 'storage', 'escalation-proofs', safeTicketId, safeFilename);
+    const root = path.resolve(process.cwd(), 'storage', 'escalation-proofs', safeTicketId);
+    const filePath = path.join(root, safeFilename);
     if (!fs.existsSync(filePath)) {
-      throw new NotFoundException('Proof file not found');
+      return res.status(404).json({ statusCode: 404, message: 'Proof file not found' });
     }
-    res.sendFile(filePath);
+    res.sendFile(safeFilename, { root }, (err) => {
+      if (err && !res.headersSent) {
+        res.status(500).json({ statusCode: 500, message: 'Error serving file' });
+      }
+    });
   }
 }

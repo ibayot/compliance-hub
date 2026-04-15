@@ -118,10 +118,11 @@ export default function TicketsPage() {
   const isJuniorTech = ['desktop_jr', 'it_support_jr'].includes(user?.role ?? '');
   const isTechnician = isFocalTech || isLowerLevelTech || isJuniorTech;
   const isFocal = user?.role === 'focal';
-  const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer';
+  const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer'
+    || user?.role === 'cybersec' || user?.role === 'infosec';
   const isSectionHead = user?.roleCode === 'section_head';
   // Only super_admin, section_head, compliance_officer, desktop_sr, it_support_sr see ALL tickets
-  const canManageAll = isSuperAdmin || isSectionHead || isComplianceOfficer || user?.role === 'desktop_sr' || user?.role === 'it_support_sr';
+  const canManageAll = isSuperAdmin || isSectionHead || isComplianceOfficer || user?.role === 'desktop_sr' || user?.role === 'it_support_sr' || user?.role === 'pantawid_ict';
   // canViewEscalatedQueue: DB-driven — true if current user's role is in escalation_focal_configs
   const canViewEscalatedQueue = isEscalationFocal;
   // canAssign: focal techs, CO, SH, super_admin can assign/reassign tickets

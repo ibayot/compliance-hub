@@ -264,6 +264,12 @@ export class UsersService {
     return this.roleDefinitionsRepository.find({ order: { label: 'ASC' } });
   }
 
+  /** Look up the role_code for a given role value from role_definitions. */
+  async getRoleCodeForRole(roleValue: string): Promise<string | null> {
+    const def = await this.roleDefinitionsRepository.findOne({ where: { value: roleValue } });
+    return def?.roleCode ?? null;
+  }
+
   async createRoleDefinition(dto: CreateRoleDefinitionDto) {
     const existing = await this.roleDefinitionsRepository.findOne({ where: { value: dto.value } });
     if (existing) {

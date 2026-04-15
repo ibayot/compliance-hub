@@ -280,7 +280,7 @@ function RoleManagementCard() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {roles.map((role) => (
+                {roles.filter((role) => role.value !== 'super_admin').map((role) => (
                   <TableRow key={role.value} hover>
                     <TableCell>
                       <Typography variant="body2" fontWeight={600}>{role.label}</Typography>

@@ -6,7 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.0.25] - 2026-04-15 — Cybersec Escalation, Ticket Tabs, Section Head Nav, Junior Tech Access
+## [0.0.28] - 2026-04-15 — Cybersec Ticket Views, Auto-Progress on Accept, Proof Photo Fix, Reports Enhancement
+
+### Fixed
+- **Cybersec/infosec roles see all tickets:** Added `UserRole.CYBERSEC`, `UserRole.INFOSEC`, and `UserRole.PANTAWID_ICT` to the `SEE_ALL_ROLES` array in `getTickets()`. These roles now see the full managed ticket list.
+- **Cybersec 5-tab ticket view:** `isComplianceOfficer` now explicitly includes `cybersec` and `infosec` roles in addition to the `roleCode === 'compliance_officer'` check. `canManageAll` now includes `pantawid_ict`.
+- **JWT roleCode always populated:** `generateTokens()` now resolves and embeds `roleCode` from `role_definitions` in the JWT payload. `buildAuthResponse`, `login`, `googleLogin`, and `refresh` all propagate `roleCode`. This ensures `user?.roleCode` is available client-side for role checks.
+- **Escalation auto-sets ticket to In Progress:** `acceptEscalation()` now sets ticket status to `in_progress` (unless already resolved/closed) when an escalation is accepted. The status change is logged via `logEvent`.
+- **Proof photo spinner resolved:** Failed proof photo loads are now marked with an `'error'` sentinel in `proofBlobUrls` instead of silently discarded. The thumbnail shows a `✕` indicator instead of an indefinite spinner. Lightbox filters out error entries.
+- **Proof route sendFile fix:** `serveProofFile` now uses `res.sendFile(filename, { root })` instead of `res.sendFile(absolutePath)` to avoid Windows path behavior differences. 404 is returned via `res.status(404).json(...)` instead of throwing `NotFoundException` (bypassed by `@Res()` decorator).
+- **"Focal User" removed from technician availability:** `getTechnicianAvailability()` no longer includes `{ role: UserRole.FOCAL, ticketMainFocal: true }` in the technician query, removing the "Focal User" entry from the Reports dropdown and escalation assign dialog.
+- **Escalation dropdown attendance-filtered:** `listTechnicians()` in `AttendanceService` now filters out technicians who are `absent` or `out_of_office` for today before returning the list.
+- **super_admin hidden from Role Management UI:** Role Management card in Settings now filters out `super_admin` from the displayed role list.
+- **focal@rictms.gov.ph removed:** Removed from `excludedAttendanceEmails` (now empty array), CHANGELOG.md, and QA-USER-MANUAL.md.
+
+### Added
+- **Period-filtered technician dropdown in Reports:** New endpoint `GET /tickets/report-technicians` returns technicians who had assigned tickets in the selected period. Frontend reports page uses this endpoint for the technician filter dropdown, replacing the static `getTechnicians()` call. Technician dropdown is only shown to privileged roles.
+- **Role-gated ticket reports:** Reports page now determines `isPrivileged` based on role set (super_admin, section_head, reviewer, compliance_officer, cybersec, infosec, desktop_sr, it_support_sr, pantawid_ict). Technician filter is hidden from non-privileged users.
+- **Charts in reports page:** Added recharts `PieChart` (ticket distribution by support type) and `BarChart` (average rating per technician) to the Ticket Reports page.
+- **Print functionality:** Added Print button to Ticket Reports page using `window.print()`. Filters and header are hidden in print via `@media print` CSS.
+- **`getTechniciansByPeriod` service method:** New method returns distinct technicians (excluding focal role) who had tickets in a date range derived from year/month/quarter/semester filters.
+- **`getRoleCodeForRole` in UsersService:** New helper to look up `role_code` from `role_definitions` by role value — used by auth service to populate JWT roleCode.
+
+
 
 ### Fixed
 - **Cybersec/infosec escalation visibility:** `cybersec` and `infosec` added to `isStaffRole` so they get `canManageAll=true` and see the full ticket list. Added `isCybersecOfficer` flag used in `canViewEscalatedQueue` and `canAssign`, so they can see the "Escalated To Me" filter and assign tickets. Added `cybersec`/`infosec` as valid escalation targets for IT-type tickets in the assign dialog.
@@ -248,7 +270,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Support-category isolation fixed** — attendance category filters no longer leak cross-category technicians due to broad fallback technician-flag inclusion.
 - **ITO login attendance automation fixed** — auto-attendance on login now includes ITO/focal-equivalent roles.
 - **Escalation dropdown focal sourcing fixed** — ticket detail escalation dialog now builds candidate users from attendance category pools (`ito` + ticket type), then filters by configured escalation focal roles.
-- **Placeholder attendance users removed from operational views** — attendance queries now exclude seeded demo placeholder identities (`desktop.tech@rictms.gov.ph`, `it.tech@rictms.gov.ph`, `focal@rictms.gov.ph`).
+- **Placeholder attendance users removed from operational views** — attendance queries now exclude seeded demo placeholder identities where present.
 - **Migration script cleanup extension** — `backend/database/microservices-migrate.sql` now includes optional post-copy cleanup that drops non-compliance tables from the source DB when `@cleanup_source_tables = 1`.
 - **Patch version bump only** — `0.0.8` -> `0.0.9` (x/y unchanged).
 
@@ -833,7 +855,7 @@ Your machine is accessible at:
 - **`MovService.onModuleInit`** — added `private readonly logger = new Logger(MovService.name)` and wrapped `seedDefaultAssessmentArtifacts()` in `try/catch` with non-fatal WARN, matching the `DocumentService` pattern.
 
 #### Database
-- **Password reset** — all 4 user accounts reset to `password123` via bcrypt-10 hash generated in an isolated Node.js script (bypassing PowerShell `$` variable expansion). Hash `$2b$10$w0rNTO8B1FNZ7/7c1b2HHeONh0n4uNAXvtEGCqEbo3pYkLxymYzeu` applied to: `admin@rictms.gov.ph` (super_admin), `reviewer@rictms.gov.ph` (reviewer), `focal@rictms.gov.ph` (focal), `jmmmaguigad@dswd.gov.ph` (focal). Verified with `bcrypt.compare()` → `true`.
+- **Password reset** — all user accounts reset to `password123` via bcrypt-10 hash generated in an isolated Node.js script (bypassing PowerShell `$` variable expansion). Applied to: `admin@rictms.gov.ph` (super_admin), `reviewer@rictms.gov.ph` (reviewer), and other seeded accounts. Verified with `bcrypt.compare()` → `true`.
 
 #### Validation
 - Backend starts cleanly: `Nest application successfully started` ✅ — no crash, no unhandled `EntityMetadataNotFoundError`

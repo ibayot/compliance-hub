@@ -38,9 +38,7 @@ export interface BulkSetOfficeDaysDto {
 @Injectable()
 export class AttendanceService {
   private readonly logger = new Logger(AttendanceService.name);
-  private readonly excludedAttendanceEmails = [
-    'focal@rictms.gov.ph',
-  ];
+  private readonly excludedAttendanceEmails: string[] = [];
   private readonly excludedAttendanceRoleValues = [
     'user',
     'super_admin',
@@ -133,9 +131,6 @@ export class AttendanceService {
       .leftJoinAndSelect('a.user', 'user')
       .leftJoinAndSelect('a.setBy', 'setBy')
       .where('a.date BETWEEN :startDate AND :endDate', { startDate, endDate })
-      .andWhere('LOWER(user.email) NOT IN (:...excludedEmails)', {
-        excludedEmails: this.excludedAttendanceEmails,
-      })
       .orderBy('a.date', 'ASC')
       .addOrderBy('user.lastName', 'ASC');
 
@@ -219,9 +214,6 @@ export class AttendanceService {
       .createQueryBuilder('u')
       .where('u.active = :active', { active: true })
       .andWhere('u.role IN (:...roles)', { roles })
-      .andWhere('LOWER(u.email) NOT IN (:...excludedEmails)', {
-        excludedEmails: this.excludedAttendanceEmails,
-      })
       .getMany();
 
     const seen = new Set<number>();
@@ -287,9 +279,6 @@ export class AttendanceService {
       .createQueryBuilder('u')
       .where('u.active = :active', { active: true })
       .andWhere('u.role IN (:...roles)', { roles })
-      .andWhere('LOWER(u.email) NOT IN (:...excludedEmails)', {
-        excludedEmails: this.excludedAttendanceEmails,
-      })
       .orderBy('u.lastName', 'ASC')
       .addOrderBy('u.firstName', 'ASC')
       .getMany();
@@ -304,7 +293,16 @@ export class AttendanceService {
       }
     }
 
-    return merged;
+    // Filter out technicians who are absent or out_of_office today
+    const today = new Date().toISOString().slice(0, 10);
+    const todayAttendance = await this.attendanceRepo.find({ where: { date: today } });
+    const unavailableIds = new Set<number>(
+      todayAttendance
+        .filter((a) => a.status === AttendanceStatus.ABSENT || a.status === AttendanceStatus.OUT_OF_OFFICE)
+        .map((a) => a.userId),
+    );
+
+    return merged.filter((u) => !unavailableIds.has(u.id));
   }
 
   /** Get all staff who logged in on a specific date (for staff activity tab) */
