@@ -11,8 +11,8 @@ const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: (idToken: string) => Promise<void>;
+  login: (email: string, password: string, redirectTo?: string) => Promise<void>;
+  loginWithGoogle: (idToken: string, redirectTo?: string) => Promise<void>;
   logout: () => Promise<void>;
   isSessionLocked: boolean;
   unlockSession: (password: string) => Promise<void>;
@@ -122,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [!!user]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, redirectTo?: string) => {
     try {
       const response = await authApi.login({ email, password });
       localStorage.setItem('accessToken', response.accessToken);
@@ -136,13 +136,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         // Non-blocking: login response user data is still valid
       }
-      router.push('/dashboard');
+      router.push(redirectTo ?? '/dashboard');
     } catch (error) {
       throw error;
     }
   };
 
-  const loginWithGoogle = async (idToken: string) => {
+  const loginWithGoogle = async (idToken: string, redirectTo?: string) => {
     try {
       const response = await authApi.loginWithGoogle({ idToken });
       localStorage.setItem('accessToken', response.accessToken);
@@ -153,7 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(profile);
       } catch {
       }
-      router.push('/dashboard');
+      router.push(redirectTo ?? '/dashboard');
     } catch (error) {
       throw error;
     }

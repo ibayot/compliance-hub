@@ -688,6 +688,7 @@ export class TicketService implements OnModuleInit {
       : undefined;
 
     const emailData: TicketEmailData = {
+      ticketId: saved.id,
       ticketNumber: saved.ticketNumber,
       subject: saved.subject,
       description: saved.description,
@@ -828,6 +829,7 @@ export class TicketService implements OnModuleInit {
         const savedClosed = await this.ticketRepo.save(ticket);
         if (ticket.assignedTo?.email) {
           this.emailService.sendTicketClosedOrRatedEmailToTechnician({
+            ticketId: savedClosed.id,
             ticketNumber: savedClosed.ticketNumber,
             subject: savedClosed.subject,
             technicianName: [ticket.assignedTo.firstName, ticket.assignedTo.lastName].filter(Boolean).join(' ') || ticket.assignedTo.email,
@@ -983,6 +985,7 @@ export class TicketService implements OnModuleInit {
 
       if (dto.status === TicketStatus.RESOLVED && ticket.requester?.email) {
         this.emailService.sendTicketResolvedEmailToRequester({
+          ticketId: saved.id,
           ticketNumber: saved.ticketNumber,
           subject: saved.subject,
           requesterName: [ticket.requester.firstName, ticket.requester.lastName].filter(Boolean).join(' ') || ticket.requester.email,
@@ -995,6 +998,7 @@ export class TicketService implements OnModuleInit {
 
       if (dto.status === TicketStatus.CLOSED && ticket.assignedTo?.email) {
         this.emailService.sendTicketClosedOrRatedEmailToTechnician({
+          ticketId: saved.id,
           ticketNumber: saved.ticketNumber,
           subject: saved.subject,
           technicianName: [ticket.assignedTo.firstName, ticket.assignedTo.lastName].filter(Boolean).join(' ') || ticket.assignedTo.email,
@@ -1135,6 +1139,7 @@ export class TicketService implements OnModuleInit {
 
     // Send assignment notification email (fire-and-forget)
     this.emailService.sendTicketAssignedEmail({
+      ticketId: assigned.id,
       ticketNumber: assigned.ticketNumber,
       subject: assigned.subject,
       ticketType: assigned.ticketType,
@@ -1257,6 +1262,7 @@ export class TicketService implements OnModuleInit {
 
     if (ticket.assignedTo?.email) {
       this.emailService.sendTicketClosedOrRatedEmailToTechnician({
+        ticketId: saved.id,
         ticketNumber: saved.ticketNumber,
         subject: saved.subject,
         technicianName: [ticket.assignedTo.firstName, ticket.assignedTo.lastName].filter(Boolean).join(' ') || ticket.assignedTo.email,
@@ -1573,6 +1579,7 @@ export class TicketService implements OnModuleInit {
       }).catch(() => {});
 
       this.emailService.sendTicketAssignedEmail({
+        ticketId: pending.id,
         ticketNumber: pending.ticketNumber,
         subject: pending.subject,
         ticketType: pending.ticketType,

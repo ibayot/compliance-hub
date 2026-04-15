@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.19] - 2026-04-14 — Clickable Email Links, Redirect-After-Login, 3-DB Seed, File Cleanup
+
+### Added
+- **Clickable ticket links in emails:** All 4 email templates now include a clickable ticket number heading and a "View Ticket" CTA button linking to `${FRONTEND_URL}/dashboard/tickets/${ticketId}`.
+- **Resolve email with dual CTAs:** `sendTicketResolvedEmailToRequester` now shows side-by-side "Close Ticket" and "Rate Technician" action buttons, with a session-expiry note.
+- **Redirect-after-login:** `ProtectedDashboard` (App.tsx) now encodes the current path as `?redirect=<path>` when redirecting unauthenticated users to `/login`. `AuthContext.login` and `loginWithGoogle` accept optional `redirectTo?: string` param and use it for post-login navigation. Login page reads and passes the `redirect` query param.
+- **EMAIL_TEST_OVERRIDE env var:** Documented in `.env.example` with clear removal instructions in `email.service.ts`.
+- **SMTP_FROM_NAME and EMAIL_ENABLED:** Added to `.env.example`.
+- **seed-data.sql 3-DB restructure:** Reorganized into 4 USE sections covering `compliance_hub_users`, `compliance_hub`, and `compliance_hub_ticketing`. Removed reviewer/focal test accounts (id=2, id=3 now are `cybersec.test` and `lead.infra`).
+- **ticket_categories seed:** 6 default IT support categories seeded in `compliance_hub_ticketing`.
+- **ticket_keyword_rules seed:** 6 default keyword rules for auto-type detection seeded.
+- **role_definitions copy in ticketing DB:** `compliance_hub_ticketing.role_definitions` now seeded alongside the primary `compliance_hub_users.role_definitions`.
+
+### Changed
+- **email.service.ts:** Added `ticketId: string` to all 4 email data interfaces. Added `frontendUrl` read from `FRONTEND_URL` env var. All 4 email templates updated with structured HTML, clickable ticket number, action buttons.
+- **ticket.service.ts:** All 7 `emailService.*` call sites now pass `ticketId`.
+- **seed-data.sql:** Single `USE compliance_hub` replaced with proper 3-section layout. Sample tickets moved to `compliance_hub_ticketing` section.
+
+### Removed
+- **Unnecessary project files deleted:** `IMPLEMENTATION-PLAN.md`, `IMPLEMENTATION_STATUS.md`, `CURRENT-STATUS.md`, `DATABASE-SETUP-COMPLETE.md`, `PROJECT_STATUS.md`, `RELEASE-NOTES-v1.2.0.4.md`, `KPI-FEATURE-PLAN.md`, `KPI-MOV-AUDIT-2026-03-04.md`, `ICT-ISSUANCE-RELEVANCE-MAP.md`, `smoke-test.ps1`, `smoke-artifacts/`, `tentative-compliance-report/`, `services/`, `scripts/reset-for-uat.*`.
+
+### How To Test
+- Email: Create a ticket, check email — ticket number should be a link to the ticket detail URL.
+- Email: Resolve a ticket, check requester email — Close Ticket and Rate Technician buttons should appear.
+- Auth: Log out while on `/dashboard/tickets/:id`, go back to that URL — should redirect to `/login?redirect=...` and land on the ticket after login.
+- Seed: Run `seed-data.sql` against the 3-DB microservices setup — all 4 sections should succeed without foreign key errors.
+
+### Rollback Steps
+- Revert `backend/src/modules/tickets/services/email.service.ts` and `ticket.service.ts` to remove `ticketId` if email format causes issues.
+- Revert `frontend/src/App.tsx` `ProtectedDashboard` redirect if redirect loop is observed.
+- Restore deleted files from git if needed: `git checkout HEAD~1 -- <file>`.
+
+- **Patch version bump only** — `0.0.18` -> `0.0.19` (x/y unchanged).
+
+---
+
 ## [0.0.14] - 2026-04-14 - DB Reference Hardening + Attendance Route Ownership Correction
 
 ### Changed
