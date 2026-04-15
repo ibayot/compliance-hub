@@ -89,9 +89,8 @@ export class EmailService {
     }
 
     // Keep a single override target for QA routing when email is enabled.
-    const override = this.configService.get<string>('EMAIL_TEST_OVERRIDE') ?? 'mjdibay@dswd.gov.ph';
+    const override = this.configService.get<string>('EMAIL_TEST_OVERRIDE') ?? '';
     this.testOverrideTo = override;
-    this.logger.warn(`[EMAIL] All emails redirected to: ${override}`);
   }
 
   /** Send a ticket creation confirmation email to the requester */

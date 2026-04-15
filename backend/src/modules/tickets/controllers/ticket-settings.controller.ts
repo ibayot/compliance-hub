@@ -46,8 +46,10 @@ export class TicketSettingsController {
   @Roles(UserRole.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
   async testEmail(@Body('to') to: string) {
-    const recipient = to || 'mjdibay@dswd.gov.ph';
-    return this.emailService.sendTestEmail(recipient);
+    if (!to) {
+      return { message: 'Provide a recipient email address in the request body: { "to": "email@example.com" }' };
+    }
+    return this.emailService.sendTestEmail(to);
   }
 
   // ── Categories ──────────────────────────────────────────────────────────

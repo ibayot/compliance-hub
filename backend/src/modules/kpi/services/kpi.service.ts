@@ -7,7 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Unit } from '../../units/entities/unit.entity';
-import { User } from '../../users/entities/user.entity';
+import { User, UserRole } from '../../users/entities/user.entity';
 import { KpiFrequency, KpiMaster, KpiType } from '../entities/kpi-master.entity';
 import { KpiMonitoring, KpiMonitoringStatus } from '../entities/kpi-monitoring.entity';
 import { KpiThreshold } from '../entities/kpi-threshold.entity';
@@ -67,14 +67,18 @@ export class KpiService {
     }
   }
 
-  private canManage(user: AuthUser) {
-    return ['super_admin', 'reviewer', 'section_head', 'compliance_officer'].includes(user.role)
-      || user.roleCode === 'compliance_officer';
+  private canManage(user: AuthUser): boolean {
+    const roles: string[] = [
+      UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER,
+    ];
+    return roles.includes(user.role) || (!!user.roleCode && roles.includes(user.roleCode));
   }
 
-  private canViewAll(user: AuthUser) {
-    return ['super_admin', 'reviewer', 'section_head', 'compliance_officer'].includes(user.role)
-      || user.roleCode === 'compliance_officer';
+  private canViewAll(user: AuthUser): boolean {
+    const roles: string[] = [
+      UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER,
+    ];
+    return roles.includes(user.role) || (!!user.roleCode && roles.includes(user.roleCode));
   }
 
   private normalizeUnitId(value: number | string | { id?: number | string } | undefined): number | null {

@@ -37,7 +37,7 @@ export class IssuanceController {
    * POST /issuances
    */
   @Post()
-  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   @HttpCode(HttpStatus.CREATED)
   async createIssuance(@Body() dto: CreateIssuanceDto) {
     return this.issuanceService.createIssuance(dto);
@@ -48,7 +48,7 @@ export class IssuanceController {
    * GET /issuances
    */
   @Get()
-  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   async getIssuances(
     @Query('authority') authority?: string,
     @Query('category') category?: string,
@@ -71,7 +71,7 @@ export class IssuanceController {
    * GET /issuances/:id
    */
   @Get(':id')
-  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   async getIssuance(@Param('id') id: string) {
     return this.issuanceService.getIssuance(id);
   }
@@ -81,7 +81,7 @@ export class IssuanceController {
    * PUT /issuances/:id
    */
   @Put(':id')
-  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   async updateIssuance(@Param('id') id: string, @Body() dto: UpdateIssuanceDto) {
     return this.issuanceService.updateIssuance(id, dto);
   }
@@ -102,7 +102,7 @@ export class IssuanceController {
    * POST /issuances/:id/documents/:documentId
    */
   @Post(':id/documents/:documentId')
-  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   @HttpCode(HttpStatus.OK)
   async linkDocument(
     @Param('id') id: string,
@@ -117,7 +117,7 @@ export class IssuanceController {
    * DELETE /issuances/:id/documents/:documentId
    */
   @Delete(':id/documents/:documentId')
-  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   @HttpCode(HttpStatus.NO_CONTENT)
   async unlinkDocument(
     @Param('id') id: string,
@@ -131,7 +131,7 @@ export class IssuanceController {
    * POST /issuances/:id/attachment
    */
   @Post(':id/attachment')
-  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   @UseInterceptors(
     FileInterceptor('file', {
       limits: {
@@ -151,7 +151,7 @@ export class IssuanceController {
    * DELETE /issuances/:id/attachment
    */
   @Delete(':id/attachment')
-  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteAttachment(@Param('id') id: string) {
     await this.issuanceService.deleteAttachment(id);
@@ -162,7 +162,7 @@ export class IssuanceController {
    * GET /issuances/:id/attachment/view
    */
   @Get(':id/attachment/view')
-  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   async viewAttachment(
     @Param('id') id: string,
     @Res({ passthrough: true }) res: Response,
@@ -181,7 +181,7 @@ export class IssuanceController {
    * GET /issuances/:id/attachment/download
    */
   @Get(':id/attachment/download')
-  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   async downloadAttachment(
     @Param('id') id: string,
     @Res({ passthrough: true }) res: Response,

@@ -16,6 +16,7 @@ import { CreateRoleDefinitionDto, UpdateRoleDefinitionDto, CreateUserDto, Update
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from './entities/user.entity';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -24,67 +25,67 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('roles')
-  @Roles('super_admin', 'reviewer', 'compliance_officer')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
   getRoles() {
     return this.usersService.getRoles();
   }
 
   @Post('roles')
-  @Roles('super_admin')
+  @Roles(UserRole.SUPER_ADMIN)
   createRole(@Body() createRoleDefinitionDto: CreateRoleDefinitionDto) {
     return this.usersService.createRoleDefinition(createRoleDefinitionDto);
   }
 
   @Patch('roles/:value')
-  @Roles('super_admin')
+  @Roles(UserRole.SUPER_ADMIN)
   updateRole(@Param('value') value: string, @Body() updateRoleDefinitionDto: UpdateRoleDefinitionDto) {
     return this.usersService.updateRoleDefinition(value, updateRoleDefinitionDto);
   }
 
   @Delete('roles/:value')
-  @Roles('super_admin')
+  @Roles(UserRole.SUPER_ADMIN)
   deleteRole(@Param('value') value: string) {
     return this.usersService.deleteRoleDefinition(value);
   }
 
   @Post()
-  @Roles('super_admin')
+  @Roles(UserRole.SUPER_ADMIN)
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 
   @Get('search-email')
-  @Roles('super_admin')
+  @Roles(UserRole.SUPER_ADMIN)
   searchEmail(@Query('q') q: string) {
     return this.usersService.searchEmails(q);
   }
 
   @Get()
-  @Roles('super_admin', 'reviewer', 'compliance_officer')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
   findAll() {
     return this.usersService.findAll();
   }
 
   @Get('federated')
-  @Roles('super_admin', 'reviewer', 'compliance_officer')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
   getFederatedUsers() {
     return this.usersService.getFederatedUsers();
   }
 
   @Get(':id')
-  @Roles('super_admin', 'reviewer', 'compliance_officer')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(+id);
   }
 
   @Patch(':id')
-  @Roles('super_admin')
+  @Roles(UserRole.SUPER_ADMIN)
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(+id, updateUserDto);
   }
 
   @Delete(':id')
-  @Roles('super_admin')
+  @Roles(UserRole.SUPER_ADMIN)
   remove(@Param('id') id: string) {
     return this.usersService.remove(+id);
   }

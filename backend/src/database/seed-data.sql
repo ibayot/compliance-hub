@@ -81,7 +81,7 @@ INSERT INTO users (id, email, passwordHash, first_name, last_name, role, active,
 (5, 'it.tech@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'IT', 'Technician', 'technician_it_support', 1, NOW(), NOW()),
 (6, 'user1@example.com', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Juan', 'Dela Cruz', 'user', 1, NOW(), NOW()),
 (7, 'user2@example.com', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Maria', 'Santos', 'user', 1, NOW(), NOW()),
-(8, 'mjdibay@dswd.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Mark John', 'Dibay', 'user', 1, NOW(), NOW());
+(8, 'compliance.officer@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Compliance', 'Officer', 'compliance_officer', 1, NOW(), NOW());
 
 -- Seed tickets (ticket_number format: DESK-YYYYMMDD-NNNN or IT-YYYYMMDD-NNNN)
 INSERT INTO tickets (id, ticket_number, subject, description, ticket_type, priority, status, requester_id, assigned_to_id, resolution_notes, created_at, updated_at) VALUES
@@ -89,11 +89,11 @@ INSERT INTO tickets (id, ticket_number, subject, description, ticket_type, prior
 (UUID(), 'IT-20250101-0001', 'Cannot connect to the internet', 'Getting "No internet access" despite being connected to the office WiFi.', 'it_support', 'medium', 'assigned', 7, 5, NULL, NOW(), NOW()),
 (UUID(), 'DESK-20250101-0002', 'Printer not printing', 'Document sent to shared printer but nothing comes out. Queue shows it pending.', 'desktop_support', 'low', 'open', 6, NULL, NULL, NOW(), NOW()),
 (UUID(), 'IT-20250101-0002', 'Email not syncing on phone', 'Work email stopped syncing on my mobile device after password reset.', 'it_support', 'medium', 'resolved', 7, 5, 'Exchange profile was re-configured on the device. Issue resolved.', NOW(), NOW()),
--- mjdibay sample tickets: keyword auto-tag correction demo
--- "internet" keyword → auto-shifted to it_support (originally submitted as desktop_support)
-(UUID(), 'IT-20250115-0001', 'Internet connectivity issue at workstation', 'My workstation cannot access the internet. Other devices on the same desk work fine. Possibly a cable or port issue.', 'it_support', 'medium', 'open', 8, NULL, NULL, NOW(), NOW()),
--- "printer repair" keyword → auto-shifted to desktop_support (originally submitted as it_support)
-(UUID(), 'DESK-20250115-0001', 'Printer repair request — unit 3B shared printer', 'The shared printer in unit 3B is making a grinding noise and not feeding paper properly. Needs physical inspection and repair.', 'desktop_support', 'low', 'open', 8, NULL, NULL, NOW(), NOW());
+-- keyword auto-tag demo tickets (test accounts)
+-- "internet" keyword → auto-shifted to it_support
+(UUID(), 'IT-20250115-0001', 'Internet connectivity issue at workstation', 'Workstation cannot access the internet. Other devices on the same desk work fine. Possibly a cable or port issue.', 'it_support', 'medium', 'open', 7, NULL, NULL, NOW(), NOW()),
+-- "printer repair" keyword → auto-shifted to desktop_support
+(UUID(), 'DESK-20250115-0001', 'Printer repair request — unit 3B shared printer', 'The shared printer in unit 3B is making a grinding noise and not feeding paper properly. Needs physical inspection and repair.', 'desktop_support', 'low', 'open', 6, NULL, NULL, NOW(), NOW());
 
 
 -- Units: id is auto_increment int; columns: id, name, description, active, created_at
@@ -106,14 +106,43 @@ INSERT INTO user_unit_access (user_id, unit_id) VALUES
 (1, 1), (1, 2),
 (2, 1), (2, 2),
 (3, 1),
-(8, 1);
+(8, 1), (8, 2);
 
-INSERT INTO role_definitions (`value`, `label`, `description`, `assignable`, `is_system`, `created_at`, `updated_at`) VALUES
-('super_admin', 'Super Admin', 'Full system access including user and security administration.', 0, 1, NOW(), NOW()),
-('reviewer', 'Reviewer / Compliance Officer', 'Consolidated compliance oversight and KPI monitoring input.', 1, 1, NOW(), NOW()),
-('focal', 'Focal Person', 'Unit-level dashboard visibility and document operations.', 1, 1, NOW(), NOW()),
-('technician', 'Technician', 'Operational support role with limited visibility.', 1, 1, NOW(), NOW()),
-('auditor', 'Auditor', 'Read-only compliance and KPI access for audit.', 1, 1, NOW(), NOW());
+INSERT INTO role_definitions (`value`, `label`, `description`, `assignable`, `is_system`, `role_code`, `technician_type`, `created_at`, `updated_at`) VALUES
+-- Core system roles
+('super_admin', 'Super Admin', 'Full system access. Manages users, roles, settings, and all data.', 0, 1, NULL, NULL, NOW(), NOW()),
+('reviewer', 'Reviewer (Legacy/Compat)', 'Legacy compliance oversight role retained for backward compatibility. Maps to compliance_officer feature set.', 1, 1, 'compliance_officer', NULL, NOW(), NOW()),
+('focal', 'Focal Person', 'Unit-level focal. Uploads documents, manages unit compliance activities.', 1, 1, 'focal', NULL, NOW(), NOW()),
+('section_head', 'Section Head', 'Section-level supervisor. Manages staff tickets and unit attendance within their section.', 1, 1, 'section_head', NULL, NOW(), NOW()),
+('technician', 'Technician (General)', 'General ICT support technician. Handles tickets and operational support tasks.', 1, 1, 'technician', NULL, NOW(), NOW()),
+('auditor', 'Auditor', 'Read-only compliance, KPI, and document access for internal/external audit.', 1, 1, 'auditor', NULL, NOW(), NOW()),
+('user', 'Regular Staff', 'Standard staff user. Can submit tickets and view personal dashboards.', 1, 1, NULL, NULL, NOW(), NOW()),
+-- RICTMS named compliance roles
+('compliance_officer', 'Compliance Officer', 'Primary compliance and quality management role. Full access to documents, KPI, MOV, reviews, and issuances.', 1, 1, NULL, NULL, NOW(), NOW()),
+('cybersec', 'Cybersecurity Officer', 'Cybersecurity-focused compliance officer. Manages cybersecurity metrics, reviews, and IAM-related compliance.', 1, 1, 'compliance_officer', NULL, NOW(), NOW()),
+('infosec', 'Information Security Officer', 'Information security governance and compliance. Reviews documents and manages security-related policy compliance.', 1, 1, 'compliance_officer', NULL, NOW(), NOW()),
+-- RICTMS named focal-equivalent infrastructure roles
+('lead_infra', 'Lead Infrastructure Officer', 'Leads infrastructure operations. Focal-level access to tickets, attendance management, and compliance.', 1, 1, 'focal', NULL, NOW(), NOW()),
+('server_admin', 'Server Administrator', 'Manages server infrastructure. Focal-level access for compliance and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
+('db_admin', 'Database Administrator', 'Manages database systems. Focal-level access for compliance and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
+('network_admin', 'Network Administrator', 'Manages network infrastructure. Focal-level access for compliance and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
+-- RICTMS named focal-equivalent project/development roles
+('project_mgr', 'Project Manager', 'Manages ICT projects. Focal-level access for compliance documentation and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
+('dev_lead', 'Development Lead', 'Leads software development. Focal-level access for compliance and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
+('sqa_lead', 'SQA Lead', 'Leads software quality assurance. Focal-level access for compliance and review participation.', 1, 1, 'focal', NULL, NOW(), NOW()),
+-- RICTMS named focal-equivalent administrative roles
+('records_officer', 'Records Officer', 'Manages administrative records. Focal-level access for document handling and compliance tracking.', 1, 1, 'focal', NULL, NOW(), NOW()),
+('hr_id_officer', 'HR / ID Officer', 'HR and identification management. Focal-level access for compliance and operational documentation.', 1, 1, 'focal', NULL, NOW(), NOW()),
+-- RICTMS named technician roles with technician type mapping
+('technician_desktop', 'Desktop Technician', 'Desktop support technician. Handles hardware and peripheral support tickets.', 1, 1, 'technician', 'desktop_support', NOW(), NOW()),
+('technician_it_support', 'IT Support Technician', 'IT support technician. Handles connectivity, software, and network-level support tickets.', 1, 1, 'technician', 'it_support', NOW(), NOW()),
+('technician_it_staff', 'IT Support Staff', 'IT support staff under supervision. Handles assigned IT tickets and support tasks.', 1, 1, 'technician', 'it_support', NOW(), NOW()),
+('technician_desktop_staff', 'Desktop Support Staff', 'Desktop support staff under supervision. Handles assigned desktop-related tickets.', 1, 1, 'technician', 'desktop_support', NOW(), NOW()),
+('desktop_sr', 'Desktop Support Senior', 'Senior desktop technician with attendance management authority over their team.', 1, 1, 'focal', 'desktop_support', NOW(), NOW()),
+('it_support_sr', 'IT Support Senior', 'Senior IT support technician with attendance management authority over their team.', 1, 1, 'focal', 'it_support', NOW(), NOW()),
+('desktop_jr', 'Desktop Support Junior', 'Junior desktop technician assigned to escalate unresolved hardware issues.', 1, 1, 'technician', 'desktop_support', NOW(), NOW()),
+('it_support_jr', 'IT Support Junior', 'Junior IT support assigned to resolve basic network and software support tickets.', 1, 1, 'technician', 'it_support', NOW(), NOW()),
+('pantawid_ict', 'Pantawid ICT Support', 'ICT support for the Pantawid Pamilyang Pilipino program. Manages Pantawid-specific ICT tickets with focal-level oversight.', 1, 1, 'focal', 'pantawid_ict_support', NOW(), NOW());
 
 INSERT INTO mov_artifacts (id, artifact_type, scope, title, period_year, quarter, unit_id, status, content_markdown, metadata_json, created_by, created_at, updated_at) VALUES
 ('mov-001', 'assessment_plan', 'regional', 'Assessment Plan Q1 2026', 2026, 1, 1, 'draft',
