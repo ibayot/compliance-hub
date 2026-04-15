@@ -90,6 +90,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
   const hasAccess = (roles: string[], roleCodes?: string[], service: NavItem['service'] = 'core') => {
     if (roles.includes('all')) return true;
+    if (user?.role === 'super_admin') return true;
     if (service && service !== 'core' && services[service] === false) return false;
     if (!user) return false;
     if (roles.includes(user.role)) return true;

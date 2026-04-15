@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.23] - 2026-04-15 — Remove Legacy Roles, Super Admin Full Access Bypass
+
+### Fixed
+- **Legacy role definitions removed:** The 8 legacy/compat roles (`reviewer`, `focal`, `technician`, `auditor`, `technician_desktop`, `technician_it_support`, `technician_it_staff`, `technician_desktop_staff`) that were incorrectly added to `DEFAULT_ROLE_DEFINITIONS` in v0.0.22 have been removed. The authoritative 20 correct roles remain.
+- **Super admin always sees full nav:** Added `super_admin` early-exit bypass in sidebar `hasAccess()` — fires immediately after the `roles: ['all']` check, before the service-availability gate. Super admin now sees all nav items regardless of microservice health status.
+
 ## [0.0.22] - 2026-04-15 — Health Endpoints, Units VIEW Self-Heal, Role Definitions Completeness, Frontend Role Guards
 
 ### Fixed
