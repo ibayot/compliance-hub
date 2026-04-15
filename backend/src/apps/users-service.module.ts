@@ -5,7 +5,6 @@ import * as Joi from 'joi';
 import { AuthModule } from '../modules/auth/auth.module';
 import { UsersModule } from '../modules/users/users.module';
 import { UnitsModule } from '../modules/units/units.module';
-import { AttendanceModule } from '../modules/users/attendance.module';
 
 @Module({
   imports: [
@@ -47,7 +46,6 @@ import { AttendanceModule } from '../modules/users/attendance.module';
     AuthModule,
     UsersModule,
     UnitsModule,
-    AttendanceModule,
   ],
 })
 export class UsersServiceAppModule {}

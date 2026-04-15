@@ -71,7 +71,7 @@ async function bootstrap() {
   app.use('/api/units', createServiceProxy(`${usersServiceUrl}/api/units`, 'users'));
 
   app.use('/api/tickets', createServiceProxy(`${ticketingServiceUrl}/api/tickets`, 'ticketing'));
-  app.use('/api/attendance', createServiceProxy(`${usersServiceUrl}/api/attendance`, 'users'));
+  app.use('/api/attendance', createServiceProxy(`${ticketingServiceUrl}/api/attendance`, 'ticketing'));
   app.use('/api/ticket-settings', createServiceProxy(`${ticketingServiceUrl}/api/ticket-settings`, 'ticketing'));
 
   app.use('/api/documents', createServiceProxy(`${complianceServiceUrl}/api/documents`, 'compliance'));
