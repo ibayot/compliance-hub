@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.21] - 2026-04-15 — Cross-DB role_definitions Fix + Attendance Service Routing
+
+### Fixed
+- **`Table 'compliance_hub.role_definitions' doesn't exist` runtime error:** Root cause was `USERS_DB_DATABASE=compliance_hub` in `.env` — corrected to `USERS_DB_DATABASE=compliance_hub_users` so the users service connects to the correct authoritative database.
+- **Attendance service routing:** `AttendanceController` added to `TicketsModule` and `/api/attendance` gateway route changed to ticketing service (`4102`). Previously routed to users service which lacked `office_days` table; ticketing service has all required tables via VIEWs (`attendance`, `users`, `role_definitions`) and the actual `office_days` table.
+- **`AttendanceModule` removed from users service:** No longer registering ticketing-scoped entities (`TechAttendance`, `OfficeDay`) in the users service TypeORM context. Prevents missing-table errors on users DB.
+- **`schema.sql` alignment:** Updated `users` table (expanded `role` enum with all RICTMS roles, fixed `is_active` → `active`, added `position_full`, `ticket_main_focal`, `ticket_technician`, `auth_provider`, `google_sub`, `last_login` columns). Updated `role_definitions` table to include `technician_type` and `role_code` columns matching the TypeORM entity.
+
+## [0.0.20] - 2026-04-15 — role_definitions Cross-DB VIEW Fix
+
+### Fixed
+- **`microservices-migrate.sql`:** Added `DROP TABLE + CREATE VIEW role_definitions` enforcement for both `compliance_hub_ticketing` and `compliance_hub` DBs, pointing to `compliance_hub_users.role_definitions`.
+- **`ticket.service.ts` `runMigrations()`:** Added VIEW creation for `role_definitions` in `compliance_hub_ticketing` (alongside existing `users`, `units`, `attendance` VIEWs).
+- **`seed-data.sql` Section 4:** Removed erroneous TRUNCATE + INSERT for `role_definitions` in ticketing DB (it is a VIEW, not a table).
+
 ## [0.0.19] - 2026-04-14 — Clickable Email Links, Redirect-After-Login, 3-DB Seed, File Cleanup
 
 ### Added
