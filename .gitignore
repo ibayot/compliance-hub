@@ -49,7 +49,7 @@ logs/
 *.log
 
 # Artifact and classification output directories
-issuance-file-drop/
+# regulatory-issuances/ is intentionally tracked (source PDFs for issuance classification)
 smoke-artifacts/
 tentative-compliance-report/
 

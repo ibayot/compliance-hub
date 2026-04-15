@@ -1,204 +1,410 @@
-# Compliance Hub Deployment Guide
+# Compliance Hub — Deployment Guide
 
-## 1. Purpose
-This document is the step-by-step deployment basis for installing the current code from this repository in a split microservices runtime.
+> **Who this is for:** Someone who has never deployed this app before. You don't need to know how to code. You just need to be able to run commands in a terminal.
 
-## 2. Scope of This Guide
-This guide is based on the current repository content:
-- Backend source and service entrypoints are in `backend/`.
-- Frontend source is in `frontend/`.
-- Container definitions are in `docker-compose.yml`.
-- Split database scripts are in `backend/database/microservices-init.sql` and `backend/database/microservices-migrate.sql`.
+---
 
-## 3. Runtime Architecture (Current)
-- `users-service` (NestJS, port 4101)
-- `ticketing-service` (NestJS, port 4102)
-- `compliance-service` (NestJS, port 4103)
-- `api-gateway` (NestJS, port 4000)
-- `frontend` (Vite app, port 3000)
-- `mariadb` (port 3306)
-- `redis` (port 6379)
+## What You Are Deploying
 
-## 4. Prerequisites
+This is a web application called Compliance Hub. When you finish this guide, your server will be running:
 
-### 4.1 Infrastructure
-- 1 application server with Docker support
-- 1 database server (or MariaDB container host) reachable over intranet
-- Internal DNS or static IP mapping for app and DB hosts
+- A **website** (the part users open in a browser)
+- A **backend** (4 services that handle data and business logic)
+- A **database** (MariaDB — where all data is stored)
+- A **cache layer** (Redis — makes things faster)
 
-### 4.2 Software
-Install on deployment host:
-- Docker Engine 24+
-- Docker Compose plugin 2+
-- Git
+Everything runs inside Docker containers. Think of Docker as a way to run the app in isolated boxes so you don't have to install Node.js, MariaDB, and Redis manually.
 
-### 4.3 Access
-- Sudo/admin access for initial host setup and firewall configuration
+The source code is organized like this:
+- Website code is in `frontend/`
+- Backend code is in `backend/`
+- Docker setup is in `docker-compose.yml`
+- Database setup scripts are in `backend/database/`
 
-## 5. Required Network Ports
-Open and allow only required ports:
-- 3000 (frontend)
-- 4000 (api-gateway)
-- 4101 (users-service)
-- 4102 (ticketing-service)
-- 4103 (compliance-service)
-- 3306 (MariaDB)
-- 6379 (Redis)
+---
 
-## 6. Deployment Steps
+## Before You Start
 
-### Step 1: Clone the Repository
-Replace `<remote-url>` with the actual Git remote URL of this repository as configured by your organization:
+### What You Need to Install
+
+Make sure these are installed on the server before you begin:
+
+**1. Docker** — runs all the app's containers. Check if installed:
+```bash
+docker --version
+```
+You should see something like `Docker version 24.x.x`. If not installed, get it from https://docs.docker.com/engine/install/
+
+**2. Docker Compose** — orchestrates the containers. Check:
+```bash
+docker compose version
+```
+You should see `Docker Compose version v2.x.x`. It comes bundled with Docker Desktop, or follow https://docs.docker.com/compose/install/
+
+**3. Git** — downloads the code. Check:
+```bash
+git --version
+```
+If not installed, get it from https://git-scm.com/
+
+### What Ports Need to Be Open on the Firewall
+
+| Port | What It's For | Who Should Access It |
+|---|---|---|
+| **3000** | The website | Your users (open to the local network) |
+| **4000** | API Gateway | The website calls this automatically |
+| **4101** | Users Service | Internal only — no need to expose |
+| **4102** | Ticketing Service | Internal only — no need to expose |
+| **4103** | Compliance Service | Internal only — no need to expose |
+| **3306** | Database | Internal only — no need to expose |
+| **6379** | Cache | Internal only — no need to expose |
+
+> For a typical intranet setup, you only need to open **port 3000** to end users. Everything else stays internal.
+
+### What the Services Do
+
+| Container Name | Role |
+|---|---|
+| `ricms_mariadb` | Database — stores everything |
+| `ricms_redis` | Cache — makes the app faster |
+| `ricms_users_service` | Handles login, users, and attendance |
+| `ricms_ticketing_service` | Handles tickets and issue tracking |
+| `ricms_compliance_service` | Handles documents, KPI, reviews, issuances |
+| `ricms_api_gateway` | Routes requests between services — the main entry point |
+| `ricms_frontend` | The website that users open in their browser |
+
+---
+
+## Deployment Steps
+
+### Step 1 — Download the Code
+
+Open a terminal on the server and run:
+
 ```bash
 git clone <remote-url>
 cd "Compliance Hub"
 ```
 
-### Step 2: Build Backend and Frontend Images
+Replace `<remote-url>` with the Git URL your team provided for this repository. After this, you will be inside a folder called `Compliance Hub` which contains all the project files.
+
+---
+
+### Step 2 — Set Your Passwords and Configuration
+
+This is the most important step for a real deployment. You need to change the default passwords to something secure.
+
+Create a file named `.env` in the root folder of the project. You can create it using any text editor, or run:
+
+```bash
+# On Linux/Mac:
+cp docker-compose.yml .env   # wrong, just create the file manually
+# Actually, just open a text editor and create a new file named .env
+```
+
+Paste the following content into `.env` and fill in your own values:
+
+```env
+# ─────────────────────────────────────────────────────────────
+# DATABASE PASSWORDS — change all of these
+# ─────────────────────────────────────────────────────────────
+MYSQL_ROOT_PASSWORD=change_this_to_a_strong_password
+MYSQL_PASSWORD=change_this_to_a_strong_password
+DB_PASSWORD=change_this_to_a_strong_password
+
+# ─────────────────────────────────────────────────────────────
+# SECRET KEYS FOR LOGINS — generate unique random values (see below)
+# ─────────────────────────────────────────────────────────────
+JWT_SECRET=paste_a_long_random_string_here
+JWT_REFRESH_SECRET=paste_a_different_long_random_string_here
+
+# ─────────────────────────────────────────────────────────────
+# YOUR SERVER'S ADDRESS — replace with your server's IP
+# ─────────────────────────────────────────────────────────────
+CORS_ORIGIN=http://YOUR_SERVER_IP:3000
+NEXT_PUBLIC_API_URL=http://YOUR_SERVER_IP:4000/api
+```
+
+**How to generate secure secret keys** — run this on any computer that has Node.js installed:
+```bash
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+```
+Run it twice. Use the first output for `JWT_SECRET` and the second for `JWT_REFRESH_SECRET`.
+
+> **Example**: If your server IP is `192.168.1.50`, then set:
+> `CORS_ORIGIN=http://192.168.1.50:3000`
+> `NEXT_PUBLIC_API_URL=http://192.168.1.50:4000/api`
+
+---
+
+### Step 3 — Build the Application
+
+This step packages all the code into Docker images. It will take a few minutes the first time (it's downloading and compiling things).
+
 ```bash
 docker compose build
 ```
 
-### Step 3: Start Core Data Services First
+**You'll know it's finished when** the terminal returns to a prompt without any error messages. Warnings are usually fine; errors in red are not.
+
+---
+
+### Step 4 — Start the Database and Cache
+
+The database and cache must be running first because everything else depends on them.
+
 ```bash
 docker compose --profile microservices up -d mariadb redis
 ```
 
-### Step 4: Wait for Health
+Wait about 30 seconds, then check they started correctly:
+
 ```bash
 docker compose ps
 ```
-Ensure MariaDB and Redis are healthy before continuing.
 
-### Step 5: Start Backend Microservices (Separated Containers)
+**Look for:** `ricms_mariadb` and `ricms_redis` should show `healthy` in the STATUS column.
+
+If they still show `starting`, wait another 30 seconds and run `docker compose ps` again. Do not continue until both are `healthy`.
+
+---
+
+### Step 5 — Set Up the Database *(First Time Only)*
+
+This creates all the database tables and populates initial data. **You only need to do this once** on a brand new installation.
+
+```bash
+docker exec -i ricms_mariadb mysql -uroot -pYOUR_ROOT_PASSWORD < backend/database/microservices-migrate.sql
+```
+
+Replace `YOUR_ROOT_PASSWORD` with the `MYSQL_ROOT_PASSWORD` value you set in Step 2.
+
+**You're done when:** The command finishes without printing `ERROR`. Some lines that say "Query OK" or warnings about views already existing are normal and fine.
+
+**What this created:** Three databases — `compliance_hub`, `compliance_hub_users`, and `compliance_hub_ticketing` — with all the required tables and relationships between them.
+
+---
+
+### Step 6 — Start the Backend Services
+
 ```bash
 docker compose --profile microservices up -d users-service ticketing-service compliance-service api-gateway
 ```
 
-### Step 6: Start Frontend
+**What just happened:** Four backend services are now running. They handle all the logic — logins, documents, tickets, KPI, and so on.
+
+---
+
+### Step 7 — Start the Website
+
 ```bash
 docker compose up -d frontend
 ```
 
-### Step 7: Run Split-DB Migration Script Once
-Run from repository root while MariaDB container is running:
-```bash
-docker exec -i ricms_mariadb mysql -uroot -pricms_password < backend/database/microservices-migrate.sql
-```
+**What just happened:** The website is now running. Users can open it in a browser.
 
-### Step 8: Restart API Services to Pick Up Migrated DB State
+---
+
+### Step 8 — Restart the Backend Once
+
+After the database was set up in Step 5, do a quick restart of the backend services so they fully connect:
+
 ```bash
 docker compose --profile microservices restart users-service ticketing-service compliance-service api-gateway
 ```
 
-### Step 9: Verify Health
-Check gateway health:
+This takes about 15–30 seconds.
+
+---
+
+### Step 9 — Confirm Everything is Working
+
+**Check 1 — Health check:**
 ```bash
-node -e "fetch('http://localhost:4000/api/health').then(r=>r.text()).then(console.log).catch(e=>{console.error(e.message);process.exit(1);});"
+curl http://localhost:4000/api/health
 ```
-Expected: JSON payload with `services.users`, `services.ticketing`, `services.compliance` status flags.
 
-## 7. How Backend Servers Are Separated in Containers
-All backend services come from the same backend codebase/image and are separated by command entrypoint:
-- users-service: `npm run start:users:dev`
-- ticketing-service: `npm run start:ticketing:dev`
-- compliance-service: `npm run start:compliance:dev`
-- api-gateway: `npm run start:gateway:dev`
+You should see:
+```json
+{
+  "status": "ok",
+  "services": { "users": true, "ticketing": true, "compliance": true }
+}
+```
+All three must say `true`. If any say `false`, that service didn't start correctly (see Troubleshooting below).
 
-This mapping is already present in `docker-compose.yml` and does not require code relocation.
+**Check 2 — Open the website:**
 
-## 8. Environment Variables (Current Compose Baseline)
+Open a browser and go to `http://YOUR_SERVER_IP:3000`
 
-The following variables are defined in `docker-compose.yml` and used at container startup. Override these in your compose environment or a `.env` file at the repository root when deploying outside the default development baseline.
+You should see the Compliance Hub login page.
 
-### 8.1 MariaDB Service
-| Variable | Default | Purpose |
-|---|---|---|
-| `MYSQL_ROOT_PASSWORD` | `ricms_password` | MariaDB root password |
-| `MYSQL_DATABASE` | `compliance_hub` | Initial database created at first boot |
-| `MYSQL_USER` | `ricms_user` | Application database user |
-| `MYSQL_PASSWORD` | `ricms_password` | Application database user password |
+**Default login credentials (change after first login!):**
+- Email: `admin@rictms.gov.ph`
+- Password: `password123`
 
-### 8.2 Backend / Microservice Variables (applied to all four backend containers)
-| Variable | Default | Purpose |
-|---|---|---|
-| `NODE_ENV` | `development` | Runtime environment mode |
-| `DB_HOST` | `mariadb` | Hostname of MariaDB container |
-| `DB_PORT` | `3306` | MariaDB port |
-| `DB_USERNAME` | `ricms_user` | Database user |
-| `DB_PASSWORD` | `ricms_password` | Database user password |
-| `DB_DATABASE` | `compliance_hub_users` | Default DB (overridden per service) |
-| `USERS_DB_DATABASE` | `compliance_hub_users` | Users service database |
-| `TICKETING_DB_DATABASE` | `compliance_hub_ticketing` | Ticketing service database |
-| `COMPLIANCE_DB_DATABASE` | `compliance_hub` | Compliance service database |
-| `REDIS_HOST` | `redis` | Redis container hostname |
-| `REDIS_PORT` | `6379` | Redis port |
-| `JWT_SECRET` | `dev-jwt-secret-change-in-production` | **Must be changed in production** — signs access tokens |
-| `JWT_REFRESH_SECRET` | `dev-refresh-secret-change-in-production` | **Must be changed in production** — signs refresh tokens |
-| `CORS_ORIGIN` | `http://localhost:3000` | Allowed CORS origin for the frontend |
-| `MICROSERVICES_STRICT` | `true` | When `true`, gateway returns 503 for unavailable services |
+> ⚠️ Go to Settings immediately after your first login and change the admin password.
 
-### 8.3 Frontend Variables
-| Variable | Default | Purpose |
-|---|---|---|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:4000/api` | Base URL frontend uses to reach the gateway |
+---
 
-### 8.4 Production Secrets Guidance
-Before any production or staging deployment, override the following values with strong, randomly generated secrets:
+## Updating the App (After First Deployment)
 
-1. **`MYSQL_ROOT_PASSWORD`** and **`MYSQL_PASSWORD`** — use a random 32-character alphanumeric string.
-2. **`JWT_SECRET`** and **`JWT_REFRESH_SECRET`** — use a cryptographically random value (minimum 64 characters). These can be generated with:
-   ```bash
-   node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
-   ```
-3. **`CORS_ORIGIN`** — set to the actual intranet URL or hostname of the deployed frontend (e.g., `http://192.168.1.100:3000`).
-4. **`NEXT_PUBLIC_API_URL`** — set to the actual intranet URL or hostname of the deployed gateway (e.g., `http://192.168.1.100:4000/api`).
+When a new version is released:
 
-Store secrets in a `.env` file at the repository root (which is excluded from version control) or inject them through your CI/CD or container orchestration tool. Never commit secrets to the repository.
-
-## 9. Post-Deployment Validation Checklist
-- Frontend opens at `http://<host>:3000`
-- Gateway responds at `http://<host>:4000/api/health`
-- Users API reachable through gateway `/api/users`
-- Ticketing API reachable through gateway `/api/tickets`
-- Compliance API reachable through gateway `/api/documents`
-- Login succeeds
-- Core dashboard pages load without API 500 errors
-
-## 10. Troubleshooting
-
-### 10.1 Port Already In Use
-Symptoms: `EADDRINUSE` in service logs.
-Action:
 ```bash
-docker compose ps
-docker compose logs <service-name>
+# 1. Get the latest code
+git pull
+
+# 2. Rebuild the images (takes a few minutes)
+docker compose build
+
+# 3. Run the migration (safe to run again — it won't break existing data)
+docker exec -i ricms_mariadb mysql -uroot -pYOUR_ROOT_PASSWORD < backend/database/microservices-migrate.sql
+
+# 4. Restart services
+docker compose --profile microservices restart users-service ticketing-service compliance-service api-gateway
+docker compose restart frontend
 ```
-Stop conflicting local process/container and restart target service.
 
-### 10.2 Upstream Service Unavailable
-Symptoms: gateway returns 503 with `Service currently unavailable`.
-Action:
-- check service container status
-- check DB connectivity and env vars
-- check gateway `/api/health` service flags
+---
 
-### 10.3 Migration Errors
-Action:
-- verify MariaDB is healthy
-- rerun migration command
-- inspect DB object state in `compliance_hub_users`, `compliance_hub_ticketing`, `compliance_hub`
+## Stopping the App
 
-## 11. Rollback (Safe Reversal)
-1. Stop all application containers:
+To stop everything (your data is preserved):
+
 ```bash
 docker compose --profile microservices down
+docker compose down
 ```
-2. Restore DB from latest pre-deployment backup.
-3. Checkout previous known-good tag/commit.
-4. Rebuild and redeploy with previous compose image state.
 
-## 12. Operational Notes
-- Keep production-like healthchecks and restart policies in staging.
-- Use regular DB backups before schema/migration runs.
-- Prefer non-root runtime user for daily operations after initial setup.
+To start it again:
+```bash
+docker compose --profile microservices up -d mariadb redis
+# Wait for both to be healthy, then:
+docker compose --profile microservices up -d users-service ticketing-service compliance-service api-gateway
+docker compose up -d frontend
+```
+
+---
+
+## Configuration Reference
+
+These are all the settings the app understands. Most are already configured in `docker-compose.yml`. You override them in the `.env` file you created in Step 2.
+
+### Database Settings
+| Setting | Default | What It Does |
+|---|---|---|
+| `MYSQL_ROOT_PASSWORD` | `ricms_password` | Password for the database admin account |
+| `MYSQL_DATABASE` | `compliance_hub` | Main database name |
+| `MYSQL_USER` | `ricms_user` | App's database username |
+| `MYSQL_PASSWORD` | `ricms_password` | App's database password |
+
+### Backend Settings
+| Setting | Default | What It Does |
+|---|---|---|
+| `DB_HOST` | `mariadb` | Where the database is (Docker handles this automatically) |
+| `DB_PORT` | `3306` | Database port |
+| `DB_USERNAME` | `ricms_user` | Database username |
+| `DB_PASSWORD` | `ricms_password` | **Change in production** |
+| `USERS_DB_DATABASE` | `compliance_hub_users` | Database for user accounts |
+| `TICKETING_DB_DATABASE` | `compliance_hub_ticketing` | Database for tickets |
+| `COMPLIANCE_DB_DATABASE` | `compliance_hub` | Database for documents, KPI, etc. |
+| `REDIS_HOST` | `redis` | Where the cache is (Docker handles this automatically) |
+| `REDIS_PORT` | `6379` | Cache port |
+| `JWT_SECRET` | *(dev default)* | **Must change in production** — used to sign login sessions |
+| `JWT_REFRESH_SECRET` | *(dev default)* | **Must change in production** — used to renew sessions |
+| `CORS_ORIGIN` | `http://localhost:3000` | The address of your website (set to your server IP) |
+
+### Frontend Settings
+| Setting | Default | What It Does |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:4000/api` | Where the website sends API requests (set to your server IP) |
+
+---
+
+## Troubleshooting
+
+### "Port already in use" error
+
+**You see:** `EADDRINUSE` in the logs, or `port is already allocated`
+
+**Fix:**
+1. Find what's using the port:
+   ```bash
+   # Linux/Mac:
+   sudo lsof -i :3000
+   # Windows:
+   netstat -ano | findstr :3000
+   ```
+2. Kill that process or stop whatever is already running on that port.
+3. Restart the affected container: `docker compose restart frontend`
+
+---
+
+### "Service currently unavailable" banner in the app
+
+**You see:** A gray/red "Service Unavailable" panel in the browser.
+
+**Fix:**
+1. Check which containers are running:
+   ```bash
+   docker compose ps
+   ```
+2. Check the health endpoint to see which service is down:
+   ```bash
+   curl http://localhost:4000/api/health
+   ```
+3. Check the logs of the affected service (replace with the actual service name):
+   ```bash
+   docker compose logs compliance-service
+   ```
+4. Restart just that service:
+   ```bash
+   docker compose --profile microservices restart compliance-service
+   ```
+
+---
+
+### Login says "Invalid credentials" or fails silently
+
+**Fix:**
+1. Confirm all services are healthy: `curl http://localhost:4000/api/health`
+2. Check the users-service logs: `docker compose logs users-service`
+3. Make sure Step 5 (database setup) completed successfully. If unsure, run it again — it's safe.
+
+---
+
+### The database migration shows errors
+
+**Fix:**
+- Make sure MariaDB is healthy before running the migration.
+- Double-check the password you typed matches `MYSQL_ROOT_PASSWORD` in your `.env` file.
+- If some errors say "table already exists" or "view already exists", that is normal on re-runs — ignore those.
+
+---
+
+## Rolling Back to a Previous Version
+
+If something goes wrong after an update:
+
+1. Stop everything:
+   ```bash
+   docker compose --profile microservices down
+   docker compose down
+   ```
+2. Restore your database from a backup (always back up before updating!).
+3. Go back to the previous version of the code:
+   ```bash
+   git log --oneline       # shows recent versions — find the one before the update
+   git checkout <the-hash-from-the-log>
+   ```
+4. Rebuild and restart following Steps 3–9 above.
+
+---
+
+## Daily Operations Notes
+
+- **Back up the database regularly.** All data lives in MariaDB. Use `docker exec ricms_mariadb mysqldump ...` or your preferred backup tool.
+- **Check container status periodically:** `docker compose ps`
+- **View live logs for any service:** `docker compose logs -f <service-name>`
+- **Restart a single service** (without stopping others): `docker compose --profile microservices restart <service-name>`

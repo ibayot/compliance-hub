@@ -117,7 +117,7 @@ Use this as your manual file collection/upload checklist. Links are reference-on
 
 ## Dropped File Assessment (2026-03-03)
 
-Assessment source: `issuance-file-drop/classification-results.csv`
+Assessment source: `regulatory-issuances/classification-results.csv`
 
 - Total processed PDFs: 51
 - Included (national baseline + internal policy): 41
