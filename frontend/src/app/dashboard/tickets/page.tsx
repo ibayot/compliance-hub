@@ -43,9 +43,7 @@ function ticketTypeIcon(t: TicketType) {
   return <ITIcon />;
 }
 
-function isStaffRole(role?: string) {
-  return ['super_admin','reviewer','focal','technician','technician_desktop','technician_it_support','technician_it_staff','technician_desktop_staff','auditor','cybersec','infosec'].includes(role ?? '');
-}
+
 
 function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'warning' | 'breached' | null {
   if (!ticket.slaDeadline) return null;
@@ -95,6 +93,7 @@ export default function TicketsPage() {
   const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
   const [selectedTechId, setSelectedTechId] = useState('');
   const [isEscalateMode, setIsEscalateMode] = useState(false);
+  const [isEscalationFocal, setIsEscalationFocal] = useState(false);
 
   // Satisfaction dialog
   const [satDialogOpen, setSatDialogOpen] = useState(false);
@@ -113,7 +112,6 @@ export default function TicketsPage() {
   const [reminderTitle, setReminderTitle] = useState('Pending Satisfaction Reminder');
   const [reminderMessage, setReminderMessage] = useState('');
 
-  const canManageAll = isStaffRole(user?.role) && !(['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? ''));
   const isSuperAdmin = user?.role === 'super_admin';
   const isFocalTech = ['technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr'].includes(user?.role ?? '');
   const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
@@ -122,10 +120,12 @@ export default function TicketsPage() {
   const isFocal = user?.role === 'focal';
   const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer';
   const isSectionHead = user?.roleCode === 'section_head';
-  const isCybersecOfficer = user?.role === 'cybersec' || user?.role === 'infosec' || user?.roleCode === 'cybersecurity_officer';
-  const canViewEscalatedQueue = isSuperAdmin || isFocal || isFocalTech || isComplianceOfficer || isSectionHead || isCybersecOfficer;
-  // canAssign: focal techs, CO, SH, super_admin, cybersec/infosec can assign/reassign tickets
-  const canAssign = isSuperAdmin || isFocal || isFocalTech || isComplianceOfficer || isSectionHead || isCybersecOfficer;
+  // Only super_admin, section_head, compliance_officer, desktop_sr, it_support_sr see ALL tickets
+  const canManageAll = isSuperAdmin || isSectionHead || isComplianceOfficer || user?.role === 'desktop_sr' || user?.role === 'it_support_sr';
+  // canViewEscalatedQueue: DB-driven — true if current user's role is in escalation_focal_configs
+  const canViewEscalatedQueue = isEscalationFocal;
+  // canAssign: focal techs, CO, SH, super_admin can assign/reassign tickets
+  const canAssign = isSuperAdmin || isFocal || isFocalTech || isComplianceOfficer || isSectionHead;
   // canEscalate: lower-level techs can escalate their assigned ticket to a focal technician
   const canEscalate = isLowerLevelTech || isJuniorTech;
 
@@ -166,6 +166,14 @@ export default function TicketsPage() {
       }).catch(() => {});
     }
   }, [canManageAll]);
+
+  // Check DB escalation_focal_configs to see if the current user's role is a configured focal
+  useEffect(() => {
+    if (!user?.role || user.role === 'user') { setIsEscalationFocal(false); return; }
+    ticketSettingsApi.getEscalationFocals().then(focals => {
+      setIsEscalationFocal(focals.some(f => f.roleValue === user.role));
+    }).catch(() => setIsEscalationFocal(false));
+  }, [user?.role]);
 
   // Silent auto-refresh — no loading spinner to avoid flicker on background polls
   const silentFetchTickets = useCallback(async () => {

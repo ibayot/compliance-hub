@@ -736,31 +736,25 @@ export class TicketService implements OnModuleInit {
       .orderBy('t.createdAt', 'DESC');
 
     // Role-based visibility
+    // Only these roles see ALL tickets (full management view):
+    const SEE_ALL_ROLES: string[] = [
+      UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.REVIEWER,
+      UserRole.COMPLIANCE_OFFICER, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
+    ];
     if (filters.viewerRole === UserRole.USER) {
-      // Regular users see only their own tickets
+      // Regular users see only their own submitted tickets
       qb.where('t.requesterId = :uid', { uid: filters.viewerId });
-    } else if ([UserRole.TECHNICIAN_IT_STAFF, UserRole.IT_SUPPORT_JR].includes(filters.viewerRole as any)) {
-      // Lower-level IT staff see only tickets assigned to them
-      qb.where('t.assignedToId = :uid', { uid: filters.viewerId });
-      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
-    } else if ([UserRole.TECHNICIAN_DESKTOP_STAFF, UserRole.DESKTOP_JR].includes(filters.viewerRole as any)) {
-      // Lower-level Desktop staff see only tickets assigned to them
-      qb.where('t.assignedToId = :uid', { uid: filters.viewerId });
-      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
-    } else if ([UserRole.TECHNICIAN_DESKTOP, UserRole.DESKTOP_SR].includes(filters.viewerRole as any)) {
-      // Desktop-level technicians see all desktop_support tickets
-      qb.where('t.ticketType = :type', { type: TicketType.DESKTOP_SUPPORT });
-      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
-    } else if ([UserRole.TECHNICIAN_IT_SUPPORT, UserRole.IT_SUPPORT_SR].includes(filters.viewerRole as any)) {
-      // IT-level technicians see all it_support tickets
-      qb.where('t.ticketType = :type', { type: TicketType.IT_SUPPORT });
-      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
-    } else {
-      // super_admin, reviewer, focal, auditor, technician see all
+    } else if (filters.viewerRole && SEE_ALL_ROLES.includes(filters.viewerRole as string)) {
+      // Privileged roles: no WHERE restriction — see all tickets with full filter support
       if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
       if (filters.ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
       if (filters.requesterId) qb.andWhere('t.requesterId = :rid', { rid: filters.requesterId });
       if (filters.assignedToId) qb.andWhere('t.assignedToId = :aid', { aid: filters.assignedToId });
+    } else {
+      // All other staff: see only tickets assigned to them OR submitted by them
+      qb.where('(t.assignedToId = :uid OR t.requesterId = :uid)', { uid: filters.viewerId });
+      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
+      if (filters.ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
     }
 
     if (filters.escalatedToId) {

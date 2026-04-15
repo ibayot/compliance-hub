@@ -719,6 +719,75 @@ export default function TicketDetailPage() {
         </Grid>
       </Grid>
 
+      {/* ── Escalation Details ── (always shown; placed before comments for at-a-glance access) */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+            Escalation Details {escalations.length > 0 ? `(${escalations.length})` : ''}
+          </Typography>
+          {escalationsLoading ? (
+            <Box textAlign="center" py={2}><CircularProgress size={24} /></Box>
+          ) : escalations.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">No escalations for this ticket.</Typography>
+          ) : (
+            escalations.map((e) => (
+              <Box key={e.id} mb={2} p={1.5} bgcolor="action.hover" borderRadius={1}>
+                <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+                  <Chip label={e.status.toUpperCase()} size="small"
+                    color={e.status === 'accepted' ? 'success' : e.status === 'returned' ? 'error' : 'warning'} />
+                  <Typography variant="body2">
+                    <strong>{e.escalatedBy?.firstName} {e.escalatedBy?.lastName}</strong>
+                    {' → '}
+                    <strong>{e.escalatedTo?.firstName} {e.escalatedTo?.lastName}</strong>
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {new Date(e.createdAt).toLocaleString()}
+                  </Typography>
+                </Box>
+                {e.notes ? (
+                  <Typography variant="body2" mt={0.5}>Reason: {e.notes}</Typography>
+                ) : (
+                  <Typography variant="body2" color="text.secondary" mt={0.5} fontStyle="italic">No reason provided.</Typography>
+                )}
+                {e.returnReason && <Typography variant="body2" color="error.main" mt={0.5}>Return reason: {e.returnReason}</Typography>}
+                {e.proofFiles && e.proofFiles.length > 0 ? (
+                  <Box mt={1} display="flex" flexWrap="wrap" gap={1}>
+                    {e.proofFiles.map((filePath, idx) => {
+                      const parts = filePath.replace('escalation-proofs/', '').split('/');
+                      const tid = parts[0] ?? ticketId;
+                      const fname = encodeURIComponent(parts[1] ?? filePath);
+                      const srcUrl = `/api/tickets/proof/${tid}/${fname}`;
+                      return (
+                        <Box key={idx} component="a" href={srcUrl} target="_blank" rel="noreferrer noopener">
+                          <Box
+                            component="img"
+                            src={srcUrl}
+                            alt={`Proof photo ${idx + 1}`}
+                            sx={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 1, border: '1px solid', borderColor: 'divider', cursor: 'pointer' }}
+                          />
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                ) : (
+                  <Typography variant="caption" color="text.secondary" mt={0.5} display="block">No proof photo attached.</Typography>
+                )}
+                {e.status === 'pending' && e.escalatedToId === (user as any)?.id && (
+                  <Box mt={1} display="flex" gap={1}>
+                    <Button size="small" variant="contained" color="success"
+                      onClick={() => handleAcceptEscalation(e.id)}>Accept</Button>
+                    <Button size="small" variant="outlined" color="error"
+                      onClick={() => { setReturnEscalationId(e.id); setReturnReason(''); setReturnDialogOpen(true); }}>
+                      Return
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
       {/* ── Comments ── */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
@@ -859,54 +928,6 @@ export default function TicketDetailPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* ── Escalation History ── */}
-      {escalations.length > 0 && (
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-              Escalation History ({escalations.length})
-            </Typography>
-            {escalationsLoading ? (
-              <Box textAlign="center" py={2}><CircularProgress size={24} /></Box>
-            ) : (
-              escalations.map((e) => (
-                <Box key={e.id} mb={2} p={1.5} bgcolor="action.hover" borderRadius={1}>
-                  <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
-                    <Chip label={e.status.toUpperCase()} size="small"
-                      color={e.status === 'accepted' ? 'success' : e.status === 'returned' ? 'error' : 'warning'} />
-                    <Typography variant="body2">
-                      <strong>{e.escalatedBy?.firstName} {e.escalatedBy?.lastName}</strong>
-                      {' → '}
-                      <strong>{e.escalatedTo?.firstName} {e.escalatedTo?.lastName}</strong>
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {new Date(e.createdAt).toLocaleString()}
-                    </Typography>
-                  </Box>
-                  {e.notes && <Typography variant="body2" mt={0.5}>Notes: {e.notes}</Typography>}
-                  {e.returnReason && <Typography variant="body2" color="error.main" mt={0.5}>Return reason: {e.returnReason}</Typography>}
-                  {e.proofFiles && e.proofFiles.length > 0 && (
-                    <Typography variant="caption" color="text.secondary" mt={0.5} display="block">
-                      Proof files: {e.proofFiles.length} attachment(s)
-                    </Typography>
-                  )}
-                  {e.status === 'pending' && e.escalatedToId === (user as any)?.id && (
-                    <Box mt={1} display="flex" gap={1}>
-                      <Button size="small" variant="contained" color="success"
-                        onClick={() => handleAcceptEscalation(e.id)}>Accept</Button>
-                      <Button size="small" variant="outlined" color="error"
-                        onClick={() => { setReturnEscalationId(e.id); setReturnReason(''); setReturnDialogOpen(true); }}>
-                        Return
-                      </Button>
-                    </Box>
-                  )}
-                </Box>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {/* ── Assign / Escalate Dialog ── */}
       <Dialog open={assignDialogOpen} onClose={() => setAssignDialogOpen(false)} maxWidth="xs" fullWidth>

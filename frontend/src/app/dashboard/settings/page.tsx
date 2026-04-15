@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Autocomplete,
-  Badge,
   Box,
   Button,
   Card,
@@ -25,11 +24,13 @@ import {
   MenuItem,
   Select,
   Switch,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -40,7 +41,6 @@ import {
   Key as KeyIcon,
   Palette as PaletteIcon,
   PersonAdd as PersonAddIcon,
-  People as PeopleIcon,
   CheckCircle as ActiveIcon,
   Cancel as InactiveIcon,
   Delete as DeleteIcon,
@@ -449,6 +449,7 @@ function FocalUserManagementCard() {
   const [roles, setRoles] = useState<RoleDefinition[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [focalUsers, setFocalUsers] = useState<any[]>([]);
+  const [userTab, setUserTab] = useState(0); // 0 = RICTMS Staff, 1 = Regular Users
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editUser, setEditUser] = useState<any | null>(null);
@@ -489,8 +490,8 @@ function FocalUserManagementCard() {
       ]);
       setRoles(roleList);
       setUnits(unitList);
-      const assignable = new Set(roleList.filter((r) => r.assignable).map((r) => r.value));
-      setFocalUsers(users.filter((u: any) => assignable.has(u.role as string)));
+      // Show ALL users — not filtered by assignable flag
+      setFocalUsers(users);
     } catch { /* non-blocking */ }
   }, []);
 
@@ -572,8 +573,8 @@ function FocalUserManagementCard() {
     <Card elevation={2}>
       <CardHeader
         avatar={<PersonAddIcon color="primary" />}
-        title="Focal & Operations User Management"
-        subheader="Create and manage user accounts for focal persons, technicians, reviewers, and auditors."
+        title="User Management"
+        subheader="Create and manage user accounts for RICTMS staff and regular users."
         action={
           <Button variant="contained" startIcon={<PersonAddIcon />} size="small" onClick={handleOpenCreate}>
             Create New User
@@ -706,81 +707,89 @@ function FocalUserManagementCard() {
 
         <Divider sx={{ my: 3 }} />
 
-        <Box display="flex" alignItems="center" gap={1} mb={1.5}>
-          <PeopleIcon color="action" fontSize="small" />
-          <Typography variant="subtitle2">Existing Users</Typography>
-          <Badge badgeContent={focalUsers.length} color="primary" sx={{ ml: 1 }} />
-        </Box>
+        {/* Tabs: RICTMS Staff / Regular Users */}
+        <Tabs value={userTab} onChange={(_, v) => setUserTab(v)} sx={{ mb: 2 }}>
+          <Tab label={`RICTMS Staff (${focalUsers.filter((u: any) => u.role !== 'user').length})`} />
+          <Tab label={`Regular Users (${focalUsers.filter((u: any) => u.role === 'user').length})`} />
+        </Tabs>
 
-        {focalUsers.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">No users provisioned yet.</Typography>
-        ) : (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell><strong>Name / Email</strong></TableCell>
-                <TableCell><strong>Staff ID</strong></TableCell>
-                <TableCell><strong>Role</strong></TableCell>
-                <TableCell><strong>Status</strong></TableCell>
-                <TableCell align="right"><strong>Actions</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {focalUsers.map((u) => (
-                <TableRow key={u.id} hover>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={600}>
-                      {[u.firstName, u.middleName, u.lastName, u.suffix].filter(Boolean).join(' ') || ''}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">{u.email}</Typography>
-                  </TableCell>
-                  <TableCell><Typography variant="body2">{u.staffId || ''}</Typography></TableCell>
-                  <TableCell>
-                    <Chip label={u.role?.replace('_', ' ').toUpperCase()} size="small" variant="outlined" />
-                  </TableCell>
-                  <TableCell>
-                    {(u.is_active || u.active)
-                      ? <Chip icon={<ActiveIcon />} label="Active" size="small" color="success" />
-                      : <Chip icon={<InactiveIcon />} label="Inactive" size="small" color="default" />}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip title="Edit user">
-                      <IconButton
-                        size="small"
-                        color="primary"
-                        onClick={() => {
-                          setEditUser({
-                            id: u.id,
-                            email: u.email || '',
-                            firstName: u.firstName || '',
-                            middleName: u.middleName || '',
-                            lastName: u.lastName || '',
-                            suffix: u.suffix || '',
-                            staffId: u.staffId || '',
-                            position: u.position || '',
-                            positionFull: u.positionFull || '',
-                            designation: u.designation || '',
-                            ticketMainFocal: Boolean(u.ticketMainFocal),
-                            ticketTechnician: Boolean(u.ticketTechnician),
-                            role: u.role,
-                            unitIds: Array.isArray(u.units) ? u.units.map((unit: any) => unit.id) : [],
-                          });
-                        }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={(u.is_active || u.active) ? 'Deactivate' : 'Activate'}>
-                      <IconButton size="small" color={(u.is_active || u.active) ? 'warning' : 'success'} onClick={() => handleToggleActive(u)}>
-                        {(u.is_active || u.active) ? <InactiveIcon fontSize="small" /> : <ActiveIcon fontSize="small" />}
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
+        {(() => {
+          const displayUsers = userTab === 0
+            ? focalUsers.filter((u: any) => u.role !== 'user')
+            : focalUsers.filter((u: any) => u.role === 'user');
+
+          if (displayUsers.length === 0) {
+            return <Typography variant="body2" color="text.secondary">{userTab === 0 ? 'No RICTMS staff accounts provisioned yet.' : 'No regular user accounts provisioned yet.'}</Typography>;
+          }
+
+          return (
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>Name / Email</strong></TableCell>
+                  <TableCell><strong>Staff ID</strong></TableCell>
+                  <TableCell><strong>Role</strong></TableCell>
+                  <TableCell><strong>Status</strong></TableCell>
+                  <TableCell align="right"><strong>Actions</strong></TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+              </TableHead>
+              <TableBody>
+                {displayUsers.map((u: any) => (
+                  <TableRow key={u.id} hover>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={600}>
+                        {[u.firstName, u.middleName, u.lastName, u.suffix].filter(Boolean).join(' ') || ''}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">{u.email}</Typography>
+                    </TableCell>
+                    <TableCell><Typography variant="body2">{u.staffId || ''}</Typography></TableCell>
+                    <TableCell>
+                      <Chip label={u.role?.replace(/_/g, ' ').toUpperCase()} size="small" variant="outlined" />
+                    </TableCell>
+                    <TableCell>
+                      {(u.is_active || u.active)
+                        ? <Chip icon={<ActiveIcon />} label="Active" size="small" color="success" />
+                        : <Chip icon={<InactiveIcon />} label="Inactive" size="small" color="default" />}
+                    </TableCell>
+                    <TableCell align="right">
+                      <Tooltip title="Edit user">
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => {
+                            setEditUser({
+                              id: u.id,
+                              email: u.email || '',
+                              firstName: u.firstName || '',
+                              middleName: u.middleName || '',
+                              lastName: u.lastName || '',
+                              suffix: u.suffix || '',
+                              staffId: u.staffId || '',
+                              position: u.position || '',
+                              positionFull: u.positionFull || '',
+                              designation: u.designation || '',
+                              ticketMainFocal: Boolean(u.ticketMainFocal),
+                              ticketTechnician: Boolean(u.ticketTechnician),
+                              role: u.role,
+                              unitIds: Array.isArray(u.units) ? u.units.map((unit: any) => unit.id) : [],
+                            });
+                          }}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={(u.is_active || u.active) ? 'Deactivate' : 'Activate'}>
+                        <IconButton size="small" color={(u.is_active || u.active) ? 'warning' : 'success'} onClick={() => handleToggleActive(u)}>
+                          {(u.is_active || u.active) ? <InactiveIcon fontSize="small" /> : <ActiveIcon fontSize="small" />}
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          );
+        })()}
 
         <Dialog open={Boolean(editUser)} onClose={() => setEditUser(null)} maxWidth="md" fullWidth>
           <DialogTitle>Edit User Profile</DialogTitle>

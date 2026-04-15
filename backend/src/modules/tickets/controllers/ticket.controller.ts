@@ -13,7 +13,12 @@ import {
   Logger,
   UploadedFiles,
   UseInterceptors,
+  Res,
+  NotFoundException,
 } from '@nestjs/common';
+import { Response } from 'express';
+import * as path from 'path';
+import * as fs from 'fs';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
@@ -259,5 +264,23 @@ export class TicketController {
     @Request() req: any,
   ) {
     return this.ticketService.returnEscalation(id, eid, dto, req.user.id ?? req.user.userId);
+  }
+
+  /** GET /tickets/proof/:ticketId/:filename — serve escalation proof photo */
+  @Get('proof/:ticketId/:filename')
+  @Roles(...ALL_ROLES)
+  async serveProofFile(
+    @Param('ticketId') ticketId: string,
+    @Param('filename') filename: string,
+    @Res() res: Response,
+  ) {
+    // Sanitize inputs — prevent path traversal
+    const safeTicketId = path.basename(ticketId);
+    const safeFilename = path.basename(filename);
+    const filePath = path.join(process.cwd(), 'storage', 'escalation-proofs', safeTicketId, safeFilename);
+    if (!fs.existsSync(filePath)) {
+      throw new NotFoundException('Proof file not found');
+    }
+    res.sendFile(filePath);
   }
 }
