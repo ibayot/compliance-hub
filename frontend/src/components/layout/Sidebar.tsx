@@ -65,18 +65,18 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const mainNavItems: NavItem[] = [
     { label: 'Dashboard', icon: DashboardIcon, path: '/dashboard', roles: ['all'], service: 'core' },
     { label: 'Tickets', icon: TicketsIcon, path: '/dashboard/tickets', roles: ['all'], service: 'ticketing' },
-    { label: 'Documents', icon: DocumentsIcon, path: '/dashboard/documents', roles: ['super_admin', 'reviewer', 'compliance_officer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr', 'desktop_jr', 'it_support_jr', 'pantawid_ict', 'auditor'], service: 'compliance', roleCodes: ['focal'] },
-    { label: 'Repository', icon: RepositoryIcon, path: '/dashboard/repository', roles: ['super_admin', 'reviewer', 'compliance_officer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr', 'desktop_jr', 'it_support_jr', 'pantawid_ict', 'auditor'], service: 'compliance', roleCodes: ['focal'] },
+    { label: 'Documents', icon: DocumentsIcon, path: '/dashboard/documents', roles: ['super_admin', 'reviewer', 'compliance_officer', 'section_head', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr', 'pantawid_ict', 'auditor'], service: 'compliance', roleCodes: ['focal', 'section_head'] },
+    { label: 'Repository', icon: RepositoryIcon, path: '/dashboard/repository', roles: ['super_admin', 'reviewer', 'compliance_officer', 'section_head', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr', 'pantawid_ict', 'auditor'], service: 'compliance', roleCodes: ['focal', 'section_head'] },
     { label: 'Issuances', icon: IssuancesIcon, path: '/dashboard/issuances', roles: ['super_admin', 'reviewer', 'compliance_officer'], service: 'compliance' },
   ];
 
   const adminNavItems: NavItem[] = [
-    { label: 'Units', icon: UnitsIcon, path: '/dashboard/units', roles: ['super_admin'], service: 'users' },
+    { label: 'Units', icon: UnitsIcon, path: '/dashboard/units', roles: ['super_admin', 'section_head'], service: 'users' },
     { label: 'Metrics', icon: MetricsIcon, path: '/dashboard/metrics', roles: ['super_admin', 'reviewer', 'compliance_officer'], service: 'compliance' },
-    { label: 'KPI', icon: KpiIcon, path: '/dashboard/kpi', roles: ['super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor'], service: 'compliance', roleCodes: ['focal'] },
-    { label: 'Ticket Settings', icon: TicketSettingsIcon, path: '/dashboard/ticket-settings', roles: ['super_admin', 'technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr', 'pantawid_ict'], service: 'ticketing', roleCodes: ['focal'] },
+    { label: 'KPI', icon: KpiIcon, path: '/dashboard/kpi', roles: ['super_admin', 'reviewer', 'compliance_officer', 'section_head', 'focal', 'auditor'], service: 'compliance', roleCodes: ['focal', 'section_head'] },
+    { label: 'Ticket Settings', icon: TicketSettingsIcon, path: '/dashboard/ticket-settings', roles: ['super_admin', 'section_head', 'technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr', 'pantawid_ict'], service: 'ticketing', roleCodes: ['focal', 'section_head'] },
     { label: 'Ticket Reports', icon: TicketReportsIcon, path: '/dashboard/ticket-reports', roles: ['super_admin', 'focal', 'reviewer', 'section_head', 'compliance_officer', 'technician_it_support', 'technician_desktop', 'it_support_sr', 'desktop_sr', 'pantawid_ict', 'technician'], service: 'ticketing', roleCodes: ['focal'] },
-    { label: 'Attendance', icon: AttendanceIcon, path: '/dashboard/attendance', roles: ['super_admin', 'focal', 'reviewer', 'compliance_officer', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff', 'desktop_sr', 'it_support_sr', 'desktop_jr', 'it_support_jr', 'pantawid_ict'], service: 'ticketing', roleCodes: ['focal'] },
+    { label: 'Attendance', icon: AttendanceIcon, path: '/dashboard/attendance', roles: ['super_admin', 'section_head', 'focal', 'reviewer', 'compliance_officer', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff', 'desktop_sr', 'it_support_sr', 'desktop_jr', 'it_support_jr', 'pantawid_ict'], service: 'ticketing', roleCodes: ['focal', 'section_head'] },
     { label: 'Reviews', icon: SecurityIcon, path: '/dashboard/reviews', roles: ['super_admin', 'reviewer', 'compliance_officer'], service: 'compliance' },
     { label: 'Reports', icon: ReportsIcon, path: '/dashboard/reports', roles: ['super_admin', 'reviewer', 'compliance_officer'], service: 'compliance', roleCodes: ['section_head', 'compliance_officer'] },
     { label: 'MoV Builder', icon: MovIcon, path: '/dashboard/mov', roles: ['super_admin', 'reviewer', 'compliance_officer'], service: 'compliance' },

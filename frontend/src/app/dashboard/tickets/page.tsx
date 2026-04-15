@@ -44,7 +44,7 @@ function ticketTypeIcon(t: TicketType) {
 }
 
 function isStaffRole(role?: string) {
-  return ['super_admin','reviewer','focal','technician','technician_desktop','technician_it_support','technician_it_staff','technician_desktop_staff','auditor'].includes(role ?? '');
+  return ['super_admin','reviewer','focal','technician','technician_desktop','technician_it_support','technician_it_staff','technician_desktop_staff','auditor','cybersec','infosec'].includes(role ?? '');
 }
 
 function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'warning' | 'breached' | null {
@@ -122,9 +122,10 @@ export default function TicketsPage() {
   const isFocal = user?.role === 'focal';
   const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer';
   const isSectionHead = user?.roleCode === 'section_head';
-  const canViewEscalatedQueue = isSuperAdmin || isFocal || isFocalTech || isComplianceOfficer || isSectionHead;
-  // canAssign: focal techs, CO, SH, super_admin can assign/reassign tickets
-  const canAssign = isSuperAdmin || isFocal || isFocalTech || isComplianceOfficer || isSectionHead;
+  const isCybersecOfficer = user?.role === 'cybersec' || user?.role === 'infosec' || user?.roleCode === 'cybersecurity_officer';
+  const canViewEscalatedQueue = isSuperAdmin || isFocal || isFocalTech || isComplianceOfficer || isSectionHead || isCybersecOfficer;
+  // canAssign: focal techs, CO, SH, super_admin, cybersec/infosec can assign/reassign tickets
+  const canAssign = isSuperAdmin || isFocal || isFocalTech || isComplianceOfficer || isSectionHead || isCybersecOfficer;
   // canEscalate: lower-level techs can escalate their assigned ticket to a focal technician
   const canEscalate = isLowerLevelTech || isJuniorTech;
 
@@ -134,7 +135,7 @@ export default function TicketsPage() {
   const doneTickets = tickets.filter(t => ['resolved', 'closed'].includes(t.status));
   const frozenTickets = tickets.filter(t => t.status === 'freeze');
   const duplicateTickets = tickets.filter(t => t.status === 'duplicate');
-  const tabFilteredTickets = (isFocalTech && !canManageAll)
+  const tabFilteredTickets = isTechnician
     ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
     : tickets;
 
@@ -272,7 +273,7 @@ export default function TicketsPage() {
             return ['technician_desktop', 'technician', 'desktop_sr'].includes(t.role);
           if (ticket.ticketType === 'pantawid_ict_support')
             return ['technician', 'pantawid_ict'].includes(t.role);
-          return ['technician_it_support', 'technician', 'it_support_sr'].includes(t.role);
+          return ['technician_it_support', 'technician', 'it_support_sr', 'cybersec', 'infosec'].includes(t.role);
         }
         // Normal assign: filter by ticket type role
         if (ticket.ticketType === 'desktop_support')
@@ -407,8 +408,8 @@ export default function TicketsPage() {
       )}
       {!canManageAll && isFocalTech && (
         <Card sx={{ mb: 2 }}>
-          <CardContent sx={{ pb: '0 !important' }}>
-            <Stack direction="row" spacing={2} sx={{ mb: 1.5 }}>
+          <CardContent>
+            <Stack direction="row" spacing={2}>
               <Button
                 size="small"
                 variant={showMyTickets ? 'contained' : 'outlined'}
@@ -431,12 +432,6 @@ export default function TicketsPage() {
                 </Button>
               )}
             </Stack>
-            <Tabs value={ticketTab} onChange={(_, v) => setTicketTab(v)} variant="scrollable" scrollButtons="auto">
-              <Tab label={`Active (${activeTickets.length})`} />
-              <Tab label={`Resolved / Closed (${doneTickets.length})`} />
-              <Tab label={`Frozen (${frozenTickets.length})`} />
-              <Tab label={`Duplicate (${duplicateTickets.length})`} />
-            </Tabs>
           </CardContent>
         </Card>
       )}
@@ -446,6 +441,18 @@ export default function TicketsPage() {
             <Typography variant="body2" color="text.secondary">
               Showing your assigned tickets. Use the Escalate button to forward a ticket to a focal technician.
             </Typography>
+          </CardContent>
+        </Card>
+      )}
+      {isTechnician && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent sx={{ pb: '0 !important' }}>
+            <Tabs value={ticketTab} onChange={(_, v) => setTicketTab(v)} variant="scrollable" scrollButtons="auto">
+              <Tab label={`Active (${activeTickets.length})`} />
+              <Tab label={`Resolved / Closed (${doneTickets.length})`} />
+              <Tab label={`Frozen (${frozenTickets.length})`} />
+              <Tab label={`Duplicate (${duplicateTickets.length})`} />
+            </Tabs>
           </CardContent>
         </Card>
       )}

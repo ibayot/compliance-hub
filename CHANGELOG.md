@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.25] - 2026-04-15 — Cybersec Escalation, Ticket Tabs, Section Head Nav, Junior Tech Access
+
+### Fixed
+- **Cybersec/infosec escalation visibility:** `cybersec` and `infosec` added to `isStaffRole` so they get `canManageAll=true` and see the full ticket list. Added `isCybersecOfficer` flag used in `canViewEscalatedQueue` and `canAssign`, so they can see the "Escalated To Me" filter and assign tickets. Added `cybersec`/`infosec` as valid escalation targets for IT-type tickets in the assign dialog.
+- **Ticket tabs for all technician roles:** Tabs (Active / Resolved+Closed / Frozen / Duplicate) now appear for all `isTechnician` roles — this covers `desktop_sr`, `it_support_sr` (before), plus `technician`, `technician_desktop`, `technician_it_support`, `technician_it_staff`, `technician_desktop_staff`, `desktop_jr`, `it_support_jr` (newly added). Tabs are rendered in a dedicated Card below any existing control cards so they compose cleanly with the filter bar for canManageAll roles.
+- **Section head nav:** Added `section_head` role (and `roleCode: 'section_head'`) access to: Documents, Repository, Units, KPI, Ticket Settings, Attendance. Ticket Reports and Reports already included `section_head`. Section head now sees the full set requested: Dashboard, Tickets, Documents, Repository, Units, KPI, Ticket Settings, Ticket Reports, Attendance, Reports.
+- **Junior techs blocked from Documents/Repository:** Removed `desktop_jr` and `it_support_jr` from the Documents and Repository nav item role arrays. Junior desktop/IT support engineers no longer see these compliance modules.
+
 ## [0.0.24] - 2026-04-15 — Nav Access Fix, Ticket Tabs, Service Warning Cleanup
 
 ### Fixed
