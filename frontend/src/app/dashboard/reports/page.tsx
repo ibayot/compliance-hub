@@ -1086,7 +1086,8 @@ export default function ReportsPage() {
   const now = new Date();
   const { user } = useAuth();
   const isSuperOrReviewer =
-    user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.REVIEWER;
+    user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.REVIEWER ||
+    user?.role === UserRole.COMPLIANCE_OFFICER || user?.roleCode === 'compliance_officer';
 
   if (!isSuperOrReviewer) {
     return (

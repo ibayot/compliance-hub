@@ -22,12 +22,33 @@ export interface User {
 export enum UserRole {
   SUPER_ADMIN = 'super_admin',
   REVIEWER = 'reviewer',
+  SECTION_HEAD = 'section_head',
   FOCAL = 'focal',
   TECHNICIAN = 'technician',
   TECHNICIAN_DESKTOP = 'technician_desktop',
   TECHNICIAN_IT_SUPPORT = 'technician_it_support',
+  TECHNICIAN_IT_STAFF = 'technician_it_staff',
+  TECHNICIAN_DESKTOP_STAFF = 'technician_desktop_staff',
   AUDITOR = 'auditor',
   USER = 'user',
+  // RICTMS-specific named roles (use roleCode for feature routing)
+  COMPLIANCE_OFFICER = 'compliance_officer',
+  CYBERSEC = 'cybersec',
+  INFOSEC = 'infosec',
+  LEAD_INFRA = 'lead_infra',
+  SERVER_ADMIN = 'server_admin',
+  DB_ADMIN = 'db_admin',
+  NETWORK_ADMIN = 'network_admin',
+  PROJECT_MGR = 'project_mgr',
+  DEV_LEAD = 'dev_lead',
+  SQA_LEAD = 'sqa_lead',
+  RECORDS_OFFICER = 'records_officer',
+  HR_ID_OFFICER = 'hr_id_officer',
+  DESKTOP_SR = 'desktop_sr',
+  IT_SUPPORT_SR = 'it_support_sr',
+  DESKTOP_JR = 'desktop_jr',
+  IT_SUPPORT_JR = 'it_support_jr',
+  PANTAWID_ICT = 'pantawid_ict',
 }
 
 export interface Unit {

@@ -20,6 +20,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   const port = Number(process.env.USERS_SERVICE_PORT || 4101);
+  app.use('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'users' }));
   await app.listen(port);
   console.log(`Users service running on http://localhost:${port}/api`);
 }

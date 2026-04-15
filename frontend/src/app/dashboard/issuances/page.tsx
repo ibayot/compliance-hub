@@ -112,7 +112,8 @@ export default function IssuancesPage() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
   const [actionsIssuance, setActionsIssuance] = useState<Issuance | null>(null);
-  const canManageIssuances = user?.role === 'super_admin' || user?.role === 'reviewer';
+  const canManageIssuances = user?.role === 'super_admin' || user?.role === 'reviewer' ||
+    user?.role === 'compliance_officer' || user?.roleCode === 'compliance_officer';
 
   useEffect(() => {
     fetchIssuances();

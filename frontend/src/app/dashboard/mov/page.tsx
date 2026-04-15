@@ -107,7 +107,8 @@ export default function MovBuilderPage() {
   const [tab, setTab] = useState(0);
 
   // ── Role Gate (render-time check) ─────────────────────────────────────────
-  const allowed = !user || [UserRole.SUPER_ADMIN, UserRole.REVIEWER].includes(user.role as UserRole);
+  const allowed = !user || user.role === 'super_admin' || user.role === 'reviewer' ||
+    user.role === 'compliance_officer' || user.roleCode === 'compliance_officer';
 
   const [year, setYear] = useState<number>(currentYear);
   const [quarter, setQuarter] = useState<number>(Math.floor((now.getMonth() + 3) / 3));

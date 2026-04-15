@@ -183,6 +183,79 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
     roleCode: null,
     technicianType: 'pantawid_ict_support',
   },
+  // ── Legacy / compat roles ────────────────────────────────────────────────
+  {
+    value: UserRole.REVIEWER,
+    label: 'Reviewer (Legacy)',
+    description: 'Legacy role mapped to compliance_officer access. Users assigned this role have the same permissions as Compliance Officer.',
+    assignable: true,
+    isSystem: true,
+    roleCode: 'compliance_officer',
+    technicianType: null,
+  },
+  {
+    value: UserRole.FOCAL,
+    label: 'Focal Person (Legacy)',
+    description: 'Legacy focal role. Users assigned this role have the same access as named focal roles (lead_infra, project_mgr, etc.).',
+    assignable: true,
+    isSystem: true,
+    roleCode: 'focal',
+    technicianType: null,
+  },
+  {
+    value: UserRole.TECHNICIAN,
+    label: 'Technician',
+    description: 'General technician role. Handles support tickets.',
+    assignable: true,
+    isSystem: true,
+    roleCode: null,
+    technicianType: null,
+  },
+  {
+    value: UserRole.TECHNICIAN_DESKTOP,
+    label: 'Desktop Support Technician',
+    description: 'Handles desktop/hardware support tickets.',
+    assignable: true,
+    isSystem: true,
+    roleCode: null,
+    technicianType: 'desktop_support',
+  },
+  {
+    value: UserRole.TECHNICIAN_IT_SUPPORT,
+    label: 'IT Support Technician',
+    description: 'Handles IT/software support tickets.',
+    assignable: true,
+    isSystem: true,
+    roleCode: null,
+    technicianType: 'it_support',
+  },
+  {
+    value: UserRole.TECHNICIAN_IT_STAFF,
+    label: 'IT Support Staff',
+    description: 'Handles IT support tickets.',
+    assignable: true,
+    isSystem: true,
+    roleCode: null,
+    technicianType: 'it_support',
+  },
+  {
+    value: UserRole.TECHNICIAN_DESKTOP_STAFF,
+    label: 'Desktop Support Staff',
+    description: 'Handles desktop support tickets.',
+    assignable: true,
+    isSystem: true,
+    roleCode: null,
+    technicianType: 'desktop_support',
+  },
+  {
+    value: UserRole.AUDITOR,
+    label: 'Auditor',
+    description: 'Read-only access to compliance records and audit trails.',
+    assignable: true,
+    isSystem: true,
+    roleCode: null,
+    technicianType: null,
+  },
   // ── End-user role ────────────────────────────────────────────────────────
   {
     value: UserRole.USER,
@@ -237,6 +310,9 @@ export class UsersService {
       // Seed roleCode for existing system roles
       await queryRunner.query(`UPDATE role_definitions SET role_code = 'compliance_officer' WHERE \`value\` = 'reviewer' AND role_code IS NULL`).catch(() => undefined);
       await queryRunner.query(`UPDATE role_definitions SET role_code = 'section_head' WHERE \`value\` = 'section_head' AND role_code IS NULL`).catch(() => undefined);
+      // Create units VIEW so User entity can JOIN to units stored in the compliance DB
+      const complianceDb = process.env.COMPLIANCE_DB_DATABASE || 'compliance_hub';
+      await queryRunner.query(`CREATE OR REPLACE VIEW units AS SELECT * FROM \`${complianceDb}\`.units`).catch(() => undefined);
     } finally {
       await queryRunner.release();
     }
@@ -326,8 +402,11 @@ export class UsersService {
   }
 
   private isMissingUserUnitAccessError(error: unknown): boolean {
-    const message = (error as any)?.message || '';
-    return String(message).toLowerCase().includes('user_unit_access');
+    const message = String((error as any)?.message || '').toLowerCase();
+    return (
+      message.includes('user_unit_access') ||
+      (message.includes("doesn't exist") && message.includes("table '"))
+    );
   }
 
   async create(createUserDto: CreateUserDto): Promise<User> {

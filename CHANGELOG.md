@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.22] - 2026-04-15 — Health Endpoints, Units VIEW Self-Heal, Role Definitions Completeness, Frontend Role Guards
+
+### Fixed
+- **All nav items hidden after login (critical):** All 3 microservices now expose `/api/health` endpoints. Gateway health checks were receiving `404` → all services reported as DOWN → `hasAccess()` blocked all service-tagged nav items (Documents, Issuances, KPI, MoV, Tickets, Reports, Reviews, etc.). Only Dashboard and Tickets (tagged `roles: ['all']`) were visible.
+- **`getProfile()` 500 crash on login (critical):** Users service `ensureSchema()` now creates a `units` VIEW in `compliance_hub_users` pointing to `compliance_hub.units`. Previously `findOne(userId, { relations: ['units'] })` threw `Table 'compliance_hub_users.units' doesn't exist` → `initAuth()` removed tokens → `user = null` → sidebar collapsed to Dashboard + Tickets only.
+- **`isMissingUserUnitAccessError` too narrow:** Now catches any `Table '...' doesn't exist` MySQL error (not just `user_unit_access`), making DB resilience cover all missing table/view scenarios on the users DB.
+- **`DEFAULT_ROLE_DEFINITIONS` incomplete:** Added 8 missing legacy/compat roles: `reviewer` (roleCode: `compliance_officer`), `focal` (roleCode: `focal`), `technician`, `auditor`, `technician_desktop`, `technician_it_support`, `technician_it_staff`, `technician_desktop_staff`. Fresh installs without seed would have lacked these entries, causing roleCode-based feature routing to fail for legacy users.
+- **Compliance service cross-DB VIEWs at startup:** `compliance-service.main.ts` now creates/updates `users` and `role_definitions` VIEWs in `compliance_hub` at startup, ensuring KPI and compliance modules can JOIN user data even without running `migrate.sql`.
+- **Frontend `UserRole` enum outdated:** Added 20 missing roles to match backend enum: `SECTION_HEAD`, `COMPLIANCE_OFFICER`, `CYBERSEC`, `INFOSEC`, `LEAD_INFRA`, `SERVER_ADMIN`, `DB_ADMIN`, `NETWORK_ADMIN`, `PROJECT_MGR`, `DEV_LEAD`, `SQA_LEAD`, `RECORDS_OFFICER`, `HR_ID_OFFICER`, `DESKTOP_SR`, `IT_SUPPORT_SR`, `DESKTOP_JR`, `IT_SUPPORT_JR`, `PANTAWID_ICT`, `TECHNICIAN_IT_STAFF`, `TECHNICIAN_DESKTOP_STAFF`.
+- **Issuances page:** `canManageIssuances` now includes `compliance_officer` role and `roleCode === 'compliance_officer'` check. Previously only `super_admin` and `reviewer` could manage issuances.
+- **MoV page:** `allowed` gate now includes `compliance_officer` and `roleCode === 'compliance_officer'`. Previously blocked all compliance officers from accessing the MoV module.
+- **Documents page:** `isSuperOrCompliance` in `getWorkflowStatus`, `canReturnDocument`, and `canDeleteDocument` now includes `compliance_officer` and `roleCode` check. Uploader role checks also updated to include `compliance_officer`.
+- **Document detail page:** Same `isSuperOrCompliance` fix applied to workflow status display logic.
+- **Reports page:** `isSuperOrReviewer` now includes `UserRole.COMPLIANCE_OFFICER` and `roleCode === 'compliance_officer'`. Previously compliance officers were blocked from the Reports module.
+
 ## [0.0.21] - 2026-04-15 — Cross-DB role_definitions Fix + Attendance Service Routing
 
 ### Fixed

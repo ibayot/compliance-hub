@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { ComplianceServiceAppModule } from './compliance-service.module';
+import { DataSource } from 'typeorm';
 
 async function bootstrap() {
   const app = await NestFactory.create(ComplianceServiceAppModule);
@@ -29,6 +30,20 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   const port = Number(process.env.COMPLIANCE_SERVICE_PORT || 4103);
+  app.use('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'compliance' }));
+  // Ensure cross-DB VIEWs so the compliance service can access user/role data from compliance_hub_users
+  try {
+    const dataSource = app.get(DataSource);
+    const usersDb = process.env.USERS_DB_DATABASE || 'compliance_hub_users';
+    const conn = dataSource.createQueryRunner();
+    await conn.connect();
+    try {
+      await conn.query(`CREATE OR REPLACE VIEW users AS SELECT * FROM \`${usersDb}\`.users`).catch(() => undefined);
+      await conn.query(`CREATE OR REPLACE VIEW role_definitions AS SELECT * FROM \`${usersDb}\`.role_definitions`).catch(() => undefined);
+    } finally {
+      await conn.release();
+    }
+  } catch (_e) { /* non-fatal: service starts regardless of VIEW creation status */ }
   await app.listen(port);
   console.log(`Compliance service running on http://localhost:${port}/api`);
 }

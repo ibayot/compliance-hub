@@ -153,7 +153,8 @@ export default function DocumentDetailsPage() {
 
   const getWorkflowStatus = (doc: Document) => {
     const cs = doc.compliance_status;
-    const isSuperOrCompliance = user?.role === 'super_admin' || user?.role === 'reviewer';
+    const isSuperOrCompliance = user?.role === 'super_admin' || user?.role === 'reviewer' ||
+      user?.role === 'compliance_officer' || user?.roleCode === 'compliance_officer';
     if (cs === 'compliant') {
       return { label: isSuperOrCompliance ? 'COMPLIANT' : 'Approved', color: 'success' as const };
     }
