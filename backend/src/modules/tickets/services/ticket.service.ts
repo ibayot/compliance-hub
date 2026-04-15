@@ -254,6 +254,11 @@ export class TicketService implements OnModuleInit {
       await qr.query('DROP TABLE IF EXISTS units').catch(() => undefined);
       await qr.query(`CREATE VIEW units AS SELECT * FROM \`${complianceDb}\`.units`).catch(() => undefined);
 
+      // role_definitions: ownership stays in compliance_hub_users; expose as read-only view here
+      await qr.query('DROP VIEW IF EXISTS role_definitions').catch(() => undefined);
+      await qr.query('DROP TABLE IF EXISTS role_definitions').catch(() => undefined);
+      await qr.query(`CREATE VIEW role_definitions AS SELECT * FROM \`${usersDb}\`.role_definitions`).catch(() => undefined);
+
       // Create office_days table
       await qr.query(`
         CREATE TABLE IF NOT EXISTS office_days (

@@ -226,31 +226,38 @@ CALL copy_table_if_exists(@source_db, @compliance_db, 'mov_artifacts');
 
 -- Enforce single-table ownership and provide compatibility views
 -- Ownership policy:
---   users       -> compliance_hub_users
---   attendance  -> compliance_hub_users
---   units       -> compliance_hub
+--   users            -> compliance_hub_users
+--   attendance       -> compliance_hub_users
+--   role_definitions -> compliance_hub_users (views in ticketing + compliance DBs)
+--   units            -> compliance_hub
 
 -- Users DB should not own units table (use view to compliance units instead)
 CALL drop_view_if_exists(@users_db, 'units');
 CALL drop_table_if_exists(@users_db, 'units');
 CALL create_passthrough_view_if_table_exists(@users_db, 'units', @compliance_db, 'units');
 
--- Ticketing DB should not own users/units/attendance tables (use views)
+-- Ticketing DB should not own users/units/attendance/role_definitions tables (use views)
 CALL drop_view_if_exists(@ticketing_db, 'users');
 CALL drop_view_if_exists(@ticketing_db, 'units');
 CALL drop_view_if_exists(@ticketing_db, 'attendance');
+CALL drop_view_if_exists(@ticketing_db, 'role_definitions');
 CALL drop_table_if_exists(@ticketing_db, 'users');
 CALL drop_table_if_exists(@ticketing_db, 'units');
 CALL drop_table_if_exists(@ticketing_db, 'attendance');
 CALL drop_table_if_exists(@ticketing_db, 'tech_attendance');
+CALL drop_table_if_exists(@ticketing_db, 'role_definitions');
 CALL create_passthrough_view_if_table_exists(@ticketing_db, 'users', @users_db, 'users');
 CALL create_passthrough_view_if_table_exists(@ticketing_db, 'units', @compliance_db, 'units');
 CALL create_passthrough_view_if_table_exists(@ticketing_db, 'attendance', @users_db, 'attendance');
+CALL create_passthrough_view_if_table_exists(@ticketing_db, 'role_definitions', @users_db, 'role_definitions');
 
--- Compliance DB should not own users table (use view to users DB)
+-- Compliance DB should not own users/role_definitions tables (use views)
 CALL drop_view_if_exists(@compliance_db, 'users');
+CALL drop_view_if_exists(@compliance_db, 'role_definitions');
 CALL drop_table_if_exists(@compliance_db, 'users');
+CALL drop_table_if_exists(@compliance_db, 'role_definitions');
 CALL create_passthrough_view_if_table_exists(@compliance_db, 'users', @users_db, 'users');
+CALL create_passthrough_view_if_table_exists(@compliance_db, 'role_definitions', @users_db, 'role_definitions');
 
 SET FOREIGN_KEY_CHECKS = 1;
 

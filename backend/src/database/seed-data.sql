@@ -707,7 +707,11 @@ INSERT INTO metric_results (id, version_id, metric_template_id, status, score, m
 COMMIT;
 
 -- ============================================================
--- SECTION 4: compliance_hub_ticketing -- roles, categories, rules, tickets
+-- SECTION 4: compliance_hub_ticketing -- categories, rules, tickets
+-- NOTE: role_definitions, users, units, attendance are VIEWs pointing to
+--       their authoritative databases. They are created automatically by
+--       ticket.service.ts::runMigrations() on first service startup.
+--       Do NOT seed role_definitions here.
 -- ============================================================
 USE compliance_hub_ticketing;
 
@@ -716,39 +720,7 @@ TRUNCATE TABLE ticket_comments;
 TRUNCATE TABLE tickets;
 TRUNCATE TABLE ticket_keyword_rules;
 TRUNCATE TABLE ticket_categories;
-TRUNCATE TABLE role_definitions;
 SET FOREIGN_KEY_CHECKS = 1;
-
--- Role definitions (copy for ticketing service reads)
-INSERT INTO role_definitions (`value`, `label`, `description`, `assignable`, `is_system`, `role_code`, `technician_type`, `created_at`, `updated_at`) VALUES
-('super_admin', 'Super Admin', 'Full system access. Manages users, roles, settings, and all data.', 0, 1, NULL, NULL, NOW(), NOW()),
-('reviewer', 'Reviewer (Legacy/Compat)', 'Legacy compliance oversight role retained for backward compatibility. Maps to compliance_officer feature set.', 1, 1, 'compliance_officer', NULL, NOW(), NOW()),
-('focal', 'Focal Person', 'Unit-level focal. Uploads documents, manages unit compliance activities.', 1, 1, 'focal', NULL, NOW(), NOW()),
-('section_head', 'Section Head', 'Section-level supervisor. Manages staff tickets and unit attendance within their section.', 1, 1, 'section_head', NULL, NOW(), NOW()),
-('technician', 'Technician (General)', 'General ICT support technician. Handles tickets and operational support tasks.', 1, 1, 'technician', NULL, NOW(), NOW()),
-('auditor', 'Auditor', 'Read-only compliance, KPI, and document access for internal/external audit.', 1, 1, 'auditor', NULL, NOW(), NOW()),
-('user', 'Regular Staff', 'Standard staff user. Can submit tickets and view personal dashboards.', 1, 1, NULL, NULL, NOW(), NOW()),
-('compliance_officer', 'Compliance Officer', 'Primary compliance and quality management role. Full access to documents, KPI, MOV, reviews, and issuances.', 1, 1, NULL, NULL, NOW(), NOW()),
-('cybersec', 'Cybersecurity Officer', 'Cybersecurity-focused compliance officer. Manages cybersecurity metrics, reviews, and IAM-related compliance.', 1, 1, 'compliance_officer', NULL, NOW(), NOW()),
-('infosec', 'Information Security Officer', 'Information security governance and compliance. Reviews documents and manages security-related policy compliance.', 1, 1, 'compliance_officer', NULL, NOW(), NOW()),
-('lead_infra', 'Lead Infrastructure Officer', 'Leads infrastructure operations. Focal-level access to tickets, attendance management, and compliance.', 1, 1, 'focal', NULL, NOW(), NOW()),
-('server_admin', 'Server Administrator', 'Manages server infrastructure. Focal-level access for compliance and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
-('db_admin', 'Database Administrator', 'Manages database systems. Focal-level access for compliance and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
-('network_admin', 'Network Administrator', 'Manages network infrastructure. Focal-level access for compliance and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
-('project_mgr', 'Project Manager', 'Manages ICT projects. Focal-level access for compliance documentation and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
-('dev_lead', 'Development Lead', 'Leads software development. Focal-level access for compliance and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
-('sqa_lead', 'SQA Lead', 'Leads software quality assurance. Focal-level access for compliance and review participation.', 1, 1, 'focal', NULL, NOW(), NOW()),
-('records_officer', 'Records Officer', 'Manages administrative records. Focal-level access for document handling and compliance tracking.', 1, 1, 'focal', NULL, NOW(), NOW()),
-('hr_id_officer', 'HR / ID Officer', 'HR and identification management. Focal-level access for compliance and operational documentation.', 1, 1, 'focal', NULL, NOW(), NOW()),
-('technician_desktop', 'Desktop Technician', 'Desktop support technician. Handles hardware and peripheral support tickets.', 1, 1, 'technician', 'desktop_support', NOW(), NOW()),
-('technician_it_support', 'IT Support Technician', 'IT support technician. Handles connectivity, software, and network-level support tickets.', 1, 1, 'technician', 'it_support', NOW(), NOW()),
-('technician_it_staff', 'IT Support Staff', 'IT support staff under supervision. Handles assigned IT tickets and support tasks.', 1, 1, 'technician', 'it_support', NOW(), NOW()),
-('technician_desktop_staff', 'Desktop Support Staff', 'Desktop support staff under supervision. Handles assigned desktop-related tickets.', 1, 1, 'technician', 'desktop_support', NOW(), NOW()),
-('desktop_sr', 'Desktop Support Senior', 'Senior desktop technician with attendance management authority over their team.', 1, 1, 'focal', 'desktop_support', NOW(), NOW()),
-('it_support_sr', 'IT Support Senior', 'Senior IT support technician with attendance management authority over their team.', 1, 1, 'focal', 'it_support', NOW(), NOW()),
-('desktop_jr', 'Desktop Support Junior', 'Junior desktop technician assigned to escalate unresolved hardware issues.', 1, 1, 'technician', 'desktop_support', NOW(), NOW()),
-('it_support_jr', 'IT Support Junior', 'Junior IT support assigned to resolve basic network and software support tickets.', 1, 1, 'technician', 'it_support', NOW(), NOW()),
-('pantawid_ict', 'Pantawid ICT Support', 'ICT support for the Pantawid Pamilyang Pilipino program. Manages Pantawid-specific ICT tickets with focal-level oversight.', 1, 1, 'focal', 'pantawid_ict_support', NOW(), NOW());
 
 -- Ticket categories
 INSERT INTO ticket_categories (id, `key`, name, ticket_type, description, is_active, is_deleted, sla_hours, created_by, updated_by, created_at, updated_at) VALUES
