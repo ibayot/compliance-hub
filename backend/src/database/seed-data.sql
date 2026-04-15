@@ -24,6 +24,14 @@ CREATE TABLE IF NOT EXISTS mov_artifacts (
 	updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 	PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS units (
+	id INT NOT NULL AUTO_INCREMENT,
+	name VARCHAR(255) NOT NULL,
+	description TEXT NULL,
+	active TINYINT(1) NOT NULL DEFAULT 1,
+	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 TRUNCATE TABLE units;
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -68,16 +76,10 @@ TRUNCATE TABLE role_definitions;
 TRUNCATE TABLE users;
 SET FOREIGN_KEY_CHECKS = 1;
 
--- Users: test accounts using RICTMS named roles (password: Admin@123)
+-- Seed admin account only (password: Admin@123). Real users are managed via User Management.
 INSERT INTO users (id, email, passwordHash, first_name, last_name, role, active, created_at, updated_at) VALUES
-(1, 'admin@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'System', 'Admin', 'super_admin', 1, NOW(), NOW()),
-(2, 'cybersec.test@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Cybersec', 'Test', 'cybersec', 1, NOW(), NOW()),
-(3, 'lead.infra@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Lead', 'Infrastructure', 'lead_infra', 1, NOW(), NOW()),
-(4, 'desktop.tech@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Desktop', 'Technician', 'technician_desktop', 1, NOW(), NOW()),
-(5, 'it.tech@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'IT', 'Technician', 'technician_it_support', 1, NOW(), NOW()),
-(6, 'user1@example.com', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Juan', 'Dela Cruz', 'user', 1, NOW(), NOW()),
-(7, 'user2@example.com', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Maria', 'Santos', 'user', 1, NOW(), NOW()),
-(8, 'compliance.officer@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Compliance', 'Officer', 'compliance_officer', 1, NOW(), NOW());
+(1, 'admin@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'System', 'Admin', 'super_admin', 1, NOW(), NOW())
+ON DUPLICATE KEY UPDATE email = VALUES(email);
 
 -- ============================================================
 -- Back to compliance_hub for units INSERT
@@ -95,11 +97,8 @@ INSERT INTO units (id, name, description, active, created_at) VALUES
 USE compliance_hub_users;
 
 -- user_unit_access: user_id int, unit_id int
-INSERT INTO user_unit_access (user_id, unit_id) VALUES
-(1, 1), (1, 2),   -- admin: IT + Finance
-(2, 1), (2, 2),   -- cybersec.test: IT + Finance
-(3, 1),           -- lead.infra: IT Unit
-(8, 1), (8, 2);   -- compliance.officer: IT + Finance
+INSERT IGNORE INTO user_unit_access (user_id, unit_id) VALUES
+(1, 1), (1, 2);   -- admin: IT + Finance
 
 INSERT INTO role_definitions (`value`, `label`, `description`, `assignable`, `is_system`, `role_code`, `technician_type`, `created_at`, `updated_at`) VALUES
 -- Core system roles

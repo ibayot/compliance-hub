@@ -131,13 +131,17 @@ export default function TicketsPage() {
 
   // Senior technician tab state (isFocalTech && !canManageAll view)
   const [ticketTab, setTicketTab] = useState(0);
+  // Management tab state (canManageAll view: CO, SH, super_admin)
+  const [mgmtTab, setMgmtTab] = useState(0);
   const activeTickets = tickets.filter(t => ['open', 'assigned', 'in_progress'].includes(t.status));
   const doneTickets = tickets.filter(t => ['resolved', 'closed'].includes(t.status));
   const frozenTickets = tickets.filter(t => t.status === 'freeze');
   const duplicateTickets = tickets.filter(t => t.status === 'duplicate');
-  const tabFilteredTickets = isTechnician
-    ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
-    : tickets;
+  const tabFilteredTickets = canManageAll
+    ? ([tickets, activeTickets, doneTickets, frozenTickets, duplicateTickets][mgmtTab] ?? tickets)
+    : isTechnician
+      ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
+      : tickets;
 
   const fetchTickets = useCallback(async () => {
     try {
@@ -449,6 +453,19 @@ export default function TicketsPage() {
             <Typography variant="body2" color="text.secondary">
               Showing your assigned tickets. Use the Escalate button to forward a ticket to a focal technician.
             </Typography>
+          </CardContent>
+        </Card>
+      )}
+      {canManageAll && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent sx={{ pb: '0 !important' }}>
+            <Tabs value={mgmtTab} onChange={(_, v) => setMgmtTab(v)} variant="scrollable" scrollButtons="auto">
+              <Tab label={`All (${tickets.length})`} />
+              <Tab label={`Active (${activeTickets.length})`} />
+              <Tab label={`Resolved / Closed (${doneTickets.length})`} />
+              <Tab label={`Frozen (${frozenTickets.length})`} />
+              <Tab label={`Duplicate (${duplicateTickets.length})`} />
+            </Tabs>
           </CardContent>
         </Card>
       )}

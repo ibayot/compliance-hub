@@ -39,8 +39,6 @@ export interface BulkSetOfficeDaysDto {
 export class AttendanceService {
   private readonly logger = new Logger(AttendanceService.name);
   private readonly excludedAttendanceEmails = [
-    'desktop.tech@rictms.gov.ph',
-    'it.tech@rictms.gov.ph',
     'focal@rictms.gov.ph',
   ];
   private readonly excludedAttendanceRoleValues = [

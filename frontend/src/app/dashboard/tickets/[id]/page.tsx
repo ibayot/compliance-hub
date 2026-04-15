@@ -29,6 +29,7 @@ import {
   Checkbox,
   Autocomplete,
   InputAdornment,
+  IconButton,
 } from '@mui/material';
 import { useParams, useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
@@ -45,7 +46,8 @@ import {
   TicketEscalation,
   EscalationFocalConfig,
 } from '@/app/api/references';
-import { ArrowBack as BackIcon, Star as StarIcon, CloudUpload as UploadIcon, SentimentVerySatisfied, SentimentSatisfied, SentimentNeutral, SentimentDissatisfied, SentimentVeryDissatisfied } from '@mui/icons-material';
+import { ArrowBack as BackIcon, Star as StarIcon, CloudUpload as UploadIcon, SentimentVerySatisfied, SentimentSatisfied, SentimentNeutral, SentimentDissatisfied, SentimentVeryDissatisfied, NavigateBefore, NavigateNext } from '@mui/icons-material';
+import { apiClient } from '@/lib/api/client';
 
 const STATUS_OPTS = [
   { value: 'open', label: 'Open' },
@@ -123,6 +125,12 @@ export default function TicketDetailPage() {
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [returnEscalationId, setReturnEscalationId] = useState('');
   const [returnReason, setReturnReason] = useState('');
+
+  // Proof photo blob URLs (authenticated loading) and lightbox modal
+  const [proofBlobUrls, setProofBlobUrls] = useState<Record<string, string>>({});
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [photoModalSrcs, setPhotoModalSrcs] = useState<string[]>([]);
+  const [photoModalIdx, setPhotoModalIdx] = useState(0);
 
   // Satisfaction dialog
   const [satDialogOpen, setSatDialogOpen] = useState(false);
@@ -211,6 +219,31 @@ export default function TicketDetailPage() {
 
   useEffect(() => { fetchEvents(); }, [ticketId]);
   useEffect(() => { fetchEscalations(); }, [ticketId]);
+
+  // Load proof photos as authenticated blob URLs
+  useEffect(() => {
+    if (!escalations.length) return;
+    const urlMap: Record<string, string> = {};
+    const loaders: Promise<void>[] = [];
+    escalations.forEach(e => {
+      (e.proofFiles ?? []).forEach(filePath => {
+        const parts = filePath.replace('escalation-proofs/', '').split('/');
+        const tid = parts[0] ?? ticketId;
+        const fname = encodeURIComponent(parts[1] ?? filePath);
+        const apiUrl = `/api/tickets/proof/${tid}/${fname}`;
+        loaders.push(
+          apiClient.get(apiUrl, { responseType: 'blob' })
+            .then(r => { urlMap[apiUrl] = URL.createObjectURL(r.data); })
+            .catch(() => {})
+        );
+      });
+    });
+    Promise.all(loaders).then(() => setProofBlobUrls(prev => {
+      Object.values(prev).forEach(u => URL.revokeObjectURL(u));
+      return { ...urlMap };
+    }));
+    return () => { Object.values(urlMap).forEach(u => URL.revokeObjectURL(u)); };
+  }, [escalations, ticketId]);
 
   // Live updates – poll every 30 s for all users (QA #7: ensures user-side sees status changes)
   useEffect(() => {
@@ -756,15 +789,40 @@ export default function TicketDetailPage() {
                       const parts = filePath.replace('escalation-proofs/', '').split('/');
                       const tid = parts[0] ?? ticketId;
                       const fname = encodeURIComponent(parts[1] ?? filePath);
-                      const srcUrl = `/api/tickets/proof/${tid}/${fname}`;
+                      const apiUrl = `/api/tickets/proof/${tid}/${fname}`;
+                      const blobUrl = proofBlobUrls[apiUrl];
+                      const allBlobUrls = (e.proofFiles ?? []).map(fp => {
+                        const p = fp.replace('escalation-proofs/', '').split('/');
+                        const t2 = p[0] ?? ticketId;
+                        const f2 = encodeURIComponent(p[1] ?? fp);
+                        return proofBlobUrls[`/api/tickets/proof/${t2}/${f2}`];
+                      }).filter(Boolean) as string[];
                       return (
-                        <Box key={idx} component="a" href={srcUrl} target="_blank" rel="noreferrer noopener">
-                          <Box
-                            component="img"
-                            src={srcUrl}
-                            alt={`Proof photo ${idx + 1}`}
-                            sx={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 1, border: '1px solid', borderColor: 'divider', cursor: 'pointer' }}
-                          />
+                        <Box
+                          key={idx}
+                          component="button"
+                          onClick={() => {
+                            if (!allBlobUrls.length) return;
+                            setPhotoModalSrcs(allBlobUrls);
+                            setPhotoModalIdx(idx < allBlobUrls.length ? idx : 0);
+                            setPhotoModalOpen(true);
+                          }}
+                          sx={{
+                            p: 0, border: '1px solid', borderColor: 'divider', borderRadius: 1,
+                            cursor: 'pointer', background: 'transparent', overflow: 'hidden',
+                            width: 80, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}
+                        >
+                          {blobUrl ? (
+                            <Box
+                              component="img"
+                              src={blobUrl}
+                              alt={`Proof photo ${idx + 1}`}
+                              sx={{ width: 80, height: 80, objectFit: 'cover' }}
+                            />
+                          ) : (
+                            <CircularProgress size={20} />
+                          )}
                         </Box>
                       );
                     })}
@@ -1229,6 +1287,42 @@ export default function TicketDetailPage() {
               {csatSubmitting ? 'Submitting…' : 'Submit Feedback'}
             </Button>
           )}
+        </DialogActions>
+      </Dialog>
+      {/* ── Photo Lightbox Modal ── */}
+      <Dialog open={photoModalOpen} onClose={() => setPhotoModalOpen(false)} maxWidth="md" fullWidth
+        PaperProps={{ sx: { bgcolor: 'black', borderRadius: 2, position: 'relative' } }}>
+        <DialogContent sx={{ p: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400, position: 'relative' }}>
+          {photoModalSrcs.length > 0 && (
+            <Box
+              component="img"
+              src={photoModalSrcs[photoModalIdx]}
+              alt={`Proof photo ${photoModalIdx + 1}`}
+              sx={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain', display: 'block', mx: 'auto' }}
+            />
+          )}
+          {photoModalSrcs.length > 1 && (
+            <>
+              <IconButton
+                onClick={() => setPhotoModalIdx(i => (i - 1 + photoModalSrcs.length) % photoModalSrcs.length)}
+                sx={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'white', bgcolor: 'rgba(0,0,0,0.4)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
+              >
+                <NavigateBefore />
+              </IconButton>
+              <IconButton
+                onClick={() => setPhotoModalIdx(i => (i + 1) % photoModalSrcs.length)}
+                sx={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: 'white', bgcolor: 'rgba(0,0,0,0.4)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
+              >
+                <NavigateNext />
+              </IconButton>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ bgcolor: 'black', justifyContent: 'space-between', px: 2 }}>
+          <Typography variant="caption" color="grey.400">
+            {photoModalSrcs.length > 1 ? `${photoModalIdx + 1} / ${photoModalSrcs.length}` : ''}
+          </Typography>
+          <Button onClick={() => setPhotoModalOpen(false)} sx={{ color: 'grey.300' }}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>
