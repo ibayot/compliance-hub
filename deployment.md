@@ -48,8 +48,9 @@ Open and allow only required ports:
 ## 6. Deployment Steps
 
 ### Step 1: Clone the Repository
+Replace `<remote-url>` with the actual Git remote URL of this repository as configured by your organization:
 ```bash
-git clone <your-repo-url>
+git clone <remote-url>
 cd "Compliance Hub"
 ```
 
@@ -107,11 +108,53 @@ All backend services come from the same backend codebase/image and are separated
 This mapping is already present in `docker-compose.yml` and does not require code relocation.
 
 ## 8. Environment Variables (Current Compose Baseline)
-Use current compose variables unless your infrastructure requires overrides:
-- Users DB: `compliance_hub_users`
-- Ticketing DB: `compliance_hub_ticketing`
-- Compliance DB: `compliance_hub`
-- Gateway strict mode: `MICROSERVICES_STRICT=true`
+
+The following variables are defined in `docker-compose.yml` and used at container startup. Override these in your compose environment or a `.env` file at the repository root when deploying outside the default development baseline.
+
+### 8.1 MariaDB Service
+| Variable | Default | Purpose |
+|---|---|---|
+| `MYSQL_ROOT_PASSWORD` | `ricms_password` | MariaDB root password |
+| `MYSQL_DATABASE` | `compliance_hub` | Initial database created at first boot |
+| `MYSQL_USER` | `ricms_user` | Application database user |
+| `MYSQL_PASSWORD` | `ricms_password` | Application database user password |
+
+### 8.2 Backend / Microservice Variables (applied to all four backend containers)
+| Variable | Default | Purpose |
+|---|---|---|
+| `NODE_ENV` | `development` | Runtime environment mode |
+| `DB_HOST` | `mariadb` | Hostname of MariaDB container |
+| `DB_PORT` | `3306` | MariaDB port |
+| `DB_USERNAME` | `ricms_user` | Database user |
+| `DB_PASSWORD` | `ricms_password` | Database user password |
+| `DB_DATABASE` | `compliance_hub_users` | Default DB (overridden per service) |
+| `USERS_DB_DATABASE` | `compliance_hub_users` | Users service database |
+| `TICKETING_DB_DATABASE` | `compliance_hub_ticketing` | Ticketing service database |
+| `COMPLIANCE_DB_DATABASE` | `compliance_hub` | Compliance service database |
+| `REDIS_HOST` | `redis` | Redis container hostname |
+| `REDIS_PORT` | `6379` | Redis port |
+| `JWT_SECRET` | `dev-jwt-secret-change-in-production` | **Must be changed in production** — signs access tokens |
+| `JWT_REFRESH_SECRET` | `dev-refresh-secret-change-in-production` | **Must be changed in production** — signs refresh tokens |
+| `CORS_ORIGIN` | `http://localhost:3000` | Allowed CORS origin for the frontend |
+| `MICROSERVICES_STRICT` | `true` | When `true`, gateway returns 503 for unavailable services |
+
+### 8.3 Frontend Variables
+| Variable | Default | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:4000/api` | Base URL frontend uses to reach the gateway |
+
+### 8.4 Production Secrets Guidance
+Before any production or staging deployment, override the following values with strong, randomly generated secrets:
+
+1. **`MYSQL_ROOT_PASSWORD`** and **`MYSQL_PASSWORD`** — use a random 32-character alphanumeric string.
+2. **`JWT_SECRET`** and **`JWT_REFRESH_SECRET`** — use a cryptographically random value (minimum 64 characters). These can be generated with:
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+   ```
+3. **`CORS_ORIGIN`** — set to the actual intranet URL or hostname of the deployed frontend (e.g., `http://192.168.1.100:3000`).
+4. **`NEXT_PUBLIC_API_URL`** — set to the actual intranet URL or hostname of the deployed gateway (e.g., `http://192.168.1.100:4000/api`).
+
+Store secrets in a `.env` file at the repository root (which is excluded from version control) or inject them through your CI/CD or container orchestration tool. Never commit secrets to the repository.
 
 ## 9. Post-Deployment Validation Checklist
 - Frontend opens at `http://<host>:3000`

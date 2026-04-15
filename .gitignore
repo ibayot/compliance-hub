@@ -47,3 +47,23 @@ uploads/
 # Logs
 logs/
 *.log
+
+# Artifact and classification output directories
+issuance-file-drop/
+smoke-artifacts/
+tentative-compliance-report/
+
+# UAT and environment-specific reset scripts
+scripts/reset-for-uat.js
+scripts/reset-for-uat.sql
+scripts/run-reset-for-uat.ps1
+
+# Internal planning and status docs (not for repository)
+CURRENT-STATUS.md
+DATABASE-SETUP-COMPLETE.md
+IMPLEMENTATION-PLAN.md
+IMPLEMENTATION_STATUS.md
+KPI-FEATURE-PLAN.md
+KPI-MOV-AUDIT-2026-03-04.md
+PROJECT_STATUS.md
+RELEASE-NOTES-v1.2.0.4.md

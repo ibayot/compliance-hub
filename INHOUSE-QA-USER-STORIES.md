@@ -70,9 +70,67 @@ These user stories are intended for internal QA validation of currently implemen
 2. As an operator, I can restart one affected service without stopping all services so that maintenance is safer.
 3. As an operator, I can validate container health quickly using compose and gateway health endpoints so that release checks are repeatable.
 
+## Session Inactivity Edge Cases
+1. As a local-auth user, I am locked after exactly 15 minutes of inactivity so that the timeout is precise and not affected by clock drift.
+2. As a local-auth user, any valid activity (mouse move, keypress, API call) resets the 15-minute inactivity timer so that active users are not interrupted.
+3. As a local-auth user, submitting an incorrect password on the inactivity unlock dialog shows a clear error and does not log me out so that I can retry.
+4. As a Google-auth user, the inactivity lock triggers the Google sign-in flow (not a password dialog) so that provider-specific authentication is respected.
+5. As a user, closing and reopening the browser tab while locked requires re-authentication so that unattended sessions cannot be resumed without credentials.
+
+## Document Workflow Edge Cases
+1. As a focal user, uploading a document with a filename that does not match the expected pattern for the selected reportorial document type results in a clear validation error so that naming conventions are enforced at upload time.
+2. As a reviewer, returning a document with empty remarks is blocked by the system so that focal users always receive actionable feedback.
+3. As a focal user, a returned document shows the return remarks prominently and the document status is `needs_revision` so that the correction requirement is unambiguous.
+4. As a reviewer, a document marked `compliant` transitions to `ready` status immediately so that the workflow state is consistent.
+5. As a focal user, I cannot delete a document that is linked to an issuance so that reference integrity is preserved.
+
+## Microservice Resilience Stories
+1. As a frontend user, when the compliance service is unavailable, pages requiring compliance data show a service-unavailable panel instead of an unhandled error so that partial outages are gracefully handled.
+2. As a frontend user, sidebar navigation items scoped to a down service are hidden automatically so that users are not led to broken pages.
+3. As an operator, restarting a single microservice restores its functionality without requiring a restart of sibling services so that maintenance is targeted.
+4. As an operator, the gateway health check endpoint (`GET /api/health`) returns individual service flags for users, ticketing, and compliance so that the affected service can be identified without checking each port manually.
+
 ## QA Acceptance Checklist
-- Validate all stories with positive and negative scenarios.
-- Record expected vs actual behavior per story.
-- Attach evidence (screenshots/log snippets/API responses).
-- Tag each failed story with severity and module owner.
-- Re-test failed stories after fixes and mark closure date.
+
+### Story Coverage
+- Each user story in this document must be validated with at least one positive scenario (happy path) and one negative scenario (failure/boundary case).
+- Stories that cannot be tested in the current environment must be explicitly deferred with a documented reason.
+
+### Evidence Requirements
+For each story tested, record the following:
+| Field | Description |
+|---|---|
+| Story ID | Module + sequential number (e.g., Auth-3) |
+| Scenario | Positive or Negative |
+| Steps Performed | Numbered list of exact steps taken |
+| Expected Result | What the system should do |
+| Actual Result | What the system actually did |
+| Pass / Fail | Outcome |
+| Evidence | Screenshot filename, log snippet, or API response excerpt |
+| Tester | Name of person who validated |
+| Date | Date of validation |
+| Severity (if Fail) | Critical / High / Medium / Low |
+| Module Owner | Team member responsible for the module |
+
+### Defect Handling
+- All failed stories must be logged as defects with the severity and module owner filled in.
+- Defects rated Critical or High must be resolved before the release is marked QA-cleared.
+- After a fix is deployed, the story must be re-tested and the re-test date must be recorded alongside the original failure date.
+- Re-tested stories that pass are marked Closed with the closure date.
+
+### Regression Baseline
+Before each release, the following minimum regression checks must pass:
+1. Backend build completes without error (`npm run build` in `backend/`).
+2. Frontend build completes without error (`npm run build` in `frontend/`).
+3. Backend unit tests pass (`npm run test` in `backend/`).
+4. Gateway health check returns all services healthy (`GET /api/health`).
+5. Login succeeds for at least one account of each role: `super_admin`, `reviewer`, `focal`, `user`.
+6. Documents module loads and at least one document is listed without a 500 error.
+7. Tickets module loads and ticket creation succeeds.
+8. KPI dashboard loads without NaN or unhandled error state.
+
+### Non-Functional Acceptance Criteria
+- All API responses for authenticated endpoints return `401 Unauthorized` when called without a valid token.
+- All write endpoints for privileged operations (`users`, `metrics`, `kpi master`, `reviews`) return `403 Forbidden` when called by a role that does not have write access.
+- Uploading a file larger than the configured limit returns a `413 Payload Too Large` response.
+- The inactivity lock triggers at or before 15 minutes of inactivity on all tested browsers (Chrome, Firefox, Edge).
