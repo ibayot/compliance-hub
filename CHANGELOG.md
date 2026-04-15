@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.24] - 2026-04-15 — Nav Access Fix, Ticket Tabs, Service Warning Cleanup
+
+### Fixed
+- **Compliance officer / section head nav (critical):** Removed service-availability gate from sidebar `hasAccess()`. Nav items are now always shown to authorized roles regardless of microservice health. The page-level "Service currently unavailable" banner (in DashboardLayout) already provides the correct user feedback when a service is actually down — hiding nav items was redundant and harmful.
+- **Pantawid ICT / desktop_sr / it_support_sr Ticket Settings & Reports:** These roles were already listed in the nav item role arrays but were blocked by the same service gate. Fixed by the same `hasAccess` change above.
+- **Section head nav:** Same fix — section_head was blocked from KPI, Reports, Ticket Reports, and Attendance because those are `service: 'compliance'` or `service: 'ticketing'`.
+- **Service unavailable warning:** Removed the redundant "The Compliance service is offline. Start the compliance microservice..." text. The `Alert severity="warning"` with "Service currently unavailable" is sufficient.
+- **`Document.uploader.role` TS type too narrow:** Added `'compliance_officer' | string` to the `uploader.role` union in `documents.ts` to prevent false TypeScript errors when comparing against newer role values.
+
+### Added
+- **Ticket tabs for senior technicians (`desktop_sr`, `it_support_sr`):** Four tabs added to the senior tech ticket view:
+  - **Active** — open, assigned, in_progress tickets
+  - **Resolved / Closed** — resolved and closed tickets
+  - **Frozen** — freeze status tickets
+  - **Duplicate** — duplicate status tickets
+  - Each tab label shows a live count badge from the current ticket list.
+
 ## [0.0.23] - 2026-04-15 — Remove Legacy Roles, Super Admin Full Access Bypass
 
 ### Fixed

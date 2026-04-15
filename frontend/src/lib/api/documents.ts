@@ -26,7 +26,7 @@ export interface Document {
     id: string;
     username: string;
     email: string;
-    role?: 'super_admin' | 'reviewer' | 'focal' | 'technician' | 'auditor';
+    role?: 'super_admin' | 'reviewer' | 'focal' | 'technician' | 'auditor' | 'compliance_officer' | string;
   };
   versions?: DocumentVersion[];
   issuances?: Array<{ id: string; issuance_number: string; title: string }>;

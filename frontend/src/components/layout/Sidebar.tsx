@@ -37,7 +37,7 @@ import {
 import type { ElementType } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSidebar } from '@/contexts/SidebarContext';
-import { useServiceAvailability } from '@/lib/utils/useServiceAvailability';
+
 
 interface SidebarProps {
   mobileOpen: boolean;
@@ -61,7 +61,6 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user } = useAuth();
   const { isCollapsed, drawerWidth } = useSidebar();
-  const { services } = useServiceAvailability();
 
   const mainNavItems: NavItem[] = [
     { label: 'Dashboard', icon: DashboardIcon, path: '/dashboard', roles: ['all'], service: 'core' },
@@ -88,10 +87,9 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     { label: 'Settings', icon: SettingsIcon, path: '/dashboard/settings', roles: ['super_admin', 'reviewer', 'compliance_officer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr', 'pantawid_ict', 'auditor'], roleCodes: ['focal'] },
   ];
 
-  const hasAccess = (roles: string[], roleCodes?: string[], service: NavItem['service'] = 'core') => {
+  const hasAccess = (roles: string[], roleCodes?: string[], _service?: NavItem['service']) => {
     if (roles.includes('all')) return true;
     if (user?.role === 'super_admin') return true;
-    if (service && service !== 'core' && services[service] === false) return false;
     if (!user) return false;
     if (roles.includes(user.role)) return true;
     if (roleCodes && user.roleCode && roleCodes.includes(user.roleCode)) return true;

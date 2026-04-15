@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Alert, Box, Paper, Toolbar, Typography } from '@mui/material';
+import { Alert, Box, Paper, Toolbar } from '@mui/material';
 import Sidebar from './Sidebar';
 import AppBar from './AppBar';
 import { SidebarProvider } from '@/contexts/SidebarContext';
@@ -85,15 +85,9 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         >
           {showComplianceUnavailable ? (
             <Paper sx={{ p: 3 }}>
-              <Alert severity="warning" sx={{ mb: 2 }}>
+              <Alert severity="warning">
                 Service currently unavailable
               </Alert>
-              <Typography variant="h6" fontWeight={700} mb={1}>
-                The Compliance service is offline.
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Start the compliance microservice, then refresh this page to continue.
-              </Typography>
             </Paper>
           ) : (
             children
