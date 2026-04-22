@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, BadRequestException, Optional } from
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { OAuth2Client, TokenPayload as GoogleTokenPayload } from 'google-auth-library';
 import { UsersService } from '../users/users.service';
 import { AttendanceService } from '../tickets/services/attendance.service';
@@ -20,6 +21,18 @@ export class AuthService {
     @Optional() private readonly attendanceService?: AttendanceService,
     @Optional() private readonly ticketService?: TicketService,
   ) {}
+
+  private timingSafeStringEquals(a: string, b: string): boolean {
+    const aBuf = Buffer.from(a, 'utf8');
+    const bBuf = Buffer.from(b, 'utf8');
+    const len = Math.max(aBuf.length, bBuf.length);
+    const aPadded = Buffer.alloc(len);
+    const bPadded = Buffer.alloc(len);
+    aBuf.copy(aPadded);
+    bBuf.copy(bPadded);
+    const equals = crypto.timingSafeEqual(aPadded, bPadded);
+    return equals && aBuf.length === bBuf.length;
+  }
 
   private get jwtIssuer(): string {
     return this.configService.get<string>('JWT_ISSUER') || 'compliance-hub-api';
@@ -240,7 +253,7 @@ export class AuthService {
       designation: user.designation,
       ticketMainFocal: user.ticketMainFocal,
       ticketTechnician: user.ticketTechnician,
-      authProvider: (user as any).authProvider,
+      authProvider: user.authProvider,
       role: user.role,
       units: user.units?.map((u) => ({ id: u.id, name: u.name })) || [],
       roleCode: roleDef?.roleCode ?? null,
@@ -252,7 +265,7 @@ export class AuthService {
     currentPassword: string,
     newPassword: string,
   ): Promise<{ message: string }> {
-    if (currentPassword === newPassword) {
+    if (this.timingSafeStringEquals(currentPassword, newPassword)) {
       throw new BadRequestException('New password must be different from current password');
     }
 
@@ -275,7 +288,7 @@ export class AuthService {
     }
 
     const user = await this.usersService.findOne(userId);
-    if ((user as any).authProvider === 'google') {
+    if (user.authProvider === 'google') {
       throw new BadRequestException('Password re-authentication is not available for Google accounts. Please sign in again.');
     }
 

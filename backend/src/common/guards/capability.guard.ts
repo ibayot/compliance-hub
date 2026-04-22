@@ -35,10 +35,20 @@ export class CapabilityGuard implements CanActivate {
 
     if (role === 'super_admin') return true;
 
-    // Delegates to the matching boolean helper on RoleCapabilitiesService
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fn = (this.roleCapSvc as any)[required];
-    if (typeof fn !== 'function') return false;
-    return (fn as (r: string) => boolean).call(this.roleCapSvc, role);
+    const capabilityCheckers: Record<string, (r: string) => boolean> = {
+      isFocal: (r) => this.roleCapSvc.isFocal(r),
+      isIto: (r) => this.roleCapSvc.isIto(r),
+      isDesktop: (r) => this.roleCapSvc.isDesktop(r),
+      isItSupport: (r) => this.roleCapSvc.isItSupport(r),
+      isPantawidIct: (r) => this.roleCapSvc.isPantawidIct(r),
+      isEscalationFocal: (r) => this.roleCapSvc.isEscalationFocal(r),
+      isTicketSettingsFocal: (r) => this.roleCapSvc.isTicketSettingsFocal(r),
+      isAllTickets: (r) => this.roleCapSvc.isAllTickets(r),
+      isTicketFocal: (r) => this.roleCapSvc.isTicketFocal(r),
+    };
+
+    const checker = capabilityCheckers[required];
+    if (!checker) return false;
+    return checker(role);
   }
 }

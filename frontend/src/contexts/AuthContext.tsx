@@ -9,6 +9,21 @@ import { usersApi, RoleCapabilityRecord } from '@/lib/api/users';
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 
+const tokenStore = {
+  get: (key: 'accessToken' | 'refreshToken'): string | null => {
+    if (typeof window === 'undefined') return null;
+    return window.sessionStorage.getItem(key);
+  },
+  set: (key: 'accessToken' | 'refreshToken', value: string) => {
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.setItem(key, value);
+  },
+  remove: (key: 'accessToken' | 'refreshToken') => {
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.removeItem(key);
+  },
+};
+
 interface AuthContextType {
   user: User | null;
   myCap: RoleCapabilityRecord | null;
@@ -67,15 +82,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Check for existing token and fetch user profile
     const initAuth = async () => {
-      const token = localStorage.getItem('accessToken');
+      const token = tokenStore.get('accessToken');
       if (token) {
         try {
           const profile = await authApi.getProfile();
           setUser(profile);
           usersApi.getMyCapabilities().then(setMyCap).catch(() => {});
         } catch (error) {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
+          tokenStore.remove('accessToken');
+          tokenStore.remove('refreshToken');
         }
       }
       setLoading(false);
@@ -129,8 +144,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string, redirectTo?: string) => {
     try {
       const response = await authApi.login({ email, password });
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('refreshToken', response.refreshToken);
+      tokenStore.set('accessToken', response.accessToken);
+      tokenStore.set('refreshToken', response.refreshToken);
       // Set user from login response first (includes units now)
       setUser(response.user as any);
       // Then fetch full profile to guarantee units and all relations are populated
@@ -150,8 +165,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithGoogle = async (idToken: string, redirectTo?: string) => {
     try {
       const response = await authApi.loginWithGoogle({ idToken });
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('refreshToken', response.refreshToken);
+      tokenStore.set('accessToken', response.accessToken);
+      tokenStore.set('refreshToken', response.refreshToken);
       setUser(response.user as any);
       try {
         const profile = await authApi.getProfile();
@@ -171,8 +186,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      tokenStore.remove('accessToken');
+      tokenStore.remove('refreshToken');
       setUser(null);
       setMyCap(null);
       setIsSessionLocked(false);

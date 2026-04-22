@@ -556,30 +556,34 @@ function ReportView({ params }: { params: ReportParams }) {
     if (!content) return;
     const win = window.open('', '_blank', 'width=960,height=720');
     if (!win) return;
-    win.document.write(`
-      <html>
-        <head>
-          <title>Consolidated Report — ${periodLabel}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 28px; color: #222; }
-            h1, h2, h3 { margin: 0 0 6px; }
-            table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-            th, td { border: 1px solid #ccc; padding: 6px 10px; font-size: 12px; }
-            th { background: #f4f4f4; font-weight: 600; }
-            .score-cards { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-            .score-card { padding: 16px 28px; border: 2px solid #1976d2; border-radius: 8px; text-align: center; min-width: 120px; }
-            .score-value { font-size: 2.2rem; font-weight: 700; color: #1976d2; }
-            .score-label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-            .section-title { font-size: 1rem; font-weight: 700; margin: 20px 0 8px; border-bottom: 2px solid #1976d2; padding-bottom: 4px; }
-            .no-data { padding: 10px 14px; background: #e3f2fd; border-left: 4px solid #1976d2; border-radius: 0 4px 4px 0; font-size: 13px; }
-            .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 11px; color: #999; }
-            svg { display: none !important; }
-          </style>
-        </head>
-        <body>${content.innerHTML}</body>
-      </html>
-    `);
-    win.document.close();
+    const doc = win.document;
+    if (!doc.head || !doc.body) return;
+    doc.title = `Consolidated Report - ${periodLabel}`;
+
+    while (doc.body.firstChild) {
+      doc.body.removeChild(doc.body.firstChild);
+    }
+
+    const style = doc.createElement('style');
+    style.textContent = `
+      body { font-family: Arial, sans-serif; padding: 28px; color: #222; }
+      h1, h2, h3 { margin: 0 0 6px; }
+      table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+      th, td { border: 1px solid #ccc; padding: 6px 10px; font-size: 12px; }
+      th { background: #f4f4f4; font-weight: 600; }
+      .score-cards { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+      .score-card { padding: 16px 28px; border: 2px solid #1976d2; border-radius: 8px; text-align: center; min-width: 120px; }
+      .score-value { font-size: 2.2rem; font-weight: 700; color: #1976d2; }
+      .score-label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+      .section-title { font-size: 1rem; font-weight: 700; margin: 20px 0 8px; border-bottom: 2px solid #1976d2; padding-bottom: 4px; }
+      .no-data { padding: 10px 14px; background: #e3f2fd; border-left: 4px solid #1976d2; border-radius: 0 4px 4px 0; font-size: 13px; }
+      .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 11px; color: #999; }
+      svg { display: none !important; }
+    `;
+    doc.head.appendChild(style);
+
+    const cloned = content.cloneNode(true) as HTMLElement;
+    doc.body.appendChild(cloned);
     win.focus();
     win.print();
   };

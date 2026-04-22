@@ -1066,15 +1066,22 @@ export default function MovBuilderPage() {
                       borderColor: 'divider',
                       borderRadius: 1,
                       minHeight: 520,
-                      p: 2,
+                      p: 0,
                       overflow: 'auto',
                       backgroundColor: '#fff',
                       color: '#111',
                       '&, & *': { color: '#111' },
                       '& th': { backgroundColor: '#87CEEB !important' },
                     }}
-                    dangerouslySetInnerHTML={{ __html: reportHtml || '<p style="color:#9ca3af">No report generated yet. Use the Generate buttons on the left.</p>' }}
-                  />
+                  >
+                    <Box
+                      component="iframe"
+                      title="mov-report-preview"
+                      sandbox="allow-same-origin"
+                      srcDoc={reportHtml || '<p style="color:#9ca3af">No report generated yet. Use the Generate buttons on the left.</p>'}
+                      sx={{ width: '100%', minHeight: 520, border: 0, display: 'block' }}
+                    />
+                  </Box>
                 </Stack>
               </CardContent>
             </Card>
