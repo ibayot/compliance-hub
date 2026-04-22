@@ -7,12 +7,14 @@ import {
   Param,
   Delete,
   Query,
+  Request,
   UseGuards,
   ClassSerializerInterceptor,
   UseInterceptors,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { CreateRoleDefinitionDto, UpdateRoleDefinitionDto, CreateUserDto, UpdateUserDto } from './dto';
+import { RoleCapabilitiesService } from './role-capabilities.service';
+import { CreateRoleDefinitionDto, UpdateRoleDefinitionDto, CreateUserDto, UpdateUserDto, UpdateRoleCapabilityDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -22,10 +24,13 @@ import { UserRole } from './entities/user.entity';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @UseInterceptors(ClassSerializerInterceptor)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly roleCapabilitiesService: RoleCapabilitiesService,
+  ) {}
 
   @Get('roles')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   getRoles() {
     return this.usersService.getRoles();
   }
@@ -61,19 +66,49 @@ export class UsersController {
   }
 
   @Get()
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   findAll() {
     return this.usersService.findAll();
   }
 
   @Get('federated')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   getFederatedUsers() {
     return this.usersService.getFederatedUsers();
   }
 
+  // ── Role Capabilities ── declared BEFORE :id to avoid NestJS route shadowing ──
+
+  /** Returns all role capability rows. Admin read access. */
+  @Get('role-capabilities')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
+  getRoleCapabilities() {
+    return this.roleCapabilitiesService.findAll();
+  }
+
+  /**
+   * Returns the capability row for the currently authenticated user's role.
+   * Accessible to any logged-in user (no @Roles restriction).
+   */
+  @Get('role-capabilities/me')
+  getMyCapabilities(@Request() req: any) {
+    return this.roleCapabilitiesService.findOne(req.user.role) ?? null;
+  }
+
+  /** Updates capability flags for a specific role. Super admin only. */
+  @Patch('role-capabilities/:roleValue')
+  @Roles(UserRole.SUPER_ADMIN)
+  updateRoleCapability(
+    @Param('roleValue') roleValue: string,
+    @Body() dto: UpdateRoleCapabilityDto,
+  ) {
+    return this.roleCapabilitiesService.updateOne(roleValue, dto);
+  }
+
+  // ── Generic user :id routes — kept AFTER static capability routes ──
+
   @Get(':id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(+id);
   }

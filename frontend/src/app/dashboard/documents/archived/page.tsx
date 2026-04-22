@@ -29,7 +29,7 @@ export default function ArchivedDocumentsPage() {
   const { user } = useAuth();
 
   // Only focal users should access this page
-  const isFocal = user?.role === 'focal';
+  const isFocal = user?.roleCode === 'focal';
 
   const { data, isLoading } = useQuery({
     queryKey: ['documents', 'archived'],

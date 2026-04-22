@@ -71,15 +71,16 @@ function RatingBar({ avg }: { avg: number }) {
 }
 
 const PIE_COLORS = ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#F44336', '#00BCD4'];
-
-const PRIVILEGED_ROLES = [
-  'super_admin', 'section_head', 'reviewer', 'compliance_officer',
-  'cybersec', 'infosec', 'desktop_sr', 'it_support_sr', 'pantawid_ict',
-];
+const ESC_PIE_COLORS: Record<string, string> = {
+  Accepted: '#4CAF50',
+  Returned: '#F44336',
+  Pending: '#FF9800',
+};
 
 export default function TicketReportsPage() {
-  const { user } = useAuth();
-  const isPrivileged = PRIVILEGED_ROLES.includes(user?.role ?? '');
+  const { user, myCap } = useAuth();
+  /** True for all staff with ticket settings admin access (DB-driven via is_ticket_settings_focal flag) */
+  const isTicketSettingsFocal = user?.role === 'super_admin' || !!myCap?.isTicketSettingsFocal;
 
   const [year, setYear] = useState<number>(CURRENT_YEAR);
   const [periodMode, setPeriodMode] = useState<PeriodMode>('month');
@@ -95,14 +96,14 @@ export default function TicketReportsPage() {
 
   // Period-filtered technician dropdown
   useEffect(() => {
-    if (!isPrivileged) return;
+    if (!isTicketSettingsFocal) return;
     const filters: Parameters<typeof ticketsApi.getReportTechnicians>[0] = { year };
     if (periodMode === 'month') filters.month = month;
     else if (periodMode === 'quarter') filters.quarter = quarter;
     else if (periodMode === 'semester') filters.semester = semester;
     if (ticketType) filters.ticketType = ticketType;
     ticketsApi.getReportTechnicians(filters).then(setTechnicians).catch(() => {});
-  }, [isPrivileged, year, periodMode, month, quarter, semester, ticketType]);
+  }, [isTicketSettingsFocal, year, periodMode, month, quarter, semester, ticketType]);
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
@@ -112,7 +113,11 @@ export default function TicketReportsPage() {
       if (periodMode === 'month') filters.month = month;
       else if (periodMode === 'quarter') filters.quarter = quarter;
       else if (periodMode === 'semester') filters.semester = semester;
-      if (isPrivileged && technicianId) filters.technicianId = technicianId as number;
+      // Privileged users: filter by chosen technician (optional); non-privileged: always filter to own id
+      const effectiveTechId = isTicketSettingsFocal
+        ? (technicianId !== '' ? (technicianId as number) : undefined)
+        : (user?.id ?? undefined);
+      if (effectiveTechId) filters.technicianId = effectiveTechId;
       if (ticketType) filters.ticketType = ticketType;
       const data = await ticketsApi.getReports(filters);
       setResult(data);
@@ -121,7 +126,7 @@ export default function TicketReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [year, periodMode, month, quarter, semester, technicianId, ticketType, isPrivileged]);
+  }, [year, periodMode, month, quarter, semester, technicianId, ticketType, isTicketSettingsFocal, user?.id]);
 
   useEffect(() => {
     fetchReports();
@@ -144,6 +149,24 @@ export default function TicketReportsPage() {
     avg: parseFloat(row.avg.toFixed(2)),
     count: row.count,
   })) ?? [];
+
+  // Ticket count per technician (grouped view — 2nd bar chart)
+  const countBarData = result?.avgRatingByTechnician.map(row => ({
+    name: row.techName.split(' ').pop() ?? row.techName,
+    tickets: row.count,
+  })) ?? [];
+
+  // Escalation outcome pie (individual view — shown when escalations exist)
+  const escalationPieData: { name: string; value: number }[] = [];
+  if (result && result.totalEscalations > 0) {
+    const pending = result.totalEscalations - result.acceptedEscalations - result.returnedEscalations;
+    if (result.acceptedEscalations > 0) escalationPieData.push({ name: 'Accepted', value: result.acceptedEscalations });
+    if (result.returnedEscalations > 0) escalationPieData.push({ name: 'Returned', value: result.returnedEscalations });
+    if (pending > 0) escalationPieData.push({ name: 'Pending', value: pending });
+  }
+
+  // Individual view = specific technician selected (privileged) OR non-privileged user viewing own data
+  const isIndividualView = isTicketSettingsFocal ? !!technicianId : true;
 
   return (
     <Box>
@@ -236,7 +259,7 @@ export default function TicketReportsPage() {
                 <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
               </TextField>
             </Grid>
-            {isPrivileged && (
+            {isTicketSettingsFocal && (
               <Grid item xs={12} sm={4} md={2}>
                 <TextField
                   select fullWidth size="small" label="Technician"
@@ -339,93 +362,235 @@ export default function TicketReportsPage() {
           )}
 
           <Grid container spacing={3}>
-            {/* ── Per Support Type ── */}
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent>
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>Average Rating by Support Type</Typography>
-                  {result.avgRatingByType.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">No rated tickets in this period.</Typography>
-                  ) : (
-                    <>
-                      <Stack spacing={2} mt={1} mb={2}>
-                        {result.avgRatingByType.map(row => (
-                          <Box key={row.type}>
-                            <Box display="flex" justifyContent="space-between" mb={0.5}>
-                              <Typography variant="body2" fontWeight={500}>{TYPE_LABELS[row.type] ?? row.type}</Typography>
-                              <Typography variant="caption" color="text.secondary">{row.count} rated</Typography>
-                            </Box>
-                            <RatingBar avg={row.avg} />
-                          </Box>
-                        ))}
-                      </Stack>
-                      {/* Pie chart — ticket count distribution */}
-                      {pieData.length > 0 && (
-                        <Box mt={1}>
-                          <Typography variant="caption" color="text.secondary" gutterBottom display="block">
-                            Ticket distribution by type
-                          </Typography>
-                          <ResponsiveContainer width="100%" height={200}>
-                            <PieChart>
-                              <Pie data={pieData} cx="50%" cy="50%" outerRadius={70} dataKey="value" label={({ name, percent }) => `${name.split(' ')[0]} ${(percent * 100).toFixed(0)}%`}>
-                                {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                              </Pie>
-                              <Tooltip />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </Box>
+            {/* ═══════════════════════════════════════════════════════════
+                INDIVIDUAL VIEW — specific technician selected (or non-focal user's own data)
+                Shows pie charts for each parameter
+                ═════════════════════════════════════════════════════════ */}
+            {isIndividualView && (
+              <>
+                {/* Pie 1 — Ticket distribution by support type */}
+                <Grid item xs={12} md={escalationPieData.length > 0 ? 6 : 8}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        Tickets by Support Type
+                      </Typography>
+                      {pieData.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">No data for this period.</Typography>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <PieChart>
+                            <Pie
+                              data={pieData} cx="50%" cy="50%" outerRadius={80}
+                              dataKey="value"
+                              label={({ name, percent }) => `${name.split(' ')[0]} ${(percent * 100).toFixed(0)}%`}
+                            >
+                              {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                            </Pie>
+                            <Tooltip />
+                            <Legend />
+                          </PieChart>
+                        </ResponsiveContainer>
                       )}
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
+                    </CardContent>
+                  </Card>
+                </Grid>
 
-            {/* ── Per Technician ── */}
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent>
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>Average Rating by Technician</Typography>
-                  {result.avgRatingByTechnician.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">No rated tickets in this period.</Typography>
-                  ) : (
-                    <>
-                      <Table size="small" sx={{ mb: 2 }}>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Technician</TableCell>
-                            <TableCell align="right">Rated</TableCell>
-                            <TableCell>Rating</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {result.avgRatingByTechnician.map(row => (
-                            <TableRow key={row.techId}>
-                              <TableCell>{row.techName}</TableCell>
-                              <TableCell align="right">{row.count}</TableCell>
-                              <TableCell>
-                                <RatingBar avg={row.avg} />
-                              </TableCell>
-                            </TableRow>
+                {/* Pie 2 — Escalation outcome (only if escalations exist) */}
+                {escalationPieData.length > 0 && (
+                  <Grid item xs={12} md={6}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                          Escalation Outcome
+                        </Typography>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <PieChart>
+                            <Pie
+                              data={escalationPieData} cx="50%" cy="50%" outerRadius={80}
+                              dataKey="value"
+                              label={({ name, value }) => `${name}: ${value}`}
+                            >
+                              {escalationPieData.map((entry) => (
+                                <Cell key={entry.name} fill={ESC_PIE_COLORS[entry.name] ?? '#9C27B0'} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                            <Legend />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+
+                {/* Avg Rating by Support Type (table + rating bars) */}
+                <Grid item xs={12}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        Average Rating by Support Type
+                      </Typography>
+                      {result!.avgRatingByType.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">No rated tickets in this period.</Typography>
+                      ) : (
+                        <Stack spacing={2} mt={1}>
+                          {result!.avgRatingByType.map(row => (
+                            <Box key={row.type}>
+                              <Box display="flex" justifyContent="space-between" mb={0.5}>
+                                <Typography variant="body2" fontWeight={500}>{TYPE_LABELS[row.type] ?? row.type}</Typography>
+                                <Typography variant="caption" color="text.secondary">{row.count} rated</Typography>
+                              </Box>
+                              <RatingBar avg={row.avg} />
+                            </Box>
                           ))}
-                        </TableBody>
-                      </Table>
-                      {/* Bar chart */}
-                      {barData.length > 0 && (
-                        <ResponsiveContainer width="100%" height={180}>
+                        </Stack>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════
+                GROUPED VIEW — all technicians, privileged user, no tech filter
+                Shows bar charts for each parameter
+                ═════════════════════════════════════════════════════════ */}
+            {!isIndividualView && (
+              <>
+                {/* Type distribution pie — always useful context */}
+                <Grid item xs={12} md={4}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        Tickets by Support Type
+                      </Typography>
+                      {pieData.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">No data.</Typography>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={200}>
+                          <PieChart>
+                            <Pie
+                              data={pieData} cx="50%" cy="50%" outerRadius={70}
+                              dataKey="value"
+                              label={({ name, percent }) => `${name.split(' ')[0]} ${(percent * 100).toFixed(0)}%`}
+                            >
+                              {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Bar 1 — Avg rating per technician */}
+                <Grid item xs={12} md={8}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        Average Rating by Technician
+                      </Typography>
+                      {barData.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">No rated tickets in this period.</Typography>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={200}>
                           <BarChart data={barData} margin={{ top: 4, right: 8, left: -20, bottom: 4 }}>
                             <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                             <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
                             <Tooltip formatter={(v: number) => v.toFixed(2)} />
+                            <Legend />
                             <Bar dataKey="avg" name="Avg Rating" fill="#2196F3" radius={[4, 4, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       )}
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Bar 2 — Ticket count per technician */}
+                <Grid item xs={12} md={6}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        Ticket Volume by Technician
+                      </Typography>
+                      {countBarData.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">No data.</Typography>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={countBarData} margin={{ top: 4, right: 8, left: -20, bottom: 4 }}>
+                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="tickets" name="Rated Tickets" fill="#4CAF50" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Avg Rating by Type — table */}
+                <Grid item xs={12} md={6}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        Average Rating by Support Type
+                      </Typography>
+                      {result!.avgRatingByType.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">No rated tickets in this period.</Typography>
+                      ) : (
+                        <Stack spacing={2} mt={1}>
+                          {result!.avgRatingByType.map(row => (
+                            <Box key={row.type}>
+                              <Box display="flex" justifyContent="space-between" mb={0.5}>
+                                <Typography variant="body2" fontWeight={500}>{TYPE_LABELS[row.type] ?? row.type}</Typography>
+                                <Typography variant="caption" color="text.secondary">{row.count} rated</Typography>
+                              </Box>
+                              <RatingBar avg={row.avg} />
+                            </Box>
+                          ))}
+                        </Stack>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Technician detail table (grouped view reference) */}
+                {result!.avgRatingByTechnician.length > 0 && (
+                  <Grid item xs={12}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                          Technician Detail
+                        </Typography>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Technician</TableCell>
+                              <TableCell align="right">Rated Tickets</TableCell>
+                              <TableCell>Avg Rating</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {result!.avgRatingByTechnician.map(row => (
+                              <TableRow key={row.techId}>
+                                <TableCell>{row.techName}</TableCell>
+                                <TableCell align="right">{row.count}</TableCell>
+                                <TableCell><RatingBar avg={row.avg} /></TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+              </>
+            )}
           </Grid>
         </>
       )}

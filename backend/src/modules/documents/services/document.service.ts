@@ -26,6 +26,7 @@ import * as net from 'net';
 import { ReportorialDocumentType } from '../entities/reportorial-document-type.entity';
 import { ReportorialDocTypeService } from './reportorial-doc-type.service';
 import { MetricsService } from '../../metrics/services/metrics.service';
+import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 
 export interface UploadDocumentDto {
   title: string;
@@ -116,6 +117,7 @@ export class DocumentService implements OnModuleInit {
     @InjectQueue('document-processing') private documentQueue: Queue,
     private metricsService: MetricsService,
     private dataSource: DataSource,
+    private readonly roleCapSvc: RoleCapabilitiesService,
   ) {}
 
   private async enqueueMetricsOrFallback(versionId: string, source: string): Promise<void> {
@@ -395,6 +397,15 @@ export class DocumentService implements OnModuleInit {
     } catch (err) {
       this.logger.warn(`Startup recovery failed (non-fatal): ${err?.message}`);
     }
+
+    // v0.0.31: Ensure role_capabilities VIEW exists in this DB (failsafe for pre-migration deploy)
+    try {
+      const usersDb = process.env.USERS_DB_DATABASE || 'compliance_hub_users';
+      await this.dataSource.query(`CREATE OR REPLACE VIEW role_capabilities AS SELECT * FROM \`${usersDb}\`.role_capabilities`);
+      await this.roleCapSvc.reload();
+    } catch (err: any) {
+      this.logger.warn(`role_capabilities view setup failed (non-fatal — run v0.0.31 migration): ${err?.message}`);
+    }
   }
 
   private async getLatestReviewMap(
@@ -638,7 +649,7 @@ export class DocumentService implements OnModuleInit {
 
     const normalizedDocumentType = this.normalizeDocumentType(metadata.document_type);
 
-    if (user_role === UserRole.FOCAL && !metadata.reportorial_doc_type_id) {
+    if (this.roleCapSvc.isFocal(user_role as string) && !metadata.reportorial_doc_type_id) {
       await this.validateFocalSubmission(
         { ...metadata, document_type: normalizedDocumentType, file },
         file.originalname,
@@ -691,7 +702,7 @@ export class DocumentService implements OnModuleInit {
     }
 
     // For focal users on the reportorial path, check for duplicate submissions
-    if (dto.user_role === UserRole.FOCAL && metadata.reportorial_doc_type_id) {
+    if (this.roleCapSvc.isFocal(dto.user_role as string) && metadata.reportorial_doc_type_id) {
       const existingReportorial = await this.documentRepo.findOne({
         where: {
           unit_id: Number(dto.unit_id),
@@ -925,7 +936,7 @@ export class DocumentService implements OnModuleInit {
       query.andWhere('doc.status = :status', { status });
     }
 
-    if (actor_role === UserRole.FOCAL && actor_id) {
+    if (this.roleCapSvc.isFocal(actor_role as string) && actor_id) {
       query.andWhere('doc.uploaded_by = :actorId', { actorId: actor_id });
     }
 
@@ -934,7 +945,7 @@ export class DocumentService implements OnModuleInit {
     if (
       !archived &&
       !status &&
-      (actor_role === UserRole.SUPER_ADMIN || actor_role === UserRole.REVIEWER || actor_role === UserRole.COMPLIANCE_OFFICER)
+      (actor_role === UserRole.SUPER_ADMIN || actor_role === UserRole.COMPLIANCE_OFFICER)
     ) {
       query.andWhere(`
         COALESCE((
@@ -1286,7 +1297,7 @@ export class DocumentService implements OnModuleInit {
 
     const uploaderRole = document.uploader?.role;
     const shouldHardDelete =
-      uploaderRole === UserRole.SUPER_ADMIN || uploaderRole === UserRole.REVIEWER || uploaderRole === UserRole.COMPLIANCE_OFFICER;
+      uploaderRole === UserRole.SUPER_ADMIN || uploaderRole === UserRole.COMPLIANCE_OFFICER;
 
     if (shouldHardDelete) {
       for (const version of document.versions || []) {
@@ -1331,7 +1342,6 @@ export class DocumentService implements OnModuleInit {
 
     if (
       document.uploader?.role === UserRole.SUPER_ADMIN ||
-      document.uploader?.role === UserRole.REVIEWER ||
       document.uploader?.role === UserRole.COMPLIANCE_OFFICER
     ) {
       throw new BadRequestException(
@@ -1530,7 +1540,7 @@ export class DocumentService implements OnModuleInit {
       .where('doc.is_deleted = :d', { d: false })
       .andWhere('doc.status = :readyStatus', { readyStatus: DocumentStatus.READY });
 
-    if (actorRole === UserRole.FOCAL && actorId) {
+    if (this.roleCapSvc.isFocal(actorRole as string) && actorId) {
       qb.andWhere('doc.uploaded_by = :actorId', { actorId });
     }
 

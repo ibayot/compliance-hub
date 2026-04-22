@@ -6,6 +6,8 @@ import { TechAttendance } from '../tickets/entities/tech-attendance.entity';
 import { OfficeDay } from '../tickets/entities/office-day.entity';
 import { User } from './entities/user.entity';
 import { RoleDefinitionEntity } from './entities/role-definition.entity';
+import { RoleCapability } from './entities/role-capability.entity';
+import { RoleCapabilitiesService } from './role-capabilities.service';
 
 @Module({
   imports: [
@@ -14,10 +16,11 @@ import { RoleDefinitionEntity } from './entities/role-definition.entity';
       OfficeDay,
       User,
       RoleDefinitionEntity,
+      RoleCapability,
     ]),
   ],
   controllers: [AttendanceController],
-  providers: [AttendanceService],
-  exports: [AttendanceService],
+  providers: [AttendanceService, RoleCapabilitiesService],
+  exports: [AttendanceService, RoleCapabilitiesService],
 })
 export class AttendanceModule {}

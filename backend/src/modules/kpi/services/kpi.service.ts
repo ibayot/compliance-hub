@@ -69,14 +69,14 @@ export class KpiService {
 
   private canManage(user: AuthUser): boolean {
     const roles: string[] = [
-      UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER,
+      UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER,
     ];
     return roles.includes(user.role) || (!!user.roleCode && roles.includes(user.roleCode));
   }
 
   private canViewAll(user: AuthUser): boolean {
     const roles: string[] = [
-      UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER,
+      UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER,
     ];
     return roles.includes(user.role) || (!!user.roleCode && roles.includes(user.roleCode));
   }

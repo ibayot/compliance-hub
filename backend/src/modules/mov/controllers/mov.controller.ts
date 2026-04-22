@@ -14,7 +14,7 @@ export class MovController {
   constructor(private readonly movService: MovService) {}
 
   @Get('artifacts')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   list(
     @Query('artifact_type') artifact_type?: string,
     @Query('period_year') period_year?: string,
@@ -32,43 +32,43 @@ export class MovController {
   }
 
   @Get('artifacts/:id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   getById(@Param('id') id: string) {
     return this.movService.getById(id);
   }
 
   @Post('artifacts')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   create(@Body() dto: CreateMovArtifactDto, @Request() req: any) {
     return this.movService.create(dto, req.user?.id ?? req.user?.userId);
   }
 
   @Put('artifacts/:id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   update(@Param('id') id: string, @Body() dto: UpdateMovArtifactDto) {
     return this.movService.update(id, dto);
   }
 
   @Delete('artifacts/:id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   remove(@Param('id') id: string) {
     return this.movService.remove(id);
   }
 
   @Get('templates')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   getTemplate(@Query() query: TemplateQueryDto) {
     return this.movService.getTemplate(query);
   }
 
   @Get('register-columns')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   registerColumns() {
     return this.movService.getRegisterColumns();
   }
 
   @Get('reports/register')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   buildRegisterReport(
     @Query('year') year: string,
     @Query('quarter') quarter: string,
@@ -86,7 +86,7 @@ export class MovController {
   }
 
   @Get('reports/monitoring-matrix')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   buildMonitoringMatrixReport(
     @Query('year') year: string,
     @Query('quarter') quarter: string,
@@ -102,7 +102,7 @@ export class MovController {
   }
 
   @Get('reports/assessment')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   buildAssessmentReport(
     @Query('year') year: string,
     @Query('quarter') quarter: string,
@@ -116,7 +116,7 @@ export class MovController {
   }
 
   @Post('reports/assessment')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   buildAssessmentReportPost(
     @Body() body: {
       year: number;

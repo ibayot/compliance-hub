@@ -84,7 +84,7 @@ const TYPE_LABELS: Record<string, string> = {
 export default function TicketDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   const ticketId = params.id as string;
   const { enqueueSnackbar } = useSnackbar();
 
@@ -126,6 +126,13 @@ export default function TicketDetailPage() {
   const [returnEscalationId, setReturnEscalationId] = useState('');
   const [returnReason, setReturnReason] = useState('');
 
+  // Add notes/proof to existing pending escalation
+  const [addProofDialogOpen, setAddProofDialogOpen] = useState(false);
+  const [addProofEscalationId, setAddProofEscalationId] = useState('');
+  const [addProofNotes, setAddProofNotes] = useState('');
+  const [addProofFiles, setAddProofFiles] = useState<File[]>([]);
+  const [addingProof, setAddingProof] = useState(false);
+
   // Proof photo blob URLs (authenticated loading) and lightbox modal
   const [proofBlobUrls, setProofBlobUrls] = useState<Record<string, string>>({});
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
@@ -156,20 +163,34 @@ export default function TicketDetailPage() {
   const [selectedDupOfId, setSelectedDupOfId] = useState('');
 
   const isRegularUser = user?.role === 'user';
-  const isFocalTech = ['technician_desktop', 'technician_it_support', 'technician', 'desktop_sr', 'it_support_sr'].includes(user?.role ?? '');
-  const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
-  const isJuniorTech = ['it_support_jr', 'desktop_jr'].includes(user?.role ?? '');
-  const isTechnician = isFocalTech || isLowerLevelTech || isJuniorTech;
-  const isFocal = user?.role === 'focal';
-  const isAdmin = user?.role === 'super_admin' || isFocal || user?.role === 'reviewer';
+  const isFocalTech = ['desktop_sr', 'it_support_sr'].includes(user?.role ?? '');
+  const isLowerLevelTech = ['desktop_jr', 'it_support_jr'].includes(user?.role ?? '');
+  const isJuniorTech = isLowerLevelTech;
+  const isTechnician = isFocalTech || isLowerLevelTech;
+  const isFocal = user?.roleCode === 'focal';
+  const isAdmin = user?.role === 'super_admin' || isFocal;
   const canStaff = isAdmin || isTechnician;
   const canPriority = canStaff;
-  const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer';
+  const isComplianceOfficer = user?.roleCode === 'compliance_officer';
   const isSectionHead = user?.roleCode === 'section_head';
-  // canReassign: focal techs (incl. desktop_sr/it_support_sr), CO, SH, super_admin can assign / reassign
-  const canReassign = user?.role === 'super_admin' || user?.role === 'focal' || isFocalTech || isComplianceOfficer || isSectionHead;
-  // canEscalate: any technician role can escalate
-  const canEscalate = isLowerLevelTech || isFocalTech || isJuniorTech;
+  // canEscalate: only desktop and IT support (including Pantawid ICT) technicians may escalate.
+  // ITO professional staff (cybersec, infosec, etc.) are excluded — they are NOT ticket handlers.
+  const canEscalate = !!(myCap?.isDesktop || myCap?.isItSupport || myCap?.isPantawidIct);
+  const isEscalationAdmin = user?.role === 'super_admin' || isComplianceOfficer || isSectionHead;
+  const latestEscalation = escalations.length > 0 ? escalations[0] : null;
+  const hasPendingEscalation = latestEscalation?.status === 'pending';
+  const hasAcceptedEscalation = latestEscalation?.status === 'accepted';
+  const isAcceptedEscalationFocal = hasAcceptedEscalation && latestEscalation?.escalatedToId === (user as any)?.id;
+  // UI policy: if escalation is pending, no top action buttons are shown.
+  // If escalation is accepted, only Update Status may appear.
+  const hideTopActionButtons = !!hasPendingEscalation;
+  const acceptedEscalationOnlyStatusAction = !!hasAcceptedEscalation;
+  const canUpdateStatusNow = canStaff && (!hasAcceptedEscalation || isEscalationAdmin || !!isAcceptedEscalationFocal);
+  // canReassign: focal/senior/admin by default, but once escalation is accepted only escalation admins can reassign.
+  const canReassign = (user?.role === 'super_admin' || isFocal || isFocalTech || isComplianceOfficer || isSectionHead)
+    && (!hasAcceptedEscalation || isEscalationAdmin);
+  // Ticket can be escalated again only if there is no escalation yet or the latest one was returned.
+  const canEscalateNow = canEscalate && (!latestEscalation || latestEscalation.status === 'returned');
   const isRequester = ticket?.requesterId === (user as any)?.id;
   const canSatisfaction = isRequester && (ticket?.status === 'resolved' || ticket?.status === 'closed') && !ticket?.satisfactionSubmittedAt;
   // Duplicate is terminal — no further modifications allowed
@@ -230,7 +251,7 @@ export default function TicketDetailPage() {
         const parts = filePath.replace('escalation-proofs/', '').split('/');
         const tid = parts[0] ?? ticketId;
         const fname = encodeURIComponent(parts[1] ?? filePath);
-        const apiUrl = `/api/tickets/proof/${tid}/${fname}`;
+        const apiUrl = `/tickets/proof/${tid}/${fname}`;
         loaders.push(
           apiClient.get(apiUrl, { responseType: 'blob' })
             .then(r => { urlMap[apiUrl] = URL.createObjectURL(r.data); })
@@ -247,13 +268,17 @@ export default function TicketDetailPage() {
 
   // Live updates – poll every 30 s for all users (QA #7: ensures user-side sees status changes)
   useEffect(() => {
-    const id = setInterval(() => {
-      ticketsApi.getById(ticketId).then(data => {
-        setTicket(data);
-      }).catch(() => {});
-      ticketsApi.getEvents(ticketId).then(data => {
-        setEvents(data);
-      }).catch(() => {});
+    const id = setInterval(async () => {
+      try {
+        const [ticketData, eventsData, escalationsData] = await Promise.all([
+          ticketsApi.getById(ticketId),
+          ticketsApi.getEvents(ticketId),
+          ticketsApi.getEscalations(ticketId),
+        ]);
+        setTicket(ticketData);
+        setEvents(eventsData);
+        setEscalations(escalationsData);
+      } catch { /* silent */ }
     }, 30_000);
     return () => clearInterval(id);
   }, [ticketId]);
@@ -314,6 +339,11 @@ export default function TicketDetailPage() {
   };
 
   const handleUpdateStatus = async (overrideDupOfId?: string) => {
+    if (!canUpdateStatusNow) {
+      enqueueSnackbar('You cannot change status while this ticket has an accepted escalation.', { variant: 'warning' });
+      return;
+    }
+
     // Step 1: If marking as duplicate, show a confirmation dialog first
     if (newStatus === 'duplicate' && !overrideDupOfId) {
       setDupConfirmOpen(true);
@@ -403,12 +433,30 @@ export default function TicketDetailPage() {
       await ticketsApi.returnEscalation(ticketId, returnEscalationId, returnReason);
       setReturnDialogOpen(false);
       setReturnReason('');
-      fetchTicket();
-      fetchEvents();
-      fetchEscalations();
       enqueueSnackbar('Ticket returned to escalating technician.', { variant: 'success' });
+      // UX rule: after returning escalation, only the returner view should refresh and go back to list.
+      router.push('/dashboard/tickets');
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to return escalation', { variant: 'error' });
+    }
+  };
+
+  const handleAddProof = async () => {
+    try {
+      setAddingProof(true);
+      const formData = new FormData();
+      if (addProofNotes !== undefined) formData.append('notes', addProofNotes);
+      addProofFiles.forEach(f => formData.append('proofFiles', f));
+      await ticketsApi.updateEscalationProof(ticketId, addProofEscalationId, formData);
+      setAddProofDialogOpen(false);
+      setAddProofNotes('');
+      setAddProofFiles([]);
+      fetchEscalations();
+      enqueueSnackbar('Escalation notes and proof updated.', { variant: 'success' });
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to update escalation', { variant: 'error' });
+    } finally {
+      setAddingProof(false);
     }
   };
 
@@ -524,7 +572,7 @@ export default function TicketDetailPage() {
 
             {/* Actions */}
             <Box display="flex" flexDirection="column" gap={1} minWidth={160}>
-              {canStaff && !editingStatus && !isDuplicate && !(
+              {!hideTopActionButtons && canUpdateStatusNow && !editingStatus && !isDuplicate && !(
                 ['resolved', 'closed'].includes(ticket.status) &&
                 (isTechnician || isSectionHead || isComplianceOfficer || user?.role === 'super_admin')
               ) && (
@@ -532,10 +580,10 @@ export default function TicketDetailPage() {
                   Update Status
                 </Button>
               )}
-              {isDuplicate && (
+              {!hideTopActionButtons && !acceptedEscalationOnlyStatusAction && isDuplicate && (
                 <Chip label="Duplicate (Terminal)" color="default" size="small" />
               )}
-              {canReassign && !isDuplicate && !['resolved', 'closed'].includes(ticket.status) && (
+              {!hideTopActionButtons && !acceptedEscalationOnlyStatusAction && canReassign && !isDuplicate && !['resolved', 'closed'].includes(ticket.status) && (
                 <Button variant="outlined" size="small" onClick={async () => {
                   setIsEscalateMode(false);
                   setAssignToId(ticket.assignedToId || '');
@@ -545,18 +593,18 @@ export default function TicketDetailPage() {
                   {ticket.assignedToId ? 'Reassign Ticket' : 'Assign Technician'}
                 </Button>
               )}
-              {canEscalate && !isDuplicate && !['closed', 'resolved'].includes(ticket.status) && (
+              {!hideTopActionButtons && !acceptedEscalationOnlyStatusAction && canEscalateNow && !isDuplicate && !['closed', 'resolved'].includes(ticket.status) && (
                 <Button variant="outlined" size="small" color="warning" onClick={openEscalateDialog}>
                   Escalate Ticket
                 </Button>
               )}
               {/* Self-close: requester can close their own ticket once it is Resolved */}
-              {isRegularUser && isRequester && ticket.status === 'resolved' && (
+              {!hideTopActionButtons && !acceptedEscalationOnlyStatusAction && isRegularUser && isRequester && ticket.status === 'resolved' && (
                 <Button variant="outlined" size="small" color="error" onClick={handleSelfClose}>
                   Close Ticket
                 </Button>
               )}
-              {canSatisfaction && (
+              {!hideTopActionButtons && !acceptedEscalationOnlyStatusAction && canSatisfaction && (
                 <Button
                   variant="contained"
                   size="small"
@@ -586,7 +634,7 @@ export default function TicketDetailPage() {
           </Box>
 
           {/* Inline status editor */}
-          {editingStatus && canStaff && (
+          {editingStatus && !hideTopActionButtons && canUpdateStatusNow && (
             <Box mt={3} p={2} bgcolor="action.hover" borderRadius={1}>
               <Typography variant="subtitle2" gutterBottom>Update Ticket</Typography>
               {(() => {
@@ -789,13 +837,13 @@ export default function TicketDetailPage() {
                       const parts = filePath.replace('escalation-proofs/', '').split('/');
                       const tid = parts[0] ?? ticketId;
                       const fname = encodeURIComponent(parts[1] ?? filePath);
-                      const apiUrl = `/api/tickets/proof/${tid}/${fname}`;
+                      const apiUrl = `/tickets/proof/${tid}/${fname}`;
                       const blobUrl = proofBlobUrls[apiUrl];
                       const allBlobUrls = (e.proofFiles ?? []).map(fp => {
                         const p = fp.replace('escalation-proofs/', '').split('/');
                         const t2 = p[0] ?? ticketId;
                         const f2 = encodeURIComponent(p[1] ?? fp);
-                        return proofBlobUrls[`/api/tickets/proof/${t2}/${f2}`];
+                        return proofBlobUrls[`/tickets/proof/${t2}/${f2}`];
                       }).filter((u): u is string => Boolean(u) && u !== 'error');
                       return (
                         <Box
@@ -839,6 +887,24 @@ export default function TicketDetailPage() {
                     <Button size="small" variant="outlined" color="error"
                       onClick={() => { setReturnEscalationId(e.id); setReturnReason(''); setReturnDialogOpen(true); }}>
                       Return
+                    </Button>
+                  </Box>
+                )}
+                {e.status === 'pending' && e.escalatedById === (user as any)?.id && (
+                  <Box mt={1}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="info"
+                      startIcon={<UploadIcon />}
+                      onClick={() => {
+                        setAddProofEscalationId(e.id);
+                        setAddProofNotes(e.notes ?? '');
+                        setAddProofFiles([]);
+                        setAddProofDialogOpen(true);
+                      }}
+                    >
+                      Add Notes / Proof
                     </Button>
                   </Box>
                 )}
@@ -1103,6 +1169,43 @@ export default function TicketDetailPage() {
           <Button variant="contained" color="error" onClick={handleReturnEscalation}
             disabled={!returnReason.trim()}>
             Return Ticket
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Add Notes / Proof to Pending Escalation Dialog ── */}
+      <Dialog open={addProofDialogOpen} onClose={() => setAddProofDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Notes / Proof to Escalation</DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
+            You can update the reason and attach additional proof photos to your pending escalation.
+          </Alert>
+          <TextField
+            fullWidth multiline rows={3} label="Updated reason / notes"
+            value={addProofNotes} onChange={(e) => setAddProofNotes(e.target.value)}
+            size="small" sx={{ mb: 2 }}
+          />
+          <Box>
+            <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+              Additional proof photos (max 10 files, 10 MB each)
+            </Typography>
+            <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />}>
+              Upload Photo(s)
+              <input type="file" hidden multiple accept="image/*"
+                onChange={(e) => setAddProofFiles(Array.from(e.target.files ?? []))} />
+            </Button>
+            {addProofFiles.length > 0 && (
+              <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                {addProofFiles.length} new file(s) selected
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddProofDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" color="primary" onClick={handleAddProof}
+            disabled={addingProof || (!addProofNotes.trim() && addProofFiles.length === 0)}>
+            {addingProof ? 'Saving…' : 'Save'}
           </Button>
         </DialogActions>
       </Dialog>

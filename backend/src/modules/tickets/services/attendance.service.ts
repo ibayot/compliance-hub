@@ -9,6 +9,7 @@ import { TechAttendance, AttendanceStatus } from '../entities/tech-attendance.en
 import { OfficeDay } from '../entities/office-day.entity';
 import { User, UserRole } from '../../users/entities/user.entity';
 import { RoleDefinitionEntity } from '../../users/entities/role-definition.entity';
+import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -42,12 +43,6 @@ export class AttendanceService {
   private readonly excludedAttendanceRoleValues = [
     'user',
     'super_admin',
-    'focal',
-    'technician',
-    'technician_desktop',
-    'technician_it_support',
-    'technician_it_staff',
-    'technician_desktop_staff',
   ];
 
   constructor(
@@ -59,6 +54,7 @@ export class AttendanceService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(RoleDefinitionEntity)
     private readonly roleDefRepo: Repository<RoleDefinitionEntity>,
+    private readonly roleCapSvc: RoleCapabilitiesService,
   ) {}
 
   // ── Attendance ──────────────────────────────────────────────────────────
@@ -85,21 +81,8 @@ export class AttendanceService {
   }
 
   private getItoRoles(): string[] {
-    return [
-      UserRole.SECTION_HEAD,
-      UserRole.COMPLIANCE_OFFICER,
-      UserRole.CYBERSEC,
-      UserRole.INFOSEC,
-      UserRole.LEAD_INFRA,
-      UserRole.SERVER_ADMIN,
-      UserRole.DB_ADMIN,
-      UserRole.NETWORK_ADMIN,
-      UserRole.PROJECT_MGR,
-      UserRole.DEV_LEAD,
-      UserRole.SQA_LEAD,
-      UserRole.RECORDS_OFFICER,
-      UserRole.HR_ID_OFFICER,
-    ];
+    // Derived from role_capabilities.is_ito=1 (startup-cached)
+    return this.roleCapSvc.getRolesWhere('isIto');
   }
 
   // ✅ CENTRALIZED ROLE GROUPING
@@ -158,18 +141,14 @@ export class AttendanceService {
     }
 
     // Scope restriction: senior support roles can only tag their own staff tier
-    const itFocalRoles = [UserRole.IT_SUPPORT_SR];
-    const deskFocalRoles = [UserRole.DESKTOP_SR];
-    if (itFocalRoles.includes(actorRole as UserRole)) {
+    if (this.roleCapSvc.isSeniorItSupport(actorRole as string)) {
       const target = await this.userRepo.findOne({ where: { id: dto.userId } });
-      const itStaffRoles = [UserRole.IT_SUPPORT_JR, UserRole.IT_SUPPORT_SR];
-      if (target && !itStaffRoles.includes(target.role as UserRole) && actorRole !== UserRole.SUPER_ADMIN) {
+      if (target && !this.roleCapSvc.isItSupport(target.role) && actorRole !== UserRole.SUPER_ADMIN) {
         throw new BadRequestException('IT Support focal can only manage attendance for IT Support team members.');
       }
-    } else if (deskFocalRoles.includes(actorRole as UserRole)) {
+    } else if (this.roleCapSvc.isSeniorDesktop(actorRole as string)) {
       const target = await this.userRepo.findOne({ where: { id: dto.userId } });
-      const deskStaffRoles = [UserRole.DESKTOP_JR, UserRole.DESKTOP_SR];
-      if (target && !deskStaffRoles.includes(target.role as UserRole) && actorRole !== UserRole.SUPER_ADMIN) {
+      if (target && !this.roleCapSvc.isDesktop(target.role) && actorRole !== UserRole.SUPER_ADMIN) {
         throw new BadRequestException('Desktop focal can only manage attendance for Desktop Support team members.');
       }
     }
@@ -355,14 +334,13 @@ export class AttendanceService {
    * Called from AuthService.login() / googleLogin() after recording the login timestamp.
    */
   async autoCorrectAbsentOnLogin(userId: number): Promise<void> {
-    // Only auto-mark attendance for roles in the attendance role groups
-    const roleGroups = await this.getRoleGroups();
-    const techRoles = new Set<string>(roleGroups.all);
+    // Skip only non-staff roles; all other roles (technicians, ITO staff, etc.) get auto-attendance
+    const EXCLUDED_FROM_ATTENDANCE = new Set<string>([UserRole.USER, UserRole.SUPER_ADMIN]);
 
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) return;
 
-    if (!techRoles.has(user.role)) return;
+    if (EXCLUDED_FROM_ATTENDANCE.has(user.role as UserRole)) return;
 
     const today = new Date().toISOString().slice(0, 10);
     const record = await this.attendanceRepo.findOne({ where: { userId, date: today } });

@@ -70,7 +70,7 @@ const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'war
 
 export default function TicketsPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -79,8 +79,6 @@ export default function TicketsPage() {
   const [filterType, setFilterType] = useState('');
   const [showMyTickets, setShowMyTickets] = useState(false);
   const [showEscalatedToMe, setShowEscalatedToMe] = useState(false);
-
-  // New ticket dialog
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [form, setForm] = useState<CreateTicketDto>({ subject: '', description: '', ticketType: 'it_support', priority: undefined });
   const [submitting, setSubmitting] = useState(false);
@@ -93,7 +91,7 @@ export default function TicketsPage() {
   const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
   const [selectedTechId, setSelectedTechId] = useState('');
   const [isEscalateMode, setIsEscalateMode] = useState(false);
-  const [isEscalationFocal, setIsEscalationFocal] = useState(false);
+  const [escalationStateByTicket, setEscalationStateByTicket] = useState<Record<string, 'none' | 'returned' | 'active'>>({});
 
   // Satisfaction dialog
   const [satDialogOpen, setSatDialogOpen] = useState(false);
@@ -112,23 +110,30 @@ export default function TicketsPage() {
   const [reminderTitle, setReminderTitle] = useState('Pending Satisfaction Reminder');
   const [reminderMessage, setReminderMessage] = useState('');
 
+  // DB-driven role capabilities (is_all_tickets, is_ticket_focal) — loaded from AuthContext
+  // (also available: myCap?.isEscalationFocal, myCap?.isTicketSettingsFocal, myCap?.isFocal)
+
   const isSuperAdmin = user?.role === 'super_admin';
-  const isFocalTech = ['technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr'].includes(user?.role ?? '');
-  const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
-  const isJuniorTech = ['desktop_jr', 'it_support_jr'].includes(user?.role ?? '');
-  const isTechnician = isFocalTech || isLowerLevelTech || isJuniorTech;
-  const isFocal = user?.role === 'focal';
-  const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer'
-    || user?.role === 'cybersec' || user?.role === 'infosec';
+  const isFocalTech = ['desktop_sr', 'it_support_sr', 'pantawid_ict'].includes(user?.role ?? '');
+  const isLowerLevelTech = ['desktop_jr', 'it_support_jr'].includes(user?.role ?? '');
+  const isJuniorTech = isLowerLevelTech;
+  // ITO staff roles: see only their own tickets (restricted view), same as junior techs
+  const isItoRole = ['cybersec', 'infosec', 'lead_infra', 'server_admin', 'db_admin',
+    'network_admin', 'project_mgr', 'dev_lead', 'sqa_lead', 'records_officer', 'hr_id_officer',
+  ].includes(user?.role ?? '');
+  const isTechnician = isFocalTech || isLowerLevelTech || isJuniorTech || isItoRole;
+  const isFocal = user?.roleCode === 'focal';
+  const isComplianceOfficer = user?.roleCode === 'compliance_officer';
   const isSectionHead = user?.roleCode === 'section_head';
-  // Only super_admin, section_head, compliance_officer, desktop_sr, it_support_sr see ALL tickets
-  const canManageAll = isSuperAdmin || isSectionHead || isComplianceOfficer || user?.role === 'desktop_sr' || user?.role === 'it_support_sr' || user?.role === 'pantawid_ict';
-  // canViewEscalatedQueue: DB-driven — true if current user's role is in escalation_focal_configs
-  const canViewEscalatedQueue = isEscalationFocal;
-  // canAssign: focal techs, CO, SH, super_admin can assign/reassign tickets
-  const canAssign = isSuperAdmin || isFocal || isFocalTech || isComplianceOfficer || isSectionHead;
-  // canEscalate: lower-level techs can escalate their assigned ticket to a focal technician
-  const canEscalate = isLowerLevelTech || isJuniorTech;
+  // DB-driven: is_all_tickets column — falls back to super_admin only until capabilities load
+  const canManageAll = isSuperAdmin || !!myCap?.isAllTickets;
+  // canViewEscalatedQueue: DB-driven — is_escalation_focal column from role_capabilities
+  const canViewEscalatedQueue = isSuperAdmin || !!myCap?.isEscalationFocal;
+  // DB-driven: is_ticket_focal column — who can manually assign/reassign tickets
+  const canAssign = isSuperAdmin || !!myCap?.isTicketFocal;
+  // canEscalate: only desktop and IT support (including Pantawid ICT) technicians can escalate.
+  // ITO professional staff (cybersec, infosec, lead_infra, etc.) are NOT ticket technicians and cannot escalate.
+  const canEscalate = !!(myCap?.isDesktop || myCap?.isItSupport || myCap?.isPantawidIct);
 
   // Senior technician tab state (isFocalTech && !canManageAll view)
   const [ticketTab, setTicketTab] = useState(0);
@@ -143,6 +148,31 @@ export default function TicketsPage() {
     : isTechnician
       ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
       : tickets;
+
+  const refreshEscalationStates = useCallback(async (rows: Ticket[]) => {
+    if (!canEscalate) return;
+    const candidates = rows
+      .filter((t) => !['duplicate', 'closed', 'resolved'].includes(t.status))
+      .slice(0, 80);
+    if (candidates.length === 0) return;
+
+    const entries = await Promise.all(candidates.map(async (t) => {
+      try {
+        const escalations = await ticketsApi.getEscalations(t.id);
+        const latest = escalations[0];
+        const state: 'none' | 'returned' | 'active' = !latest
+          ? 'none'
+          : latest.status === 'returned'
+            ? 'returned'
+            : 'active';
+        return [t.id, state] as const;
+      } catch {
+        return [t.id, 'none'] as const;
+      }
+    }));
+
+    setEscalationStateByTicket((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
+  }, [canEscalate]);
 
   const fetchTickets = useCallback(async () => {
     try {
@@ -163,6 +193,22 @@ export default function TicketsPage() {
 
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
 
+  useEffect(() => {
+    const rows = canManageAll
+      ? ([tickets, activeTickets, doneTickets, frozenTickets, duplicateTickets][mgmtTab] ?? tickets)
+      : isTechnician
+        ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
+        : tickets;
+    refreshEscalationStates(rows);
+  }, [
+    tickets,
+    canManageAll,
+    isTechnician,
+    mgmtTab,
+    ticketTab,
+    refreshEscalationStates,
+  ]);
+
   // For regular users: load pending satisfaction count to warn before new ticket
   useEffect(() => {
     if (!canManageAll) {
@@ -173,12 +219,8 @@ export default function TicketsPage() {
   }, [canManageAll]);
 
   // Check DB escalation_focal_configs to see if the current user's role is a configured focal
-  useEffect(() => {
-    if (!user?.role || user.role === 'user') { setIsEscalationFocal(false); return; }
-    ticketSettingsApi.getEscalationFocals().then(focals => {
-      setIsEscalationFocal(focals.some(f => f.roleValue === user.role));
-    }).catch(() => setIsEscalationFocal(false));
-  }, [user?.role]);
+  // NOTE: isEscalationFocal is now read from myCap?.isEscalationFocal (AuthContext)
+  // The escalation_focal_configs table is still used only for the assign dialog recipient list.
 
   // Silent auto-refresh — no loading spinner to avoid flicker on background polls
   const silentFetchTickets = useCallback(async () => {
@@ -274,9 +316,23 @@ export default function TicketsPage() {
   };
 
   const openAssignDialog = async (ticket: Ticket, escalate = false) => {
+    if (escalate) {
+      try {
+        const escalations = await ticketsApi.getEscalations(ticket.id);
+        const latest = escalations[0];
+        if (latest && latest.status !== 'returned') {
+          setEscalationStateByTicket((prev) => ({ ...prev, [ticket.id]: 'active' }));
+          enqueueSnackbar('This ticket already has an active escalation. You can escalate again only after it is returned.', { variant: 'warning' });
+          return;
+        }
+        setEscalationStateByTicket((prev) => ({ ...prev, [ticket.id]: latest?.status === 'returned' ? 'returned' : 'none' }));
+      } catch {
+      }
+    }
+
     setIsEscalateMode(escalate);
     setAssigningTicket(ticket);
-    setSelectedTechId(String(ticket.assignedToId ?? ''));
+    setSelectedTechId(escalate ? '' : String(ticket.assignedToId ?? ''));
     try {
       const techs = await ticketsApi.getTechnicians();
       const roleFiltered = techs.filter(t => {
@@ -305,12 +361,20 @@ export default function TicketsPage() {
   const handleAssign = async () => {
     if (!assigningTicket || !selectedTechId) return;
     try {
-      await ticketsApi.assign(assigningTicket.id, Number(selectedTechId));
-      enqueueSnackbar('Ticket assigned.', { variant: 'success' });
+      if (isEscalateMode) {
+        const formData = new FormData();
+        formData.append('escalatedToId', String(Number(selectedTechId)));
+        await ticketsApi.escalateTicket(assigningTicket.id, formData);
+        enqueueSnackbar('Ticket escalated.', { variant: 'success' });
+        setEscalationStateByTicket((prev) => ({ ...prev, [assigningTicket.id]: 'active' }));
+      } else {
+        await ticketsApi.assign(assigningTicket.id, Number(selectedTechId));
+        enqueueSnackbar('Ticket assigned.', { variant: 'success' });
+      }
       setAssignDialogOpen(false);
       fetchTickets();
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to assign', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || (isEscalateMode ? 'Failed to escalate' : 'Failed to assign'), { variant: 'error' });
     }
   };
 
@@ -470,7 +534,7 @@ export default function TicketsPage() {
           </CardContent>
         </Card>
       )}
-      {isTechnician && (
+      {isTechnician && !canManageAll && (
         <Card sx={{ mb: 2 }}>
           <CardContent sx={{ pb: '0 !important' }}>
             <Tabs value={ticketTab} onChange={(_, v) => setTicketTab(v)} variant="scrollable" scrollButtons="auto">
@@ -580,7 +644,7 @@ export default function TicketsPage() {
                         </span>
                       </Tooltip>
                     )}
-                    {canEscalate && !['duplicate', 'closed', 'resolved'].includes(ticket.status) && (
+                    {canEscalate && escalationStateByTicket[ticket.id] !== 'active' && !['duplicate', 'closed', 'resolved'].includes(ticket.status) && (
                       <Tooltip title="Escalate Ticket">
                         <IconButton size="small" color="warning" onClick={() => openAssignDialog(ticket, true)}><AssignIcon fontSize="small" /></IconButton>
                       </Tooltip>

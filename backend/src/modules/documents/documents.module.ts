@@ -16,6 +16,8 @@ import { ReportorialDocumentType } from './entities/reportorial-document-type.en
 import { ReportorialDocTypeService } from './services/reportorial-doc-type.service';
 import { ReportorialDocTypeController } from './controllers/reportorial-doc-type.controller';
 import { MetricsModule } from '../metrics/metrics.module';
+import { RoleCapability } from '../users/entities/role-capability.entity';
+import { RoleCapabilitiesService } from '../users/role-capabilities.service';
 
 @Module({
   imports: [
@@ -26,6 +28,7 @@ import { MetricsModule } from '../metrics/metrics.module';
       DocumentReference,
       ManualReview,
       ReportorialDocumentType,
+      RoleCapability,
     ]),
     MetricsModule,
     BullModule.registerQueue({
@@ -40,12 +43,14 @@ import { MetricsModule } from '../metrics/metrics.module';
     DocumentProcessor,
     PreviewGenerator,
     ReportorialDocTypeService,
+    RoleCapabilitiesService,
   ],
   exports: [
     DocumentService,
     VersionService,
     StorageService,
     ReportorialDocTypeService,
+    RoleCapabilitiesService,
     TypeOrmModule,
   ],
 })

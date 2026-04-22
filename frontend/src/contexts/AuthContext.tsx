@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Typography } from '@mui/material';
 import { User } from '@/lib/types/auth';
 import { authApi } from '@/lib/api/auth';
+import { usersApi, RoleCapabilityRecord } from '@/lib/api/users';
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 
 interface AuthContextType {
   user: User | null;
+  myCap: RoleCapabilityRecord | null;
   loading: boolean;
   login: (email: string, password: string, redirectTo?: string) => Promise<void>;
   loginWithGoogle: (idToken: string, redirectTo?: string) => Promise<void>;
@@ -23,6 +25,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [myCap, setMyCap] = useState<RoleCapabilityRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSessionLocked, setIsSessionLocked] = useState(false);
   const [unlockPassword, setUnlockPassword] = useState('');
@@ -69,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const profile = await authApi.getProfile();
           setUser(profile);
+          usersApi.getMyCapabilities().then(setMyCap).catch(() => {});
         } catch (error) {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
@@ -136,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         // Non-blocking: login response user data is still valid
       }
+      usersApi.getMyCapabilities().then(setMyCap).catch(() => {});
       router.push(redirectTo ?? '/dashboard');
     } catch (error) {
       throw error;
@@ -153,6 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(profile);
       } catch {
       }
+      usersApi.getMyCapabilities().then(setMyCap).catch(() => {});
       router.push(redirectTo ?? '/dashboard');
     } catch (error) {
       throw error;
@@ -168,6 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       setUser(null);
+      setMyCap(null);
       setIsSessionLocked(false);
       clearInactivityTimer();
       router.push('/login');
@@ -198,6 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       <AuthContext.Provider
         value={{
           user,
+          myCap,
           loading,
           login,
           loginWithGoogle,

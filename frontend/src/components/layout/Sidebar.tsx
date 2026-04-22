@@ -37,6 +37,7 @@ import {
 import type { ElementType } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSidebar } from '@/contexts/SidebarContext';
+import type { RoleCapabilityRecord } from '@/lib/api/users';
 
 
 interface SidebarProps {
@@ -52,6 +53,8 @@ interface NavItem {
   service?: 'users' | 'ticketing' | 'compliance' | 'core';
   /** Optional roleCode values that also grant access (e.g. 'section_head') */
   roleCodes?: string[];
+  /** If set, also grant access when myCap[capabilityKey] is true */
+  capabilityKey?: keyof RoleCapabilityRecord;
 }
 
 export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
@@ -59,38 +62,39 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   const { isCollapsed, drawerWidth } = useSidebar();
 
   const mainNavItems: NavItem[] = [
     { label: 'Dashboard', icon: DashboardIcon, path: '/dashboard', roles: ['all'], service: 'core' },
     { label: 'Tickets', icon: TicketsIcon, path: '/dashboard/tickets', roles: ['all'], service: 'ticketing' },
-    { label: 'Documents', icon: DocumentsIcon, path: '/dashboard/documents', roles: ['super_admin', 'reviewer', 'compliance_officer', 'section_head', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr', 'pantawid_ict', 'auditor'], service: 'compliance', roleCodes: ['focal', 'section_head'] },
-    { label: 'Repository', icon: RepositoryIcon, path: '/dashboard/repository', roles: ['super_admin', 'reviewer', 'compliance_officer', 'section_head', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr', 'pantawid_ict', 'auditor'], service: 'compliance', roleCodes: ['focal', 'section_head'] },
-    { label: 'Issuances', icon: IssuancesIcon, path: '/dashboard/issuances', roles: ['super_admin', 'reviewer', 'compliance_officer'], service: 'compliance' },
+    { label: 'Documents', icon: DocumentsIcon, path: '/dashboard/documents', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isFocal' },
+    { label: 'Repository', icon: RepositoryIcon, path: '/dashboard/repository', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isFocal' },
+    { label: 'Issuances', icon: IssuancesIcon, path: '/dashboard/issuances', roles: ['super_admin', 'compliance_officer'], service: 'compliance' },
   ];
 
   const adminNavItems: NavItem[] = [
     { label: 'Units', icon: UnitsIcon, path: '/dashboard/units', roles: ['super_admin', 'section_head'], service: 'users' },
-    { label: 'Metrics', icon: MetricsIcon, path: '/dashboard/metrics', roles: ['super_admin', 'reviewer', 'compliance_officer'], service: 'compliance' },
-    { label: 'KPI', icon: KpiIcon, path: '/dashboard/kpi', roles: ['super_admin', 'reviewer', 'compliance_officer', 'section_head', 'focal', 'auditor'], service: 'compliance', roleCodes: ['focal', 'section_head'] },
-    { label: 'Ticket Settings', icon: TicketSettingsIcon, path: '/dashboard/ticket-settings', roles: ['super_admin', 'section_head', 'technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr', 'pantawid_ict'], service: 'ticketing', roleCodes: ['focal', 'section_head'] },
-    { label: 'Ticket Reports', icon: TicketReportsIcon, path: '/dashboard/ticket-reports', roles: ['super_admin', 'focal', 'reviewer', 'section_head', 'compliance_officer', 'technician_it_support', 'technician_desktop', 'it_support_sr', 'desktop_sr', 'pantawid_ict', 'technician'], service: 'ticketing', roleCodes: ['focal'] },
-    { label: 'Attendance', icon: AttendanceIcon, path: '/dashboard/attendance', roles: ['super_admin', 'section_head', 'focal', 'reviewer', 'compliance_officer', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff', 'desktop_sr', 'it_support_sr', 'desktop_jr', 'it_support_jr', 'pantawid_ict'], service: 'ticketing', roleCodes: ['focal', 'section_head'] },
-    { label: 'Reviews', icon: SecurityIcon, path: '/dashboard/reviews', roles: ['super_admin', 'reviewer', 'compliance_officer'], service: 'compliance' },
-    { label: 'Reports', icon: ReportsIcon, path: '/dashboard/reports', roles: ['super_admin', 'reviewer', 'compliance_officer'], service: 'compliance', roleCodes: ['section_head', 'compliance_officer'] },
-    { label: 'MoV Builder', icon: MovIcon, path: '/dashboard/mov', roles: ['super_admin', 'reviewer', 'compliance_officer'], service: 'compliance' },
+    { label: 'Metrics', icon: MetricsIcon, path: '/dashboard/metrics', roles: ['super_admin', 'compliance_officer'], service: 'compliance' },
+    { label: 'KPI', icon: KpiIcon, path: '/dashboard/kpi', roles: ['super_admin', 'compliance_officer', 'cybersec', 'infosec', 'section_head'], service: 'compliance', roleCodes: ['focal', 'section_head'] },
+    { label: 'Ticket Settings', icon: TicketSettingsIcon, path: '/dashboard/ticket-settings', roles: ['super_admin'], service: 'ticketing', capabilityKey: 'isTicketSettingsFocal' },
+    { label: 'Ticket Reports', icon: TicketReportsIcon, path: '/dashboard/ticket-reports', roles: ['super_admin'], service: 'ticketing', capabilityKey: 'isTicketSettingsFocal' },
+    { label: 'Attendance', icon: AttendanceIcon, path: '/dashboard/attendance', roles: ['super_admin', 'section_head', 'compliance_officer', 'desktop_sr', 'it_support_sr', 'desktop_jr', 'it_support_jr', 'pantawid_ict'], service: 'ticketing', roleCodes: ['focal', 'section_head', 'technician'], capabilityKey: 'isIto' },
+    { label: 'Reviews', icon: SecurityIcon, path: '/dashboard/reviews', roles: ['super_admin', 'compliance_officer', 'cybersec', 'infosec'], service: 'compliance' },
+    { label: 'Reports', icon: ReportsIcon, path: '/dashboard/reports', roles: ['super_admin', 'compliance_officer', 'cybersec', 'infosec'], service: 'compliance', roleCodes: ['section_head', 'compliance_officer'] },
+    { label: 'MoV Builder', icon: MovIcon, path: '/dashboard/mov', roles: ['super_admin', 'compliance_officer', 'cybersec', 'infosec'], service: 'compliance' },
   ];
 
   const settingsNavItems: NavItem[] = [
-    { label: 'User Manual', icon: ManualIcon, path: '/dashboard/user-manual', roles: ['super_admin', 'reviewer', 'compliance_officer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff', 'desktop_sr', 'it_support_sr', 'desktop_jr', 'it_support_jr', 'pantawid_ict', 'auditor', 'user'], roleCodes: ['focal'] },
-    { label: 'Settings', icon: SettingsIcon, path: '/dashboard/settings', roles: ['super_admin', 'reviewer', 'compliance_officer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'desktop_sr', 'it_support_sr', 'pantawid_ict', 'auditor'], roleCodes: ['focal'] },
+    { label: 'User Manual', icon: ManualIcon, path: '/dashboard/user-manual', roles: ['all'] },
+    { label: 'Settings', icon: SettingsIcon, path: '/dashboard/settings', roles: ['super_admin', 'compliance_officer', 'cybersec', 'infosec', 'section_head', 'desktop_sr', 'it_support_sr', 'pantawid_ict'], roleCodes: ['focal', 'technician'] },
   ];
 
-  const hasAccess = (roles: string[], roleCodes?: string[], _service?: NavItem['service']) => {
+  const hasAccess = (roles: string[], roleCodes?: string[], capabilityKey?: keyof RoleCapabilityRecord, _service?: NavItem['service']) => {
     if (roles.includes('all')) return true;
     if (user?.role === 'super_admin') return true;
     if (!user) return false;
+    if (capabilityKey && myCap && myCap[capabilityKey]) return true;
     if (roles.includes(user.role)) return true;
     if (roleCodes && user.roleCode && roleCodes.includes(user.roleCode)) return true;
     return false;
@@ -165,14 +169,14 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       <Divider />
 
       <List sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
-        {mainNavItems.filter((item) => hasAccess(item.roles, item.roleCodes, item.service)).map((item) => (
+        {mainNavItems.filter((item) => hasAccess(item.roles, item.roleCodes, item.capabilityKey, item.service)).map((item) => (
           <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
             {renderNavItem(item)}
           </ListItem>
         ))}
       </List>
 
-      {adminNavItems.some((item) => hasAccess(item.roles, item.roleCodes, item.service)) && (
+      {adminNavItems.some((item) => hasAccess(item.roles, item.roleCodes, item.capabilityKey, item.service)) && (
         <>
           <Divider sx={{ mx: isCollapsed ? 1 : 2, my: 1 }} />
           {!isCollapsed && (
@@ -181,7 +185,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             </Typography>
           )}
           <List sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
-            {adminNavItems.filter((item) => hasAccess(item.roles, item.roleCodes, item.service)).map((item) => (
+            {adminNavItems.filter((item) => hasAccess(item.roles, item.roleCodes, item.capabilityKey, item.service)).map((item) => (
               <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
                 {renderNavItem(item)}
               </ListItem>
@@ -195,7 +199,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       <Divider sx={{ mx: isCollapsed ? 1 : 2, my: 1 }} />
 
       <List sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
-        {settingsNavItems.filter((item) => hasAccess(item.roles, item.roleCodes, item.service)).map((item) => (
+        {settingsNavItems.filter((item) => hasAccess(item.roles, item.roleCodes, item.capabilityKey, item.service)).map((item) => (
           <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
             {renderNavItem(item)}
           </ListItem>

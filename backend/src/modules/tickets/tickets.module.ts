@@ -18,6 +18,9 @@ import { TicketController } from './controllers/ticket.controller';
 import { TicketSettingsController } from './controllers/ticket-settings.controller';
 import { User } from '../users/entities/user.entity';
 import { RoleDefinitionEntity } from '../users/entities/role-definition.entity';
+import { RoleCapability } from '../users/entities/role-capability.entity';
+import { RoleCapabilitiesService } from '../users/role-capabilities.service';
+import { CapabilityGuard } from '../../common/guards/capability.guard';
 import { Unit } from '../units/entities/unit.entity';
 
 @Module({
@@ -35,11 +38,11 @@ import { Unit } from '../units/entities/unit.entity';
       User,
       Unit,
       RoleDefinitionEntity,
+      RoleCapability,
     ]),
   ],
   controllers: [AttendanceController, TicketController, TicketSettingsController],
-  providers: [TicketService, TicketSettingsService, AttendanceService, EmailService],
-  exports: [TicketService, AttendanceService, EmailService],
+  providers: [TicketService, TicketSettingsService, AttendanceService, EmailService, RoleCapabilitiesService, CapabilityGuard],
+  exports: [TicketService, AttendanceService, EmailService, RoleCapabilitiesService],
 })
 export class TicketsModule {}
-

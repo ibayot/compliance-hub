@@ -14,7 +14,9 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
+import { CapabilityGuard } from '../../../common/guards/capability.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { UserRole } from '../../users/entities/user.entity';
 import {
   TicketSettingsService,
@@ -25,12 +27,17 @@ import {
   CreateEscalationFocalDto,
 } from '../services/ticket-settings.service';
 import { EmailService } from '../services/email.service';
+import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 
-const SETTINGS_ROLES = [
-  UserRole.SUPER_ADMIN,
-  UserRole.TECHNICIAN,
-  UserRole.TECHNICIAN_DESKTOP,
-  UserRole.TECHNICIAN_IT_SUPPORT,
+// All named staff roles — the CapabilityGuard enforces is_ticket_settings_focal at runtime
+const ALL_STAFF_ROLES = [
+  UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD,
+  UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+  UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
+  UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
+  UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
+  UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
+  UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
 ];
 
 @Controller('ticket-settings')
@@ -39,6 +46,7 @@ export class TicketSettingsController {
   constructor(
     private readonly settingsService: TicketSettingsService,
     private readonly emailService: EmailService,
+    private readonly roleCapSvc: RoleCapabilitiesService,
   ) {}
 
   /** POST /ticket-settings/email-test — send a test email to verify SMTP (super_admin only) */
@@ -57,10 +65,13 @@ export class TicketSettingsController {
   /** GET /ticket-settings/categories — active categories by default; pass ?all=true for admin to see all */
   @Get('categories')
   @Roles(
-    UserRole.USER, UserRole.FOCAL, UserRole.TECHNICIAN,
-    UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
-    UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
-    UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN,
+    UserRole.USER, UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD,
+    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+    UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
+    UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
+    UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
+    UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
+    UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
   )
   async listCategories(
     @Query('ticketType') ticketType?: string,
@@ -75,26 +86,34 @@ export class TicketSettingsController {
   }
 
   @Get('categories/:id')
-  @Roles(...SETTINGS_ROLES)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
   async getCategory(@Param('id') id: string) {
     return this.settingsService.getCategoryById(id);
   }
 
   @Post('categories')
-  @Roles(...SETTINGS_ROLES)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
   @HttpCode(HttpStatus.CREATED)
   async createCategory(@Body() dto: CreateCategoryDto, @Request() req: any) {
     return this.settingsService.createCategory(dto, req.user.id ?? req.user.userId);
   }
 
   @Patch('categories/:id')
-  @Roles(...SETTINGS_ROLES)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
   async updateCategory(@Param('id') id: string, @Body() dto: UpdateCategoryDto, @Request() req: any) {
     return this.settingsService.updateCategory(id, dto, req.user.id ?? req.user.userId);
   }
 
   @Delete('categories/:id')
-  @Roles(...SETTINGS_ROLES)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteCategory(@Param('id') id: string, @Request() req: any) {
     await this.settingsService.deleteCategory(id, req.user.id ?? req.user.userId);
@@ -103,32 +122,42 @@ export class TicketSettingsController {
   // ── Keyword Rules ──────────────────────────────────────────────────────
 
   @Get('keyword-rules')
-  @Roles(...SETTINGS_ROLES)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
   async listKeywordRules() {
     return this.settingsService.listKeywordRules();
   }
 
   @Get('keyword-rules/:id')
-  @Roles(...SETTINGS_ROLES)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
   async getKeywordRule(@Param('id') id: string) {
     return this.settingsService.getKeywordRuleById(id);
   }
 
   @Post('keyword-rules')
-  @Roles(...SETTINGS_ROLES)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
   @HttpCode(HttpStatus.CREATED)
   async createKeywordRule(@Body() dto: CreateKeywordRuleDto, @Request() req: any) {
     return this.settingsService.createKeywordRule(dto, req.user.id ?? req.user.userId);
   }
 
   @Patch('keyword-rules/:id')
-  @Roles(...SETTINGS_ROLES)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
   async updateKeywordRule(@Param('id') id: string, @Body() dto: UpdateKeywordRuleDto) {
     return this.settingsService.updateKeywordRule(id, dto);
   }
 
   @Delete('keyword-rules/:id')
-  @Roles(...SETTINGS_ROLES)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteKeywordRule(@Param('id') id: string) {
     await this.settingsService.deleteKeywordRule(id);
@@ -138,12 +167,7 @@ export class TicketSettingsController {
 
   /** GET /ticket-settings/escalation-focals */
   @Get('escalation-focals')
-  @Roles(
-    UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER,
-    UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP,
-    UserRole.TECHNICIAN_IT_SUPPORT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
-    UserRole.REVIEWER, UserRole.PANTAWID_ICT,
-  )
+  @Roles(...ALL_STAFF_ROLES)
   async listEscalationFocals(@Query('ticketType') ticketType?: string) {
     return this.settingsService.listEscalationFocals(ticketType);
   }
@@ -153,14 +177,18 @@ export class TicketSettingsController {
    * QA #13: Returns roles from DB (role_definitions), excluding non-assignable platform roles.
    */
   @Get('escalation-available-roles')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER, UserRole.REVIEWER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
   async listAvailableEscalationRoles() {
     return this.settingsService.listAvailableEscalationRoles();
   }
 
   /** POST /ticket-settings/escalation-focals */
   @Post('escalation-focals')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER, UserRole.REVIEWER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
   @HttpCode(HttpStatus.CREATED)
   async addEscalationFocal(@Body() dto: CreateEscalationFocalDto, @Request() req: any) {
     return this.settingsService.addEscalationFocal(dto, req.user.id ?? req.user.userId);
@@ -168,7 +196,9 @@ export class TicketSettingsController {
 
   /** DELETE /ticket-settings/escalation-focals/:id */
   @Delete('escalation-focals/:id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER, UserRole.REVIEWER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeEscalationFocal(@Param('id') id: string) {
     await this.settingsService.removeEscalationFocal(Number(id));

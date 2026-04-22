@@ -410,14 +410,14 @@ export default function AttendancePage() {
               <Box textAlign="center" py={4}><CircularProgress /></Box>
             ) : technicians.length === 0 ? (
               <Typography color="text.secondary" py={3} textAlign="center">
-                No technicians found for this support type.
+                No staff found.
               </Typography>
             ) : (
               <TableContainer sx={{ maxHeight: 500 }}>
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ position: 'sticky', left: 0, zIndex: 3, bgcolor: 'background.paper', minWidth: 160 }}>Technician</TableCell>
+                      <TableCell sx={{ position: 'sticky', left: 0, zIndex: 3, bgcolor: 'background.paper', minWidth: 160 }}>Staff</TableCell>
                       {weekdays.map(d => {
                         const isOffice = isOfficeDayForDate(d);
                         return (

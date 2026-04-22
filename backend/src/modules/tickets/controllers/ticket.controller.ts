@@ -37,15 +37,13 @@ import {
 import { TicketStatus, TicketType } from '../entities/ticket.entity';
 
 const ALL_ROLES = [
-  UserRole.USER, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.TECHNICIAN,
-  UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
-  UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
-  UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN,
-  // v0.6.14 named roles
+  UserRole.USER, UserRole.SECTION_HEAD, UserRole.SUPER_ADMIN,
+  // Named compliance roles
   UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+  // Named technician roles
   UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
   UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
-  // focal-equivalent staff roles — also matched via roleCode='focal' in RolesGuard
+  // Named focal-equivalent roles (also matched via roleCode='focal' in RolesGuard)
   UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
   UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
   UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
@@ -92,14 +90,13 @@ export class TicketController {
 
   /** GET /tickets/statistics */
   @Get('statistics')
-  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD,
-    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD,
+    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, 'focal')
   async getStatistics() { return this.ticketService.getStatistics(); }
 
   /** GET /tickets/technicians */
   @Get('technicians')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
-    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR)
+  @Roles(...ALL_ROLES)
   async getTechnicians() { return this.ticketService.getTechnicianAvailability(); }
 
   /** GET /tickets/dashboard */
@@ -127,9 +124,8 @@ export class TicketController {
 
   /** GET /tickets/reports — satisfaction reports (QA #11) */
   @Get('reports')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER,
-    UserRole.COMPLIANCE_OFFICER, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
-    UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR, UserRole.PANTAWID_ICT, UserRole.TECHNICIAN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD,
+    UserRole.COMPLIANCE_OFFICER, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR, UserRole.PANTAWID_ICT, 'focal')
   async getTicketReports(
     @Query('year') year?: string,
     @Query('month') month?: string,
@@ -176,24 +172,21 @@ export class TicketController {
 
   /** PATCH /tickets/:id */
   @Patch(':id')
-  @Roles(UserRole.USER, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF, UserRole.REVIEWER, UserRole.SUPER_ADMIN,
-    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR)
+  @Roles(...ALL_ROLES)
   async updateTicket(@Param('id') id: string, @Body() dto: UpdateTicketDto, @Request() req: any) {
     return this.ticketService.updateTicket(id, dto, req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** GET /tickets/requester/:requesterId/open - open tickets for Duplicate picker */
   @Get('requester/:requesterId/open')
-  @Roles(UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
-    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR)
+  @Roles(...ALL_ROLES)
   async getRequesterOpenTickets(@Param('requesterId') requesterId: string) {
     return this.ticketService.getOpenTicketsForRequester(Number(requesterId));
   }
 
   /** PATCH /tickets/:id/assign */
   @Patch(':id/assign')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
-    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR)
+  @Roles(...ALL_ROLES)
   async assignTicket(@Param('id') id: string, @Body() dto: AssignTicketDto, @Request() req: any) {
     return this.ticketService.assignTicket(id, dto, req.user.role, req.user.id ?? req.user.userId);
   }
@@ -214,8 +207,7 @@ export class TicketController {
 
   /** POST /tickets/:id/comments */
   @Post(':id/comments')
-  @Roles(UserRole.USER, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF, UserRole.REVIEWER, UserRole.SUPER_ADMIN,
-    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR)
+  @Roles(...ALL_ROLES)
   async addComment(@Param('id') ticketId: string, @Body() dto: AddCommentDto, @Request() req: any) {
     return this.ticketService.addComment(ticketId, dto, req.user.id ?? req.user.userId, req.user.role);
   }
@@ -246,11 +238,12 @@ export class TicketController {
   /** POST /tickets/:id/escalate — upload proof photos (multipart/form-data) */
   @Post(':id/escalate')
   @Roles(
-    UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER,
-    UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
-    UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
+    UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD,
     UserRole.COMPLIANCE_OFFICER, UserRole.PANTAWID_ICT,
     UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
+    UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
+    UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
+    UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
   )
   @UseInterceptors(FilesInterceptor('proofFiles', 10, { limits: { fileSize: 10 * 1024 * 1024 } }))
   async escalateTicket(
@@ -283,6 +276,26 @@ export class TicketController {
     @Request() req: any,
   ) {
     return this.ticketService.returnEscalation(id, eid, dto, req.user.id ?? req.user.userId);
+  }
+
+  /**
+   * PATCH /tickets/:id/escalation/:eid/update-proof
+   * Lets the escalating technician append additional notes and/or proof photos
+   * to a pending escalation they initiated.
+   */
+  @Patch(':id/escalation/:eid/update-proof')
+  @Roles(...ALL_ROLES)
+  @UseInterceptors(FilesInterceptor('proofFiles', 10, { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async updateEscalationProof(
+    @Param('id') id: string,
+    @Param('eid') eid: string,
+    @Body() body: { notes?: string },
+    @UploadedFiles() proofFiles: Express.Multer.File[],
+    @Request() req: any,
+  ) {
+    return this.ticketService.updateEscalationProof(
+      id, eid, body, proofFiles ?? [], req.user.id ?? req.user.userId,
+    );
   }
 
   /** GET /tickets/proof/:ticketId/:filename — serve escalation proof photo */

@@ -41,7 +41,7 @@ export default function DocumentDetailsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const isFocal = user?.role === 'focal';
+  const isFocal = user?.roleCode === 'focal';
   const documentId = params.id as string;
 
   const { setPageTitle } = usePageTitle();
@@ -153,7 +153,7 @@ export default function DocumentDetailsPage() {
 
   const getWorkflowStatus = (doc: Document) => {
     const cs = doc.compliance_status;
-    const isSuperOrCompliance = user?.role === 'super_admin' || user?.role === 'reviewer' ||
+    const isSuperOrCompliance = user?.role === 'super_admin' || 
       user?.role === 'compliance_officer' || user?.roleCode === 'compliance_officer';
     if (cs === 'compliant') {
       return { label: isSuperOrCompliance ? 'COMPLIANT' : 'Approved', color: 'success' as const };

@@ -3,11 +3,10 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@
 /** Roles that bypass per-unit access scoping and can see all units. */
 const GLOBAL_ACCESS_ROLES = new Set([
   'super_admin',
-  'reviewer',
+  'section_head',        // Section heads oversee all units under their purview
   'compliance_officer',
   'cybersec',
   'infosec',
-  'auditor',
 ]);
 
 @Injectable()
@@ -25,8 +24,8 @@ export class UnitAccessGuard implements CanActivate {
       return true;
     }
 
-    // Focal users and technicians can only access their assigned units
-    if (user.role === 'focal' || user.role === 'technician' || user.roleCode === 'focal' || user.roleCode === 'technician') {
+    // Focal users and technicians (matched via roleCode) can only access their assigned units
+    if (user.roleCode === 'focal' || user.roleCode === 'technician') {
       if (!unitId) {
         return true; // Let controller handle missing unitId
       }

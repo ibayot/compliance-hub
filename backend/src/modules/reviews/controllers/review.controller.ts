@@ -28,7 +28,7 @@ export class ReviewController {
    * POST /documents/:documentId/reviews
    */
   @Post()
-  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC)
   @HttpCode(HttpStatus.CREATED)
   async submitReview(
     @Param('documentId') documentId: string,
@@ -59,8 +59,7 @@ export class ReviewController {
    * GET /documents/:documentId/reviews/latest
    */
   @Get('latest')
-  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN,
-    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+  @Roles('focal', 'technician', UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
     UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR)
   async getLatestReview(@Param('documentId') documentId: string) {
     return this.reviewService.getLatestReview(documentId);
@@ -71,8 +70,7 @@ export class ReviewController {
    * GET /documents/:documentId/reviews
    */
   @Get()
-  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN,
-    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+  @Roles('focal', 'technician', UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
     UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR)
   async getReviewHistory(@Param('documentId') documentId: string) {
     return this.reviewService.getReviewHistory(documentId);
@@ -83,7 +81,7 @@ export class ReviewController {
    * GET /documents/:documentId/reviews/evidence-report
    */
   @Get('evidence-report')
-  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC)
   async getEvidenceReport(@Param('documentId') documentId: string) {
     return this.reviewService.getEvidenceReport(documentId);
   }

@@ -259,11 +259,12 @@ export class TicketSettingsService {
 
   /**
    * List roles available to be designated as escalation focals.
-   * QA #13: Reads from role_definitions table, excludes non-assignable system roles.
+   * Includes all defined roles except non-staff system roles and management roles
+   * (user, super_admin, section_head, compliance_officer).
    */
   async listAvailableEscalationRoles(): Promise<{ value: string; label: string }[]> {
-    const excluded = ['user', 'super_admin', 'section_head'];
-    const rows = await this.roleDefRepo.find({ where: { assignable: true } });
+    const excluded = ['user', 'super_admin', 'section_head', 'compliance_officer'];
+    const rows = await this.roleDefRepo.find();
     return rows
       .filter(r => !excluded.includes(r.value))
       .map(r => ({ value: r.value, label: r.label }));

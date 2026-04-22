@@ -103,11 +103,7 @@ INSERT IGNORE INTO user_unit_access (user_id, unit_id) VALUES
 INSERT INTO role_definitions (`value`, `label`, `description`, `assignable`, `is_system`, `role_code`, `technician_type`, `created_at`, `updated_at`) VALUES
 -- Core system roles
 ('super_admin', 'Super Admin', 'Full system access. Manages users, roles, settings, and all data.', 0, 1, NULL, NULL, NOW(), NOW()),
-('reviewer', 'Reviewer (Legacy/Compat)', 'Legacy compliance oversight role retained for backward compatibility. Maps to compliance_officer feature set.', 1, 1, 'compliance_officer', NULL, NOW(), NOW()),
-('focal', 'Focal Person', 'Unit-level focal. Uploads documents, manages unit compliance activities.', 1, 1, 'focal', NULL, NOW(), NOW()),
 ('section_head', 'Section Head', 'Section-level supervisor. Manages staff tickets and unit attendance within their section.', 1, 1, 'section_head', NULL, NOW(), NOW()),
-('technician', 'Technician (General)', 'General ICT support technician. Handles tickets and operational support tasks.', 1, 1, 'technician', NULL, NOW(), NOW()),
-('auditor', 'Auditor', 'Read-only compliance, KPI, and document access for internal/external audit.', 1, 1, 'auditor', NULL, NOW(), NOW()),
 ('user', 'Regular Staff', 'Standard staff user. Can submit tickets and view personal dashboards.', 1, 1, NULL, NULL, NOW(), NOW()),
 -- RICTMS named compliance roles
 ('compliance_officer', 'Compliance Officer', 'Primary compliance and quality management role. Full access to documents, KPI, MOV, reviews, and issuances.', 1, 1, NULL, NULL, NOW(), NOW()),
@@ -126,10 +122,6 @@ INSERT INTO role_definitions (`value`, `label`, `description`, `assignable`, `is
 ('records_officer', 'Records Officer', 'Manages administrative records. Focal-level access for document handling and compliance tracking.', 1, 1, 'focal', NULL, NOW(), NOW()),
 ('hr_id_officer', 'HR / ID Officer', 'HR and identification management. Focal-level access for compliance and operational documentation.', 1, 1, 'focal', NULL, NOW(), NOW()),
 -- RICTMS named technician roles with technician type mapping
-('technician_desktop', 'Desktop Technician', 'Desktop support technician. Handles hardware and peripheral support tickets.', 1, 1, 'technician', 'desktop_support', NOW(), NOW()),
-('technician_it_support', 'IT Support Technician', 'IT support technician. Handles connectivity, software, and network-level support tickets.', 1, 1, 'technician', 'it_support', NOW(), NOW()),
-('technician_it_staff', 'IT Support Staff', 'IT support staff under supervision. Handles assigned IT tickets and support tasks.', 1, 1, 'technician', 'it_support', NOW(), NOW()),
-('technician_desktop_staff', 'Desktop Support Staff', 'Desktop support staff under supervision. Handles assigned desktop-related tickets.', 1, 1, 'technician', 'desktop_support', NOW(), NOW()),
 ('desktop_sr', 'Desktop Support Senior', 'Senior desktop technician with attendance management authority over their team.', 1, 1, 'focal', 'desktop_support', NOW(), NOW()),
 ('it_support_sr', 'IT Support Senior', 'Senior IT support technician with attendance management authority over their team.', 1, 1, 'focal', 'it_support', NOW(), NOW()),
 ('desktop_jr', 'Desktop Support Junior', 'Junior desktop technician assigned to escalate unresolved hardware issues.', 1, 1, 'technician', 'desktop_support', NOW(), NOW()),

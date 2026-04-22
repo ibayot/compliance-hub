@@ -26,19 +26,19 @@ export class KpiController {
   constructor(private readonly kpiService: KpiService) {}
 
   @Get('master')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN, UserRole.SECTION_HEAD)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, UserRole.SECTION_HEAD, 'focal', 'technician')
   listKpiMaster(@Request() req: any) {
     return this.kpiService.listKpiMaster(req.user);
   }
 
   @Post('master')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.SECTION_HEAD)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.SECTION_HEAD)
   createKpiMaster(@Request() req: any, @Body() dto: CreateKpiMasterDto) {
     return this.kpiService.createKpiMaster(req.user, dto);
   }
 
   @Patch('master/:code')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.SECTION_HEAD)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.SECTION_HEAD)
   updateKpiMaster(@Request() req: any, @Param('code') code: string, @Body() dto: UpdateKpiMasterDto) {
     return this.kpiService.updateKpiMaster(req.user, code, dto);
   }
@@ -50,7 +50,7 @@ export class KpiController {
   }
 
   @Get('monitoring')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN, UserRole.SECTION_HEAD)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, UserRole.SECTION_HEAD, 'focal', 'technician')
   listMonitoring(
     @Request() req: any,
     @Query('periodYear') periodYear?: number,
@@ -62,25 +62,25 @@ export class KpiController {
   }
 
   @Post('monitoring')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.SECTION_HEAD)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.SECTION_HEAD)
   upsertMonitoring(@Request() req: any, @Body() dto: UpsertKpiMonitoringDto) {
     return this.kpiService.upsertMonitoring(req.user, dto);
   }
 
   @Patch('monitoring/:id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.SECTION_HEAD)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.SECTION_HEAD)
   updateMonitoring(@Request() req: any, @Param('id', ParseIntPipe) id: number, @Body() dto: UpdateKpiMonitoringDto) {
     return this.kpiService.updateMonitoring(req.user, id, dto);
   }
 
   @Patch('monitoring/:id/lock')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.SECTION_HEAD)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.SECTION_HEAD)
   lockMonitoring(@Request() req: any, @Param('id', ParseIntPipe) id: number) {
     return this.kpiService.lockMonitoring(req.user, id);
   }
 
   @Get('dashboard/summary')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN, UserRole.SECTION_HEAD)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, UserRole.SECTION_HEAD, 'focal', 'technician')
   dashboardSummary(
     @Request() req: any,
     @Query('periodYear') periodYear?: string,
@@ -92,7 +92,7 @@ export class KpiController {
   }
 
   @Get('dashboard/unit/:unitId')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN, UserRole.SECTION_HEAD)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, UserRole.SECTION_HEAD, 'focal', 'technician')
   dashboardUnit(
     @Request() req: any,
     @Param('unitId', ParseIntPipe) unitId: number,
@@ -105,7 +105,7 @@ export class KpiController {
   }
 
   @Get('dashboard/unit/:unitId/timeseries')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN, UserRole.SECTION_HEAD)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, UserRole.SECTION_HEAD, 'focal', 'technician')
   dashboardUnitTimeseries(
     @Request() req: any,
     @Param('unitId', ParseIntPipe) unitId: number,
@@ -122,7 +122,7 @@ export class KpiController {
   }
 
   @Get('action-plans')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN, UserRole.SECTION_HEAD)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, UserRole.SECTION_HEAD, 'focal', 'technician')
   generateActionPlans(
     @Request() req: any,
     @Query('periodYear') periodYear: string,
@@ -137,7 +137,7 @@ export class KpiController {
   }
 
   @Get('lookups/thresholds')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN, UserRole.SECTION_HEAD)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, UserRole.SECTION_HEAD, 'focal', 'technician')
   listThresholds() {
     return this.kpiService.listThresholds();
   }
@@ -159,7 +159,7 @@ export class KpiController {
   }
 
   @Get('lookups/scoring-rules')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER, UserRole.FOCAL, UserRole.AUDITOR, UserRole.TECHNICIAN, UserRole.SECTION_HEAD)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, UserRole.SECTION_HEAD, 'focal', 'technician')
   listScoringRules() {
     return this.kpiService.listScoringRules();
   }

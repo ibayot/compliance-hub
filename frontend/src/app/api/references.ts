@@ -541,6 +541,13 @@ export const ticketsApi = {
     const response = await apiClient.patch(`/tickets/${ticketId}/escalation/${escalationId}/return`, { returnReason });
     return response.data;
   },
+
+  updateEscalationProof: async (ticketId: string, escalationId: string, data: FormData): Promise<TicketEscalation> => {
+    const response = await apiClient.patch(`/tickets/${ticketId}/escalation/${escalationId}/update-proof`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
 };
 
 // Ticket Settings API (Categories + Keyword Rules)

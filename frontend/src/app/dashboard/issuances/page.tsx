@@ -112,7 +112,7 @@ export default function IssuancesPage() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
   const [actionsIssuance, setActionsIssuance] = useState<Issuance | null>(null);
-  const canManageIssuances = user?.role === 'super_admin' || user?.role === 'reviewer' ||
+  const canManageIssuances = user?.role === 'super_admin' ||
     user?.role === 'compliance_officer' || user?.roleCode === 'compliance_officer';
 
   useEffect(() => {
@@ -141,7 +141,12 @@ export default function IssuancesPage() {
       const users = await usersApi.list();
       const options = users
         .filter((entry: UserRecord) => entry.active)
-        .filter((entry: UserRecord) => ['focal', 'reviewer', 'compliance_officer', 'section_head', 'super_admin'].includes(String(entry.role)))
+        .filter((entry: UserRecord) => {
+          const role = String(entry.role);
+          const rc = (entry as any).roleCode;
+          return ['compliance_officer', 'section_head', 'super_admin'].includes(role) ||
+            rc === 'focal' || rc === 'section_head' || rc === 'compliance_officer';
+        })
         .map((entry: UserRecord) => {
           const displayName = [entry.firstName, entry.middleName, entry.lastName, entry.suffix]
             .filter(Boolean)

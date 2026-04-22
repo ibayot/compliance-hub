@@ -38,7 +38,7 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
-  const isFocal = user?.role === 'focal';
+  const isFocal = user?.roleCode === 'focal';
 
   const now = new Date();
 

@@ -39,7 +39,7 @@ export default function DocumentsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const isFocal = user?.role === 'focal';
+  const isFocal = user?.roleCode === 'focal';
 
   const [filters, setFilters] = useState<ListDocumentsParams>({
     page: 1,
@@ -188,7 +188,7 @@ export default function DocumentsPage() {
 
   const getWorkflowStatus = (document: Document) => {
     const complianceStatus = document.compliance_status || 'pending';
-    const isSuperOrCompliance = user?.role === 'super_admin' || user?.role === 'reviewer' ||
+    const isSuperOrCompliance = user?.role === 'super_admin' ||
       user?.role === 'compliance_officer' || user?.roleCode === 'compliance_officer';
 
     if (isSuperOrCompliance) {
@@ -213,14 +213,14 @@ export default function DocumentsPage() {
   };
 
   const canReturnDocument = (document: Document) => {
-    const isSuperOrCompliance = user?.role === 'super_admin' || user?.role === 'reviewer' ||
+    const isSuperOrCompliance = user?.role === 'super_admin' ||
       user?.role === 'compliance_officer' || user?.roleCode === 'compliance_officer';
     if (!isSuperOrCompliance) {
       return { allowed: false, reason: 'Only super admin and compliance roles can return documents.' };
     }
 
     const uploaderRole = document.uploader?.role;
-    if (uploaderRole === 'super_admin' || uploaderRole === 'reviewer' || uploaderRole === 'compliance_officer') {
+    if (uploaderRole === 'super_admin' || uploaderRole === 'compliance_officer') {
       return { allowed: false, reason: 'Documents uploaded by compliance/super admin require hard delete instead of return.' };
     }
 
@@ -236,14 +236,14 @@ export default function DocumentsPage() {
   };
 
   const canDeleteDocument = (document: Document) => {
-    const isSuperOrCompliance = user?.role === 'super_admin' || user?.role === 'reviewer' ||
+    const isSuperOrCompliance = user?.role === 'super_admin' ||
       user?.role === 'compliance_officer' || user?.roleCode === 'compliance_officer';
     if (!isSuperOrCompliance) {
       return { allowed: false, reason: 'Only super admin and compliance roles can delete documents.' };
     }
 
     const uploaderRole = document.uploader?.role;
-    if (uploaderRole !== 'super_admin' && uploaderRole !== 'reviewer' && uploaderRole !== 'compliance_officer') {
+    if (uploaderRole !== 'super_admin' && uploaderRole !== 'compliance_officer') {
       return { allowed: false, reason: 'Hard delete is only enabled for documents uploaded by compliance/super admin.' };
     }
 

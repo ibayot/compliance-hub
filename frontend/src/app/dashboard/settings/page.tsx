@@ -44,12 +44,13 @@ import {
   CheckCircle as ActiveIcon,
   Cancel as InactiveIcon,
   Delete as DeleteIcon,
+  Security as SecurityIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { useThemeMode } from '@/contexts/ThemeModeContext';
 import { authApi } from '@/lib/api/auth';
-import { usersApi, RoleDefinition } from '@/lib/api/users';
+import { usersApi, RoleDefinition, RoleCapabilityRecord } from '@/lib/api/users';
 import { unitsApi, Unit } from '@/lib/api/units';
 import { UserRole } from '@/lib/types/auth';
 
@@ -159,6 +160,119 @@ function ThemeCard() {
             </Box>
           }
         />
+      </CardContent>
+    </Card>
+  );
+}
+
+// --- Role Capabilities Card ------------------------------------------------
+
+const CAPABILITY_COLUMNS: { key: keyof RoleCapabilityRecord; label: string; description: string }[] = [
+  { key: 'isFocal',              label: 'Focal',           description: 'Compliance document & focal-level access' },
+  { key: 'isDesktop',            label: 'Desktop',         description: 'Handle desktop/hardware support tickets' },
+  { key: 'isItSupport',          label: 'IT Support',      description: 'Handle IT/software support tickets' },
+  { key: 'isPantawidIct',        label: 'Pantawid ICT',    description: 'Handle Pantawid ICT support tickets' },
+  { key: 'isIto',                label: 'ITO Staff',       description: 'Non-technician ITO professional staff group' },
+  { key: 'isEscalationFocal',    label: 'Escalation',      description: 'Can receive escalated tickets' },
+  { key: 'isTicketSettingsFocal',label: 'Ticket Admin',    description: 'Full ticket settings & reports access' },
+  { key: 'isAllTickets',         label: 'See All Tickets', description: 'View all tickets system-wide (not just own)' },
+  { key: 'isTicketFocal',        label: 'Assign Tickets',  description: 'Manually assign/reassign tickets to technicians' },
+];
+
+function RoleCapabilitiesCard() {
+  const { user } = useAuth();
+  const canEdit = user?.role === UserRole.SUPER_ADMIN;
+  const [caps, setCaps] = useState<RoleCapabilityRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null); // roleValue being saved
+  const { enqueueSnackbar } = useSnackbar();
+
+  const load = useCallback(async () => {
+    try {
+      const data = await usersApi.listCapabilities();
+      setCaps(data);
+    } catch {
+      enqueueSnackbar('Failed to load role capabilities.', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [enqueueSnackbar]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleToggle = async (
+    roleValue: string,
+    field: keyof RoleCapabilityRecord,
+    newValue: boolean,
+  ) => {
+    setSaving(roleValue);
+    try {
+      const updated = await usersApi.updateCapability(roleValue, { [field]: newValue });
+      setCaps(prev => prev.map(c => c.roleValue === roleValue ? updated : c));
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to update capability.', { variant: 'error' });
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <Card elevation={2}>
+      <CardHeader
+        avatar={<SecurityIcon color="primary" />}
+        title="Role Capabilities Matrix"
+        subheader={canEdit
+          ? 'Toggle capability flags per role. Changes take effect immediately — the backend cache is reloaded on each save.'
+          : 'View-only. Role capability flags for the system. Contact the System Administrator to make changes.'}
+      />
+      <CardContent sx={{ overflowX: 'auto' }}>
+        {loading ? (
+          <Typography variant="body2" color="text.secondary">Loading capabilities...</Typography>
+        ) : (
+          <Table size="small" sx={{ minWidth: 900 }}>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700, minWidth: 160 }}>Role</TableCell>
+                {CAPABILITY_COLUMNS.map(col => (
+                  <TableCell key={col.key} align="center" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    <Tooltip title={col.description} placement="top">
+                      <span>{col.label}</span>
+                    </Tooltip>
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {caps.map(cap => (
+                <TableRow key={cap.roleValue} hover sx={{ opacity: saving === cap.roleValue ? 0.6 : 1 }}>
+                  <TableCell>
+                    <Chip
+                      label={cap.roleValue}
+                      size="small"
+                      variant="outlined"
+                      color={cap.roleValue === 'super_admin' ? 'error' : 'default'}
+                    />
+                  </TableCell>
+                  {CAPABILITY_COLUMNS.map(col => {
+                    const val = cap[col.key] as boolean;
+                    const isLocked = cap.roleValue === 'super_admin' || !canEdit;
+                    return (
+                      <TableCell key={col.key} align="center">
+                        <Switch
+                          size="small"
+                          checked={cap.roleValue === 'super_admin' ? true : val}
+                          disabled={isLocked || saving === cap.roleValue}
+                          onChange={(e) => handleToggle(cap.roleValue, col.key, e.target.checked)}
+                          color="primary"
+                        />
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </CardContent>
     </Card>
   );
@@ -458,7 +572,7 @@ function FocalUserManagementCard() {
   const { enqueueSnackbar } = useSnackbar();
   const [form, setForm] = useState({
     email: '', password: '', firstName: '', middleName: '', lastName: '',
-    suffix: '', staffId: '', role: UserRole.FOCAL, position: '', positionFull: '', designation: '',
+    suffix: '', staffId: '', role: UserRole.USER, position: '', positionFull: '', designation: '',
     ticketMainFocal: false, ticketTechnician: false,
     unitIds: [] as number[],
   });
@@ -500,7 +614,7 @@ function FocalUserManagementCard() {
   const resetForm = () => {
     setForm({
       email: '', password: '', firstName: '', middleName: '', lastName: '',
-      suffix: '', staffId: '', role: UserRole.FOCAL, position: '', positionFull: '', designation: '',
+      suffix: '', staffId: '', role: UserRole.USER, position: '', positionFull: '', designation: '',
       ticketMainFocal: false, ticketTechnician: false,
       unitIds: [],
     });
@@ -709,13 +823,13 @@ function FocalUserManagementCard() {
 
         {/* Tabs: RICTMS Staff / Regular Users */}
         <Tabs value={userTab} onChange={(_, v) => setUserTab(v)} sx={{ mb: 2 }}>
-          <Tab label={`RICTMS Staff (${focalUsers.filter((u: any) => u.role !== 'user').length})`} />
+          <Tab label={`RICTMS Staff (${focalUsers.filter((u: any) => u.role !== 'user' && u.role !== 'super_admin').length})`} />
           <Tab label={`Regular Users (${focalUsers.filter((u: any) => u.role === 'user').length})`} />
         </Tabs>
 
         {(() => {
           const displayUsers = userTab === 0
-            ? focalUsers.filter((u: any) => u.role !== 'user')
+            ? focalUsers.filter((u: any) => u.role !== 'user' && u.role !== 'super_admin')
             : focalUsers.filter((u: any) => u.role === 'user');
 
           if (displayUsers.length === 0) {
@@ -948,6 +1062,8 @@ function FocalUserManagementCard() {
 export default function SettingsPage() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
+  const isSectionHead = user?.role === UserRole.SECTION_HEAD;
+  const isCapAdmin = isSuperAdmin || isSectionHead;
 
   return (
     <Box>
@@ -1008,6 +1124,12 @@ export default function SettingsPage() {
         {isSuperAdmin && (
           <Grid item xs={12}>
             <RoleManagementCard />
+          </Grid>
+        )}
+
+        {isCapAdmin && (
+          <Grid item xs={12}>
+            <RoleCapabilitiesCard />
           </Grid>
         )}
 

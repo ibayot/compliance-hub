@@ -25,7 +25,7 @@ export class ComparisonController {
    * POST /comparisons
    */
   @Post()
-  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @Roles('focal', 'technician', UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.SECTION_HEAD)
   @HttpCode(HttpStatus.CREATED)
   async compareVersions(
     @Body() dto: Omit<CompareVersionsDto, 'compared_by_id'>,
@@ -44,7 +44,7 @@ export class ComparisonController {
    * GET /comparisons/:id
    */
   @Get(':id')
-  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @Roles('focal', 'technician', UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.SECTION_HEAD)
   async getComparison(@Param('id') id: string) {
     return this.comparisonService.getComparison(id);
   }
@@ -54,7 +54,7 @@ export class ComparisonController {
    * GET /comparisons/document/:documentId
    */
   @Get('document/:documentId')
-  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN)
+  @Roles('focal', 'technician', UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.SECTION_HEAD)
   async getDocumentComparisons(@Param('documentId') documentId: string) {
     return this.comparisonService.getDocumentComparisons(documentId);
   }

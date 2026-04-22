@@ -26,7 +26,6 @@ import {
 const FOCAL_ROLES = [
   UserRole.SUPER_ADMIN,
   UserRole.SECTION_HEAD,
-  UserRole.REVIEWER,
   // v0.6.14 named roles
   UserRole.PANTAWID_ICT,
   UserRole.DESKTOP_SR,
@@ -42,7 +41,6 @@ const FOCAL_ROLES = [
 /** Roles that can manage office days (set/toggle office calendar) */
 const OFFICE_DAY_ROLES = [
   UserRole.SUPER_ADMIN,
-  UserRole.REVIEWER,
   UserRole.SECTION_HEAD,
   // v0.6.14 ITO focal-equivalent roles
   UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
@@ -56,9 +54,7 @@ const OFFICE_DAY_ROLES = [
 /** Roles that can read attendance */
 const READ_ROLES = [
   UserRole.SUPER_ADMIN,
-  UserRole.REVIEWER,
   UserRole.SECTION_HEAD,
-  UserRole.AUDITOR,
   // v0.6.14 named roles
   UserRole.PANTAWID_ICT,
   UserRole.DESKTOP_SR,
@@ -161,7 +157,7 @@ export class AttendanceController {
 
   /** GET /attendance/staff-logins?date=YYYY-MM-DD — staff login activity for a date */
   @Get('staff-logins')
-  @Roles(...READ_ROLES, UserRole.AUDITOR)
+  @Roles(...READ_ROLES)
   async getStaffLogins(@Query('date') date?: string) {
     const target = date || new Date().toISOString().slice(0, 10);
     return this.attendanceService.getStaffLoginsForDate(target);
@@ -171,7 +167,7 @@ export class AttendanceController {
 
   /** GET /attendance/staff-logins-monthly?startDate=&endDate= — all non-tech staff with lastLogin for monthly grid */
   @Get('staff-logins-monthly')
-  @Roles(...READ_ROLES, UserRole.AUDITOR)
+  @Roles(...READ_ROLES)
   async getStaffLoginsMonthly(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,

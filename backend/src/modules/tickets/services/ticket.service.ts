@@ -20,6 +20,7 @@ import { User, UserRole } from '../../users/entities/user.entity';
 import { TicketSettingsService } from './ticket-settings.service';
 import { AttendanceService } from './attendance.service';
 import { EmailService, TicketEmailData } from './email.service';
+import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 
 // --- DTOs --------------------------------------------------------------------
 
@@ -109,6 +110,7 @@ export class TicketService implements OnModuleInit {
     private readonly settingsService: TicketSettingsService,
     private readonly attendanceService: AttendanceService,
     private readonly emailService: EmailService,
+    private readonly roleCapSvc: RoleCapabilitiesService,
   ) {}
 
   // --- Schema Migration ----------------------------------------------------
@@ -352,10 +354,17 @@ export class TicketService implements OnModuleInit {
       // Seed default keyword rules
       await this.seedDefaultKeywordRules(qr);
 
+      // ── v0.0.31 migrations ────────────────────────────────────────────────
+      // Expose role_capabilities (BASE TABLE in users DB) as a view here
+      await qr.query('DROP VIEW IF EXISTS role_capabilities').catch(() => undefined);
+      await qr.query(`CREATE OR REPLACE VIEW role_capabilities AS SELECT * FROM \`${usersDb}\`.role_capabilities`).catch(() => undefined);
+
       this.logger.log('Ticket schema migrations applied.');
     } finally {
       await qr.release();
     }
+    // Reload capability cache now that the VIEW is guaranteed to exist
+    await this.roleCapSvc.reload().catch(() => undefined);
   }
 
   private async resolveExistingSchemaName(
@@ -587,20 +596,15 @@ export class TicketService implements OnModuleInit {
 
         if (availableTechs.length > 0) {
           // QA #2: Senior technicians are NOT eligible for auto-assignment — they self-assign via admin UI
-          const SENIOR_AUTO_ASSIGN_EXCLUDED: string[] = [
-            UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR,
-            UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
-          ];
-          const eligibleTechs = availableTechs.filter(t => !SENIOR_AUTO_ASSIGN_EXCLUDED.includes(t.role));
+          const eligibleTechs = availableTechs.filter(t => !this.roleCapSvc.isSeniorTech(t.role));
 
           // Sort techs by tier: junior first, then others
           const tierPriority = (role: string): number => {
             const juniorRoles: string[] = [
               UserRole.IT_SUPPORT_JR, UserRole.DESKTOP_JR,
-              UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
             ];
             if (juniorRoles.includes(role)) return 1;
-            return 3; // focal / pantawid / others
+            return 3; // pantawid / others
           };
           eligibleTechs.sort((a, b) => tierPriority(a.role) - tierPriority(b.role));
 
@@ -736,16 +740,11 @@ export class TicketService implements OnModuleInit {
       .orderBy('t.createdAt', 'DESC');
 
     // Role-based visibility
-    // Only these roles see ALL tickets (full management view):
-    const SEE_ALL_ROLES: string[] = [
-      UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.REVIEWER,
-      UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
-      UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.PANTAWID_ICT,
-    ];
+    // Focal roles (is_focal=1) and super_admin see ALL tickets (full management view).
     if (filters.viewerRole === UserRole.USER) {
       // Regular users see only their own submitted tickets
       qb.where('t.requesterId = :uid', { uid: filters.viewerId });
-    } else if (filters.viewerRole && SEE_ALL_ROLES.includes(filters.viewerRole as string)) {
+    } else if (filters.viewerRole && this.roleCapSvc.canSeeAllTickets(filters.viewerRole as string)) {
       // Privileged roles: no WHERE restriction — see all tickets with full filter support
       if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
       if (filters.ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
@@ -810,6 +809,10 @@ export class TicketService implements OnModuleInit {
     actorRole: UserRole,
   ): Promise<Ticket> {
     const ticket = await this.getTicketById(id);
+    const acceptedEscalation = await this.escalationRepo.findOne({
+      where: { ticketId: id, status: EscalationStatus.ACCEPTED },
+      order: { createdAt: 'DESC' },
+    });
 
     // Regular users can only edit their own open tickets (subject/description)
     // OR close their own ticket if it is in a resolvable state
@@ -858,32 +861,28 @@ export class TicketService implements OnModuleInit {
 
     // Priority changes allowed for all technician-level roles and above
     if (dto.priority !== undefined) {
-      const priorityRoles = [
-        UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER, UserRole.SUPER_ADMIN,
-        UserRole.TECHNICIAN, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
-        UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
-        // v0.6.14 named roles
-        UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
-        UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
-        UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
-        UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
-        UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
-        UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
-      ];
-      if (!priorityRoles.includes(actorRole)) {
+      if (!this.roleCapSvc.canChangePriority(actorRole as string)) {
         throw new ForbiddenException('Only technicians and above can change ticket priority.');
       }
       ticket.priority = dto.priority;
     }
 
     if (dto.status) {
+      if (acceptedEscalation) {
+        const isEscalationAdmin =
+          actorRole === UserRole.SUPER_ADMIN ||
+          actorRole === UserRole.SECTION_HEAD ||
+          actorRole === UserRole.COMPLIANCE_OFFICER;
+        const isAcceptedFocal = acceptedEscalation.escalatedToId === actorId;
+        if (!isEscalationAdmin && !isAcceptedFocal) {
+          throw new ForbiddenException(
+            'This ticket has an accepted escalation. Only the accepting focal, compliance officer, section head, or super admin can change status.',
+          );
+        }
+      }
+
       // QA #4/#3/#6: Full status transition matrix enforcement
-      const SENIOR_AUTHORITY_ROLES: UserRole[] = [
-        UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER,
-        UserRole.COMPLIANCE_OFFICER, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
-        UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR,
-      ];
-      const isSeniorAuthority = SENIOR_AUTHORITY_ROLES.includes(actorRole);
+      const isSeniorAuthority = this.roleCapSvc.isSeniorAuthority(actorRole as string);
 
       const ALLOWED_TRANSITIONS: Partial<Record<TicketStatus, TicketStatus[]>> = {
         [TicketStatus.OPEN]:        [TicketStatus.FREEZE, TicketStatus.DUPLICATE],
@@ -942,13 +941,9 @@ export class TicketService implements OnModuleInit {
           if (ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT || isOfficeDayToday) {
             const presentTechs = await this.attendanceService.getPresentTechnicians(ticket.ticketType, today);
 
-            const SENIOR_AUTO_ASSIGN_EXCLUDED: string[] = [
-              UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR,
-              UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
-            ];
-            const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
-              ? presentTechs
-              : presentTechs.filter(t => !SENIOR_AUTO_ASSIGN_EXCLUDED.includes(t.role));
+const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
+            ? presentTechs
+            : presentTechs.filter(t => !this.roleCapSvc.isSeniorTech(t.role));
 
             // Pick first eligible tech with zero active tickets
             for (const tech of eligibleTechs) {
@@ -1011,12 +1006,8 @@ export class TicketService implements OnModuleInit {
     // QA #1/#2: On RESOLVED, auto-assign next OPEN ticket — only for non-senior techs
     if (dto.status === TicketStatus.RESOLVED && saved.assignedToId) {
       try {
-        const SENIOR_AUTO_ASSIGN_EXCLUDED: string[] = [
-          UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR,
-          UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
-        ];
         const resolvedByTech = await this.userRepo.findOne({ where: { id: saved.assignedToId } });
-        const isSeniorTech = resolvedByTech && SENIOR_AUTO_ASSIGN_EXCLUDED.includes(resolvedByTech.role);
+        const isSeniorTech = resolvedByTech && this.roleCapSvc.isSeniorTech(resolvedByTech.role);
 
         if (!isSeniorTech) {
           const nextTicket = await this.ticketRepo
@@ -1044,23 +1035,15 @@ export class TicketService implements OnModuleInit {
   }
 
   async assignTicket(id: string, dto: AssignTicketDto, actorRole: UserRole, actorId?: number): Promise<Ticket> {
-    const allowedActors = [
-      UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER,
-      UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT,
-      UserRole.TECHNICIAN, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
-      // v0.6.14 named roles
-      UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
-      UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
-      UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
-      UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
-      UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
-      UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
-    ];
-    if (!allowedActors.includes(actorRole)) {
+    if (!this.roleCapSvc.canAssignTickets(actorRole as string)) {
       throw new ForbiddenException('Only admins, focal persons, and technicians can assign tickets.');
     }
 
     const ticket = await this.getTicketById(id);
+    const acceptedEscalation = await this.escalationRepo.findOne({
+      where: { ticketId: id, status: EscalationStatus.ACCEPTED },
+      order: { createdAt: 'DESC' },
+    });
 
     // Duplicate, Resolved, and Closed tickets are terminal – assignment is not allowed
     if (ticket.status === TicketStatus.DUPLICATE) {
@@ -1072,6 +1055,30 @@ export class TicketService implements OnModuleInit {
 
     const technician = await this.userRepo.findOne({ where: { id: dto.assignedToId } });
     if (!technician) throw new NotFoundException('Technician not found');
+
+    // Once an escalation is accepted, only CO/SH/super_admin may reassign,
+    // and only to another configured escalation focal.
+    if (acceptedEscalation) {
+      const isEscalationAdmin =
+        actorRole === UserRole.SUPER_ADMIN ||
+        actorRole === UserRole.SECTION_HEAD ||
+        actorRole === UserRole.COMPLIANCE_OFFICER;
+      if (!isEscalationAdmin) {
+        throw new ForbiddenException(
+          'This ticket has an accepted escalation. Only compliance officer, section head, or super admin can reassign it.',
+        );
+      }
+
+      const focals = await this.escalationFocalRepo.find();
+      const allowedRoles = focals
+        .filter((f) => f.ticketType === ticket.ticketType || f.ticketType === 'all')
+        .map((f) => f.roleValue);
+      if (allowedRoles.length > 0 && !allowedRoles.includes(technician.role)) {
+        throw new ForbiddenException(
+          'During an accepted escalation, reassignment is limited to configured escalation focal roles for this ticket type.',
+        );
+      }
+    }
 
     const today = new Date().toISOString().slice(0, 10);
     const attendanceRow = await this.dataSource
@@ -1091,12 +1098,12 @@ export class TicketService implements OnModuleInit {
       const actorUser = await this.userRepo.findOne({ where: { id: actorId } });
       actorIsMainFocal = actorUser?.ticketMainFocal === true;
     }
-    const bypassBusyGuard = actorIsMainFocal || [UserRole.SUPER_ADMIN, UserRole.FOCAL, UserRole.SECTION_HEAD, UserRole.REVIEWER].includes(actorRole);
+    const bypassBusyGuard = actorIsMainFocal || actorRole === UserRole.SUPER_ADMIN ||
+      actorRole === UserRole.SECTION_HEAD || this.roleCapSvc.isFocal(actorRole as string);
 
     // Guard: lower-level techs can only escalate to focal-level technicians
-    const lowerLevelRoles: UserRole[] = [UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR];
-    const focalTechRoles: UserRole[] = [UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP, UserRole.TECHNICIAN_IT_SUPPORT, UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR];
-    if (lowerLevelRoles.includes(actorRole) && !focalTechRoles.includes(technician.role as UserRole)) {
+    const lowerLevelRoles: UserRole[] = [UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR];
+    if (lowerLevelRoles.includes(actorRole) && !this.roleCapSvc.isFocal(technician.role as string)) {
       throw new ForbiddenException('Lower-level technicians may only escalate to focal-level technicians.');
     }
 
@@ -1436,17 +1443,12 @@ export class TicketService implements OnModuleInit {
   async getTechnicianAvailability(): Promise<Array<{ id: number; email: string; firstName: string; lastName: string; role: string; openCount: number; attendanceStatus: string | null; isUnavailable: boolean }>> {
     const technicians = await this.userRepo.find({
       where: [
-        { role: UserRole.TECHNICIAN_DESKTOP },
-        { role: UserRole.TECHNICIAN_IT_SUPPORT },
-        { role: UserRole.TECHNICIAN },
-        { role: UserRole.TECHNICIAN_IT_STAFF },
-        { role: UserRole.TECHNICIAN_DESKTOP_STAFF },
-        // v0.6.14+ named technician roles
         { role: UserRole.PANTAWID_ICT },
         { role: UserRole.DESKTOP_SR },
         { role: UserRole.IT_SUPPORT_SR },
         { role: UserRole.DESKTOP_JR },
         { role: UserRole.IT_SUPPORT_JR },
+        ...this.roleCapSvc.getRolesWhere('isFocal').map(r => ({ role: r as UserRole })),
       ],
     });
 
@@ -1515,19 +1517,18 @@ export class TicketService implements OnModuleInit {
 
       // Determine which ticket types this technician handles
       const DESKTOP_ROLES: string[] = [
-        UserRole.DESKTOP_JR, UserRole.TECHNICIAN_DESKTOP_STAFF,
+        UserRole.DESKTOP_JR,
       ];
       const IT_ROLES: string[] = [
-        UserRole.IT_SUPPORT_JR, UserRole.TECHNICIAN_IT_STAFF,
+        UserRole.IT_SUPPORT_JR,
       ];
       const PANTAWID_ROLES: string[] = [
-        UserRole.PANTAWID_ICT, UserRole.TECHNICIAN,
+        UserRole.PANTAWID_ICT,
       ];
 
       // Senior roles are excluded from auto-assignment per existing rule
       const SENIOR_EXCLUDED: string[] = [
         UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR,
-        UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_DESKTOP,
       ];
       if (SENIOR_EXCLUDED.includes(tech.role)) return;
 
@@ -1628,8 +1629,8 @@ export class TicketService implements OnModuleInit {
 
     const techRoles = [
       UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
-      UserRole.PANTAWID_ICT, UserRole.TECHNICIAN, UserRole.TECHNICIAN_DESKTOP,
-      UserRole.TECHNICIAN_IT_SUPPORT, UserRole.TECHNICIAN_IT_STAFF, UserRole.TECHNICIAN_DESKTOP_STAFF,
+      UserRole.PANTAWID_ICT,
+      ...this.roleCapSvc.getRolesWhere('isFocal').map(r => r as UserRole),
     ];
 
     const qb = this.ticketRepo
@@ -1802,6 +1803,16 @@ export class TicketService implements OnModuleInit {
   ): Promise<TicketEscalation> {
     const ticket = await this.getTicketById(ticketId);
 
+    const latestEscalation = await this.escalationRepo.findOne({
+      where: { ticketId },
+      order: { createdAt: 'DESC' },
+    });
+    if (latestEscalation && latestEscalation.status !== EscalationStatus.RETURNED) {
+      throw new BadRequestException(
+        'This ticket already has an active escalation. You can only escalate again after it is returned.',
+      );
+    }
+
     // Terminal tickets cannot be escalated
     if ([TicketStatus.CLOSED, TicketStatus.DUPLICATE, TicketStatus.RESOLVED].includes(ticket.status as TicketStatus)) {
       throw new ForbiddenException('Resolved, closed, or duplicate tickets cannot be escalated.');
@@ -1922,5 +1933,49 @@ export class TicketService implements OnModuleInit {
       relations: ['escalatedBy', 'escalatedTo'],
       order: { createdAt: 'DESC' },
     });
+  }
+
+  /**
+   * PATCH /tickets/:id/escalation/:eid/update-proof
+   * Allows the escalating technician to supplement notes and/or proof photos on a
+   * PENDING escalation they initiated.  Appends new files; does not overwrite existing ones.
+   */
+  async updateEscalationProof(
+    ticketId: string,
+    escalationId: string,
+    dto: { notes?: string },
+    proofFiles: Express.Multer.File[],
+    actorId: number,
+  ): Promise<TicketEscalation> {
+    const escalation = await this.escalationRepo.findOne({
+      where: { id: escalationId, ticketId },
+      relations: ['escalatedBy', 'escalatedTo'],
+    });
+    if (!escalation) throw new NotFoundException('Escalation record not found.');
+    if (escalation.escalatedById !== actorId) {
+      throw new ForbiddenException('Only the technician who initiated the escalation may update it.');
+    }
+    if (escalation.status !== EscalationStatus.PENDING) {
+      throw new BadRequestException('Only a pending escalation can be updated.');
+    }
+
+    if (dto.notes !== undefined) {
+      escalation.notes = dto.notes.trim() || null;
+    }
+
+    if (proofFiles && proofFiles.length > 0) {
+      const dir = path.join(this.escalationStorageRoot(), ticketId);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const savedPaths: string[] = [...(escalation.proofFiles ?? [])];
+      for (const file of proofFiles) {
+        const filename = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const fullPath = path.join(dir, filename);
+        fs.writeFileSync(fullPath, file.buffer);
+        savedPaths.push(`escalation-proofs/${ticketId}/${filename}`);
+      }
+      escalation.proofFiles = savedPaths;
+    }
+
+    return this.escalationRepo.save(escalation);
   }
 }

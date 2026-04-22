@@ -6,6 +6,70 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.31] - 2026-04-16 — role_capabilities Table, RoleCapabilitiesService, Sub-Q Focal Elevation
+
+### Added
+- **`compliance_hub_users.role_capabilities` BASE TABLE** with 6 boolean flags per role (`is_focal`, `is_desktop`, `is_it_support`, `is_pantawid_ict`, `is_ito`, `is_escalation_focal`). 20 rows seeded for all active roles.
+- **VIEWs** in `compliance_hub_ticketing` and `compliance_hub` pointing to the base table in `compliance_hub_users`. These DBs no longer need their own hardcoded role knowledge.
+- **`backend/src/modules/users/entities/role-capability.entity.ts`** — TypeORM entity for the new table.
+- **`backend/src/modules/users/role-capabilities.service.ts`** — Startup-cached role capability lookup service. Loaded via `onModuleInit()`. Provides bool helpers (`isFocal`, `isIto`, `isDesktop`, `isItSupport`, `isPantawidIct`, `isEscalationFocal`, `isTechnician`, `isSeniorTech`, `isSeniorDesktop`, `isSeniorItSupport`) and compound helpers (`canSeeAllTickets`, `canChangePriority`, `isSeniorAuthority`, `canAssignTickets`) and bulk query helpers (`getRolesWhere`, `getSeniorTechRoles`, `getTechnicianRoles`).
+- **Migration**: `backend/database/v0.0.31-migration.sql` — creates table, seeds 20 rows, creates VIEWs, elevates roleCode for `desktop_sr`/`it_support_sr`/`pantawid_ict`.
+
+### Changed
+- **Sub-Q: `desktop_sr`, `it_support_sr`, `pantawid_ict` now have `role_definitions.role_code = 'focal'`**. These roles now pass `@Roles('focal')` controller guards and `user.roleCode === 'focal'` frontend checks. They gain full access to compliance endpoints, document pages, issuances, and all other focal-gated routes.
+- **`ticket.service.ts`**: Removed `FOCAL_NAMED_ROLES` const. All 8+ hardcoded role arrays replaced with `RoleCapabilitiesService` method calls (`canSeeAllTickets`, `canChangePriority`, `isSeniorAuthority`, `isSeniorTech`, `canAssignTickets`, `isFocal`, `getRolesWhere`).
+- **`attendance.service.ts`**: `getItoRoles()` now uses `roleCapSvc.getRolesWhere('isIto')`. Attendance scope restriction checks use `isSeniorDesktop()` / `isSeniorItSupport()` / `isDesktop()` / `isItSupport()`.
+- **`document.service.ts`**: Removed module-level `FOCAL_NAMED_ROLES` Set constant. All 4 `FOCAL_NAMED_ROLES.has()` calls replaced with `this.roleCapSvc.isFocal()`.
+- **`unit-access.guard.ts`**: Added `section_head` to `GLOBAL_ACCESS_ROLES` (was previously missing, causing section_head to be unit-scoped unintentionally).
+- **`users.module.ts`**, **`tickets.module.ts`**, **`documents.module.ts`**: Registered `RoleCapability` entity and `RoleCapabilitiesService`.
+
+### Fixed
+- **Pre-existing bug: cybersec/infosec/ITO focal roles could not see all tickets** despite being able to assign them. `canSeeAllTickets()` now correctly includes ALL focal roles, not just the narrow previous list.
+- **`section_head` unit-access bypass was missing**: Added to `GLOBAL_ACCESS_ROLES` so section heads can access all units without being unit-scoped.
+
+---
+
+## [0.0.30] - 2026-04-17 — Legacy Role Cleanup, DB Table Restructuring, Attendance Table Creation
+
+### Removed
+- **8 legacy roles permanently removed** from the entire codebase and database:
+  - `reviewer`, `focal`, `technician`, `auditor`
+  - `technician_desktop`, `technician_it_support`, `technician_it_staff`, `technician_desktop_staff`
+- Removed from: `seed-data.sql`, `role_definitions` table, `UserRole` enum (backend + frontend), all `@Roles()` decorators, service-layer role checks, sidebar nav items, and all frontend page-level role comparisons.
+- `UserRole.FOCAL` default replaced with `UserRole.USER` in `users.service.ts` and `settings/page.tsx`.
+- `REVIEWER` references in 12+ files replaced with `COMPLIANCE_OFFICER` (backend) or removed (frontend).
+
+### Changed (Database)
+- **Removed misplaced tables from `compliance_hub_users`:** `escalation_focal_configs`, `office_days`, `ticket_events`, `ticket_keyword_rules` (these belong only in `compliance_hub_ticketing`).
+- **Removed misplaced tables from `compliance_hub`:** Same 4 tables dropped (they existed as BASE TABLEs when they should only be in `compliance_hub_ticketing`).
+- **Created `attendance` BASE TABLE in `compliance_hub_users`** (was missing; `compliance_hub` and `compliance_hub_ticketing` already have VIEWs pointing to it).
+- **Altered `users.role` ENUM** in `compliance_hub_users` to remove the 8 legacy values; DEFAULT changed to `'user'`.
+- Migration script: `backend/database/v0.0.30-migration.sql`
+
+### Changed (Code Patterns)
+- **Backend:** All `@Roles()` decorators updated to use roleCode-matching strings `'focal'`, `'technician'` instead of deleted `UserRole.FOCAL` / `UserRole.TECHNICIAN`.
+- **Backend:** `FOCAL_NAMED_ROLES` constant added in `ticket.service.ts` and `document.service.ts` to identify named focal-equivalent roles for service-level business logic.
+- **Backend:** `unit-access.guard.ts` now checks `user.roleCode === 'focal'` instead of `user.role === UserRole.FOCAL`.
+- **Backend:** `excludedAttendanceRoleValues` in `attendance.service.ts` simplified to `['user', 'super_admin']`.
+- **Frontend:** `isFocal` checks updated from `user?.role === 'focal'` → `user?.roleCode === 'focal'` across 6 files.
+- **Frontend:** `isComplianceOfficer` checks no longer include `user?.role === 'reviewer'`.
+- **Frontend:** `isFocalTech` arrays updated to remove `technician*` legacy values; `isLowerLevelTech` now only includes `desktop_jr`, `it_support_jr`.
+
+
+
+### Fixed
+- **ITO roles wrongly saw all tickets (v0.0.28 regression):** Removed `UserRole.CYBERSEC` and `UserRole.INFOSEC` from `SEE_ALL_ROLES` in `getTickets()`. ITO staff roles now correctly see only tickets assigned to them or submitted by them.
+- **isComplianceOfficer wrongly included cybersec/infosec (v0.0.28 regression):** Reverted `isComplianceOfficer` to `reviewer || roleCode === 'compliance_officer'` only. Cybersec and infosec are NOT management roles and should not have the full management ticket view.
+- **Auto-attendance not working on login:** Two root causes fixed:
+  1. `AuthModule` now imports `AttendanceModule` (a focused re-export in `users/attendance.module.ts`), making `AttendanceService` properly injectable into `AuthService`. Importing the full `TicketsModule` was avoided to prevent circular dependency risk.
+  2. `autoCorrectAbsentOnLogin()` now uses an exclusion-based check (`user` and `super_admin` excluded) instead of `getRoleGroups().all` (which only included `assignable=true` roles from `role_definitions`, silently skipping ITO roles).
+- **ITO roles not available as escalation focals:** `listAvailableEscalationRoles()` in `TicketSettingsService` now returns ALL defined roles (instead of `assignable=true` only), excluding only `user`, `super_admin`, `section_head`, and `compliance_officer`. ITO specialist roles are now selectable as escalation focal targets in Settings.
+
+### Added
+- **ITO role restricted ticket view (frontend):** Added `isItoRole` constant covering all ITO specialist roles. These roles are included in `isTechnician` for a 4-tab restricted view (Active, Resolved/Closed, Frozen, Duplicate) — they see only their own tickets. `canEscalate` now includes `isItoRole` so ITO staff can escalate assigned tickets.
+- **MICROSERVICES-REFERENCE.md:** Working documentation file (not committed) covering all services, modules, API endpoints, entities, role reference, and environment variables.
+
+
 ## [0.0.28] - 2026-04-15 — Cybersec Ticket Views, Auto-Progress on Accept, Proof Photo Fix, Reports Enhancement
 
 ### Fixed

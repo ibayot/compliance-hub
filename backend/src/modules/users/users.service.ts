@@ -224,18 +224,17 @@ export class UsersService {
       await queryRunner.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider ENUM('local','google') NOT NULL DEFAULT 'local'");
       await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(255) NULL');
       await queryRunner.query('CREATE UNIQUE INDEX IF NOT EXISTS uq_users_google_sub ON users (google_sub)');
-      // Extend the role enum to include new roles (safe: only adds values, never removes)
+      // Update role enum to current set (legacy generic roles removed)
       await queryRunner.query(
-        `ALTER TABLE users MODIFY COLUMN role ENUM('super_admin','reviewer','section_head','focal','technician','technician_desktop','technician_it_support','technician_it_staff','technician_desktop_staff','auditor','user','compliance_officer','cybersec','infosec','project_mgr','dev_lead','sqa_lead','lead_infra','server_admin','db_admin','network_admin','desktop_sr','it_support_sr','desktop_jr','it_support_jr','pantawid_ict','records_officer','hr_id_officer') NOT NULL DEFAULT 'focal'`,
-      ).catch(() => undefined); // Catch if enum already has these values
+        `ALTER TABLE users MODIFY COLUMN role ENUM('super_admin','section_head','user','compliance_officer','cybersec','infosec','project_mgr','dev_lead','sqa_lead','lead_infra','server_admin','db_admin','network_admin','desktop_sr','it_support_sr','desktop_jr','it_support_jr','pantawid_ict','records_officer','hr_id_officer') NOT NULL DEFAULT 'user'`,
+      ).catch(() => undefined);
       // Add last_login column for staff activity tracking
       await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login DATETIME NULL').catch(() => undefined);
       // QA v0.6.4: Add technician_type to role_definitions for custom-role attendance tagging
       await queryRunner.query('ALTER TABLE role_definitions ADD COLUMN IF NOT EXISTS technician_type VARCHAR(30) NULL DEFAULT NULL').catch(() => undefined);
       // QA v0.6.10: Add role_code to role_definitions for platform feature-set routing
       await queryRunner.query('ALTER TABLE role_definitions ADD COLUMN IF NOT EXISTS role_code VARCHAR(50) NULL DEFAULT NULL').catch(() => undefined);
-      // Seed roleCode for existing system roles
-      await queryRunner.query(`UPDATE role_definitions SET role_code = 'compliance_officer' WHERE \`value\` = 'reviewer' AND role_code IS NULL`).catch(() => undefined);
+      // Seed roleCode for section_head if not set
       await queryRunner.query(`UPDATE role_definitions SET role_code = 'section_head' WHERE \`value\` = 'section_head' AND role_code IS NULL`).catch(() => undefined);
       // Create units VIEW so User entity can JOIN to units stored in the compliance DB
       const complianceDb = process.env.COMPLIANCE_DB_DATABASE || 'compliance_hub';
@@ -403,7 +402,7 @@ export class UsersService {
       authProvider: AuthProvider.LOCAL,
       googleSub: null,
       // Admin-created users are always RICTMS staff → default to FOCAL unless explicitly set
-      role: createUserDto.role ?? UserRole.FOCAL,
+      role: createUserDto.role ?? UserRole.USER,
       units,
     });
 
@@ -600,7 +599,7 @@ export class UsersService {
       passwordHash,
       firstName: payload.firstName || 'Google',
       lastName: payload.lastName || 'User',
-      role: payload.role || UserRole.FOCAL,
+      role: payload.role || UserRole.USER,
       authProvider: AuthProvider.GOOGLE,
       googleSub: payload.googleSub,
       ticketMainFocal: false,
