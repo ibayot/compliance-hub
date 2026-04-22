@@ -94,13 +94,7 @@ Replace `<remote-url>` with the Git URL your team provided for this repository. 
 
 This is the most important step for a real deployment. You need to change the default passwords to something secure.
 
-Create a file named `.env` in the root folder of the project. You can create it using any text editor, or run:
-
-```bash
-# On Linux/Mac:
-cp docker-compose.yml .env   # wrong, just create the file manually
-# Actually, just open a text editor and create a new file named .env
-```
+Create a file named `.env` in the root folder of the project using a text editor.
 
 Paste the following content into `.env` and fill in your own values:
 
@@ -111,6 +105,12 @@ Paste the following content into `.env` and fill in your own values:
 MYSQL_ROOT_PASSWORD=change_this_to_a_strong_password
 MYSQL_PASSWORD=change_this_to_a_strong_password
 DB_PASSWORD=change_this_to_a_strong_password
+
+# Database user and service DB names
+DB_USERNAME=ricms_user
+USERS_DB_DATABASE=compliance_hub_users
+TICKETING_DB_DATABASE=compliance_hub_ticketing
+COMPLIANCE_DB_DATABASE=compliance_hub
 
 # ─────────────────────────────────────────────────────────────
 # SECRET KEYS FOR LOGINS — generate unique random values (see below)
@@ -123,6 +123,11 @@ JWT_REFRESH_SECRET=paste_a_different_long_random_string_here
 # ─────────────────────────────────────────────────────────────
 CORS_ORIGIN=http://YOUR_SERVER_IP:3000
 NEXT_PUBLIC_API_URL=http://YOUR_SERVER_IP:4000/api
+
+# Gateway-to-service routing (Docker network hostnames)
+USERS_SERVICE_URL=http://users-service:4101
+TICKETING_SERVICE_URL=http://ticketing-service:4102
+COMPLIANCE_SERVICE_URL=http://compliance-service:4103
 ```
 
 **How to generate secure secret keys** — run this on any computer that has Node.js installed:

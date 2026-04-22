@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.38] - 2026-04-22 - Documentation Cleanup and Deployment Alignment
+
+### Changed
+- Restructured `README.md` to keep it focused on overview, quick start, architecture, and documentation links.
+- Removed release-log style content from `README.md`; release history remains in `CHANGELOG.md`.
+- Aligned `deployment.md` environment variable guidance with the current microservices layout (`compliance_hub_users`, `compliance_hub_ticketing`, `compliance_hub`) and gateway service URL variables.
+
+### Reviewed
+- Repository cleanup candidates were reviewed:
+  - `regulatory-issuances/` remains intentionally tracked because it is an active source corpus for issuance deep-dive classification workflows.
+  - `scripts/classify_issuance_drop.py` and `scripts/quick-escalation-smoke.mjs` remain as maintained utility scripts.
+
+### Versioning
+- Patch version bump only: `0.0.37` -> `0.0.38`.
+
 ## [0.0.37] - 2026-04-22 - Security Hardening Pass (OWASP-focused)
 
 ### Fixed
