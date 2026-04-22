@@ -15,6 +15,7 @@ export interface UserRecord {
   ticketMainFocal?: boolean;
   ticketTechnician?: boolean;
   role: UserRole;
+  roleCode?: string | null;
   active: boolean;
 }
 

@@ -40,7 +40,7 @@ export interface Issuance {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  documents?: any[];
+  documents?: Array<{ id: string }>;
 }
 
 export interface CreateIssuanceDto {
@@ -92,9 +92,67 @@ export interface TicketEvent {
   actorId: number | null;
   actorName?: string | null;
   eventType: string;
-  meta?: Record<string, any> | null;
+  meta?: Record<string, string | number | boolean | null> | null;
   createdAt: string;
 }
+
+interface AttendanceTechnicianRecord {
+  id: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  openCount: number;
+  attendanceStatus?: AttendanceStatus | null;
+  isUnavailable?: boolean;
+}
+
+interface StaffLoginRecord {
+  userId?: number;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  role?: string;
+  lastLogin?: string | null;
+  [key: string]: unknown;
+}
+
+const sanitizeKeywordValue = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const parseKeywordArrayFromUnknown = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  const parsed: string[] = [];
+  value.forEach((entry) => {
+    const sanitized = sanitizeKeywordValue(entry);
+    if (sanitized) parsed.push(sanitized);
+  });
+  return parsed;
+};
+
+const parseKeywordListField = (rawKeywords: unknown, fallbackKeyword?: unknown): string[] => {
+  if (Array.isArray(rawKeywords)) {
+    const normalized = parseKeywordArrayFromUnknown(rawKeywords);
+    if (normalized.length > 0) return normalized;
+  }
+
+  if (typeof rawKeywords === 'string') {
+    try {
+      const parsed = JSON.parse(rawKeywords) as unknown;
+      const normalized = parseKeywordArrayFromUnknown(parsed);
+      if (normalized.length > 0) return normalized;
+    } catch {
+      const single = sanitizeKeywordValue(rawKeywords);
+      if (single) return [single];
+    }
+  }
+
+  const fallback = sanitizeKeywordValue(fallbackKeyword);
+  return fallback ? [fallback] : [];
+};
 
 export interface Ticket {
   id: string;
@@ -437,7 +495,7 @@ export const ticketsApi = {
     return response.data;
   },
 
-  getStatistics: async (): Promise<any> => {
+  getStatistics: async (): Promise<Record<string, unknown>> => {
     const response = await apiClient.get(`/tickets/statistics`);
     return response.data;
   },
@@ -581,13 +639,10 @@ export const ticketSettingsApi = {
   // Keyword Rules
   getKeywordRules: async (): Promise<TicketKeywordRule[]> => {
     const response = await apiClient.get(`/ticket-settings/keyword-rules`);
-    // The backend stores keywords as a raw JSON string in a TEXT column.
-    // Parse it here so the rest of the UI always receives string[].
+    // The backend stores keywords as JSON string in some rows; validate before accepting.
     return (response.data as TicketKeywordRule[]).map(rule => ({
       ...rule,
-      keywords: rule.keywords
-        ? (Array.isArray(rule.keywords) ? rule.keywords : JSON.parse(rule.keywords as unknown as string))
-        : (rule.keyword ? [rule.keyword] : []),
+      keywords: parseKeywordListField(rule.keywords, rule.keyword),
     }));
   },
   createKeywordRule: async (data: { keywords: string[]; targetTicketType: string; targetCategoryId?: string; isActive?: boolean }): Promise<TicketKeywordRule> => {
@@ -638,21 +693,21 @@ export const attendanceApi = {
     const response = await apiClient.post(`/attendance/bulk`, data);
     return response.data;
   },
-  getAvailableTechnicians: async (ticketType: string, date: string): Promise<any[]> => {
+  getAvailableTechnicians: async (ticketType: string, date: string): Promise<AttendanceTechnicianRecord[]> => {
     const response = await apiClient.get(`/attendance/technicians?ticketType=${ticketType}&date=${date}`);
     return response.data;
   },
-  getTechnicians: async (ticketType?: string): Promise<any[]> => {
+  getTechnicians: async (ticketType?: string): Promise<AttendanceTechnicianRecord[]> => {
     const params = ticketType ? `?ticketType=${ticketType}` : '';
     const response = await apiClient.get(`/attendance/technicians${params}`);
     return response.data;
   },
-  getStaffLogins: async (date?: string): Promise<any[]> => {
+  getStaffLogins: async (date?: string): Promise<StaffLoginRecord[]> => {
     const params = date ? `?date=${date}` : '';
     const response = await apiClient.get(`/attendance/staff-logins${params}`);
     return response.data;
   },
-  getStaffLoginsMonthly: async (startDate: string, endDate: string): Promise<any[]> => {
+  getStaffLoginsMonthly: async (startDate: string, endDate: string): Promise<StaffLoginRecord[]> => {
     const response = await apiClient.get(`/attendance/staff-logins-monthly?startDate=${startDate}&endDate=${endDate}`);
     return response.data;
   },

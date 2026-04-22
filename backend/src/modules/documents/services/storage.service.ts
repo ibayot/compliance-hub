@@ -4,6 +4,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { Readable } from 'stream';
+import { resolvePathWithinRoot } from '../../../common/security/security-validators';
 
 @Injectable()
 export class StorageService {
@@ -21,13 +22,11 @@ export class StorageService {
   }
 
   private resolveWithinStorage(relativePath: string): string {
-    const normalizedRelative = relativePath.replace(/\\/g, '/');
-    const fullPath = path.resolve(this.storageRootAbs, normalizedRelative);
-    const rootWithSep = `${this.storageRootAbs}${path.sep}`;
-    if (fullPath !== this.storageRootAbs && !fullPath.startsWith(rootWithSep)) {
+    try {
+      return resolvePathWithinRoot(this.storageRootAbs, relativePath);
+    } catch {
       throw new NotFoundException('Invalid storage path');
     }
-    return fullPath;
   }
 
   private async ensureStorageDirectories() {

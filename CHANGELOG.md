@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.37] - 2026-04-22 - Security Hardening Pass (OWASP-focused)
+
+### Fixed
+- Replaced dynamic print rendering pattern that used `document.write` and dynamic HTML string injection in reports printing flow.
+- Replaced `dangerouslySetInnerHTML` render paths in MoV report preview and review diff viewer with sandboxed iframe rendering.
+- Moved frontend token persistence from `localStorage` to `sessionStorage` in auth context and API client.
+- Hardened storage path resolution with canonical root-bound checks to block traversal attempts.
+- Replaced shell command string execution for preview conversion with argument-safe child process spawning.
+- Added stricter URL safety checks in document viewer before issuing browser fetch requests.
+- Removed dynamic `any` dispatch in capability guard and replaced with explicit capability checker mapping.
+- Added timing-safe password equality comparison helper for password-change self-comparison path.
+
+### Added
+- Safe keyword JSON parsing and schema validation logic for ticket keyword-rule payload handling in frontend references API.
+- Issuance payload key allowlist sanitizer to enforce accepted keys before create/update submission.
+- Prototype-pollution-resistant dynamic key generation in reports charting data.
+- Centralized security validator utilities and unit tests in backend:
+  - `backend/src/common/security/security-validators.ts`
+  - `backend/src/common/security/security-validators.spec.ts`
+
+### Changed
+- Removed tracked `.env.example` files from frontend and backend and tightened `.gitignore` env patterns.
+
+---
+
 ## [0.0.31] - 2026-04-16 — role_capabilities Table, RoleCapabilitiesService, Sub-Q Focal Elevation
 
 ### Added

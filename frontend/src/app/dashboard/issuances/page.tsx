@@ -52,6 +52,60 @@ import { issuancesApi, Issuance, CreateIssuanceDto } from '@/app/api/references'
 import { documentsApi, Document } from '@/lib/api/documents';
 import { usersApi, UserRecord } from '@/lib/api/users';
 
+const ISSUANCE_ALLOWED_KEYS = [
+  'issuance_number',
+  'title',
+  'description',
+  'issuance_type',
+  'applicability_scope',
+  'relevance_notes',
+  'binding_nature',
+  'adoption_basis',
+  'applicable_provisions',
+  'compliance_obligations',
+  'required_evidence',
+  'evidence_location',
+  'process_owner',
+  'frequency_cadence',
+  'compliance_status',
+  'gap_summary',
+  'action_required',
+  'target_date',
+  'last_review_date',
+  'quarterly_readiness',
+  'q1_compliance_status',
+  'q2_compliance_status',
+  'q3_compliance_status',
+  'q4_compliance_status',
+  'register_added_at',
+  'is_amendment',
+  'amended_issuance_number',
+  'ict_amendment_notes',
+  'issuing_authority',
+  'issue_date',
+  'effectivity_date',
+  'source_url',
+  'attachment_file_name',
+  'attachment_mime_type',
+  'attachment_uploaded_at',
+  'is_active',
+] as const;
+
+type IssuanceAllowedKey = (typeof ISSUANCE_ALLOWED_KEYS)[number];
+
+const sanitizeIssuancePayload = (
+  payload: Partial<CreateIssuanceDto>,
+): Partial<CreateIssuanceDto> => {
+  const sanitized: Partial<CreateIssuanceDto> = {};
+  ISSUANCE_ALLOWED_KEYS.forEach((key) => {
+    const typedKey = key as IssuanceAllowedKey;
+    if (Object.prototype.hasOwnProperty.call(payload, key)) {
+      (sanitized as Record<string, unknown>)[typedKey] = payload[typedKey] as unknown;
+    }
+  });
+  return sanitized;
+};
+
 export default function IssuancesPage() {
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
@@ -143,7 +197,7 @@ export default function IssuancesPage() {
         .filter((entry: UserRecord) => entry.active)
         .filter((entry: UserRecord) => {
           const role = String(entry.role);
-          const rc = (entry as any).roleCode;
+          const rc = entry.roleCode;
           return ['compliance_officer', 'section_head', 'super_admin'].includes(role) ||
             rc === 'focal' || rc === 'section_head' || rc === 'compliance_officer';
         })
@@ -269,14 +323,15 @@ export default function IssuancesPage() {
     }
 
     try {
+      const sanitizedPayload = sanitizeIssuancePayload(formData);
       let savedIssuance: Issuance;
       if (editingIssuance) {
-        savedIssuance = await issuancesApi.update(editingIssuance.id, formData);
+        savedIssuance = await issuancesApi.update(editingIssuance.id, sanitizedPayload);
         if (removeExistingAttachment && editingIssuance.attachment_file_name) {
           await issuancesApi.deleteAttachment(editingIssuance.id);
         }
       } else {
-        savedIssuance = await issuancesApi.create(formData);
+        savedIssuance = await issuancesApi.create(sanitizedPayload as CreateIssuanceDto);
       }
 
       if (attachmentFile) {
@@ -296,7 +351,7 @@ export default function IssuancesPage() {
     }
 
     try {
-      await issuancesApi.update(issuance.id, { is_active: !issuance.is_active });
+      await issuancesApi.update(issuance.id, sanitizeIssuancePayload({ is_active: !issuance.is_active }));
       await fetchIssuances();
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to update issuance status', { variant: 'error' });
