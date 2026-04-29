@@ -8,6 +8,9 @@ import { KpiThreshold } from './entities/kpi-threshold.entity';
 import { KpiScoringRule } from './entities/kpi-scoring-rule.entity';
 import { Unit } from '../units/entities/unit.entity';
 import { User } from '../users/entities/user.entity';
+import { RoleCapability } from '../users/entities/role-capability.entity';
+import { RoleCapabilitiesService } from '../users/role-capabilities.service';
+import { CapabilityGuard } from '../../common/guards/capability.guard';
 
 @Module({
   imports: [
@@ -18,10 +21,11 @@ import { User } from '../users/entities/user.entity';
       KpiScoringRule,
       Unit,
       User,
+      RoleCapability,
     ]),
   ],
   controllers: [KpiController],
-  providers: [KpiService],
+  providers: [KpiService, RoleCapabilitiesService, CapabilityGuard],
   exports: [KpiService],
 })
 export class KpiModule {}

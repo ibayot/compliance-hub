@@ -82,7 +82,8 @@ export class UsersController {
   /** Returns all role capability rows. Admin read access. */
   @Get('role-capabilities')
   @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
-  getRoleCapabilities() {
+  async getRoleCapabilities() {
+    await this.roleCapabilitiesService.reload();
     return this.roleCapabilitiesService.findAll();
   }
 

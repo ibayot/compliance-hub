@@ -6,6 +6,101 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.43] - 2026-04-29 - Matrix Role Row Sync and Phase 2 Capability Migration
+
+### Fixed
+- Resolved empty role-capability matrix rows by syncing `role_capabilities` records from `role_definitions` on startup and role CRUD.
+- Role capability list endpoint now reloads cache before returning rows, preventing stale/empty matrix display.
+
+### Changed
+- Phase 2 capability migration applied to backend controllers:
+  - KPI controller now uses `CapabilityGuard` with `isKpiAccess` / `isKpiManage` instead of large hardcoded role lists.
+  - MoV controller now uses `CapabilityGuard` with `isMovAccess`.
+  - Reviews controllers now use `CapabilityGuard` with `isReviewsAccess`.
+  - Issuance read endpoints now use `CapabilityGuard` with `isIssuancesAccess`.
+- Registered capability-guard dependencies in affected modules (`kpi`, `mov`, `reviews`, `references`).
+
+### Notes
+- No database schema drops or destructive migrations were introduced.
+
+### Versioning
+- Patch version bump only: `0.0.42` -> `0.0.43`.
+
+## [0.0.42] - 2026-04-29 - KPI No-Unit Hard Stop and Capability Matrix Expansion
+
+### Fixed
+- KPI page now hard-stops rendering and API loading when a non-manage user has no assigned unit, preventing forced dashboard load and avoiding the no-unit error path.
+- KPI page now blocks access when role capability `isKpiAccess` is not granted.
+
+### Changed
+- Expanded `role_capabilities` matrix with module-level flags:
+  - `isKpiAccess`, `isKpiManage`
+  - `isAttendanceAccess`, `isAttendanceManage`
+  - `isReportsAccess`, `isReviewsAccess`, `isMovAccess`
+  - `isDocumentsAccess`, `isRepositoryAccess`
+  - `isIssuancesAccess`, `isMetricsAccess`
+- Added backend guard and service support for all new capability keys.
+- Sidebar and page-level access gates for KPI, Attendance, Reports, Reviews, MoV, Documents, and Repository now use capability matrix flags.
+- Added hardcoded-permission scrape report: `CAPABILITY-MATRIX-AUDIT-2026-04-29.md`.
+
+### Notes
+- No destructive database changes were introduced. New capability columns are added with backward-compatible defaults during schema bootstrap.
+
+### Versioning
+- Patch version bump only: `0.0.41` -> `0.0.42`.
+
+## [0.0.41] - 2026-04-29 - KPI No-Unit Guard and Reports Scope Tightening
+
+### Fixed
+- Added KPI no-unit trapping for non-manage users so dashboard/monitoring requests are skipped when no unit is assigned.
+- Added frontend warning states for users without assigned units to prevent forced KPI dashboard loading and related server errors.
+- Added backend defensive guard in KPI allowed-unit resolution for invalid/missing user IDs to safely return empty unit access instead of failing.
+- Restricted Reports module visibility and in-page access checks to `super_admin` and `compliance_officer` only.
+
+### Notes
+- No database schema changes were made.
+
+### Versioning
+- Patch version bump only: `0.0.40` -> `0.0.41`.
+
+## [0.0.40] - 2026-04-29 - KPI and Attendance Permission Regression Fix
+
+### Fixed
+- Resolved over-permission behavior where `cybersec` could access/manage KPI and Attendance actions through role-code fallback paths.
+- KPI manage/view-all enforcement now uses strict role matching in service-layer authorization checks.
+- Attendance mutation endpoints now enforce strict role checks (exact role, no roleCode fallback) for:
+  - `POST /api/attendance`
+  - `POST /api/attendance/bulk`
+  - `POST /api/attendance/office-days`
+  - `POST /api/attendance/office-days/bulk`
+- Frontend permission checks updated so `cybersec`/`infosec` are no longer treated as attendance managers.
+- Frontend KPI management tab visibility now uses strict role matching (no compliance roleCode fallback).
+
+### Notes
+- No database schema changes were made.
+
+### Versioning
+- Patch version bump only: `0.0.39` -> `0.0.40`.
+
+## [0.0.39] - 2026-04-29 - Capability Scope Alignment and ENV Reference
+
+### Changed
+- Added gateway alias for role capabilities under compliance namespace:
+  - `GET /api/compliance/role-capabilities`
+  - `GET /api/compliance/role-capabilities/me`
+  - `PATCH /api/compliance/role-capabilities/:roleValue`
+- Frontend role capability API calls now use the compliance namespace alias.
+- Restricted MoV endpoints to `super_admin` and `compliance_officer` only.
+- Aligned sidebar visibility so `MoV Builder` and `Reviews` are visible only to `super_admin` and `compliance_officer`.
+- Added a concise `Short ENV Reference` section to `INSTALLATION.md` for key microservices environment variables.
+
+### Notes
+- No database schema changes were introduced.
+- Existing users-service role capability endpoints remain available for backward compatibility.
+
+### Versioning
+- Patch version bump only: `0.0.38` -> `0.0.39`.
+
 ## [0.0.38] - 2026-04-22 - Documentation Cleanup and Deployment Alignment
 
 ### Changed

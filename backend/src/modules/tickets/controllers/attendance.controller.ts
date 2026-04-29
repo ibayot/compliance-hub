@@ -1,5 +1,6 @@
 import {
   Controller,
+  ForbiddenException,
   Get,
   Post,
   Delete,
@@ -21,6 +22,7 @@ import {
   SetOfficeDayDto,
   BulkSetOfficeDaysDto,
 } from '../services/attendance.service';
+import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 
 /** Roles that can manage technician attendance (set present/absent/etc.) */
 const FOCAL_ROLES = [
@@ -37,6 +39,12 @@ const FOCAL_ROLES = [
   UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
   UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
 ];
+
+/** Strict role-only check (no roleCode fallback) for attendance mutation endpoints. */
+const STRICT_ATTENDANCE_MANAGE_ROLES: string[] = [];
+
+/** Strict role-only check (no roleCode fallback) for office-day mutation endpoints. */
+const STRICT_OFFICEDAY_MANAGE_ROLES: string[] = [];
 
 /** Roles that can manage office days (set/toggle office calendar) */
 const OFFICE_DAY_ROLES = [
@@ -70,7 +78,21 @@ const READ_ROLES = [
 @Controller('attendance')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AttendanceController {
-  constructor(private readonly attendanceService: AttendanceService) {}
+  constructor(
+    private readonly attendanceService: AttendanceService,
+    private readonly roleCapSvc: RoleCapabilitiesService,
+  ) {}
+
+  private ensureStrictRole(actualRole: string | undefined, allowed: string[], action: string) {
+    if (allowed.length === 0 && actualRole) {
+      if (this.roleCapSvc.isAttendanceManage(actualRole)) {
+        return;
+      }
+    }
+    if (!actualRole || !allowed.includes(actualRole)) {
+      throw new ForbiddenException(`Role '${actualRole || 'unknown'}' cannot ${action}.`);
+    }
+  }
 
   // ── Attendance ──────────────────────────────────────────────────────────
 
@@ -94,6 +116,7 @@ export class AttendanceController {
   @Roles(...FOCAL_ROLES, ...OFFICE_DAY_ROLES)
   @HttpCode(HttpStatus.OK)
   async setAttendance(@Body() dto: SetAttendanceDto, @Request() req: any) {
+    this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
     return this.attendanceService.setAttendance(dto, req.user.id ?? req.user.userId, req.user.role);
   }
 
@@ -102,6 +125,7 @@ export class AttendanceController {
   @Roles(...FOCAL_ROLES, ...OFFICE_DAY_ROLES)
   @HttpCode(HttpStatus.OK)
   async bulkSetAttendance(@Body() dto: BulkSetAttendanceDto, @Request() req: any) {
+    this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
     return this.attendanceService.bulkSetAttendance(dto, req.user.id ?? req.user.userId, req.user.role);
   }
 
@@ -144,6 +168,7 @@ export class AttendanceController {
   @Roles(...OFFICE_DAY_ROLES)
   @HttpCode(HttpStatus.OK)
   async setOfficeDay(@Body() dto: SetOfficeDayDto, @Request() req: any) {
+    this.ensureStrictRole(req.user?.role, STRICT_OFFICEDAY_MANAGE_ROLES, 'manage office days');
     return this.attendanceService.setOfficeDay(dto, req.user.id ?? req.user.userId);
   }
 
@@ -152,6 +177,7 @@ export class AttendanceController {
   @Roles(...OFFICE_DAY_ROLES)
   @HttpCode(HttpStatus.OK)
   async bulkSetOfficeDays(@Body() dto: BulkSetOfficeDaysDto, @Request() req: any) {
+    this.ensureStrictRole(req.user?.role, STRICT_OFFICEDAY_MANAGE_ROLES, 'manage office days');
     return this.attendanceService.bulkSetOfficeDays(dto, req.user.id ?? req.user.userId);
   }
 

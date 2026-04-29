@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CloseIcon from '@mui/icons-material/Close';
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -217,7 +218,7 @@ function DirectionIndicator({ direction }: { direction?: KpiDirection | null }) 
 }
 
 export default function KpiPage() {
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
 
   const now = new Date();
@@ -271,9 +272,12 @@ export default function KpiPage() {
     status: 'draft' as KpiMonitoringStatus,
   });
 
-  const canManage = ['super_admin', 'reviewer', 'section_head', 'compliance_officer'].includes(String(user?.role))
-    || user?.roleCode === 'compliance_officer';
+  const canManage = user?.role === 'super_admin'
+    || !!myCap?.isKpiManage
+    || ['section_head', 'compliance_officer'].includes(String(user?.role));
+  const canAccessKpi = user?.role === 'super_admin' || !!myCap?.isKpiAccess || canManage;
   const userUnitIds = useMemo(() => ((user?.units || []) as any[]).map((u: any) => Number(u.id)).filter(Number.isFinite), [user?.units]);
+  const noUnitWarningShownRef = useRef(false);
 
   const effectiveMonth = useMemo(() => {
     switch (viewFrequency) {
@@ -288,6 +292,7 @@ export default function KpiPage() {
     if (canManage) return units;
     return units.filter((unit) => userUnitIds.includes(unit.id));
   }, [canManage, units, userUnitIds]);
+  const hasAssignedUnit = canManage || availableUnits.length > 0;
 
   // Auto-lock unit filter to focal's own unit
   useEffect(() => {
@@ -297,6 +302,11 @@ export default function KpiPage() {
   }, [canManage, userUnitIds]);
 
   const loadInitial = useCallback(async () => {
+    if (!canAccessKpi) {
+      setUnits([]);
+      setMasters([]);
+      return;
+    }
     try {
       const [unitList, masterList] = await Promise.all([unitsApi.listAll(), kpiApi.listMaster()]);
       setUnits(unitList);
@@ -304,10 +314,18 @@ export default function KpiPage() {
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI master data.', { variant: 'error' });
     }
-  }, [enqueueSnackbar]);
+  }, [enqueueSnackbar, canAccessKpi]);
 
   const loadMonitoring = useCallback(async () => {
+    if (!canAccessKpi) {
+      setMonitoring([]);
+      return;
+    }
     if (!Number.isFinite(periodYear) || !Number.isFinite(effectiveMonth)) return;
+    if (!hasAssignedUnit) {
+      setMonitoring([]);
+      return;
+    }
     try {
       const data = await kpiApi.listMonitoring({
         periodYear,
@@ -318,10 +336,26 @@ export default function KpiPage() {
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI monitoring data.', { variant: 'error' });
     }
-  }, [enqueueSnackbar, effectiveMonth, periodYear, filterUnitId]);
+  }, [enqueueSnackbar, effectiveMonth, periodYear, filterUnitId, hasAssignedUnit, canAccessKpi]);
 
   const loadDashboard = useCallback(async () => {
+    if (!canAccessKpi) {
+      setSummary(null);
+      setActionPlans([]);
+      setAllUnitsTimeseries({});
+      setSelectedUnitDashboard(null);
+      setUnitTimeseries([]);
+      return;
+    }
     if (!Number.isFinite(periodYear) || !Number.isFinite(effectiveMonth)) return;
+    if (!hasAssignedUnit) {
+      setSummary(null);
+      setActionPlans([]);
+      setAllUnitsTimeseries({});
+      setSelectedUnitDashboard(null);
+      setUnitTimeseries([]);
+      return;
+    }
     try {
       const data = await kpiApi.dashboardSummary(periodYear, effectiveMonth);
       setSummary(data);
@@ -370,7 +404,20 @@ export default function KpiPage() {
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI dashboard.', { variant: 'error' });
     }
-  }, [enqueueSnackbar, effectiveMonth, periodYear, canManage, availableUnits, viewFrequency, periodQuarter, periodSemester, filterUnitId]);
+  }, [enqueueSnackbar, effectiveMonth, periodYear, canManage, availableUnits, viewFrequency, periodQuarter, periodSemester, filterUnitId, hasAssignedUnit, canAccessKpi]);
+
+  useEffect(() => {
+    if (!canAccessKpi) {
+      return;
+    }
+    if (!canManage && !hasAssignedUnit && !noUnitWarningShownRef.current) {
+      noUnitWarningShownRef.current = true;
+      enqueueSnackbar('No unit is assigned to your account yet. KPI dashboard is unavailable until a unit is assigned.', { variant: 'warning' });
+    }
+    if (hasAssignedUnit) {
+      noUnitWarningShownRef.current = false;
+    }
+  }, [canManage, hasAssignedUnit, enqueueSnackbar, canAccessKpi]);
 
   useEffect(() => {
     loadInitial();
@@ -799,6 +846,28 @@ export default function KpiPage() {
   const overallBand = computeBand(Number(summary?.summary.overallScore ?? 0), summary?.thresholds || []);
   const overallBandColor = BAND_COLORS[overallBand] || BAND_COLORS.unclassified;
 
+  if (!canAccessKpi) {
+    return (
+      <Box>
+        <Typography variant="h4" gutterBottom>KPI Monitoring & Dashboard</Typography>
+        <Alert severity="error">
+          Access restricted. Your role does not currently have KPI module access in the capability matrix.
+        </Alert>
+      </Box>
+    );
+  }
+
+  if (!canManage && !hasAssignedUnit) {
+    return (
+      <Box>
+        <Typography variant="h4" gutterBottom>KPI Monitoring & Dashboard</Typography>
+        <Alert severity="warning">
+          No unit is assigned to your account. KPI dashboard loading is blocked until an administrator assigns your unit.
+        </Alert>
+      </Box>
+    );
+  }
+
   return (
     <Box>
       <Box mb={3}>
@@ -879,6 +948,12 @@ export default function KpiPage() {
           </Grid>
         </CardContent>
       </Card>
+
+      {!canManage && !hasAssignedUnit && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          No unit is assigned to your account. KPI data cannot be loaded until an administrator assigns your unit.
+        </Alert>
+      )}
 
       <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
         <Tab label="KPI Dashboard" />

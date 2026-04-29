@@ -6,6 +6,7 @@ import { User, UserRole, AuthProvider } from './entities/user.entity';
 import { CreateRoleDefinitionDto, UpdateRoleDefinitionDto, CreateUserDto, UpdateUserDto } from './dto';
 import { Unit } from '../units/entities/unit.entity';
 import { RoleDefinitionEntity } from './entities/role-definition.entity';
+import { RoleCapability } from './entities/role-capability.entity';
 
 const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'label' | 'description' | 'assignable' | 'isSystem'> & { roleCode?: string | null; technicianType?: string | null }> = [
   // ── Core administrative roles ────────────────────────────────────────────
@@ -204,9 +205,66 @@ export class UsersService {
     private readonly unitsRepository: Repository<Unit>,
     @InjectRepository(RoleDefinitionEntity)
     private readonly roleDefinitionsRepository: Repository<RoleDefinitionEntity>,
+    @InjectRepository(RoleCapability)
+    private readonly roleCapabilitiesRepository: Repository<RoleCapability>,
   ) {
     this.ensureSchema().catch(() => undefined);
-    this.ensureRoleDefinitions().catch(() => undefined);
+    this.ensureRoleDefinitions()
+      .then(() => this.ensureRoleCapabilityRows())
+      .catch(() => undefined);
+  }
+
+  private buildCapabilitySeed(role: RoleDefinitionEntity) {
+    const roleValue = role.value;
+    const roleCode = role.roleCode ?? null;
+    const technicianType = role.technicianType ?? null;
+    const isSuperAdmin = roleValue === UserRole.SUPER_ADMIN;
+    const isComplianceRole = roleValue === UserRole.COMPLIANCE_OFFICER;
+    const isSectionHead = roleValue === UserRole.SECTION_HEAD;
+    const isCyberRole = roleValue === UserRole.CYBERSEC || roleValue === UserRole.INFOSEC;
+    const isFocal = isSuperAdmin || roleCode === 'focal' || isComplianceRole || isSectionHead;
+    const isDesktop = technicianType === 'desktop_support';
+    const isItSupport = technicianType === 'it_support';
+    const isPantawidIct = technicianType === 'pantawid_ict_support';
+    const isTech = isDesktop || isItSupport || isPantawidIct;
+
+    return this.roleCapabilitiesRepository.create({
+      roleValue,
+      isFocal,
+      isDesktop,
+      isItSupport,
+      isPantawidIct,
+      isIto: isCyberRole,
+      isEscalationFocal: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
+      isTicketSettingsFocal: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
+      isAllTickets: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
+      isTicketFocal: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
+      isKpiAccess: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
+      isKpiManage: isSuperAdmin || isSectionHead || isComplianceRole,
+      isAttendanceAccess: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal || isTech,
+      isAttendanceManage: isSuperAdmin || isSectionHead || isComplianceRole || isFocal || isTech,
+      isReportsAccess: isSuperAdmin || isComplianceRole,
+      isReviewsAccess: isSuperAdmin || isComplianceRole || isCyberRole,
+      isMovAccess: isSuperAdmin || isComplianceRole,
+      isDocumentsAccess: isSuperAdmin || isFocal,
+      isRepositoryAccess: isSuperAdmin || isFocal,
+      isIssuancesAccess: isSuperAdmin || isComplianceRole,
+      isMetricsAccess: isSuperAdmin || isComplianceRole,
+    });
+  }
+
+  private async ensureRoleCapabilityRows() {
+    const [roleDefs, existingCaps] = await Promise.all([
+      this.roleDefinitionsRepository.find(),
+      this.roleCapabilitiesRepository.find({ select: ['roleValue'] }),
+    ]);
+
+    const existingRoleValues = new Set(existingCaps.map((row) => row.roleValue));
+    const missing = roleDefs.filter((role) => !existingRoleValues.has(role.value));
+
+    if (missing.length > 0) {
+      await this.roleCapabilitiesRepository.save(missing.map((role) => this.buildCapabilitySeed(role)));
+    }
   }
 
   private async ensureSchema() {
@@ -239,6 +297,36 @@ export class UsersService {
       // Create units VIEW so User entity can JOIN to units stored in the compliance DB
       const complianceDb = process.env.COMPLIANCE_DB_DATABASE || 'compliance_hub';
       await queryRunner.query(`CREATE OR REPLACE VIEW units AS SELECT * FROM \`${complianceDb}\`.units`).catch(() => undefined);
+
+      // v0.0.41: Expand role_capabilities to cover module-level access controls
+      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_kpi_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
+      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_kpi_manage TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
+      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_attendance_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
+      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_attendance_manage TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
+      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_reports_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
+      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_reviews_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
+      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_mov_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
+      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_documents_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
+      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_repository_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
+      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_issuances_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
+      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_metrics_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
+
+      // Seed defaults from current policy so migration to capability checks is backward-compatible.
+      await queryRunner.query(`
+        UPDATE role_capabilities
+        SET
+          is_documents_access = IF(role_value = 'super_admin' OR is_focal = 1, 1, is_documents_access),
+          is_repository_access = IF(role_value = 'super_admin' OR is_focal = 1, 1, is_repository_access),
+          is_kpi_access = IF(role_value IN ('super_admin','section_head','compliance_officer','cybersec','infosec') OR is_focal = 1, 1, is_kpi_access),
+          is_kpi_manage = IF(role_value IN ('super_admin','section_head','compliance_officer'), 1, is_kpi_manage),
+          is_attendance_access = IF(role_value IN ('super_admin','section_head','compliance_officer','cybersec','infosec') OR is_focal = 1 OR is_desktop = 1 OR is_it_support = 1 OR is_pantawid_ict = 1, 1, is_attendance_access),
+          is_attendance_manage = IF(role_value IN ('super_admin','section_head','compliance_officer') OR is_focal = 1 OR is_desktop = 1 OR is_it_support = 1 OR is_pantawid_ict = 1, 1, is_attendance_manage),
+          is_reports_access = IF(role_value IN ('super_admin','compliance_officer'), 1, is_reports_access),
+          is_reviews_access = IF(role_value IN ('super_admin','compliance_officer','cybersec','infosec'), 1, is_reviews_access),
+          is_mov_access = IF(role_value IN ('super_admin','compliance_officer'), 1, is_mov_access),
+          is_issuances_access = IF(role_value IN ('super_admin','compliance_officer'), 1, is_issuances_access),
+          is_metrics_access = IF(role_value IN ('super_admin','compliance_officer'), 1, is_metrics_access)
+      `).catch(() => undefined);
     } finally {
       await queryRunner.release();
     }
@@ -286,7 +374,9 @@ export class UsersService {
       roleCode: dto.roleCode ?? null,
     });
 
-    return this.roleDefinitionsRepository.save(role);
+    const savedRole = await this.roleDefinitionsRepository.save(role);
+    await this.ensureRoleCapabilityRows();
+    return savedRole;
   }
 
   async updateRoleDefinition(value: string, dto: UpdateRoleDefinitionDto) {
@@ -319,7 +409,13 @@ export class UsersService {
       role.roleCode = dto.roleCode ?? null;
     }
 
-    return this.roleDefinitionsRepository.save(role);
+    const previousValue = value;
+    const saved = await this.roleDefinitionsRepository.save(role);
+    if (saved.value !== previousValue) {
+      await this.roleCapabilitiesRepository.delete({ roleValue: previousValue });
+      await this.ensureRoleCapabilityRows();
+    }
+    return saved;
   }
 
   async deleteRoleDefinition(value: string) {
@@ -331,6 +427,7 @@ export class UsersService {
       throw new BadRequestException(`System role '${value}' cannot be deleted. Only custom roles can be removed.`);
     }
     await this.roleDefinitionsRepository.remove(role);
+    await this.roleCapabilitiesRepository.delete({ roleValue: value });
   }
 
   private isMissingUserUnitAccessError(error: unknown): boolean {

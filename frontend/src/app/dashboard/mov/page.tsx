@@ -100,15 +100,14 @@ function compressImageToBase64(file: File, maxPx = 400, quality = 0.75): Promise
 }
 
 export default function MovBuilderPage() {
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const now = new Date();
   const currentYear = now.getFullYear();
   const [tab, setTab] = useState(0);
 
   // ── Role Gate (render-time check) ─────────────────────────────────────────
-  const allowed = !user || user.role === 'super_admin' ||
-    user.role === 'compliance_officer' || user.roleCode === 'compliance_officer';
+  const allowed = !user || user.role === 'super_admin' || !!myCap?.isMovAccess;
 
   const [year, setYear] = useState<number>(currentYear);
   const [quarter, setQuarter] = useState<number>(Math.floor((now.getMonth() + 3) / 3));

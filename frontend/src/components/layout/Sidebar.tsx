@@ -68,21 +68,21 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const mainNavItems: NavItem[] = [
     { label: 'Dashboard', icon: DashboardIcon, path: '/dashboard', roles: ['all'], service: 'core' },
     { label: 'Tickets', icon: TicketsIcon, path: '/dashboard/tickets', roles: ['all'], service: 'ticketing' },
-    { label: 'Documents', icon: DocumentsIcon, path: '/dashboard/documents', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isFocal' },
-    { label: 'Repository', icon: RepositoryIcon, path: '/dashboard/repository', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isFocal' },
-    { label: 'Issuances', icon: IssuancesIcon, path: '/dashboard/issuances', roles: ['super_admin', 'compliance_officer'], service: 'compliance' },
+    { label: 'Documents', icon: DocumentsIcon, path: '/dashboard/documents', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isDocumentsAccess' },
+    { label: 'Repository', icon: RepositoryIcon, path: '/dashboard/repository', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isRepositoryAccess' },
+    { label: 'Issuances', icon: IssuancesIcon, path: '/dashboard/issuances', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isIssuancesAccess' },
   ];
 
   const adminNavItems: NavItem[] = [
     { label: 'Units', icon: UnitsIcon, path: '/dashboard/units', roles: ['super_admin', 'section_head'], service: 'users' },
-    { label: 'Metrics', icon: MetricsIcon, path: '/dashboard/metrics', roles: ['super_admin', 'compliance_officer'], service: 'compliance' },
-    { label: 'KPI', icon: KpiIcon, path: '/dashboard/kpi', roles: ['super_admin', 'compliance_officer', 'cybersec', 'infosec', 'section_head'], service: 'compliance', roleCodes: ['focal', 'section_head'] },
+    { label: 'Metrics', icon: MetricsIcon, path: '/dashboard/metrics', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isMetricsAccess' },
+    { label: 'KPI', icon: KpiIcon, path: '/dashboard/kpi', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isKpiAccess' },
     { label: 'Ticket Settings', icon: TicketSettingsIcon, path: '/dashboard/ticket-settings', roles: ['super_admin'], service: 'ticketing', capabilityKey: 'isTicketSettingsFocal' },
     { label: 'Ticket Reports', icon: TicketReportsIcon, path: '/dashboard/ticket-reports', roles: ['super_admin'], service: 'ticketing', capabilityKey: 'isTicketSettingsFocal' },
-    { label: 'Attendance', icon: AttendanceIcon, path: '/dashboard/attendance', roles: ['super_admin', 'section_head', 'compliance_officer', 'desktop_sr', 'it_support_sr', 'desktop_jr', 'it_support_jr', 'pantawid_ict'], service: 'ticketing', roleCodes: ['focal', 'section_head', 'technician'], capabilityKey: 'isIto' },
-    { label: 'Reviews', icon: SecurityIcon, path: '/dashboard/reviews', roles: ['super_admin', 'compliance_officer', 'cybersec', 'infosec'], service: 'compliance' },
-    { label: 'Reports', icon: ReportsIcon, path: '/dashboard/reports', roles: ['super_admin', 'compliance_officer', 'cybersec', 'infosec'], service: 'compliance', roleCodes: ['section_head', 'compliance_officer'] },
-    { label: 'MoV Builder', icon: MovIcon, path: '/dashboard/mov', roles: ['super_admin', 'compliance_officer', 'cybersec', 'infosec'], service: 'compliance' },
+    { label: 'Attendance', icon: AttendanceIcon, path: '/dashboard/attendance', roles: ['super_admin'], service: 'ticketing', capabilityKey: 'isAttendanceAccess' },
+    { label: 'Reviews', icon: SecurityIcon, path: '/dashboard/reviews', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isReviewsAccess' },
+    { label: 'Reports', icon: ReportsIcon, path: '/dashboard/reports', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isReportsAccess' },
+    { label: 'MoV Builder', icon: MovIcon, path: '/dashboard/mov', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isMovAccess' },
   ];
 
   const settingsNavItems: NavItem[] = [

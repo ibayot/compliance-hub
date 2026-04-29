@@ -75,6 +75,50 @@ export class RoleCapability {
   @Column({ name: 'is_ticket_focal', type: 'tinyint', width: 1, default: 0 })
   isTicketFocal: boolean;
 
+  /** True for roles that can access the KPI module pages and read endpoints. */
+  @Column({ name: 'is_kpi_access', type: 'tinyint', width: 1, default: 0 })
+  isKpiAccess: boolean;
+
+  /** True for roles that can manage KPI master/monitoring records. */
+  @Column({ name: 'is_kpi_manage', type: 'tinyint', width: 1, default: 0 })
+  isKpiManage: boolean;
+
+  /** True for roles that can access attendance views. */
+  @Column({ name: 'is_attendance_access', type: 'tinyint', width: 1, default: 0 })
+  isAttendanceAccess: boolean;
+
+  /** True for roles that can mutate attendance/office-day records. */
+  @Column({ name: 'is_attendance_manage', type: 'tinyint', width: 1, default: 0 })
+  isAttendanceManage: boolean;
+
+  /** True for roles that can access consolidated compliance reports. */
+  @Column({ name: 'is_reports_access', type: 'tinyint', width: 1, default: 0 })
+  isReportsAccess: boolean;
+
+  /** True for roles that can access review workflows. */
+  @Column({ name: 'is_reviews_access', type: 'tinyint', width: 1, default: 0 })
+  isReviewsAccess: boolean;
+
+  /** True for roles that can access MoV Builder. */
+  @Column({ name: 'is_mov_access', type: 'tinyint', width: 1, default: 0 })
+  isMovAccess: boolean;
+
+  /** True for roles that can access Documents module. */
+  @Column({ name: 'is_documents_access', type: 'tinyint', width: 1, default: 0 })
+  isDocumentsAccess: boolean;
+
+  /** True for roles that can access Repository module. */
+  @Column({ name: 'is_repository_access', type: 'tinyint', width: 1, default: 0 })
+  isRepositoryAccess: boolean;
+
+  /** True for roles that can access Issuances module. */
+  @Column({ name: 'is_issuances_access', type: 'tinyint', width: 1, default: 0 })
+  isIssuancesAccess: boolean;
+
+  /** True for roles that can access Metrics module. */
+  @Column({ name: 'is_metrics_access', type: 'tinyint', width: 1, default: 0 })
+  isMetricsAccess: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

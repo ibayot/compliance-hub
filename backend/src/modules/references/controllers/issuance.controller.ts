@@ -20,6 +20,8 @@ import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { CapabilityGuard } from '../../../common/guards/capability.guard';
+import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { UserRole } from '../../users/entities/user.entity';
 import {
   IssuanceService,
@@ -48,7 +50,8 @@ export class IssuanceController {
    * GET /issuances
    */
   @Get()
-  @Roles('focal', 'technician', UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isIssuancesAccess')
   async getIssuances(
     @Query('authority') authority?: string,
     @Query('category') category?: string,
@@ -71,7 +74,8 @@ export class IssuanceController {
    * GET /issuances/:id
    */
   @Get(':id')
-  @Roles('focal', 'technician', UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isIssuancesAccess')
   async getIssuance(@Param('id') id: string) {
     return this.issuanceService.getIssuance(id);
   }
@@ -162,7 +166,8 @@ export class IssuanceController {
    * GET /issuances/:id/attachment/view
    */
   @Get(':id/attachment/view')
-  @Roles('focal', 'technician', UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isIssuancesAccess')
   async viewAttachment(
     @Param('id') id: string,
     @Res({ passthrough: true }) res: Response,
@@ -181,7 +186,8 @@ export class IssuanceController {
    * GET /issuances/:id/attachment/download
    */
   @Get(':id/attachment/download')
-  @Roles('focal', 'technician', UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isIssuancesAccess')
   async downloadAttachment(
     @Param('id') id: string,
     @Res({ passthrough: true }) res: Response,

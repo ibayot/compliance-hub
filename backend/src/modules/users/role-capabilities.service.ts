@@ -145,9 +145,64 @@ export class RoleCapabilitiesService implements OnModuleInit {
     return !!this.get(role)?.isTicketFocal;
   }
 
+  isKpiAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isKpiAccess;
+  }
+
+  isKpiManage(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isKpiManage;
+  }
+
+  isAttendanceAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isAttendanceAccess;
+  }
+
+  isAttendanceManage(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isAttendanceManage;
+  }
+
+  isReportsAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isReportsAccess;
+  }
+
+  isReviewsAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isReviewsAccess;
+  }
+
+  isMovAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isMovAccess;
+  }
+
+  isDocumentsAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isDocumentsAccess;
+  }
+
+  isRepositoryAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isRepositoryAccess;
+  }
+
+  isIssuancesAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isIssuancesAccess;
+  }
+
+  isMetricsAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isMetricsAccess;
+  }
+
   /** Return all role values that have a given capability set to true. */
   getRolesWhere(
-    capability: 'isFocal' | 'isIto' | 'isDesktop' | 'isItSupport' | 'isPantawidIct' | 'isEscalationFocal' | 'isTicketSettingsFocal' | 'isAllTickets' | 'isTicketFocal',
+    capability: 'isFocal' | 'isIto' | 'isDesktop' | 'isItSupport' | 'isPantawidIct' | 'isEscalationFocal' | 'isTicketSettingsFocal' | 'isAllTickets' | 'isTicketFocal' | 'isKpiAccess' | 'isKpiManage' | 'isAttendanceAccess' | 'isAttendanceManage' | 'isReportsAccess' | 'isReviewsAccess' | 'isMovAccess' | 'isDocumentsAccess' | 'isRepositoryAccess' | 'isIssuancesAccess' | 'isMetricsAccess',
   ): string[] {
     return [...this.cache.values()]
       .filter((r) => r[capability])

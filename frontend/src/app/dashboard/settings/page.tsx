@@ -177,6 +177,17 @@ const CAPABILITY_COLUMNS: { key: keyof RoleCapabilityRecord; label: string; desc
   { key: 'isTicketSettingsFocal',label: 'Ticket Admin',    description: 'Full ticket settings & reports access' },
   { key: 'isAllTickets',         label: 'See All Tickets', description: 'View all tickets system-wide (not just own)' },
   { key: 'isTicketFocal',        label: 'Assign Tickets',  description: 'Manually assign/reassign tickets to technicians' },
+  { key: 'isKpiAccess',          label: 'KPI View',        description: 'Access KPI dashboard/read endpoints' },
+  { key: 'isKpiManage',          label: 'KPI Manage',      description: 'Create/update KPI master and monitoring records' },
+  { key: 'isAttendanceAccess',   label: 'Attendance View', description: 'Access attendance and office-day views' },
+  { key: 'isAttendanceManage',   label: 'Attendance Manage', description: 'Mutate attendance and office-day records' },
+  { key: 'isReportsAccess',      label: 'Reports',         description: 'Access consolidated compliance reports' },
+  { key: 'isReviewsAccess',      label: 'Reviews',         description: 'Access review workflows' },
+  { key: 'isMovAccess',          label: 'MoV',             description: 'Access MoV Builder' },
+  { key: 'isDocumentsAccess',    label: 'Documents',       description: 'Access Documents module' },
+  { key: 'isRepositoryAccess',   label: 'Repository',      description: 'Access Repository module' },
+  { key: 'isIssuancesAccess',    label: 'Issuances',       description: 'Access Issuances module' },
+  { key: 'isMetricsAccess',      label: 'Metrics',         description: 'Access Metrics module' },
 ];
 
 function RoleCapabilitiesCard() {

@@ -35,11 +35,23 @@ const statusOptions = [
 ];
 
 export default function DocumentsPage() {
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
 
   const isFocal = user?.roleCode === 'focal';
+  const canAccessDocuments = user?.role === 'super_admin' || !!myCap?.isDocumentsAccess;
+
+  if (!canAccessDocuments) {
+    return (
+      <Container maxWidth="xl">
+        <Box sx={{ py: 4 }}>
+          <Typography variant="h4" gutterBottom>Documents</Typography>
+          <Typography color="error">Access restricted. Your role does not have Documents access in the capability matrix.</Typography>
+        </Box>
+      </Container>
+    );
+  }
 
   const [filters, setFilters] = useState<ListDocumentsParams>({
     page: 1,

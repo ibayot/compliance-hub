@@ -51,7 +51,7 @@ function isWeekday(d: Date): boolean {
 }
 
 export default function AttendancePage() {
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   const isLowerLevelTech = [
     'it_support_jr', 'desktop_jr',
   ].includes(user?.role ?? '');
@@ -280,21 +280,23 @@ export default function AttendancePage() {
   };
 
   const canManageAttendance = [
-    'super_admin', 'reviewer', 'section_head',
-    'it_support_sr', 'desktop_sr', 'pantawid_ict',
-    // ITO focal-equivalent roles
-    'lead_infra', 'server_admin', 'db_admin', 'network_admin',
-    'project_mgr', 'dev_lead', 'sqa_lead', 'records_officer', 'hr_id_officer',
-    'compliance_officer', 'cybersec', 'infosec',
-  ].includes(user?.role ?? '');
+    'super_admin',
+  ].includes(user?.role ?? '') || !!myCap?.isAttendanceManage;
 
   const canManageOfficeDays = [
-    'super_admin', 'reviewer', 'section_head',
-    'lead_infra', 'server_admin', 'db_admin', 'network_admin',
-    'project_mgr', 'dev_lead', 'sqa_lead', 'records_officer', 'hr_id_officer',
-    'compliance_officer', 'cybersec', 'infosec',
-    'it_support_sr', 'desktop_sr', 'pantawid_ict',
-  ].includes(user?.role ?? '');
+    'super_admin',
+  ].includes(user?.role ?? '') || !!myCap?.isAttendanceManage;
+
+  const canAccessAttendance = user?.role === 'super_admin' || !!myCap?.isAttendanceAccess;
+
+  if (!canAccessAttendance) {
+    return (
+      <Box>
+        <Typography variant="h4" fontWeight={700} mb={0.5}>Attendance Management</Typography>
+        <Typography color="error">Access restricted. Your role does not have Attendance access in the capability matrix.</Typography>
+      </Box>
+    );
+  }
 
   const canManage = canManageAttendance;
 

@@ -35,6 +35,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { documentsApi, type RepositoryBucket, type Document } from '@/lib/api/documents';
 import DocumentViewer from '@/components/documents/DocumentViewer';
+import { useAuth } from '@/contexts/AuthContext';
 
 function DocumentTable({
   documents,
@@ -151,6 +152,8 @@ function BucketFolder({
 }
 
 export default function RepositoryPage() {
+  const { user, myCap } = useAuth();
+  const canAccessRepository = user?.role === 'super_admin' || !!myCap?.isRepositoryAccess;
   const [selectedBucketKey, setSelectedBucketKey] = useState<string | null>(null);
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
@@ -185,6 +188,17 @@ export default function RepositoryPage() {
   });
 
   const currentYear = String(new Date().getFullYear());
+
+  if (!canAccessRepository) {
+    return (
+      <Box p={3}>
+        <Typography variant="h4" fontWeight={700} gutterBottom>
+          Report Repository
+        </Typography>
+        <Typography color="error">Access restricted. Your role does not have Repository access in the capability matrix.</Typography>
+      </Box>
+    );
+  }
 
   if (isLoading) {
     return (

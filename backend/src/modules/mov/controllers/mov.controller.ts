@@ -1,8 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
-import { Roles } from '../../../common/decorators/roles.decorator';
-import { UserRole } from '../../users/entities/user.entity';
+import { CapabilityGuard } from '../../../common/guards/capability.guard';
+import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { MovService } from '../services/mov.service';
 import { CreateMovArtifactDto } from '../dto/create-mov-artifact.dto';
 import { UpdateMovArtifactDto } from '../dto/update-mov-artifact.dto';
@@ -14,7 +14,8 @@ export class MovController {
   constructor(private readonly movService: MovService) {}
 
   @Get('artifacts')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isMovAccess')
   list(
     @Query('artifact_type') artifact_type?: string,
     @Query('period_year') period_year?: string,
@@ -32,43 +33,50 @@ export class MovController {
   }
 
   @Get('artifacts/:id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isMovAccess')
   getById(@Param('id') id: string) {
     return this.movService.getById(id);
   }
 
   @Post('artifacts')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isMovAccess')
   create(@Body() dto: CreateMovArtifactDto, @Request() req: any) {
     return this.movService.create(dto, req.user?.id ?? req.user?.userId);
   }
 
   @Put('artifacts/:id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isMovAccess')
   update(@Param('id') id: string, @Body() dto: UpdateMovArtifactDto) {
     return this.movService.update(id, dto);
   }
 
   @Delete('artifacts/:id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isMovAccess')
   remove(@Param('id') id: string) {
     return this.movService.remove(id);
   }
 
   @Get('templates')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isMovAccess')
   getTemplate(@Query() query: TemplateQueryDto) {
     return this.movService.getTemplate(query);
   }
 
   @Get('register-columns')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isMovAccess')
   registerColumns() {
     return this.movService.getRegisterColumns();
   }
 
   @Get('reports/register')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isMovAccess')
   buildRegisterReport(
     @Query('year') year: string,
     @Query('quarter') quarter: string,
@@ -86,7 +94,8 @@ export class MovController {
   }
 
   @Get('reports/monitoring-matrix')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isMovAccess')
   buildMonitoringMatrixReport(
     @Query('year') year: string,
     @Query('quarter') quarter: string,
@@ -102,7 +111,8 @@ export class MovController {
   }
 
   @Get('reports/assessment')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isMovAccess')
   buildAssessmentReport(
     @Query('year') year: string,
     @Query('quarter') quarter: string,
@@ -116,7 +126,8 @@ export class MovController {
   }
 
   @Post('reports/assessment')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isMovAccess')
   buildAssessmentReportPost(
     @Body() body: {
       year: number;

@@ -92,6 +92,17 @@ export interface RoleCapabilityRecord {
   isTicketSettingsFocal: boolean;
   isAllTickets: boolean;
   isTicketFocal: boolean;
+  isKpiAccess: boolean;
+  isKpiManage: boolean;
+  isAttendanceAccess: boolean;
+  isAttendanceManage: boolean;
+  isReportsAccess: boolean;
+  isReviewsAccess: boolean;
+  isMovAccess: boolean;
+  isDocumentsAccess: boolean;
+  isRepositoryAccess: boolean;
+  isIssuancesAccess: boolean;
+  isMetricsAccess: boolean;
 }
 
 export interface UpdateRoleCapabilityPayload {
@@ -104,6 +115,17 @@ export interface UpdateRoleCapabilityPayload {
   isTicketSettingsFocal?: boolean;
   isAllTickets?: boolean;
   isTicketFocal?: boolean;
+  isKpiAccess?: boolean;
+  isKpiManage?: boolean;
+  isAttendanceAccess?: boolean;
+  isAttendanceManage?: boolean;
+  isReportsAccess?: boolean;
+  isReviewsAccess?: boolean;
+  isMovAccess?: boolean;
+  isDocumentsAccess?: boolean;
+  isRepositoryAccess?: boolean;
+  isIssuancesAccess?: boolean;
+  isMetricsAccess?: boolean;
 }
 
 export const usersApi = {
@@ -161,19 +183,19 @@ export const usersApi = {
 
   /** Fetch capability rows for all roles. Super admin / compliance officer only. */
   listCapabilities: async (): Promise<RoleCapabilityRecord[]> => {
-    const response = await apiClient.get('/users/role-capabilities');
+    const response = await apiClient.get('/compliance/role-capabilities');
     return response.data;
   },
 
   /** Fetch capability row for the current user's role. Any authenticated user. */
   getMyCapabilities: async (): Promise<RoleCapabilityRecord | null> => {
-    const response = await apiClient.get('/users/role-capabilities/me');
+    const response = await apiClient.get('/compliance/role-capabilities/me');
     return response.data;
   },
 
   /** Update capability flags for a specific role. Super admin only. */
   updateCapability: async (roleValue: string, payload: UpdateRoleCapabilityPayload): Promise<RoleCapabilityRecord> => {
-    const response = await apiClient.patch(`/users/role-capabilities/${encodeURIComponent(roleValue)}`, payload);
+    const response = await apiClient.patch(`/compliance/role-capabilities/${encodeURIComponent(roleValue)}`, payload);
     return response.data;
   },
 };

@@ -45,6 +45,17 @@ export class CapabilityGuard implements CanActivate {
       isTicketSettingsFocal: (r) => this.roleCapSvc.isTicketSettingsFocal(r),
       isAllTickets: (r) => this.roleCapSvc.isAllTickets(r),
       isTicketFocal: (r) => this.roleCapSvc.isTicketFocal(r),
+      isKpiAccess: (r) => this.roleCapSvc.isKpiAccess(r),
+      isKpiManage: (r) => this.roleCapSvc.isKpiManage(r),
+      isAttendanceAccess: (r) => this.roleCapSvc.isAttendanceAccess(r),
+      isAttendanceManage: (r) => this.roleCapSvc.isAttendanceManage(r),
+      isReportsAccess: (r) => this.roleCapSvc.isReportsAccess(r),
+      isReviewsAccess: (r) => this.roleCapSvc.isReviewsAccess(r),
+      isMovAccess: (r) => this.roleCapSvc.isMovAccess(r),
+      isDocumentsAccess: (r) => this.roleCapSvc.isDocumentsAccess(r),
+      isRepositoryAccess: (r) => this.roleCapSvc.isRepositoryAccess(r),
+      isIssuancesAccess: (r) => this.roleCapSvc.isIssuancesAccess(r),
+      isMetricsAccess: (r) => this.roleCapSvc.isMetricsAccess(r),
     };
 
     const checker = capabilityCheckers[required];

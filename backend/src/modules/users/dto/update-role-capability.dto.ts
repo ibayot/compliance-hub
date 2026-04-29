@@ -41,4 +41,48 @@ export class UpdateRoleCapabilityDto {
   @IsOptional()
   @IsBoolean()
   isTicketFocal?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isKpiAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isKpiManage?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isAttendanceAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isAttendanceManage?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isReportsAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isReviewsAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isMovAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isDocumentsAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isRepositoryAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isIssuancesAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isMetricsAccess?: boolean;
 }

@@ -1107,12 +1107,10 @@ function ReportView({ params }: { params: ReportParams }) {
 
 export default function ReportsPage() {
   const now = new Date();
-  const { user } = useAuth();
-  const isSuperOrReviewer =
-    user?.role === UserRole.SUPER_ADMIN ||
-    user?.role === UserRole.COMPLIANCE_OFFICER || user?.roleCode === 'compliance_officer';
+  const { user, myCap } = useAuth();
+  const canAccessReports = user?.role === UserRole.SUPER_ADMIN || !!myCap?.isReportsAccess;
 
-  if (!isSuperOrReviewer) {
+  if (!canAccessReports) {
     return (
       <Box p={4}>
         <Typography variant="h5" color="error" gutterBottom>
