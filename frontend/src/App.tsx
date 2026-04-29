@@ -230,7 +230,7 @@ export default function App() {
       <Route
         path="/dashboard/ticket-reports"
         element={
-          <ProtectedDashboard requiredCapability="isTicketSettingsFocal">
+          <ProtectedDashboard>
             <TicketReportsPage />
           </ProtectedDashboard>
         }

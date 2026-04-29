@@ -335,7 +335,7 @@ export default function AttendancePage() {
             ) : (
               <Box>
                 <Typography variant="body2" color="text.secondary" mb={2}>
-                  Click on a date to toggle it as an office day. Past dates cannot be changed. Weekdays default to office days.
+                  Click on today or a future date to toggle it as an office day. Past dates cannot be changed. Weekdays default to office days.
                 </Typography>
                 <Box display="grid" gridTemplateColumns="repeat(7, 1fr)" gap={0.5}>
                   {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
@@ -346,7 +346,7 @@ export default function AttendancePage() {
                   {days.map(d => {
                     const isOffice = isOfficeDayForDate(d);
                     const dStr = formatDate(d);
-                    // Today and past are not clickable (today is already treated as office day)
+                    // Past dates are not clickable; today remains editable for emergency declarations.
                     const isPastOrToday = dStr < todayStr;
                     const isToday = dStr === todayStr;
                     return (

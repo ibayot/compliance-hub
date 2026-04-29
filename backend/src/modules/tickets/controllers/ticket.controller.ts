@@ -124,8 +124,7 @@ export class TicketController {
 
   /** GET /tickets/reports — satisfaction reports (QA #11) */
   @Get('reports')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD,
-    UserRole.COMPLIANCE_OFFICER, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR, UserRole.PANTAWID_ICT, 'focal')
+  @Roles(...ALL_ROLES)
   async getTicketReports(
     @Query('year') year?: string,
     @Query('month') month?: string,
@@ -133,6 +132,7 @@ export class TicketController {
     @Query('semester') semester?: string,
     @Query('technicianId') technicianId?: string,
     @Query('ticketType') ticketType?: string,
+    @Request() req?: any,
   ) {
     return this.ticketService.getTicketReports({
       year: year ? Number(year) : undefined,
@@ -141,6 +141,8 @@ export class TicketController {
       semester: semester ? Number(semester) : undefined,
       technicianId: technicianId ? Number(technicianId) : undefined,
       ticketType,
+      viewerId: req?.user?.id ?? req?.user?.userId,
+      viewerRole: req?.user?.role,
     });
   }
 

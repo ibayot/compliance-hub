@@ -1671,6 +1671,8 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     semester?: number;
     technicianId?: number;
     ticketType?: string;
+    viewerId?: number;
+    viewerRole?: string;
   }): Promise<{
     totalTickets: number;
     totalWithRating: number;
@@ -1683,6 +1685,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
   }> {
     const now = new Date();
     const year = filters.year ?? now.getFullYear();
+    const isTicketSettingsViewer = (filters.viewerRole === UserRole.SUPER_ADMIN)
+      || this.roleCapSvc.isTicketSettingsFocal(filters.viewerRole || '');
+    const requesterIdFilter = !isTicketSettingsViewer ? filters.viewerId : undefined;
 
     // Build date range from filters
     let startDate: Date;
@@ -1711,7 +1716,11 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       .andWhere('t.createdAt >= :startDate', { startDate })
       .andWhere('t.createdAt <= :endDate', { endDate });
 
-    if (filters.technicianId) {
+    if (requesterIdFilter) {
+      qb = qb.andWhere('t.requesterId = :requesterId', { requesterId: requesterIdFilter });
+    }
+
+    if (isTicketSettingsViewer && filters.technicianId) {
       qb = qb.andWhere('t.assignedToId = :techId', { techId: filters.technicianId });
     }
     if (filters.ticketType) {
@@ -1725,7 +1734,8 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       .createQueryBuilder('t')
       .where('t.createdAt >= :startDate', { startDate })
       .andWhere('t.createdAt <= :endDate', { endDate });
-    if (filters.technicianId) totalQb = totalQb.andWhere('t.assignedToId = :techId', { techId: filters.technicianId });
+    if (requesterIdFilter) totalQb = totalQb.andWhere('t.requesterId = :requesterId', { requesterId: requesterIdFilter });
+    if (isTicketSettingsViewer && filters.technicianId) totalQb = totalQb.andWhere('t.assignedToId = :techId', { techId: filters.technicianId });
     if (filters.ticketType) totalQb = totalQb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
     const totalTickets = await totalQb.getCount();
 
@@ -1773,6 +1783,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       .innerJoin('tickets', 't', 't.id = e.ticket_id')
       .where('t.created_at >= :startDate', { startDate })
       .andWhere('t.created_at <= :endDate', { endDate });
+    if (requesterIdFilter) {
+      escQb = escQb.andWhere('t.requester_id = :requesterId', { requesterId: requesterIdFilter });
+    }
     if (filters.ticketType) {
       escQb = escQb.andWhere('t.ticket_type = :ticketType', { ticketType: filters.ticketType });
     }

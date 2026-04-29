@@ -989,31 +989,28 @@ export default function UserManualPage() {
     '/dashboard/ticket-reports': 'isTicketSettingsFocal',
   };
 
-  const settingsAllowedRoles = new Set([
-    'super_admin',
-    'compliance_officer',
-    'cybersec',
-    'infosec',
-    'section_head',
-    'desktop_sr',
-    'it_support_sr',
-    'pantawid_ict',
-  ]);
-
   const hasPathAccess = (path: string): boolean => {
     if (!user) return false;
     if (user.role === 'super_admin') return true;
+
+    if (path === '/dashboard' || path === '/dashboard/tickets' || path === '/dashboard/user-manual') {
+      return true;
+    }
+
     const capKey = capabilityByPath[path];
     if (capKey) {
       return Boolean(myCap?.[capKey]);
     }
+
     if (path === '/dashboard/units') {
       return user.role === 'section_head';
     }
+
     if (path === '/dashboard/settings') {
-      return settingsAllowedRoles.has(user.role);
+      return false;
     }
-    return true;
+
+    return false;
   };
 
   const visibleItems = useMemo(

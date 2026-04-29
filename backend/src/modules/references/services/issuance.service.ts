@@ -125,6 +125,17 @@ export class IssuanceService implements OnModuleInit {
       ADD COLUMN IF NOT EXISTS q4_compliance_status VARCHAR(40) NULL,
       ADD COLUMN IF NOT EXISTS register_added_at DATE NULL;
     `);
+
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS document_issuances (
+        issuance_id VARCHAR(36) NOT NULL,
+        document_id VARCHAR(36) NOT NULL,
+        PRIMARY KEY (issuance_id, document_id),
+        KEY idx_document_issuances_document (document_id),
+        CONSTRAINT fk_document_issuances_issuance FOREIGN KEY (issuance_id) REFERENCES issuances(id) ON DELETE CASCADE,
+        CONSTRAINT fk_document_issuances_document FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+      );
+    `);
   }
 
   /**

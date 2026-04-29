@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.45] - 2026-04-29 - Issuance Join-Table Recovery and Ticket Report Scope Split
+
+### Fixed
+- Added startup recovery for issuance-document mapping table: `document_issuances` is now created automatically if missing, preventing compliance service runtime failures when loading issuance-linked documents.
+- Tightened User Manual visibility filtering so sections are no longer default-allowed for unmapped paths.
+
+### Changed
+- Ticket reports now support two scopes:
+  - Basic scope for non-focal users: automatically limited to their own requested tickets.
+  - Full scope for ticket-settings focal/admin users: supports technician-wide and period filters.
+- Opened `/dashboard/ticket-reports` route and sidebar entry to all authenticated users; backend now enforces data scope.
+- Clarified Attendance module helper text: today is editable, past dates remain locked.
+
+### Versioning
+- Patch version bump only: `0.0.44` -> `0.0.45`.
+
 ## [0.0.44] - 2026-04-29 - Frontend Route Guard Hardening and KPI Error Mitigation
 
 ### Fixed
