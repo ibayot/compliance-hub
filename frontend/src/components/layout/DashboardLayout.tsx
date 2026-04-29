@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Alert, Box, Paper, Toolbar } from '@mui/material';
+import { Alert, Box, CircularProgress, Paper, Toolbar, Typography } from '@mui/material';
 import Sidebar from './Sidebar';
 import AppBar from './AppBar';
 import { SidebarProvider } from '@/contexts/SidebarContext';
@@ -28,7 +28,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { drawerWidth } = useSidebar();
   const location = useLocation();
-  const { services } = useServiceAvailability();
+  const { services, loaded } = useServiceAvailability();
 
   const compliancePaths = [
     '/dashboard/documents',
@@ -41,7 +41,8 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
     '/dashboard/mov',
   ];
   const isComplianceRoute = compliancePaths.some((p) => location.pathname === p || location.pathname.startsWith(`${p}/`));
-  const showComplianceUnavailable = isComplianceRoute && services.compliance === false;
+  const showComplianceUnavailable = isComplianceRoute && loaded && services.compliance === false;
+  const isComplianceLoading = isComplianceRoute && !loaded;
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -83,10 +84,17 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
             py: 4,
           }}
         >
-          {showComplianceUnavailable ? (
+          {isComplianceLoading ? (
+            <Paper sx={{ p: 3, textAlign: 'center' }}>
+              <CircularProgress size={24} />
+              <Typography variant="body2" color="text.secondary" mt={1}>
+                Checking service availability...
+              </Typography>
+            </Paper>
+          ) : showComplianceUnavailable ? (
             <Paper sx={{ p: 3 }}>
               <Alert severity="warning">
-                Service currently unavailable
+                Service currently unavailable. Please try again later.
               </Alert>
             </Paper>
           ) : (

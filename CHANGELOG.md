@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.46] - 2026-04-29 - Schema-Safe Issuance Fix and Compliance Unavailable UX Hardening
+
+### Fixed
+- Removed compliance-service startup DDL that attempted to create `document_issuances`.
+- Issuance service now checks whether `document_issuances` exists before using mapping relations.
+- When linkage table is absent, issuance reads still work and return an empty `documents` array instead of crashing.
+
+### Changed
+- Dashboard layout now waits for service availability check before mounting compliance pages, preventing startup toast floods when compliance service is down.
+- Compliance routes now show a consistent page-level message: `Service currently unavailable. Please try again later.`
+
+### Validation
+- Live schema check against `compliance_hub` confirmed only `documents` and `issuances` tables exist for issuance/document domain in current environment.
+
+### Versioning
+- Patch version bump only: `0.0.45` -> `0.0.46`.
+
 ## [0.0.45] - 2026-04-29 - Issuance Join-Table Recovery and Ticket Report Scope Split
 
 ### Fixed
