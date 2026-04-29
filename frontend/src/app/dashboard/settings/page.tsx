@@ -243,7 +243,18 @@ function RoleCapabilitiesCard() {
           <Table size="small" sx={{ minWidth: 900 }}>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ fontWeight: 700, minWidth: 160 }}>Role</TableCell>
+                <TableCell
+                  sx={{
+                    fontWeight: 700,
+                    minWidth: 160,
+                    position: 'sticky',
+                    left: 0,
+                    zIndex: 3,
+                    backgroundColor: 'background.paper',
+                  }}
+                >
+                  Role
+                </TableCell>
                 {CAPABILITY_COLUMNS.map(col => (
                   <TableCell key={col.key} align="center" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
                     <Tooltip title={col.description} placement="top">
@@ -256,7 +267,14 @@ function RoleCapabilitiesCard() {
             <TableBody>
               {caps.map(cap => (
                 <TableRow key={cap.roleValue} hover sx={{ opacity: saving === cap.roleValue ? 0.6 : 1 }}>
-                  <TableCell>
+                  <TableCell
+                    sx={{
+                      position: 'sticky',
+                      left: 0,
+                      zIndex: 2,
+                      backgroundColor: 'background.paper',
+                    }}
+                  >
                     <Chip
                       label={cap.roleValue}
                       size="small"

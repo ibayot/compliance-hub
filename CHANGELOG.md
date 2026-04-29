@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.44] - 2026-04-29 - Frontend Route Guard Hardening and KPI Error Mitigation
+
+### Fixed
+- Added centralized route-level capability/role guarding in frontend router so hardcoded URLs cannot bypass feature restrictions.
+- Standardized access-denied messaging across modules to: `You do not have access to this feature.`
+- Fixed User Manual visibility logic to be capability/path-driven, preventing empty manual content for valid roles such as `cybersec`.
+- Added sticky/frozen `Role` column in Role Capabilities Matrix for easier horizontal scrolling.
+- Hardened KPI unit-resolution fallback: user-unit relation lookup failures now safely degrade to empty access scope instead of surfacing internal server errors.
+
+### Reviewed
+- Verified `INSTALLATION.md` changes are documentation-only and have no runtime effect.
+- Verified `backend/src/apps/gateway.main.ts` change adds a proxy alias route only and does not alter existing route behavior.
+
+### Versioning
+- Patch version bump only: `0.0.43` -> `0.0.44`.
+
 ## [0.0.43] - 2026-04-29 - Matrix Role Row Sync and Phase 2 Capability Migration
 
 ### Fixed

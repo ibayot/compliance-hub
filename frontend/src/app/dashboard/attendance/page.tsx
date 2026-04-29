@@ -293,7 +293,7 @@ export default function AttendancePage() {
     return (
       <Box>
         <Typography variant="h4" fontWeight={700} mb={0.5}>Attendance Management</Typography>
-        <Typography color="error">Access restricted. Your role does not have Attendance access in the capability matrix.</Typography>
+        <Typography color="error">You do not have access to this feature.</Typography>
       </Box>
     );
   }

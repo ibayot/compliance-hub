@@ -105,7 +105,7 @@ export class KpiService {
       return [];
     }
 
-    const actor = await this.userRepo.findOne({ where: { id: userId }, relations: ['units'] });
+    const actor = await this.userRepo.findOne({ where: { id: userId }, relations: ['units'] }).catch(() => null);
     if (!actor?.units?.length) {
       return [];
     }

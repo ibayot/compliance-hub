@@ -851,7 +851,7 @@ export default function KpiPage() {
       <Box>
         <Typography variant="h4" gutterBottom>KPI Monitoring & Dashboard</Typography>
         <Alert severity="error">
-          Access restricted. Your role does not currently have KPI module access in the capability matrix.
+          You do not have access to this feature.
         </Alert>
       </Box>
     );

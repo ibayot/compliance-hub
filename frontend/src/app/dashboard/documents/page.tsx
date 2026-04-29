@@ -47,7 +47,7 @@ export default function DocumentsPage() {
       <Container maxWidth="xl">
         <Box sx={{ py: 4 }}>
           <Typography variant="h4" gutterBottom>Documents</Typography>
-          <Typography color="error">Access restricted. Your role does not have Documents access in the capability matrix.</Typography>
+          <Typography color="error">You do not have access to this feature.</Typography>
         </Box>
       </Container>
     );

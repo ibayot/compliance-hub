@@ -1113,12 +1113,7 @@ export default function ReportsPage() {
   if (!canAccessReports) {
     return (
       <Box p={4}>
-        <Typography variant="h5" color="error" gutterBottom>
-          Access Restricted
-        </Typography>
-        <Typography color="text.secondary">
-          The Reports module is only accessible to Super Admins and Compliance Officers.
-        </Typography>
+        <Typography color="error">You do not have access to this feature.</Typography>
       </Box>
     );
   }

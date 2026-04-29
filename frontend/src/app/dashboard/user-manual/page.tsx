@@ -20,6 +20,7 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { useAuth } from '@/contexts/AuthContext';
+import type { RoleCapabilityRecord } from '@/lib/api/users';
 
 type ManualRole = 'super_admin' | 'reviewer' | 'focal' | 'technician' | 'technician_desktop' | 'technician_it_support' | 'technician_it_staff' | 'technician_desktop_staff' | 'auditor' | 'section_head' | 'user';
 
@@ -970,13 +971,54 @@ const manualItems: ManualItem[] = [
 ];
 
 export default function UserManualPage() {
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   const [selectedManual, setSelectedManual] = useState<ManualItem | null>(null);
 
   const role = user?.role;
+  const capabilityByPath: Partial<Record<string, keyof RoleCapabilityRecord>> = {
+    '/dashboard/documents': 'isDocumentsAccess',
+    '/dashboard/repository': 'isRepositoryAccess',
+    '/dashboard/issuances': 'isIssuancesAccess',
+    '/dashboard/metrics': 'isMetricsAccess',
+    '/dashboard/reviews': 'isReviewsAccess',
+    '/dashboard/kpi': 'isKpiAccess',
+    '/dashboard/reports': 'isReportsAccess',
+    '/dashboard/mov': 'isMovAccess',
+    '/dashboard/attendance': 'isAttendanceAccess',
+    '/dashboard/ticket-settings': 'isTicketSettingsFocal',
+    '/dashboard/ticket-reports': 'isTicketSettingsFocal',
+  };
+
+  const settingsAllowedRoles = new Set([
+    'super_admin',
+    'compliance_officer',
+    'cybersec',
+    'infosec',
+    'section_head',
+    'desktop_sr',
+    'it_support_sr',
+    'pantawid_ict',
+  ]);
+
+  const hasPathAccess = (path: string): boolean => {
+    if (!user) return false;
+    if (user.role === 'super_admin') return true;
+    const capKey = capabilityByPath[path];
+    if (capKey) {
+      return Boolean(myCap?.[capKey]);
+    }
+    if (path === '/dashboard/units') {
+      return user.role === 'section_head';
+    }
+    if (path === '/dashboard/settings') {
+      return settingsAllowedRoles.has(user.role);
+    }
+    return true;
+  };
+
   const visibleItems = useMemo(
-    () => manualItems.filter((item) => (role ? item.roles.includes(role as ManualRole) : false)),
-    [role],
+    () => manualItems.filter((item) => (role ? hasPathAccess(item.path) : false)),
+    [role, myCap],
   );
 
   return (

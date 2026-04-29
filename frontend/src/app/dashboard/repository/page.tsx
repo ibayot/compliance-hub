@@ -195,7 +195,7 @@ export default function RepositoryPage() {
         <Typography variant="h4" fontWeight={700} gutterBottom>
           Report Repository
         </Typography>
-        <Typography color="error">Access restricted. Your role does not have Repository access in the capability matrix.</Typography>
+        <Typography color="error">You do not have access to this feature.</Typography>
       </Box>
     );
   }

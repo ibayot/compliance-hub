@@ -83,6 +83,8 @@ async function bootstrap() {
   app.use('/api/cybersecurity', createServiceProxy(`${complianceServiceUrl}/api/cybersecurity`, 'compliance'));
   app.use('/api/kpi', createServiceProxy(`${complianceServiceUrl}/api/kpi`, 'compliance'));
   app.use('/api/mov', createServiceProxy(`${complianceServiceUrl}/api/mov`, 'compliance'));
+  // Role capabilities matrix is surfaced under compliance namespace for frontend capability management.
+  app.use('/api/compliance/role-capabilities', createServiceProxy(`${usersServiceUrl}/api/users/role-capabilities`, 'users'));
 
   app.use('/api/health', async (_req: Request, res: Response) => {
     const [usersAvailable, ticketingAvailable, complianceAvailable] = await Promise.all([

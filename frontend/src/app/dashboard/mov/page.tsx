@@ -775,7 +775,7 @@ export default function MovBuilderPage() {
     return (
       <Box sx={{ p: 4 }}>
         <Alert severity="warning" variant="filled">
-          <strong>Access Restricted.</strong> The MoV Builder is available to System Administrators and Compliance Officers (Reviewer role) only.
+          You do not have access to this feature.
         </Alert>
       </Box>
     );
