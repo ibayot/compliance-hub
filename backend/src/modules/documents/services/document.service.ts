@@ -72,24 +72,6 @@ export interface ListDocumentsDto {
 @Injectable()
 export class DocumentService implements OnModuleInit {
   private readonly logger = new Logger(DocumentService.name);
-  private hasDocumentIssuancesTable: boolean | null = null;
-
-  private async canUseDocumentIssuanceLinks(): Promise<boolean> {
-    if (this.hasDocumentIssuancesTable !== null) {
-      return this.hasDocumentIssuancesTable;
-    }
-
-    try {
-      const rows = await this.dataSource.query(
-        "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'document_issuances' LIMIT 1",
-      );
-      this.hasDocumentIssuancesTable = Array.isArray(rows) && rows.length > 0;
-    } catch {
-      this.hasDocumentIssuancesTable = false;
-    }
-
-    return this.hasDocumentIssuancesTable;
-  }
 
   private extractGoogleDocId(inputUrl: string): string | null {
     try {
@@ -890,21 +872,14 @@ export class DocumentService implements OnModuleInit {
    * Get document by ID with relations
    */
   async getDocumentById(id: string): Promise<Document> {
-    const canUseIssuanceLinks = await this.canUseDocumentIssuanceLinks();
     // Allow fetching archived (is_deleted=true) docs so focal can view detail on archived page
     const document = await this.documentRepo.findOne({
       where: { id },
-      relations: canUseIssuanceLinks
-        ? ['unit', 'uploader', 'versions', 'versions.uploader', 'issuances']
-        : ['unit', 'uploader', 'versions', 'versions.uploader'],
+      relations: ['unit', 'uploader', 'versions', 'versions.uploader', 'issuances'],
     });
 
     if (!document) {
       throw new NotFoundException(`Document with ID ${id} not found`);
-    }
-
-    if (!canUseIssuanceLinks) {
-      (document as any).issuances = [];
     }
 
     const [enriched] = await this.enrichDocumentsForWorkflow([document]);
@@ -934,18 +909,13 @@ export class DocumentService implements OnModuleInit {
       archived = false,
     } = dto;
 
-    const canUseIssuanceLinks = await this.canUseDocumentIssuanceLinks();
-
     const query = this.documentRepo
       .createQueryBuilder('doc')
       .leftJoinAndSelect('doc.unit', 'unit')
       .leftJoinAndSelect('doc.uploader', 'uploader')
+      .leftJoinAndSelect('doc.issuances', 'issuances')
       // archived mode shows soft-deleted docs for the owning focal; normal mode shows active docs
       .where('doc.is_deleted = :isDeleted', { isDeleted: archived ? true : false });
-
-    if (canUseIssuanceLinks) {
-      query.leftJoinAndSelect('doc.issuances', 'issuances');
-    }
 
     if (unit_id) {
       query.andWhere('doc.unit_id = :unit_id', { unit_id });
@@ -993,11 +963,6 @@ export class DocumentService implements OnModuleInit {
     query.skip((page - 1) * limit).take(limit);
 
     const [data, total] = await query.getManyAndCount();
-    if (!canUseIssuanceLinks) {
-      data.forEach((doc) => {
-        (doc as any).issuances = [];
-      });
-    }
     const enriched = await this.enrichDocumentsForWorkflow(data);
 
     return { data: enriched, total, page, limit };

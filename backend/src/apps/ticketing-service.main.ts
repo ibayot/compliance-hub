@@ -3,6 +3,7 @@ import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { DataSource } from 'typeorm';
 import { TicketingServiceAppModule } from './ticketing-service.module';
 
 async function bootstrap() {
@@ -30,6 +31,16 @@ async function bootstrap() {
 
   const port = Number(process.env.TICKETING_SERVICE_PORT || 4102);
   app.use('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'ticketing' }));
+  app.use('/api/health/live', (_req: any, res: any) => res.json({ status: 'ok', service: 'ticketing' }));
+  app.use('/api/health/ready', async (_req: any, res: any) => {
+    try {
+      const ds = app.get(DataSource);
+      await ds.query('SELECT 1');
+      res.json({ status: 'ok', service: 'ticketing' });
+    } catch {
+      res.status(503).json({ status: 'error', service: 'ticketing', reason: 'db_unreachable' });
+    }
+  });
   await app.listen(port);
   console.log(`Ticketing service running on http://localhost:${port}/api`);
 }

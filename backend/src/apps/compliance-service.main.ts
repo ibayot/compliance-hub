@@ -31,6 +31,16 @@ async function bootstrap() {
 
   const port = Number(process.env.COMPLIANCE_SERVICE_PORT || 4103);
   app.use('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'compliance' }));
+  app.use('/api/health/live', (_req: any, res: any) => res.json({ status: 'ok', service: 'compliance' }));
+  app.use('/api/health/ready', async (_req: any, res: any) => {
+    try {
+      const ds = app.get(DataSource);
+      await ds.query('SELECT 1');
+      res.json({ status: 'ok', service: 'compliance' });
+    } catch {
+      res.status(503).json({ status: 'error', service: 'compliance', reason: 'db_unreachable' });
+    }
+  });
   // Ensure cross-DB VIEWs so the compliance service can access user/role data from compliance_hub_users
   try {
     const dataSource = app.get(DataSource);

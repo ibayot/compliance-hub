@@ -2,6 +2,7 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
+import { DataSource } from 'typeorm';
 import { UsersServiceAppModule } from './users-service.module';
 
 async function bootstrap() {
@@ -21,6 +22,16 @@ async function bootstrap() {
 
   const port = Number(process.env.USERS_SERVICE_PORT || 4101);
   app.use('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'users' }));
+  app.use('/api/health/live', (_req: any, res: any) => res.json({ status: 'ok', service: 'users' }));
+  app.use('/api/health/ready', async (_req: any, res: any) => {
+    try {
+      const ds = app.get(DataSource);
+      await ds.query('SELECT 1');
+      res.json({ status: 'ok', service: 'users' });
+    } catch {
+      res.status(503).json({ status: 'error', service: 'users', reason: 'db_unreachable' });
+    }
+  });
   await app.listen(port);
   console.log(`Users service running on http://localhost:${port}/api`);
 }

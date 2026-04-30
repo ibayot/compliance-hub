@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.49] - 2026-04-30 - document_issuances Table Creation + Hardening Plan Priority 1-4
+
+### Fixed
+- `document_issuances` pivot table is now created on compliance-service startup via `issuance.service.ts onModuleInit()`. This fully enables document↔issuance linking and restores the `Documents` module data.
+- Removed defensive `canUseDocumentIssuanceLinks()` / `canUseDocumentLinks()` pattern from both `document.service.ts` and `issuance.service.ts` (v0.0.48 workaround no longer needed).
+- Unconditional `leftJoinAndSelect('doc.issuances')` restored in `listDocuments()` and `getDocumentById()`.
+- Unconditional `leftJoinAndSelect('issuance.documents')` restored in `getIssuances()` and `getIssuance()`.
+- `linkDocument()` and `unlinkDocument()` no longer throw "unavailable in current schema" errors.
+
+### Added (Hardening Plan Priorities 1-4)
+- **Priority 1.3**: `backend/SERVICE-OWNERSHIP.md` — machine-readable table/API ownership map, cross-DB view registry, and write rules per service.
+- **Priority 2.2**: `backend/database/migrations/v0.0.49-schema-baseline.sql` — versioned migration capturing all ALTER TABLE / CREATE TABLE statements currently in runtime self-healing across users, ticketing, and compliance services.
+- **Priority 2.2**: `document_issuances` added to `microservices-migrate.sql` copy list.
+- **Priority 3.2**: `/api/health/live` (always 200) and `/api/health/ready` (DB SELECT 1 check, 503 on fail) endpoints added to users-service, ticketing-service, and compliance-service. Existing `/api/health` retained for gateway backward compatibility.
+- **Priority 4.1**: `scripts/release-checklist.ps1` — manual CI/CD substitute script that validates backend build, frontend tsc, smoke tests, and records a release artifact JSON with rollback command.
+
+### Infrastructure Constraint Acknowledgment
+- Architecture: 1 server, 3 Docker containers per microservice + gateway container, 1 MariaDB instance with 3 databases (`compliance_hub`, `compliance_hub_users`, `compliance_hub_ticketing`).
+- Cross-schema views are the accepted compatibility bridge under current constraints. Marked as deprecated in SERVICE-OWNERSHIP.md with HTTP API migration as future target.
+
+### Versioning
+- Patch version bump only: `0.0.48` → `0.0.49`.
+
 ## [0.0.48] - 2026-04-30 - Documents Availability Fix and Rollback Baseline Tag
 
 ### Fixed
