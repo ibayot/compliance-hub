@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.48] - 2026-04-30 - Documents Availability Fix and Rollback Baseline Tag
+
+### Fixed
+- Documents API no longer hard-fails when `document_issuances` join table is absent.
+- `DocumentService` now conditionally joins/loads `issuances` only when the join table exists, and safely returns empty `issuances` arrays otherwise.
+- This prevents false empty-state behavior in the Documents module when records exist in `compliance_hub.documents`.
+
+### Ops
+- Added rollback baseline git tag: `rollback-baseline-2026-04-30-b712167`.
+
+### Versioning
+- Patch version bump only: `0.0.47` -> `0.0.48`.
+
 ## [0.0.47] - 2026-04-30 - KPI No-Unit Toast Dedup and Access-Scoped Manual Content
 
 ### Fixed
