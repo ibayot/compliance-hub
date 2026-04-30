@@ -1,8 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { randomUUID } from 'crypto';
 import { GatewayAppModule } from './gateway.module';
 
 const SERVICE_UNAVAILABLE_MESSAGE = 'Service currently unavailable. Please start the service and try again.';
@@ -11,7 +12,15 @@ function createServiceProxy(target: string, service: string) {
   return createProxyMiddleware({
     target,
     changeOrigin: true,
+    proxyTimeout: 30_000,
+    timeout: 31_000,
     on: {
+      proxyReq: (proxyReq, req: Request) => {
+        // Propagate correlation ID to downstream service
+        const requestId =
+          (req.headers['x-request-id'] as string | undefined) || randomUUID();
+        proxyReq.setHeader('x-request-id', requestId);
+      },
       error: (_err, req, res) => {
         const response = res as Response;
         response.status(503).json({
@@ -48,6 +57,17 @@ async function bootstrap() {
   const strictMode = (process.env.MICROSERVICES_STRICT || 'true').toLowerCase() !== 'false';
 
   app.use(helmet());
+
+  // Attach/preserve correlation ID on every request so all downstream services
+  // can trace a single frontend interaction through the logs.
+  app.use((_req: Request, res: Response, next: NextFunction) => {
+    const requestId =
+      (_req.headers['x-request-id'] as string | undefined)?.trim() || randomUUID();
+    _req.headers['x-request-id'] = requestId;
+    res.setHeader('x-request-id', requestId);
+    next();
+  });
+
   app.enableCors({
     origin: (process.env.CORS_ORIGIN || 'http://localhost:3000,http://127.0.0.1:3000')
       .split(',')

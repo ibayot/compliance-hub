@@ -208,7 +208,7 @@ export class UsersService {
     @InjectRepository(RoleCapability)
     private readonly roleCapabilitiesRepository: Repository<RoleCapability>,
   ) {
-    this.ensureSchema().catch(() => undefined);
+    this.ensureUnitsView().catch(() => undefined);
     this.ensureRoleDefinitions()
       .then(() => this.ensureRoleCapabilityRows())
       .catch(() => undefined);
@@ -267,69 +267,18 @@ export class UsersService {
     }
   }
 
-  private async ensureSchema() {
-    const queryRunner = this.usersRepository.manager.connection.createQueryRunner();
-    await queryRunner.connect();
-    try {
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS middle_name VARCHAR(255) NULL');
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS suffix VARCHAR(255) NULL');
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS staff_id VARCHAR(255) NULL');
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS position VARCHAR(255) NULL');
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS position_full VARCHAR(255) NULL');
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS designation VARCHAR(255) NULL');
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS ticket_main_focal TINYINT(1) NOT NULL DEFAULT 0');
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS ticket_technician TINYINT(1) NOT NULL DEFAULT 0');
-      await queryRunner.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider ENUM('local','google') NOT NULL DEFAULT 'local'");
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(255) NULL');
-      await queryRunner.query('CREATE UNIQUE INDEX IF NOT EXISTS uq_users_google_sub ON users (google_sub)');
-      // Update role enum to current set (legacy generic roles removed)
-      await queryRunner.query(
-        `ALTER TABLE users MODIFY COLUMN role ENUM('super_admin','section_head','user','compliance_officer','cybersec','infosec','project_mgr','dev_lead','sqa_lead','lead_infra','server_admin','db_admin','network_admin','desktop_sr','it_support_sr','desktop_jr','it_support_jr','pantawid_ict','records_officer','hr_id_officer') NOT NULL DEFAULT 'user'`,
-      ).catch(() => undefined);
-      // Add last_login column for staff activity tracking
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login DATETIME NULL').catch(() => undefined);
-      // QA v0.6.4: Add technician_type to role_definitions for custom-role attendance tagging
-      await queryRunner.query('ALTER TABLE role_definitions ADD COLUMN IF NOT EXISTS technician_type VARCHAR(30) NULL DEFAULT NULL').catch(() => undefined);
-      // QA v0.6.10: Add role_code to role_definitions for platform feature-set routing
-      await queryRunner.query('ALTER TABLE role_definitions ADD COLUMN IF NOT EXISTS role_code VARCHAR(50) NULL DEFAULT NULL').catch(() => undefined);
-      // Seed roleCode for section_head if not set
-      await queryRunner.query(`UPDATE role_definitions SET role_code = 'section_head' WHERE \`value\` = 'section_head' AND role_code IS NULL`).catch(() => undefined);
-      // Create units VIEW so User entity can JOIN to units stored in the compliance DB
-      const complianceDb = process.env.COMPLIANCE_DB_DATABASE || 'compliance_hub';
-      await queryRunner.query(`CREATE OR REPLACE VIEW units AS SELECT * FROM \`${complianceDb}\`.units`).catch(() => undefined);
-
-      // v0.0.41: Expand role_capabilities to cover module-level access controls
-      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_kpi_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
-      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_kpi_manage TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
-      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_attendance_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
-      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_attendance_manage TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
-      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_reports_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
-      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_reviews_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
-      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_mov_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
-      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_documents_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
-      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_repository_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
-      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_issuances_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
-      await queryRunner.query('ALTER TABLE role_capabilities ADD COLUMN IF NOT EXISTS is_metrics_access TINYINT(1) NOT NULL DEFAULT 0').catch(() => undefined);
-
-      // Seed defaults from current policy so migration to capability checks is backward-compatible.
-      await queryRunner.query(`
-        UPDATE role_capabilities
-        SET
-          is_documents_access = IF(role_value = 'super_admin' OR is_focal = 1, 1, is_documents_access),
-          is_repository_access = IF(role_value = 'super_admin' OR is_focal = 1, 1, is_repository_access),
-          is_kpi_access = IF(role_value IN ('super_admin','section_head','compliance_officer','cybersec','infosec') OR is_focal = 1, 1, is_kpi_access),
-          is_kpi_manage = IF(role_value IN ('super_admin','section_head','compliance_officer'), 1, is_kpi_manage),
-          is_attendance_access = IF(role_value IN ('super_admin','section_head','compliance_officer','cybersec','infosec') OR is_focal = 1 OR is_desktop = 1 OR is_it_support = 1 OR is_pantawid_ict = 1, 1, is_attendance_access),
-          is_attendance_manage = IF(role_value IN ('super_admin','section_head','compliance_officer') OR is_focal = 1 OR is_desktop = 1 OR is_it_support = 1 OR is_pantawid_ict = 1, 1, is_attendance_manage),
-          is_reports_access = IF(role_value IN ('super_admin','compliance_officer'), 1, is_reports_access),
-          is_reviews_access = IF(role_value IN ('super_admin','compliance_officer','cybersec','infosec'), 1, is_reviews_access),
-          is_mov_access = IF(role_value IN ('super_admin','compliance_officer'), 1, is_mov_access),
-          is_issuances_access = IF(role_value IN ('super_admin','compliance_officer'), 1, is_issuances_access),
-          is_metrics_access = IF(role_value IN ('super_admin','compliance_officer'), 1, is_metrics_access)
-      `).catch(() => undefined);
-    } finally {
-      await queryRunner.release();
-    }
+  /**
+   * Ensures the cross-DB `units` VIEW exists in the users database.
+   *
+   * This VIEW is required so that the User TypeORM entity can JOIN to
+   * units stored in compliance_hub. All DDL column migrations have been
+   * extracted to backend/database/migrations/v0.0.50-service-ddl-extraction.sql.
+   */
+  private async ensureUnitsView(): Promise<void> {
+    const complianceDb = process.env.COMPLIANCE_DB_DATABASE || 'compliance_hub';
+    await this.usersRepository.manager.connection
+      .query(`CREATE OR REPLACE VIEW units AS SELECT * FROM \`${complianceDb}\`.units`)
+      .catch(() => undefined);
   }
 
   private async ensureRoleDefinitions() {

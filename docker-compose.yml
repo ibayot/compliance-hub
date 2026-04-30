@@ -91,6 +91,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
+    image: compliance-hub/users-service:${VERSION:-latest}
     container_name: ricms_users_service
     profiles: ['microservices']
     ports:
@@ -107,6 +108,8 @@ services:
       - DB_PASSWORD=ricms_password
       - DB_DATABASE=compliance_hub_users
       - USERS_DB_DATABASE=compliance_hub_users
+      - COMPLIANCE_SERVICE_URL=http://compliance-service:4103
+      - INTERNAL_SERVICE_SECRET=dev-internal-secret-change-in-production
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=dev-jwt-secret-change-in-production
@@ -125,6 +128,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
+    image: compliance-hub/ticketing-service:${VERSION:-latest}
     container_name: ricms_ticketing_service
     profiles: ['microservices']
     ports:
@@ -141,6 +145,9 @@ services:
       - DB_PASSWORD=ricms_password
       - DB_DATABASE=compliance_hub_ticketing
       - TICKETING_DB_DATABASE=compliance_hub_ticketing
+      - USERS_SERVICE_URL=http://users-service:4101
+      - COMPLIANCE_SERVICE_URL=http://compliance-service:4103
+      - INTERNAL_SERVICE_SECRET=dev-internal-secret-change-in-production
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=dev-jwt-secret-change-in-production
@@ -159,6 +166,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
+    image: compliance-hub/compliance-service:${VERSION:-latest}
     container_name: ricms_compliance_service
     profiles: ['microservices']
     ports:
@@ -176,6 +184,8 @@ services:
       - DB_PASSWORD=ricms_password
       - DB_DATABASE=compliance_hub
       - COMPLIANCE_DB_DATABASE=compliance_hub
+      - USERS_SERVICE_URL=http://users-service:4101
+      - INTERNAL_SERVICE_SECRET=dev-internal-secret-change-in-production
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=dev-jwt-secret-change-in-production
@@ -194,6 +204,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
+    image: compliance-hub/api-gateway:${VERSION:-latest}
     container_name: ricms_api_gateway
     profiles: ['microservices']
     ports:

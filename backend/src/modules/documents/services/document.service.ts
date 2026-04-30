@@ -327,56 +327,8 @@ export class DocumentService implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS document_assignments (
-        id varchar(36) NOT NULL,
-        user_id int NOT NULL,
-        unit_id int NOT NULL,
-        document_type varchar(100) NOT NULL,
-        report_name varchar(255) DEFAULT NULL,
-        filename_prefix varchar(100) DEFAULT NULL,
-        submission_frequency enum('monthly','quarterly','annual','custom') NOT NULL DEFAULT 'monthly',
-        submission_month tinyint DEFAULT NULL,
-        is_active tinyint(1) NOT NULL DEFAULT 1,
-        created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-        updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-        PRIMARY KEY (id),
-        UNIQUE KEY uq_assignment_user_unit_type (user_id, unit_id, document_type),
-        KEY idx_assignment_user (user_id),
-        KEY idx_assignment_unit (unit_id),
-        CONSTRAINT fk_assignment_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-        CONSTRAINT fk_assignment_unit FOREIGN KEY (unit_id) REFERENCES units (id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS document_references (
-        id varchar(36) NOT NULL,
-        source_document_id varchar(36) NOT NULL,
-        target_document_id varchar(36) NOT NULL,
-        relationship_type varchar(50) NOT NULL DEFAULT 'references',
-        created_by int DEFAULT NULL,
-        created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-        PRIMARY KEY (id),
-        UNIQUE KEY uq_document_reference_pair (source_document_id, target_document_id),
-        KEY idx_doc_ref_source (source_document_id),
-        KEY idx_doc_ref_target (target_document_id),
-        CONSTRAINT fk_doc_ref_source FOREIGN KEY (source_document_id) REFERENCES documents (id) ON DELETE CASCADE,
-        CONSTRAINT fk_doc_ref_target FOREIGN KEY (target_document_id) REFERENCES documents (id) ON DELETE CASCADE,
-        CONSTRAINT fk_doc_ref_creator FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await this.dataSource.query(`
-      ALTER TABLE document_versions
-      ADD COLUMN IF NOT EXISTS file_blob LONGBLOB NULL,
-      ADD COLUMN IF NOT EXISTS preview_blob LONGBLOB NULL;
-    `);
-
-    await this.dataSource.query(`
-      ALTER TABLE documents
-      ADD COLUMN IF NOT EXISTS file_blob LONGBLOB NULL;
-    `);
+    // Schema DDL for this service is managed via versioned migration files in
+    // backend/database/migrations/. See v0.0.50-service-ddl-extraction.sql.
 
     // Startup recovery: re-enqueue any documents stuck in pending/processing due to
     // a previous backend crash or restart that dropped the Bull queue jobs.

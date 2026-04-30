@@ -13,6 +13,7 @@ import { CybersecurityModule } from '../modules/cybersecurity/cybersecurity.modu
 import { KpiModule } from '../modules/kpi/kpi.module';
 import { MovModule } from '../modules/mov/mov.module';
 import { ComplianceJwtStrategy } from './compliance-jwt.strategy';
+import { HttpClientsModule } from '../common/http-clients/http-clients.module';
 
 @Module({
   imports: [
@@ -75,6 +76,7 @@ import { ComplianceJwtStrategy } from './compliance-jwt.strategy';
     CybersecurityModule,
     KpiModule,
     MovModule,
+    HttpClientsModule,
   ],
   providers: [ComplianceJwtStrategy],
 })

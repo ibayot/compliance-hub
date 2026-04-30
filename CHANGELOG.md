@@ -6,6 +6,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.50] - 2026-05-01 - Service DDL Extraction, HTTP Inter-Service Clients, Correlation IDs, Gateway Hardening
+
+### Changed
+
+#### ⚡ Service DDL Extraction (all 4 services)
+- Removed all `ALTER TABLE` / `CREATE TABLE` / `CREATE UNIQUE INDEX` DDL from service startup code (`onModuleInit()` / `runMigrations()`).
+- Services no longer self-heal the schema at runtime. Schema is governed exclusively by versioned migration files.
+- `issuance.service.ts`: empty `onModuleInit()` replaced with a startup log; defensive `canUseDocumentLinks()` guard retained.
+- `document.service.ts`: CREATE TABLE `document_assignments` / `document_references`, ALTER TABLE `document_versions` / `documents` removed; startup recovery and `role_capabilities` VIEW creation retained.
+- `users.service.ts`: `ensureSchema()` method removed; new `ensureUnitsView()` method retains the cross-DB `units` VIEW creation required by TypeORM entity JOINs.
+- `ticket.service.ts`: All DDL ALTERs / CREATEs removed from `runMigrations()`; cross-DB view creation (users, units, role_definitions, attendance, role_capabilities) and default data seeding retained.
+
+#### 🌐 HTTP Inter-Service API Clients
+- **New** `backend/src/common/http-clients/users.http-client.ts` — `UsersHttpClient`: injectable NestJS service that calls `users-service` via HTTP for user data enrichment. Replaces cross-DB SQL views for non-JOIN data paths. Methods: `getUserById()`, `getUsers()`. Timeout: 2000ms, graceful null fallback.
+- **New** `backend/src/common/http-clients/compliance.http-client.ts` — `ComplianceHttpClient`: same pattern for compliance-service unit data. Methods: `getUnits()`, `getUnitById()`.
+- **New** `backend/src/common/http-clients/http-clients.module.ts` — `HttpClientsModule`: exports both clients; imported by all 3 service app modules.
+- Cross-DB views remain as the compatibility bridge for existing TypeORM entity JOIN relationships. HTTP clients are the path forward for new non-JOIN code.
+
+#### 🔒 Internal Service Guard + Endpoints
+- **New** `backend/src/common/guards/internal-service.guard.ts` — `InternalServiceGuard`: replaces `JwtAuthGuard` on internal-only endpoints. Validates `X-Service-Token` header against `INTERNAL_SERVICE_SECRET` env var. Permissive (warning-only) when secret is unset in dev.
+- **New** `backend/src/modules/internal/internal.controller.ts` — `InternalController`: serves `GET /api/internal/users`, `GET /api/internal/users/:id`, `GET /api/internal/units`, `GET /api/internal/units/:id`. Protected by `InternalServiceGuard`.
+- **New** `backend/src/modules/internal/internal.module.ts` — `InternalModule`: wires `InternalController` with `UsersModule` and `UnitsModule`; imported by `UsersServiceAppModule`.
+
+#### 🔗 Correlation ID Propagation
+- **New** `backend/src/common/middleware/correlation-id.middleware.ts` — generates/preserves `X-Request-ID` UUID per request.
+- `gateway.main.ts`: adds `X-Request-ID` middleware on all incoming requests and propagates the header to every proxied downstream request via `proxyReq` event.
+- All services echo `X-Request-ID` back in every response so client traces are end-to-end.
+
+#### ⏱ Gateway Proxy Timeouts
+- `createServiceProxy()` now sets `proxyTimeout: 30_000ms` and `timeout: 31_000ms` — prevents the gateway from hanging indefinitely on slow or stuck upstream service responses.
+
+#### 🐳 Docker Image Tagging
+- All 4 microservice containers (`users-service`, `ticketing-service`, `compliance-service`, `api-gateway`) now include `image: compliance-hub/<service>:${VERSION:-latest}`.
+- Set `VERSION=0.0.50` in your environment before `docker compose build --profile microservices` to tag images for that version.
+
+#### 🌍 Inter-Service URL Environment Variables
+- `USERS_SERVICE_URL` added to `compliance-service` and `ticketing-service` docker-compose env blocks.
+- `COMPLIANCE_SERVICE_URL` added to `users-service` and `ticketing-service` docker-compose env blocks.
+- `INTERNAL_SERVICE_SECRET` added to all 4 microservice containers (dev placeholder value included; **must be replaced before production deployment**).
+
+### Added
+- `backend/database/migrations/v0.0.50-service-ddl-extraction.sql` — complete audit trail of all DDL removed from service startup code; acts as the migration to run on a fresh database alongside `v0.0.49-schema-baseline.sql`.
+- `scripts/contract-tests.cjs` — API contract tests. Validates health endpoint shapes, response contracts (documents, issuances, tickets, units), correlation ID propagation, and internal inter-service endpoints. Run with `node scripts/contract-tests.cjs`. Set `AUTH_TOKEN` for authenticated endpoint tests.
+
+### Versioning
+- Patch version bump: `0.0.49` → `0.0.50`.
+
+---
+
 ## [0.0.49] - 2026-04-30 - document_issuances Table Creation + Hardening Plan Priority 1-4
 
 ### Fixed

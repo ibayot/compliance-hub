@@ -5,6 +5,8 @@ import * as Joi from 'joi';
 import { AuthModule } from '../modules/auth/auth.module';
 import { UsersModule } from '../modules/users/users.module';
 import { UnitsModule } from '../modules/units/units.module';
+import { InternalModule } from '../modules/internal/internal.module';
+import { HttpClientsModule } from '../common/http-clients/http-clients.module';
 
 @Module({
   imports: [
@@ -46,6 +48,8 @@ import { UnitsModule } from '../modules/units/units.module';
     AuthModule,
     UsersModule,
     UnitsModule,
+    InternalModule,
+    HttpClientsModule,
   ],
 })
 export class UsersServiceAppModule {}

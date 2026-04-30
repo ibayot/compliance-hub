@@ -138,116 +138,17 @@ export class TicketService implements OnModuleInit {
         process.env.COMPLIANCE_DB_DATABASE || 'compliance_hub',
       );
 
-      // Ensure new columns exist on tickets table
-      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ticket_number VARCHAR(50) NULL').catch(() => undefined);
-      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ticket_type VARCHAR(30) NOT NULL DEFAULT "it_support"').catch(() => undefined);
-      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS requester_id INT NULL').catch(() => undefined);
-      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS resolution_notes TEXT NULL').catch(() => undefined);
-      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS resolved_at DATETIME NULL').catch(() => undefined);
-      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS satisfaction_rating TINYINT NULL').catch(() => undefined);
-      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS satisfaction_comment TEXT NULL').catch(() => undefined);
-      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS satisfaction_submitted_at DATETIME NULL').catch(() => undefined);
+      // Schema DDL has been extracted to versioned migration files.
+      // See backend/database/migrations/v0.0.50-service-ddl-extraction.sql.
 
-      // v0.6.7 migrations
-      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS duplicate_of_id VARCHAR(36) NULL').catch(() => undefined);
+      // ── Cross-DB compatibility views (re-created on every startup) ─────────
+      // These are infrastructure config, not data mutations. They must be
+      // re-applied on restart so TypeORM entity JOINs continue to work.
 
-      // v0.6.8 migrations
-      // Make priority nullable so focals can tag it manually (not auto-set by the app)
-      await qr.query(
-        'ALTER TABLE tickets MODIFY COLUMN priority VARCHAR(10) NULL DEFAULT NULL',
-      ).catch(() => undefined);
-
-      // Make legacy reported_by_id nullable so new tickets only need requester_id
-      await qr.query(
-        'ALTER TABLE tickets MODIFY COLUMN reported_by_id INT(11) NULL',
-      ).catch(() => undefined);
-
-      // Ensure status enum includes all current values
-      await qr.query(
-        "ALTER TABLE tickets MODIFY COLUMN status ENUM('open','assigned','in_progress','resolved','closed','freeze','duplicate') NOT NULL DEFAULT 'open'",
-      ).catch(() => undefined);
-
-      // Backfill requester_id from legacy reported_by_id if needed
-      await qr.query(
-        'UPDATE tickets SET requester_id = reported_by_id WHERE requester_id IS NULL AND reported_by_id IS NOT NULL',
-      ).catch(() => undefined);
-
-      // Add unique index for ticket_number if not already present
-      await qr.query(
-        'CREATE UNIQUE INDEX IF NOT EXISTS uq_tickets_ticket_number ON tickets (ticket_number)',
-      ).catch(() => undefined);
-
-      // Add is_internal flag to ticket_comments
-      await qr.query(
-        'ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS is_internal TINYINT(1) NOT NULL DEFAULT 0',
-      ).catch(() => undefined);
-
-      // v0.6.15 migrations
-      // Track when a ticket is explicitly closed by the requesting user
-      await qr.query(
-        'ALTER TABLE tickets ADD COLUMN IF NOT EXISTS user_closed TINYINT(1) NOT NULL DEFAULT 0',
-      ).catch(() => undefined);
-
-      // Rename ticket_comments columns if old names exist
-      await qr.query(
-        'ALTER TABLE ticket_comments CHANGE COLUMN ticket_id ticket_id VARCHAR(36) NOT NULL',
-      ).catch(() => undefined);
-      await qr.query(
-        'ALTER TABLE ticket_comments CHANGE COLUMN user_id user_id INT NOT NULL',
-      ).catch(() => undefined);
-
-      // ── v0.6 migrations ──────────────────────────────────────────────────
-
-      // Add ticket_type to ticket_categories
-      await qr.query(
-        "ALTER TABLE ticket_categories ADD COLUMN IF NOT EXISTS ticket_type VARCHAR(30) NOT NULL DEFAULT 'it_support'",
-      ).catch(() => undefined);
-
-      // Add category_id to tickets
-      await qr.query(
-        'ALTER TABLE tickets ADD COLUMN IF NOT EXISTS category_id VARCHAR(36) NULL',
-      ).catch(() => undefined);
-
-      // Create ticket_keyword_rules table
-      await qr.query(`
-        CREATE TABLE IF NOT EXISTS ticket_keyword_rules (
-          id VARCHAR(36) NOT NULL PRIMARY KEY,
-          keyword VARCHAR(100) NOT NULL,
-          target_ticket_type VARCHAR(30) NOT NULL,
-          target_category_id VARCHAR(36) NULL,
-          is_active TINYINT(1) NOT NULL DEFAULT 1,
-          created_by INT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        )
-      `).catch(() => undefined);
-
-      // Attendance is owned by users DB; keep ticketing compatibility via a passthrough view.
-      await qr.query(
-        'RENAME TABLE tech_attendance TO attendance',
-      ).catch(() => undefined);
-      await qr.query(`
-        CREATE TABLE IF NOT EXISTS \`${usersDb}\`.attendance (
-          id VARCHAR(36) NOT NULL PRIMARY KEY,
-          user_id INT NOT NULL,
-          date DATE NOT NULL,
-          status VARCHAR(20) NOT NULL DEFAULT 'present',
-          set_by_id INT NULL,
-          notes TEXT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE KEY uq_attendance_user_date (user_id, date)
-        )
-      `).catch(() => undefined);
-
-      await qr.query(`
-        INSERT IGNORE INTO \`${usersDb}\`.attendance (id, user_id, date, status, set_by_id, notes, created_at)
-        SELECT id, user_id, date, status, set_by_id, notes, created_at FROM attendance
-      `).catch(() => undefined);
       await qr.query('DROP VIEW IF EXISTS attendance').catch(() => undefined);
       await qr.query('DROP TABLE IF EXISTS attendance').catch(() => undefined);
       await qr.query(`CREATE VIEW attendance AS SELECT * FROM \`${usersDb}\`.attendance`).catch(() => undefined);
 
-      // Compatibility views for shared reference data (single-table ownership across DBs)
       await qr.query('DROP VIEW IF EXISTS users').catch(() => undefined);
       await qr.query('DROP TABLE IF EXISTS users').catch(() => undefined);
       await qr.query(`CREATE VIEW users AS SELECT * FROM \`${usersDb}\`.users`).catch(() => undefined);
@@ -256,110 +157,18 @@ export class TicketService implements OnModuleInit {
       await qr.query('DROP TABLE IF EXISTS units').catch(() => undefined);
       await qr.query(`CREATE VIEW units AS SELECT * FROM \`${complianceDb}\`.units`).catch(() => undefined);
 
-      // role_definitions: ownership stays in compliance_hub_users; expose as read-only view here
       await qr.query('DROP VIEW IF EXISTS role_definitions').catch(() => undefined);
       await qr.query('DROP TABLE IF EXISTS role_definitions').catch(() => undefined);
       await qr.query(`CREATE VIEW role_definitions AS SELECT * FROM \`${usersDb}\`.role_definitions`).catch(() => undefined);
 
-      // Create office_days table
-      await qr.query(`
-        CREATE TABLE IF NOT EXISTS office_days (
-          id VARCHAR(36) NOT NULL PRIMARY KEY,
-          date DATE NOT NULL UNIQUE,
-          is_office_day TINYINT(1) NOT NULL DEFAULT 1,
-          notes TEXT NULL,
-          set_by_id INT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `).catch(() => undefined);
-
-      // ── v0.6.3 migrations ─────────────────────────────────────────────────
-
-      // Expand ticket_type column to include pantawid_ict_support
-      await qr.query(
-        "ALTER TABLE tickets MODIFY COLUMN ticket_type VARCHAR(30) NOT NULL DEFAULT 'it_support'",
-      ).catch(() => undefined);
-
-      // Reset any weekend office-days that were accidentally set as office days
-      await qr.query(
-        "UPDATE office_days SET is_office_day = 0 WHERE DAYOFWEEK(date) IN (1, 7) AND is_office_day = 1",
-      ).catch(() => undefined);
-
-      // ── v0.6.16 migrations ──────────────────────────────────────────────────
-
-      // Ticket events table for timeline view
-      await qr.query(`
-        CREATE TABLE IF NOT EXISTS ticket_events (
-          id VARCHAR(36) NOT NULL PRIMARY KEY,
-          ticket_id VARCHAR(36) NOT NULL,
-          actor_id INT NULL,
-          event_type VARCHAR(50) NOT NULL,
-          meta TEXT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          INDEX idx_te_ticket_id (ticket_id)
-        )
-      `).catch(() => undefined);
-
-      // ── v0.6.17 migrations ──────────────────────────────────────────────────
-
-      // SLA deadline column on tickets
-      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS sla_deadline DATETIME NULL').catch(() => undefined);
-      // Full CSAT form data column on tickets
-      await qr.query('ALTER TABLE tickets ADD COLUMN IF NOT EXISTS satisfaction_form_data TEXT NULL').catch(() => undefined);
-      // SLA hours on categories
-      await qr.query('ALTER TABLE ticket_categories ADD COLUMN IF NOT EXISTS sla_hours INT NULL').catch(() => undefined);
-      // Multi-keyword support on keyword rules
-      await qr.query('ALTER TABLE ticket_keyword_rules ADD COLUMN IF NOT EXISTS keywords TEXT NULL').catch(() => undefined);
-      // Backfill keywords column from existing keyword column
-      await qr.query(
-        "UPDATE ticket_keyword_rules SET keywords = CONCAT('[\"', keyword, '\"]') WHERE keywords IS NULL"
-      ).catch(() => undefined);
-
-      // ── v0.6.21 migrations ──────────────────────────────────────────────────
-
-      // Escalation records per ticket
-      await qr.query(`
-        CREATE TABLE IF NOT EXISTS ticket_escalations (
-          id VARCHAR(36) NOT NULL PRIMARY KEY,
-          ticket_id VARCHAR(36) NOT NULL,
-          escalated_by_id INT NOT NULL,
-          escalated_to_id INT NOT NULL,
-          status VARCHAR(20) NOT NULL DEFAULT 'pending',
-          notes TEXT NULL,
-          return_reason TEXT NULL,
-          proof_files JSON NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          INDEX idx_te_ticket (ticket_id),
-          CONSTRAINT fk_te_ticket FOREIGN KEY (ticket_id) REFERENCES tickets (id) ON DELETE CASCADE
-        )
-      `).catch(() => undefined);
-
-      // Escalation focal configuration (which roles can receive escalations per ticket type)
-      await qr.query(`
-        CREATE TABLE IF NOT EXISTS escalation_focal_configs (
-          id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          ticket_type VARCHAR(30) NOT NULL,
-          role_value VARCHAR(50) NOT NULL,
-          label VARCHAR(100) NOT NULL,
-          created_by_id INT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE KEY uq_efc_type_role (ticket_type, role_value)
-        )
-      `).catch(() => undefined);
-
-      // Seed default categories if table is empty
-      await this.seedDefaultCategories(qr);
-
-      // Seed default keyword rules
-      await this.seedDefaultKeywordRules(qr);
-
-      // ── v0.0.31 migrations ────────────────────────────────────────────────
-      // Expose role_capabilities (BASE TABLE in users DB) as a view here
       await qr.query('DROP VIEW IF EXISTS role_capabilities').catch(() => undefined);
       await qr.query(`CREATE OR REPLACE VIEW role_capabilities AS SELECT * FROM \`${usersDb}\`.role_capabilities`).catch(() => undefined);
 
-      this.logger.log('Ticket schema migrations applied.');
+      // ── Data seeding (idempotent) ──────────────────────────────────────────
+      await this.seedDefaultCategories(qr);
+      await this.seedDefaultKeywordRules(qr);
+
+      this.logger.log('Ticket service views and seed data applied.');
     } finally {
       await qr.release();
     }

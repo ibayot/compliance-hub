@@ -100,35 +100,13 @@ export class IssuanceService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    await this.dataSource.query(`
-      ALTER TABLE issuances
-      ADD COLUMN IF NOT EXISTS attachment_file_name VARCHAR(255) NULL,
-      ADD COLUMN IF NOT EXISTS attachment_mime_type VARCHAR(120) NULL,
-      ADD COLUMN IF NOT EXISTS attachment_blob LONGBLOB NULL,
-      ADD COLUMN IF NOT EXISTS attachment_uploaded_at DATETIME NULL,
-      ADD COLUMN IF NOT EXISTS binding_nature VARCHAR(60) NULL,
-      ADD COLUMN IF NOT EXISTS adoption_basis TEXT NULL,
-      ADD COLUMN IF NOT EXISTS applicable_provisions TEXT NULL,
-      ADD COLUMN IF NOT EXISTS compliance_obligations TEXT NULL,
-      ADD COLUMN IF NOT EXISTS required_evidence TEXT NULL,
-      ADD COLUMN IF NOT EXISTS evidence_location TEXT NULL,
-      ADD COLUMN IF NOT EXISTS process_owner VARCHAR(160) NULL,
-      ADD COLUMN IF NOT EXISTS frequency_cadence VARCHAR(80) NULL,
-      ADD COLUMN IF NOT EXISTS compliance_status VARCHAR(40) NULL,
-      ADD COLUMN IF NOT EXISTS gap_summary TEXT NULL,
-      ADD COLUMN IF NOT EXISTS action_required TEXT NULL,
-      ADD COLUMN IF NOT EXISTS target_date DATE NULL,
-      ADD COLUMN IF NOT EXISTS last_review_date DATE NULL,
-      ADD COLUMN IF NOT EXISTS quarterly_readiness VARCHAR(40) NULL,
-      ADD COLUMN IF NOT EXISTS q1_compliance_status VARCHAR(40) NULL,
-      ADD COLUMN IF NOT EXISTS q2_compliance_status VARCHAR(40) NULL,
-      ADD COLUMN IF NOT EXISTS q3_compliance_status VARCHAR(40) NULL,
-      ADD COLUMN IF NOT EXISTS q4_compliance_status VARCHAR(40) NULL,
-      ADD COLUMN IF NOT EXISTS register_added_at DATE NULL;
-    `);
-    // NOTE: document_issuances pivot table is intentionally NOT created here.
+    // Schema DDL for this service is managed via versioned migration files in
+    // backend/database/migrations/. See v0.0.50-service-ddl-extraction.sql.
+    //
+    // NOTE: document_issuances pivot table is intentionally absent.
     // The compliance_hub.issuances table is the source of truth.
     // The ManyToMany join to document_issuances is guarded by canUseDocumentLinks().
+    this.logger.log('IssuanceService initialized. Schema managed via migration files.');
   }
 
   private async canUseDocumentLinks(): Promise<boolean> {

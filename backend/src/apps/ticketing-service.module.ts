@@ -5,6 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import * as Joi from 'joi';
 import { TicketsModule } from '../modules/tickets/tickets.module';
 import { TicketingJwtStrategy } from './ticketing-jwt.strategy';
+import { HttpClientsModule } from '../common/http-clients/http-clients.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { TicketingJwtStrategy } from './ticketing-jwt.strategy';
     }),
     PassportModule,
     TicketsModule,
+    HttpClientsModule,
   ],
   providers: [TicketingJwtStrategy],
 })
