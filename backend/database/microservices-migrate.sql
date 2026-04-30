@@ -211,7 +211,7 @@ CALL copy_table_if_exists(@source_db, @compliance_db, 'reportorial_document_type
 CALL copy_table_if_exists(@source_db, @compliance_db, 'manual_reviews');
 CALL copy_table_if_exists(@source_db, @compliance_db, 'version_comparisons');
 CALL copy_table_if_exists(@source_db, @compliance_db, 'issuances');
-CALL copy_table_if_exists(@source_db, @compliance_db, 'document_issuances');
+-- NOTE: document_issuances is intentionally not copied. It does not exist in compliance_hub.
 CALL copy_table_if_exists(@source_db, @compliance_db, 'metrics');
 CALL copy_table_if_exists(@source_db, @compliance_db, 'metric_templates');
 CALL copy_table_if_exists(@source_db, @compliance_db, 'metric_applicability');

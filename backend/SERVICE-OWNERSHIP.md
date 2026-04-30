@@ -39,13 +39,18 @@ in a future version when independent DB engines become feasible.
 ## Table Ownership (per database)
 
 ### compliance_hub_users (users-service)
+**Base Tables:**
 - users
 - role_definitions
 - role_capabilities
 - user_unit_access
 - attendance
 
+**Views (read-only, owned by other services):**
+- units → compliance_hub.units
+
 ### compliance_hub_ticketing (ticketing-service)
+**Base Tables:**
 - tickets
 - ticket_comments
 - ticket_events
@@ -56,13 +61,20 @@ in a future version when independent DB engines become feasible.
 - escalation_focal_configs
 - office_days
 
+**Views (read-only, owned by other services):**
+- users → compliance_hub_users.users
+- attendance → compliance_hub_users.attendance
+- role_definitions → compliance_hub_users.role_definitions
+- role_capabilities → compliance_hub_users.role_capabilities
+- units → compliance_hub.units
+
 ### compliance_hub (compliance-service)
+**Base Tables:**
 - units
 - documents
 - document_versions
 - document_references
 - document_assignments
-- document_issuances (pivot: documents ↔ issuances)
 - manual_reviews
 - version_comparisons
 - reportorial_document_types
@@ -79,6 +91,14 @@ in a future version when independent DB engines become feasible.
 - kpi_thresholds
 - kpi_scoring_rules
 - mov_artifacts
+
+**Note:** `document_issuances` pivot table does NOT exist in production. The `issuances` table is the source of truth. ManyToMany document linking is conditionally guarded in code; will be enabled only when/if this table is explicitly added via migration.
+
+**Views (read-only, owned by other services):**
+- attendance → compliance_hub_users.attendance
+- role_capabilities → compliance_hub_users.role_capabilities
+- role_definitions → compliance_hub_users.role_definitions
+- users → compliance_hub_users.users
 
 ## API Route Ownership (via Gateway)
 

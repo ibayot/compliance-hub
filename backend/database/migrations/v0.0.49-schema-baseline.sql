@@ -40,18 +40,9 @@ ALTER TABLE `compliance_hub`.`issuances`
   ADD COLUMN IF NOT EXISTS `q4_compliance_status` VARCHAR(40) NULL,
   ADD COLUMN IF NOT EXISTS `register_added_at` DATE NULL;
 
--- ============================================================
--- compliance_hub: document_issuances pivot table
--- (from issuance.service.ts onModuleInit - v0.0.49)
--- ============================================================
-CREATE TABLE IF NOT EXISTS `compliance_hub`.`document_issuances` (
-  `issuance_id` varchar(36) NOT NULL,
-  `document_id` varchar(36) NOT NULL,
-  PRIMARY KEY (`issuance_id`, `document_id`),
-  KEY `fk_doc_issuance_document` (`document_id`),
-  CONSTRAINT `fk_doc_issuance_issuance` FOREIGN KEY (`issuance_id`) REFERENCES `compliance_hub`.`issuances` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_doc_issuance_document` FOREIGN KEY (`document_id`) REFERENCES `compliance_hub`.`documents` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- NOTE: document_issuances pivot table is intentionally NOT included.
+-- compliance_hub.issuances is the source of truth. The document_issuances
+-- junction table does not exist in this deployment and should not be created.
 
 -- ============================================================
 -- compliance_hub: document_versions and documents blob columns
