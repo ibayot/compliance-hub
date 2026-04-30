@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { UsersHttpClient } from './users.http-client';
 import { ComplianceHttpClient } from './compliance.http-client';
 import { RoleCapabilitiesHttpClient } from './role-capabilities.http-client';
+import { EventBusModule } from '../events/event-bus.module';
 
 /**
  * HttpClientsModule — reusable inter-service HTTP client providers.
@@ -14,9 +15,15 @@ import { RoleCapabilitiesHttpClient } from './role-capabilities.http-client';
  *
  * RoleCapabilitiesHttpClient is the Phase B replacement for importing
  * RoleCapabilitiesService TypeScript source across service boundaries.
+ *
+ * EventBusModule is imported so RoleCapabilitiesHttpClient can optionally
+ * inject EventBusService and subscribe to capabilities.updated events.
+ * In services without Redis, EventBusService is @Optional() — startup
+ * will succeed but live cache invalidation will be TTL-based only.
  */
 @Module({
+  imports: [EventBusModule],
   providers: [UsersHttpClient, ComplianceHttpClient, RoleCapabilitiesHttpClient],
-  exports: [UsersHttpClient, ComplianceHttpClient, RoleCapabilitiesHttpClient],
+  exports: [UsersHttpClient, ComplianceHttpClient, RoleCapabilitiesHttpClient, EventBusModule],
 })
 export class HttpClientsModule {}

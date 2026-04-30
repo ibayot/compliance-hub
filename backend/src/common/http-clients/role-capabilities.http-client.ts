@@ -1,48 +1,56 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, InternalServerErrorException, Optional } from '@nestjs/common';
 import { UsersHttpClient, RoleCapabilityStub } from './users.http-client';
+import { EventBusService, CAPABILITIES_UPDATED_EVENT, CapabilitiesUpdatedPayload } from '../events/event-bus.service';
+
+/** All capability key names — mirrors RoleCapabilitiesService.getRolesWhere parameter type. */
+export type CapabilityKey =
+  | 'isFocal' | 'isIto' | 'isDesktop' | 'isItSupport' | 'isPantawidIct' | 'isEscalationFocal'
+  | 'isTicketSettingsFocal' | 'isAllTickets' | 'isTicketFocal'
+  | 'isKpiAccess' | 'isKpiManage'
+  | 'isAttendanceAccess' | 'isAttendanceManage'
+  | 'isReportsAccess' | 'isReviewsAccess'
+  | 'isMovAccess' | 'isDocumentsAccess' | 'isRepositoryAccess' | 'isIssuancesAccess' | 'isMetricsAccess';
 
 /**
- * RoleCapabilitiesHttpClient — HTTP-sourced role capability cache.
+ * RoleCapabilitiesHttpClient — full drop-in replacement for RoleCapabilitiesService
+ * in ticketing-service and compliance-service.
  *
- * This is the Phase B replacement for the in-process RoleCapabilitiesService
- * that is currently duplicated across ticketing and compliance services by
- * importing it directly from the users TypeScript source.
+ * Wire up in non-users modules via:
+ *   { provide: RoleCapabilitiesService, useClass: RoleCapabilitiesHttpClient }
  *
- * Usage:
- *  - Inject this service instead of RoleCapabilitiesService in ticketing and compliance modules.
- *  - The cache is seeded from users-service on startup via UsersHttpClient.
- *  - TTL: 30s stale-while-revalidate. On cache miss or expired, returns the last known value
- *    rather than failing outright (graceful degradation).
- *  - When users-service publishes a Redis pub/sub 'capabilities.updated' event (Phase H),
- *    call reload() to flush the cache.
+ * This eliminates the compile-time coupling where ticketing/compliance imported
+ * RoleCapabilitiesService TypeScript source directly from the users module,
+ * along with the TypeORM Repository<RoleCapability> cross-DB view dependency.
  *
- * Why this exists:
- *  The old pattern imports RoleCapabilitiesService TypeScript class and the RoleCapability
- *  TypeORM entity across service boundaries — this means both services compile against
- *  the same entity class, and ticketing/compliance query the role_capabilities cross-DB view
- *  directly at SQL level. This new client queries the users-service HTTP API instead,
- *  removing the TypeORM view dependency and the shared TypeScript class compilation.
- *
- * Migration status: READY FOR USE — not yet wired into ticketing/compliance modules.
- *  This is Phase B of ARCHITECTURE-AUDIT-v2.md.
+ * Cache strategy: loaded on startup via UsersHttpClient, refreshed every 60s
+ * (stale-while-revalidate). Cache invalidation is triggered by Phase H Redis events.
  */
 @Injectable()
 export class RoleCapabilitiesHttpClient implements OnModuleInit {
   private readonly logger = new Logger(RoleCapabilitiesHttpClient.name);
   private readonly cache = new Map<string, RoleCapabilityStub>();
   private lastLoaded = 0;
-  private readonly cacheTtlMs = 30_000; // 30s stale-while-revalidate
+  private readonly cacheTtlMs = 60_000; // 60s stale-while-revalidate
 
-  constructor(private readonly usersHttpClient: UsersHttpClient) {}
+  constructor(
+    private readonly usersHttpClient: UsersHttpClient,
+    @Optional() private readonly eventBus?: EventBusService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     await this.reload();
+    if (this.eventBus) {
+      await this.eventBus.subscribe<CapabilitiesUpdatedPayload>(
+        CAPABILITIES_UPDATED_EVENT,
+        (payload) => {
+          this.logger.log(`capabilities.updated received for role "${payload.role}" — reloading cache`);
+          void this.reload();
+        },
+      );
+    }
   }
 
-  /**
-   * (Re)load the capability cache from users-service.
-   * Non-fatal: if the request fails, the previous cache is kept (stale-while-revalidate).
-   */
+  /** Reload the capability cache from users-service over HTTP. Non-fatal — keeps stale cache on failure. */
   async reload(): Promise<void> {
     try {
       const rows = await this.usersHttpClient.getRoleCapabilities();
@@ -54,7 +62,7 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
         this.lastLoaded = Date.now();
         this.logger.log(`RoleCapabilities HTTP cache loaded: ${rows.length} role(s) from users-service`);
       } else {
-        this.logger.warn('RoleCapabilities HTTP cache: users-service returned 0 rows or is unreachable — keeping stale cache');
+        this.logger.warn('RoleCapabilities HTTP cache: 0 rows from users-service — keeping stale cache');
       }
     } catch (err: any) {
       this.logger.warn(`RoleCapabilities HTTP cache reload failed (non-fatal): ${err?.message}`);
@@ -62,38 +70,21 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
   }
 
   private get(role: string): RoleCapabilityStub | undefined {
-    // Background refresh if cache is stale (non-blocking — returns current value immediately)
     if (Date.now() - this.lastLoaded > this.cacheTtlMs) {
+      // Background refresh — non-blocking
       this.reload().catch(() => undefined);
     }
     return this.cache.get(role);
   }
 
-  // ── Boolean helpers — same surface as RoleCapabilitiesService ─────────────
+  // ── Boolean helpers (exact parity with RoleCapabilitiesService) ───────────
 
-  isFocal(role: string): boolean {
-    return !!this.get(role)?.isFocal;
-  }
-
-  isIto(role: string): boolean {
-    return !!this.get(role)?.isIto;
-  }
-
-  isDesktop(role: string): boolean {
-    return !!this.get(role)?.isDesktop;
-  }
-
-  isItSupport(role: string): boolean {
-    return !!this.get(role)?.isItSupport;
-  }
-
-  isPantawidIct(role: string): boolean {
-    return !!this.get(role)?.isPantawidIct;
-  }
-
-  isEscalationFocal(role: string): boolean {
-    return !!this.get(role)?.isEscalationFocal;
-  }
+  isFocal(role: string): boolean { return !!this.get(role)?.isFocal; }
+  isIto(role: string): boolean { return !!this.get(role)?.isIto; }
+  isDesktop(role: string): boolean { return !!this.get(role)?.isDesktop; }
+  isItSupport(role: string): boolean { return !!this.get(role)?.isItSupport; }
+  isPantawidIct(role: string): boolean { return !!this.get(role)?.isPantawidIct; }
+  isEscalationFocal(role: string): boolean { return !!this.get(role)?.isEscalationFocal; }
 
   isTechnician(role: string): boolean {
     const c = this.get(role);
@@ -103,5 +94,144 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
   isSeniorTech(role: string): boolean {
     const c = this.get(role);
     return !!c && !!c.isFocal && (!!c.isDesktop || !!c.isItSupport);
+  }
+
+  isSeniorDesktop(role: string): boolean {
+    const c = this.get(role);
+    return !!c && !!c.isFocal && !!c.isDesktop;
+  }
+
+  isSeniorItSupport(role: string): boolean {
+    const c = this.get(role);
+    return !!c && !!c.isFocal && !!c.isItSupport;
+  }
+
+  isTicketSettingsFocal(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isTicketSettingsFocal;
+  }
+
+  isAllTickets(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isAllTickets;
+  }
+
+  isTicketFocal(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isTicketFocal;
+  }
+
+  isKpiAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isKpiAccess;
+  }
+
+  isKpiManage(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isKpiManage;
+  }
+
+  isAttendanceAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isAttendanceAccess;
+  }
+
+  isAttendanceManage(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isAttendanceManage;
+  }
+
+  isReportsAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isReportsAccess;
+  }
+
+  isReviewsAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isReviewsAccess;
+  }
+
+  isMovAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isMovAccess;
+  }
+
+  isDocumentsAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isDocumentsAccess;
+  }
+
+  isRepositoryAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isRepositoryAccess;
+  }
+
+  isIssuancesAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isIssuancesAccess;
+  }
+
+  isMetricsAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isMetricsAccess;
+  }
+
+  // ── Derived helpers ───────────────────────────────────────────────────────
+
+  canSeeAllTickets(role: string): boolean {
+    return this.isAllTickets(role) || this.isTicketSettingsFocal(role);
+  }
+
+  canChangePriority(role: string): boolean {
+    if (role === 'super_admin') return true;
+    const c = this.get(role);
+    return !!(c?.isFocal || c?.isIto || c?.isDesktop || c?.isItSupport || c?.isPantawidIct);
+  }
+
+  isSeniorAuthority(role: string): boolean {
+    if (role === 'super_admin') return true;
+    const c = this.get(role);
+    return !!(c?.isFocal || c?.isIto);
+  }
+
+  canAssignTickets(role: string): boolean {
+    return this.isTicketFocal(role) || this.isTicketSettingsFocal(role);
+  }
+
+  // ── Bulk query helpers ────────────────────────────────────────────────────
+
+  getRolesWhere(capability: CapabilityKey): string[] {
+    return [...this.cache.values()]
+      .filter((r) => r[capability])
+      .map((r) => r.roleValue);
+  }
+
+  getSeniorTechRoles(): string[] {
+    return [...this.cache.values()]
+      .filter((r) => r.isFocal && (r.isDesktop || r.isItSupport))
+      .map((r) => r.roleValue);
+  }
+
+  getTechnicianRoles(): string[] {
+    return [...this.cache.values()]
+      .filter((r) => r.isDesktop || r.isItSupport || r.isPantawidIct)
+      .map((r) => r.roleValue);
+  }
+
+  // ── Read-only admin helpers (cache-based) ─────────────────────────────────
+
+  findAll(): any[] {
+    return [...this.cache.values()].sort((a, b) => a.roleValue.localeCompare(b.roleValue));
+  }
+
+  findOne(roleValue: string): any | undefined {
+    return this.cache.get(roleValue);
+  }
+
+  /** Not available from a remote service context — updateOne must go via users-service directly. */
+  async updateOne(_roleValue: string, _dto: any): Promise<any> {
+    throw new InternalServerErrorException(
+      'updateOne is not available in RoleCapabilitiesHttpClient — call users-service directly.',
+    );
   }
 }

@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 import { DocumentVersion } from '../../documents/entities/document-version.entity';
 import { Document } from '../../documents/entities/document.entity';
-import { User } from '../../users/entities/user.entity';
+import { User } from '../../shared/entities';
 
 @Entity('version_comparisons')
 export class VersionComparison {

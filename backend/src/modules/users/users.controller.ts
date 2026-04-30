@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from './entities/user.entity';
+import { EventBusService, CAPABILITIES_UPDATED_EVENT } from '../../common/events/event-bus.service';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -27,6 +28,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly roleCapabilitiesService: RoleCapabilitiesService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   @Get('roles')
@@ -99,11 +101,16 @@ export class UsersController {
   /** Updates capability flags for a specific role. Super admin only. */
   @Patch('role-capabilities/:roleValue')
   @Roles(UserRole.SUPER_ADMIN)
-  updateRoleCapability(
+  async updateRoleCapability(
     @Param('roleValue') roleValue: string,
     @Body() dto: UpdateRoleCapabilityDto,
   ) {
-    return this.roleCapabilitiesService.updateOne(roleValue, dto);
+    const result = await this.roleCapabilitiesService.updateOne(roleValue, dto);
+    void this.eventBus.publish(CAPABILITIES_UPDATED_EVENT, {
+      role: roleValue,
+      updatedAt: new Date().toISOString(),
+    });
+    return result;
   }
 
   // ── Generic user :id routes — kept AFTER static capability routes ──

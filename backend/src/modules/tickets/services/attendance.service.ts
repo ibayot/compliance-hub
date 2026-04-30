@@ -7,8 +7,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { TechAttendance, AttendanceStatus } from '../entities/tech-attendance.entity';
 import { OfficeDay } from '../entities/office-day.entity';
-import { User, UserRole } from '../../users/entities/user.entity';
-import { RoleDefinitionEntity } from '../../users/entities/role-definition.entity';
+import { User, UserRole } from '../../shared/entities';
+import { RoleDefinitionEntity } from '../../shared/entities';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 
 // --- DTOs ------------------------------------------------------------------

@@ -8,7 +8,7 @@ import {
   Unique,
 } from 'typeorm';
 import { Document } from './document.entity';
-import { User } from '../../users/entities/user.entity';
+import { User } from '../../shared/entities';
 
 @Entity('document_references')
 @Unique('uq_document_reference_pair', ['source_document_id', 'target_document_id'])

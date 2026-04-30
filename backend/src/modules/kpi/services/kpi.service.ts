@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { Unit } from '../../units/entities/unit.entity';
-import { User, UserRole } from '../../users/entities/user.entity';
+import { Unit } from '../../shared/entities';
+import { User, UserRole } from '../../shared/entities';
 import { KpiFrequency, KpiMaster, KpiType } from '../entities/kpi-master.entity';
 import { KpiMonitoring, KpiMonitoringStatus } from '../entities/kpi-monitoring.entity';
 import { KpiThreshold } from '../entities/kpi-threshold.entity';

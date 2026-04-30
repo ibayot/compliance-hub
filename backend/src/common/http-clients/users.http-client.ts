@@ -12,13 +12,27 @@ export interface UserStub {
 
 export interface RoleCapabilityStub {
   roleValue: string;
-  label: string;
+  label?: string;
   isFocal: boolean;
   isIto: boolean;
   isDesktop: boolean;
   isItSupport: boolean;
   isPantawidIct: boolean;
   isEscalationFocal: boolean;
+  isTicketSettingsFocal: boolean;
+  isAllTickets: boolean;
+  isTicketFocal: boolean;
+  isKpiAccess: boolean;
+  isKpiManage: boolean;
+  isAttendanceAccess: boolean;
+  isAttendanceManage: boolean;
+  isReportsAccess: boolean;
+  isReviewsAccess: boolean;
+  isMovAccess: boolean;
+  isDocumentsAccess: boolean;
+  isRepositoryAccess: boolean;
+  isIssuancesAccess: boolean;
+  isMetricsAccess: boolean;
 }
 
 /** Circuit breaker states for inter-service calls. */

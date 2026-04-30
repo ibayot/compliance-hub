@@ -16,8 +16,9 @@ import { ReportorialDocumentType } from './entities/reportorial-document-type.en
 import { ReportorialDocTypeService } from './services/reportorial-doc-type.service';
 import { ReportorialDocTypeController } from './controllers/reportorial-doc-type.controller';
 import { MetricsModule } from '../metrics/metrics.module';
-import { RoleCapability } from '../users/entities/role-capability.entity';
 import { RoleCapabilitiesService } from '../users/role-capabilities.service';
+import { RoleCapabilitiesHttpClient } from '../../common/http-clients/role-capabilities.http-client';
+import { HttpClientsModule } from '../../common/http-clients/http-clients.module';
 
 @Module({
   imports: [
@@ -28,9 +29,10 @@ import { RoleCapabilitiesService } from '../users/role-capabilities.service';
       DocumentReference,
       ManualReview,
       ReportorialDocumentType,
-      RoleCapability,
+      // RoleCapability removed: now loaded via RoleCapabilitiesHttpClient → users-service HTTP API
     ]),
     MetricsModule,
+    HttpClientsModule,
     BullModule.registerQueue({
       name: 'document-processing',
     }),
@@ -43,7 +45,8 @@ import { RoleCapabilitiesService } from '../users/role-capabilities.service';
     DocumentProcessor,
     PreviewGenerator,
     ReportorialDocTypeService,
-    RoleCapabilitiesService,
+    // Phase B: HTTP client drop-in replacing TypeORM-coupled RoleCapabilitiesService
+    { provide: RoleCapabilitiesService, useClass: RoleCapabilitiesHttpClient },
   ],
   exports: [
     DocumentService,

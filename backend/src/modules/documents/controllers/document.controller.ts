@@ -25,6 +25,7 @@ import { DocumentService, UploadDocumentDto, UploadGoogleDocDto } from '../servi
 import { VersionService, CreateVersionDto } from '../services/version.service';
 import { Document, DocumentStatus } from '../entities/document.entity';
 import { SubmissionFrequency } from '../entities/document-assignment.entity';
+import { UploadBulkheadInterceptor } from '../../../common/interceptors/upload-bulkhead.interceptor';
 
 @Controller('documents')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -46,6 +47,7 @@ export class DocumentController {
     'technician',
   )
   @UseInterceptors(
+    UploadBulkheadInterceptor,
     FileInterceptor('file', {
       limits: {
         fileSize: 50 * 1024 * 1024, // 50MB limit
@@ -78,6 +80,7 @@ export class DocumentController {
     'focal',
     'technician',
   )
+  @UseInterceptors(UploadBulkheadInterceptor)
   async uploadGoogleDoc(
     @Body() body: Omit<UploadGoogleDocDto, 'uploaded_by' | 'user_role' | 'unit_id'> & { unit_id: number | string },
     @CurrentUser() user: any,

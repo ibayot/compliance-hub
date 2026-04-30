@@ -10,7 +10,7 @@ import {
 } from 'typeorm';
 import { KpiMaster } from './kpi-master.entity';
 import { Unit } from '../../units/entities/unit.entity';
-import { User } from '../../users/entities/user.entity';
+import { User } from '../../shared/entities';
 
 export enum KpiMonitoringStatus {
   DRAFT = 'draft',

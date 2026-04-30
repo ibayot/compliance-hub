@@ -10,7 +10,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Unit } from '../../units/entities/unit.entity';
-import { User } from '../../users/entities/user.entity';
+import { User } from '../../shared/entities';
 import { DocumentVersion } from './document-version.entity';
 import { ReportorialDocumentType } from './reportorial-document-type.entity';
 

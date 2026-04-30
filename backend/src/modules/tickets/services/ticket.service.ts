@@ -16,7 +16,7 @@ import { TicketCategoryConfig } from '../entities/ticket-category.entity';
 import { TicketEvent } from '../entities/ticket-event.entity';
 import { TicketEscalation, EscalationStatus } from '../entities/ticket-escalation.entity';
 import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
-import { User, UserRole } from '../../users/entities/user.entity';
+import { User, UserRole } from '../../shared/entities';
 import { TicketSettingsService } from './ticket-settings.service';
 import { AttendanceService } from './attendance.service';
 import { EmailService, TicketEmailData } from './email.service';

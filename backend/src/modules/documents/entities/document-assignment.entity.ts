@@ -8,7 +8,7 @@ import {
   UpdateDateColumn,
   Unique,
 } from 'typeorm';
-import { User } from '../../users/entities/user.entity';
+import { User } from '../../shared/entities';
 import { Unit } from '../../units/entities/unit.entity';
 
 export enum SubmissionFrequency {

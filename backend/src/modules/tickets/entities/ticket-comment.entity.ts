@@ -7,7 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Ticket } from './ticket.entity';
-import { User } from '../../users/entities/user.entity';
+import { User } from '../../shared/entities';
 
 @Entity('ticket_comments')
 export class TicketComment {
