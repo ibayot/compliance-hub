@@ -277,7 +277,6 @@ export default function KpiPage() {
     || ['section_head', 'compliance_officer'].includes(String(user?.role));
   const canAccessKpi = user?.role === 'super_admin' || !!myCap?.isKpiAccess || canManage;
   const userUnitIds = useMemo(() => ((user?.units || []) as any[]).map((u: any) => Number(u.id)).filter(Number.isFinite), [user?.units]);
-  const noUnitWarningShownRef = useRef(false);
 
   const effectiveMonth = useMemo(() => {
     switch (viewFrequency) {
@@ -405,19 +404,6 @@ export default function KpiPage() {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI dashboard.', { variant: 'error' });
     }
   }, [enqueueSnackbar, effectiveMonth, periodYear, canManage, availableUnits, viewFrequency, periodQuarter, periodSemester, filterUnitId, hasAssignedUnit, canAccessKpi]);
-
-  useEffect(() => {
-    if (!canAccessKpi) {
-      return;
-    }
-    if (!canManage && !hasAssignedUnit && !noUnitWarningShownRef.current) {
-      noUnitWarningShownRef.current = true;
-      enqueueSnackbar('No unit is assigned to your account yet. KPI dashboard is unavailable until a unit is assigned.', { variant: 'warning' });
-    }
-    if (hasAssignedUnit) {
-      noUnitWarningShownRef.current = false;
-    }
-  }, [canManage, hasAssignedUnit, enqueueSnackbar, canAccessKpi]);
 
   useEffect(() => {
     loadInitial();

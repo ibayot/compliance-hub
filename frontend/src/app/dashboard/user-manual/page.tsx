@@ -34,6 +34,12 @@ type ManualItem = {
     inputs: Array<{ field: string; explanation: string }>;
     outputs: Array<{ field: string; explanation: string }>;
   };
+  accessOnlyDetails?: {
+    purpose: string;
+    inputs: Array<{ field: string; explanation: string }>;
+    outputs: Array<{ field: string; explanation: string }>;
+  };
+  managementCapabilityKey?: keyof RoleCapabilityRecord;
 };
 
 const manualItems: ManualItem[] = [
@@ -914,6 +920,7 @@ const manualItems: ManualItem[] = [
     description: 'Track office days, manage technician attendance, and review daily staff login activity.',
     roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff'],
     path: '/dashboard/attendance',
+    managementCapabilityKey: 'isAttendanceManage',
     details: {
       purpose:
         'The Attendance Management module has three integrated views: the Office Days Calendar for planning which days require full staffing, the Technician Attendance grid for recording daily presence/absence of IT and desktop support staff (used by the auto-assignment engine), and the Staff Login Activity log showing all RICTMS users who logged in on a given day.',
@@ -967,6 +974,49 @@ const manualItems: ManualItem[] = [
         },
       ],
     },
+    accessOnlyDetails: {
+      purpose:
+        'The Attendance module gives access-level users visibility into office-day status and attendance outcomes that affect ticket operations, without exposing attendance administration actions.',
+      inputs: [
+        {
+          field: 'Month / Year Navigator',
+          explanation:
+            'Use the left/right arrows to browse months and view attendance outcomes for each visible day in the selected period.',
+        },
+        {
+          field: 'Support Type Filter (if visible to your role)',
+          explanation:
+            'Choose a support category to narrow the displayed attendance data and quickly check team availability by role group.',
+        },
+        {
+          field: 'Date Selector (Staff Login Activity tab)',
+          explanation:
+            'Pick a specific date to review logged-in staff and validate observed daily activity without editing attendance records.',
+        },
+      ],
+      outputs: [
+        {
+          field: 'Office Day Visibility',
+          explanation:
+            'You can view which dates are office days versus non-office days so you can interpret assignment and staffing behavior correctly.',
+        },
+        {
+          field: 'Attendance Status Indicators',
+          explanation:
+            'You can see present, absent, half-day, and out-of-office states for relevant staff to understand operational availability.',
+        },
+        {
+          field: 'Staff Login Activity',
+          explanation:
+            'You can review who logged in on a selected date, including role and login timestamp, for visibility and audit awareness.',
+        },
+        {
+          field: 'Operational Impact Context',
+          explanation:
+            'Displayed attendance information explains why technicians may or may not be considered for assignment without requiring edit privileges.',
+        },
+      ],
+    },
   },
 ];
 
@@ -1014,8 +1064,25 @@ export default function UserManualPage() {
   };
 
   const visibleItems = useMemo(
-    () => manualItems.filter((item) => (role ? hasPathAccess(item.path) : false)),
-    [role, myCap],
+    () => manualItems
+      .filter((item) => (role ? hasPathAccess(item.path) : false))
+      .map((item) => {
+        if (!item.accessOnlyDetails || !item.managementCapabilityKey || user?.role === 'super_admin') {
+          return item;
+        }
+
+        const canManage = Boolean(myCap?.[item.managementCapabilityKey]);
+        if (canManage) {
+          return item;
+        }
+
+        return {
+          ...item,
+          description: item.description.replace('Track office days, manage technician attendance, and review daily staff login activity.', 'View office days, attendance statuses, and daily staff login activity.'),
+          details: item.accessOnlyDetails,
+        };
+      }),
+    [role, myCap, user?.role],
   );
 
   return (

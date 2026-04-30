@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.47] - 2026-04-30 - KPI No-Unit Toast Dedup and Access-Scoped Manual Content
+
+### Fixed
+- Removed duplicate KPI no-unit snackbar warning (`No unit is assigned to your account yet...`) so the in-page notice is the single source of truth.
+
+### Changed
+- User Manual now supports access-only guidance separate from management guidance.
+- Added access-scoped content for Attendance: users with `isAttendanceAccess` but without `isAttendanceManage` now see read-only/access explanations instead of management/edit instructions.
+
+### Versioning
+- Patch version bump only: `0.0.46` -> `0.0.47`.
+
 ## [0.0.46] - 2026-04-29 - Schema-Safe Issuance Fix and Compliance Unavailable UX Hardening
 
 ### Fixed
