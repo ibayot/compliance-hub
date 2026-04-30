@@ -6,7 +6,21 @@ import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import { GatewayAppModule } from './gateway.module';
 
-const SERVICE_UNAVAILABLE_MESSAGE = 'Service currently unavailable. Please start the service and try again.';
+const SERVICE_DOMAINS: Record<string, string[]> = {
+  users: ['/api/auth', '/api/users', '/api/units'],
+  ticketing: ['/api/tickets', '/api/attendance', '/api/ticket-settings'],
+  compliance: [
+    '/api/documents',
+    '/api/document-types',
+    '/api/comparisons',
+    '/api/issuances',
+    '/api/metrics',
+    '/api/incidents',
+    '/api/cybersecurity',
+    '/api/kpi',
+    '/api/mov',
+  ],
+};
 
 function createServiceProxy(target: string, service: string) {
   return createProxyMiddleware({
@@ -21,11 +35,28 @@ function createServiceProxy(target: string, service: string) {
           (req.headers['x-request-id'] as string | undefined) || randomUUID();
         proxyReq.setHeader('x-request-id', requestId);
       },
+      proxyRes: (proxyRes, _req, res: Response) => {
+        // Propagate X-Service-Version from downstream to the client so callers
+        // can detect version mismatches without inspecting the body.
+        const svcVersion = proxyRes.headers['x-service-version'];
+        if (svcVersion) {
+          res.setHeader('x-service-version', svcVersion);
+        }
+        res.setHeader('x-served-by', service);
+      },
       error: (_err, req, res) => {
         const response = res as Response;
+        // Domain-aware error: tell the client which domain is unavailable
+        // so the frontend can degrade gracefully (e.g., still show tickets if compliance is down)
+        const path = req.url ?? '';
+        const affectedDomain = Object.entries(SERVICE_DOMAINS).find(([, prefixes]) =>
+          prefixes.some((p) => path.startsWith(p.replace('/api', ''))),
+        )?.[0] ?? service;
         response.status(503).json({
-          message: SERVICE_UNAVAILABLE_MESSAGE,
-          service,
+          error: 'service_unavailable',
+          service: affectedDomain,
+          message: `${affectedDomain} service is currently unavailable. Other services may still be operational.`,
+          retryAfter: 30,
           path: req.url,
         });
       },

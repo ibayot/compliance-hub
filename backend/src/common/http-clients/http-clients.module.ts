@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { UsersHttpClient } from './users.http-client';
 import { ComplianceHttpClient } from './compliance.http-client';
+import { RoleCapabilitiesHttpClient } from './role-capabilities.http-client';
 
 /**
  * HttpClientsModule — reusable inter-service HTTP client providers.
@@ -10,9 +11,12 @@ import { ComplianceHttpClient } from './compliance.http-client';
  *
  * Cross-DB views are still used for TypeORM entity JOIN relationships;
  * these HTTP clients are for new non-JOIN enrichment paths.
+ *
+ * RoleCapabilitiesHttpClient is the Phase B replacement for importing
+ * RoleCapabilitiesService TypeScript source across service boundaries.
  */
 @Module({
-  providers: [UsersHttpClient, ComplianceHttpClient],
-  exports: [UsersHttpClient, ComplianceHttpClient],
+  providers: [UsersHttpClient, ComplianceHttpClient, RoleCapabilitiesHttpClient],
+  exports: [UsersHttpClient, ComplianceHttpClient, RoleCapabilitiesHttpClient],
 })
 export class HttpClientsModule {}

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { UnitsService } from '../units/units.service';
+import { RoleCapabilitiesService } from '../users/role-capabilities.service';
 import { InternalServiceGuard } from '../../common/guards/internal-service.guard';
 
 /**
@@ -18,10 +19,11 @@ import { InternalServiceGuard } from '../../common/guards/internal-service.guard
  * the INTERNAL_SERVICE_SECRET environment variable.
  *
  * Routes:
- *  GET /api/internal/users         All users (basic stub fields)
- *  GET /api/internal/users/:id     Single user by ID
- *  GET /api/internal/units         All active units
- *  GET /api/internal/units/:id     Single unit by ID
+ *  GET /api/internal/users                 All users (basic stub fields)
+ *  GET /api/internal/users/:id             Single user by ID
+ *  GET /api/internal/units                 All active units
+ *  GET /api/internal/units/:id             Single unit by ID
+ *  GET /api/internal/role-capabilities     Full role capability matrix
  *
  * These endpoints are called by compliance-service and ticketing-service
  * via UsersHttpClient as an HTTP-first alternative to cross-DB SQL views.
@@ -32,6 +34,7 @@ export class InternalController {
   constructor(
     private readonly usersService: UsersService,
     private readonly unitsService: UnitsService,
+    private readonly roleCapabilitiesService: RoleCapabilitiesService,
   ) {}
 
   @Get('users')
@@ -40,9 +43,9 @@ export class InternalController {
     return users.map((u) => ({
       id: u.id,
       email: u.email,
-      first_name: u.first_name,
-      last_name: u.last_name,
-      middle_name: u.middle_name ?? null,
+      first_name: u.firstName,
+      last_name: u.lastName,
+      middle_name: u.middleName ?? null,
       role: u.role,
       staff_id: (u as any).staff_id ?? null,
     }));
@@ -57,9 +60,9 @@ export class InternalController {
     return {
       id: user.id,
       email: user.email,
-      first_name: user.first_name,
-      last_name: user.last_name,
-      middle_name: user.middle_name ?? null,
+      first_name: user.firstName,
+      last_name: user.lastName,
+      middle_name: user.middleName ?? null,
       role: user.role,
       staff_id: (user as any).staff_id ?? null,
     };
@@ -77,5 +80,17 @@ export class InternalController {
       throw new NotFoundException(`Unit ${id} not found`);
     }
     return unit;
+  }
+
+  /**
+   * Returns the full role capability matrix.
+   * Consumed by ticketing-service and compliance-service to seed their local
+   * RoleCapabilitiesHttpClient cache without needing a cross-DB SQL view.
+   *
+   * Response shape matches RoleCapabilityStub in UsersHttpClient.
+   */
+  @Get('role-capabilities')
+  getRoleCapabilities() {
+    return this.roleCapabilitiesService.findAll();
   }
 }

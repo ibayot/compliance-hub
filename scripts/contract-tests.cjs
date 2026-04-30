@@ -117,7 +117,11 @@ async function testHealthEndpoints() {
       fetchWithTimeout(`${USERS_URL}/api/health/ready`),
     ]);
     assert(liveRes.status === 200, 'Users /api/health/live → 200');
-    assert(readyRes.status === 200 || readyRes.status === 503, 'Users /api/health/ready → 200 or 503');
+    assert([200, 207, 503].includes(readyRes.status), 'Users /api/health/ready → 200, 207, or 503');
+    if (readyRes.status === 200 || readyRes.status === 207) {
+      const readyBody = await readyRes.json();
+      assert(typeof readyBody.checks === 'object', 'Users /api/health/ready body has "checks" object');
+    }
   } catch {
     skip('Users-service liveness/readiness endpoints not reachable');
   }
@@ -348,12 +352,80 @@ async function testInternalEndpoints() {
   } catch (err) {
     skip(`Internal endpoint rejection test error: ${err.message}`);
   }
+
+  // Role capabilities internal endpoint (added in v0.0.51)
+  try {
+    const res = await fetchWithTimeout(`${USERS_URL}/api/internal/role-capabilities`, { headers });
+    assert(res.status === 200, 'GET /api/internal/role-capabilities → 200 with valid token');
+    if (res.status === 200) {
+      const body = await res.json();
+      assert(Array.isArray(body), 'Internal role-capabilities response is an array');
+      if (Array.isArray(body) && body.length > 0) {
+        const first = body[0];
+        assert(typeof first.roleValue === 'string', 'RoleCapability has roleValue field');
+        assert(typeof first.isFocal === 'boolean' || typeof first.isFocal === 'number', 'RoleCapability has isFocal field');
+      }
+    }
+  } catch (err) {
+    skip(`Internal role-capabilities endpoint error: ${err.message}`);
+  }
+}
+
+// ── Contract: X-Service-Version header ──────────────────────────────────────
+
+async function testServiceVersionHeaders() {
+  section('X-Service-Version Response Headers (v0.0.51)');
+
+  const serviceChecks = [
+    { name: 'users', url: `${USERS_URL}/api/health` },
+    { name: 'ticketing', url: `${TICKETING_URL}/api/health` },
+    { name: 'compliance', url: `${COMPLIANCE_URL}/api/health` },
+  ];
+
+  for (const { name, url } of serviceChecks) {
+    try {
+      const res = await fetchWithTimeout(url);
+      const version = res.headers.get('x-service-version');
+      const serviceName = res.headers.get('x-service-name');
+      assert(typeof version === 'string' && version.length > 0, `${name} response has X-Service-Version header`);
+      assert(serviceName === name, `${name} response has X-Service-Name: ${name}`);
+    } catch {
+      skip(`${name} service not reachable`);
+    }
+  }
+}
+
+// ── Contract: OpenAPI docs ───────────────────────────────────────────────────
+
+async function testOpenApiDocs() {
+  section('OpenAPI Docs (v0.0.51)');
+
+  const serviceChecks = [
+    { name: 'users', url: `${USERS_URL}/api/openapi.json` },
+    { name: 'ticketing', url: `${TICKETING_URL}/api/openapi.json` },
+    { name: 'compliance', url: `${COMPLIANCE_URL}/api/openapi.json` },
+  ];
+
+  for (const { name, url } of serviceChecks) {
+    try {
+      const res = await fetchWithTimeout(url);
+      if (res.status === 200) {
+        const body = await res.json();
+        assert(body.openapi || body.swagger, `${name} /api/openapi.json is a valid OpenAPI document`);
+        assert(typeof body.info?.title === 'string', `${name} OpenAPI doc has info.title`);
+      } else {
+        skip(`${name} /api/openapi.json not yet exposed (${res.status})`);
+      }
+    } catch {
+      skip(`${name} service not reachable for OpenAPI check`);
+    }
+  }
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('Compliance Hub — Contract Tests v0.0.50');
+  console.log('Compliance Hub — Contract Tests v0.0.51');
   console.log(`  Gateway:    ${GATEWAY_URL}`);
   console.log(`  Users:      ${USERS_URL}`);
   console.log(`  Ticketing:  ${TICKETING_URL}`);
@@ -366,6 +438,8 @@ async function main() {
 
   await testHealthEndpoints();
   await testCorrelationId();
+  await testServiceVersionHeaders();
+  await testOpenApiDocs();
   await testInternalEndpoints();
   await testDocumentsContract();
   await testIssuancesContract();

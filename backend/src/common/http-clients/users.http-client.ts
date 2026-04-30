@@ -10,6 +10,63 @@ export interface UserStub {
   staff_id?: string | null;
 }
 
+export interface RoleCapabilityStub {
+  roleValue: string;
+  label: string;
+  isFocal: boolean;
+  isIto: boolean;
+  isDesktop: boolean;
+  isItSupport: boolean;
+  isPantawidIct: boolean;
+  isEscalationFocal: boolean;
+}
+
+/** Circuit breaker states for inter-service calls. */
+type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+
+/**
+ * Lightweight circuit breaker per HTTP client instance.
+ * - CLOSED  → calls pass through normally
+ * - OPEN    → calls are short-circuited (return null immediately) after OPEN_THRESHOLD consecutive failures
+ * - HALF_OPEN → one probe call is allowed after RESET_TIMEOUT_MS; resets state on success
+ */
+class CircuitBreaker {
+  private state: CircuitState = 'CLOSED';
+  private consecutiveFailures = 0;
+  private openedAt = 0;
+  private readonly openThreshold = 5;
+  private readonly resetTimeoutMs = 30_000;
+
+  isOpen(): boolean {
+    if (this.state === 'OPEN') {
+      if (Date.now() - this.openedAt >= this.resetTimeoutMs) {
+        this.state = 'HALF_OPEN';
+        return false; // allow one probe
+      }
+      return true;
+    }
+    return false; // CLOSED or HALF_OPEN
+  }
+
+  recordSuccess(): void {
+    this.consecutiveFailures = 0;
+    if (this.state !== 'CLOSED') {
+      this.state = 'CLOSED';
+    }
+  }
+
+  recordFailure(logger: Logger, name: string): void {
+    this.consecutiveFailures++;
+    if (this.state === 'HALF_OPEN' || this.consecutiveFailures >= this.openThreshold) {
+      if (this.state !== 'OPEN') {
+        logger.warn(`[CircuitBreaker:${name}] Opening circuit after ${this.consecutiveFailures} failures`);
+      }
+      this.state = 'OPEN';
+      this.openedAt = Date.now();
+    }
+  }
+}
+
 /**
  * HTTP client for inter-service calls to the users-service.
  *
@@ -28,6 +85,7 @@ export class UsersHttpClient {
   private readonly logger = new Logger(UsersHttpClient.name);
   private readonly baseUrl: string;
   private readonly serviceToken: string | undefined;
+  private readonly circuit = new CircuitBreaker();
 
   constructor() {
     this.baseUrl = process.env.USERS_SERVICE_URL || 'http://localhost:4101';
@@ -45,7 +103,7 @@ export class UsersHttpClient {
     return headers;
   }
 
-  private async fetchWithTimeout<T>(url: string, timeoutMs = 2000): Promise<T | null> {
+  private async fetchOnce<T>(url: string, timeoutMs: number): Promise<T> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -55,19 +113,54 @@ export class UsersHttpClient {
       });
       clearTimeout(timer);
       if (!response.ok) {
-        this.logger.warn(`Inter-service GET ${url} → HTTP ${response.status}`);
-        return null;
+        throw new Error(`HTTP ${response.status}`);
       }
       return (await response.json()) as T;
     } catch (err: any) {
       clearTimeout(timer);
-      if (err?.name === 'AbortError') {
-        this.logger.warn(`Inter-service GET ${url} timed out after ${timeoutMs}ms`);
-      } else {
-        this.logger.warn(`Inter-service GET ${url} failed: ${err?.message}`);
-      }
+      throw err;
+    }
+  }
+
+  /**
+   * GET with retry (up to maxRetries attempts) and exponential backoff.
+   * Wrapped by a circuit breaker — if the circuit is OPEN, returns null immediately.
+   */
+  private async fetchWithRetry<T>(
+    url: string,
+    timeoutMs = 2000,
+    maxRetries = 2,
+  ): Promise<T | null> {
+    if (this.circuit.isOpen()) {
+      this.logger.warn(`[CircuitBreaker:users] Circuit OPEN — skipping ${url}`);
       return null;
     }
+
+    let lastErr: any;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await this.fetchOnce<T>(url, timeoutMs);
+        this.circuit.recordSuccess();
+        return result;
+      } catch (err: any) {
+        lastErr = err;
+        const isAbort = err?.name === 'AbortError';
+        const isLastAttempt = attempt === maxRetries;
+
+        if (!isLastAttempt) {
+          const delayMs = 200 * Math.pow(2, attempt); // 200ms, 400ms
+          this.logger.warn(
+            `Inter-service GET ${url} failed (attempt ${attempt + 1}/${maxRetries + 1}): ${err?.message} — retrying in ${delayMs}ms`,
+          );
+          await new Promise((r) => setTimeout(r, delayMs));
+        } else {
+          const reason = isAbort ? `timed out after ${timeoutMs}ms` : err?.message;
+          this.logger.warn(`Inter-service GET ${url} failed after ${maxRetries + 1} attempts: ${reason}`);
+          this.circuit.recordFailure(this.logger, 'users');
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -75,7 +168,7 @@ export class UsersHttpClient {
    * Returns null on error or if the user does not exist.
    */
   async getUserById(id: number): Promise<UserStub | null> {
-    return this.fetchWithTimeout<UserStub>(`${this.baseUrl}/api/internal/users/${id}`);
+    return this.fetchWithRetry<UserStub>(`${this.baseUrl}/api/internal/users/${id}`);
   }
 
   /**
@@ -83,7 +176,18 @@ export class UsersHttpClient {
    * Returns an empty array on error.
    */
   async getUsers(): Promise<UserStub[]> {
-    const result = await this.fetchWithTimeout<UserStub[]>(`${this.baseUrl}/api/internal/users`);
+    const result = await this.fetchWithRetry<UserStub[]>(`${this.baseUrl}/api/internal/users`);
+    return result ?? [];
+  }
+
+  /**
+   * Fetch role capabilities matrix from users-service.
+   * Returns an empty array on error (callers must handle empty cache gracefully).
+   */
+  async getRoleCapabilities(): Promise<RoleCapabilityStub[]> {
+    const result = await this.fetchWithRetry<RoleCapabilityStub[]>(
+      `${this.baseUrl}/api/internal/role-capabilities`,
+    );
     return result ?? [];
   }
 }

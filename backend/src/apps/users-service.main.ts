@@ -1,6 +1,7 @@
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { DataSource } from 'typeorm';
 import { UsersServiceAppModule } from './users-service.module';
@@ -10,6 +11,7 @@ async function bootstrap() {
 
   const app = await NestFactory.create(UsersServiceAppModule);
   const configService = app.get(ConfigService);
+  const serviceVersion = process.env.npm_package_version || '0.0.0';
 
   app.use(helmet());
   app.enableCors({
@@ -20,20 +22,62 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
   app.setGlobalPrefix('api');
 
+  // Attach X-Service-Version to every response so callers can detect version mismatches.
+  app.use((_req: any, res: any, next: any) => {
+    res.setHeader('X-Service-Version', serviceVersion);
+    res.setHeader('X-Service-Name', 'users');
+    next();
+  });
+
   const port = Number(process.env.USERS_SERVICE_PORT || 4101);
-  app.use('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'users' }));
-  app.use('/api/health/live', (_req: any, res: any) => res.json({ status: 'ok', service: 'users' }));
+  app.use('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'users', version: serviceVersion }));
+  app.use('/api/health/live', (_req: any, res: any) => res.json({ status: 'ok', service: 'users', version: serviceVersion }));
   app.use('/api/health/ready', async (_req: any, res: any) => {
     try {
       const ds = app.get(DataSource);
       await ds.query('SELECT 1');
-      res.json({ status: 'ok', service: 'users' });
-    } catch {
-      res.status(503).json({ status: 'error', service: 'users', reason: 'db_unreachable' });
+
+      // Verify role_capabilities table/view has data (cache won't be populated if empty)
+      const [roleCapsCheck] = await ds.query(
+        'SELECT COUNT(*) as cnt FROM role_capabilities',
+      ).catch(() => [{ cnt: 0 }]);
+      const roleCapsCount = Number(roleCapsCheck?.cnt ?? 0);
+
+      res.json({
+        status: 'ok',
+        service: 'users',
+        version: serviceVersion,
+        checks: { db: true, role_capabilities_rows: roleCapsCount },
+      });
+    } catch (err: any) {
+      res.status(503).json({
+        status: 'error',
+        service: 'users',
+        reason: 'db_unreachable',
+        detail: err?.message,
+      });
     }
   });
+
+  // OpenAPI/Swagger — accessible at /api/docs (not proxied through gateway)
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Compliance Hub — Users Service')
+    .setDescription('User management, authentication, role definitions, and role capability matrix')
+    .setVersion(serviceVersion)
+    .addBearerAuth()
+    .addTag('auth', 'Authentication endpoints')
+    .addTag('users', 'User CRUD and profile management')
+    .addTag('units', 'Organisational unit management')
+    .addTag('role-capabilities', 'Role capability matrix administration')
+    .build();
+  const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, swaggerDoc, {
+    jsonDocumentUrl: 'api/openapi.json',
+  });
+
   await app.listen(port);
   console.log(`Users service running on http://localhost:${port}/api`);
+  console.log(`Users service OpenAPI docs: http://localhost:${port}/api/docs`);
 }
 
 bootstrap();
