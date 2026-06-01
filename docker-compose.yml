@@ -102,6 +102,7 @@ services:
     environment:
       - NODE_ENV=development
       - USERS_SERVICE_PORT=4101
+      - SERVICE_NAME=users-service
       - DB_HOST=mariadb
       - DB_PORT=3306
       - DB_USERNAME=ricms_user
@@ -110,6 +111,8 @@ services:
       - USERS_DB_DATABASE=compliance_hub_users
       - COMPLIANCE_SERVICE_URL=http://compliance-service:4103
       - INTERNAL_SERVICE_SECRET=dev-internal-secret-change-in-production
+      - INTERNAL_SERVICE_TOKEN=users-service-dev-token
+      - INTERNAL_SERVICE_TOKENS={"ticketing-service":"ticketing-service-dev-token","compliance-service":"compliance-service-dev-token","users-service":"users-service-dev-token","api-gateway":"api-gateway-dev-token"}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=dev-jwt-secret-change-in-production
@@ -139,6 +142,7 @@ services:
     environment:
       - NODE_ENV=development
       - TICKETING_SERVICE_PORT=4102
+      - SERVICE_NAME=ticketing-service
       - DB_HOST=mariadb
       - DB_PORT=3306
       - DB_USERNAME=ricms_user
@@ -148,6 +152,7 @@ services:
       - USERS_SERVICE_URL=http://users-service:4101
       - COMPLIANCE_SERVICE_URL=http://compliance-service:4103
       - INTERNAL_SERVICE_SECRET=dev-internal-secret-change-in-production
+      - INTERNAL_SERVICE_TOKEN=ticketing-service-dev-token
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=dev-jwt-secret-change-in-production
@@ -178,6 +183,7 @@ services:
     environment:
       - NODE_ENV=development
       - COMPLIANCE_SERVICE_PORT=4103
+      - SERVICE_NAME=compliance-service
       - DB_HOST=mariadb
       - DB_PORT=3306
       - DB_USERNAME=ricms_user
@@ -186,6 +192,7 @@ services:
       - COMPLIANCE_DB_DATABASE=compliance_hub
       - USERS_SERVICE_URL=http://users-service:4101
       - INTERNAL_SERVICE_SECRET=dev-internal-secret-change-in-production
+      - INTERNAL_SERVICE_TOKEN=compliance-service-dev-token
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=dev-jwt-secret-change-in-production
@@ -215,11 +222,13 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=4000
+      - SERVICE_NAME=api-gateway
       - CORS_ORIGIN=http://localhost:3000
       - USERS_SERVICE_URL=http://users-service:4101
       - TICKETING_SERVICE_URL=http://ticketing-service:4102
       - COMPLIANCE_SERVICE_URL=http://compliance-service:4103
       - MICROSERVICES_STRICT=true
+      - INTERNAL_SERVICE_TOKEN=api-gateway-dev-token
     depends_on:
       - users-service
       - ticketing-service
