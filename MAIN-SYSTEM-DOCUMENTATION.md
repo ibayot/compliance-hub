@@ -325,7 +325,9 @@ All API routes are served through the API Gateway at port `4000`. The gateway ro
 | GET | `/api/tickets/:id` | Get ticket detail |
 | PATCH | `/api/tickets/:id` | Update ticket status, assignment, or notes |
 | POST | `/api/tickets/:id/escalate` | Escalate ticket (with optional proof photo upload) |
-| POST | `/api/tickets/:id/rate` | Submit satisfaction rating |
+| POST | `/api/tickets/:id/satisfaction` | Submit satisfaction form/rating |
+| POST | `/api/tickets/:id/rate` | Backward-compatible alias for satisfaction submission |
+| GET | `/api/tickets/sla/summary` | SLA summary (overdue, due-today, compliance rate) |
 | GET | `/api/ticket-settings` | List ticket categories, issue types, priorities |
 
 ### 9.3 Compliance (compliance-service, port 4103)

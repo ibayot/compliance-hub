@@ -4,6 +4,7 @@ import { Ticket } from './entities/ticket.entity';
 import { TicketComment } from './entities/ticket-comment.entity';
 import { TicketCategoryConfig } from './entities/ticket-category.entity';
 import { TicketKeywordRule } from './entities/ticket-keyword-rule.entity';
+import { TicketIssueType } from './entities/ticket-issue-type.entity';
 import { TechAttendance } from './entities/tech-attendance.entity';
 import { OfficeDay } from './entities/office-day.entity';
 import { TicketEvent } from './entities/ticket-event.entity';
@@ -31,6 +32,7 @@ import { Unit } from '../shared/entities';
       TicketComment,
       TicketCategoryConfig,
       TicketKeywordRule,
+      TicketIssueType,
       TechAttendance,
       OfficeDay,
       TicketEvent,

@@ -25,9 +25,12 @@ import {
   CreateKeywordRuleDto,
   UpdateKeywordRuleDto,
   CreateEscalationFocalDto,
+  CreateIssueTypeDto,
+  UpdateIssueTypeDto,
 } from '../services/ticket-settings.service';
 import { EmailService } from '../services/email.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
+import { TicketPriority, TicketType } from '../entities/ticket.entity';
 
 // All named staff roles — the CapabilityGuard enforces is_ticket_settings_focal at runtime
 const ALL_STAFF_ROLES = [
@@ -58,6 +61,40 @@ export class TicketSettingsController {
       return { message: 'Provide a recipient email address in the request body: { "to": "email@example.com" }' };
     }
     return this.emailService.sendTestEmail(to);
+  }
+
+  /** GET /ticket-settings — consolidated reference data for ticket forms/settings screens */
+  @Get()
+  @Roles(
+    UserRole.USER, UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD,
+    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+    UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
+    UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
+    UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
+    UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
+    UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
+  )
+  async getTicketSettingsSnapshot(
+    @Query('ticketType') ticketType?: string,
+    @Query('all') all?: string,
+    @Query('activeOnly') activeOnly?: string,
+  ) {
+    const includeAll = all === 'true' || activeOnly === 'false';
+    const [categories, issueTypes] = await Promise.all([
+      includeAll
+        ? this.settingsService.listCategories(ticketType)
+        : this.settingsService.listActiveCategories(ticketType),
+      includeAll
+        ? this.settingsService.listIssueTypes()
+        : this.settingsService.listActiveIssueTypes(),
+    ]);
+
+    return {
+      categories,
+      issueTypes,
+      priorities: Object.values(TicketPriority),
+      ticketTypes: Object.values(TicketType),
+    };
   }
 
   // ── Categories ──────────────────────────────────────────────────────────
@@ -161,6 +198,63 @@ export class TicketSettingsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteKeywordRule(@Param('id') id: string) {
     await this.settingsService.deleteKeywordRule(id);
+  }
+
+  // ── Issue Types ───────────────────────────────────────────────────────
+
+  @Get('issue-types')
+  @Roles(
+    UserRole.USER, UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD,
+    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+    UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
+    UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
+    UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
+    UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
+    UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
+  )
+  async listIssueTypes(
+    @Query('categoryId') categoryId?: string,
+    @Query('all') all?: string,
+    @Query('activeOnly') activeOnly?: string,
+  ) {
+    if (all === 'true' || activeOnly === 'false') {
+      return this.settingsService.listIssueTypes(categoryId);
+    }
+    return this.settingsService.listActiveIssueTypes(categoryId);
+  }
+
+  @Get('issue-types/:id')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
+  async getIssueType(@Param('id') id: string) {
+    return this.settingsService.getIssueTypeById(id);
+  }
+
+  @Post('issue-types')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
+  @HttpCode(HttpStatus.CREATED)
+  async createIssueType(@Body() dto: CreateIssueTypeDto, @Request() req: any) {
+    return this.settingsService.createIssueType(dto, req.user.id ?? req.user.userId);
+  }
+
+  @Patch('issue-types/:id')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
+  async updateIssueType(@Param('id') id: string, @Body() dto: UpdateIssueTypeDto, @Request() req: any) {
+    return this.settingsService.updateIssueType(id, dto, req.user.id ?? req.user.userId);
+  }
+
+  @Delete('issue-types/:id')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteIssueType(@Param('id') id: string, @Request() req: any) {
+    await this.settingsService.deleteIssueType(id, req.user.id ?? req.user.userId);
   }
 
   // ── Escalation Focal Configuration ──────────────────────────────────────

@@ -13,6 +13,7 @@ import * as path from 'path';
 import { Ticket, TicketType, TicketStatus, TicketPriority } from '../entities/ticket.entity';
 import { TicketComment } from '../entities/ticket-comment.entity';
 import { TicketCategoryConfig } from '../entities/ticket-category.entity';
+import { TicketIssueType } from '../entities/ticket-issue-type.entity';
 import { TicketEvent } from '../entities/ticket-event.entity';
 import { TicketEscalation, EscalationStatus } from '../entities/ticket-escalation.entity';
 import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
@@ -33,6 +34,8 @@ export interface CreateTicketDto {
   categoryId?: string;
   /** Staff only: override the requester (for walk-ins / phone calls) */
   requesterId?: number;
+  /** Optional issue type reference from ticket_issue_types */
+  issueTypeId?: string;
 }
 
 export interface UpdateTicketDto {
@@ -41,6 +44,9 @@ export interface UpdateTicketDto {
   status?: TicketStatus;
   priority?: TicketPriority;
   resolutionNotes?: string;
+  resolutionSteps?: string;
+  resolutionDate?: string;
+  issueTypeId?: string | null;
   /** Required when status = DUPLICATE: UUID of the original ticket */
   duplicateOfId?: string;
 }
@@ -98,6 +104,8 @@ export class TicketService implements OnModuleInit {
     private readonly ticketRepo: Repository<Ticket>,
     @InjectRepository(TicketComment)
     private readonly commentRepo: Repository<TicketComment>,
+    @InjectRepository(TicketIssueType)
+    private readonly issueTypeRepo: Repository<TicketIssueType>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     @InjectRepository(TicketEvent)
@@ -294,7 +302,13 @@ export class TicketService implements OnModuleInit {
   }
 
   /** Return all events for a ticket, ordered chronologically, with actor info */
-  async getTicketEvents(ticketId: string): Promise<Array<TicketEvent & { actorName?: string }>> {
+  async getTicketEvents(
+    ticketId: string,
+    viewerId?: number,
+    viewerRole?: UserRole,
+  ): Promise<Array<TicketEvent & { actorName?: string }>> {
+    await this.getTicketById(ticketId, viewerRole, viewerId);
+
     const events = await this.eventRepo
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.actor', 'actor')
@@ -310,6 +324,33 @@ export class TicketService implements OnModuleInit {
         ? [e.actor.firstName, e.actor.lastName].filter(Boolean).join(' ') || e.actor.email
         : (e.eventType === 'auto_assigned' ? 'Automatic Ticket Assignment' : undefined),
     }));
+  }
+
+  private canViewAllTicketsInTicketing(role?: string): boolean {
+    if (!role) return false;
+    if (role === UserRole.SUPER_ADMIN) return true;
+    return this.roleCapSvc.isFocal(role) || this.roleCapSvc.isIto(role);
+  }
+
+  private async canAccessTicketByEscalation(ticketId: string, viewerId?: number): Promise<boolean> {
+    if (!viewerId) return false;
+
+    const count = await this.escalationRepo
+      .createQueryBuilder('e')
+      .where('e.ticketId = :ticketId', { ticketId })
+      .andWhere('(e.escalatedById = :viewerId OR e.escalatedToId = :viewerId)', { viewerId })
+      .getCount();
+
+    return count > 0;
+  }
+
+  private async assertTicketReadAccess(ticket: Ticket, viewerId?: number, viewerRole?: UserRole): Promise<void> {
+    if (!viewerRole || !viewerId) return;
+    if (this.canViewAllTicketsInTicketing(viewerRole as string)) return;
+    if (ticket.requesterId === viewerId || ticket.assignedToId === viewerId) return;
+    if (await this.canAccessTicketByEscalation(ticket.id, viewerId)) return;
+
+    throw new ForbiddenException('You do not have access to this ticket.');
   }
 
   // --- Create (with Auto-Shift, Auto-Assign, Email) -------------------------
@@ -341,7 +382,19 @@ export class TicketService implements OnModuleInit {
 
     let ticketType = dto.ticketType;
     let categoryId = dto.categoryId || null;
+    let issueTypeId = dto.issueTypeId || null;
+    let issueTypeKey: string | null = null;
     let autoShifted = false;
+
+    if (issueTypeId) {
+      const issueType = await this.issueTypeRepo.findOne({
+        where: { id: issueTypeId, is_deleted: false, is_active: true },
+      });
+      if (!issueType) {
+        throw new BadRequestException('Selected issue type is invalid or inactive.');
+      }
+      issueTypeKey = issueType.key;
+    }
 
     // ── Auto-Shift based on keyword rules (QA #13: skipped for Pantawid ICT) ────
     if (dto.ticketType !== TicketType.PANTAWID_ICT_SUPPORT) {
@@ -461,9 +514,13 @@ export class TicketService implements OnModuleInit {
       priority: dto.priority ?? null,
       status,
       categoryId,
+      issueTypeId,
+      issueType: issueTypeKey,
       requesterId,
       assignedToId,
       resolutionNotes: null,
+      resolutionSteps: null,
+      resolutionDate: null,
       resolvedAt: null,
       satisfactionRating: null,
       satisfactionComment: null,
@@ -538,22 +595,44 @@ export class TicketService implements OnModuleInit {
     escalatedToId?: number;
     viewerId?: number;
     viewerRole?: UserRole;
-  }): Promise<Ticket[]> {
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<Ticket[] | {
+    data: Ticket[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const allowedSortColumns: Record<string, string> = {
+      createdAt: 't.createdAt',
+      updatedAt: 't.updatedAt',
+      priority: 't.priority',
+      status: 't.status',
+      slaDeadline: 't.slaDeadline',
+    };
+    const sortBy = allowedSortColumns[filters.sortBy || 'createdAt'] || allowedSortColumns.createdAt;
+    const sortOrder = filters.sortOrder?.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
     const qb = this.ticketRepo
       .createQueryBuilder('t')
       .leftJoinAndSelect('t.requester', 'requester')
       .leftJoinAndSelect('t.assignedTo', 'assignedTo')
       .leftJoinAndSelect('t.category', 'category')
+      .leftJoinAndSelect('t.issueTypeConfig', 'issueTypeConfig')
       .leftJoinAndSelect('t.comments', 'comments')
       .leftJoinAndSelect('comments.user', 'commentUser')
-      .orderBy('t.createdAt', 'DESC');
+      .orderBy(sortBy, sortOrder as 'ASC' | 'DESC')
+      .distinct(true);
 
     // Role-based visibility
     // Focal roles (is_focal=1) and super_admin see ALL tickets (full management view).
     if (filters.viewerRole === UserRole.USER) {
       // Regular users see only their own submitted tickets
       qb.where('t.requesterId = :uid', { uid: filters.viewerId });
-    } else if (filters.viewerRole && this.roleCapSvc.canSeeAllTickets(filters.viewerRole as string)) {
+    } else if (filters.viewerRole && this.canViewAllTicketsInTicketing(filters.viewerRole as string)) {
       // Privileged roles: no WHERE restriction — see all tickets with full filter support
       if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
       if (filters.ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
@@ -578,7 +657,23 @@ export class TicketService implements OnModuleInit {
       ).distinct(true);
     }
 
-    const tickets = await qb.getMany();
+    const page = filters.page && filters.page > 0 ? Math.floor(filters.page) : undefined;
+    const limit = filters.limit && filters.limit > 0 ? Math.min(100, Math.floor(filters.limit)) : undefined;
+    const usePagination = Boolean(page && limit);
+
+    let tickets: Ticket[] = [];
+    let total = 0;
+    if (usePagination) {
+      const offset = ((page as number) - 1) * (limit as number);
+      tickets = await qb.clone().skip(offset).take(limit as number).getMany();
+      const totalRow = await qb
+        .clone()
+        .select('COUNT(DISTINCT t.id)', 'count')
+        .getRawOne<{ count?: string | number }>();
+      total = Number(totalRow?.count ?? 0);
+    } else {
+      tickets = await qb.getMany();
+    }
 
     // Augment with today's absence flag for assigned technicians (used in admin/section-head views)
     const today = new Date().toISOString().slice(0, 10);
@@ -591,17 +686,30 @@ export class TicketService implements OnModuleInit {
       .getRawMany();
     const absentIds = new Set<number>(absentRows.map(r => Number(r.userId)));
 
-    return tickets.map(t => Object.assign(t, {
+    const withAvailability = tickets.map(t => Object.assign(t, {
       assignedTechAbsent: t.assignedToId ? absentIds.has(t.assignedToId) : false,
     })) as any;
+
+    if (!usePagination) {
+      return withAvailability;
+    }
+
+    return {
+      data: withAvailability,
+      total,
+      page: page as number,
+      limit: limit as number,
+      totalPages: Math.max(1, Math.ceil(total / (limit as number))),
+    };
   }
 
-  async getTicketById(id: string, viewerRole?: UserRole): Promise<Ticket> {
+  async getTicketById(id: string, viewerRole?: UserRole, viewerId?: number): Promise<Ticket> {
     const ticket = await this.ticketRepo.findOne({
       where: { id },
-      relations: ['requester', 'assignedTo', 'category', 'comments', 'comments.user'],
+      relations: ['requester', 'assignedTo', 'category', 'issueTypeConfig', 'comments', 'comments.user'],
     });
     if (!ticket) throw new NotFoundException(`Ticket ${id} not found`);
+    await this.assertTicketReadAccess(ticket, viewerId, viewerRole);
     // Strip internal notes for regular users — they should never see staff-only comments
     if (viewerRole === UserRole.USER && ticket.comments) {
       (ticket as any).comments = ticket.comments.filter((c: any) => !c.isInternal);
@@ -617,7 +725,7 @@ export class TicketService implements OnModuleInit {
     actorId: number,
     actorRole: UserRole,
   ): Promise<Ticket> {
-    const ticket = await this.getTicketById(id);
+    const ticket = await this.getTicketById(id, actorRole, actorId);
     const acceptedEscalation = await this.escalationRepo.findOne({
       where: { ticketId: id, status: EscalationStatus.ACCEPTED },
       order: { createdAt: 'DESC' },
@@ -667,6 +775,22 @@ export class TicketService implements OnModuleInit {
     // Technicians / admins can update status + resolution
     if (dto.subject) ticket.subject = dto.subject.trim();
     if (dto.description) ticket.description = dto.description.trim();
+
+    if (dto.issueTypeId !== undefined) {
+      if (!dto.issueTypeId) {
+        ticket.issueTypeId = null;
+        ticket.issueType = null;
+      } else {
+        const issueType = await this.issueTypeRepo.findOne({
+          where: { id: dto.issueTypeId, is_deleted: false, is_active: true },
+        });
+        if (!issueType) {
+          throw new BadRequestException('Selected issue type is invalid or inactive.');
+        }
+        ticket.issueTypeId = issueType.id;
+        ticket.issueType = issueType.key;
+      }
+    }
 
     // Priority changes allowed for all technician-level roles and above
     if (dto.priority !== undefined) {
@@ -777,6 +901,18 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       }
     }
     if (dto.resolutionNotes !== undefined) ticket.resolutionNotes = dto.resolutionNotes;
+    if (dto.resolutionSteps !== undefined) ticket.resolutionSteps = dto.resolutionSteps?.trim() || null;
+    if (dto.resolutionDate !== undefined) {
+      if (!dto.resolutionDate) {
+        ticket.resolutionDate = null;
+      } else {
+        const parsed = new Date(dto.resolutionDate);
+        if (Number.isNaN(parsed.getTime())) {
+          throw new BadRequestException('resolutionDate must be a valid ISO date string.');
+        }
+        ticket.resolutionDate = parsed;
+      }
+    }
 
     const saved = await this.ticketRepo.save(ticket);
 
@@ -848,7 +984,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       throw new ForbiddenException('Only admins, focal persons, and technicians can assign tickets.');
     }
 
-    const ticket = await this.getTicketById(id);
+    const ticket = await this.getTicketById(id, actorRole, actorId);
     const acceptedEscalation = await this.escalationRepo.findOne({
       where: { ticketId: id, status: EscalationStatus.ACCEPTED },
       order: { createdAt: 'DESC' },
@@ -970,7 +1106,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
 
   /** Mark ticket as In Progress when the assigned technician opens the detail view */
   async markTicketViewed(id: string, viewerId: number, viewerRole: UserRole): Promise<Ticket | null> {
-    const ticket = await this.getTicketById(id);
+    const ticket = await this.getTicketById(id, viewerRole, viewerId);
     // Only auto-transition when the assigned technician views an 'assigned' ticket
     // QA #5: Skip auto-transition if priority has not been set yet
     if (
@@ -998,7 +1134,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     actorId: number,
     actorRole: UserRole,
   ): Promise<TicketComment> {
-    const ticket = await this.getTicketById(ticketId);
+    const ticket = await this.getTicketById(ticketId, actorRole, actorId);
 
     // Regular users cannot add internal notes
     const isInternal = dto.isInternal && actorRole !== UserRole.USER;
@@ -1029,7 +1165,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     dto: SubmitSatisfactionDto,
     requesterId: number,
   ): Promise<Ticket> {
-    const ticket = await this.getTicketById(id);
+    const ticket = await this.getTicketById(id, UserRole.USER, requesterId);
 
     if (ticket.requesterId !== requesterId) {
       throw new ForbiddenException('Only the requester can submit satisfaction.');
@@ -1206,6 +1342,68 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     };
   }
 
+  async getSlaSummary(viewerId?: number, viewerRole?: UserRole): Promise<{
+    totalWithSla: number;
+    activeWithSla: number;
+    overdueActive: number;
+    dueToday: number;
+    breachedResolved: number;
+    complianceRate: number;
+  }> {
+    const activeStatuses = [TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.FREEZE];
+
+    const qb = this.ticketRepo
+      .createQueryBuilder('t')
+      .where('t.slaDeadline IS NOT NULL');
+
+    if (viewerRole === UserRole.USER) {
+      qb.andWhere('t.requesterId = :viewerId', { viewerId });
+    } else if (viewerRole && !this.canViewAllTicketsInTicketing(viewerRole as string)) {
+      qb.andWhere('(t.requesterId = :viewerId OR t.assignedToId = :viewerId)', { viewerId });
+    }
+
+    const tickets = await qb.getMany();
+    const now = new Date();
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    let activeWithSla = 0;
+    let overdueActive = 0;
+    let dueToday = 0;
+    let breachedResolved = 0;
+
+    for (const t of tickets) {
+      if (!t.slaDeadline) continue;
+
+      const deadline = new Date(t.slaDeadline);
+      const isActive = activeStatuses.includes(t.status as TicketStatus);
+      if (isActive) {
+        activeWithSla++;
+        if (deadline < now) overdueActive++;
+        if (deadline >= startOfDay && deadline <= endOfDay) dueToday++;
+      }
+
+      if ((t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) && t.resolvedAt && deadline < t.resolvedAt) {
+        breachedResolved++;
+      }
+    }
+
+    const complianceRate = activeWithSla > 0
+      ? Math.max(0, Math.round(((activeWithSla - overdueActive) / activeWithSla) * 100))
+      : 100;
+
+    return {
+      totalWithSla: tickets.length,
+      activeWithSla,
+      overdueActive,
+      dueToday,
+      breachedResolved,
+      complianceRate,
+    };
+  }
+
   /** Monthly stats for tickets assigned to a specific technician */
   async getTechAssignedStats(techId: number, year: number, month: number): Promise<{
     total: number;
@@ -1303,7 +1501,15 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
   }
 
   /** Returns all non-closed, non-duplicate tickets for a given requester (used in Duplicate picker) */
-  async getOpenTicketsForRequester(requesterId: number): Promise<Ticket[]> {
+  async getOpenTicketsForRequester(
+    requesterId: number,
+    viewerId?: number,
+    viewerRole?: UserRole,
+  ): Promise<Ticket[]> {
+    if (viewerRole && viewerId && !this.canViewAllTicketsInTicketing(viewerRole as string) && viewerId !== requesterId) {
+      throw new ForbiddenException('You can only view open tickets for your own requester account.');
+    }
+
     return this.ticketRepo
       .createQueryBuilder('t')
       .where('t.requesterId = :rid', { rid: requesterId })
@@ -1623,7 +1829,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     actorId: number,
     actorRole: UserRole,
   ): Promise<TicketEscalation> {
-    const ticket = await this.getTicketById(ticketId);
+    const ticket = await this.getTicketById(ticketId, actorRole, actorId);
 
     const latestEscalation = await this.escalationRepo.findOne({
       where: { ticketId },
@@ -1749,12 +1955,36 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
   }
 
   /** GET /tickets/:id/escalations — list all escalations for a ticket */
-  async getEscalations(ticketId: string): Promise<TicketEscalation[]> {
+  async getEscalations(ticketId: string, viewerId?: number, viewerRole?: UserRole): Promise<TicketEscalation[]> {
+    await this.getTicketById(ticketId, viewerRole, viewerId);
     return this.escalationRepo.find({
       where: { ticketId },
       relations: ['escalatedBy', 'escalatedTo'],
       order: { createdAt: 'DESC' },
     });
+  }
+
+  async ensureProofFileReadable(
+    ticketId: string,
+    filename: string,
+    viewerId?: number,
+    viewerRole?: UserRole,
+  ): Promise<{ root: string; safeFilename: string }> {
+    await this.getTicketById(ticketId, viewerRole, viewerId);
+
+    const safeFilename = path.basename(filename);
+    const escalations = await this.escalationRepo.find({ where: { ticketId } });
+    const proofPaths = escalations.flatMap((e) => e.proofFiles ?? []);
+    const isReferenced = proofPaths.some((p) => path.basename(String(p)) === safeFilename);
+    if (!isReferenced) {
+      throw new NotFoundException('Proof file not found');
+    }
+
+    const safeTicketId = path.basename(ticketId);
+    return {
+      root: path.resolve(process.cwd(), 'storage', 'escalation-proofs', safeTicketId),
+      safeFilename,
+    };
   }
 
   /**

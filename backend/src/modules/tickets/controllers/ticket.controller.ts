@@ -14,7 +14,6 @@ import {
   UploadedFiles,
   UseInterceptors,
   Res,
-  NotFoundException,
 } from '@nestjs/common';
 import { Response } from 'express';
 import * as path from 'path';
@@ -74,6 +73,10 @@ export class TicketController {
     @Query('requesterId') requesterId?: string,
     @Query('assignedToId') assignedToId?: string,
     @Query('escalatedToMe') escalatedToMe?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
     @Request() req?: any,
   ) {
     const viewerId = req?.user?.id ?? req?.user?.userId;
@@ -85,7 +88,18 @@ export class TicketController {
       escalatedToId: showEscalatedToMe ? viewerId : undefined,
       viewerId,
       viewerRole: req?.user?.role,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      sortBy,
+      sortOrder,
     });
+  }
+
+  /** GET /tickets/sla/summary — aggregate SLA breach and due metrics */
+  @Get('sla/summary')
+  @Roles(...ALL_ROLES)
+  async getSlaSummary(@Request() req: any) {
+    return this.ticketService.getSlaSummary(req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** GET /tickets/statistics */
@@ -169,7 +183,7 @@ export class TicketController {
   @Get(':id')
   @Roles(...ALL_ROLES)
   async getTicket(@Param('id') id: string, @Request() req: any) {
-    return this.ticketService.getTicketById(id, req.user?.role as UserRole);
+    return this.ticketService.getTicketById(id, req.user?.role as UserRole, req.user.id ?? req.user.userId);
   }
 
   /** PATCH /tickets/:id */
@@ -182,8 +196,12 @@ export class TicketController {
   /** GET /tickets/requester/:requesterId/open - open tickets for Duplicate picker */
   @Get('requester/:requesterId/open')
   @Roles(...ALL_ROLES)
-  async getRequesterOpenTickets(@Param('requesterId') requesterId: string) {
-    return this.ticketService.getOpenTicketsForRequester(Number(requesterId));
+  async getRequesterOpenTickets(@Param('requesterId') requesterId: string, @Request() req: any) {
+    return this.ticketService.getOpenTicketsForRequester(
+      Number(requesterId),
+      req.user.id ?? req.user.userId,
+      req.user.role,
+    );
   }
 
   /** PATCH /tickets/:id/assign */
@@ -203,8 +221,8 @@ export class TicketController {
   /** GET /tickets/:id/events — timeline of all ticket events */
   @Get(':id/events')
   @Roles(...ALL_ROLES)
-  async getTicketEvents(@Param('id') id: string) {
-    return this.ticketService.getTicketEvents(id);
+  async getTicketEvents(@Param('id') id: string, @Request() req: any) {
+    return this.ticketService.getTicketEvents(id, req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** POST /tickets/:id/comments */
@@ -221,6 +239,13 @@ export class TicketController {
     return this.ticketService.submitSatisfaction(id, dto, req.user.id ?? req.user.userId);
   }
 
+  /** POST /tickets/:id/rate — backward-compatible alias for satisfaction submission */
+  @Post(':id/rate')
+  @Roles(...ALL_ROLES)
+  async submitSatisfactionAlias(@Param('id') id: string, @Body() dto: SubmitSatisfactionDto, @Request() req: any) {
+    return this.ticketService.submitSatisfaction(id, dto, req.user.id ?? req.user.userId);
+  }
+
   /** GET /tickets/satisfaction/unit-suggestions — distinct unit values from past CSAT forms */
   @Get('satisfaction/unit-suggestions')
   @Roles(...ALL_ROLES)
@@ -233,8 +258,8 @@ export class TicketController {
   /** GET /tickets/:id/escalations */
   @Get(':id/escalations')
   @Roles(...ALL_ROLES)
-  async getEscalations(@Param('id') id: string) {
-    return this.ticketService.getEscalations(id);
+  async getEscalations(@Param('id') id: string, @Request() req: any) {
+    return this.ticketService.getEscalations(id, req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** POST /tickets/:id/escalate — upload proof photos (multipart/form-data) */
@@ -306,12 +331,15 @@ export class TicketController {
   async serveProofFile(
     @Param('ticketId') ticketId: string,
     @Param('filename') filename: string,
+    @Request() req: any,
     @Res() res: Response,
   ) {
-    // Sanitize inputs — prevent path traversal
-    const safeTicketId = path.basename(ticketId);
-    const safeFilename = path.basename(filename);
-    const root = path.resolve(process.cwd(), 'storage', 'escalation-proofs', safeTicketId);
+    const { root, safeFilename } = await this.ticketService.ensureProofFileReadable(
+      ticketId,
+      filename,
+      req.user.id ?? req.user.userId,
+      req.user.role,
+    );
     const filePath = path.join(root, safeFilename);
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ statusCode: 404, message: 'Proof file not found' });

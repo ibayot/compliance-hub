@@ -243,6 +243,56 @@ async function testTicketsContract() {
       const body = await res.json();
       const items = Array.isArray(body) ? body : body.data;
       assert(Array.isArray(items), 'Tickets response is array or {data:[]}');
+
+      // Pagination contract (v0.0.55+): when page/limit is sent, response should be object with data[] and paging fields.
+      const pagedRes = await fetchWithTimeout(
+        `${TICKETING_URL}/api/tickets?page=1&limit=5&sortBy=createdAt&sortOrder=desc`,
+        { headers: authHeaders() },
+      );
+      assert(pagedRes.status === 200, 'GET /api/tickets?page=1&limit=5 → 200');
+      if (pagedRes.status === 200) {
+        const pagedBody = await pagedRes.json();
+        assert(Array.isArray(pagedBody.data), 'Paginated tickets response has data[]');
+        assert(typeof pagedBody.total === 'number', 'Paginated tickets response has numeric total');
+        assert(typeof pagedBody.page === 'number', 'Paginated tickets response has numeric page');
+        assert(typeof pagedBody.limit === 'number', 'Paginated tickets response has numeric limit');
+      }
+
+      const settingsRes = await fetchWithTimeout(
+        `${TICKETING_URL}/api/ticket-settings`,
+        { headers: authHeaders() },
+      );
+      assert(settingsRes.status === 200, 'GET /api/ticket-settings → 200');
+      if (settingsRes.status === 200) {
+        const settingsBody = await settingsRes.json();
+        assert(Array.isArray(settingsBody.categories), 'Ticket settings has categories[]');
+        assert(Array.isArray(settingsBody.issueTypes), 'Ticket settings has issueTypes[]');
+        assert(Array.isArray(settingsBody.priorities), 'Ticket settings has priorities[]');
+      }
+
+      const slaRes = await fetchWithTimeout(
+        `${TICKETING_URL}/api/tickets/sla/summary`,
+        { headers: authHeaders() },
+      );
+      assert(slaRes.status === 200, 'GET /api/tickets/sla/summary → 200');
+      if (slaRes.status === 200) {
+        const slaBody = await slaRes.json();
+        assert(typeof slaBody.totalWithSla === 'number', 'SLA summary has totalWithSla');
+        assert(typeof slaBody.overdueActive === 'number', 'SLA summary has overdueActive');
+        assert(typeof slaBody.complianceRate === 'number', 'SLA summary has complianceRate');
+      }
+
+      if (Array.isArray(items) && items.length > 0 && items[0]?.id) {
+        const rateRes = await fetchWithTimeout(
+          `${TICKETING_URL}/api/tickets/${items[0].id}/rate`,
+          {
+            method: 'POST',
+            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rating: 5 }),
+          },
+        );
+        assert(rateRes.status !== 404, 'POST /api/tickets/:id/rate is routed (not 404)');
+      }
     }
   } catch (err) {
     skip(`Tickets endpoint error: ${err.message}`);

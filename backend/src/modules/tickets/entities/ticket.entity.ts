@@ -11,6 +11,7 @@ import {
 import { User } from '../../shared/entities';
 import { TicketComment } from './ticket-comment.entity';
 import { TicketCategoryConfig } from './ticket-category.entity';
+import { TicketIssueType } from './ticket-issue-type.entity';
 
 export enum TicketType {
   DESKTOP_SUPPORT = 'desktop_support',
@@ -74,6 +75,17 @@ export class Ticket {
   @JoinColumn({ name: 'category_id' })
   category: TicketCategoryConfig | null;
 
+  // --- Issue Type ---
+  @Column({ name: 'issue_type_id', type: 'varchar', length: 36, nullable: true })
+  issueTypeId: string | null;
+
+  @Column({ name: 'issue_type', type: 'varchar', length: 50, nullable: true })
+  issueType: string | null;
+
+  @ManyToOne(() => TicketIssueType, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'issue_type_id' })
+  issueTypeConfig: TicketIssueType | null;
+
   // --- Requester ---
   @Column({ name: 'requester_id', type: 'int' })
   requesterId: number;
@@ -93,6 +105,12 @@ export class Ticket {
   // --- Resolution ---
   @Column({ name: 'resolution_notes', type: 'text', nullable: true })
   resolutionNotes: string | null;
+
+  @Column({ name: 'resolution_steps', type: 'text', nullable: true })
+  resolutionSteps: string | null;
+
+  @Column({ name: 'resolution_date', type: 'datetime', nullable: true })
+  resolutionDate: Date | null;
 
   @Column({ name: 'resolved_at', type: 'datetime', nullable: true })
   resolvedAt: Date | null;
