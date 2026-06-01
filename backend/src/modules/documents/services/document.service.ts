@@ -27,6 +27,7 @@ import { ReportorialDocumentType } from '../entities/reportorial-document-type.e
 import { ReportorialDocTypeService } from './reportorial-doc-type.service';
 import { MetricsService } from '../../metrics/services/metrics.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
+import { UsersHttpClient, UserStub } from '../../../common/http-clients/users.http-client';
 
 export interface UploadDocumentDto {
   title: string;
@@ -134,7 +135,45 @@ export class DocumentService implements OnModuleInit {
     private metricsService: MetricsService,
     private dataSource: DataSource,
     private readonly roleCapSvc: RoleCapabilitiesService,
+    private readonly usersHttpClient: UsersHttpClient,
   ) {}
+
+  private async enrichUsersById(userIds: number[]): Promise<Map<number, UserStub | null>> {
+    const uniqueIds = Array.from(
+      new Set(userIds.filter((id) => Number.isFinite(Number(id))).map((id) => Number(id))),
+    );
+    const map = new Map<number, UserStub | null>();
+    await Promise.all(
+      uniqueIds.map(async (id) => {
+        const user = await this.usersHttpClient.getUserById(id);
+        map.set(id, user);
+      }),
+    );
+    return map;
+  }
+
+  private async enrichAssignmentsUsers(assignments: DocumentAssignment[]): Promise<DocumentAssignment[]> {
+    const userMap = await this.enrichUsersById(assignments.map((a) => Number(a.user_id)));
+    assignments.forEach((assignment) => {
+      assignment.user = userMap.get(Number(assignment.user_id)) ?? null;
+    });
+    return assignments;
+  }
+
+  private async enrichReferenceCreators(references: DocumentReference[]): Promise<DocumentReference[]> {
+    const userMap = await this.enrichUsersById(
+      references
+        .map((ref) => Number(ref.created_by))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    );
+    references.forEach((reference) => {
+      const creatorId = Number(reference.created_by);
+      reference.creator = Number.isFinite(creatorId) && creatorId > 0
+        ? userMap.get(creatorId) ?? null
+        : null;
+    });
+    return references;
+  }
 
   private async enqueueMetricsOrFallback(versionId: string, source: string): Promise<void> {
     const queueReachable = await this.isRedisReachable();
@@ -976,7 +1015,12 @@ export class DocumentService implements OnModuleInit {
       }),
     ]);
 
-    return { outgoing, incoming };
+    const [enrichedOutgoing, enrichedIncoming] = await Promise.all([
+      this.enrichReferenceCreators(outgoing),
+      this.enrichReferenceCreators(incoming),
+    ]);
+
+    return { outgoing: enrichedOutgoing, incoming: enrichedIncoming };
   }
 
   async linkDocumentReference(payload: {
@@ -1098,7 +1142,6 @@ export class DocumentService implements OnModuleInit {
   }): Promise<DocumentAssignment[]> {
     const qb = this.assignmentRepo
       .createQueryBuilder('assignment')
-      .leftJoinAndSelect('assignment.user', 'user')
       .leftJoinAndSelect('assignment.unit', 'unit');
 
     if (filters?.user_id) {
@@ -1115,7 +1158,8 @@ export class DocumentService implements OnModuleInit {
 
     qb.orderBy('assignment.created_at', 'DESC');
 
-    return qb.getMany();
+    const assignments = await qb.getMany();
+    return this.enrichAssignmentsUsers(assignments);
   }
 
   async updateAssignment(
@@ -1147,10 +1191,17 @@ export class DocumentService implements OnModuleInit {
     Object.assign(assignment, payload);
     await this.assignmentRepo.save(assignment);
 
-    return this.assignmentRepo.findOne({
+    const updated = await this.assignmentRepo.findOne({
       where: { id },
-      relations: ['user', 'unit'],
-    }) as Promise<DocumentAssignment>;
+      relations: ['unit'],
+    });
+
+    if (!updated) {
+      throw new NotFoundException('Assignment not found');
+    }
+
+    const [enriched] = await this.enrichAssignmentsUsers([updated]);
+    return enriched;
   }
 
   async deleteAssignment(id: string): Promise<void> {
