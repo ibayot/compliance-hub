@@ -626,25 +626,9 @@ export class TicketService implements OnModuleInit {
       .orderBy(sortBy, sortOrder as 'ASC' | 'DESC')
       .distinct(true);
 
-    // Role-based visibility
-    // Focal roles (is_focal=1) and super_admin see ALL tickets (full management view).
-    if (filters.viewerRole === UserRole.USER) {
-      // Regular users see only their own submitted tickets
-      qb.where('t.requesterId = :uid', { uid: filters.viewerId });
-    } else if (filters.viewerRole && this.canViewAllTicketsInTicketing(filters.viewerRole as string)) {
-      // Privileged roles: no WHERE restriction — see all tickets with full filter support
-      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
-      if (filters.ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
-      if (filters.requesterId) qb.andWhere('t.requesterId = :rid', { rid: filters.requesterId });
-      if (filters.assignedToId) qb.andWhere('t.assignedToId = :aid', { aid: filters.assignedToId });
-    } else {
-      // All other staff: see only tickets assigned to them OR submitted by them
-      qb.where('(t.assignedToId = :uid OR t.requesterId = :uid)', { uid: filters.viewerId });
-      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
-      if (filters.ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
-    }
+    const isEscalatedQueue = Boolean(filters.escalatedToId);
 
-    if (filters.escalatedToId) {
+    if (isEscalatedQueue) {
       qb.innerJoin(
         'ticket_escalations',
         'te',
@@ -654,6 +638,29 @@ export class TicketService implements OnModuleInit {
           escalationStatuses: [EscalationStatus.PENDING, EscalationStatus.ACCEPTED],
         },
       ).distinct(true);
+
+      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
+      if (filters.ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+      if (filters.requesterId) qb.andWhere('t.requesterId = :rid', { rid: filters.requesterId });
+      if (filters.assignedToId) qb.andWhere('t.assignedToId = :aid', { aid: filters.assignedToId });
+    } else {
+      // Role-based visibility
+      // Focal roles (is_focal=1) and super_admin see ALL tickets (full management view).
+      if (filters.viewerRole === UserRole.USER) {
+        // Regular users see only their own submitted tickets
+        qb.where('t.requesterId = :uid', { uid: filters.viewerId });
+      } else if (filters.viewerRole && this.canViewAllTicketsInTicketing(filters.viewerRole as string)) {
+        // Privileged roles: no WHERE restriction — see all tickets with full filter support
+        if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
+        if (filters.ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+        if (filters.requesterId) qb.andWhere('t.requesterId = :rid', { rid: filters.requesterId });
+        if (filters.assignedToId) qb.andWhere('t.assignedToId = :aid', { aid: filters.assignedToId });
+      } else {
+        // All other staff: see only tickets assigned to them OR submitted by them
+        qb.where('(t.assignedToId = :uid OR t.requesterId = :uid)', { uid: filters.viewerId });
+        if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
+        if (filters.ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+      }
     }
 
     const page = filters.page && filters.page > 0 ? Math.floor(filters.page) : undefined;
