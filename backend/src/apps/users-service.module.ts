@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import * as Joi from 'joi';
@@ -6,7 +6,7 @@ import { AuthModule } from '../modules/auth/auth.module';
 import { UsersModule } from '../modules/users/users.module';
 import { UnitsModule } from '../modules/units/units.module';
 import { InternalModule } from '../modules/internal/internal.module';
-import { HttpClientsModule } from '../common/http-clients/http-clients.module';
+import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware';
 
 @Module({
   imports: [
@@ -49,7 +49,10 @@ import { HttpClientsModule } from '../common/http-clients/http-clients.module';
     UsersModule,
     UnitsModule,
     InternalModule,
-    HttpClientsModule,
   ],
 })
-export class UsersServiceAppModule {}
+export class UsersServiceAppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+  }
+}

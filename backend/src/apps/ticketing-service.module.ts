@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PassportModule } from '@nestjs/passport';
@@ -6,6 +6,7 @@ import * as Joi from 'joi';
 import { TicketsModule } from '../modules/tickets/tickets.module';
 import { TicketingJwtStrategy } from './ticketing-jwt.strategy';
 import { HttpClientsModule } from '../common/http-clients/http-clients.module';
+import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware';
 
 @Module({
   imports: [
@@ -48,4 +49,8 @@ import { HttpClientsModule } from '../common/http-clients/http-clients.module';
   ],
   providers: [TicketingJwtStrategy],
 })
-export class TicketingServiceAppModule {}
+export class TicketingServiceAppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+  }
+}

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bull';
@@ -14,6 +14,7 @@ import { KpiModule } from '../modules/kpi/kpi.module';
 import { MovModule } from '../modules/mov/mov.module';
 import { ComplianceJwtStrategy } from './compliance-jwt.strategy';
 import { HttpClientsModule } from '../common/http-clients/http-clients.module';
+import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware';
 
 @Module({
   imports: [
@@ -80,4 +81,8 @@ import { HttpClientsModule } from '../common/http-clients/http-clients.module';
   ],
   providers: [ComplianceJwtStrategy],
 })
-export class ComplianceServiceAppModule {}
+export class ComplianceServiceAppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+  }
+}

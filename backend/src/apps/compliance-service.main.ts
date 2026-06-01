@@ -30,6 +30,7 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
   app.setGlobalPrefix('api');
+  const http = app.getHttpAdapter().getInstance();
 
   // Attach X-Service-Version to every response so callers can detect version mismatches.
   app.use((_req: any, res: any, next: any) => {
@@ -39,11 +40,13 @@ async function bootstrap() {
   });
 
   const port = Number(process.env.COMPLIANCE_SERVICE_PORT || 4103);
-  app.use('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'compliance', version: serviceVersion }));
-  app.use('/api/health/live', (_req: any, res: any) => res.json({ status: 'ok', service: 'compliance', version: serviceVersion }));
-  app.use('/api/health/ready', async (_req: any, res: any) => {
+  http.get('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'compliance', version: serviceVersion }));
+  http.get('/api/health/live', (_req: any, res: any) => res.json({ status: 'ok', service: 'compliance', version: serviceVersion }));
+  http.get('/api/health/ready', async (_req: any, res: any) => {
     const checks: Record<string, boolean> = {};
     let dbOk = false;
+    const dbHost = process.env.DB_HOST || 'localhost';
+    const dbName = process.env.COMPLIANCE_DB_DATABASE || process.env.DB_DATABASE || 'compliance_hub';
 
     try {
       const ds = app.get(DataSource);
@@ -92,6 +95,13 @@ async function bootstrap() {
       status: allOk ? 'ok' : 'degraded',
       service: 'compliance',
       version: serviceVersion,
+      topology: {
+        runtime: 'single-vm-multi-container',
+        containerRole: 'compliance-service',
+        dbServer: dbHost,
+        dbName,
+        sharedDbServer: true,
+      },
       checks,
     });
   });

@@ -30,6 +30,7 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
   app.setGlobalPrefix('api');
+  const http = app.getHttpAdapter().getInstance();
 
   // Attach X-Service-Version to every response so callers can detect version mismatches.
   app.use((_req: any, res: any, next: any) => {
@@ -39,12 +40,14 @@ async function bootstrap() {
   });
 
   const port = Number(process.env.TICKETING_SERVICE_PORT || 4102);
-  app.use('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'ticketing', version: serviceVersion }));
-  app.use('/api/health/live', (_req: any, res: any) => res.json({ status: 'ok', service: 'ticketing', version: serviceVersion }));
-  app.use('/api/health/ready', async (_req: any, res: any) => {
+  http.get('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'ticketing', version: serviceVersion }));
+  http.get('/api/health/live', (_req: any, res: any) => res.json({ status: 'ok', service: 'ticketing', version: serviceVersion }));
+  http.get('/api/health/ready', async (_req: any, res: any) => {
     try {
       const ds = app.get(DataSource);
       await ds.query('SELECT 1');
+      const dbHost = process.env.DB_HOST || 'localhost';
+      const dbName = process.env.TICKETING_DB_DATABASE || process.env.DB_DATABASE || 'compliance_hub_ticketing';
 
       // Check that cross-DB views are accessible (critical dependency for ticketing queries)
       const checks: Record<string, boolean> = { db: true };
@@ -64,6 +67,13 @@ async function bootstrap() {
         status: allViewsOk ? 'ok' : 'degraded',
         service: 'ticketing',
         version: serviceVersion,
+        topology: {
+          runtime: 'single-vm-multi-container',
+          containerRole: 'ticketing-service',
+          dbServer: dbHost,
+          dbName,
+          sharedDbServer: true,
+        },
         checks,
       });
     } catch (err: any) {

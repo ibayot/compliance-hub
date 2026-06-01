@@ -21,6 +21,7 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
   app.setGlobalPrefix('api');
+  const http = app.getHttpAdapter().getInstance();
 
   // Attach X-Service-Version to every response so callers can detect version mismatches.
   app.use((_req: any, res: any, next: any) => {
@@ -30,12 +31,14 @@ async function bootstrap() {
   });
 
   const port = Number(process.env.USERS_SERVICE_PORT || 4101);
-  app.use('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'users', version: serviceVersion }));
-  app.use('/api/health/live', (_req: any, res: any) => res.json({ status: 'ok', service: 'users', version: serviceVersion }));
-  app.use('/api/health/ready', async (_req: any, res: any) => {
+  http.get('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'users', version: serviceVersion }));
+  http.get('/api/health/live', (_req: any, res: any) => res.json({ status: 'ok', service: 'users', version: serviceVersion }));
+  http.get('/api/health/ready', async (_req: any, res: any) => {
     try {
       const ds = app.get(DataSource);
       await ds.query('SELECT 1');
+      const dbHost = process.env.DB_HOST || 'localhost';
+      const dbName = process.env.USERS_DB_DATABASE || process.env.DB_DATABASE || 'compliance_hub_users';
 
       // Verify role_capabilities table/view has data (cache won't be populated if empty)
       const [roleCapsCheck] = await ds.query(
@@ -47,6 +50,13 @@ async function bootstrap() {
         status: 'ok',
         service: 'users',
         version: serviceVersion,
+        topology: {
+          runtime: 'single-vm-multi-container',
+          containerRole: 'users-service',
+          dbServer: dbHost,
+          dbName,
+          sharedDbServer: true,
+        },
         checks: { db: true, role_capabilities_rows: roleCapsCount },
       });
     } catch (err: any) {

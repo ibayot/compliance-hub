@@ -117,51 +117,76 @@ async function bootstrap() {
     }),
   );
 
-  app.use('/api/auth', createServiceProxy(`${usersServiceUrl}/api/auth`, 'users'));
-  app.use('/api/users', createServiceProxy(`${usersServiceUrl}/api/users`, 'users'));
-  app.use('/api/units', createServiceProxy(`${usersServiceUrl}/api/units`, 'users'));
+  app.use(
+    '/api/v1',
+    rateLimit({
+      windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+      max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 1000),
+      standardHeaders: true,
+      legacyHeaders: false,
+    }),
+  );
 
-  app.use('/api/tickets', createServiceProxy(`${ticketingServiceUrl}/api/tickets`, 'ticketing'));
-  app.use('/api/attendance', createServiceProxy(`${ticketingServiceUrl}/api/attendance`, 'ticketing'));
-  app.use('/api/ticket-settings', createServiceProxy(`${ticketingServiceUrl}/api/ticket-settings`, 'ticketing'));
+  const registerServiceRoutes = (prefix: '/api' | '/api/v1') => {
+    app.use(`${prefix}/auth`, createServiceProxy(`${usersServiceUrl}/api/auth`, 'users'));
+    app.use(`${prefix}/users`, createServiceProxy(`${usersServiceUrl}/api/users`, 'users'));
+    app.use(`${prefix}/units`, createServiceProxy(`${usersServiceUrl}/api/units`, 'users'));
 
-  app.use('/api/documents', createServiceProxy(`${complianceServiceUrl}/api/documents`, 'compliance'));
-  app.use('/api/document-types', createServiceProxy(`${complianceServiceUrl}/api/document-types`, 'compliance'));
-  app.use('/api/comparisons', createServiceProxy(`${complianceServiceUrl}/api/comparisons`, 'compliance'));
-  app.use('/api/issuances', createServiceProxy(`${complianceServiceUrl}/api/issuances`, 'compliance'));
-  app.use('/api/metrics', createServiceProxy(`${complianceServiceUrl}/api/metrics`, 'compliance'));
-  app.use('/api/incidents', createServiceProxy(`${complianceServiceUrl}/api/incidents`, 'compliance'));
-  app.use('/api/cybersecurity', createServiceProxy(`${complianceServiceUrl}/api/cybersecurity`, 'compliance'));
-  app.use('/api/kpi', createServiceProxy(`${complianceServiceUrl}/api/kpi`, 'compliance'));
-  app.use('/api/mov', createServiceProxy(`${complianceServiceUrl}/api/mov`, 'compliance'));
-  // Role capabilities matrix is surfaced under compliance namespace for frontend capability management.
-  app.use('/api/compliance/role-capabilities', createServiceProxy(`${usersServiceUrl}/api/users/role-capabilities`, 'users'));
+    app.use(`${prefix}/tickets`, createServiceProxy(`${ticketingServiceUrl}/api/tickets`, 'ticketing'));
+    app.use(`${prefix}/attendance`, createServiceProxy(`${ticketingServiceUrl}/api/attendance`, 'ticketing'));
+    app.use(`${prefix}/ticket-settings`, createServiceProxy(`${ticketingServiceUrl}/api/ticket-settings`, 'ticketing'));
 
-  app.use('/api/health', async (_req: Request, res: Response) => {
-    const [usersAvailable, ticketingAvailable, complianceAvailable] = await Promise.all([
-      checkServiceHealth(usersServiceUrl),
-      checkServiceHealth(ticketingServiceUrl),
-      checkServiceHealth(complianceServiceUrl),
-    ]);
+    app.use(`${prefix}/documents`, createServiceProxy(`${complianceServiceUrl}/api/documents`, 'compliance'));
+    app.use(`${prefix}/document-types`, createServiceProxy(`${complianceServiceUrl}/api/document-types`, 'compliance'));
+    app.use(`${prefix}/comparisons`, createServiceProxy(`${complianceServiceUrl}/api/comparisons`, 'compliance'));
+    app.use(`${prefix}/issuances`, createServiceProxy(`${complianceServiceUrl}/api/issuances`, 'compliance'));
+    app.use(`${prefix}/metrics`, createServiceProxy(`${complianceServiceUrl}/api/metrics`, 'compliance'));
+    app.use(`${prefix}/incidents`, createServiceProxy(`${complianceServiceUrl}/api/incidents`, 'compliance'));
+    app.use(`${prefix}/cybersecurity`, createServiceProxy(`${complianceServiceUrl}/api/cybersecurity`, 'compliance'));
+    app.use(`${prefix}/kpi`, createServiceProxy(`${complianceServiceUrl}/api/kpi`, 'compliance'));
+    app.use(`${prefix}/mov`, createServiceProxy(`${complianceServiceUrl}/api/mov`, 'compliance'));
+    app.use(`${prefix}/compliance/role-capabilities`, createServiceProxy(`${usersServiceUrl}/api/users/role-capabilities`, 'users'));
 
-    res.json({
-      service: 'api-gateway',
-      status: 'ok',
-      usersServiceUrl,
-      ticketingServiceUrl,
-      complianceServiceUrl,
-      services: {
-        users: usersAvailable,
-        ticketing: ticketingAvailable,
-        compliance: complianceAvailable,
-      },
-      strictMode,
-      version: process.env.npm_package_version || '0.0.0',
+    app.use(`${prefix}/health`, async (_req: Request, res: Response) => {
+      const [usersAvailable, ticketingAvailable, complianceAvailable] = await Promise.all([
+        checkServiceHealth(usersServiceUrl),
+        checkServiceHealth(ticketingServiceUrl),
+        checkServiceHealth(complianceServiceUrl),
+      ]);
+
+      res.json({
+        service: 'api-gateway',
+        status: 'ok',
+        usersServiceUrl,
+        ticketingServiceUrl,
+        complianceServiceUrl,
+        services: {
+          users: usersAvailable,
+          ticketing: ticketingAvailable,
+          compliance: complianceAvailable,
+        },
+        strictMode,
+        version: process.env.npm_package_version || '0.0.0',
+        apiVersion: prefix === '/api/v1' ? 'v1' : 'legacy',
+      });
     });
-  });
+  };
+
+  registerServiceRoutes('/api');
+  registerServiceRoutes('/api/v1');
 
   if (strictMode) {
     app.use('/api', (req: Request, res: Response) => {
+      res.status(503).json({
+        message: 'Service currently unavailable for this endpoint in microservices mode.',
+        path: req.path,
+        usersServiceUrl,
+        ticketingServiceUrl,
+        complianceServiceUrl,
+      });
+    });
+
+    app.use('/api/v1', (req: Request, res: Response) => {
       res.status(503).json({
         message: 'Service currently unavailable for this endpoint in microservices mode.',
         path: req.path,
