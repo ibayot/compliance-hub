@@ -742,10 +742,13 @@ export class TicketService implements OnModuleInit {
     actorRole: UserRole,
   ): Promise<Ticket> {
     const ticket = await this.getTicketById(id, actorRole, actorId);
-    const acceptedEscalation = await this.escalationRepo.findOne({
-      where: { ticketId: id, status: EscalationStatus.ACCEPTED },
+    const latestEscalation = await this.escalationRepo.findOne({
+      where: { ticketId: id },
       order: { createdAt: 'DESC' },
     });
+    const acceptedEscalation = latestEscalation?.status === EscalationStatus.ACCEPTED
+      ? latestEscalation
+      : null;
 
     // Regular users can only edit their own open tickets (subject/description)
     // OR close their own ticket if it is in a resolvable state
@@ -1001,10 +1004,13 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
 
     const ticket = await this.getTicketById(id, actorRole, actorId);
-    const acceptedEscalation = await this.escalationRepo.findOne({
-      where: { ticketId: id, status: EscalationStatus.ACCEPTED },
+    const latestEscalation = await this.escalationRepo.findOne({
+      where: { ticketId: id },
       order: { createdAt: 'DESC' },
     });
+    const acceptedEscalation = latestEscalation?.status === EscalationStatus.ACCEPTED
+      ? latestEscalation
+      : null;
 
     // Duplicate, Resolved, and Closed tickets are terminal – assignment is not allowed
     if (ticket.status === TicketStatus.DUPLICATE) {

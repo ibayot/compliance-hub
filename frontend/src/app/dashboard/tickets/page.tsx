@@ -507,18 +507,20 @@ export default function TicketsPage() {
           </CardContent>
         </Card>
       )}
-      {!canManageAll && isFocalTech && (
+      {!canManageAll && (isFocalTech || canViewEscalatedQueue) && (
         <Card sx={{ mb: 2 }}>
           <CardContent>
             <Stack direction="row" spacing={2}>
-              <Button
-                size="small"
-                variant={showMyTickets ? 'contained' : 'outlined'}
-                color="primary"
-                onClick={() => setShowMyTickets(v => !v)}
-              >
-                {showMyTickets ? 'My Assigned Tickets ✓' : 'All Tickets'}
-              </Button>
+              {isFocalTech && (
+                <Button
+                  size="small"
+                  variant={showMyTickets ? 'contained' : 'outlined'}
+                  color="primary"
+                  onClick={() => setShowMyTickets(v => !v)}
+                >
+                  {showMyTickets ? 'My Assigned Tickets ✓' : 'All Tickets'}
+                </Button>
+              )}
               {canViewEscalatedQueue && (
                 <Button
                   size="small"
