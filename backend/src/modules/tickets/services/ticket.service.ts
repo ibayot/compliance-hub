@@ -1828,6 +1828,10 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     actorId: number,
     actorRole: UserRole,
   ): Promise<TicketEscalation> {
+    if (!this.roleCapSvc.canEscalateTickets(actorRole as string)) {
+      throw new ForbiddenException('Your role is not allowed to escalate tickets.');
+    }
+
     const ticket = await this.getTicketById(ticketId, actorRole, actorId);
 
     const latestEscalation = await this.escalationRepo.findOne({

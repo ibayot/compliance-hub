@@ -169,13 +169,19 @@ export default function TicketDetailPage() {
   const isTechnician = isFocalTech || isLowerLevelTech;
   const isFocal = user?.roleCode === 'focal';
   const isAdmin = user?.role === 'super_admin' || isFocal;
-  const canStaff = isAdmin || isTechnician;
+  const canAssignByCapability = user?.role === 'super_admin' || !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
+  const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isEscalationFocal || !!myCap?.isAllTickets;
   const canPriority = canStaff;
   const isComplianceOfficer = user?.roleCode === 'compliance_officer';
   const isSectionHead = user?.roleCode === 'section_head';
-  // canEscalate: only desktop and IT support (including Pantawid ICT) technicians may escalate.
-  // ITO professional staff (cybersec, infosec, etc.) are excluded — they are NOT ticket handlers.
-  const canEscalate = !!(myCap?.isDesktop || myCap?.isItSupport || myCap?.isPantawidIct);
+  const canEscalate = user?.role === 'super_admin' || !!(
+    myCap?.isDesktop ||
+    myCap?.isItSupport ||
+    myCap?.isPantawidIct ||
+    myCap?.isTicketFocal ||
+    myCap?.isTicketSettingsFocal ||
+    myCap?.isAllTickets
+  );
   const isEscalationAdmin = user?.role === 'super_admin' || isComplianceOfficer || isSectionHead;
   const latestEscalation = escalations.length > 0 ? escalations[0] : null;
   const hasPendingEscalation = latestEscalation?.status === 'pending';
@@ -186,8 +192,8 @@ export default function TicketDetailPage() {
   const hideTopActionButtons = !!hasPendingEscalation;
   const acceptedEscalationOnlyStatusAction = !!hasAcceptedEscalation;
   const canUpdateStatusNow = canStaff && (!hasAcceptedEscalation || isEscalationAdmin || !!isAcceptedEscalationFocal);
-  // canReassign: focal/senior/admin by default, but once escalation is accepted only escalation admins can reassign.
-  const canReassign = (user?.role === 'super_admin' || isFocal || isFocalTech || isComplianceOfficer || isSectionHead)
+  // Matrix-driven reassign privilege: ticket admin/assign capability, constrained after accepted escalations.
+  const canReassign = canAssignByCapability
     && (!hasAcceptedEscalation || isEscalationAdmin);
   // Ticket can be escalated again only if there is no escalation yet or the latest one was returned.
   const canEscalateNow = canEscalate && (!latestEscalation || latestEscalation.status === 'returned');

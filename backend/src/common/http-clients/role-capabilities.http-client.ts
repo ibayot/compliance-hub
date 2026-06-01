@@ -198,6 +198,14 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
     return this.isTicketFocal(role) || this.isTicketSettingsFocal(role);
   }
 
+  canEscalateTickets(role: string): boolean {
+    return this.canAssignTickets(role)
+      || this.canSeeAllTickets(role)
+      || this.isDesktop(role)
+      || this.isItSupport(role)
+      || this.isPantawidIct(role);
+  }
+
   // ── Bulk query helpers ────────────────────────────────────────────────────
 
   getRolesWhere(capability: CapabilityKey): string[] {

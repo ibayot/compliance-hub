@@ -62,6 +62,7 @@ export class InternalServiceGuard implements CanActivate {
     const token = request.headers['x-service-token'] as string | undefined;
     const origin = (request.headers['x-service-origin'] as string | undefined)?.trim();
     const hasPerServiceConfig = Object.keys(this.serviceTokenMap).length > 0;
+    const isProduction = process.env.NODE_ENV === 'production';
 
     if (hasPerServiceConfig) {
       const expectedToken = origin ? this.serviceTokenMap[origin] : undefined;
@@ -82,6 +83,14 @@ export class InternalServiceGuard implements CanActivate {
     }
 
     if (!this.secret) {
+      if (isProduction) {
+        this.logger.error(
+          'INTERNAL_SERVICE_SECRET and INTERNAL_SERVICE_TOKENS are not set in production. ' +
+            'Blocking internal endpoint access until a token configuration is provided.',
+        );
+        return false;
+      }
+
       this.logger.warn(
         'INTERNAL_SERVICE_SECRET and INTERNAL_SERVICE_TOKENS are not set. Internal endpoint is unprotected. ' +
           'Set one of these env vars before deploying to production.',

@@ -260,6 +260,18 @@ export class RoleCapabilitiesService implements OnModuleInit {
     return this.isTicketFocal(role) || this.isTicketSettingsFocal(role);
   }
 
+  /**
+   * True if the role can initiate ticket escalations.
+   * Matrix-driven: assignment/admin/all-ticket capabilities and technician tracks.
+   */
+  canEscalateTickets(role: string): boolean {
+    return this.canAssignTickets(role)
+      || this.canSeeAllTickets(role)
+      || this.isDesktop(role)
+      || this.isItSupport(role)
+      || this.isPantawidIct(role);
+  }
+
   // ── Admin CRUD ─────────────────────────────────────────────────────────────
 
   /** Return all capability rows sorted by role_value, served from cache. */

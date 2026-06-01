@@ -19,7 +19,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ticketsApi, Ticket, CreateTicketDto, TicketStatus, TicketType, TicketPriority,
-  TechnicianOption, TicketCategory, ticketSettingsApi, CsatFormData,
+  TechnicianOption, TicketCategory, ticketSettingsApi, attendanceApi, CsatFormData,
 } from '@/app/api/references';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
@@ -131,9 +131,16 @@ export default function TicketsPage() {
   const canViewEscalatedQueue = isSuperAdmin || !!myCap?.isEscalationFocal;
   // DB-driven: is_ticket_focal column — who can manually assign/reassign tickets
   const canAssign = isSuperAdmin || !!myCap?.isTicketFocal;
-  // canEscalate: only desktop and IT support (including Pantawid ICT) technicians can escalate.
-  // ITO professional staff (cybersec, infosec, lead_infra, etc.) are NOT ticket technicians and cannot escalate.
-  const canEscalate = !!(myCap?.isDesktop || myCap?.isItSupport || myCap?.isPantawidIct);
+  // Matrix-driven escalation eligibility:
+  // show action for technician tracks plus ticket admin/assign/all-ticket capabilities.
+  const canEscalate = isSuperAdmin || !!(
+    myCap?.isDesktop ||
+    myCap?.isItSupport ||
+    myCap?.isPantawidIct ||
+    myCap?.isTicketFocal ||
+    myCap?.isTicketSettingsFocal ||
+    myCap?.isAllTickets
+  );
 
   // Senior technician tab state (isFocalTech && !canManageAll view)
   const [ticketTab, setTicketTab] = useState(0);
@@ -334,26 +341,43 @@ export default function TicketsPage() {
     setAssigningTicket(ticket);
     setSelectedTechId(escalate ? '' : String(ticket.assignedToId ?? ''));
     try {
-      const techs = await ticketsApi.getTechnicians();
-      const roleFiltered = techs.filter(t => {
-        // For escalation: only show focal-level technicians
-        if (escalate) {
-          if (ticket.ticketType === 'desktop_support')
-            return ['technician_desktop', 'technician', 'desktop_sr'].includes(t.role);
-          if (ticket.ticketType === 'pantawid_ict_support')
+      if (escalate) {
+        const [focals, itoUsers, supportUsers] = await Promise.all([
+          ticketSettingsApi.getEscalationFocals(ticket.ticketType),
+          attendanceApi.getTechnicians('ito'),
+          attendanceApi.getTechnicians(ticket.ticketType),
+        ]);
+        const mergedUsers = [...itoUsers, ...supportUsers]
+          .filter((u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx);
+        const allowedRoles = new Set(
+          focals
+            .filter((f) => f.ticketType === ticket.ticketType || f.ticketType === 'all')
+            .map((f) => f.roleValue),
+        );
+        const roleFiltered = mergedUsers.filter(
+          (t) => allowedRoles.size === 0 || allowedRoles.has(t.role),
+        );
+        const availableByAttendance = roleFiltered.filter(
+          (t) => !t.isUnavailable && !['absent', 'out_of_office'].includes(t.attendanceStatus ?? ''),
+        );
+        setTechnicians(availableByAttendance);
+      } else {
+        const techs = await ticketsApi.getTechnicians();
+        const roleFiltered = techs.filter((t) => {
+          if (ticket.ticketType === 'desktop_support') {
+            return ['technician_desktop', 'technician', 'technician_desktop_staff', 'desktop_sr', 'desktop_jr'].includes(t.role);
+          }
+          if (ticket.ticketType === 'pantawid_ict_support') {
             return ['technician', 'pantawid_ict'].includes(t.role);
-          return ['technician_it_support', 'technician', 'it_support_sr', 'cybersec', 'infosec'].includes(t.role);
-        }
-        // Normal assign: filter by ticket type role
-        if (ticket.ticketType === 'desktop_support')
-          return ['technician_desktop', 'technician', 'technician_desktop_staff', 'desktop_sr', 'desktop_jr'].includes(t.role);
-        if (ticket.ticketType === 'pantawid_ict_support')
-          return ['technician', 'pantawid_ict'].includes(t.role);
-        return ['technician_it_support', 'technician', 'technician_it_staff', 'it_support_sr', 'it_support_jr'].includes(t.role);
-      });
-      const availableByAttendance = roleFiltered.filter((t) => !t.isUnavailable && !['absent', 'out_of_office'].includes(t.attendanceStatus ?? ''));
-      // For normal assign: only show techs with no open tickets (same as ticket detail view)
-      setTechnicians(escalate ? availableByAttendance : availableByAttendance.filter(t => t.openCount === 0));
+          }
+          return ['technician_it_support', 'technician', 'technician_it_staff', 'it_support_sr', 'it_support_jr'].includes(t.role);
+        });
+        const availableByAttendance = roleFiltered.filter(
+          (t) => !t.isUnavailable && !['absent', 'out_of_office'].includes(t.attendanceStatus ?? ''),
+        );
+        // For normal assign: only show techs with no open tickets (same as ticket detail view)
+        setTechnicians(availableByAttendance.filter((t) => t.openCount === 0));
+      }
     } catch { setTechnicians([]); }
     setAssignDialogOpen(true);
   };

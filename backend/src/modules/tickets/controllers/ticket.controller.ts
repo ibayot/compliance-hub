@@ -46,6 +46,8 @@ const ALL_ROLES = [
   UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
   UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
   UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
+  // Generic roleCode aliases for custom role values managed from role definitions.
+  'technician', 'focal', 'ito', 'compliance_officer', 'section_head',
 ];
 
 @Controller('tickets')
