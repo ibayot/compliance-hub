@@ -5,8 +5,7 @@
 ## Infrastructure
 
 - 1 physical/virtual server
-- 3 Docker containers: users-service, ticketing-service, compliance-service
-- 1 gateway container (HTTP proxy)
+- 4 Docker application containers: users-service, ticketing-service, compliance-service, api-gateway
 - 1 MariaDB 11 instance with 3 databases
 - 1 Redis instance (optional, for document processing queue)
 
@@ -134,6 +133,6 @@ The gateway (port 4000) proxies by path prefix:
 |------------------------|--------------------------------|--------------------------------|
 | GET /api/health        | Legacy liveness (backward compat) | Always 200 ok               |
 | GET /api/health/live   | Liveness — is process up?      | Always 200 if process running  |
-| GET /api/health/ready  | Readiness — is DB reachable?   | 503 if SELECT 1 fails          |
+| GET /api/health/ready  | Readiness — dependency health  | DB + critical view/Redis checks, plus topology metadata |
 
 Gateway uses `/api/health` for service availability checks (backward compatible).

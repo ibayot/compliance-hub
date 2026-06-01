@@ -6,6 +6,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.54] - 2026-05-13 - Boundary Decoupling Step 1/2 + API v1 Alias + Service Token Hardening
+
+### Changed
+- Executed Step 1 and Step 2 decoupling pattern for selected cross-boundary paths without changing endpoint behavior:
+  - Added shared contracts under `backend/src/shared/contracts/` (`UserRef`, `UnitRef`)
+  - Removed direct ORM `ManyToOne(() => User)` coupling in incidents and replaced it with HTTP user enrichment via `UsersHttpClient`
+  - Removed direct ORM `User` relation coupling in document assignments/references and preserved response shape through HTTP user enrichment
+
+- Added gateway API version alias support:
+  - Existing routes remain at `/api/*`
+  - New compatibility aliases added at `/api/v1/*` (same behavior, proxied to existing service endpoints)
+
+- Hardened inter-service authentication for constrained microservices deployment:
+  - `InternalServiceGuard` now supports per-service token mapping via `INTERNAL_SERVICE_TOKENS`
+  - Kept backward-compatible fallback to `INTERNAL_SERVICE_SECRET`
+  - `UsersHttpClient` and `ComplianceHttpClient` now send service identity (`X-Service-Origin`) and prefer `INTERNAL_SERVICE_TOKEN` with fallback to shared secret
+
+- Updated compose environment for per-service identity/tokens while preserving legacy secret compatibility.
+
+### Notes
+- This pass reduces C1/M1 in targeted modules and lowers H1 reliance in those read paths while preserving existing logic and payload keys.
+- No database schema changes were introduced.
+- Fixed runtime health-route shadowing by changing service health handlers from `app.use(...)` to exact `app.get(...)`, ensuring `/api/health/ready` returns readiness payload instead of base health payload.
+
+### Versioning
+- Patch version bump only: `0.0.53` -> `0.0.54`.
+
+## [0.0.53] - 2026-05-13 - Re-Audit Hardening Pass (Topology-Aware Readiness + Correlation Middleware Wiring)
+
+### Changed
+- Wired correlation ID middleware at app-module level for all microservices:
+  - `users-service`
+  - `ticketing-service`
+  - `compliance-service`
+
+- Enhanced service readiness responses (`GET /api/health/ready`) to include explicit topology metadata reflecting deployed constraints:
+  - runtime mode (`single-vm-multi-container`)
+  - service container role
+  - DB server host
+  - owned logical DB name
+  - shared DB server flag
+
+- Updated architecture governance artifacts to encode real infrastructure constraints:
+  - `ARCHITECTURE-AUDIT-v2.md` now includes 2026-05-13 re-audit addendum
+  - `backend/SERVICE-OWNERSHIP.md` infrastructure and readiness notes clarified
+  - `backend/SERVICE-DEPENDENCY-GRAPH.json` now includes `deployment_topology`
+
+### Notes
+- Deployment reality is preserved by design: 4 application containers on one virtual server and 3 logical databases in one MariaDB server.
+- No schema changes were introduced.
+
+### Versioning
+- Patch version bump only: `0.0.52` -> `0.0.53`.
+
 ## [0.0.50] - 2026-05-01 - Service DDL Extraction, HTTP Inter-Service Clients, Correlation IDs, Gateway Hardening
 
 ### Changed

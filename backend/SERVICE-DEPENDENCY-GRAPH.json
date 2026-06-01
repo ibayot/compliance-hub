@@ -1,5 +1,23 @@
 {
-  "_comment": "Machine-readable service dependency graph. Updated: 2026-04-30. Version: 0.0.51",
+  "_comment": "Machine-readable service dependency graph. Updated: 2026-05-13. Version: 0.0.53",
+  "deployment_topology": {
+    "runtime": "single-vm-multi-container",
+    "application_containers": [
+      "users-service",
+      "ticketing-service",
+      "compliance-service",
+      "api-gateway"
+    ],
+    "database_server": {
+      "engine": "mariadb",
+      "shared_instance": true,
+      "logical_databases": [
+        "compliance_hub_users",
+        "compliance_hub_ticketing",
+        "compliance_hub"
+      ]
+    }
+  },
   "_legend": {
     "sync-http": "Synchronous HTTP call via internal API (X-Service-Token auth, circuit-breaker protected)",
     "cross-db-view": "Direct SQL cross-database view JOIN via TypeORM (DEPRECATED — being replaced by sync-http)",

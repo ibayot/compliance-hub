@@ -4,6 +4,94 @@
 
 ---
 
+## Re-Audit Addendum (Evidence-Based)
+*Re-audit date: 2026-05-13 | Assessed against working tree in local repository*
+
+### Validated Deployment Constraints (confirmed from docker-compose and service bootstraps)
+
+1. Runtime topology: 1 virtual server hosting 4 application containers in microservices mode:
+  - users-service
+  - ticketing-service
+  - compliance-service
+  - api-gateway
+2. Data topology: 1 MariaDB server hosting 3 logical databases:
+  - compliance_hub_users (users-service owner)
+  - compliance_hub_ticketing (ticketing-service owner)
+  - compliance_hub (compliance-service owner)
+3. Cross-domain compatibility remains dependent on cross-database SQL views while HTTP internal APIs are being introduced.
+
+### Current Classification (updated)
+
+| Dimension | 2026-04-30 | 2026-05-13 | Delta |
+|---|---:|---:|---|
+| Service boundary definition | 3/5 | 3/5 | Unchanged (entity coupling still present) |
+| Database isolation | 2/5 | 2/5 | Unchanged (3 DBs share 1 MariaDB server + cross-DB views) |
+| Communication patterns | 3/5 | 4/5 | Improved (HTTP clients + circuit breaker + Redis pub/sub path present) |
+| Deployability | 3/5 | 3/5 | Unchanged (independent binaries, but schema/view coupling remains) |
+| Failure isolation | 3/5 | 4/5 | Improved (gateway domain-aware 503 + readiness depth + circuit breaker) |
+
+### Re-Audit Verdict
+
+Classification remains: Advanced Distributed Monolith transitioning to Constrained Microservices.
+
+Reason: the system now has stronger resilience controls, but true boundary independence is still blocked by cross-boundary TypeORM entity references and cross-DB view hydration across services hosted on one shared DB server.
+
+### Findings Re-validated on 2026-05-13
+
+Resolved/Improved since baseline:
+- C3 (No circuit breaker): Resolved in users and compliance HTTP clients.
+- H3 (Flat gateway 503): Improved with domain-aware service_unavailable payload.
+- H4 (Shallow readiness): Improved with view and Redis checks in service readiness endpoints.
+- H5 (No machine-readable graph): Resolved with SERVICE-DEPENDENCY-GRAPH.json.
+- H6 partial (No async event path): Partial via Redis EventBus and capabilities.updated invalidation flow.
+
+Still open:
+- C1 (cross-boundary entity imports / ORM joins).
+- H1 (cross-DB views are still the primary join mechanism in several domains).
+- M1 (shared entity compile coupling remains through shared entity barrel).
+- M2 partial (OpenAPI and service version headers available; full external versioning strategy still pending).
+- M3 (shared static INTERNAL_SERVICE_SECRET).
+
+### Implementation Completed in This Re-Audit Pass (2026-05-13)
+
+1. Correlation middleware registration was wired at app-module level for:
+  - users-service app module
+  - ticketing-service app module
+  - compliance-service app module
+2. Readiness payloads now expose deployment topology metadata (runtime mode, service role, DB host, DB name, shared DB server indicator), matching the actual single-VM + single-MariaDB-server architecture.
+3. Architecture governance artifacts updated to encode explicit infrastructure constraints (4 containers, 3 logical DBs on one DB server).
+4. Step 1 and Step 2 executed in selected bounded contexts:
+  - Added shared value-object contracts (`UserRef`, `UnitRef`).
+  - Replaced selected cross-boundary User ORM relations with scalar IDs + UsersHttpClient enrichment (incidents, document assignments/references) while preserving endpoint payload keys.
+5. M2 progress: gateway now exposes versioned aliases at `/api/v1/*` while preserving existing `/api/*` behavior.
+6. M3 progress: internal service auth now supports per-service tokens (`INTERNAL_SERVICE_TOKENS`) with backward-compatible shared-secret fallback.
+
+### Topology-Constrained Plan (No Assumptions)
+
+Immediate (safe in current infra):
+1. Continue C1 reduction by replacing selected cross-service relations with scalar FK + HTTP enrichment in read paths only.
+2. Keep cross-DB views as compatibility bridge until each path has HTTP enrichment parity.
+3. Add per-service dependency assertions in readiness checks for all critical views/queues actually used by that service.
+
+Near term:
+1. Complete RoleCapabilitiesService decoupling from users source imports in all non-users modules.
+2. Introduce rotating internal service identity (per-service JWT or signed service token) while preserving shared-VM deployment.
+
+Medium term:
+1. Reduce cross-DB view usage by domain, one aggregate at a time, starting with tickets and document assignments.
+2. Keep strict ownership rules: each service writes only to its owned database even though all DBs share one MariaDB server.
+
+### Validation Commands for This Pass
+
+- Backend compile: run backend build and verify no TypeScript regressions.
+- Readiness checks:
+  - GET /api/health/ready on users-service (4101)
+  - GET /api/health/ready on ticketing-service (4102)
+  - GET /api/health/ready on compliance-service (4103)
+- Confirm response now includes topology metadata and existing checks payload.
+
+---
+
 ## Executive Classification
 
 | Dimension | Score | Verdict |
