@@ -65,17 +65,19 @@ export class ComplianceHttpClient {
   private readonly logger = new Logger(ComplianceHttpClient.name);
   private readonly baseUrl: string;
   private readonly serviceToken: string | undefined;
+  private readonly serviceOrigin: string;
   private readonly circuit = new CircuitBreaker();
 
   constructor() {
     this.baseUrl = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:4103';
-    this.serviceToken = process.env.INTERNAL_SERVICE_SECRET;
+    this.serviceToken = process.env.INTERNAL_SERVICE_TOKEN || process.env.INTERNAL_SERVICE_SECRET;
+    this.serviceOrigin = process.env.SERVICE_NAME || 'unknown-service';
   }
 
   private buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'X-Service-Origin': 'compliance-hub-internal',
+      'X-Service-Origin': this.serviceOrigin,
     };
     if (this.serviceToken) {
       headers['X-Service-Token'] = this.serviceToken;
