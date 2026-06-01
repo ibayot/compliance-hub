@@ -179,7 +179,7 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
   // ── Derived helpers ───────────────────────────────────────────────────────
 
   canSeeAllTickets(role: string): boolean {
-    return this.isAllTickets(role) || this.isTicketSettingsFocal(role);
+    return this.isAllTickets(role);
   }
 
   canChangePriority(role: string): boolean {

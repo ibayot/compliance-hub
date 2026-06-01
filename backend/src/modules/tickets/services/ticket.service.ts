@@ -328,8 +328,7 @@ export class TicketService implements OnModuleInit {
 
   private canViewAllTicketsInTicketing(role?: string): boolean {
     if (!role) return false;
-    if (role === UserRole.SUPER_ADMIN) return true;
-    return this.roleCapSvc.isFocal(role) || this.roleCapSvc.isIto(role);
+    return this.roleCapSvc.isAllTickets(role);
   }
 
   private async canAccessTicketByEscalation(ticketId: string, viewerId?: number): Promise<boolean> {

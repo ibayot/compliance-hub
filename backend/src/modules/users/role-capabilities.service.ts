@@ -225,11 +225,10 @@ export class RoleCapabilitiesService implements OnModuleInit {
 
   /**
    * True if the role can see ALL tickets (not restricted to own-submitted/assigned).
-   * DB-driven via is_all_tickets column.
-   * Ticket Settings Focals implicitly inherit this privilege (cascade).
+   * DB-driven via is_all_tickets column only.
    */
   canSeeAllTickets(role: string): boolean {
-    return this.isAllTickets(role) || this.isTicketSettingsFocal(role);
+    return this.isAllTickets(role);
   }
 
   /**
