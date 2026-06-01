@@ -331,6 +331,12 @@ export class TicketService implements OnModuleInit {
     return this.roleCapSvc.isAllTickets(role);
   }
 
+  private canViewEscalatedQueue(role?: string): boolean {
+    if (!role) return false;
+    if (role === UserRole.SUPER_ADMIN) return true;
+    return this.roleCapSvc.isEscalationFocal(role);
+  }
+
   private async canAccessTicketByEscalation(ticketId: string, viewerId?: number): Promise<boolean> {
     if (!viewerId) return false;
 
@@ -627,6 +633,10 @@ export class TicketService implements OnModuleInit {
       .distinct(true);
 
     const isEscalatedQueue = Boolean(filters.escalatedToId);
+
+    if (isEscalatedQueue && !this.canViewEscalatedQueue(filters.viewerRole as string)) {
+      throw new ForbiddenException('Your role does not have escalation queue access.');
+    }
 
     if (isEscalatedQueue) {
       qb.innerJoin(

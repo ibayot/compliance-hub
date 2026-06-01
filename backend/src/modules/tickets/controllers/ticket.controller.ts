@@ -266,14 +266,7 @@ export class TicketController {
 
   /** POST /tickets/:id/escalate — upload proof photos (multipart/form-data) */
   @Post(':id/escalate')
-  @Roles(
-    UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD,
-    UserRole.COMPLIANCE_OFFICER, UserRole.PANTAWID_ICT,
-    UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
-    UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
-    UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
-    UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
-  )
+  @Roles(...ALL_ROLES)
   @UseInterceptors(FilesInterceptor('proofFiles', 10, { limits: { fileSize: 10 * 1024 * 1024 } }))
   async escalateTicket(
     @Param('id') id: string,

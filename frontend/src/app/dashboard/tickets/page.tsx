@@ -19,7 +19,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ticketsApi, Ticket, CreateTicketDto, TicketStatus, TicketType, TicketPriority,
-  TechnicianOption, TicketCategory, EscalationFocalConfig, ticketSettingsApi, attendanceApi, CsatFormData,
+  TechnicianOption, TicketCategory, ticketSettingsApi, attendanceApi, CsatFormData,
 } from '@/app/api/references';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
@@ -109,7 +109,6 @@ export default function TicketsPage() {
   const [reminderOpen, setReminderOpen] = useState(false);
   const [reminderTitle, setReminderTitle] = useState('Pending Satisfaction Reminder');
   const [reminderMessage, setReminderMessage] = useState('');
-  const [isEscalationRoleConfigured, setIsEscalationRoleConfigured] = useState(false);
 
   // DB-driven role capabilities (is_all_tickets, is_ticket_focal) — loaded from AuthContext
   // (also available: myCap?.isEscalationFocal, myCap?.isTicketSettingsFocal, myCap?.isFocal)
@@ -128,10 +127,10 @@ export default function TicketsPage() {
   const isSectionHead = user?.roleCode === 'section_head';
   // DB-driven: is_all_tickets column — falls back to super_admin only until capabilities load
   const canManageAll = isSuperAdmin || !!myCap?.isAllTickets;
-  // Escalated queue visibility is based on Ticket Settings escalation focal configuration.
-  const canViewEscalatedQueue = isSuperAdmin || isEscalationRoleConfigured;
+  // Matrix-driven: Escalated To Me tab is visible when Escalation capability is ticked.
+  const canViewEscalatedQueue = isSuperAdmin || !!myCap?.isEscalationFocal;
   // DB-driven: is_ticket_focal column — who can manually assign/reassign tickets
-  const canAssign = isSuperAdmin || !!myCap?.isTicketFocal;
+  const canAssign = isSuperAdmin || !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
   // Matrix-driven escalation eligibility:
   // show action for technician tracks plus ticket admin/assign/all-ticket capabilities.
   const canEscalate = isSuperAdmin || !!(
@@ -249,20 +248,6 @@ export default function TicketsPage() {
       usersApi.list().then(users => setAllUsers(users.filter(u => u.active))).catch(() => {});
     }
   }, [canManageAll]);
-
-  useEffect(() => {
-    if (!user?.role) {
-      setIsEscalationRoleConfigured(false);
-      return;
-    }
-
-    ticketSettingsApi
-      .getEscalationFocals()
-      .then((rows: EscalationFocalConfig[]) => {
-        setIsEscalationRoleConfigured(rows.some((r) => r.roleValue === user.role));
-      })
-      .catch(() => setIsEscalationRoleConfigured(false));
-  }, [user?.role]);
 
   // Fetch categories when the New Ticket dialog opens or support type changes
   // Pass activeOnly=true so only active categories appear in the creation dropdown

@@ -375,10 +375,8 @@ export class TicketSettingsService {
    * (user, super_admin, section_head, compliance_officer).
    */
   async listAvailableEscalationRoles(): Promise<{ value: string; label: string }[]> {
-    const excluded = ['user', 'super_admin', 'section_head', 'compliance_officer'];
     const rows = await this.roleDefRepo.find();
     return rows
-      .filter(r => !excluded.includes(r.value))
       .filter(r => this.roleCapSvc.isEscalationFocal(r.value))
       .map(r => ({ value: r.value, label: r.label }));
   }
