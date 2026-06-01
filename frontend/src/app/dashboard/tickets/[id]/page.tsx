@@ -170,7 +170,7 @@ export default function TicketDetailPage() {
   const isFocal = user?.roleCode === 'focal';
   const isAdmin = user?.role === 'super_admin' || isFocal;
   const canAssignByCapability = user?.role === 'super_admin' || !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
-  const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isEscalationFocal || !!myCap?.isAllTickets;
+  const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isAllTickets;
   const canPriority = canStaff;
   const isComplianceOfficer = user?.roleCode === 'compliance_officer';
   const isSectionHead = user?.roleCode === 'section_head';

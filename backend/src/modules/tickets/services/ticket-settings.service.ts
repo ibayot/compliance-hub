@@ -11,6 +11,7 @@ import { TicketKeywordRule } from '../entities/ticket-keyword-rule.entity';
 import { TicketIssueType } from '../entities/ticket-issue-type.entity';
 import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
 import { RoleDefinitionEntity } from '../../users/entities/role-definition.entity';
+import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -80,6 +81,7 @@ export class TicketSettingsService {
     private readonly escalationFocalRepo: Repository<EscalationFocalConfig>,
     @InjectRepository(RoleDefinitionEntity)
     private readonly roleDefRepo: Repository<RoleDefinitionEntity>,
+    private readonly roleCapSvc: RoleCapabilitiesService,
   ) {}
 
   // ── Categories ──────────────────────────────────────────────────────────
@@ -377,6 +379,7 @@ export class TicketSettingsService {
     const rows = await this.roleDefRepo.find();
     return rows
       .filter(r => !excluded.includes(r.value))
+      .filter(r => this.roleCapSvc.isEscalationFocal(r.value))
       .map(r => ({ value: r.value, label: r.label }));
   }
 
@@ -386,6 +389,12 @@ export class TicketSettingsService {
     if (!validTypes.includes(dto.ticketType)) {
       throw new BadRequestException(`ticketType must be one of: ${validTypes.join(', ')}`);
     }
+    if (!this.roleCapSvc.isEscalationFocal(dto.roleValue)) {
+      throw new BadRequestException(
+        `Role "${dto.roleValue}" is not enabled for escalation focal in role capability matrix.`,
+      );
+    }
+
     const existing = await this.escalationFocalRepo.findOne({
       where: { ticketType: dto.ticketType, roleValue: dto.roleValue },
     });

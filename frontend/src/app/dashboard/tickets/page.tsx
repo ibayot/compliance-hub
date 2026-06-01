@@ -128,8 +128,8 @@ export default function TicketsPage() {
   const isSectionHead = user?.roleCode === 'section_head';
   // DB-driven: is_all_tickets column — falls back to super_admin only until capabilities load
   const canManageAll = isSuperAdmin || !!myCap?.isAllTickets;
-  // canViewEscalatedQueue: role-capabilities or Ticket Settings escalation focal configuration.
-  const canViewEscalatedQueue = isSuperAdmin || !!myCap?.isEscalationFocal || isEscalationRoleConfigured;
+  // Escalated queue visibility is based on Ticket Settings escalation focal configuration.
+  const canViewEscalatedQueue = isSuperAdmin || isEscalationRoleConfigured;
   // DB-driven: is_ticket_focal column — who can manually assign/reassign tickets
   const canAssign = isSuperAdmin || !!myCap?.isTicketFocal;
   // Matrix-driven escalation eligibility:
