@@ -1,4 +1,4 @@
-﻿import {
+import {
   Injectable,
   NotFoundException,
   Logger,
@@ -388,7 +388,7 @@ export class TicketService implements OnModuleInit {
     let ticketType = dto.ticketType;
     let categoryId = dto.categoryId || null;
     let issueTypeId = dto.issueTypeId || null;
-    let issueTypeKey: string | null = null;
+    let issueTypeKey: string = 'other';
     let autoShifted = false;
 
     if (issueTypeId) {
@@ -798,7 +798,7 @@ export class TicketService implements OnModuleInit {
     if (dto.issueTypeId !== undefined) {
       if (!dto.issueTypeId) {
         ticket.issueTypeId = null;
-        ticket.issueType = null;
+        ticket.issueType = 'other';
       } else {
         const issueType = await this.issueTypeRepo.findOne({
           where: { id: dto.issueTypeId, is_deleted: false, is_active: true },

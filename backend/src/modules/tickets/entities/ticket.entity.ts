@@ -79,8 +79,8 @@ export class Ticket {
   @Column({ name: 'issue_type_id', type: 'varchar', length: 36, nullable: true })
   issueTypeId: string | null;
 
-  @Column({ name: 'issue_type', type: 'varchar', length: 50, nullable: true })
-  issueType: string | null;
+  @Column({ name: 'issue_type', type: 'varchar', length: 50, default: 'other' })
+  issueType: string;
 
   @ManyToOne(() => TicketIssueType, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'issue_type_id' })
