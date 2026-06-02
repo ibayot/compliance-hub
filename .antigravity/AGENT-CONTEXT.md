@@ -659,3 +659,6 @@ The MASTER-CONTEXT.md is STALE at v0.0.31. Key things it misses:
 | `GET /api/health/ready` | Readiness — DB + critical view/Redis checks + topology metadata |
 
 Gateway aggregates health of all 3 services at its own `GET /api/health`.
+
+### Recent Changes by Antigravity
+- **Ticketing Service**: Fixed issue_type nullable schema mismatch in 	icket.entity.ts and 	icket.service.ts to adhere to DB NOT NULL DEFAULT 'other' constraint.
