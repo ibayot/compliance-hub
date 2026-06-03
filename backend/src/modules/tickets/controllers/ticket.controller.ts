@@ -162,6 +162,23 @@ export class TicketController {
     });
   }
 
+  /** GET /tickets/ratings-report — detailed ratings report (Tickets, Techs, Days/Weeks/Months/Quarters) */
+  @Get('ratings-report')
+  @Roles(...ALL_ROLES)
+  async getRatingsReport(
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+    @Query('quarter') quarter?: string,
+    @Query('technicianId') technicianId?: string,
+  ) {
+    return this.ticketService.getRatingsReport({
+      year: year ? Number(year) : undefined,
+      month: month ? Number(month) : undefined,
+      quarter: quarter ? Number(quarter) : undefined,
+      technicianId: technicianId ? Number(technicianId) : undefined,
+    });
+  }
+
   /** GET /tickets/report-technicians — technicians who had tickets in a given period */
   @Get('report-technicians')
   @Roles(...ALL_ROLES)

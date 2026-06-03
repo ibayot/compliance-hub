@@ -702,9 +702,24 @@ export class TicketService implements OnModuleInit {
       .getRawMany();
     const absentIds = new Set<number>(absentRows.map(r => Number(r.userId)));
 
-    const withAvailability = tickets.map(t => Object.assign(t, {
-      assignedTechAbsent: t.assignedToId ? absentIds.has(t.assignedToId) : false,
-    })) as any;
+    const now = new Date();
+    const withAvailability = tickets.map(t => {
+      let isOverdue = false;
+      let isNearingSLA = false;
+      if (t.slaDeadline) {
+        const deadline = new Date(t.slaDeadline);
+        if (now > deadline) {
+          isOverdue = true;
+        } else if (deadline.getTime() - now.getTime() <= 2 * 60 * 60 * 1000) { // 2 hours before SLA
+          isNearingSLA = true;
+        }
+      }
+      return Object.assign(t, {
+        assignedTechAbsent: t.assignedToId ? absentIds.has(t.assignedToId) : false,
+        isOverdue,
+        isNearingSLA,
+      });
+    }) as any;
 
     if (!usePagination) {
       return withAvailability;
@@ -730,7 +745,20 @@ export class TicketService implements OnModuleInit {
     if (viewerRole === UserRole.USER && ticket.comments) {
       (ticket as any).comments = ticket.comments.filter((c: any) => !c.isInternal);
     }
-    return ticket;
+    
+    // Add SLA indicators
+    let isOverdue = false;
+    let isNearingSLA = false;
+    if (ticket.slaDeadline) {
+      const now = new Date();
+      const deadline = new Date(ticket.slaDeadline);
+      if (now > deadline) {
+        isOverdue = true;
+      } else if (deadline.getTime() - now.getTime() <= 2 * 60 * 60 * 1000) {
+        isNearingSLA = true;
+      }
+    }
+    return Object.assign(ticket, { isOverdue, isNearingSLA });
   }
 
   // --- Update --------------------------------------------------------------
@@ -1317,6 +1345,77 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     };
   }
 
+  async getRatingsReport(filters: {
+    year?: number;
+    month?: number;
+    quarter?: number;
+    technicianId?: number;
+  }): Promise<{
+    byTicket: any[];
+    byTechnician: Record<string, { average: number, count: number }>;
+    summary: { average: number, count: number };
+  }> {
+    const qb = this.ticketRepo.createQueryBuilder('t')
+      .leftJoinAndSelect('t.assignedTo', 'assignedTo')
+      .where('t.satisfactionRating IS NOT NULL');
+
+    if (filters.year) {
+      qb.andWhere('YEAR(t.satisfactionSubmittedAt) = :year', { year: filters.year });
+    }
+    if (filters.month) {
+      qb.andWhere('MONTH(t.satisfactionSubmittedAt) = :month', { month: filters.month });
+    }
+    if (filters.quarter) {
+      qb.andWhere('QUARTER(t.satisfactionSubmittedAt) = :quarter', { quarter: filters.quarter });
+    }
+    if (filters.technicianId) {
+      qb.andWhere('t.assignedToId = :techId', { techId: filters.technicianId });
+    }
+
+    const tickets = await qb.orderBy('t.satisfactionSubmittedAt', 'DESC').getMany();
+
+    const byTicket = tickets.map(t => ({
+      ticketId: t.id,
+      ticketNumber: t.ticketNumber,
+      rating: t.satisfactionRating,
+      comment: t.satisfactionComment,
+      formData: t.satisfactionFormData,
+      submittedAt: t.satisfactionSubmittedAt,
+      technicianId: t.assignedTo?.id,
+      technicianName: t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName}` : 'Unknown'
+    }));
+
+    const byTechnician: Record<string, { total: number, count: number }> = {};
+    let totalSum = 0;
+    
+    for (const t of tickets) {
+      const techName = t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName}`.trim() : 'Unknown';
+      if (!byTechnician[techName]) {
+        byTechnician[techName] = { total: 0, count: 0 };
+      }
+      byTechnician[techName].total += t.satisfactionRating!;
+      byTechnician[techName].count += 1;
+      totalSum += t.satisfactionRating!;
+    }
+
+    const technicianAverages: Record<string, { average: number, count: number }> = {};
+    for (const [tech, data] of Object.entries(byTechnician)) {
+      technicianAverages[tech] = {
+        average: Math.round((data.total / data.count) * 10) / 10,
+        count: data.count
+      };
+    }
+
+    return {
+      byTicket,
+      byTechnician: technicianAverages,
+      summary: {
+        average: tickets.length > 0 ? Math.round((totalSum / tickets.length) * 10) / 10 : 0,
+        count: tickets.length
+      }
+    };
+  }
+
   async getUserDashboardStats(requesterId: number): Promise<{
     total: number;
     open: number;
@@ -1883,6 +1982,14 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
 
     if (allowedRoles.length > 0 && !allowedRoles.includes(focal.role)) {
       throw new ForbiddenException('The selected user is not designated as an escalation focal for this ticket type.');
+    }
+
+    // QA #9: Verify that the selected focal is actually PRESENT today
+    const today = new Date().toISOString().slice(0, 10);
+    const presentFocals = await this.attendanceService.getPresentTechnicians(ticket.ticketType, today);
+    const isPresent = presentFocals.some(t => t.id === focal.id);
+    if (!isPresent) {
+      throw new BadRequestException('The selected escalation focal is not currently marked as present or available today.');
     }
 
     // Save proof photos to disk
