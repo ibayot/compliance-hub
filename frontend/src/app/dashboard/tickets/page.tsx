@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -629,7 +629,11 @@ export default function TicketsPage() {
                   </Stack>
                 </TableCell>
                 <TableCell>
-                  {(() => { const s = getSlaStatus(ticket); return s ? <Chip size="small" label={SLA_CHIP[s].label} color={SLA_CHIP[s].color} /> : <Typography variant="body2" color="text.disabled">—</Typography>; })()}
+                  <Stack direction="column" spacing={0.5}>
+                    {(() => { const s = getSlaStatus(ticket); return s ? <Chip size="small" label={SLA_CHIP[s].label} color={SLA_CHIP[s].color} /> : <Typography variant="body2" color="text.disabled">—</Typography>; })()}
+                    {ticket.isOverdue && <Chip size="small" label="Overdue" color="error" variant="filled" />}
+                    {ticket.isNearingSLA && !ticket.isOverdue && <Chip size="small" label="Nearing SLA" color="warning" variant="filled" />}
+                  </Stack>
                 </TableCell>
                 {canManageAll && (
                   <TableCell>{ticket.requester ? `${ticket.requester.firstName ?? ''} ${ticket.requester.lastName ?? ''}`.trim() || ticket.requester.email : '—'}</TableCell>

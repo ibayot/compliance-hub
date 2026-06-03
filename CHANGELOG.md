@@ -1,10 +1,26 @@
-﻿# RICTMS Compliance Hub - Changelog
+# RICTMS Compliance Hub - Changelog
 
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
+
+## [0.0.61] - 2026-06-03 - E2E Testing, Detailed Ratings Report, and SLA Enhancements
+
+### Added
+- Front-end End-to-End automated test suite using Playwright (`tests/e2e/tickets.spec.ts`).
+- `Detailed Ratings` view in Ticket Reports module, incorporating `byDay`, `byWeek`, `byMonth`, `byQuarter` and `byTicket` analytics.
+- Overdue and Nearing SLA visual chips on the ticket table row for quick monitoring.
+
+### Changed
+- `isNearingSLA` logic updated to dynamically compute a 40% threshold of the total SLA time instead of a static 2 hours.
+
+## [0.0.60] - 2026-06-02 - Escalation Metrics and SLA logic
+
+### Added
+- `isOverdue` and `isNearingSLA` initial SLA indicators based on deadline computation.
+- Support for detailed API endpoints for Ratings parameters.
 
 ## [0.0.54] - 2026-05-13 - Boundary Decoupling Step 1/2 + API v1 Alias + Service Token Hardening
 

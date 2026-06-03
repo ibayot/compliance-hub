@@ -21,10 +21,12 @@ import {
   Chip,
   Stack,
   LinearProgress,
+  ToggleButtonGroup,
+  ToggleButton,
 } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { ticketsApi, TicketReportResult } from '@/app/api/references';
+import { ticketsApi, TicketReportResult, RatingsReportResult } from '@/app/api/references';
 import { useAuth } from '@/contexts/AuthContext';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -91,6 +93,8 @@ export default function TicketReportsPage() {
   const [ticketType, setTicketType] = useState<string>('');
   const [technicians, setTechnicians] = useState<Array<{ id: number; firstName: string; lastName: string; role: string }>>([]);
   const [result, setResult] = useState<TicketReportResult | null>(null);
+  const [detailedResult, setDetailedResult] = useState<RatingsReportResult | null>(null);
+  const [viewMode, setViewMode] = useState<'overview' | 'detailed'>('overview');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -121,6 +125,13 @@ export default function TicketReportsPage() {
       if (ticketType) filters.ticketType = ticketType;
       const data = await ticketsApi.getReports(filters);
       setResult(data);
+
+      try {
+        const dData = await ticketsApi.getRatingsReport({ year, month, quarter, technicianId: effectiveTechId });
+        setDetailedResult(dData);
+      } catch (err) {
+        console.error('Failed to fetch detailed ratings', err);
+      }
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to load report data.');
     } finally {
@@ -183,9 +194,20 @@ export default function TicketReportsPage() {
           Print
         </Button>
       </Box>
-      <Typography variant="body2" color="text.secondary" mb={3} sx={{ '@media print': { display: 'none' } }}>
-        Satisfaction ratings overview — average overall, per support type, and per technician.
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} sx={{ '@media print': { display: 'none' } }}>
+        <Typography variant="body2" color="text.secondary">
+          Satisfaction ratings overview — average overall, per support type, and per technician.
+        </Typography>
+        <ToggleButtonGroup
+          value={viewMode}
+          exclusive
+          onChange={(_, val) => val && setViewMode(val)}
+          size="small"
+        >
+          <ToggleButton value="overview">Overview</ToggleButton>
+          <ToggleButton value="detailed">Detailed Ratings</ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
 
       {/* ── Print header (only visible in print) ── */}
       <Box sx={{ display: 'none', '@media print': { display: 'block', mb: 2 } }}>
@@ -281,7 +303,7 @@ export default function TicketReportsPage() {
       {loading && <Box textAlign="center" py={4}><CircularProgress /></Box>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      {!loading && result && (
+      {!loading && viewMode === 'overview' && result && (
         <>
           {/* ── Summary Cards ── */}
           <Grid container spacing={2} mb={3}>
@@ -593,6 +615,77 @@ export default function TicketReportsPage() {
             )}
           </Grid>
         </>
+      )}
+
+      {!loading && viewMode === 'detailed' && detailedResult && (
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>Average Rating By Day</Typography>
+                {detailedResult.byDay.length === 0 ? <Typography variant="body2" color="text.secondary">No data.</Typography> : (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={detailedResult.byDay} margin={{ top: 4, right: 8, left: -20, bottom: 4 }}>
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                      <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="avgRating" name="Avg Rating" fill="#9C27B0" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>Average Rating By Week</Typography>
+                {detailedResult.byWeek.length === 0 ? <Typography variant="body2" color="text.secondary">No data.</Typography> : (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={detailedResult.byWeek} margin={{ top: 4, right: 8, left: -20, bottom: 4 }}>
+                      <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                      <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="avgRating" name="Avg Rating" fill="#FF9800" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>Ratings Per Ticket</Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Ticket</TableCell>
+                      <TableCell>Subject</TableCell>
+                      <TableCell>Submitted At</TableCell>
+                      <TableCell align="right">Rating</TableCell>
+                      <TableCell>Comment</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {detailedResult.byTicket.map(t => (
+                      <TableRow key={t.ticketId}>
+                        <TableCell sx={{ fontFamily: 'monospace' }}>{t.ticketNumber}</TableCell>
+                        <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.subject}</TableCell>
+                        <TableCell>{new Date(t.submittedAt).toLocaleDateString()}</TableCell>
+                        <TableCell align="right"><Chip size="small" label={t.rating} color={RATING_COLOR(t.rating)} /></TableCell>
+                        <TableCell sx={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.comment || '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                    {detailedResult.byTicket.length === 0 && (
+                      <TableRow><TableCell colSpan={5} align="center"><Typography variant="body2" color="text.secondary" py={2}>No rated tickets found.</Typography></TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
       )}
     </Box>
   );

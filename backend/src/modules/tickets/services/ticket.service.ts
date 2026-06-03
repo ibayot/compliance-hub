@@ -708,9 +708,13 @@ export class TicketService implements OnModuleInit {
       let isNearingSLA = false;
       if (t.slaDeadline) {
         const deadline = new Date(t.slaDeadline);
+        const createdAt = new Date(t.createdAt);
+        const totalSlaMs = deadline.getTime() - createdAt.getTime();
+        const fortyPercentSlaMs = totalSlaMs * 0.40;
+
         if (now > deadline) {
           isOverdue = true;
-        } else if (deadline.getTime() - now.getTime() <= 2 * 60 * 60 * 1000) { // 2 hours before SLA
+        } else if (deadline.getTime() - now.getTime() <= fortyPercentSlaMs) {
           isNearingSLA = true;
         }
       }
@@ -752,9 +756,13 @@ export class TicketService implements OnModuleInit {
     if (ticket.slaDeadline) {
       const now = new Date();
       const deadline = new Date(ticket.slaDeadline);
+      const createdAt = new Date(ticket.createdAt);
+      const totalSlaMs = deadline.getTime() - createdAt.getTime();
+      const fortyPercentSlaMs = totalSlaMs * 0.40;
+
       if (now > deadline) {
         isOverdue = true;
-      } else if (deadline.getTime() - now.getTime() <= 2 * 60 * 60 * 1000) {
+      } else if (deadline.getTime() - now.getTime() <= fortyPercentSlaMs) {
         isNearingSLA = true;
       }
     }

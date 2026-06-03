@@ -179,6 +179,8 @@ export interface Ticket {
   /** UUID of the original ticket when status = 'duplicate' */
   duplicateOfId?: string | null;
   comments?: TicketComment[];
+  isOverdue?: boolean;
+  isNearingSLA?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -279,6 +281,32 @@ export interface TicketReportResult {
   totalEscalations: number;
   acceptedEscalations: number;
   returnedEscalations: number;
+}
+
+export interface RatingsReportResult {
+  overview: {
+    totalRatings: number;
+    avgOverallRating: number;
+  };
+  byTicket: Array<{
+    ticketId: string;
+    ticketNumber: string;
+    subject: string;
+    rating: number;
+    comment: string | null;
+    submittedAt: string;
+    technicianId: number | null;
+  }>;
+  byTechnician: Array<{
+    techId: number;
+    techName: string;
+    avgRating: number;
+    count: number;
+  }>;
+  byDay: Array<{ date: string; avgRating: number; count: number }>;
+  byWeek: Array<{ week: string; avgRating: number; count: number }>;
+  byMonth: Array<{ month: string; avgRating: number; count: number }>;
+  byQuarter: Array<{ quarter: string; avgRating: number; count: number }>;
 }
 
 export type EscalationStatus = 'pending' | 'accepted' | 'returned';
@@ -556,6 +584,22 @@ export const ticketsApi = {
     if (filters?.technicianId) params.append('technicianId', String(filters.technicianId));
     if (filters?.ticketType) params.append('ticketType', filters.ticketType);
     const response = await apiClient.get(`/tickets/reports?${params}`);
+    return response.data;
+  },
+
+  /** Get detailed ratings report (Tickets, Techs, Days/Weeks/Months/Quarters) */
+  getRatingsReport: async (filters?: {
+    year?: number;
+    month?: number;
+    quarter?: number;
+    technicianId?: number;
+  }): Promise<RatingsReportResult> => {
+    const params = new URLSearchParams();
+    if (filters?.year) params.append('year', String(filters.year));
+    if (filters?.month) params.append('month', String(filters.month));
+    if (filters?.quarter) params.append('quarter', String(filters.quarter));
+    if (filters?.technicianId) params.append('technicianId', String(filters.technicianId));
+    const response = await apiClient.get(`/tickets/ratings-report?${params}`);
     return response.data;
   },
 
