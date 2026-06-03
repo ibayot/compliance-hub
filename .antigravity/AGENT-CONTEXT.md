@@ -662,3 +662,8 @@ Gateway aggregates health of all 3 services at its own `GET /api/health`.
 
 ### Recent Changes by Antigravity
 - **Ticketing Service**: Fixed issue_type nullable schema mismatch in 	icket.entity.ts and 	icket.service.ts to adhere to DB NOT NULL DEFAULT 'other' constraint.
+
+### Feature Updates (Ticketing Regression 2)
+- **SLA Indicators**: Added \isOverdue\ and \isNearingSLA\ properties to ticket list payloads based on \slaDeadline\.
+- **Ratings Report API**: Added \/api/tickets/ratings-report\ endpoint for detailed ratings grouped by ticket and technician over selectable periods (day/month/quarter).
+- **Escalation Visibility**: Validates if the selected escalation focal is actively marked as present (\ttendanceService\) before allowing escalation.
