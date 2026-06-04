@@ -15,7 +15,7 @@ code = code.replace(createTicketOldEnd, createTicketNewEnd);
 
 // 3. Append Test 4 at the bottom
 const test4 = `
-  test('Test 4: Multiple Requests Allowed (Open Ticket & Pending Rating Restrictions Removed)', async ({ page }) => {
+  test('Test 4: Multiple Requests Allowed', async ({ page }) => {
     test.setTimeout(120000); // 2 mins
 
     // 1. Create first ticket
@@ -25,7 +25,7 @@ const test4 = `
     const subject1 = 'E2E Test 4 Multi-Request A ' + Date.now();
     await createTicket(page, subject1);
 
-    // 2. User creates a second ticket IMMEDIATELY (checking Open Ticket Restriction is gone)
+    // 2. User creates a second ticket IMMEDIATELY
     await page.goto('/dashboard/tickets');
     await page.waitForTimeout(1000);
     const subject2 = 'E2E Test 4 Multi-Request B ' + Date.now();
@@ -55,7 +55,7 @@ const test4 = `
     await expect(page.getByText('Ticket updated.')).toBeVisible({ timeout: 10000 });
     await logout(page);
 
-    // 4. User attempts to create a 3rd ticket while Ticket 1 is Unrated (Pending Satisfaction)
+    // 4. User attempts to create a 3rd ticket while Ticket 1 is Unrated
     await login(page, ACCOUNTS.user.email);
     await page.goto('/dashboard/tickets');
     await page.waitForTimeout(1000);
@@ -84,9 +84,14 @@ const test4 = `
     await logout(page);
     await cleanAttendance([ACCOUNTS.desktopSr.id]);
   });
+});
 `;
 
-code = code.replace(/}\);\n}\);\n*$/, '});\n' + test4 + '\n});\n');
-
-fs.writeFileSync('tests/e2e/tickets.spec.ts', code, 'utf8');
-console.log('Modified tests/e2e/tickets.spec.ts programmatically!');
+const lastIndex = code.lastIndexOf('});');
+if (lastIndex !== -1) {
+  code = code.substring(0, lastIndex) + test4;
+  fs.writeFileSync('tests/e2e/tickets.spec.ts', code, 'utf8');
+  console.log('Successfully updated tickets.spec.ts!');
+} else {
+  console.log('Failed to append test4');
+}

@@ -292,22 +292,12 @@ export default function TicketsPage() {
     if (!canManageAll) {
       ticketsApi.getDashboardStats().then(stats => {
         const pendingCount = stats.pendingSatisfactionTickets?.length ?? 0;
-        const unclosedCount = (stats.open ?? 0) + (stats.inProgress ?? 0) + (stats.resolved ?? 0);
         setPendingSatCount(pendingCount);
 
         if (pendingCount > 0) {
           setReminderTitle('Pending Satisfaction Reminder');
           setReminderMessage(
-            `You still have ${pendingCount} unresolved satisfaction rating${pendingCount > 1 ? 's' : ''}. Please rate your resolved tickets before opening a new request.`,
-          );
-          setReminderOpen(true);
-          return;
-        }
-
-        if (unclosedCount > 0) {
-          setReminderTitle('Open Ticket Restriction');
-          setReminderMessage(
-            `You currently have ${unclosedCount} unclosed ticket${unclosedCount > 1 ? 's' : ''}. New ticket creation is disabled until your existing ticket is closed.`,
+            `You still have ${pendingCount} unresolved satisfaction rating${pendingCount > 1 ? 's' : ''}. We recommend rating your resolved tickets, but you may proceed to open a new request.`,
           );
           setReminderOpen(true);
           return;
@@ -787,6 +777,14 @@ export default function TicketsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setReminderOpen(false)}>Close</Button>
+          <Button
+            onClick={() => {
+              setReminderOpen(false);
+              setNewDialogOpen(true);
+            }}
+          >
+            Proceed Anyway
+          </Button>
           <Button
             variant="contained"
             color="warning"

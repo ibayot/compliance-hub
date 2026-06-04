@@ -272,16 +272,7 @@ export class AttendanceService {
       }
     }
 
-    // Filter out technicians who are absent or out_of_office today
-    const today = new Date().toISOString().slice(0, 10);
-    const todayAttendance = await this.attendanceRepo.find({ where: { date: today } });
-    const unavailableIds = new Set<number>(
-      todayAttendance
-        .filter((a) => a.status === AttendanceStatus.ABSENT || a.status === AttendanceStatus.OUT_OF_OFFICE)
-        .map((a) => a.userId),
-    );
-
-    return merged.filter((u) => !unavailableIds.has(u.id));
+    return merged;
   }
 
   /** Get all staff who logged in on a specific date (for staff activity tab) */

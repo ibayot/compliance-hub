@@ -529,7 +529,7 @@ test.describe('Ticketing Lifecycle and SLA Tests', () => {
     await page.getByRole('option', { name: 'Resolved' }).click();
     await page.waitForTimeout(300);
 
-    await page.getByLabel('Resolution Notes (optional)').fill('Issue resolved by escalation focal.');
+    await page.getByLabel('Resolution Notes (optional)').fill('Issue resolved.');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     //await expect(page.getByText('Ticket updated.')).toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(500);
@@ -628,6 +628,11 @@ test.describe('Ticketing Lifecycle and SLA Tests', () => {
     }
     await logout(page);
 
+    // Resolve IT Support and Desktop Support tickets from the first batch
+    const db2 = await getDb('compliance_hub_ticketing');
+    await db2.execute(`UPDATE tickets SET status = 'resolved' WHERE ticket_type IN ('it_support', 'desktop_support')`);
+    await db2.end();
+
     // 4. Superadmin logs in, goes to Attendance, tags IT Support (gmjavierjr) as OOO.
     await login(page, ACCOUNTS.admin.email);
     await page.goto('/dashboard/attendance');
@@ -659,6 +664,7 @@ test.describe('Ticketing Lifecycle and SLA Tests', () => {
         await btn.click();
         await page.waitForTimeout(500);
       }
+      await page.waitForTimeout(3000); // Visual delay for OOO
     }
     await logout(page);
 
@@ -701,7 +707,152 @@ test.describe('Ticketing Lifecycle and SLA Tests', () => {
       await expect(page.locator('.MuiDialog-root')).toBeHidden({ timeout: 15000 });
     }
     await logout(page);
+
+    // Verify assignments for the second batch
+    const dbVer = await getDb('compliance_hub_ticketing');
+    const [rows] = await dbVer.query('SELECT subject, ticket_type, status, assigned_to_id FROM tickets WHERE subject LIKE ? ORDER BY created_at ASC', [`E2E Test 5 - % ${ts2}`]);
+    const ticketsBatch2 = rows as any[];
+    await dbVer.end();
+
+    const itTicketA = ticketsBatch2.find(t => t.ticket_type === 'it_support' && t.subject.includes('issue A'));
+    const desktopTicketA = ticketsBatch2.find(t => t.ticket_type === 'desktop_support' && t.subject.includes('issue A'));
+    const pantawidTicketA = ticketsBatch2.find(t => t.ticket_type === 'pantawid_ict_support' && t.subject.includes('issue A'));
     
+    // IT Support ticket A falls back to Desktop Support tech (assigned_to_id should not be null)
+    expect(itTicketA.assigned_to_id).not.toBeNull();
+    
+    // Desktop Support ticket A should be left OPEN because Desktop tech is busy with IT Ticket A, and Pantawid is busy from Batch 1
+    expect(desktopTicketA.assigned_to_id).toBeNull();
+    expect(desktopTicketA.status).toBe('open');
+
+    // Pantawid ICT Support ticket A should be left OPEN (all fallback layers busy/OOO)
+    expect(pantawidTicketA.assigned_to_id).toBeNull();
+    expect(pantawidTicketA.status).toBe('open');
+
     await cleanAttendance(techs);
   });
 });
+
+test.describe('Mobile View Tests', () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test('Test 6: Mobile Friendliness and CSAT Ratings Flow', async ({ page }) => {
+    test.setTimeout(120000);
+    await login(page, ACCOUNTS.user.email);
+    
+    // Verify mobile hamburger menu appears and can open sidebar
+    const menuBtn = page.getByRole('button', { name: 'open drawer' });
+    if (await menuBtn.isVisible({ timeout: 10000 })) {
+      await menuBtn.click();
+      await page.waitForTimeout(1000);
+    }
+    
+    await page.locator('a[href="/dashboard/tickets"]').first().click({ force: true });
+    await page.waitForTimeout(2000);
+
+    // Filter datagrid or wait for it to load
+    const resolvedRow1 = page.locator('tr').filter({ hasText: 'E2E Test 5' }).filter({ hasText: 'Resolved' }).first();
+    await expect(resolvedRow1).toBeVisible({ timeout: 20000 });
+
+    // 1. Rate 1 out of 2 resolved tickets
+    await resolvedRow1.click();
+    
+    // CSAT Dialog should open
+    const csatDialog = page.locator('.MuiDialog-root').filter({ hasText: 'CLIENT SATISFACTION MEASUREMENT FORM' });
+    await expect(csatDialog).toBeVisible({ timeout: 10000 });
+    
+    // Fill CSAT
+    await csatDialog.getByRole('checkbox').check();
+    await csatDialog.getByRole('combobox', { name: /Unit/i }).fill('IT');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    await csatDialog.getByRole('textbox', { name: /First Name/i }).fill('Juan');
+    await csatDialog.getByRole('textbox', { name: /Last Name/i }).fill('Dela Cruz');
+    await csatDialog.getByRole('textbox', { name: /Age/i }).fill('30');
+    await csatDialog.getByRole('combobox', { name: /Religion/i }).click();
+    await page.getByRole('option', { name: /Christianity/i }).click();
+    await csatDialog.getByRole('combobox', { name: /Sex/i }).click();
+    await page.getByRole('option', { name: /Male/i }).click();
+
+    // Click all "5" radios
+    const radios5 = csatDialog.locator('input[type="radio"][value="5"]');
+    const count = await radios5.count();
+    for (let i = 0; i < count; i++) {
+      await radios5.nth(i).click({ force: true });
+    }
+
+    await csatDialog.getByRole('button', { name: 'Submit Satisfaction' }).click();
+    await expect(csatDialog).toBeHidden({ timeout: 15000 });
+
+    // Verify status is Closed in UI (Wait for the cell to update)
+    await page.waitForTimeout(2000);
+
+    // 2. Create another ticket and verify reminder
+    const newTicketBtn = page.getByRole('button', { name: 'New Ticket' });
+    await newTicketBtn.click();
+
+    // Reminder should appear (Proceed Anyway button is in the reminder dialog)
+    const proceedBtn = page.getByRole('button', { name: 'Proceed Anyway' });
+    await expect(proceedBtn).toBeVisible({ timeout: 5000 });
+    
+    // 3. Create another ticket
+    await proceedBtn.click();
+    
+    const ticketDialog = page.locator('.MuiDialog-root').filter({ hasText: 'Create Ticket' });
+    await expect(ticketDialog).toBeVisible({ timeout: 10000 });
+    
+    await ticketDialog.getByRole('textbox', { name: /Subject/i }).fill(`E2E Test 6 - Mobile Ticket ${Date.now()}`);
+    await ticketDialog.getByRole('textbox', { name: /Description/i }).fill('Testing mobile friendliness.');
+    const card = ticketDialog.getByText('Desktop Support').first();
+    if (await card.isVisible({ timeout: 3000 })) await card.click();
+    await ticketDialog.getByRole('button', { name: 'Submit Ticket', exact: true }).click();
+    await expect(ticketDialog).toBeHidden({ timeout: 15000 });
+
+    // 4. Rate the last unrated ticket
+    await page.waitForTimeout(2000);
+    const resolvedRow2 = page.locator('tr').filter({ hasText: 'E2E Test 5' }).filter({ hasText: 'Resolved' }).first();
+    await resolvedRow2.click();
+    
+    await expect(csatDialog).toBeVisible({ timeout: 10000 });
+    await csatDialog.getByRole('checkbox').check();
+    await csatDialog.getByRole('combobox', { name: /Unit/i }).fill('HR');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    await csatDialog.getByRole('textbox', { name: /First Name/i }).fill('Maria');
+    await csatDialog.getByRole('textbox', { name: /Last Name/i }).fill('Clara');
+    await csatDialog.getByRole('textbox', { name: /Age/i }).fill('25');
+    await csatDialog.getByRole('combobox', { name: /Religion/i }).click();
+    await page.getByRole('option', { name: /Christianity/i }).click();
+    await csatDialog.getByRole('combobox', { name: /Sex/i }).click();
+    await page.getByRole('option', { name: /Female/i }).click();
+
+    const radios5_2 = csatDialog.locator('input[type="radio"][value="5"]');
+    const count2 = await radios5_2.count();
+    for (let i = 0; i < count2; i++) {
+      await radios5_2.nth(i).click({ force: true });
+    }
+
+    await csatDialog.getByRole('button', { name: 'Submit Satisfaction' }).click();
+    await expect(csatDialog).toBeHidden({ timeout: 15000 });
+
+    // 5. Verify reminder is gone
+    await page.waitForTimeout(2000);
+    await newTicketBtn.click();
+    await expect(proceedBtn).toBeHidden({ timeout: 5000 });
+    await expect(ticketDialog).toBeVisible({ timeout: 5000 });
+    
+    // Close it
+    await ticketDialog.getByRole('button', { name: 'Cancel' }).click();
+
+    // Verify DB states for Closed
+    const { getDb } = require('../../backend/src/utils/db.utils');
+    const dbVer = await getDb('compliance_hub_ticketing');
+    const [rows] = await dbVer.query('SELECT status FROM tickets WHERE (subject LIKE ? OR subject LIKE ?) AND status = ?', ['E2E Test 5 - internet issue%', 'E2E Test 5 - printer issue%', 'closed']);
+    const closedTickets = rows as any[];
+    await dbVer.end();
+    expect(closedTickets.length >= 2).toBeTruthy();
+
+    await logout(page);
+  });
+});
+

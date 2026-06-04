@@ -10,14 +10,19 @@ export default defineConfig({
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
     actionTimeout: 15000,
+    headless: false,
+    viewport: null,
     launchOptions: {
       slowMo: 300,
+      args: ['--start-maximized'],
     },
   },
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { //...devices['Desktop Chrome'] 
+        viewport: null,
+      },
     },
   ],
 });

@@ -111,7 +111,7 @@ async function bootstrap() {
     '/api',
     rateLimit({
       windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
-      max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 1000),
+      max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 100000),
       standardHeaders: true,
       legacyHeaders: false,
     }),
@@ -121,7 +121,7 @@ async function bootstrap() {
     '/api/v1',
     rateLimit({
       windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
-      max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 1000),
+      max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 100000),
       standardHeaders: true,
       legacyHeaders: false,
     }),

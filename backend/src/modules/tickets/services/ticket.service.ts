@@ -373,18 +373,9 @@ export class TicketService implements OnModuleInit {
     const requester = await this.userRepo.findOne({ where: { id: requesterId } });
     if (!requester) throw new BadRequestException('Requester not found');
 
-    const unclosedCount = await this.ticketRepo
-      .createQueryBuilder('t')
-      .where('t.requesterId = :requesterId', { requesterId })
-      .andWhere('t.status NOT IN (:...terminal)', {
-        terminal: [TicketStatus.CLOSED, TicketStatus.DUPLICATE],
-      })
-      .getCount();
-    if (unclosedCount > 0) {
-      throw new BadRequestException(
-        'You still have an unclosed ticket. Please wait for it to be closed before creating a new ticket.',
-      );
-    }
+    // NOTE: Multiple concurrent tickets per requester are now allowed.
+    // The unclosed-ticket restriction was removed per business rule change.
+    // The satisfaction reminder is shown on the frontend only (non-blocking).
 
     let ticketType = dto.ticketType;
     let categoryId = dto.categoryId || null;
@@ -429,57 +420,42 @@ export class TicketService implements OnModuleInit {
       const today = new Date().toISOString().slice(0, 10);
       const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
 
-      // ── Pantawid tickets: ALWAYS assign to pantawid_ict technician ──
-      if (ticketType === TicketType.PANTAWID_ICT_SUPPORT) {
-        // QA: auto-assignment is disabled if no PRESENT technicians exist in attendance
-        const pantawidTechs = await this.attendanceService.getPresentTechnicians(
-          'pantawid_ict_support', today,
-        );
-        if (pantawidTechs.length > 0) {
-          // Pick the one with fewest open tickets
-          let bestTech: User | null = null;
-          let minCount = Infinity;
-          for (const tech of pantawidTechs) {
-            const cnt = await this.ticketRepo.count({
-              where: [
-                { assignedToId: tech.id, status: TicketStatus.OPEN },
-                { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
-                { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
-              ],
-            });
-            if (cnt <= minCount) { minCount = cnt; bestTech = tech; }
-          }
-          if (bestTech) {
-            assignedToId = bestTech.id;
-            assignedTech = bestTech;
-          }
-        } else {
-          noTechAvailable = true;
+      // ── Unified Fallback Chain for Auto-Assignment ──
+      let fallbackChain: TicketType[] = [];
+      if (ticketType === TicketType.IT_SUPPORT) {
+        fallbackChain = [TicketType.IT_SUPPORT, TicketType.DESKTOP_SUPPORT, TicketType.PANTAWID_ICT_SUPPORT];
+      } else if (ticketType === TicketType.DESKTOP_SUPPORT) {
+        fallbackChain = [TicketType.DESKTOP_SUPPORT, TicketType.IT_SUPPORT, TicketType.PANTAWID_ICT_SUPPORT];
+      } else if (ticketType === TicketType.PANTAWID_ICT_SUPPORT) {
+        fallbackChain = [TicketType.PANTAWID_ICT_SUPPORT, TicketType.DESKTOP_SUPPORT, TicketType.IT_SUPPORT];
+      } else {
+        fallbackChain = [ticketType];
+      }
+
+      for (const tType of fallbackChain) {
+        // Pantawid is processed regardless of office days, others only if it is an office day
+        if (tType !== TicketType.PANTAWID_ICT_SUPPORT && !isOfficeDayToday) {
+          continue;
         }
-      } else if (isOfficeDayToday) {
+
         const availableTechs = await this.attendanceService.getPresentTechnicians(
-          ticketType,
+          tType,
           today,
         );
 
         if (availableTechs.length > 0) {
-          // QA #2: Senior technicians are NOT eligible for auto-assignment — they self-assign via admin UI
+          // QA #2: Senior technicians are NOT eligible for auto-assignment
           const eligibleTechs = availableTechs.filter(t => !this.roleCapSvc.isSeniorTech(t.role));
-
+          
           // Sort techs by tier: junior first, then others
           const tierPriority = (role: string): number => {
-            const juniorRoles: string[] = [
-              UserRole.IT_SUPPORT_JR, UserRole.DESKTOP_JR,
-            ];
+            const juniorRoles: string[] = [UserRole.IT_SUPPORT_JR, UserRole.DESKTOP_JR];
             if (juniorRoles.includes(role)) return 1;
-            return 3; // pantawid / others
+            return 3; 
           };
           eligibleTechs.sort((a, b) => tierPriority(a.role) - tierPriority(b.role));
 
-          // Pick the tech with fewest open/assigned/in_progress tickets
-          let bestTech: User | null = null;
           let minCount = Infinity;
-
           for (const tech of eligibleTechs) {
             const openCount = await this.ticketRepo.count({
               where: [
@@ -488,23 +464,25 @@ export class TicketService implements OnModuleInit {
                 { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
               ],
             });
-            // Only consider techs with ZERO active tickets (not just fewest)
-          if (openCount === 0 && openCount < minCount) {
+            // Only consider techs with ZERO active tickets
+            if (openCount === 0 && openCount < minCount) {
               minCount = openCount;
-              bestTech = tech;
+              assignedTech = tech;
             }
           }
 
-          if (bestTech) {
-            assignedToId = bestTech.id;
-            assignedTech = bestTech;
-            this.logger.log(`Auto-assign: ticket → ${bestTech.email} (${minCount} open tickets)`);
+          if (assignedTech) {
+            assignedToId = assignedTech.id;
+            this.logger.log(`Auto-assign resolved: original=${ticketType} → assigned=${tType} to ${assignedTech.email}`);
+            break;
           }
-        } else {
-          noTechAvailable = true;
-          this.logger.log('Auto-assign: no technician available for this ticket type today');
         }
-      } // end else if (isOfficeDayToday)
+      }
+
+      if (!assignedToId) {
+        noTechAvailable = true;
+        this.logger.log('Auto-assign: no technician available across fallback chain');
+      }
     } catch (err: any) {
       this.logger.warn(`Auto-assign failed (non-fatal): ${err?.message}`);
     }
