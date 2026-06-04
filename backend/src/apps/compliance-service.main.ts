@@ -20,8 +20,8 @@ async function bootstrap() {
   app.use(
     '/api',
     rateLimit({
-      windowMs: Number(configService.get('RATE_LIMIT_WINDOW_MS') || 15 * 60 * 1000),
-      max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 100000),
+      windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 1 * 60 * 1000),
+      max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 4000),
       standardHeaders: true,
       legacyHeaders: false,
     }),

@@ -1,245 +1,126 @@
 version: '3.8'
 
 services:
-  mariadb:
-    image: mariadb:11
-    container_name: ricms_mariadb
+  # -------------------------
+  # Database & Cache
+  # -------------------------
+  db:
+    image: mariadb:10.11
+    container_name: rictms_db
+    restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: ricms_password
-      MYSQL_DATABASE: compliance_hub
-      MYSQL_USER: ricms_user
-      MYSQL_PASSWORD: ricms_password
+      MARIADB_ROOT_PASSWORD: admin
     ports:
-      - '3306:3306'
+      - "3306:3306"
     volumes:
-      - mariadb_data:/var/lib/mysql
-      - ./backend/database/microservices-init.sql:/docker-entrypoint-initdb.d/10-microservices-init.sql:ro
-    networks:
-      - ricms-network
-    healthcheck:
-      test: ['CMD', 'healthcheck.sh', '--connect', '--innodbtempstatus']
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - ./db-init/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - db_data:/var/lib/mysql
 
   redis:
     image: redis:7-alpine
-    container_name: ricms_redis
+    container_name: rictms_redis
+    restart: always
     ports:
-      - '6379:6379'
-    networks:
-      - ricms-network
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.dev
-    container_name: ricms_backend
-    ports:
-      - '4000:4000'
+      - "6379:6379"
     volumes:
-      - ./backend:/app
-      - /app/node_modules
-      - ./backend/storage:/app/storage
-    environment:
-      - NODE_ENV=development
-      - DB_HOST=mariadb
-      - DB_PORT=3306
-      - DB_USERNAME=ricms_user
-      - DB_PASSWORD=ricms_password
-      - DB_DATABASE=compliance_hub_users
-      - USERS_DB_DATABASE=compliance_hub_users
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - JWT_SECRET=dev-jwt-secret-change-in-production
-      - JWT_REFRESH_SECRET=dev-refresh-secret-change-in-production
-      - CORS_ORIGIN=http://localhost:3000
-    depends_on:
-      mariadb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - ricms-network
-    command: npm run start:dev
+      - redis_data:/data
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
-    container_name: ricms_frontend
-    ports:
-      - '3000:3000'
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:4000/api
-    depends_on:
-      - backend
-    networks:
-      - ricms-network
-    command: npm run dev
-
+  # -------------------------
+  # Microservices
+  # -------------------------
   users-service:
     build:
       context: ./backend
-      dockerfile: Dockerfile.dev
-    image: compliance-hub/users-service:${VERSION:-latest}
-    container_name: ricms_users_service
-    profiles: ['microservices']
-    ports:
-      - '4101:4101'
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - USERS_SERVICE_PORT=4101
-      - SERVICE_NAME=users-service
-      - DB_HOST=mariadb
-      - DB_PORT=3306
-      - DB_USERNAME=ricms_user
-      - DB_PASSWORD=ricms_password
-      - DB_DATABASE=compliance_hub_users
-      - USERS_DB_DATABASE=compliance_hub_users
-      - COMPLIANCE_SERVICE_URL=http://compliance-service:4103
-      - INTERNAL_SERVICE_SECRET=dev-internal-secret-change-in-production
-      - INTERNAL_SERVICE_TOKEN=users-service-dev-token
-      - INTERNAL_SERVICE_TOKENS={"ticketing-service":"ticketing-service-dev-token","compliance-service":"compliance-service-dev-token","users-service":"users-service-dev-token","api-gateway":"api-gateway-dev-token"}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - JWT_SECRET=dev-jwt-secret-change-in-production
-      - JWT_REFRESH_SECRET=dev-refresh-secret-change-in-production
-      - CORS_ORIGIN=http://localhost:3000
+      dockerfile: Dockerfile
+    container_name: rictms_users_service
+    restart: on-failure
     depends_on:
-      mariadb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - ricms-network
-    command: npm run start:users:dev
+      - db
+      - redis
+    command: ["node", "dist/apps/users-service.main.js"]
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=db
+      - REDIS_HOST=redis
+    ports:
+      - "4101:4101"
 
   ticketing-service:
     build:
       context: ./backend
-      dockerfile: Dockerfile.dev
-    image: compliance-hub/ticketing-service:${VERSION:-latest}
-    container_name: ricms_ticketing_service
-    profiles: ['microservices']
-    ports:
-      - '4102:4102'
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - TICKETING_SERVICE_PORT=4102
-      - SERVICE_NAME=ticketing-service
-      - DB_HOST=mariadb
-      - DB_PORT=3306
-      - DB_USERNAME=ricms_user
-      - DB_PASSWORD=ricms_password
-      - DB_DATABASE=compliance_hub_ticketing
-      - TICKETING_DB_DATABASE=compliance_hub_ticketing
-      - USERS_SERVICE_URL=http://users-service:4101
-      - COMPLIANCE_SERVICE_URL=http://compliance-service:4103
-      - INTERNAL_SERVICE_SECRET=dev-internal-secret-change-in-production
-      - INTERNAL_SERVICE_TOKEN=ticketing-service-dev-token
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - JWT_SECRET=dev-jwt-secret-change-in-production
-      - JWT_REFRESH_SECRET=dev-refresh-secret-change-in-production
-      - CORS_ORIGIN=http://localhost:3000
+      dockerfile: Dockerfile
+    container_name: rictms_ticketing_service
+    restart: on-failure
     depends_on:
-      mariadb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - ricms-network
-    command: npm run start:ticketing:dev
+      - db
+      - redis
+    command: ["node", "dist/apps/ticketing-service.main.js"]
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=db
+      - REDIS_HOST=redis
+    ports:
+      - "4102:4102"
 
   compliance-service:
     build:
       context: ./backend
-      dockerfile: Dockerfile.dev
-    image: compliance-hub/compliance-service:${VERSION:-latest}
-    container_name: ricms_compliance_service
-    profiles: ['microservices']
-    ports:
-      - '4103:4103'
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-      - ./backend/storage:/app/storage
-    environment:
-      - NODE_ENV=development
-      - COMPLIANCE_SERVICE_PORT=4103
-      - SERVICE_NAME=compliance-service
-      - DB_HOST=mariadb
-      - DB_PORT=3306
-      - DB_USERNAME=ricms_user
-      - DB_PASSWORD=ricms_password
-      - DB_DATABASE=compliance_hub
-      - COMPLIANCE_DB_DATABASE=compliance_hub
-      - USERS_SERVICE_URL=http://users-service:4101
-      - INTERNAL_SERVICE_SECRET=dev-internal-secret-change-in-production
-      - INTERNAL_SERVICE_TOKEN=compliance-service-dev-token
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - JWT_SECRET=dev-jwt-secret-change-in-production
-      - JWT_REFRESH_SECRET=dev-refresh-secret-change-in-production
-      - CORS_ORIGIN=http://localhost:3000
+      dockerfile: Dockerfile
+    container_name: rictms_compliance_service
+    restart: on-failure
     depends_on:
-      mariadb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - ricms-network
-    command: npm run start:compliance:dev
+      - db
+      - redis
+    command: ["node", "dist/apps/compliance-service.main.js"]
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=db
+      - REDIS_HOST=redis
+    ports:
+      - "4103:4103"
 
-  api-gateway:
+  # -------------------------
+  # API Gateway
+  # -------------------------
+  gateway:
     build:
       context: ./backend
-      dockerfile: Dockerfile.dev
-    image: compliance-hub/api-gateway:${VERSION:-latest}
-    container_name: ricms_api_gateway
-    profiles: ['microservices']
-    ports:
-      - '4000:4000'
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - PORT=4000
-      - SERVICE_NAME=api-gateway
-      - CORS_ORIGIN=http://localhost:3000
-      - USERS_SERVICE_URL=http://users-service:4101
-      - TICKETING_SERVICE_URL=http://ticketing-service:4102
-      - COMPLIANCE_SERVICE_URL=http://compliance-service:4103
-      - MICROSERVICES_STRICT=true
-      - INTERNAL_SERVICE_TOKEN=api-gateway-dev-token
+      dockerfile: Dockerfile
+    container_name: rictms_gateway
+    restart: on-failure
     depends_on:
       - users-service
       - ticketing-service
       - compliance-service
-    networks:
-      - ricms-network
-    command: npm run start:gateway:dev
+    command: ["node", "dist/apps/gateway.main.js"]
+    env_file:
+      - ./backend/.env
+    environment:
+      - USERS_SERVICE_URL=http://users-service:4101
+      - TICKETING_SERVICE_URL=http://ticketing-service:4102
+      - COMPLIANCE_SERVICE_URL=http://compliance-service:4103
+      - RATE_LIMIT_WINDOW_MS=60000
+      - RATE_LIMIT_MAX_REQUESTS=4000
+    ports:
+      - "4000:4000"
+
+  # -------------------------
+  # Frontend
+  # -------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rictms_frontend
+    restart: on-failure
+    depends_on:
+      - gateway
+    ports:
+      - "3000:80"
 
 volumes:
-  mariadb_data:
-
-networks:
-  ricms-network:
-    driver: bridge
+  db_data:
+  redis_data:
