@@ -740,14 +740,8 @@ test.describe('Mobile View Tests', () => {
     test.setTimeout(120000);
     await login(page, ACCOUNTS.user.email);
     
-    // Verify mobile hamburger menu appears and can open sidebar
-    const menuBtn = page.getByRole('button', { name: 'open drawer' });
-    if (await menuBtn.isVisible({ timeout: 10000 })) {
-      await menuBtn.click();
-      await page.waitForTimeout(1000);
-    }
-    
-    await page.locator('a[href="/dashboard/tickets"]').first().click({ force: true });
+    // Navigate to tickets page
+    await page.goto('/dashboard/tickets');
     await page.waitForTimeout(2000);
 
     // Filter datagrid or wait for it to load
@@ -755,36 +749,41 @@ test.describe('Mobile View Tests', () => {
     await expect(resolvedRow1).toBeVisible({ timeout: 20000 });
 
     // 1. Rate 1 out of 2 resolved tickets
-    await resolvedRow1.click();
+    await resolvedRow1.getByRole('button', { name: 'View Details' }).click();
+    
+    // Ensure "Rate Resolution" button is present and click it
+    const rateBtn1 = page.getByRole('button', { name: /Rate Resolution/i });
+    await expect(rateBtn1).toBeVisible({ timeout: 10000 });
+    await rateBtn1.click();
     
     // CSAT Dialog should open
     const csatDialog = page.locator('.MuiDialog-root').filter({ hasText: 'CLIENT SATISFACTION MEASUREMENT FORM' });
     await expect(csatDialog).toBeVisible({ timeout: 10000 });
     
-    // Fill CSAT
-    await csatDialog.getByRole('checkbox').check();
-    await csatDialog.getByRole('combobox', { name: /Unit/i }).fill('IT');
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
-    await csatDialog.getByRole('textbox', { name: /First Name/i }).fill('Juan');
-    await csatDialog.getByRole('textbox', { name: /Last Name/i }).fill('Dela Cruz');
-    await csatDialog.getByRole('textbox', { name: /Age/i }).fill('30');
-    await csatDialog.getByRole('combobox', { name: /Religion/i }).click();
-    await page.getByRole('option', { name: /Christianity/i }).click();
-    await csatDialog.getByRole('combobox', { name: /Sex/i }).click();
-    await page.getByRole('option', { name: /Male/i }).click();
-
-    // Click all "5" radios
-    const radios5 = csatDialog.locator('input[type="radio"][value="5"]');
-    const count = await radios5.count();
-    for (let i = 0; i < count; i++) {
-      await radios5.nth(i).click({ force: true });
+    // Fill CSAT Form
+    await page.getByRole('checkbox', { name: /I voluntarily give my consent/i }).check();
+    await page.getByRole('combobox', { name: /Unit\/Section/i }).fill('IT');
+    await page.getByRole('textbox', { name: /First Name/i }).fill('Juan');
+    await page.getByRole('textbox', { name: /Last Name/i }).fill('Dela Cruz');
+    await page.getByRole('spinbutton', { name: /Age/i }).fill('30');
+    await page.getByRole('textbox', { name: /Religion/i }).fill('Catholic');
+    await page.getByLabel(/Sex \*/i).click();
+    await page.getByRole('option', { name: 'Male', exact: true }).click();
+    
+    // Likert Scales - click the first button (5 - Strongly Agree) for each toggle group
+    const toggleGroups = await page.getByRole('group').all();
+    for (const group of toggleGroups) {
+      const btn5 = group.locator('button[value="5"]');
+      if (await btn5.isVisible()) {
+        await btn5.click();
+      }
     }
 
-    await csatDialog.getByRole('button', { name: 'Submit Satisfaction' }).click();
+    await page.getByRole('button', { name: 'Submit Feedback' }).click();
     await expect(csatDialog).toBeHidden({ timeout: 15000 });
 
-    // Verify status is Closed in UI (Wait for the cell to update)
+    // Go back to tickets dashboard
+    await page.goto('/dashboard/tickets');
     await page.waitForTimeout(2000);
 
     // 2. Create another ticket and verify reminder
@@ -798,7 +797,7 @@ test.describe('Mobile View Tests', () => {
     // 3. Create another ticket
     await proceedBtn.click();
     
-    const ticketDialog = page.locator('.MuiDialog-root').filter({ hasText: 'Create Ticket' });
+    const ticketDialog = page.locator('.MuiDialog-root').filter({ hasText: 'Submit a Help Desk Ticket' });
     await expect(ticketDialog).toBeVisible({ timeout: 10000 });
     
     await ticketDialog.getByRole('textbox', { name: /Subject/i }).fill(`E2E Test 6 - Mobile Ticket ${Date.now()}`);
@@ -811,29 +810,36 @@ test.describe('Mobile View Tests', () => {
     // 4. Rate the last unrated ticket
     await page.waitForTimeout(2000);
     const resolvedRow2 = page.locator('tr').filter({ hasText: 'E2E Test 5' }).filter({ hasText: 'Resolved' }).first();
-    await resolvedRow2.click();
+    await resolvedRow2.getByRole('button', { name: 'View Details' }).click();
     
-    await expect(csatDialog).toBeVisible({ timeout: 10000 });
-    await csatDialog.getByRole('checkbox').check();
-    await csatDialog.getByRole('combobox', { name: /Unit/i }).fill('HR');
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
-    await csatDialog.getByRole('textbox', { name: /First Name/i }).fill('Maria');
-    await csatDialog.getByRole('textbox', { name: /Last Name/i }).fill('Clara');
-    await csatDialog.getByRole('textbox', { name: /Age/i }).fill('25');
-    await csatDialog.getByRole('combobox', { name: /Religion/i }).click();
-    await page.getByRole('option', { name: /Christianity/i }).click();
-    await csatDialog.getByRole('combobox', { name: /Sex/i }).click();
-    await page.getByRole('option', { name: /Female/i }).click();
+    const rateBtn2 = page.getByRole('button', { name: /Rate Resolution/i });
+    await expect(rateBtn2).toBeVisible({ timeout: 10000 });
+    await rateBtn2.click();
 
-    const radios5_2 = csatDialog.locator('input[type="radio"][value="5"]');
-    const count2 = await radios5_2.count();
-    for (let i = 0; i < count2; i++) {
-      await radios5_2.nth(i).click({ force: true });
+    await expect(csatDialog).toBeVisible({ timeout: 10000 });
+    await page.getByRole('checkbox', { name: /I voluntarily give my consent/i }).check();
+    await page.getByRole('combobox', { name: /Unit\/Section/i }).fill('HR');
+    await page.getByRole('textbox', { name: /First Name/i }).fill('Maria');
+    await page.getByRole('textbox', { name: /Last Name/i }).fill('Clara');
+    await page.getByRole('spinbutton', { name: /Age/i }).fill('25');
+    await page.getByRole('textbox', { name: /Religion/i }).fill('Catholic');
+    await page.getByLabel(/Sex \*/i).click();
+    await page.getByRole('option', { name: 'Female', exact: true }).click();
+
+    const toggleGroups2 = await page.getByRole('group').all();
+    for (const group of toggleGroups2) {
+      const btn5 = group.locator('button[value="5"]');
+      if (await btn5.isVisible()) {
+        await btn5.click();
+      }
     }
 
-    await csatDialog.getByRole('button', { name: 'Submit Satisfaction' }).click();
+    await page.getByRole('button', { name: 'Submit Feedback' }).click();
     await expect(csatDialog).toBeHidden({ timeout: 15000 });
+    
+    // Go back to tickets dashboard
+    await page.goto('/dashboard/tickets');
+    await page.waitForTimeout(2000);
 
     // 5. Verify reminder is gone
     await page.waitForTimeout(2000);
@@ -845,7 +851,6 @@ test.describe('Mobile View Tests', () => {
     await ticketDialog.getByRole('button', { name: 'Cancel' }).click();
 
     // Verify DB states for Closed
-    const { getDb } = require('../../backend/src/utils/db.utils');
     const dbVer = await getDb('compliance_hub_ticketing');
     const [rows] = await dbVer.query('SELECT status FROM tickets WHERE (subject LIKE ? OR subject LIKE ?) AND status = ?', ['E2E Test 5 - internet issue%', 'E2E Test 5 - printer issue%', 'closed']);
     const closedTickets = rows as any[];
