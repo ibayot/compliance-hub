@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
@@ -186,17 +186,17 @@ export default function TicketDetailPage() {
   const latestEscalation = escalations.length > 0 ? escalations[0] : null;
   const hasPendingEscalation = latestEscalation?.status === 'pending';
   const hasAcceptedEscalation = latestEscalation?.status === 'accepted';
-  const isAcceptedEscalationFocal = hasAcceptedEscalation && latestEscalation?.escalatedToId === (user as any)?.id;
+  const isAcceptedEscalationFocal = hasAcceptedEscalation && (latestEscalation?.escalatedToId || latestEscalation?.escalatedTo?.id || (latestEscalation as any)?.escalated_to_id) === (user as any)?.id;
   // UI policy: if escalation is pending, no top action buttons are shown.
   // If escalation is accepted, only Update Status may appear.
   const hideTopActionButtons = !!hasPendingEscalation;
   const acceptedEscalationOnlyStatusAction = !!hasAcceptedEscalation;
-  const canUpdateStatusNow = canStaff && (!hasAcceptedEscalation || isEscalationAdmin || !!isAcceptedEscalationFocal);
+  const canUpdateStatusNow = (canStaff && !hasAcceptedEscalation) || isEscalationAdmin || !!isAcceptedEscalationFocal;
   // Matrix-driven reassign privilege: ticket admin/assign capability, constrained after accepted escalations.
   const canReassign = canAssignByCapability
     && (!hasAcceptedEscalation || isEscalationAdmin);
-  // Ticket can be escalated again only if there is no escalation yet or the latest one was returned.
-  const canEscalateNow = canEscalate && (!latestEscalation || latestEscalation.status === 'returned');
+  // Ticket can be escalated again if there is no pending escalation.
+  const canEscalateNow = canEscalate && (!latestEscalation || latestEscalation.status !== 'pending');
   const isRequester = ticket?.requesterId === (user as any)?.id;
   const canSatisfaction = isRequester && (ticket?.status === 'resolved' || ticket?.status === 'closed') && !ticket?.satisfactionSubmittedAt;
   // Duplicate is terminal — no further modifications allowed
@@ -427,6 +427,7 @@ export default function TicketDetailPage() {
     try {
       await ticketsApi.acceptEscalation(ticketId, escalationId);
       fetchEscalations();
+      fetchTicket();
       enqueueSnackbar('Escalation accepted.', { variant: 'success' });
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to accept escalation', { variant: 'error' });
@@ -578,9 +579,9 @@ export default function TicketDetailPage() {
 
             {/* Actions */}
             <Box display="flex" flexDirection="column" gap={1} minWidth={160}>
-              {!hideTopActionButtons && canUpdateStatusNow && !editingStatus && !isDuplicate && !(
-                ['resolved', 'closed'].includes(ticket.status) &&
-                (isTechnician || isSectionHead || isComplianceOfficer || user?.role === 'super_admin')
+              {!hideTopActionButtons && !editingStatus && !isDuplicate && !['resolved', 'closed'].includes(ticket.status) && (
+                (!hasAcceptedEscalation && canUpdateStatusNow && (isTechnician || isSectionHead || isComplianceOfficer || user?.role === 'super_admin')) ||
+                (hasAcceptedEscalation && isAcceptedEscalationFocal)
               ) && (
                 <Button variant="outlined" size="small" onClick={() => setEditingStatus(true)}>
                   Update Status
@@ -589,7 +590,7 @@ export default function TicketDetailPage() {
               {!hideTopActionButtons && !acceptedEscalationOnlyStatusAction && isDuplicate && (
                 <Chip label="Duplicate (Terminal)" color="default" size="small" />
               )}
-              {!hideTopActionButtons && !acceptedEscalationOnlyStatusAction && canReassign && !isDuplicate && !['resolved', 'closed'].includes(ticket.status) && (
+              {!hideTopActionButtons && (!hasAcceptedEscalation || isAcceptedEscalationFocal) && canReassign && !isDuplicate && !['resolved', 'closed'].includes(ticket.status) && (
                 <Button variant="outlined" size="small" onClick={async () => {
                   setIsEscalateMode(false);
                   setAssignToId(ticket.assignedToId || '');
@@ -599,18 +600,21 @@ export default function TicketDetailPage() {
                   {ticket.assignedToId ? 'Reassign Ticket' : 'Assign Technician'}
                 </Button>
               )}
-              {!hideTopActionButtons && !acceptedEscalationOnlyStatusAction && canEscalateNow && !isDuplicate && !['closed', 'resolved'].includes(ticket.status) && (
+              {!hideTopActionButtons && !isDuplicate && !['closed', 'resolved'].includes(ticket.status) && (
+                (!hasAcceptedEscalation && canEscalateNow) ||
+                (hasAcceptedEscalation && isAcceptedEscalationFocal)
+              ) && (
                 <Button variant="outlined" size="small" color="warning" onClick={openEscalateDialog}>
                   Escalate Ticket
                 </Button>
               )}
               {/* Self-close: requester can close their own ticket once it is Resolved */}
-              {!hideTopActionButtons && !acceptedEscalationOnlyStatusAction && isRegularUser && isRequester && ticket.status === 'resolved' && (
+              {!hideTopActionButtons && isRegularUser && isRequester && ticket.status === 'resolved' && (
                 <Button variant="outlined" size="small" color="error" onClick={handleSelfClose}>
                   Close Ticket
                 </Button>
               )}
-              {!hideTopActionButtons && !acceptedEscalationOnlyStatusAction && canSatisfaction && (
+              {!hideTopActionButtons && canSatisfaction && (
                 <Button
                   variant="contained"
                   size="small"
@@ -680,25 +684,23 @@ export default function TicketDetailPage() {
                         ))}
                       </TextField>
                     </Grid>
-                    {canStaff && (
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          select
-                          fullWidth
-                          label={newStatus === 'in_progress' ? 'Priority *' : 'Priority'}
-                          value={newPriority || ticket?.priority || ''}
-                          onChange={(e) => setNewPriority(e.target.value)}
-                          size="small"
-                          required={newStatus === 'in_progress'}
-                          error={needsPriority}
-                          helperText={needsPriority ? 'Priority is required before moving to In Progress' : undefined}
-                        >
-                          {['low', 'medium', 'high', 'urgent'].map((p) => (
-                            <MenuItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</MenuItem>
-                          ))}
-                        </TextField>
-                      </Grid>
-                    )}
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        select
+                        fullWidth
+                        label={newStatus === 'in_progress' ? 'Priority *' : 'Priority'}
+                        value={newPriority || ticket?.priority || ''}
+                        onChange={(e) => setNewPriority(e.target.value)}
+                        size="small"
+                        required={newStatus === 'in_progress'}
+                        error={needsPriority}
+                        helperText={needsPriority ? 'Priority is required before moving to In Progress' : undefined}
+                      >
+                        {['low', 'medium', 'high', 'urgent'].map((p) => (
+                          <MenuItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
                     <Grid item xs={12}>
                       <TextField
                         fullWidth
@@ -886,7 +888,7 @@ export default function TicketDetailPage() {
                 ) : (
                   <Typography variant="caption" color="text.secondary" mt={0.5} display="block">No proof photo attached.</Typography>
                 )}
-                {e.status === 'pending' && e.escalatedToId === (user as any)?.id && (
+                {e.status === 'pending' && (e.escalatedToId || e.escalatedTo?.id || (e as any).escalated_to_id) === (user as any)?.id && (
                   <Box mt={1} display="flex" gap={1}>
                     <Button size="small" variant="contained" color="success"
                       onClick={() => handleAcceptEscalation(e.id)}>Accept</Button>
@@ -896,7 +898,7 @@ export default function TicketDetailPage() {
                     </Button>
                   </Box>
                 )}
-                {e.status === 'pending' && e.escalatedById === (user as any)?.id && (
+                {e.status === 'pending' && (e.escalatedById || e.escalatedBy?.id || (e as any).escalated_by_id) === (user as any)?.id && (
                   <Box mt={1}>
                     <Button
                       size="small"
@@ -1142,7 +1144,14 @@ export default function TicketDetailPage() {
             <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />}>
               Upload Proof Photo(s)
               <input type="file" hidden multiple accept="image/*"
-                onChange={(e) => setEscalateFiles(Array.from(e.target.files ?? []))} />
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  const validFiles = files.filter(f => f.type.startsWith('image/'));
+                  if (validFiles.length !== files.length) {
+                    enqueueSnackbar('Only image files are allowed for proof photos.', { variant: 'error' });
+                  }
+                  setEscalateFiles(validFiles);
+                }} />
             </Button>
             {escalateFiles.length > 0 && (
               <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
@@ -1198,7 +1207,14 @@ export default function TicketDetailPage() {
             <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />}>
               Upload Photo(s)
               <input type="file" hidden multiple accept="image/*"
-                onChange={(e) => setAddProofFiles(Array.from(e.target.files ?? []))} />
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  const validFiles = files.filter(f => f.type.startsWith('image/'));
+                  if (validFiles.length !== files.length) {
+                    enqueueSnackbar('Only image files are allowed for proof photos.', { variant: 'error' });
+                  }
+                  setAddProofFiles(validFiles);
+                }} />
             </Button>
             {addProofFiles.length > 0 && (
               <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>

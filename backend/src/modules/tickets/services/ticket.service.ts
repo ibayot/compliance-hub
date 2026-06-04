@@ -352,8 +352,9 @@ export class TicketService implements OnModuleInit {
   private async assertTicketReadAccess(ticket: Ticket, viewerId?: number, viewerRole?: UserRole): Promise<void> {
     if (!viewerRole || !viewerId) return;
     if (this.canViewAllTicketsInTicketing(viewerRole as string)) return;
-    if (ticket.requesterId === viewerId || ticket.assignedToId === viewerId) return;
-    if (await this.canAccessTicketByEscalation(ticket.id, viewerId)) return;
+    const vId = Number(viewerId);
+    if (Number(ticket.requesterId) === vId || Number(ticket.assignedToId) === vId) return;
+    if (await this.canAccessTicketByEscalation(ticket.id, vId)) return;
 
     throw new ForbiddenException('You do not have access to this ticket.');
   }
@@ -1268,6 +1269,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
 
     ticket.satisfactionSubmittedAt = new Date();
+    ticket.status = TicketStatus.CLOSED;
     const saved = await this.ticketRepo.save(ticket);
 
     if (ticket.assignedTo?.email) {
@@ -1968,9 +1970,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       where: { ticketId },
       order: { createdAt: 'DESC' },
     });
-    if (latestEscalation && latestEscalation.status !== EscalationStatus.RETURNED) {
+    if (latestEscalation && latestEscalation.status === EscalationStatus.PENDING) {
       throw new BadRequestException(
-        'This ticket already has an active escalation. You can only escalate again after it is returned.',
+        'This ticket already has a pending escalation. You cannot escalate again until it is accepted or returned.',
       );
     }
 
@@ -1994,7 +1996,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
 
     // QA #9: Verify that the selected focal is actually PRESENT today
     const today = new Date().toISOString().slice(0, 10);
-    const presentFocals = await this.attendanceService.getPresentTechnicians(ticket.ticketType, today);
+    const presentFocals = await this.attendanceService.getPresentTechnicians('all', today);
     const isPresent = presentFocals.some(t => t.id === focal.id);
     if (!isPresent) {
       throw new BadRequestException('The selected escalation focal is not currently marked as present or available today.');
@@ -2003,6 +2005,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     // Save proof photos to disk
     const savedPaths: string[] = [];
     if (proofFiles && proofFiles.length > 0) {
+      for (const f of proofFiles) {
+        if (!f.mimetype.startsWith('image/')) throw new BadRequestException('Only image files are allowed for proof photos.');
+      }
       const dir = path.join(this.escalationStorageRoot(), ticketId);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       for (const file of proofFiles) {
@@ -2157,6 +2162,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
 
     if (proofFiles && proofFiles.length > 0) {
+      for (const f of proofFiles) {
+        if (!f.mimetype.startsWith('image/')) throw new BadRequestException('Only image files are allowed for proof photos.');
+      }
       const dir = path.join(this.escalationStorageRoot(), ticketId);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       const savedPaths: string[] = [...(escalation.proofFiles ?? [])];

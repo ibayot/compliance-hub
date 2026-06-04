@@ -1,5 +1,7 @@
 # RICTMS Compliance Hub - System Capabilities
 
+> **Release `v0.0.66` (2026-06-04):** Ticketing CSAT flow now restricts unclosed ticket users from creating new tickets and forces pending satisfaction reminders. Fully extended E2E test suites with strict validation covering dynamic Likert rating loops, assignment delays, and automated dialog assertions. Unified the SLA visual chip to intelligently toggle between 'Nearing SLA' (40% remaining threshold) and 'Overdue' dynamically.
+
 > **Release `v0.0.61` (2026-06-03):** Ticketing SLA Logic updated to dynamically compute 40% of the SLA time for the Nearing SLA warning, which is surfaced as a visual chip on the ticket table alongside Overdue chips. End-to-end automated Playwright UI tests are now part of the frontend build. Ticket Reports feature an all-new Detailed Ratings view (by Day, Week, Month, and individual Ticket raw ratings).
 > **Release `v1.4.0` (2026-03-03):** Issuances module now supports broader source coverage for compliance search and applicability mapping: applicable laws, IRRs, standards, Executive Orders, DICT/NPC circular references, and NCSP planning references. Issuance records now include amendment metadata (`is_amendment`, `amended_issuance_number`, `ict_amendment_notes`) and the list view includes an `ICT Related Amendments` column for fast legal-impact scanning.
 

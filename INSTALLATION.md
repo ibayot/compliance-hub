@@ -1,5 +1,7 @@
 # RICTMS Compliance Hub - Installation Guide
 
+> **Release `v0.0.66` (2026-06-04):** This release updates frontend behavior to strictly enforce unrated CSAT reminders and open ticket restrictions. You can run `cd frontend && npx playwright test` to verify the full Ticket SLA, Escalation, and CSAT Rating enforcement flow. Make sure the backend APIs are up and the rate limiting clears (or restart the backend) before re-running the test suite to prevent HTTP 429 failures in Playwright.
+
 > **Release `v0.0.61` (2026-06-03):** This release includes frontend automated tests with Playwright. You can run them via `cd frontend && npx playwright test` to verify Ticketing SLAs, Escalation, and Ratings UI features!
 > **Release `v1.4.0` (2026-03-03):** Pull latest code, run `npm run db:seed` in `backend/`, then restart backend/frontend. This release expands Issuances baseline references (laws, IRRs, standards, Executive Orders, DICT/NPC circular references, NCSP) and adds amendment metadata fields displayed in Issuances UI. Package versions are aligned to `1.4.0` (backend/frontend).
 

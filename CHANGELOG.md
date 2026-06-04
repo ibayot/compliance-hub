@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.66] - 2026-06-04 - E2E Refinements and CSAT Enforcements
+
+### Added
+- **Open Ticket Restriction**: Added restriction preventing users with unclosed tickets from creating new tickets.
+- **Pending Satisfaction Reminder**: Added enforcement reminder blocking new ticket creation if the user has an unrated resolved ticket.
+- **Enhanced E2E Tests**: Fully extended Playwright tests covering Likert-scale rating loops and pending satisfaction reminders.
+
+### Changed
+- Refactored `getSlaStatus` utility to render a unified SLA chip that covers both 'Nearing SLA' (below 40% time left) and 'Overdue' scenarios, eliminating duplicate badges.
+
+
+
 ## [0.0.61] - 2026-06-03 - E2E Testing, Detailed Ratings Report, and SLA Enhancements
 
 ### Added

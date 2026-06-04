@@ -1,4 +1,4 @@
-﻿-- RICTMS Compliance Hub Seed Data (v1.2.0 -- 3-Database Structure)
+-- RICTMS Compliance Hub Seed Data (v1.2.0 -- 3-Database Structure)
 -- Databases: compliance_hub_users | compliance_hub | compliance_hub_ticketing
 -- Test account password: Admin@123
 
@@ -76,10 +76,21 @@ TRUNCATE TABLE role_definitions;
 TRUNCATE TABLE users;
 SET FOREIGN_KEY_CHECKS = 1;
 
--- Seed admin account only (password: Admin@123). Real users are managed via User Management.
+-- Test/seed accounts (all use password: password123 bcrypt hash)
+-- Hash below verified: bcrypt.compare('password123', hash) === true
 INSERT INTO users (id, email, passwordHash, first_name, last_name, role, active, created_at, updated_at) VALUES
-(1, 'admin@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'System', 'Admin', 'super_admin', 1, NOW(), NOW())
-ON DUPLICATE KEY UPDATE email = VALUES(email);
+(1,  'admin@rictms.gov.ph',     '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'System',      'Admin',    'super_admin',        1, NOW(), NOW()),
+(2,  'bejuan@dswd.gov.ph',      '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Bernardo',    'Juan',     'section_head',       1, NOW(), NOW()),
+(3,  'gmjavierjr@dswd.gov.ph',  '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Godofredo',   'Javier',   'it_support_jr',      1, NOW(), NOW()),
+(4,  'jailingan@dswd.gov.ph',   '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'James Arnel', 'Lingan',   'pantawid_ict',       1, NOW(), NOW()),
+(5,  'jcbucayu@dswd.gov.ph',    '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Jaylord',     'Bucayu',   'dev_lead',           1, NOW(), NOW()),
+(6,  'jrcardona@dswd.gov.ph',   '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Jaymark',     'Cardona',  'desktop_jr',         1, NOW(), NOW()),
+(7,  'mpmabazza@dswd.gov.ph',   '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Mylord',      'Mabazza',  'desktop_sr',         1, NOW(), NOW()),
+(8,  'fggarcia@dswd.gov.ph',    '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Ferdinand',   'Garcia',   'desktop_sr',         1, NOW(), NOW()),
+(9,  'mjdibay@dswd.gov.ph',     '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Marc Jayson', 'Ibay',     'compliance_officer', 1, NOW(), NOW()),
+(10, 'jmmmaguigad@dswd.gov.ph', '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'John Manuel', 'Maguigad', 'cybersec',           1, NOW(), NOW()),
+(95, 'test@dswd.gov.ph',        '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Test',        'User',     'user',               1, NOW(), NOW())
+ON DUPLICATE KEY UPDATE passwordHash=VALUES(passwordHash), first_name=VALUES(first_name), last_name=VALUES(last_name), role=VALUES(role), active=VALUES(active);
 
 -- ============================================================
 -- Back to compliance_hub for units INSERT

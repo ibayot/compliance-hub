@@ -295,7 +295,7 @@ export class TicketController {
       escalatedToId: Number(body.escalatedToId),
       notes: body.notes,
     };
-    return this.ticketService.escalateTicket(id, dto, proofFiles ?? [], req.user.id ?? req.user.userId, req.user.role);
+    try { return await this.ticketService.escalateTicket(id, dto, proofFiles ?? [], req.user.id ?? req.user.userId, req.user.role); } catch(e) { console.error('Escalate error:', e); throw e; }
   }
 
   /** PATCH /tickets/:id/escalation/:eid/accept */

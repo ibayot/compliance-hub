@@ -45,27 +45,27 @@ function ticketTypeIcon(t: TicketType) {
 
 
 
-function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'warning' | 'breached' | null {
+function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | null {
   if (!ticket.slaDeadline) return null;
   const deadline = new Date(ticket.slaDeadline).getTime();
   const now = Date.now();
   const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
   if (isTerminal) {
     const resolvedTime = ticket.resolvedAt ? new Date(ticket.resolvedAt).getTime() : now;
-    return resolvedTime <= deadline ? 'met' : 'breached';
+    return resolvedTime <= deadline ? 'met' : 'overdue';
   }
-  if (now > deadline) return 'breached';
+  if (now > deadline) return 'overdue';
   const createdAt = ticket.createdAt ? new Date(ticket.createdAt).getTime() : now;
   const total = deadline - createdAt;
   const remaining = deadline - now;
-  return (total > 0 && remaining / total < 0.2) ? 'warning' : 'on_track';
+  return (total > 0 && remaining / total < 0.4) ? 'nearing_sla' : 'on_track';
 }
 
 const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'warning' | 'error' }> = {
   met: { label: 'Met', color: 'success' },
   on_track: { label: 'On Track', color: 'info' },
-  warning: { label: 'Warning', color: 'warning' },
-  breached: { label: 'Breached', color: 'error' },
+  nearing_sla: { label: 'Nearing SLA', color: 'warning' },
+  overdue: { label: 'Overdue', color: 'error' },
 };
 
 export default function TicketsPage() {
@@ -301,6 +301,7 @@ export default function TicketsPage() {
             `You still have ${pendingCount} unresolved satisfaction rating${pendingCount > 1 ? 's' : ''}. Please rate your resolved tickets before opening a new request.`,
           );
           setReminderOpen(true);
+          return;
         }
 
         if (unclosedCount > 0) {
@@ -631,8 +632,6 @@ export default function TicketsPage() {
                 <TableCell>
                   <Stack direction="column" spacing={0.5}>
                     {(() => { const s = getSlaStatus(ticket); return s ? <Chip size="small" label={SLA_CHIP[s].label} color={SLA_CHIP[s].color} /> : <Typography variant="body2" color="text.disabled">—</Typography>; })()}
-                    {ticket.isOverdue && <Chip size="small" label="Overdue" color="error" variant="filled" />}
-                    {ticket.isNearingSLA && !ticket.isOverdue && <Chip size="small" label="Nearing SLA" color="warning" variant="filled" />}
                   </Stack>
                 </TableCell>
                 {canManageAll && (
