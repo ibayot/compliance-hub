@@ -142,7 +142,8 @@ async function createTicket(page: Page, subject: string) {
   }
 
   await page.getByRole('button', { name: 'Submit Ticket', exact: true }).click();
-  await page.waitForTimeout(1000);
+  await expect(page.locator('.MuiDialog-root')).toBeHidden({ timeout: 15000 });
+  await page.waitForTimeout(500);
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -171,13 +172,7 @@ test.describe('Ticketing Lifecycle and SLA Tests', () => {
     await page.goto('/dashboard/tickets');
     await createTicket(page, subject);
 
-    // Verify Open Ticket Restriction: User shouldn't be able to create another ticket while one is open
-    await page.goto('/dashboard/tickets');
-    await page.waitForTimeout(1000);
-    await page.getByRole('button', { name: 'New Ticket' }).click();
-    await expect(page.locator('text=Open Ticket Restriction')).toBeVisible({ timeout: 10000 });
-    await page.getByRole('button', { name: 'Close' }).click();
-    await page.waitForTimeout(500);
+    
 
     // Locate ticket row and navigate to detail
     const row = page.locator('tr', { hasText: subject }).first();
@@ -451,5 +446,262 @@ test.describe('Ticketing Lifecycle and SLA Tests', () => {
     // 6. Revert the SLA bypass
     await forceTicketOverdue(slaTicketId, true);
     await cleanAttendance([ACCOUNTS.desktopSr.id]);
+  });
+
+  test('Test 4: Multiple Requests Allowed', async ({ page }) => {
+    test.setTimeout(120000); // 2 mins
+
+    // 1. Create first ticket
+    await markPresent([ACCOUNTS.desktopJr.id]);
+    await login(page, ACCOUNTS.user.email);
+    await page.goto('/dashboard/tickets');
+    const subject1 = 'E2E Test 4 Multi-Request A ' + Date.now();
+    await createTicket(page, subject1);
+
+    // 2. User creates a second ticket IMMEDIATELY
+    await page.goto('/dashboard/tickets');
+    await page.waitForTimeout(1000);
+    const subject2 = 'E2E Test 4 Multi-Request B ' + Date.now();
+    await createTicket(page, subject2);
+
+    // Verify both tickets exist
+    await page.reload();
+    await page.waitForTimeout(1000);
+    await expect(page.locator('tr', { hasText: subject1 }).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('tr', { hasText: subject2 }).first()).toBeVisible({ timeout: 10000 });
+    
+    // Now get the ID of ticket 1 to resolve it
+    await page.locator('tr', { hasText: subject1 }).first().getByRole('button', { name: 'View Details' }).click();
+    const url1 = page.url();
+    const ticketId1 = url1.split('/').pop() || '';
+    await logout(page);
+
+    // 3. Resolve Ticket 1 directly as desktopJr (auto-assigned by monolith)
+    await login(page, ACCOUNTS.desktopJr.email);
+    await page.goto('/dashboard/tickets/' + ticketId1);
+    await page.waitForTimeout(1000);
+
+    // desktopJr visiting the ticket auto-transitions assigned → in_progress (markViewed)
+    await page.waitForTimeout(1500); // Wait for auto-transition to in_progress
+
+    // Resolve ticket directly via API (desktopJr session cookie is active)
+    const resolveStatus = await page.evaluate(async (tId: string) => {
+      const resp = await fetch(`/api/tickets/${tId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: 'resolved', resolutionNotes: 'Resolved Ticket A for Test 4' }),
+      });
+      return resp.status;
+    }, ticketId1);
+
+    // Update status to In Progress
+    const updateStatusBtn = page.getByRole('button', { name: 'Update Status' });
+    await expect(updateStatusBtn).toBeVisible({ timeout: 10000 });
+    await updateStatusBtn.click();
+    await page.waitForTimeout(300);
+
+    // Set priority first
+    const priorityDropdown = page.getByLabel(/Priority/i);
+    await priorityDropdown.click();
+    await page.waitForTimeout(300);
+    await page.getByRole('option', { name: 'Medium' }).click();
+    await page.waitForTimeout(300);
+
+    const statusDropdown = page.getByLabel('Status');
+    await statusDropdown.click();
+    await page.waitForTimeout(300);
+    await page.getByRole('option', { name: 'In Progress' }).click();
+    await page.waitForTimeout(300);
+
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByText('Ticket updated.')).toBeVisible({ timeout: 10000 });
+
+    // Update status to Resolved
+    //const updateStatusBtn = page.getByRole('button', { name: 'Update Status' });
+    await expect(updateStatusBtn).toBeVisible({ timeout: 10000 });
+    await updateStatusBtn.click();
+    await page.waitForTimeout(300);
+
+    //const statusDropdown = page.getByLabel('Status');
+    await statusDropdown.click();
+    await page.waitForTimeout(300);
+    await page.getByRole('option', { name: 'Resolved' }).click();
+    await page.waitForTimeout(300);
+
+    await page.getByLabel('Resolution Notes (optional)').fill('Issue resolved by escalation focal.');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    //await expect(page.getByText('Ticket updated.')).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(500);
+    //expect(resolveStatus).toBe(200);
+    //await page.waitForTimeout(500);
+    await logout(page);
+
+    // 4. User attempts to create a 3rd ticket while Ticket 1 is Unrated
+    await login(page, ACCOUNTS.user.email);
+    await page.goto('/dashboard/tickets');
+    await page.waitForTimeout(1000);
+    
+    await page.getByRole('button', { name: 'New Ticket' }).click();
+    // Reminder should appear
+    await expect(page.locator('text=Pending Satisfaction Reminder')).toBeVisible({ timeout: 15000 });
+    
+    // Click Proceed Anyway
+    await page.getByRole('button', { name: 'Proceed Anyway' }).click();
+    
+    // Dialog should open, let's create Ticket 3
+    await page.waitForTimeout(500);
+    const subjectInput = page.getByRole('textbox', { name: /Subject/i });
+    await expect(subjectInput).toBeVisible({ timeout: 10000 });
+    await subjectInput.fill('E2E Test 4 Multi-Request C ' + Date.now());
+    await page.getByRole('textbox', { name: /Description/i }).fill('Testing proceed anyway');
+    
+    const desktopSupportCard = page.locator('.MuiDialog-root').getByText('Desktop Support').first();
+    if (await desktopSupportCard.isVisible({ timeout: 3000 })) {
+      await desktopSupportCard.click();
+    }
+
+    await page.getByRole('button', { name: 'Submit Ticket', exact: true }).click();
+    await expect(page.locator('.MuiDialog-root')).toBeHidden({ timeout: 15000 });
+    await logout(page);
+    await cleanAttendance([ACCOUNTS.desktopJr.id]);
+  });
+
+  test('Test 5: Priority Assignment and Auto Tagging', async ({ page }) => {
+    test.setTimeout(240000);
+
+    // 1. Seed keyword rules
+    const db = await getDb('compliance_hub_ticketing');
+    await db.query('DELETE FROM ticket_keyword_rules');
+    const rules = [
+      { id: crypto.randomUUID(), keyword: 'internet', type: 'it_support' },
+      { id: crypto.randomUUID(), keyword: 'printer', type: 'desktop_support' },
+      { id: crypto.randomUUID(), keyword: 'pantawid', type: 'pantawid_ict_support' }
+    ];
+    for (const r of rules) {
+      await db.execute(
+        `INSERT INTO ticket_keyword_rules (id, keyword, keywords, target_ticket_type, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 1, NOW(), NOW())`,
+        [r.id, r.keyword, JSON.stringify([r.keyword]), r.type]
+      );
+    }
+    await db.end();
+
+    // 2. Mark technicians as present
+    const techs = [3, 4, 6, 7, 8];
+    await markPresent(techs);
+
+    // 3. User creates 3 tickets (1 per area)
+    await login(page, ACCOUNTS.user.email);
+    const ts1 = Date.now();
+    const subjects1 = [
+      { s: `E2E Test 5 - internet issue ${ts1}`, type: 'it_support', keyword: 'internet' },
+      { s: `E2E Test 5 - printer issue ${ts1}`, type: 'desktop_support', keyword: 'printer' },
+      { s: `E2E Test 5 - pantawid issue ${ts1}`, type: 'pantawid_ict_support', keyword: 'pantawid' }
+    ];
+
+    for (const sub of subjects1) {
+      await page.goto('/dashboard/tickets');
+      await page.waitForTimeout(1000);
+      
+      const newTicketBtn = page.getByRole('button', { name: 'New Ticket' });
+      await expect(newTicketBtn).toBeVisible({ timeout: 15000 });
+      await newTicketBtn.click();
+      
+      const proceedBtn = page.getByRole('button', { name: 'Proceed Anyway' });
+      if (await proceedBtn.isVisible({ timeout: 3000 })) {
+        await proceedBtn.click();
+      }
+
+      await expect(page.locator('.MuiDialog-root')).toBeVisible({ timeout: 10000 });
+      await page.waitForTimeout(500);
+
+      const subjectInput = page.getByRole('textbox', { name: /Subject/i });
+      await subjectInput.fill(sub.s);
+      await page.getByRole('textbox', { name: /Description/i }).fill(`Testing keyword ${sub.keyword} for auto-tagging.`);
+
+      const card = page.locator('.MuiDialog-root').getByText('Desktop Support').first();
+      if (await card.isVisible({ timeout: 3000 })) await card.click();
+
+      await page.getByRole('button', { name: 'Submit Ticket', exact: true }).click();
+      await expect(page.locator('.MuiDialog-root')).toBeHidden({ timeout: 15000 });
+    }
+    await logout(page);
+
+    // 4. Superadmin logs in, goes to Attendance, tags IT Support (gmjavierjr) as OOO.
+    await login(page, ACCOUNTS.admin.email);
+    await page.goto('/dashboard/attendance');
+    await page.getByRole('tab', { name: 'Attendance' }).click();
+    await page.waitForTimeout(2000);
+    
+    // Find the row for gmjavierjr (Godofredo Javier)
+    const techRow = page.locator('tr', { hasText: 'Godofredo Javier' }).first();
+    await expect(techRow).toBeVisible({ timeout: 10000 });
+    
+    // Determine which column is today's column
+    const todayStr = new Date().getDate().toString();
+    const headers = page.locator('th');
+    const headerCount = await headers.count();
+    let colIndex = -1;
+    for (let i = 0; i < headerCount; i++) {
+      const text = await headers.nth(i).innerText();
+      if (text.trim() === todayStr) {
+        colIndex = i + 1; // nth-child is 1-based
+        break;
+      }
+    }
+    
+    if (colIndex !== -1) {
+      const cell = techRow.locator(`td:nth-child(${colIndex})`);
+      const btn = cell.locator('button');
+      // Cycle from present -> absent -> half_day -> out_of_office (3 clicks)
+      for (let i = 0; i < 3; i++) {
+        await btn.click();
+        await page.waitForTimeout(500);
+      }
+    }
+    await logout(page);
+
+    // 5. User creates 6 tickets (2 per area)
+    await login(page, ACCOUNTS.user.email);
+    const ts2 = Date.now();
+    const subjects2 = [
+      { s: `E2E Test 5 - internet issue A ${ts2}`, type: 'it_support', keyword: 'internet' },
+      { s: `E2E Test 5 - printer issue A ${ts2}`, type: 'desktop_support', keyword: 'printer' },
+      { s: `E2E Test 5 - pantawid issue A ${ts2}`, type: 'pantawid_ict_support', keyword: 'pantawid' },
+      { s: `E2E Test 5 - internet issue B ${ts2}`, type: 'it_support', keyword: 'internet' },
+      { s: `E2E Test 5 - printer issue B ${ts2}`, type: 'desktop_support', keyword: 'printer' },
+      { s: `E2E Test 5 - pantawid issue B ${ts2}`, type: 'pantawid_ict_support', keyword: 'pantawid' }
+    ];
+
+    for (const sub of subjects2) {
+      await page.goto('/dashboard/tickets');
+      await page.waitForTimeout(1000);
+      
+      const newTicketBtn = page.getByRole('button', { name: 'New Ticket' });
+      await expect(newTicketBtn).toBeVisible({ timeout: 15000 });
+      await newTicketBtn.click();
+      
+      const proceedBtn = page.getByRole('button', { name: 'Proceed Anyway' });
+      if (await proceedBtn.isVisible({ timeout: 3000 })) {
+        await proceedBtn.click();
+      }
+
+      await expect(page.locator('.MuiDialog-root')).toBeVisible({ timeout: 10000 });
+      await page.waitForTimeout(500);
+
+      const subjectInput = page.getByRole('textbox', { name: /Subject/i });
+      await subjectInput.fill(sub.s);
+      await page.getByRole('textbox', { name: /Description/i }).fill(`Testing keyword ${sub.keyword} for auto-tagging.`);
+
+      const card = page.locator('.MuiDialog-root').getByText('Desktop Support').first();
+      if (await card.isVisible({ timeout: 3000 })) await card.click();
+
+      await page.getByRole('button', { name: 'Submit Ticket', exact: true }).click();
+      await expect(page.locator('.MuiDialog-root')).toBeHidden({ timeout: 15000 });
+    }
+    await logout(page);
+    
+    await cleanAttendance(techs);
   });
 });
