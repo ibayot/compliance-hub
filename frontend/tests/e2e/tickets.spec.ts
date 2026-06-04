@@ -745,7 +745,7 @@ test.describe('Mobile View Tests', () => {
     await page.waitForTimeout(2000);
 
     // Filter datagrid or wait for it to load
-    const resolvedRow1 = page.locator('tr').filter({ hasText: 'E2E Test 5' }).filter({ hasText: 'Resolved' }).first();
+    const resolvedRow1 = page.locator('.MuiCard-root').filter({ hasText: 'E2E Test 5' }).filter({ hasText: 'Resolved' }).first();
     await expect(resolvedRow1).toBeVisible({ timeout: 20000 });
 
     // 1. Rate 1 out of 2 resolved tickets
@@ -809,7 +809,7 @@ test.describe('Mobile View Tests', () => {
 
     // 4. Rate the last unrated ticket
     await page.waitForTimeout(2000);
-    const resolvedRow2 = page.locator('tr').filter({ hasText: 'E2E Test 5' }).filter({ hasText: 'Resolved' }).first();
+    const resolvedRow2 = page.locator('.MuiCard-root').filter({ hasText: 'E2E Test 5' }).filter({ hasText: 'Resolved' }).first();
     await resolvedRow2.getByRole('button', { name: 'View Details' }).click();
     
     const rateBtn2 = page.getByRole('button', { name: /Rate Resolution/i });

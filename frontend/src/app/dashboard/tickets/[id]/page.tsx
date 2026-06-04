@@ -1310,7 +1310,7 @@ export default function TicketDetailPage() {
                   </Typography>
                 }
               />
-              <Stack direction="row" spacing={2}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <Autocomplete
                   options={unitSuggestions} freeSolo fullWidth value={csatForm.unitSection}
                   onInputChange={(_, v) => setCsatForm(f => ({ ...f, unitSection: v }))}
@@ -1319,13 +1319,13 @@ export default function TicketDetailPage() {
                 <TextField label="Date of Transaction *" type="date" value={csatForm.dateOfTransaction}
                   InputProps={{ readOnly: true }} disabled fullWidth InputLabelProps={{ shrink: true }} />
               </Stack>
-              <Stack direction="row" spacing={2}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField label="First Name *" value={csatForm.clientFirstName} onChange={e => setCsatForm(f => ({ ...f, clientFirstName: e.target.value }))} fullWidth />
                 <TextField label="M.I." value={csatForm.clientMiddleInitial ?? ''} onChange={e => setCsatForm(f => ({ ...f, clientMiddleInitial: e.target.value }))} inputProps={{ maxLength: 2 }} sx={{ maxWidth: 80 }} />
                 <TextField label="Last Name *" value={csatForm.clientLastName} onChange={e => setCsatForm(f => ({ ...f, clientLastName: e.target.value }))} fullWidth />
-                <TextField label="Suffix" value={csatForm.suffix ?? ''} onChange={e => setCsatForm(f => ({ ...f, suffix: e.target.value }))} sx={{ maxWidth: 100 }} />
+                <TextField label="Suffix" value={csatForm.suffix ?? ''} onChange={e => setCsatForm(f => ({ ...f, suffix: e.target.value }))} sx={{ maxWidth: { xs: '100%', sm: 100 } }} />
               </Stack>
-              <Stack direction="row" spacing={2} flexWrap="wrap">
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
                 <TextField label="Age *" type="number" inputProps={{ min: 1, max: 120 }} value={csatForm.age ?? ''}
                   onChange={e => setCsatForm(f => ({ ...f, age: e.target.value ? Number(e.target.value) : undefined }))} sx={{ maxWidth: 100 }} />
                 <TextField label="Religion *" value={csatForm.religion} onChange={e => setCsatForm(f => ({ ...f, religion: e.target.value }))} sx={{ flex: 1 }} />
@@ -1370,12 +1370,13 @@ export default function TicketDetailPage() {
                 const isNA = [3, 5, 8].includes(idx);
                 const val = csatForm.likert[idx];
                 return (
-                  <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }}>{idx}. {item}</Typography>
+                  <Box key={idx} sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, gap: 1 }}>
+                    <Typography variant="body2" sx={{ flex: 1, minWidth: 0, mb: { xs: 1, sm: 0 } }}>{idx}. {item}</Typography>
                     {isNA ? (
-                      <Chip size="small" label="N/A" color="default" sx={{ minWidth: 64 }} />
+                      <Chip size="small" label="N/A" color="default" sx={{ minWidth: 64, alignSelf: { xs: 'flex-start', sm: 'auto' } }} />
                     ) : (
                       <ToggleButtonGroup exclusive size="small" value={val === 0 ? null : val}
+                        sx={{ alignSelf: { xs: 'center', sm: 'auto' } }}
                         onChange={(_, v) => {
                           if (v !== null) {
                             const updated = [...csatForm.likert] as Array<number | 'NA'>;

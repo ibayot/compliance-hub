@@ -6,7 +6,7 @@ import {
   TableContainer, TableHead, TableRow, IconButton, Chip, TextField, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions, Stack, CircularProgress,
   Rating, Tooltip, Alert, Autocomplete, ToggleButton, ToggleButtonGroup,
-  Checkbox, FormControlLabel, InputAdornment, Tab, Tabs,
+  Checkbox, FormControlLabel, InputAdornment, Tab, Tabs, useMediaQuery, useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon, Visibility as ViewIcon, AssignmentInd as AssignIcon,
@@ -70,6 +70,8 @@ const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'war
 
 export default function TicketsPage() {
   const router = useRouter();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user, myCap } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
 
@@ -438,7 +440,7 @@ export default function TicketsPage() {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} gap={{ xs: 2, sm: 0 }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} mb={3}>
         <Box>
           <Typography variant="h4" fontWeight={700}>Help Desk Tickets</Typography>
           <Typography variant="body2" color="text.secondary">
@@ -564,6 +566,78 @@ export default function TicketsPage() {
         </Card>
       )}
 
+      {isMobile ? (
+        <Stack spacing={2}>
+          {loading ? (
+            <Box display="flex" justifyContent="center" p={3}><CircularProgress size={28} /></Box>
+          ) : tabFilteredTickets.length === 0 ? (
+            <Box display="flex" justifyContent="center" p={3}>
+              <Typography color="text.secondary">No tickets found in this category.</Typography>
+            </Box>
+          ) : tabFilteredTickets.map(ticket => {
+            const hasPendingSatisfaction =
+                (ticket.status === 'resolved' || ticket.status === 'closed') &&
+                ticket.requesterId === user?.id &&
+                !ticket.satisfactionSubmittedAt;
+
+            return (
+              <Card key={ticket.id} sx={hasPendingSatisfaction ? { backgroundColor: 'warning.50' } : {}}>
+                <CardContent>
+                  <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
+                    <Typography sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{ticket.ticketNumber}</Typography>
+                    <Box>
+                      {hasPendingSatisfaction && <Chip size="small" label="Unrated" color="warning" variant="filled" sx={{ mr: 1 }} />}
+                      <Chip size="small" label={ticket.status.replace('_', ' ')} color={STATUS_COLOR[ticket.status]} />
+                    </Box>
+                  </Box>
+                  <Typography variant="body1" sx={{ fontWeight: 600, mb: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {ticket.subject}
+                  </Typography>
+                  <Stack direction="row" flexWrap="wrap" gap={1} mb={2}>
+                    <Chip size="small" icon={ticketTypeIcon(ticket.ticketType)} label={TICKET_TYPE_LABELS[ticket.ticketType]} variant="outlined" />
+                    <Chip size="small" label={(ticket.priority ?? 'not set').toUpperCase()} color={PRIORITY_COLOR[ticket.priority ?? ''] ?? 'default'} />
+                    {(() => { const s = getSlaStatus(ticket); return s ? <Chip size="small" label={SLA_CHIP[s].label} color={SLA_CHIP[s].color} /> : null; })()}
+                  </Stack>
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography variant="caption" color="text.secondary">
+                      {new Date(ticket.createdAt).toLocaleDateString()}
+                    </Typography>
+                    <Stack direction="row" spacing={0.5}>
+                      <Tooltip title="View Details">
+                        <IconButton size="small" onClick={() => router.push(`/dashboard/tickets/${ticket.id}`)}><ViewIcon fontSize="small" /></IconButton>
+                      </Tooltip>
+                      {canAssign && ticket.status !== 'duplicate' && (
+                        <Tooltip title={['resolved', 'closed'].includes(ticket.status) ? 'Reassign disabled' : 'Assign Ticket'}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => openAssignDialog(ticket, false)}
+                              disabled={['resolved', 'closed'].includes(ticket.status)}
+                            >
+                              <AssignIcon fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      )}
+                      {canEscalate && escalationStateByTicket[ticket.id] !== 'active' && !['duplicate', 'closed', 'resolved'].includes(ticket.status) && (
+                        <Tooltip title="Escalate Ticket">
+                          <IconButton size="small" color="warning" onClick={() => openAssignDialog(ticket, true)}><AssignIcon fontSize="small" /></IconButton>
+                        </Tooltip>
+                      )}
+                      {hasPendingSatisfaction && (
+                        <Tooltip title="Rate this resolution">
+                          <IconButton size="small" color="success" onClick={() => openSatDialog(ticket)}><SatisfactionIcon fontSize="small" /></IconButton>
+                        </Tooltip>
+                      )}
+                    </Stack>
+                  </Box>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </Stack>
+      ) : (
       <TableContainer component={Card}>
         <Table>
           <TableHead>
@@ -680,6 +754,7 @@ export default function TicketsPage() {
           </TableBody>
         </Table>
       </TableContainer>
+      )}
 
       {/* New Ticket Dialog — Redesigned with highlighted support type cards + category dropdown */}
       <Dialog open={newDialogOpen} onClose={() => setNewDialogOpen(false)} maxWidth="sm" fullWidth>
@@ -687,7 +762,7 @@ export default function TicketsPage() {
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             <Typography variant="subtitle2" color="text.secondary">Choose Support Type</Typography>
-            <Stack direction="row" spacing={2} flexWrap="wrap">
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap={{ xs: 'nowrap', sm: 'wrap' }}>
               {([
                 { value: 'it_support' as TicketType, label: 'IT Support', icon: '💻', color: '#1976d2', desc: 'Software, network, email, accounts' },
                 { value: 'desktop_support' as TicketType, label: 'Desktop Support', icon: '🖥️', color: '#388e3c', desc: 'Hardware, printers, workstations' },
@@ -877,14 +952,14 @@ export default function TicketsPage() {
                 />
               </Stack>
 
-              <Stack direction="row" spacing={2}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField label="First Name *" value={csatForm.clientFirstName} onChange={e => setCsatForm(f => ({ ...f, clientFirstName: e.target.value }))} fullWidth />
                 <TextField label="M.I." value={csatForm.clientMiddleInitial ?? ''} onChange={e => setCsatForm(f => ({ ...f, clientMiddleInitial: e.target.value }))} inputProps={{ maxLength: 2 }} sx={{ maxWidth: 80 }} />
                 <TextField label="Last Name *" value={csatForm.clientLastName} onChange={e => setCsatForm(f => ({ ...f, clientLastName: e.target.value }))} fullWidth />
-                <TextField label="Suffix" value={csatForm.suffix ?? ''} onChange={e => setCsatForm(f => ({ ...f, suffix: e.target.value }))} sx={{ maxWidth: 100 }} />
+                <TextField label="Suffix" value={csatForm.suffix ?? ''} onChange={e => setCsatForm(f => ({ ...f, suffix: e.target.value }))} sx={{ maxWidth: { xs: '100%', sm: 100 } }} />
               </Stack>
 
-              <Stack direction="row" spacing={2} flexWrap="wrap">
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
                 <TextField
                   label="Age *"
                   type="number"
@@ -952,17 +1027,18 @@ export default function TicketsPage() {
                 const isNA = [3, 5, 8].includes(idx);
                 const val = csatForm.likert[idx];
                 return (
-                  <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }}>
+                  <Box key={idx} sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, gap: 1 }}>
+                    <Typography variant="body2" sx={{ flex: 1, minWidth: 0, mb: { xs: 1, sm: 0 } }}>
                       {idx}. {item}
                     </Typography>
                     {isNA ? (
-                      <Chip size="small" label="N/A" color="default" sx={{ minWidth: 64 }} />
+                      <Chip size="small" label="N/A" color="default" sx={{ minWidth: 64, alignSelf: { xs: 'flex-start', sm: 'auto' } }} />
                     ) : (
                       <ToggleButtonGroup
                         exclusive
                         size="small"
                         value={val === 0 ? null : val}
+                        sx={{ alignSelf: { xs: 'center', sm: 'auto' } }}
                         onChange={(_, v) => {
                           if (v !== null) {
                             const updated = [...csatForm.likert] as Array<number | 'NA'>;
