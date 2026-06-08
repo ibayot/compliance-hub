@@ -68,7 +68,7 @@ export class UsersController {
   }
 
   @Get()
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  // @Roles removed to allow any authenticated user to list users for ticket proxying
   findAll() {
     return this.usersService.findAll();
   }

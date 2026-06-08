@@ -148,15 +148,34 @@ export default function TicketsPage() {
   const [ticketTab, setTicketTab] = useState(0);
   // Management tab state (canManageAll view: CO, SH, super_admin)
   const [mgmtTab, setMgmtTab] = useState(0);
+  // User tab state (!isTechnician && !canManageAll view)
+  const [userTab, setUserTab] = useState(0);
+
   const activeTickets = tickets.filter(t => ['open', 'assigned', 'in_progress'].includes(t.status));
   const doneTickets = tickets.filter(t => ['resolved', 'closed'].includes(t.status));
   const frozenTickets = tickets.filter(t => t.status === 'freeze');
   const duplicateTickets = tickets.filter(t => t.status === 'duplicate');
+  
+  const toRateTickets = tickets.filter(t => 
+    (t.status === 'resolved' || t.status === 'closed') && 
+    t.requesterId === user?.id && 
+    !t.satisfactionSubmittedAt
+  );
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('filter') === 'pending_satisfaction') {
+        setUserTab(1);
+      }
+    }
+  }, []);
+
   const tabFilteredTickets = canManageAll
     ? ([tickets, activeTickets, doneTickets, frozenTickets, duplicateTickets][mgmtTab] ?? tickets)
     : isTechnician
       ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
-      : tickets;
+      : ([tickets, toRateTickets, doneTickets][userTab] ?? tickets);
 
   const refreshEscalationStates = useCallback(async (rows: Ticket[]) => {
     if (!canEscalate) return;
@@ -246,10 +265,9 @@ export default function TicketsPage() {
   useAutoRefresh(silentFetchTickets);
 
   useEffect(() => {
-    if (canManageAll) {
-      usersApi.list().then(users => setAllUsers(users.filter(u => u.active))).catch(() => {});
-    }
-  }, [canManageAll]);
+    // Load users for everyone so they can request tickets for others (Proxy Creation)
+    usersApi.list().then(users => setAllUsers(users.filter(u => u.active))).catch(() => {});
+  }, []);
 
   // Fetch categories when the New Ticket dialog opens or support type changes
   // Pass activeOnly=true so only active categories appear in the creation dropdown
@@ -565,6 +583,17 @@ export default function TicketsPage() {
           </CardContent>
         </Card>
       )}
+      {!isTechnician && !canManageAll && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent sx={{ pb: '0 !important' }}>
+            <Tabs value={userTab} onChange={(_, v) => setUserTab(v)} variant="scrollable" scrollButtons="auto">
+              <Tab label={`All (${tickets.length})`} />
+              <Tab label={`To Rate (${toRateTickets.length})`} />
+              <Tab label={`Closed / Resolved (${doneTickets.length})`} />
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
 
       {isMobile ? (
         <Stack spacing={2}>
@@ -594,6 +623,9 @@ export default function TicketsPage() {
                     {ticket.subject}
                   </Typography>
                   <Stack direction="row" flexWrap="wrap" gap={1} mb={2}>
+                    {ticket.requesterId !== user?.id && (
+                      <Chip size="small" label={`Requested for: ${ticket.requester?.firstName || ticket.requester?.email || 'Unknown'}`} color="secondary" />
+                    )}
                     <Chip size="small" icon={ticketTypeIcon(ticket.ticketType)} label={TICKET_TYPE_LABELS[ticket.ticketType]} variant="outlined" />
                     <Chip size="small" label={(ticket.priority ?? 'not set').toUpperCase()} color={PRIORITY_COLOR[ticket.priority ?? ''] ?? 'default'} />
                     {(() => { const s = getSlaStatus(ticket); return s ? <Chip size="small" label={SLA_CHIP[s].label} color={SLA_CHIP[s].color} /> : null; })()}
@@ -677,9 +709,14 @@ export default function TicketsPage() {
                 <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{ticket.ticketNumber}</TableCell>
                 <TableCell sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ticket.subject}</TableCell>
                 <TableCell>
-                  <Chip size="small"
-                    icon={ticketTypeIcon(ticket.ticketType)}
-                    label={TICKET_TYPE_LABELS[ticket.ticketType]} variant="outlined" />
+                  <Stack direction="column" spacing={0.5}>
+                    {ticket.requesterId !== user?.id && (
+                      <Chip size="small" label="Proxy Request" color="secondary" sx={{ alignSelf: 'flex-start' }} />
+                    )}
+                    <Chip size="small"
+                      icon={ticketTypeIcon(ticket.ticketType)}
+                      label={TICKET_TYPE_LABELS[ticket.ticketType]} variant="outlined" />
+                  </Stack>
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" color="text.secondary">{ticket.category?.name ?? '—'}</Typography>
@@ -802,25 +839,23 @@ export default function TicketsPage() {
 
             <TextField label="Subject *" value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} fullWidth placeholder="Brief description of your issue" />
             <TextField label="Description *" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} fullWidth multiline rows={4} placeholder="Provide details: what happened, when, steps tried..." />
-            {canManageAll && (
-              <Autocomplete
-                options={allUsers.filter(u => u.role === 'user')}
-                getOptionLabel={u => `${[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email} (${u.email})`}
+            <Autocomplete
+                options={allUsers}
+                getOptionLabel={u => `${[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email} (${u.role})`}
                 value={allUsers.find(u => u.id === form.requesterId) ?? null}
                 onChange={(_, newValue) => setForm({ ...form, requesterId: newValue?.id ?? undefined })}
                 isOptionEqualToValue={(option, value) => option.id === value.id}
                 renderInput={params => (
                   <TextField
                     {...params}
-                    label="Requester (Walk-in / Phone call)"
-                    helperText="Leave blank — ticket is automatically recorded as your own submission"
+                    label="Requested For (Optional)"
+                    helperText="Leave blank if you are requesting for yourself. Select a user to request on their behalf."
                     fullWidth
                   />
                 )}
                 clearOnEscape
                 fullWidth
               />
-            )}
             {(canManageAll || isTechnician) && (
               <TextField select label="Priority" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value as TicketPriority })} fullWidth>
                 <MenuItem value="low">Low — Not urgent</MenuItem>

@@ -846,6 +846,17 @@ export class TicketService implements OnModuleInit {
             'This ticket has an accepted escalation. Only the accepting focal, compliance officer, section head, or super admin can change status.',
           );
         }
+      } else {
+        // Enforce that only admins or the assigned technician can update status
+        const isStatusAdmin =
+          actorRole === UserRole.SUPER_ADMIN ||
+          actorRole === UserRole.SECTION_HEAD ||
+          actorRole === UserRole.COMPLIANCE_OFFICER ||
+          this.roleCapSvc.isSeniorAuthority(actorRole as string);
+
+        if (!isStatusAdmin && ticket.assignedToId !== actorId) {
+          throw new ForbiddenException('You can only update the status of tickets explicitly assigned to you.');
+        }
       }
 
       // QA #4/#3/#6: Full status transition matrix enforcement
@@ -1422,15 +1433,11 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     for (const t of tickets) {
       if (t.status === TicketStatus.OPEN) open++;
       else if (t.status === TicketStatus.ASSIGNED || t.status === TicketStatus.IN_PROGRESS) inProgress++;
-      else if (t.status === TicketStatus.RESOLVED) {
-        resolved++;
+      else if (t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) {
+        if (t.status === TicketStatus.RESOLVED) resolved++;
+        if (t.status === TicketStatus.CLOSED) closed++;
         needsSatisfaction++;
         if (!t.satisfactionSubmittedAt) pendingSatisfactionTickets.push(t);
-      }
-      else if (t.status === TicketStatus.CLOSED) {
-        closed++;
-        if (t.resolvedAt) needsSatisfaction++;
-        if (!t.satisfactionSubmittedAt && t.resolvedAt) pendingSatisfactionTickets.push(t);
       }
     }
 

@@ -11,9 +11,9 @@ services:
     environment:
       MARIADB_ROOT_PASSWORD: admin
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
-      - ./db-init/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./db-init:/docker-entrypoint-initdb.d
       - db_data:/var/lib/mysql
 
   redis:
@@ -42,6 +42,7 @@ services:
       - ./backend/.env
     environment:
       - DB_HOST=db
+      - DB_PASSWORD=admin
       - REDIS_HOST=redis
     ports:
       - "4101:4101"
@@ -60,7 +61,9 @@ services:
       - ./backend/.env
     environment:
       - DB_HOST=db
+      - DB_PASSWORD=admin
       - REDIS_HOST=redis
+      - USERS_SERVICE_URL=http://users-service:4101
     ports:
       - "4102:4102"
 
@@ -78,7 +81,9 @@ services:
       - ./backend/.env
     environment:
       - DB_HOST=db
+      - DB_PASSWORD=admin
       - REDIS_HOST=redis
+      - USERS_SERVICE_URL=http://users-service:4101
     ports:
       - "4103:4103"
 

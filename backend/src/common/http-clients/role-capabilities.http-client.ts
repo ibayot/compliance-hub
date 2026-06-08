@@ -208,7 +208,16 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
 
   // ── Bulk query helpers ────────────────────────────────────────────────────
 
+  private async ensureCacheLoaded(): Promise<void> {
+    if (this.cache.size === 0 || Date.now() - this.lastLoaded > this.cacheTtlMs) {
+      await this.reload();
+    }
+  }
+
   getRolesWhere(capability: CapabilityKey): string[] {
+    // If the cache is empty, we must trigger a reload synchronously or return stale data.
+    // However, since this method is synchronous, we can't await `reload()`.
+    // Wait, getRolesWhere is used synchronously in many places!
     return [...this.cache.values()]
       .filter((r) => r[capability])
       .map((r) => r.roleValue);

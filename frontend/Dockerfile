@@ -27,7 +27,7 @@ FROM nginx:alpine AS runner
 # Copy the built dist from Vite to Nginx html folder
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Replace default config with one that supports React Router
+# Replace default config with one that supports React Router and proxies /api
 RUN echo 'server { \
     listen 80; \
     server_name localhost; \
@@ -35,6 +35,12 @@ RUN echo 'server { \
     index index.html; \
     location / { \
         try_files $uri $uri/ /index.html; \
+    } \
+    location /api/ { \
+        proxy_pass http://gateway:4000/api/; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
     } \
 }' > /etc/nginx/conf.d/default.conf
 
