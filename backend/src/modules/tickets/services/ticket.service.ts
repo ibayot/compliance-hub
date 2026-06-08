@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ForbiddenException,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, QueryRunner, Repository } from 'typeorm';
@@ -22,6 +23,7 @@ import { TicketSettingsService } from './ticket-settings.service';
 import { AttendanceService } from './attendance.service';
 import { EmailService, TicketEmailData } from './email.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
+import { EventBusService } from '../../../common/events/event-bus.service';
 
 // --- DTOs --------------------------------------------------------------------
 
@@ -119,6 +121,8 @@ export class TicketService implements OnModuleInit {
     private readonly attendanceService: AttendanceService,
     private readonly emailService: EmailService,
     private readonly roleCapSvc: RoleCapabilitiesService,
+    @Optional()
+    private readonly eventBus?: EventBusService,
   ) {}
 
   // --- Schema Migration ----------------------------------------------------
@@ -128,6 +132,14 @@ export class TicketService implements OnModuleInit {
       await this.runMigrations();
     } catch (err) {
       this.logger.warn(`Ticket schema migration failed (non-fatal): ${err?.message}`);
+    }
+
+    if (this.eventBus) {
+      this.eventBus.subscribe('attendance.unavailable', (payload: any) => {
+        if (payload?.techId) {
+          this.reassignUnavailableTechnicianTickets(payload.techId).catch(() => {});
+        }
+      });
     }
   }
 

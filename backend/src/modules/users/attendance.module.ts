@@ -8,6 +8,7 @@ import { User } from './entities/user.entity';
 import { RoleDefinitionEntity } from './entities/role-definition.entity';
 import { RoleCapability } from './entities/role-capability.entity';
 import { RoleCapabilitiesService } from './role-capabilities.service';
+import { EventBusModule } from '../../common/events/event-bus.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { RoleCapabilitiesService } from './role-capabilities.service';
       RoleDefinitionEntity,
       RoleCapability,
     ]),
+    EventBusModule,
   ],
   controllers: [AttendanceController],
   providers: [AttendanceService, RoleCapabilitiesService],

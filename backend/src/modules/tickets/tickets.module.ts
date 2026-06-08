@@ -22,6 +22,7 @@ import { RoleDefinitionEntity } from '../shared/entities';
 import { RoleCapabilitiesService } from '../users/role-capabilities.service';
 import { RoleCapabilitiesHttpClient } from '../../common/http-clients/role-capabilities.http-client';
 import { HttpClientsModule } from '../../common/http-clients/http-clients.module';
+import { EventBusModule } from '../../common/events/event-bus.module';
 import { CapabilityGuard } from '../../common/guards/capability.guard';
 import { Unit } from '../shared/entities';
 
@@ -44,6 +45,7 @@ import { Unit } from '../shared/entities';
       // RoleCapability removed: now loaded via RoleCapabilitiesHttpClient → users-service HTTP API
     ]),
     HttpClientsModule,
+    EventBusModule,
   ],
   controllers: [AttendanceController, TicketController, TicketSettingsController],
   providers: [
