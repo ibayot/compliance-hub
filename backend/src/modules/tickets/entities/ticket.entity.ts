@@ -86,6 +86,14 @@ export class Ticket {
   @JoinColumn({ name: 'issue_type_id' })
   issueTypeConfig: TicketIssueType | null;
 
+  // --- Creator ---
+  @Column({ name: 'created_by_id', type: 'int', nullable: true })
+  createdById: number | null;
+
+  @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'created_by_id' })
+  createdBy: User | null;
+
   // --- Requester ---
   @Column({ name: 'requester_id', type: 'int' })
   requesterId: number;

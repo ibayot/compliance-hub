@@ -353,7 +353,9 @@ export class TicketService implements OnModuleInit {
     if (!viewerRole || !viewerId) return;
     if (this.canViewAllTicketsInTicketing(viewerRole as string)) return;
     const vId = Number(viewerId);
+    // Allow access to: requester, assigned tech, the person who created it (proxy filer)
     if (Number(ticket.requesterId) === vId || Number(ticket.assignedToId) === vId) return;
+    if (ticket.createdById && Number(ticket.createdById) === vId) return;
     if (await this.canAccessTicketByEscalation(ticket.id, vId)) return;
 
     throw new ForbiddenException('You do not have access to this ticket.');
@@ -501,6 +503,7 @@ export class TicketService implements OnModuleInit {
       issueTypeId,
       issueType: issueTypeKey,
       requesterId,
+      createdById: callerId,
       assignedToId,
       resolutionNotes: null,
       resolutionSteps: null,
@@ -603,6 +606,7 @@ export class TicketService implements OnModuleInit {
     const qb = this.ticketRepo
       .createQueryBuilder('t')
       .leftJoinAndSelect('t.requester', 'requester')
+      .leftJoinAndSelect('t.createdBy', 'createdBy')
       .leftJoinAndSelect('t.assignedTo', 'assignedTo')
       .leftJoinAndSelect('t.category', 'category')
       .leftJoinAndSelect('t.issueTypeConfig', 'issueTypeConfig')
@@ -636,8 +640,9 @@ export class TicketService implements OnModuleInit {
       // Role-based visibility
       // Focal roles (is_focal=1) and super_admin see ALL tickets (full management view).
       if (filters.viewerRole === UserRole.USER) {
-        // Regular users see only their own submitted tickets
-        qb.where('t.requesterId = :uid', { uid: filters.viewerId });
+        // Regular users see their own tickets AND tickets filed on their behalf (proxy),
+        // plus tickets they created on behalf of others (proxy filer visibility)
+        qb.where('(t.requesterId = :uid OR t.createdById = :uid)', { uid: filters.viewerId });
       } else if (filters.viewerRole && this.canViewAllTicketsInTicketing(filters.viewerRole as string)) {
         // Privileged roles: no WHERE restriction — see all tickets with full filter support
         if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
@@ -720,7 +725,7 @@ export class TicketService implements OnModuleInit {
   async getTicketById(id: string, viewerRole?: UserRole, viewerId?: number): Promise<Ticket> {
     const ticket = await this.ticketRepo.findOne({
       where: { id },
-      relations: ['requester', 'assignedTo', 'category', 'issueTypeConfig', 'comments', 'comments.user'],
+      relations: ['requester', 'createdBy', 'assignedTo', 'category', 'issueTypeConfig', 'comments', 'comments.user'],
     });
     if (!ticket) throw new NotFoundException(`Ticket ${id} not found`);
     await this.assertTicketReadAccess(ticket, viewerId, viewerRole);
@@ -994,26 +999,45 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
 
     // QA #1/#2: On RESOLVED, auto-assign next OPEN ticket — only for non-senior techs
+    // Bug fix: removed ticketType restriction so cross-type tickets are considered;
+    // also verifies technician is available (not absent) before assigning.
     if (dto.status === TicketStatus.RESOLVED && saved.assignedToId) {
       try {
         const resolvedByTech = await this.userRepo.findOne({ where: { id: saved.assignedToId } });
         const isSeniorTech = resolvedByTech && this.roleCapSvc.isSeniorTech(resolvedByTech.role);
 
         if (!isSeniorTech) {
-          const nextTicket = await this.ticketRepo
-            .createQueryBuilder('t')
-            .where('t.status = :status', { status: TicketStatus.OPEN })
-            .andWhere('t.assignedToId IS NULL')
-            .andWhere('t.ticketType = :type', { type: saved.ticketType })
-            .orderBy('t.createdAt', 'ASC')
-            .getOne();
-          if (nextTicket) {
-            nextTicket.assignedToId = saved.assignedToId;
-            nextTicket.status = TicketStatus.ASSIGNED;
-            await this.ticketRepo.save(nextTicket);
-            this.logger.log(
-              `Auto-reassign on resolve: ticket ${nextTicket.ticketNumber} → technician #${saved.assignedToId}`,
-            );
+          // Check technician is available today before assigning
+          const today = new Date().toISOString().slice(0, 10);
+          const absentRow = await this.dataSource
+            .createQueryBuilder()
+            .select('ta.user_id', 'userId')
+            .from('attendance', 'ta')
+            .where('ta.date = :today', { today })
+            .andWhere('ta.user_id = :uid', { uid: saved.assignedToId })
+            .andWhere("ta.status IN ('absent', 'out_of_office')")
+            .getRawOne();
+
+          if (!absentRow) {
+            // Find next oldest unassigned open ticket — no ticketType restriction (cross-type support)
+            const nextTicket = await this.ticketRepo
+              .createQueryBuilder('t')
+              .where('t.status = :status', { status: TicketStatus.OPEN })
+              .andWhere('t.assignedToId IS NULL')
+              .orderBy('t.createdAt', 'ASC')
+              .getOne();
+            if (nextTicket) {
+              nextTicket.assignedToId = saved.assignedToId;
+              nextTicket.status = TicketStatus.ASSIGNED;
+              await this.ticketRepo.save(nextTicket);
+              this.logger.log(
+                `Auto-reassign on resolve: ticket ${nextTicket.ticketNumber} (${nextTicket.ticketType}) → technician #${saved.assignedToId}`,
+              );
+            } else {
+              this.logger.log(`Auto-reassign on resolve: no open unassigned tickets available for technician #${saved.assignedToId}`);
+            }
+          } else {
+            this.logger.log(`Auto-reassign on resolve: technician #${saved.assignedToId} is absent today — skipping`);
           }
         }
       } catch (err: any) {

@@ -166,6 +166,8 @@ export interface Ticket {
   category?: TicketCategory | null;
   requesterId: number;
   requester?: { id: number; email: string; firstName?: string; lastName?: string };
+  createdById?: number | null;
+  createdBy?: { id: number; email: string; firstName?: string; lastName?: string } | null;
   assignedToId?: number | null;
   assignedTo?: { id: number; email: string; firstName?: string; lastName?: string } | null;
   resolutionNotes?: string | null;
@@ -480,6 +482,7 @@ export const ticketsApi = {
     status?: TicketStatus;
     ticketType?: TicketType;
     requesterId?: number;
+    createdById?: number;
     assignedToId?: number;
     escalatedToMe?: boolean;
   }): Promise<Ticket[]> => {

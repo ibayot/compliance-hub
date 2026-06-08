@@ -6,7 +6,7 @@ import {
   TableContainer, TableHead, TableRow, IconButton, Chip, TextField, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions, Stack, CircularProgress,
   Rating, Tooltip, Alert, Autocomplete, ToggleButton, ToggleButtonGroup,
-  Checkbox, FormControlLabel, InputAdornment, Tab, Tabs, useMediaQuery, useTheme,
+  Checkbox, FormControlLabel, InputAdornment, Tab, Tabs, Badge, useMediaQuery, useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon, Visibility as ViewIcon, AssignmentInd as AssignIcon,
@@ -147,8 +147,10 @@ export default function TicketsPage() {
   // Senior technician tab state (isFocalTech && !canManageAll view)
   const [ticketTab, setTicketTab] = useState(0);
   // Management tab state (canManageAll view: CO, SH, super_admin)
+  // 0=All, 1=Active, 2=Resolved/Closed, 3=Frozen, 4=Duplicate, 5=Proxy Requests
   const [mgmtTab, setMgmtTab] = useState(0);
   // User tab state (!isTechnician && !canManageAll view)
+  // 0 = All, 1 = Active, 2 = To Rate, 3 = Closed, 4 = Requested For
   const [userTab, setUserTab] = useState(0);
 
   const activeTickets = tickets.filter(t => ['open', 'assigned', 'in_progress'].includes(t.status));
@@ -162,6 +164,19 @@ export default function TicketsPage() {
     !t.satisfactionSubmittedAt
   );
 
+  // Tickets that were requested FOR this user (someone else filed on their behalf)
+  const requestedForTickets = tickets.filter(t =>
+    t.requesterId === user?.id &&
+    t.createdById != null &&
+    t.createdById !== user?.id
+  );
+
+  // For management/RICTMS: tickets this user created on behalf of someone else
+  const proxyCreatedTickets = tickets.filter(t =>
+    t.createdById === user?.id &&
+    t.requesterId !== user?.id
+  );
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -172,10 +187,10 @@ export default function TicketsPage() {
   }, []);
 
   const tabFilteredTickets = canManageAll
-    ? ([tickets, activeTickets, doneTickets, frozenTickets, duplicateTickets][mgmtTab] ?? tickets)
+    ? ([tickets, activeTickets, doneTickets, frozenTickets, duplicateTickets, proxyCreatedTickets][mgmtTab] ?? tickets)
     : isTechnician
       ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
-      : ([tickets, toRateTickets, doneTickets][userTab] ?? tickets);
+      : ([tickets, activeTickets, toRateTickets, doneTickets, requestedForTickets][userTab] ?? tickets);
 
   const refreshEscalationStates = useCallback(async (rows: Ticket[]) => {
     if (!canEscalate) return;
@@ -567,6 +582,11 @@ export default function TicketsPage() {
               <Tab label={`Resolved / Closed (${doneTickets.length})`} />
               <Tab label={`Frozen (${frozenTickets.length})`} />
               <Tab label={`Duplicate (${duplicateTickets.length})`} />
+              <Tab label={
+                <Badge color="info" variant="dot" invisible={proxyCreatedTickets.length === 0}>
+                  Proxy Requests ({proxyCreatedTickets.length})
+                </Badge>
+              } />
             </Tabs>
           </CardContent>
         </Card>
@@ -586,10 +606,20 @@ export default function TicketsPage() {
       {!isTechnician && !canManageAll && (
         <Card sx={{ mb: 2 }}>
           <CardContent sx={{ pb: '0 !important' }}>
-            <Tabs value={userTab} onChange={(_, v) => setUserTab(v)} variant="scrollable" scrollButtons="auto">
+            <Tabs value={userTab} onChange={(_, v) => setUserTab(v)} variant="scrollable" scrollButtons="auto" sx={{ mb: 2 }}>
               <Tab label={`All (${tickets.length})`} />
-              <Tab label={`To Rate (${toRateTickets.length})`} />
+              <Tab label={`Active (${activeTickets.length})`} />
+              <Tab label={
+                <Badge color="warning" variant="dot" invisible={toRateTickets.length === 0}>
+                  To Rate ({toRateTickets.length})
+                </Badge>
+              } />
               <Tab label={`Closed / Resolved (${doneTickets.length})`} />
+              <Tab label={
+                <Badge color="info" variant="dot" invisible={requestedForTickets.length === 0}>
+                  Requested For ({requestedForTickets.length})
+                </Badge>
+              } />
             </Tabs>
           </CardContent>
         </Card>
@@ -710,7 +740,7 @@ export default function TicketsPage() {
                 <TableCell sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ticket.subject}</TableCell>
                 <TableCell>
                   <Stack direction="column" spacing={0.5}>
-                    {ticket.requesterId !== user?.id && (
+                    {ticket.createdById && ticket.createdById !== ticket.requesterId && (
                       <Chip size="small" label="Proxy Request" color="secondary" sx={{ alignSelf: 'flex-start' }} />
                     )}
                     <Chip size="small"
@@ -841,7 +871,7 @@ export default function TicketsPage() {
             <TextField label="Description *" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} fullWidth multiline rows={4} placeholder="Provide details: what happened, when, steps tried..." />
             <Autocomplete
                 options={allUsers}
-                getOptionLabel={u => `${[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email} (${u.role})`}
+                getOptionLabel={u => `${[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}`}
                 value={allUsers.find(u => u.id === form.requesterId) ?? null}
                 onChange={(_, newValue) => setForm({ ...form, requesterId: newValue?.id ?? undefined })}
                 isOptionEqualToValue={(option, value) => option.id === value.id}

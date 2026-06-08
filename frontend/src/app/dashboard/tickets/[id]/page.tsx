@@ -775,13 +775,27 @@ export default function TicketDetailPage() {
                   <Typography variant="body2">{ticket.ticketNumber}</Typography>
                 </Box>
                 <Box>
-                  <Typography variant="caption" color="text.secondary">Requested By</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {(ticket as any).createdById && (ticket as any).createdById !== ticket.requesterId
+                      ? 'Requested For'
+                      : 'Requested By'}
+                  </Typography>
                   <Typography variant="body2">
                     {(ticket as any).requester
                       ? `${(ticket as any).requester.firstName} ${(ticket as any).requester.lastName}`
                       : `User #${ticket.requesterId}`}
                   </Typography>
                 </Box>
+                {(ticket as any).createdById && (ticket as any).createdById !== ticket.requesterId && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Filed By (Proxy)</Typography>
+                    <Typography variant="body2">
+                      {(ticket as any).createdBy
+                        ? `${(ticket as any).createdBy.firstName} ${(ticket as any).createdBy.lastName}`
+                        : `Staff #${(ticket as any).createdById}`}
+                    </Typography>
+                  </Box>
+                )}
                 {ticket.assignedToId && (
                   <Box>
                     <Typography variant="caption" color="text.secondary">Assigned To</Typography>

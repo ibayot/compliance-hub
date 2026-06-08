@@ -114,6 +114,13 @@ async function bootstrap() {
       max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 4000),
       standardHeaders: true,
       legacyHeaders: false,
+      handler: (req, res) => {
+        console.warn(`[SECURITY] Rate limit exceeded by IP: ${req.ip}. Possible spam/DDoS attack.`);
+        res.status(429).json({
+          error: 'too_many_requests',
+          message: 'Security Measure Triggered: You have exceeded the maximum number of requests allowed. Please wait a minute before trying again.',
+        });
+      },
     }),
   );
 
@@ -124,6 +131,13 @@ async function bootstrap() {
       max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 4000),
       standardHeaders: true,
       legacyHeaders: false,
+      handler: (req, res) => {
+        console.warn(`[SECURITY] Rate limit exceeded by IP: ${req.ip}. Possible spam/DDoS attack.`);
+        res.status(429).json({
+          error: 'too_many_requests',
+          message: 'Security Measure Triggered: You have exceeded the maximum number of requests allowed. Please wait a minute before trying again.',
+        });
+      },
     }),
   );
 
