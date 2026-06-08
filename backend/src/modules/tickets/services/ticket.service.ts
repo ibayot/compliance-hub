@@ -1311,6 +1311,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     ticket.satisfactionSubmittedAt = new Date();
     ticket.status = TicketStatus.CLOSED;
     const saved = await this.ticketRepo.save(ticket);
+    this.logEvent(saved.id, 'closed', requesterId).catch(() => {});
     this.logEvent(saved.id, 'rated', requesterId, { rating: saved.satisfactionRating }).catch(() => {});
 
     if (ticket.assignedTo?.email) {

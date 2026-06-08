@@ -7,7 +7,7 @@
 # Test info
 
 - Name: proxy.spec.ts >> Proxy Request Feature >> Staff can create a ticket on behalf of a user, and it shows as Proxy Request
-- Location: tests\e2e\proxy.spec.ts:21:7
+- Location: frontend\tests\e2e\proxy.spec.ts:21:7
 
 # Error details
 
@@ -137,13 +137,13 @@ Call log:
         - button "Reset" [ref=e165] [cursor=pointer]: Reset
         - button "Escalated To Me" [ref=e166] [cursor=pointer]: Escalated To Me
       - tablist [ref=e172]:
-        - tab "All (11)" [selected] [ref=e173] [cursor=pointer]: All (11)
-        - tab "Active (9)" [ref=e174] [cursor=pointer]: Active (9)
-        - tab "Resolved / Closed (2)" [ref=e175] [cursor=pointer]: Resolved / Closed (2)
+        - tab "All (12)" [selected] [ref=e173] [cursor=pointer]: All (12)
+        - tab "Active (7)" [ref=e174] [cursor=pointer]: Active (7)
+        - tab "Resolved / Closed (5)" [ref=e175] [cursor=pointer]: Resolved / Closed (5)
         - tab "Frozen (0)" [ref=e176] [cursor=pointer]: Frozen (0)
         - tab "Duplicate (0)" [ref=e177] [cursor=pointer]: Duplicate (0)
-        - tab "Proxy Requests (1)" [ref=e178] [cursor=pointer]:
-          - generic [ref=e179]: Proxy Requests (1)
+        - tab "Proxy Requests (2)" [ref=e178] [cursor=pointer]:
+          - generic [ref=e179]: Proxy Requests (2)
       - table [ref=e183]:
         - rowgroup [ref=e184]:
           - 'row "Ticket # Subject Type Category Priority Status SLA Requester Assigned To Date Actions" [ref=e185]':
@@ -159,8 +159,8 @@ Call log:
             - columnheader "Date" [ref=e195]
             - columnheader "Actions" [ref=e196]
         - rowgroup [ref=e197]:
-          - row "TKT-2026-0011 E2E Proxy Request Test Proxy Request Desktop Support — NOT SET open — Test User Unassigned 6/8/2026 View Details Assign Ticket Escalate Ticket" [ref=e198]:
-            - cell "TKT-2026-0011" [ref=e199]
+          - row "TKT-2026-0012 E2E Proxy Request Test Proxy Request Desktop Support — NOT SET open — Test User Unassigned 6/8/2026 View Details Assign Ticket Escalate Ticket" [ref=e198]:
+            - cell "TKT-2026-0012" [ref=e199]
             - cell "E2E Proxy Request Test" [ref=e200]
             - cell "Proxy Request Desktop Support" [ref=e201]:
               - generic [ref=e202]:
@@ -189,280 +189,304 @@ Call log:
                     - img [ref=e232]
                 - button "Escalate Ticket" [ref=e234] [cursor=pointer]:
                   - img [ref=e235]
-          - row "TKT-2026-0010 E2E Test 6 - Mobile Ticket 1780898632023 Desktop Support — NOT SET open — Test User Unassigned 6/8/2026 View Details Assign Ticket Escalate Ticket" [ref=e237]:
-            - cell "TKT-2026-0010" [ref=e238]
-            - cell "E2E Test 6 - Mobile Ticket 1780898632023" [ref=e239]
-            - cell "Desktop Support" [ref=e240]:
-              - generic [ref=e242]:
-                - img [ref=e243]
-                - generic [ref=e245]: Desktop Support
-            - cell "—" [ref=e246]:
-              - paragraph [ref=e247]: —
-            - cell "NOT SET" [ref=e248]:
-              - generic [ref=e250]: NOT SET
-            - cell "open" [ref=e251]:
-              - generic [ref=e254]: open
-            - cell "—" [ref=e255]:
-              - paragraph [ref=e257]: —
-            - cell "Test User" [ref=e258]
-            - cell "Unassigned" [ref=e259]:
-              - paragraph [ref=e260]: Unassigned
-            - cell "6/8/2026" [ref=e261]
-            - cell "View Details Assign Ticket Escalate Ticket" [ref=e262]:
-              - generic [ref=e263]:
-                - button "View Details" [ref=e264] [cursor=pointer]:
-                  - img [ref=e265]
-                - generic "Assign Ticket" [ref=e267]:
-                  - button [ref=e268] [cursor=pointer]:
-                    - img [ref=e269]
-                - button "Escalate Ticket" [ref=e271] [cursor=pointer]:
-                  - img [ref=e272]
-          - row "TKT-2026-0009 E2E Test 5 - pantawid issue B 1780898588492 Pantawid ICT Support — NOT SET open — Test User Unassigned 6/8/2026 View Details Assign Ticket Escalate Ticket" [ref=e274]:
-            - cell "TKT-2026-0009" [ref=e275]
-            - cell "E2E Test 5 - pantawid issue B 1780898588492" [ref=e276]
-            - cell "Pantawid ICT Support" [ref=e277]:
-              - generic [ref=e279]:
-                - img [ref=e280]
-                - generic [ref=e282]: Pantawid ICT Support
-            - cell "—" [ref=e283]:
-              - paragraph [ref=e284]: —
-            - cell "NOT SET" [ref=e285]:
-              - generic [ref=e287]: NOT SET
-            - cell "open" [ref=e288]:
-              - generic [ref=e291]: open
-            - cell "—" [ref=e292]:
-              - paragraph [ref=e294]: —
-            - cell "Test User" [ref=e295]
-            - cell "Unassigned" [ref=e296]:
-              - paragraph [ref=e297]: Unassigned
-            - cell "6/8/2026" [ref=e298]
-            - cell "View Details Assign Ticket Escalate Ticket" [ref=e299]:
-              - generic [ref=e300]:
-                - button "View Details" [ref=e301] [cursor=pointer]:
-                  - img [ref=e302]
-                - generic "Assign Ticket" [ref=e304]:
-                  - button [ref=e305] [cursor=pointer]:
-                    - img [ref=e306]
-                - button "Escalate Ticket" [ref=e308] [cursor=pointer]:
-                  - img [ref=e309]
-          - row "TKT-2026-0008 E2E Test 5 - printer issue B 1780898588492 Desktop Support — NOT SET open — Test User Unassigned 6/8/2026 View Details Assign Ticket Escalate Ticket" [ref=e311]:
-            - cell "TKT-2026-0008" [ref=e312]
-            - cell "E2E Test 5 - printer issue B 1780898588492" [ref=e313]
-            - cell "Desktop Support" [ref=e314]:
-              - generic [ref=e316]:
-                - img [ref=e317]
-                - generic [ref=e319]: Desktop Support
-            - cell "—" [ref=e320]:
-              - paragraph [ref=e321]: —
-            - cell "NOT SET" [ref=e322]:
-              - generic [ref=e324]: NOT SET
-            - cell "open" [ref=e325]:
-              - generic [ref=e328]: open
-            - cell "—" [ref=e329]:
-              - paragraph [ref=e331]: —
-            - cell "Test User" [ref=e332]
-            - cell "Unassigned" [ref=e333]:
-              - paragraph [ref=e334]: Unassigned
-            - cell "6/8/2026" [ref=e335]
-            - cell "View Details Assign Ticket Escalate Ticket" [ref=e336]:
-              - generic [ref=e337]:
-                - button "View Details" [ref=e338] [cursor=pointer]:
-                  - img [ref=e339]
-                - generic "Assign Ticket" [ref=e341]:
-                  - button [ref=e342] [cursor=pointer]:
-                    - img [ref=e343]
-                - button "Escalate Ticket" [ref=e345] [cursor=pointer]:
-                  - img [ref=e346]
-          - row "TKT-2026-0007 E2E Test 5 - internet issue B 1780898588492 IT Support — NOT SET open — Test User Unassigned 6/8/2026 View Details Assign Ticket Escalate Ticket" [ref=e348]:
-            - cell "TKT-2026-0007" [ref=e349]
-            - cell "E2E Test 5 - internet issue B 1780898588492" [ref=e350]
-            - cell "IT Support" [ref=e351]:
-              - generic [ref=e353]:
-                - img [ref=e354]
-                - generic [ref=e356]: IT Support
-            - cell "—" [ref=e357]:
-              - paragraph [ref=e358]: —
-            - cell "NOT SET" [ref=e359]:
-              - generic [ref=e361]: NOT SET
-            - cell "open" [ref=e362]:
-              - generic [ref=e365]: open
-            - cell "—" [ref=e366]:
-              - paragraph [ref=e368]: —
-            - cell "Test User" [ref=e369]
-            - cell "Unassigned" [ref=e370]:
-              - paragraph [ref=e371]: Unassigned
-            - cell "6/8/2026" [ref=e372]
-            - cell "View Details Assign Ticket Escalate Ticket" [ref=e373]:
-              - generic [ref=e374]:
-                - button "View Details" [ref=e375] [cursor=pointer]:
-                  - img [ref=e376]
-                - generic "Assign Ticket" [ref=e378]:
-                  - button [ref=e379] [cursor=pointer]:
-                    - img [ref=e380]
-                - button "Escalate Ticket" [ref=e382] [cursor=pointer]:
-                  - img [ref=e383]
-          - row "TKT-2026-0006 E2E Test 5 - pantawid issue A 1780898588492 Pantawid ICT Support — NOT SET open — Test User Unassigned 6/8/2026 View Details Assign Ticket Escalate Ticket" [ref=e385]:
-            - cell "TKT-2026-0006" [ref=e386]
-            - cell "E2E Test 5 - pantawid issue A 1780898588492" [ref=e387]
-            - cell "Pantawid ICT Support" [ref=e388]:
-              - generic [ref=e390]:
-                - img [ref=e391]
-                - generic [ref=e393]: Pantawid ICT Support
-            - cell "—" [ref=e394]:
-              - paragraph [ref=e395]: —
-            - cell "NOT SET" [ref=e396]:
-              - generic [ref=e398]: NOT SET
-            - cell "open" [ref=e399]:
-              - generic [ref=e402]: open
-            - cell "—" [ref=e403]:
-              - paragraph [ref=e405]: —
-            - cell "Test User" [ref=e406]
-            - cell "Unassigned" [ref=e407]:
-              - paragraph [ref=e408]: Unassigned
-            - cell "6/8/2026" [ref=e409]
-            - cell "View Details Assign Ticket Escalate Ticket" [ref=e410]:
-              - generic [ref=e411]:
-                - button "View Details" [ref=e412] [cursor=pointer]:
-                  - img [ref=e413]
-                - generic "Assign Ticket" [ref=e415]:
-                  - button [ref=e416] [cursor=pointer]:
-                    - img [ref=e417]
-                - button "Escalate Ticket" [ref=e419] [cursor=pointer]:
-                  - img [ref=e420]
-          - row "TKT-2026-0005 E2E Test 5 - printer issue A 1780898588492 Desktop Support — NOT SET open — Test User Unassigned 6/8/2026 View Details Assign Ticket Escalate Ticket" [ref=e422]:
-            - cell "TKT-2026-0005" [ref=e423]
-            - cell "E2E Test 5 - printer issue A 1780898588492" [ref=e424]
-            - cell "Desktop Support" [ref=e425]:
-              - generic [ref=e427]:
-                - img [ref=e428]
-                - generic [ref=e430]: Desktop Support
-            - cell "—" [ref=e431]:
-              - paragraph [ref=e432]: —
-            - cell "NOT SET" [ref=e433]:
-              - generic [ref=e435]: NOT SET
-            - cell "open" [ref=e436]:
-              - generic [ref=e439]: open
-            - cell "—" [ref=e440]:
-              - paragraph [ref=e442]: —
-            - cell "Test User" [ref=e443]
-            - cell "Unassigned" [ref=e444]:
-              - paragraph [ref=e445]: Unassigned
-            - cell "6/8/2026" [ref=e446]
-            - cell "View Details Assign Ticket Escalate Ticket" [ref=e447]:
-              - generic [ref=e448]:
-                - button "View Details" [ref=e449] [cursor=pointer]:
-                  - img [ref=e450]
-                - generic "Assign Ticket" [ref=e452]:
-                  - button [ref=e453] [cursor=pointer]:
-                    - img [ref=e454]
-                - button "Escalate Ticket" [ref=e456] [cursor=pointer]:
-                  - img [ref=e457]
-          - row "TKT-2026-0004 E2E Test 5 - internet issue A 1780898588492 IT Support — NOT SET assigned — Test User Jaymark Cardona 6/8/2026 View Details Reassign Ticket Escalate Ticket" [ref=e459]:
-            - cell "TKT-2026-0004" [ref=e460]
-            - cell "E2E Test 5 - internet issue A 1780898588492" [ref=e461]
-            - cell "IT Support" [ref=e462]:
-              - generic [ref=e464]:
-                - img [ref=e465]
-                - generic [ref=e467]: IT Support
-            - cell "—" [ref=e468]:
-              - paragraph [ref=e469]: —
-            - cell "NOT SET" [ref=e470]:
-              - generic [ref=e472]: NOT SET
-            - cell "assigned" [ref=e473]:
-              - generic [ref=e476]: assigned
-            - cell "—" [ref=e477]:
-              - paragraph [ref=e479]: —
-            - cell "Test User" [ref=e480]
-            - cell "Jaymark Cardona" [ref=e481]:
-              - generic [ref=e483]: Jaymark Cardona
-            - cell "6/8/2026" [ref=e484]
-            - cell "View Details Reassign Ticket Escalate Ticket" [ref=e485]:
-              - generic [ref=e486]:
-                - button "View Details" [ref=e487] [cursor=pointer]:
-                  - img [ref=e488]
-                - generic "Reassign Ticket" [ref=e490]:
-                  - button [ref=e491] [cursor=pointer]:
-                    - img [ref=e492]
-                - button "Escalate Ticket" [ref=e494] [cursor=pointer]:
-                  - img [ref=e495]
-          - row "TKT-2026-0003 E2E Test 5 - pantawid issue 1780898559765 Pantawid ICT Support — NOT SET assigned — Test User James Arnel Lingan 6/8/2026 View Details Reassign Ticket Escalate Ticket" [ref=e497]:
-            - cell "TKT-2026-0003" [ref=e498]
-            - cell "E2E Test 5 - pantawid issue 1780898559765" [ref=e499]
-            - cell "Pantawid ICT Support" [ref=e500]:
-              - generic [ref=e502]:
-                - img [ref=e503]
-                - generic [ref=e505]: Pantawid ICT Support
-            - cell "—" [ref=e506]:
-              - paragraph [ref=e507]: —
-            - cell "NOT SET" [ref=e508]:
-              - generic [ref=e510]: NOT SET
-            - cell "assigned" [ref=e511]:
-              - generic [ref=e514]: assigned
-            - cell "—" [ref=e515]:
-              - paragraph [ref=e517]: —
-            - cell "Test User" [ref=e518]
-            - cell "James Arnel Lingan" [ref=e519]:
-              - generic [ref=e521]: James Arnel Lingan
-            - cell "6/8/2026" [ref=e522]
-            - cell "View Details Reassign Ticket Escalate Ticket" [ref=e523]:
-              - generic [ref=e524]:
-                - button "View Details" [ref=e525] [cursor=pointer]:
-                  - img [ref=e526]
-                - generic "Reassign Ticket" [ref=e528]:
-                  - button [ref=e529] [cursor=pointer]:
-                    - img [ref=e530]
-                - button "Escalate Ticket" [ref=e532] [cursor=pointer]:
-                  - img [ref=e533]
-          - row "TKT-2026-0002 E2E Test 5 - printer issue 1780898559765 Desktop Support — NOT SET closed — Test User Jaymark Cardona 6/8/2026 View Details Reassign disabled for resolved/closed tickets" [ref=e535]:
-            - cell "TKT-2026-0002" [ref=e536]
-            - cell "E2E Test 5 - printer issue 1780898559765" [ref=e537]
-            - cell "Desktop Support" [ref=e538]:
-              - generic [ref=e540]:
-                - img [ref=e541]
-                - generic [ref=e543]: Desktop Support
-            - cell "—" [ref=e544]:
-              - paragraph [ref=e545]: —
-            - cell "NOT SET" [ref=e546]:
-              - generic [ref=e548]: NOT SET
-            - cell "closed" [ref=e549]:
-              - generic [ref=e552]: closed
-            - cell "—" [ref=e553]:
-              - paragraph [ref=e555]: —
-            - cell "Test User" [ref=e556]
-            - cell "Jaymark Cardona" [ref=e557]:
-              - generic [ref=e559]: Jaymark Cardona
-            - cell "6/8/2026" [ref=e560]
-            - cell "View Details Reassign disabled for resolved/closed tickets" [ref=e561]:
-              - generic [ref=e562]:
-                - button "View Details" [ref=e563] [cursor=pointer]:
-                  - img [ref=e564]
-                - generic "Reassign disabled for resolved/closed tickets" [ref=e566]:
+          - row "TKT-2026-0011 E2E Proxy Request Test Proxy Request Desktop Support — NOT SET open — Test User Unassigned 6/8/2026 View Details Assign Ticket Escalate Ticket" [ref=e237]:
+            - cell "TKT-2026-0011" [ref=e238]
+            - cell "E2E Proxy Request Test" [ref=e239]
+            - cell "Proxy Request Desktop Support" [ref=e240]:
+              - generic [ref=e241]:
+                - generic [ref=e243]: Proxy Request
+                - generic [ref=e244]:
+                  - img [ref=e245]
+                  - generic [ref=e247]: Desktop Support
+            - cell "—" [ref=e248]:
+              - paragraph [ref=e249]: —
+            - cell "NOT SET" [ref=e250]:
+              - generic [ref=e252]: NOT SET
+            - cell "open" [ref=e253]:
+              - generic [ref=e256]: open
+            - cell "—" [ref=e257]:
+              - paragraph [ref=e259]: —
+            - cell "Test User" [ref=e260]
+            - cell "Unassigned" [ref=e261]:
+              - paragraph [ref=e262]: Unassigned
+            - cell "6/8/2026" [ref=e263]
+            - cell "View Details Assign Ticket Escalate Ticket" [ref=e264]:
+              - generic [ref=e265]:
+                - button "View Details" [ref=e266] [cursor=pointer]:
+                  - img [ref=e267]
+                - generic "Assign Ticket" [ref=e269]:
+                  - button [ref=e270] [cursor=pointer]:
+                    - img [ref=e271]
+                - button "Escalate Ticket" [ref=e273] [cursor=pointer]:
+                  - img [ref=e274]
+          - row "TKT-2026-0010 E2E Test 6 - Mobile Ticket 1780898632023 Desktop Support — NOT SET open — Test User Unassigned 6/8/2026 View Details Assign Ticket Escalate Ticket" [ref=e276]:
+            - cell "TKT-2026-0010" [ref=e277]
+            - cell "E2E Test 6 - Mobile Ticket 1780898632023" [ref=e278]
+            - cell "Desktop Support" [ref=e279]:
+              - generic [ref=e281]:
+                - img [ref=e282]
+                - generic [ref=e284]: Desktop Support
+            - cell "—" [ref=e285]:
+              - paragraph [ref=e286]: —
+            - cell "NOT SET" [ref=e287]:
+              - generic [ref=e289]: NOT SET
+            - cell "open" [ref=e290]:
+              - generic [ref=e293]: open
+            - cell "—" [ref=e294]:
+              - paragraph [ref=e296]: —
+            - cell "Test User" [ref=e297]
+            - cell "Unassigned" [ref=e298]:
+              - paragraph [ref=e299]: Unassigned
+            - cell "6/8/2026" [ref=e300]
+            - cell "View Details Assign Ticket Escalate Ticket" [ref=e301]:
+              - generic [ref=e302]:
+                - button "View Details" [ref=e303] [cursor=pointer]:
+                  - img [ref=e304]
+                - generic "Assign Ticket" [ref=e306]:
+                  - button [ref=e307] [cursor=pointer]:
+                    - img [ref=e308]
+                - button "Escalate Ticket" [ref=e310] [cursor=pointer]:
+                  - img [ref=e311]
+          - row "TKT-2026-0009 E2E Test 5 - pantawid issue B 1780898588492 Pantawid ICT Support — NOT SET open — Test User Unassigned 6/8/2026 View Details Assign Ticket Escalate Ticket" [ref=e313]:
+            - cell "TKT-2026-0009" [ref=e314]
+            - cell "E2E Test 5 - pantawid issue B 1780898588492" [ref=e315]
+            - cell "Pantawid ICT Support" [ref=e316]:
+              - generic [ref=e318]:
+                - img [ref=e319]
+                - generic [ref=e321]: Pantawid ICT Support
+            - cell "—" [ref=e322]:
+              - paragraph [ref=e323]: —
+            - cell "NOT SET" [ref=e324]:
+              - generic [ref=e326]: NOT SET
+            - cell "open" [ref=e327]:
+              - generic [ref=e330]: open
+            - cell "—" [ref=e331]:
+              - paragraph [ref=e333]: —
+            - cell "Test User" [ref=e334]
+            - cell "Unassigned" [ref=e335]:
+              - paragraph [ref=e336]: Unassigned
+            - cell "6/8/2026" [ref=e337]
+            - cell "View Details Assign Ticket Escalate Ticket" [ref=e338]:
+              - generic [ref=e339]:
+                - button "View Details" [ref=e340] [cursor=pointer]:
+                  - img [ref=e341]
+                - generic "Assign Ticket" [ref=e343]:
+                  - button [ref=e344] [cursor=pointer]:
+                    - img [ref=e345]
+                - button "Escalate Ticket" [ref=e347] [cursor=pointer]:
+                  - img [ref=e348]
+          - row "TKT-2026-0008 E2E Test 5 - printer issue B 1780898588492 Desktop Support — NOT SET open — Test User Unassigned 6/8/2026 View Details Assign Ticket Escalate Ticket" [ref=e350]:
+            - cell "TKT-2026-0008" [ref=e351]
+            - cell "E2E Test 5 - printer issue B 1780898588492" [ref=e352]
+            - cell "Desktop Support" [ref=e353]:
+              - generic [ref=e355]:
+                - img [ref=e356]
+                - generic [ref=e358]: Desktop Support
+            - cell "—" [ref=e359]:
+              - paragraph [ref=e360]: —
+            - cell "NOT SET" [ref=e361]:
+              - generic [ref=e363]: NOT SET
+            - cell "open" [ref=e364]:
+              - generic [ref=e367]: open
+            - cell "—" [ref=e368]:
+              - paragraph [ref=e370]: —
+            - cell "Test User" [ref=e371]
+            - cell "Unassigned" [ref=e372]:
+              - paragraph [ref=e373]: Unassigned
+            - cell "6/8/2026" [ref=e374]
+            - cell "View Details Assign Ticket Escalate Ticket" [ref=e375]:
+              - generic [ref=e376]:
+                - button "View Details" [ref=e377] [cursor=pointer]:
+                  - img [ref=e378]
+                - generic "Assign Ticket" [ref=e380]:
+                  - button [ref=e381] [cursor=pointer]:
+                    - img [ref=e382]
+                - button "Escalate Ticket" [ref=e384] [cursor=pointer]:
+                  - img [ref=e385]
+          - row "TKT-2026-0007 E2E Test 5 - internet issue B 1780898588492 IT Support — NOT SET assigned — Test User Jaymark Cardona 6/8/2026 View Details Reassign Ticket Escalate Ticket" [ref=e387]:
+            - cell "TKT-2026-0007" [ref=e388]
+            - cell "E2E Test 5 - internet issue B 1780898588492" [ref=e389]
+            - cell "IT Support" [ref=e390]:
+              - generic [ref=e392]:
+                - img [ref=e393]
+                - generic [ref=e395]: IT Support
+            - cell "—" [ref=e396]:
+              - paragraph [ref=e397]: —
+            - cell "NOT SET" [ref=e398]:
+              - generic [ref=e400]: NOT SET
+            - cell "assigned" [ref=e401]:
+              - generic [ref=e404]: assigned
+            - cell "—" [ref=e405]:
+              - paragraph [ref=e407]: —
+            - cell "Test User" [ref=e408]
+            - cell "Jaymark Cardona" [ref=e409]:
+              - generic [ref=e411]: Jaymark Cardona
+            - cell "6/8/2026" [ref=e412]
+            - cell "View Details Reassign Ticket Escalate Ticket" [ref=e413]:
+              - generic [ref=e414]:
+                - button "View Details" [ref=e415] [cursor=pointer]:
+                  - img [ref=e416]
+                - generic "Reassign Ticket" [ref=e418]:
+                  - button [ref=e419] [cursor=pointer]:
+                    - img [ref=e420]
+                - button "Escalate Ticket" [ref=e422] [cursor=pointer]:
+                  - img [ref=e423]
+          - row "TKT-2026-0006 E2E Test 5 - pantawid issue A 1780898588492 Pantawid ICT Support — MEDIUM closed — Test User Jaymark Cardona 6/8/2026 View Details Reassign disabled for resolved/closed tickets" [ref=e425]:
+            - cell "TKT-2026-0006" [ref=e426]
+            - cell "E2E Test 5 - pantawid issue A 1780898588492" [ref=e427]
+            - cell "Pantawid ICT Support" [ref=e428]:
+              - generic [ref=e430]:
+                - img [ref=e431]
+                - generic [ref=e433]: Pantawid ICT Support
+            - cell "—" [ref=e434]:
+              - paragraph [ref=e435]: —
+            - cell "MEDIUM" [ref=e436]:
+              - generic [ref=e438]: MEDIUM
+            - cell "closed" [ref=e439]:
+              - generic [ref=e442]: closed
+            - cell "—" [ref=e443]:
+              - paragraph [ref=e445]: —
+            - cell "Test User" [ref=e446]
+            - cell "Jaymark Cardona" [ref=e447]:
+              - generic [ref=e449]: Jaymark Cardona
+            - cell "6/8/2026" [ref=e450]
+            - cell "View Details Reassign disabled for resolved/closed tickets" [ref=e451]:
+              - generic [ref=e452]:
+                - button "View Details" [ref=e453] [cursor=pointer]:
+                  - img [ref=e454]
+                - generic "Reassign disabled for resolved/closed tickets" [ref=e456]:
                   - button [disabled]:
                     - img
-          - row "TKT-2026-0001 E2E Test 5 - internet issue 1780898559765 IT Support — NOT SET closed — Test User Godofredo Javier 6/8/2026 View Details Reassign disabled for resolved/closed tickets" [ref=e567]:
-            - cell "TKT-2026-0001" [ref=e568]
-            - cell "E2E Test 5 - internet issue 1780898559765" [ref=e569]
-            - cell "IT Support" [ref=e570]:
-              - generic [ref=e572]:
-                - img [ref=e573]
-                - generic [ref=e575]: IT Support
-            - cell "—" [ref=e576]:
-              - paragraph [ref=e577]: —
-            - cell "NOT SET" [ref=e578]:
-              - generic [ref=e580]: NOT SET
-            - cell "closed" [ref=e581]:
-              - generic [ref=e584]: closed
-            - cell "—" [ref=e585]:
-              - paragraph [ref=e587]: —
-            - cell "Test User" [ref=e588]
-            - cell "Godofredo Javier" [ref=e589]:
-              - generic [ref=e591]: Godofredo Javier
-            - cell "6/8/2026" [ref=e592]
-            - cell "View Details Reassign disabled for resolved/closed tickets" [ref=e593]:
-              - generic [ref=e594]:
-                - button "View Details" [ref=e595] [cursor=pointer]:
-                  - img [ref=e596]
-                - generic "Reassign disabled for resolved/closed tickets" [ref=e598]:
+          - row "TKT-2026-0005 E2E Test 5 - printer issue A 1780898588492 Desktop Support — LOW closed — Test User Jaymark Cardona 6/8/2026 View Details Reassign disabled for resolved/closed tickets" [ref=e457]:
+            - cell "TKT-2026-0005" [ref=e458]
+            - cell "E2E Test 5 - printer issue A 1780898588492" [ref=e459]
+            - cell "Desktop Support" [ref=e460]:
+              - generic [ref=e462]:
+                - img [ref=e463]
+                - generic [ref=e465]: Desktop Support
+            - cell "—" [ref=e466]:
+              - paragraph [ref=e467]: —
+            - cell "LOW" [ref=e468]:
+              - generic [ref=e470]: LOW
+            - cell "closed" [ref=e471]:
+              - generic [ref=e474]: closed
+            - cell "—" [ref=e475]:
+              - paragraph [ref=e477]: —
+            - cell "Test User" [ref=e478]
+            - cell "Jaymark Cardona" [ref=e479]:
+              - generic [ref=e481]: Jaymark Cardona
+            - cell "6/8/2026" [ref=e482]
+            - cell "View Details Reassign disabled for resolved/closed tickets" [ref=e483]:
+              - generic [ref=e484]:
+                - button "View Details" [ref=e485] [cursor=pointer]:
+                  - img [ref=e486]
+                - generic "Reassign disabled for resolved/closed tickets" [ref=e488]:
+                  - button [disabled]:
+                    - img
+          - row "TKT-2026-0004 E2E Test 5 - internet issue A 1780898588492 IT Support — LOW resolved — Test User Jaymark Cardona 6/8/2026 View Details Reassign disabled for resolved/closed tickets" [ref=e489]:
+            - cell "TKT-2026-0004" [ref=e490]
+            - cell "E2E Test 5 - internet issue A 1780898588492" [ref=e491]
+            - cell "IT Support" [ref=e492]:
+              - generic [ref=e494]:
+                - img [ref=e495]
+                - generic [ref=e497]: IT Support
+            - cell "—" [ref=e498]:
+              - paragraph [ref=e499]: —
+            - cell "LOW" [ref=e500]:
+              - generic [ref=e502]: LOW
+            - cell "resolved" [ref=e503]:
+              - generic [ref=e506]: resolved
+            - cell "—" [ref=e507]:
+              - paragraph [ref=e509]: —
+            - cell "Test User" [ref=e510]
+            - cell "Jaymark Cardona" [ref=e511]:
+              - generic [ref=e513]: Jaymark Cardona
+            - cell "6/8/2026" [ref=e514]
+            - cell "View Details Reassign disabled for resolved/closed tickets" [ref=e515]:
+              - generic [ref=e516]:
+                - button "View Details" [ref=e517] [cursor=pointer]:
+                  - img [ref=e518]
+                - generic "Reassign disabled for resolved/closed tickets" [ref=e520]:
+                  - button [disabled]:
+                    - img
+          - row "TKT-2026-0003 E2E Test 5 - pantawid issue 1780898559765 Pantawid ICT Support — NOT SET assigned — Test User James Arnel Lingan 6/8/2026 View Details Reassign Ticket Escalate Ticket" [ref=e521]:
+            - cell "TKT-2026-0003" [ref=e522]
+            - cell "E2E Test 5 - pantawid issue 1780898559765" [ref=e523]
+            - cell "Pantawid ICT Support" [ref=e524]:
+              - generic [ref=e526]:
+                - img [ref=e527]
+                - generic [ref=e529]: Pantawid ICT Support
+            - cell "—" [ref=e530]:
+              - paragraph [ref=e531]: —
+            - cell "NOT SET" [ref=e532]:
+              - generic [ref=e534]: NOT SET
+            - cell "assigned" [ref=e535]:
+              - generic [ref=e538]: assigned
+            - cell "—" [ref=e539]:
+              - paragraph [ref=e541]: —
+            - cell "Test User" [ref=e542]
+            - cell "James Arnel Lingan" [ref=e543]:
+              - generic [ref=e545]: James Arnel Lingan
+            - cell "6/8/2026" [ref=e546]
+            - cell "View Details Reassign Ticket Escalate Ticket" [ref=e547]:
+              - generic [ref=e548]:
+                - button "View Details" [ref=e549] [cursor=pointer]:
+                  - img [ref=e550]
+                - generic "Reassign Ticket" [ref=e552]:
+                  - button [ref=e553] [cursor=pointer]:
+                    - img [ref=e554]
+                - button "Escalate Ticket" [ref=e556] [cursor=pointer]:
+                  - img [ref=e557]
+          - row "TKT-2026-0002 E2E Test 5 - printer issue 1780898559765 Desktop Support — NOT SET closed — Test User Jaymark Cardona 6/8/2026 View Details Reassign disabled for resolved/closed tickets" [ref=e559]:
+            - cell "TKT-2026-0002" [ref=e560]
+            - cell "E2E Test 5 - printer issue 1780898559765" [ref=e561]
+            - cell "Desktop Support" [ref=e562]:
+              - generic [ref=e564]:
+                - img [ref=e565]
+                - generic [ref=e567]: Desktop Support
+            - cell "—" [ref=e568]:
+              - paragraph [ref=e569]: —
+            - cell "NOT SET" [ref=e570]:
+              - generic [ref=e572]: NOT SET
+            - cell "closed" [ref=e573]:
+              - generic [ref=e576]: closed
+            - cell "—" [ref=e577]:
+              - paragraph [ref=e579]: —
+            - cell "Test User" [ref=e580]
+            - cell "Jaymark Cardona" [ref=e581]:
+              - generic [ref=e583]: Jaymark Cardona
+            - cell "6/8/2026" [ref=e584]
+            - cell "View Details Reassign disabled for resolved/closed tickets" [ref=e585]:
+              - generic [ref=e586]:
+                - button "View Details" [ref=e587] [cursor=pointer]:
+                  - img [ref=e588]
+                - generic "Reassign disabled for resolved/closed tickets" [ref=e590]:
+                  - button [disabled]:
+                    - img
+          - row "TKT-2026-0001 E2E Test 5 - internet issue 1780898559765 IT Support — NOT SET closed — Test User Godofredo Javier 6/8/2026 View Details Reassign disabled for resolved/closed tickets" [ref=e591]:
+            - cell "TKT-2026-0001" [ref=e592]
+            - cell "E2E Test 5 - internet issue 1780898559765" [ref=e593]
+            - cell "IT Support" [ref=e594]:
+              - generic [ref=e596]:
+                - img [ref=e597]
+                - generic [ref=e599]: IT Support
+            - cell "—" [ref=e600]:
+              - paragraph [ref=e601]: —
+            - cell "NOT SET" [ref=e602]:
+              - generic [ref=e604]: NOT SET
+            - cell "closed" [ref=e605]:
+              - generic [ref=e608]: closed
+            - cell "—" [ref=e609]:
+              - paragraph [ref=e611]: —
+            - cell "Test User" [ref=e612]
+            - cell "Godofredo Javier" [ref=e613]:
+              - generic [ref=e615]: Godofredo Javier
+            - cell "6/8/2026" [ref=e616]
+            - cell "View Details Reassign disabled for resolved/closed tickets" [ref=e617]:
+              - generic [ref=e618]:
+                - button "View Details" [ref=e619] [cursor=pointer]:
+                  - img [ref=e620]
+                - generic "Reassign disabled for resolved/closed tickets" [ref=e622]:
                   - button [disabled]:
                     - img
 ```

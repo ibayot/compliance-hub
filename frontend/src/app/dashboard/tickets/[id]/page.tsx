@@ -207,15 +207,15 @@ export default function TicketDetailPage() {
   }, [ticket]);
   const timelineEvents = useMemo(() => {
     const eventPriority = (eventType: string) => {
-      if (eventType === 'created') return 2;
+      if (eventType === 'created') return 0;
       if (eventType === 'auto_assigned') return 1;
-      return 0;
+      return 2;
     };
 
     return [...events]
       .filter((ev) => ev.eventType !== 'comment_added')
       .sort((a, b) => {
-        const timeDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        const timeDiff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         if (timeDiff !== 0) return timeDiff;
         return eventPriority(a.eventType) - eventPriority(b.eventType);
       });
@@ -1039,6 +1039,7 @@ export default function TicketDetailPage() {
                   user_closed: 'Closed by Requester',
                   escalated: 'Escalated',
                   satisfaction_submitted: 'Satisfaction Submitted',
+                  rated: 'Rated',
                 };
                 const label = EVENT_LABELS[ev.eventType] ?? ev.eventType.replace(/_/g, ' ');
                 const actorLine = ev.actorName
