@@ -1086,7 +1086,9 @@ function FocalUserManagementCard() {
   );
 }
 
-// --- Main Settings Page -----------------------------------------export default function SettingsPage() {
+// --- Main Settings Page -----------------------------------------
+
+export default function SettingsPage() {
   const { user } = useAuth();
   
   // Section Head, Compliance Officer, and Super Admin can manage roles, capabilities, and users
