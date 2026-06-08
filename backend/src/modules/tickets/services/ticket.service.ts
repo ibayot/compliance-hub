@@ -1403,6 +1403,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     quarter?: number;
     technicianId?: number;
   }): Promise<{
+    byDay: { date: string; avgRating: number }[];
     byTicket: any[];
     byTechnician: Record<string, { average: number, count: number }>;
     summary: { average: number, count: number };
