@@ -238,36 +238,7 @@ export class AttendanceService {
     return available.filter((u) => presentIds.has(u.id));
   }
 
-  private async getRoleGroups() {
-    if (typeof (this.roleCapSvc as any).ensureLoaded === 'function') {
-      await (this.roleCapSvc as any).ensureLoaded();
-    }
-    const itoRoles = this.roleCapSvc.getRolesWhere('isIto');
-    const desktopSupportRoles = this.roleCapSvc.getRolesWhere('isDesktop');
-    const itSupportRoles = this.roleCapSvc.getRolesWhere('isItSupport');
-    const pantawidIctRoles = this.roleCapSvc.getRolesWhere('isPantawidIct');
 
-    return {
-      desktop_support: [...new Set([UserRole.DESKTOP_SR, UserRole.DESKTOP_JR, ...desktopSupportRoles])],
-      it_support: [...new Set([UserRole.IT_SUPPORT_SR, UserRole.IT_SUPPORT_JR, ...itSupportRoles])],
-      pantawid_ict_support: [...new Set([UserRole.PANTAWID_ICT_SR, UserRole.PANTAWID_ICT_JR, ...pantawidIctRoles])],
-      ito: [...new Set([UserRole.ITO_I, UserRole.ITO_II, UserRole.ITO_III, ...itoRoles])],
-      all: [
-        UserRole.SUPER_ADMIN,
-        UserRole.DESKTOP_SR,
-        UserRole.DESKTOP_JR,
-        UserRole.IT_SUPPORT_SR,
-        UserRole.IT_SUPPORT_JR,
-        UserRole.PANTAWID_ICT_SR,
-        UserRole.PANTAWID_ICT_JR,
-        UserRole.ITO_I,
-        UserRole.ITO_II,
-        UserRole.ITO_III,
-        ...this.roleCapSvc.getTechnicianRoles(),
-        ...this.roleCapSvc.getSeniorTechRoles(),
-      ],
-    };
-  }
 
   /** Get technicians filtered for the current session (all staff or filtered by type) */
   async listTechnicians(ticketType?: string, actorRole?: string): Promise<User[]> {
