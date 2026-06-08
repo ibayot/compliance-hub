@@ -313,8 +313,8 @@ export class TicketService implements OnModuleInit {
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.actor', 'actor')
       .where('e.ticketId = :id', { id: ticketId })
-      .orderBy('e.createdAt', 'ASC')
-      .addOrderBy("CASE WHEN e.eventType = 'created' THEN 0 WHEN e.eventType = 'auto_assigned' THEN 1 ELSE 2 END", 'ASC')
+      .orderBy('e.createdAt', 'DESC')
+      .addOrderBy("CASE WHEN e.eventType = 'created' THEN 0 WHEN e.eventType = 'auto_assigned' THEN 1 ELSE 2 END", 'DESC')
       .getMany();
 
     return events.map(e => ({
@@ -492,6 +492,15 @@ export class TicketService implements OnModuleInit {
     const ticketNumber = await this.generateTicketNumber();
     const status = assignedToId ? TicketStatus.ASSIGNED : TicketStatus.OPEN;
 
+    let slaDeadline: Date | null = null;
+    if (assignedToId && categoryId) {
+      const cat = await this.settingsService.getCategoryById(categoryId).catch(() => null);
+      if (cat?.slaHours) {
+        slaDeadline = new Date();
+        slaDeadline.setHours(slaDeadline.getHours() + cat.slaHours);
+      }
+    }
+
     const ticket = this.ticketRepo.create({
       ticketNumber,
       subject: dto.subject.trim(),
@@ -500,6 +509,7 @@ export class TicketService implements OnModuleInit {
       priority: dto.priority ?? null,
       status,
       categoryId,
+      slaDeadline,
       issueTypeId,
       issueType: issueTypeKey,
       requesterId,
@@ -1029,7 +1039,23 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
             if (nextTicket) {
               nextTicket.assignedToId = saved.assignedToId;
               nextTicket.status = TicketStatus.ASSIGNED;
+
+              if (nextTicket.categoryId) {
+                const cat = await this.settingsService.getCategoryById(nextTicket.categoryId).catch(() => null);
+                if (cat?.slaHours) {
+                  const deadline = new Date();
+                  deadline.setHours(deadline.getHours() + cat.slaHours);
+                  nextTicket.slaDeadline = deadline;
+                }
+              }
+
               await this.ticketRepo.save(nextTicket);
+
+              this.logEvent(nextTicket.id, 'auto_assigned', null, {
+                technicianId: resolvedByTech!.id,
+                technicianName: [resolvedByTech!.firstName, resolvedByTech!.lastName].filter(Boolean).join(' ') || resolvedByTech!.email,
+              }).catch(() => {});
+
               this.logger.log(
                 `Auto-reassign on resolve: ticket ${nextTicket.ticketNumber} (${nextTicket.ticketType}) → technician #${saved.assignedToId}`,
               );
@@ -1547,10 +1573,11 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
   /** Monthly stats for tickets assigned to a specific technician */
   async getTechAssignedStats(techId: number, year: number, month: number): Promise<{
     total: number;
-    open: number;
+    assigned: number;
     inProgress: number;
     resolved: number;
     closed: number;
+    ratedCount: number;
     satisfactionAvg: number | null;
   }> {
     const startDate = new Date(year, month - 1, 1);
@@ -1563,12 +1590,12 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       .andWhere('t.createdAt <= :endDate', { endDate })
       .getMany();
 
-    let open = 0, inProgress = 0, resolved = 0, closed = 0;
+    let assigned = 0, inProgress = 0, resolved = 0, closed = 0;
     let totalSat = 0, countSat = 0;
 
     for (const t of tickets) {
-      if (t.status === TicketStatus.OPEN) open++;
-      else if (t.status === TicketStatus.ASSIGNED || t.status === TicketStatus.IN_PROGRESS) inProgress++;
+      if (t.status === TicketStatus.ASSIGNED) assigned++;
+      else if (t.status === TicketStatus.IN_PROGRESS) inProgress++;
       else if (t.status === TicketStatus.RESOLVED) resolved++;
       else if (t.status === TicketStatus.CLOSED) closed++;
       if (t.satisfactionRating != null) {
@@ -1579,10 +1606,11 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
 
     return {
       total: tickets.length,
-      open,
+      assigned,
       inProgress,
       resolved,
       closed,
+      ratedCount: countSat,
       satisfactionAvg: countSat > 0 ? Math.round((totalSat / countSat) * 10) / 10 : null,
     };
   }
@@ -1842,7 +1870,13 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     const year = filters.year ?? now.getFullYear();
     const isTicketSettingsViewer = (filters.viewerRole === UserRole.SUPER_ADMIN)
       || this.roleCapSvc.isTicketSettingsFocal(filters.viewerRole || '');
-    const requesterIdFilter = !isTicketSettingsViewer ? filters.viewerId : undefined;
+    
+    const isTechnician = filters.viewerRole && !isTicketSettingsViewer && [
+      UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR
+    ].includes(filters.viewerRole as UserRole);
+
+    const requesterIdFilter = (!isTicketSettingsViewer && !isTechnician) ? filters.viewerId : undefined;
+    const techIdFilter = isTechnician ? filters.viewerId : (isTicketSettingsViewer ? filters.technicianId : undefined);
 
     // Build date range from filters
     let startDate: Date;
@@ -1867,16 +1901,15 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     let qb = this.ticketRepo
       .createQueryBuilder('t')
       .leftJoinAndSelect('t.assignedTo', 'assignedTo')
-      .where('t.satisfactionRating IS NOT NULL')
-      .andWhere('t.createdAt >= :startDate', { startDate })
-      .andWhere('t.createdAt <= :endDate', { endDate });
+      .where('t.createdAt >= :startDate', { startDate })
+      .andWhere('t.createdAt <= :endDate', { endDate })
+      .andWhere('t.status IN (:...statuses)', { statuses: [TicketStatus.CLOSED, TicketStatus.RESOLVED] });
 
     if (requesterIdFilter) {
       qb = qb.andWhere('t.requesterId = :requesterId', { requesterId: requesterIdFilter });
     }
-
-    if (isTicketSettingsViewer && filters.technicianId) {
-      qb = qb.andWhere('t.assignedToId = :techId', { techId: filters.technicianId });
+    if (techIdFilter) {
+      qb = qb.andWhere('t.assignedToId = :techId', { techId: techIdFilter });
     }
     if (filters.ticketType) {
       qb = qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
@@ -1890,7 +1923,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       .where('t.createdAt >= :startDate', { startDate })
       .andWhere('t.createdAt <= :endDate', { endDate });
     if (requesterIdFilter) totalQb = totalQb.andWhere('t.requesterId = :requesterId', { requesterId: requesterIdFilter });
-    if (isTicketSettingsViewer && filters.technicianId) totalQb = totalQb.andWhere('t.assignedToId = :techId', { techId: filters.technicianId });
+    if (techIdFilter) totalQb = totalQb.andWhere('t.assignedToId = :techId', { techId: techIdFilter });
     if (filters.ticketType) totalQb = totalQb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
     const totalTickets = await totalQb.getCount();
 
@@ -1898,39 +1931,50 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       return { totalTickets, totalWithRating: 0, avgOverallRating: null, avgRatingByType: [], avgRatingByTechnician: [], totalEscalations: 0, acceptedEscalations: 0, returnedEscalations: 0 };
     }
 
-    // Overall average
-    const overallSum = tickets.reduce((s, t) => s + (t.satisfactionRating ?? 0), 0);
-    const avgOverallRating = Math.round((overallSum / tickets.length) * 10) / 10;
+    const ratedTickets = tickets.filter(t => t.satisfactionRating !== null);
+    const totalWithRating = ratedTickets.length;
 
-    // Per type
-    const byTypeMap = new Map<string, { sum: number; count: number }>();
+    // Overall average
+    const overallSum = ratedTickets.reduce((s, t) => s + (t.satisfactionRating ?? 0), 0);
+    const avgOverallRating = totalWithRating > 0 ? Math.round((overallSum / totalWithRating) * 10) / 10 : null;
+
+    // Per type (count total resolved/closed, but avg based on rated)
+    const byTypeMap = new Map<string, { sum: number; ratedCount: number; totalCount: number }>();
     for (const t of tickets) {
       const key = t.ticketType;
-      const cur = byTypeMap.get(key) ?? { sum: 0, count: 0 };
-      byTypeMap.set(key, { sum: cur.sum + (t.satisfactionRating ?? 0), count: cur.count + 1 });
+      const cur = byTypeMap.get(key) ?? { sum: 0, ratedCount: 0, totalCount: 0 };
+      if (t.satisfactionRating !== null) {
+        byTypeMap.set(key, { sum: cur.sum + t.satisfactionRating, ratedCount: cur.ratedCount + 1, totalCount: cur.totalCount + 1 });
+      } else {
+        byTypeMap.set(key, { ...cur, totalCount: cur.totalCount + 1 });
+      }
     }
-    const avgRatingByType = Array.from(byTypeMap.entries()).map(([type, { sum, count }]) => ({
+    const avgRatingByType = Array.from(byTypeMap.entries()).map(([type, { sum, ratedCount, totalCount }]) => ({
       type,
-      avg: Math.round((sum / count) * 10) / 10,
-      count,
+      avg: ratedCount > 0 ? Math.round((sum / ratedCount) * 10) / 10 : 0,
+      count: totalCount,
     }));
 
     // Per technician
-    const byTechMap = new Map<number, { name: string; sum: number; count: number }>();
+    const byTechMap = new Map<number, { name: string; sum: number; ratedCount: number; totalCount: number }>();
     for (const t of tickets) {
       if (!t.assignedToId) continue;
       const techName = t.assignedTo
         ? [t.assignedTo.firstName, t.assignedTo.lastName].filter(Boolean).join(' ') || t.assignedTo.email
         : `Tech #${t.assignedToId}`;
-      const cur = byTechMap.get(t.assignedToId) ?? { name: techName, sum: 0, count: 0 };
-      byTechMap.set(t.assignedToId, { name: techName, sum: cur.sum + (t.satisfactionRating ?? 0), count: cur.count + 1 });
+      const cur = byTechMap.get(t.assignedToId) ?? { name: techName, sum: 0, ratedCount: 0, totalCount: 0 };
+      if (t.satisfactionRating !== null) {
+        byTechMap.set(t.assignedToId, { name: techName, sum: cur.sum + t.satisfactionRating, ratedCount: cur.ratedCount + 1, totalCount: cur.totalCount + 1 });
+      } else {
+        byTechMap.set(t.assignedToId, { ...cur, totalCount: cur.totalCount + 1 });
+      }
     }
-    const avgRatingByTechnician = Array.from(byTechMap.entries()).map(([techId, { name, sum, count }]) => ({
+    const avgRatingByTechnician = Array.from(byTechMap.entries()).map(([techId, { name, sum, ratedCount, totalCount }]) => ({
       techId,
       techName: name,
-      avg: Math.round((sum / count) * 10) / 10,
-      count,
-    })).sort((a, b) => b.avg - a.avg);
+      avg: ratedCount > 0 ? Math.round((sum / ratedCount) * 10) / 10 : 0,
+      count: totalCount,
+    })).sort((a, b) => b.count - a.count);
 
     // Escalation counts in the same date range
     let escQb = this.escalationRepo

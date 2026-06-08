@@ -435,7 +435,7 @@ export default function DashboardPage() {
               <>
                 <Grid container spacing={2} mb={1}>
                   {([
-                    { label: 'Open', value: techAssignedStats.open, color: 'warning' as const, Icon: TicketIcon },
+                    { label: 'Assigned', value: techAssignedStats.assigned, color: 'warning' as const, Icon: TicketIcon },
                     { label: 'In Progress', value: techAssignedStats.inProgress, color: 'primary' as const, Icon: InProgressIcon },
                     { label: 'Resolved', value: techAssignedStats.resolved, color: 'success' as const, Icon: ResolvedIcon },
                     { label: 'Closed', value: techAssignedStats.closed, color: 'default' as const, Icon: ClosedIcon },
@@ -453,6 +453,13 @@ export default function DashboardPage() {
                   <Box>
                     <Typography variant="caption" color="text.secondary">Total this month</Typography>
                     <Typography variant="h6">{techAssignedStats.total}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Total Resolved & Closed</Typography>
+                    <Typography variant="h6">{techAssignedStats.resolved + techAssignedStats.closed}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {techAssignedStats.ratedCount} of {techAssignedStats.resolved + techAssignedStats.closed} tickets have rating
+                    </Typography>
                   </Box>
                   {techAssignedStats.satisfactionAvg !== null && (
                     <Box>

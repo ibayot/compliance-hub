@@ -267,10 +267,11 @@ export interface TicketDashboardStats {
 
 export interface TechAssignedStats {
   total: number;
-  open: number;
+  assigned: number;
   inProgress: number;
   resolved: number;
   closed: number;
+  ratedCount: number;
   satisfactionAvg: number | null;
 }
 
