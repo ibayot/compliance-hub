@@ -1809,7 +1809,37 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
         ticket.assignedToId = null as any;
         ticket.status = TicketStatus.OPEN;
         await this.ticketRepo.save(ticket);
-        await this.autoAssignTicket(ticket.id, ticket.ticketType);
+
+        // Auto assign right away
+        const today = new Date().toISOString().slice(0, 10);
+        const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
+        if (ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT || isOfficeDayToday) {
+          const presentTechs = await this.attendanceService.getPresentTechnicians(ticket.ticketType, today);
+          const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
+            ? presentTechs
+            : presentTechs.filter(t => !this.roleCapSvc.isSeniorTech(t.role));
+
+          for (const tech of eligibleTechs) {
+            const openCount = await this.ticketRepo.count({
+              where: [
+                { assignedToId: tech.id, status: TicketStatus.OPEN },
+                { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
+                { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
+              ],
+            });
+            if (openCount === 0) {
+              ticket.assignedToId = tech.id;
+              ticket.status = TicketStatus.ASSIGNED;
+              await this.ticketRepo.save(ticket);
+              this.logEvent(ticket.id, 'auto_assigned', null, {
+                technicianId: tech.id,
+                technicianName: `${tech.firstName} ${tech.lastName}`.trim(),
+                via: 'absence_reassign'
+              }).catch(() => {});
+              break;
+            }
+          }
+        }
       }
     } catch (err: any) {
       this.logger.error(`[Absence Reassign] Failed for tech ${techId}: ${err?.message}`);
