@@ -796,6 +796,7 @@ export class TicketService implements OnModuleInit {
         ticket.userClosed = true;
         if (!ticket.resolvedAt) ticket.resolvedAt = new Date();
         const savedClosed = await this.ticketRepo.save(ticket);
+        this.logEvent(savedClosed.id, 'closed', actorId).catch(() => {});
         if (ticket.assignedTo?.email) {
           this.emailService.sendTicketClosedOrRatedEmailToTechnician({
             ticketId: savedClosed.id,
@@ -1310,6 +1311,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     ticket.satisfactionSubmittedAt = new Date();
     ticket.status = TicketStatus.CLOSED;
     const saved = await this.ticketRepo.save(ticket);
+    this.logEvent(saved.id, 'rated', requesterId, { rating: saved.satisfactionRating }).catch(() => {});
 
     if (ticket.assignedTo?.email) {
       this.emailService.sendTicketClosedOrRatedEmailToTechnician({
@@ -1953,6 +1955,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       type,
       avg: ratedCount > 0 ? Math.round((sum / ratedCount) * 10) / 10 : 0,
       count: totalCount,
+      ratedCount,
     }));
 
     // Per technician
@@ -1974,6 +1977,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       techName: name,
       avg: ratedCount > 0 ? Math.round((sum / ratedCount) * 10) / 10 : 0,
       count: totalCount,
+      ratedCount,
     })).sort((a, b) => b.count - a.count);
 
     // Escalation counts in the same date range
@@ -1992,7 +1996,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     const acceptedEscalations = await escQb.clone().andWhere('e.status = :s', { s: EscalationStatus.ACCEPTED }).getCount();
     const returnedEscalations = await escQb.clone().andWhere('e.status = :s', { s: EscalationStatus.RETURNED }).getCount();
 
-    return { totalTickets, totalWithRating: tickets.length, avgOverallRating, avgRatingByType, avgRatingByTechnician, totalEscalations, acceptedEscalations, returnedEscalations };
+    return { totalTickets, totalWithRating, avgOverallRating, avgRatingByType, avgRatingByTechnician, totalEscalations, acceptedEscalations, returnedEscalations };
   }
 
   // --- Escalation ----------------------------------------------------------

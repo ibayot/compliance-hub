@@ -275,12 +275,23 @@ export interface TechAssignedStats {
   satisfactionAvg: number | null;
 }
 
+export interface TicketReportsData {
+  totalTickets: number;
+  totalWithRating: number;
+  avgOverallRating: number | null;
+  avgRatingByType: Array<{ type: string; avg: number; count: number; ratedCount?: number }>;
+  avgRatingByTechnician: Array<{ techId: number; techName: string; avg: number; count: number; ratedCount?: number }>;
+  totalEscalations: number;
+  acceptedEscalations: number;
+  returnedEscalations: number;
+}
+
 export interface TicketReportResult {
   totalTickets: number;
   totalWithRating: number;
   avgOverallRating: number | null;
-  avgRatingByType: Array<{ type: string; avg: number; count: number }>;
-  avgRatingByTechnician: Array<{ techId: number; techName: string; avg: number; count: number }>;
+  avgRatingByType: Array<{ type: string; avg: number; count: number; ratedCount?: number }>;
+  avgRatingByTechnician: Array<{ techId: number; techName: string; avg: number; count: number; ratedCount?: number }>;
   totalEscalations: number;
   acceptedEscalations: number;
   returnedEscalations: number;

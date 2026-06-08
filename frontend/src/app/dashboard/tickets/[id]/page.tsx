@@ -207,9 +207,9 @@ export default function TicketDetailPage() {
   }, [ticket]);
   const timelineEvents = useMemo(() => {
     const eventPriority = (eventType: string) => {
-      if (eventType === 'created') return 0;
+      if (eventType === 'created') return 2;
       if (eventType === 'auto_assigned') return 1;
-      return 2;
+      return 0;
     };
 
     return [...events]

@@ -570,7 +570,7 @@ export default function TicketReportsPage() {
                             <Box key={row.type}>
                               <Box display="flex" justifyContent="space-between" mb={0.5}>
                                 <Typography variant="body2" fontWeight={500}>{TYPE_LABELS[row.type] ?? row.type}</Typography>
-                                <Typography variant="caption" color="text.secondary">{row.count} total</Typography>
+                                <Typography variant="caption" color="text.secondary">{row.ratedCount ?? 0} rated / {row.count} resolved</Typography>
                               </Box>
                               <RatingBar avg={row.avg} />
                             </Box>
@@ -593,7 +593,8 @@ export default function TicketReportsPage() {
                           <TableHead>
                             <TableRow>
                               <TableCell>Technician</TableCell>
-                              <TableCell align="right">Total Tickets</TableCell>
+                              <TableCell align="right">Resolved Tickets</TableCell>
+                              <TableCell align="right">Rated Tickets</TableCell>
                               <TableCell>Avg Rating</TableCell>
                             </TableRow>
                           </TableHead>
@@ -601,7 +602,8 @@ export default function TicketReportsPage() {
                             {result!.avgRatingByTechnician.map(row => (
                               <TableRow key={row.techId}>
                                 <TableCell>{row.techName}</TableCell>
-                                <TableCell align="right">{row.count} total</TableCell>
+                                <TableCell align="right">{row.count}</TableCell>
+                                <TableCell align="right">{row.ratedCount ?? 0}</TableCell>
                                 <TableCell><RatingBar avg={row.avg} /></TableCell>
                               </TableRow>
                             ))}
