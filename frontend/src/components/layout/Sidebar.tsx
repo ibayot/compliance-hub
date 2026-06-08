@@ -87,7 +87,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
   const settingsNavItems: NavItem[] = [
     { label: 'User Manual', icon: ManualIcon, path: '/dashboard/user-manual', roles: ['all'] },
-    { label: 'Settings', icon: SettingsIcon, path: '/dashboard/settings', roles: ['super_admin', 'compliance_officer', 'cybersec', 'infosec', 'section_head', 'desktop_sr', 'it_support_sr', 'pantawid_ict'], roleCodes: ['focal', 'technician'] },
+    { label: 'Settings', icon: SettingsIcon, path: '/dashboard/settings', roles: ['all'] },
   ];
 
   const hasAccess = (roles: string[], roleCodes?: string[], capabilityKey?: keyof RoleCapabilityRecord, _service?: NavItem['service']) => {

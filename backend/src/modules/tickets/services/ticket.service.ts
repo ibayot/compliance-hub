@@ -1717,26 +1717,22 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       if (!tech) return;
 
       // Determine which ticket types this technician handles
-      const DESKTOP_ROLES: string[] = [
-        UserRole.DESKTOP_JR,
-      ];
-      const IT_ROLES: string[] = [
-        UserRole.IT_SUPPORT_JR,
-      ];
-      const PANTAWID_ROLES: string[] = [
-        UserRole.PANTAWID_ICT,
-      ];
+      const roleDefRows = await this.dataSource.query('SELECT technician_type as technicianType FROM role_definitions WHERE value = ?', [tech.role]);
+      let ticketType: string | null = roleDefRows[0]?.technicianType || null;
+
+      if (!ticketType) {
+        const DESKTOP_ROLES: string[] = [UserRole.DESKTOP_JR];
+        const IT_ROLES: string[] = [UserRole.IT_SUPPORT_JR];
+        const PANTAWID_ROLES: string[] = [UserRole.PANTAWID_ICT];
+        if (DESKTOP_ROLES.includes(tech.role)) ticketType = 'desktop_support';
+        else if (IT_ROLES.includes(tech.role)) ticketType = 'it_support';
+        else if (PANTAWID_ROLES.includes(tech.role)) ticketType = 'pantawid_ict_support';
+      }
 
       // Senior roles are excluded from auto-assignment per existing rule
-      const SENIOR_EXCLUDED: string[] = [
-        UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR,
-      ];
+      const SENIOR_EXCLUDED: string[] = [UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR];
       if (SENIOR_EXCLUDED.includes(tech.role)) return;
 
-      let ticketType: string | null = null;
-      if (DESKTOP_ROLES.includes(tech.role)) ticketType = 'desktop_support';
-      else if (IT_ROLES.includes(tech.role)) ticketType = 'it_support';
-      else if (PANTAWID_ROLES.includes(tech.role)) ticketType = 'pantawid_ict_support';
       if (!ticketType) return;
 
       const today = new Date().toISOString().slice(0, 10);
@@ -1794,6 +1790,29 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       );
     } catch (err: any) {
       this.logger.warn(`[Login Auto-Assign] Failed (non-fatal): ${err?.message}`);
+    }
+  }
+
+  /**
+   * Called when a technician is marked absent, out of office, or half day.
+   * Auto-reassigns their assigned tickets to other available technicians.
+   */
+  async reassignUnavailableTechnicianTickets(techId: number): Promise<void> {
+    try {
+      const tickets = await this.ticketRepo.find({
+        where: { assignedToId: techId, status: TicketStatus.ASSIGNED },
+      });
+
+      for (const ticket of tickets) {
+        this.logger.log(`[Absence Reassign] Attempting to reassign ticket ${ticket.ticketNumber} from absent technician #${techId}`);
+        // Nullify assignedTo so it acts like an open ticket for the auto assignment logic
+        ticket.assignedToId = null as any;
+        ticket.status = TicketStatus.OPEN;
+        await this.ticketRepo.save(ticket);
+        await this.autoAssignTicket(ticket.id, ticket.ticketType);
+      }
+    } catch (err: any) {
+      this.logger.error(`[Absence Reassign] Failed for tech ${techId}: ${err?.message}`);
     }
   }
 

@@ -182,7 +182,7 @@ export default function App() {
       <Route
         path="/dashboard/settings"
         element={
-          <ProtectedDashboard allowedRoles={['super_admin', 'compliance_officer', 'cybersec', 'infosec', 'section_head', 'desktop_sr', 'it_support_sr', 'pantawid_ict']}>
+          <ProtectedDashboard>
             <SettingsPage />
           </ProtectedDashboard>
         }

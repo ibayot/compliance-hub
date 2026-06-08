@@ -192,7 +192,7 @@ const CAPABILITY_COLUMNS: { key: keyof RoleCapabilityRecord; label: string; desc
 
 function RoleCapabilitiesCard() {
   const { user } = useAuth();
-  const canEdit = user?.role === UserRole.SUPER_ADMIN;
+  const canEdit = user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.SECTION_HEAD || user?.role === 'compliance_officer';
   const [caps, setCaps] = useState<RoleCapabilityRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null); // roleValue being saved
@@ -249,7 +249,7 @@ function RoleCapabilitiesCard() {
                     minWidth: 160,
                     position: 'sticky',
                     left: 0,
-                    zIndex: 3,
+                    zIndex: 11,
                     backgroundColor: 'background.paper',
                   }}
                 >
@@ -271,7 +271,7 @@ function RoleCapabilitiesCard() {
                     sx={{
                       position: 'sticky',
                       left: 0,
-                      zIndex: 2,
+                      zIndex: 10,
                       backgroundColor: 'background.paper',
                     }}
                   >
@@ -1086,13 +1086,13 @@ function FocalUserManagementCard() {
   );
 }
 
-// --- Main Settings Page -----------------------------------------------------
-
-export default function SettingsPage() {
+// --- Main Settings Page -----------------------------------------export default function SettingsPage() {
   const { user } = useAuth();
+  
+  // Section Head, Compliance Officer, and Super Admin can manage roles, capabilities, and users
   const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
-  const isSectionHead = user?.role === UserRole.SECTION_HEAD;
-  const isCapAdmin = isSuperAdmin || isSectionHead;
+  const isCapAdmin = isSuperAdmin || user?.role === UserRole.SECTION_HEAD || user?.role === 'compliance_officer';
+  const canManageUsersAndRoles = isCapAdmin;
 
   return (
     <Box>
@@ -1115,16 +1115,16 @@ export default function SettingsPage() {
             <Grid item xs={12} sm={6} md={3}>
               <Typography variant="caption" color="text.secondary" display="block">Full Name</Typography>
               <Typography variant="body1">
-                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || '�'}
+                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || '—'}
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
               <Typography variant="caption" color="text.secondary" display="block">Email</Typography>
-              <Typography variant="body1">{user?.email || '�'}</Typography>
+              <Typography variant="body1">{user?.email || '—'}</Typography>
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <Typography variant="caption" color="text.secondary" display="block">Role</Typography>
-              <Chip label={user?.role?.replace('_', ' ').toUpperCase() || '�'} size="small" color="primary" variant="outlined" />
+              <Chip label={user?.role?.replace('_', ' ').toUpperCase() || '—'} size="small" color="primary" variant="outlined" />
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
               <Typography variant="caption" color="text.secondary" display="block">Assigned Units</Typography>
@@ -1150,19 +1150,19 @@ export default function SettingsPage() {
           <ChangePasswordCard />
         </Grid>
 
-        {isSuperAdmin && (
+        {canManageUsersAndRoles && (
           <Grid item xs={12}>
             <RoleManagementCard />
           </Grid>
         )}
 
-        {isCapAdmin && (
+        {canManageUsersAndRoles && (
           <Grid item xs={12}>
             <RoleCapabilitiesCard />
           </Grid>
         )}
 
-        {isSuperAdmin && (
+        {canManageUsersAndRoles && (
           <Grid item xs={12}>
             <FocalUserManagementCard />
           </Grid>

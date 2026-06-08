@@ -2,6 +2,8 @@ import {
   Injectable,
   Logger,
   BadRequestException,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -10,6 +12,7 @@ import { OfficeDay } from '../entities/office-day.entity';
 import { User, UserRole } from '../../shared/entities';
 import { RoleDefinitionEntity } from '../../shared/entities';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
+import { TicketService } from './ticket.service';
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -55,6 +58,8 @@ export class AttendanceService {
     @InjectRepository(RoleDefinitionEntity)
     private readonly roleDefRepo: Repository<RoleDefinitionEntity>,
     private readonly roleCapSvc: RoleCapabilitiesService,
+    @Inject(forwardRef(() => TicketService))
+    private readonly ticketService: TicketService,
   ) {}
 
   // ── Attendance ──────────────────────────────────────────────────────────
@@ -171,7 +176,20 @@ export class AttendanceService {
       });
     }
 
-    return this.attendanceRepo.save(record);
+    const savedRecord = await this.attendanceRepo.save(record);
+
+    if (
+      dto.status === AttendanceStatus.ABSENT ||
+      dto.status === AttendanceStatus.OUT_OF_OFFICE ||
+      dto.status === AttendanceStatus.HALF_DAY
+    ) {
+      // Background execution: reassignment
+      this.ticketService.reassignUnavailableTechnicianTickets(dto.userId).catch((err) => {
+        this.logger.error(`Failed to reassign tickets on attendance change: ${err.message}`);
+      });
+    }
+
+    return savedRecord;
   }
 
   /** Bulk set attendance for multiple users */

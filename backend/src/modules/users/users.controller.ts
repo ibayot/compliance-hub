@@ -32,37 +32,37 @@ export class UsersController {
   ) {}
 
   @Get('roles')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
   getRoles() {
     return this.usersService.getRoles();
   }
 
   @Post('roles')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
   createRole(@Body() createRoleDefinitionDto: CreateRoleDefinitionDto) {
     return this.usersService.createRoleDefinition(createRoleDefinitionDto);
   }
 
   @Patch('roles/:value')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
   updateRole(@Param('value') value: string, @Body() updateRoleDefinitionDto: UpdateRoleDefinitionDto) {
     return this.usersService.updateRoleDefinition(value, updateRoleDefinitionDto);
   }
 
   @Delete('roles/:value')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
   deleteRole(@Param('value') value: string) {
     return this.usersService.deleteRoleDefinition(value);
   }
 
   @Post()
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 
   @Get('search-email')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
   searchEmail(@Query('q') q: string) {
     return this.usersService.searchEmails(q);
   }
@@ -74,7 +74,7 @@ export class UsersController {
   }
 
   @Get('federated')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
   getFederatedUsers() {
     return this.usersService.getFederatedUsers();
   }
@@ -100,7 +100,7 @@ export class UsersController {
 
   /** Updates capability flags for a specific role. Super admin only. */
   @Patch('role-capabilities/:roleValue')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
   async updateRoleCapability(
     @Param('roleValue') roleValue: string,
     @Body() dto: UpdateRoleCapabilityDto,
@@ -116,19 +116,19 @@ export class UsersController {
   // ── Generic user :id routes — kept AFTER static capability routes ──
 
   @Get(':id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(+id);
   }
 
   @Patch(':id')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(+id, updateUserDto);
   }
 
   @Delete(':id')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
   remove(@Param('id') id: string) {
     return this.usersService.remove(+id);
   }
