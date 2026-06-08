@@ -405,12 +405,19 @@ export default function TicketReportsPage() {
                             <Pie
                               data={pieData} cx="50%" cy="50%" outerRadius={80}
                               dataKey="value"
-                              label={({ name, percent }) => `${name.split(' ')[0]} ${(percent * 100).toFixed(0)}%`}
                             >
                               {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                             </Pie>
                             <Tooltip />
-                            <Legend />
+                            <Legend 
+                              formatter={(value, entry: any) => {
+                                const payload = entry.payload;
+                                if (!payload) return value;
+                                const total = pieData.reduce((acc, curr) => acc + curr.value, 0);
+                                const percent = total > 0 ? ((payload.value / total) * 100).toFixed(0) : 0;
+                                return `${value} (${percent}%)`;
+                              }} 
+                            />
                           </PieChart>
                         </ResponsiveContainer>
                       )}
@@ -490,16 +497,24 @@ export default function TicketReportsPage() {
                       {pieData.length === 0 ? (
                         <Typography variant="body2" color="text.secondary">No data.</Typography>
                       ) : (
-                        <ResponsiveContainer width="100%" height={200}>
+                        <ResponsiveContainer width="100%" height={220}>
                           <PieChart>
                             <Pie
-                              data={pieData} cx="50%" cy="50%" outerRadius={70}
+                              data={pieData} cx="50%" cy="50%" outerRadius={80}
                               dataKey="value"
-                              label={({ name, percent }) => `${name.split(' ')[0]} ${(percent * 100).toFixed(0)}%`}
                             >
                               {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                             </Pie>
                             <Tooltip />
+                            <Legend 
+                              formatter={(value, entry: any) => {
+                                const payload = entry.payload;
+                                if (!payload) return value;
+                                const total = pieData.reduce((acc, curr) => acc + curr.value, 0);
+                                const percent = total > 0 ? ((payload.value / total) * 100).toFixed(0) : 0;
+                                return `${value} (${percent}%)`;
+                              }} 
+                            />
                           </PieChart>
                         </ResponsiveContainer>
                       )}

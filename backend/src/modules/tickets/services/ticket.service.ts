@@ -1458,7 +1458,21 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       };
     }
 
+    const byDayMap: Record<string, { total: number, count: number }> = {};
+    for (const t of tickets) {
+      if (!t.satisfactionSubmittedAt) continue;
+      const dateStr = new Date(t.satisfactionSubmittedAt).toISOString().slice(0, 10);
+      if (!byDayMap[dateStr]) byDayMap[dateStr] = { total: 0, count: 0 };
+      byDayMap[dateStr].total += t.satisfactionRating!;
+      byDayMap[dateStr].count += 1;
+    }
+    const byDay = Object.keys(byDayMap).sort().map(date => ({
+      date,
+      avgRating: Math.round((byDayMap[date].total / byDayMap[date].count) * 10) / 10
+    }));
+
     return {
+      byDay,
       byTicket,
       byTechnician: technicianAverages,
       summary: {
@@ -2121,6 +2135,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       await this.ticketRepo.save(ticket);
       this.logEvent(ticketId, 'status_changed', actorId, { from: previousStatus, to: TicketStatus.IN_PROGRESS, reason: 'escalation_accepted' }).catch(() => {});
     }
+    this.logEvent(ticketId, 'escalation_accepted', actorId).catch(() => {});
 
     return escalation;
   }
