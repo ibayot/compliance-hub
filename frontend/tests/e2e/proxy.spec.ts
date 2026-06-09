@@ -51,7 +51,7 @@ test.describe('Proxy Request Feature', () => {
 
     // 8. Submit — button text is "Submit Ticket"
     await dialog.locator('button:has-text("Submit Ticket")').click({ force: true });
-    await page.waitForSelector('text="Ticket submitted successfully"', { timeout: 15000 });
+    await page.waitForSelector('text=/Ticket submitted successfully/i', { timeout: 15000 });
     await page.waitForTimeout(2000);
 
     // 9. Verify Proxy Request chip appears in the ticket list

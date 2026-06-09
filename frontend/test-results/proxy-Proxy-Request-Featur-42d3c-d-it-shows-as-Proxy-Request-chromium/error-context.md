@@ -137,13 +137,13 @@ Call log:
         - button "Reset" [ref=e165] [cursor=pointer]: Reset
         - button "Escalated To Me" [ref=e166] [cursor=pointer]: Escalated To Me
       - tablist [ref=e172]:
-        - tab "All (1)" [selected] [ref=e173] [cursor=pointer]: All (1)
-        - tab "Active (1)" [ref=e174] [cursor=pointer]: Active (1)
+        - tab "All (3)" [selected] [ref=e173] [cursor=pointer]: All (3)
+        - tab "Active (3)" [ref=e174] [cursor=pointer]: Active (3)
         - tab "Resolved / Closed (0)" [ref=e175] [cursor=pointer]: Resolved / Closed (0)
         - tab "Frozen (0)" [ref=e176] [cursor=pointer]: Frozen (0)
         - tab "Duplicate (0)" [ref=e177] [cursor=pointer]: Duplicate (0)
-        - tab "Proxy Requests (1)" [ref=e178] [cursor=pointer]:
-          - generic [ref=e179]: Proxy Requests (1)
+        - tab "Proxy Requests (2)" [ref=e178] [cursor=pointer]:
+          - generic [ref=e179]: Proxy Requests (2)
       - table [ref=e183]:
         - rowgroup [ref=e184]:
           - 'row "Ticket # Subject Type Category Priority Status SLA Requester Assigned To Date Actions" [ref=e185]':
@@ -159,8 +159,8 @@ Call log:
             - columnheader "Date" [ref=e195]
             - columnheader "Actions" [ref=e196]
         - rowgroup [ref=e197]:
-          - row "TKT-2026-0001 E2E Proxy Request Test Proxy Request Desktop Support — NOT SET assigned — Test User Jaymark Cardona 6/9/2026 View Details Reassign Ticket Escalate Ticket" [ref=e198]:
-            - cell "TKT-2026-0001" [ref=e199]
+          - row "TKT-2026-0003 E2E Proxy Request Test Proxy Request Desktop Support — NOT SET open — Test User Unassigned 6/9/2026 View Details Assign Ticket Escalate Ticket" [ref=e198]:
+            - cell "TKT-2026-0003" [ref=e199]
             - cell "E2E Proxy Request Test" [ref=e200]
             - cell "Proxy Request Desktop Support" [ref=e201]:
               - generic [ref=e202]:
@@ -172,23 +172,81 @@ Call log:
               - paragraph [ref=e210]: —
             - cell "NOT SET" [ref=e211]:
               - generic [ref=e213]: NOT SET
-            - cell "assigned" [ref=e214]:
-              - generic [ref=e217]: assigned
+            - cell "open" [ref=e214]:
+              - generic [ref=e217]: open
             - cell "—" [ref=e218]:
               - paragraph [ref=e220]: —
             - cell "Test User" [ref=e221]
-            - cell "Jaymark Cardona" [ref=e222]:
-              - generic [ref=e224]: Jaymark Cardona
-            - cell "6/9/2026" [ref=e225]
-            - cell "View Details Reassign Ticket Escalate Ticket" [ref=e226]:
-              - generic [ref=e227]:
-                - button "View Details" [ref=e228] [cursor=pointer]:
-                  - img [ref=e229]
-                - generic "Reassign Ticket" [ref=e231]:
-                  - button [ref=e232] [cursor=pointer]:
-                    - img [ref=e233]
-                - button "Escalate Ticket" [ref=e235] [cursor=pointer]:
-                  - img [ref=e236]
+            - cell "Unassigned" [ref=e222]:
+              - paragraph [ref=e223]: Unassigned
+            - cell "6/9/2026" [ref=e224]
+            - cell "View Details Assign Ticket Escalate Ticket" [ref=e225]:
+              - generic [ref=e226]:
+                - button "View Details" [ref=e227] [cursor=pointer]:
+                  - img [ref=e228]
+                - generic "Assign Ticket" [ref=e230]:
+                  - button [ref=e231] [cursor=pointer]:
+                    - img [ref=e232]
+                - button "Escalate Ticket" [ref=e234] [cursor=pointer]:
+                  - img [ref=e235]
+          - row "TKT-2026-0002 sads IT Support AD Account NOT SET open — Test User Unassigned 6/9/2026 View Details Assign Ticket Escalate Ticket" [ref=e237]:
+            - cell "TKT-2026-0002" [ref=e238]
+            - cell "sads" [ref=e239]
+            - cell "IT Support" [ref=e240]:
+              - generic [ref=e242]:
+                - img [ref=e243]
+                - generic [ref=e245]: IT Support
+            - cell "AD Account" [ref=e246]:
+              - paragraph [ref=e247]: AD Account
+            - cell "NOT SET" [ref=e248]:
+              - generic [ref=e250]: NOT SET
+            - cell "open" [ref=e251]:
+              - generic [ref=e254]: open
+            - cell "—" [ref=e255]:
+              - paragraph [ref=e257]: —
+            - cell "Test User" [ref=e258]
+            - cell "Unassigned" [ref=e259]:
+              - paragraph [ref=e260]: Unassigned
+            - cell "6/9/2026" [ref=e261]
+            - cell "View Details Assign Ticket Escalate Ticket" [ref=e262]:
+              - generic [ref=e263]:
+                - button "View Details" [ref=e264] [cursor=pointer]:
+                  - img [ref=e265]
+                - generic "Assign Ticket" [ref=e267]:
+                  - button [ref=e268] [cursor=pointer]:
+                    - img [ref=e269]
+                - button "Escalate Ticket" [ref=e271] [cursor=pointer]:
+                  - img [ref=e272]
+          - row "TKT-2026-0001 E2E Proxy Request Test Proxy Request Desktop Support — NOT SET assigned — Test User Jaymark Cardona 6/9/2026 View Details Reassign Ticket Escalate Ticket" [ref=e274]:
+            - cell "TKT-2026-0001" [ref=e275]
+            - cell "E2E Proxy Request Test" [ref=e276]
+            - cell "Proxy Request Desktop Support" [ref=e277]:
+              - generic [ref=e278]:
+                - generic [ref=e280]: Proxy Request
+                - generic [ref=e281]:
+                  - img [ref=e282]
+                  - generic [ref=e284]: Desktop Support
+            - cell "—" [ref=e285]:
+              - paragraph [ref=e286]: —
+            - cell "NOT SET" [ref=e287]:
+              - generic [ref=e289]: NOT SET
+            - cell "assigned" [ref=e290]:
+              - generic [ref=e293]: assigned
+            - cell "—" [ref=e294]:
+              - paragraph [ref=e296]: —
+            - cell "Test User" [ref=e297]
+            - cell "Jaymark Cardona" [ref=e298]:
+              - generic [ref=e300]: Jaymark Cardona
+            - cell "6/9/2026" [ref=e301]
+            - cell "View Details Reassign Ticket Escalate Ticket" [ref=e302]:
+              - generic [ref=e303]:
+                - button "View Details" [ref=e304] [cursor=pointer]:
+                  - img [ref=e305]
+                - generic "Reassign Ticket" [ref=e307]:
+                  - button [ref=e308] [cursor=pointer]:
+                    - img [ref=e309]
+                - button "Escalate Ticket" [ref=e311] [cursor=pointer]:
+                  - img [ref=e312]
 ```
 
 # Test source
