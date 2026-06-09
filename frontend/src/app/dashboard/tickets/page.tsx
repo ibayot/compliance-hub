@@ -190,7 +190,7 @@ export default function TicketsPage() {
     ? ([tickets, activeTickets, doneTickets, frozenTickets, duplicateTickets, proxyCreatedTickets][mgmtTab] ?? tickets)
     : isTechnician
       ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
-      : ([tickets, activeTickets, toRateTickets, doneTickets, requestedForTickets][userTab] ?? tickets);
+      : ([tickets, activeTickets, toRateTickets, doneTickets, proxyCreatedTickets][userTab] ?? tickets);
 
   const refreshEscalationStates = useCallback(async (rows: Ticket[]) => {
     if (!canEscalate) return;
@@ -617,8 +617,8 @@ export default function TicketsPage() {
               } />
               <Tab label={`Closed / Resolved (${doneTickets.length})`} />
               <Tab label={
-                <Badge color="info" variant="dot" invisible={requestedForTickets.length === 0}>
-                  Requested For ({requestedForTickets.length})
+                <Badge color="info" variant="dot" invisible={proxyCreatedTickets.length === 0}>
+                  Requested For ({proxyCreatedTickets.length})
                 </Badge>
               } />
             </Tabs>
