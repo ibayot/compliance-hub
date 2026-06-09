@@ -48,7 +48,12 @@ function ProtectedDashboard({
   }
 
   if (!isAuthenticated) {
-    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+    return <Navigate to="/login" replace />;
+  }
+
+  // Prevent direct URL access / deep linking (except for the root dashboard)
+  if (location.pathname !== '/dashboard' && location.key === 'default') {
+    return <Navigate to="/dashboard" replace />;
   }
 
   const isSuperAdmin = user?.role === 'super_admin';

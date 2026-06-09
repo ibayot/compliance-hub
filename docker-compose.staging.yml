@@ -1,0 +1,99 @@
+version: '3.8'
+
+# STAGING DEPLOYMENT
+# This docker-compose file is intended for Server A (Frontend, Backend, Gateway, Redis).
+# It does NOT include the database service, as Server B holds the database.
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: rictms_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  users-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rictms_users_service
+    restart: on-failure
+    depends_on:
+      - redis
+    command: ["node", "dist/apps/users-service.main.js"]
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+    ports:
+      - "4101:4101"
+
+  ticketing-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rictms_ticketing_service
+    restart: on-failure
+    depends_on:
+      - redis
+    command: ["node", "dist/apps/ticketing-service.main.js"]
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - USERS_SERVICE_URL=http://users-service:4101
+    ports:
+      - "4102:4102"
+
+  compliance-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rictms_compliance_service
+    restart: on-failure
+    depends_on:
+      - redis
+    command: ["node", "dist/apps/compliance-service.main.js"]
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - USERS_SERVICE_URL=http://users-service:4101
+    ports:
+      - "4103:4103"
+
+  gateway:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rictms_gateway
+    restart: on-failure
+    depends_on:
+      - users-service
+      - ticketing-service
+      - compliance-service
+    command: ["node", "dist/apps/gateway.main.js"]
+    env_file:
+      - .env
+    environment:
+      - USERS_SERVICE_URL=http://users-service:4101
+      - TICKETING_SERVICE_URL=http://ticketing-service:4102
+      - COMPLIANCE_SERVICE_URL=http://compliance-service:4103
+    ports:
+      - "4000:4000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rictms_frontend
+    restart: on-failure
+    depends_on:
+      - gateway
+    ports:
+      - "80:80" # Exposed on port 80 for staging
+
+volumes:
+  redis_data:
