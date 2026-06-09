@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.80] (Backend) / [0.0.71] (Frontend) - 2026-06-09 - User Settings and Dashboard Enhancements
+
+### Added
+- **Pantawid ICT Support Metrics**: Added Pantawid ICT Support to the IT Help Desk Overview breakdown in the dashboard to accurately reflect the categorization of support tickets.
+- **Create User Validation**: Added required field validations to Create New User dialog (Email, Password, Role, First Name, Last Name).
+
+### Changed
+- **Edit User Profile**: Enabled Staff ID editing for all users except Regular Staff ("User").
+- **Create User UX**: Removed existing email suggestions (`Autocomplete`) from the Create New User dialog, replacing it with a standard `TextField` with `autoComplete="off"`.
+
+### Fixed
+- **Role Capabilities Matrix UX**: Fixed a z-index issue where column text and toggles were visible under the sticky "Role" column during horizontal scrolling.
+
+
 ## [0.0.66] - 2026-06-04 - E2E Refinements and CSAT Enforcements
 
 ### Added

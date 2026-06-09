@@ -249,8 +249,10 @@ function RoleCapabilitiesCard() {
                     minWidth: 160,
                     position: 'sticky',
                     left: 0,
-                    zIndex: 11,
+                    zIndex: 101,
                     backgroundColor: 'background.paper',
+                    borderRight: '1px solid',
+                    borderColor: 'divider',
                   }}
                 >
                   Role
@@ -271,8 +273,10 @@ function RoleCapabilitiesCard() {
                     sx={{
                       position: 'sticky',
                       left: 0,
-                      zIndex: 10,
+                      zIndex: 100,
                       backgroundColor: 'background.paper',
+                      borderRight: '1px solid',
+                      borderColor: 'divider',
                     }}
                   >
                     <Chip
@@ -736,62 +740,40 @@ function FocalUserManagementCard() {
             )}
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
               <Grid item xs={12} md={4}>
-                <Autocomplete
-                  freeSolo
-                  options={emailSuggestions.map((s) => s.email)}
-                  inputValue={emailInputValue}
-                  onInputChange={(_, value) => {
-                    setEmailInputValue(value);
-                    setForm({ ...form, email: value });
-                    setIsExistingEmail(false);
-                  }}
-                  onChange={(_, value) => {
-                    const v = value || '';
-                    setEmailInputValue(v);
-                    const match = emailSuggestions.find(s => s.email === v);
-                    setIsExistingEmail(!!match);
-                    setForm({
-                      ...form,
-                      email: v,
-                      firstName: match?.firstName ?? form.firstName,
-                      lastName: match?.lastName ?? form.lastName,
-                      password: '',
-                    });
-                  }}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Email Address"
-                      fullWidth
-                      helperText="Login credential — type to search existing accounts"
-                    />
-                  )}
+                <TextField
+                  label="Email Address"
+                  required
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  fullWidth
+                  autoComplete="off"
+                  helperText="Login credential for the new account"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField label="Temporary Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} fullWidth helperText={isExistingEmail ? 'Leave blank to keep existing password unchanged' : 'Required for new accounts — user should change on first login'} />
+                <TextField required label="Temporary Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} fullWidth helperText="Required for new accounts — user should change on first login" />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField select label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })} fullWidth helperText="Determines access permissions">
+                <TextField select required label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })} fullWidth helperText="Determines access permissions">
                   {assignableRoles.map((r) => (
                     <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
                   ))}
                 </TextField>
               </Grid>
               <Grid item xs={12} md={3}>
-                <TextField label="First Name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} fullWidth />
+                <TextField required label="First Name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} fullWidth />
               </Grid>
               <Grid item xs={12} md={3}>
                 <TextField label="Middle Name" value={form.middleName} onChange={(e) => setForm({ ...form, middleName: e.target.value })} fullWidth />
               </Grid>
               <Grid item xs={12} md={3}>
-                <TextField label="Last Name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} fullWidth />
+                <TextField required label="Last Name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} fullWidth />
               </Grid>
               <Grid item xs={12} md={3}>
                 <TextField label="Suffix (Jr./Sr.)" value={form.suffix} onChange={(e) => setForm({ ...form, suffix: e.target.value })} fullWidth />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField label="Staff ID" value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} fullWidth helperText="Optional employee identifier" />
+                <TextField label="Staff ID" value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} fullWidth helperText="Optional employee identifier" disabled={form.role === UserRole.USER} />
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField label="Position (Abbreviated)" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} fullWidth helperText="e.g. ITO I" />
@@ -950,9 +932,10 @@ function FocalUserManagementCard() {
                 <TextField
                   label="Staff ID"
                   value={editUser?.staffId || ''}
+                  onChange={(e) => setEditUser((prev: any) => ({ ...prev, staffId: e.target.value }))}
                   fullWidth
-                  disabled
-                  helperText="Staff ID is immutable and cannot be updated."
+                  disabled={editUser?.role === UserRole.USER}
+                  helperText={editUser?.role === UserRole.USER ? "Not applicable for Regular Staff" : "Optional employee identifier"}
                 />
               </Grid>
               <Grid item xs={12} md={3}>

@@ -695,7 +695,7 @@ export default function DashboardPage() {
 
             {/* Type Breakdown */}
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} md={4}>
                 <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5, border: 1, borderColor: 'info.main' }}>
                   <ItSupportIcon color="info" />
                   <Box>
@@ -704,12 +704,21 @@ export default function DashboardPage() {
                   </Box>
                 </Paper>
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} md={4}>
                 <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5, border: 1, borderColor: 'success.main' }}>
                   <DesktopIcon color="success" />
                   <Box>
                     <Typography variant="body2" color="text.secondary">Desktop Support</Typography>
                     <Typography variant="h6" color="success.main">{ticketMetrics.byType['desktop_support'] ?? 0} tickets</Typography>
+                  </Box>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5, border: 1, borderColor: 'warning.main' }}>
+                  <TicketIcon color="warning" />
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">Pantawid ICT Support</Typography>
+                    <Typography variant="h6" color="warning.main">{ticketMetrics.byType['pantawid_ict_support'] ?? 0} tickets</Typography>
                   </Box>
                 </Paper>
               </Grid>
