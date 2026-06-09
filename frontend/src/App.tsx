@@ -1,7 +1,8 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
-import { Box, CircularProgress } from '@mui/material';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Alert, Box, CircularProgress } from '@mui/material';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import type { RoleCapabilityRecord } from '@/lib/api/users';
 
 import HomePage from '@/app/page';
 import LoginPage from '@/app/login/page';
@@ -26,8 +27,17 @@ import TicketSettingsPage from '@/app/dashboard/ticket-settings/page';
 import AttendancePage from '@/app/dashboard/attendance/page';
 import TicketReportsPage from '@/app/dashboard/ticket-reports/page';
 
-function ProtectedDashboard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, loading } = useAuth();
+function ProtectedDashboard({
+  children,
+  requiredCapability,
+  allowedRoles,
+}: {
+  children: React.ReactNode;
+  requiredCapability?: keyof RoleCapabilityRecord;
+  allowedRoles?: string[];
+}) {
+  const { isAuthenticated, loading, user, myCap } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -39,6 +49,26 @@ function ProtectedDashboard({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Prevent direct URL access / deep linking (except for the root dashboard)
+  if (location.pathname !== '/dashboard' && location.key === 'default') {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  const isSuperAdmin = user?.role === 'super_admin';
+  const hasCapability = requiredCapability ? Boolean(myCap?.[requiredCapability]) : true;
+  const hasRoleAccess = allowedRoles ? Boolean(user?.role && allowedRoles.includes(user.role)) : true;
+  const isAllowed = isSuperAdmin || (requiredCapability ? hasCapability : true) && hasRoleAccess;
+
+  if (!isAllowed) {
+    return (
+      <DashboardLayout>
+        <Box p={4}>
+          <Alert severity="warning">You do not have access to this feature.</Alert>
+        </Box>
+      </DashboardLayout>
+    );
   }
 
   return <DashboardLayout>{children}</DashboardLayout>;
@@ -61,7 +91,7 @@ export default function App() {
       <Route
         path="/dashboard/documents"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isDocumentsAccess">
             <DocumentsPage />
           </ProtectedDashboard>
         }
@@ -69,7 +99,7 @@ export default function App() {
       <Route
         path="/dashboard/documents/upload"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isDocumentsAccess">
             <DocumentUploadPage />
           </ProtectedDashboard>
         }
@@ -77,7 +107,7 @@ export default function App() {
       <Route
         path="/dashboard/documents/:id"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isDocumentsAccess">
             <DocumentDetailPage />
           </ProtectedDashboard>
         }
@@ -93,7 +123,7 @@ export default function App() {
       <Route
         path="/dashboard/issuances"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isIssuancesAccess">
             <IssuancesPage />
           </ProtectedDashboard>
         }
@@ -117,7 +147,7 @@ export default function App() {
       <Route
         path="/dashboard/units"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard allowedRoles={['super_admin', 'section_head']}>
             <UnitsPage />
           </ProtectedDashboard>
         }
@@ -125,7 +155,7 @@ export default function App() {
       <Route
         path="/dashboard/metrics"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isMetricsAccess">
             <MetricsPage />
           </ProtectedDashboard>
         }
@@ -133,7 +163,7 @@ export default function App() {
       <Route
         path="/dashboard/reviews"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isReviewsAccess">
             <ReviewsPage />
           </ProtectedDashboard>
         }
@@ -141,7 +171,7 @@ export default function App() {
       <Route
         path="/dashboard/kpi"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isKpiAccess">
             <KpiPage />
           </ProtectedDashboard>
         }
@@ -165,7 +195,7 @@ export default function App() {
       <Route
         path="/dashboard/repository"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isRepositoryAccess">
             <RepositoryPage />
           </ProtectedDashboard>
         }
@@ -173,7 +203,7 @@ export default function App() {
       <Route
         path="/dashboard/reports"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isReportsAccess">
             <ReportsPage />
           </ProtectedDashboard>
         }
@@ -181,7 +211,7 @@ export default function App() {
       <Route
         path="/dashboard/mov"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isMovAccess">
             <MovPlannerPage />
           </ProtectedDashboard>
         }
@@ -189,7 +219,7 @@ export default function App() {
       <Route
         path="/dashboard/ticket-settings"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isTicketSettingsFocal">
             <TicketSettingsPage />
           </ProtectedDashboard>
         }
@@ -197,7 +227,7 @@ export default function App() {
       <Route
         path="/dashboard/attendance"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isAttendanceAccess">
             <AttendancePage />
           </ProtectedDashboard>
         }

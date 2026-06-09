@@ -1,0 +1,155 @@
+{
+  "_comment": "Machine-readable service dependency graph. Updated: 2026-05-13. Version: 0.0.53",
+  "deployment_topology": {
+    "runtime": "single-vm-multi-container",
+    "application_containers": [
+      "users-service",
+      "ticketing-service",
+      "compliance-service",
+      "api-gateway"
+    ],
+    "database_server": {
+      "engine": "mariadb",
+      "shared_instance": true,
+      "logical_databases": [
+        "compliance_hub_users",
+        "compliance_hub_ticketing",
+        "compliance_hub"
+      ]
+    }
+  },
+  "_legend": {
+    "sync-http": "Synchronous HTTP call via internal API (X-Service-Token auth, circuit-breaker protected)",
+    "cross-db-view": "Direct SQL cross-database view JOIN via TypeORM (DEPRECATED — being replaced by sync-http)",
+    "proxy": "Gateway reverse proxy (no direct service coupling)"
+  },
+  "services": {
+    "gateway": {
+      "port": 4000,
+      "owns_tables": [],
+      "syncs": ["users", "ticketing", "compliance"],
+      "async": [],
+      "notes": "Pure reverse proxy. No business logic. Routes by URL prefix."
+    },
+    "users": {
+      "port": 4101,
+      "owns_tables": [
+        "compliance_hub_users.users",
+        "compliance_hub_users.role_definitions",
+        "compliance_hub_users.role_capabilities"
+      ],
+      "syncs": [],
+      "async": [],
+      "exposes_internal": [
+        "GET /api/internal/users",
+        "GET /api/internal/users/:id",
+        "GET /api/internal/units",
+        "GET /api/internal/units/:id",
+        "GET /api/internal/role-capabilities"
+      ],
+      "notes": "Source of truth for all identity and role capability data."
+    },
+    "ticketing": {
+      "port": 4102,
+      "owns_tables": [
+        "compliance_hub_ticketing.tickets",
+        "compliance_hub_ticketing.ticket_categories",
+        "compliance_hub_ticketing.ticket_sla_settings",
+        "compliance_hub_ticketing.attendance_logs"
+      ],
+      "syncs": [
+        {
+          "to": "users",
+          "type": "sync-http",
+          "via": "UsersHttpClient",
+          "endpoints": ["GET /api/internal/users/:id", "GET /api/internal/role-capabilities"]
+        }
+      ],
+      "cross_db_views": [
+        {
+          "view": "compliance_hub_ticketing.users",
+          "source": "compliance_hub_users.users",
+          "status": "DEPRECATED — will be replaced by sync-http enrichment"
+        },
+        {
+          "view": "compliance_hub_ticketing.units",
+          "source": "compliance_hub_users.units",
+          "status": "DEPRECATED"
+        },
+        {
+          "view": "compliance_hub_ticketing.role_definitions",
+          "source": "compliance_hub_users.role_definitions",
+          "status": "DEPRECATED"
+        },
+        {
+          "view": "compliance_hub_ticketing.role_capabilities",
+          "source": "compliance_hub_users.role_capabilities",
+          "status": "DEPRECATED"
+        },
+        {
+          "view": "compliance_hub_ticketing.attendance_users_view",
+          "source": "compliance_hub_users.users",
+          "status": "DEPRECATED"
+        }
+      ],
+      "async": [],
+      "notes": "Ticketing service has the most cross-DB view dependencies. Phase A decoupling will remove entity imports; Phase H will add async cache invalidation events."
+    },
+    "compliance": {
+      "port": 4103,
+      "owns_tables": [
+        "compliance_hub.issuances",
+        "compliance_hub.documents",
+        "compliance_hub.document_types",
+        "compliance_hub.document_assignments",
+        "compliance_hub.incidents",
+        "compliance_hub.kpi_entries",
+        "compliance_hub.mov_entries",
+        "compliance_hub.metrics"
+      ],
+      "syncs": [
+        {
+          "to": "users",
+          "type": "sync-http",
+          "via": "UsersHttpClient",
+          "endpoints": ["GET /api/internal/users", "GET /api/internal/role-capabilities"]
+        }
+      ],
+      "cross_db_views": [
+        {
+          "view": "compliance_hub.users",
+          "source": "compliance_hub_users.users",
+          "status": "DEPRECATED — will be replaced by sync-http enrichment"
+        },
+        {
+          "view": "compliance_hub.role_definitions",
+          "source": "compliance_hub_users.role_definitions",
+          "status": "DEPRECATED"
+        },
+        {
+          "view": "compliance_hub.role_capabilities",
+          "source": "compliance_hub_users.role_capabilities",
+          "status": "DEPRECATED"
+        }
+      ],
+      "async": [],
+      "redis": {
+        "used_for": ["Bull document-processing queue"],
+        "shared_instance": true,
+        "isolation": "queue namespace: document-processing"
+      },
+      "notes": "Compliance service also directly injects User/Unit TypeORM entities — tracked as violation C1 in ARCHITECTURE-AUDIT-v2.md. Phase A decoupling will remove these."
+    }
+  },
+  "known_violations": {
+    "C1": "Cross-boundary TypeORM entity imports (tickets, documents, kpi modules import User/Unit/RoleCapability entities from users module source)",
+    "C2": "RoleCapabilitiesService TypeScript code compiled into ticketing and compliance binaries alongside users-service",
+    "C3": "Circuit breaker added in v0.0.51 — RESOLVED",
+    "H1": "Cross-DB SQL views still primary JOIN mechanism for entity hydration"
+  },
+  "remediation_phases": {
+    "A": "Entity decoupling — replace cross-boundary entity classes with UserRef/UnitRef value objects",
+    "B": "RoleCapabilitiesHttpClient — replace RoleCapabilitiesService DB reads with HTTP call to /api/internal/role-capabilities",
+    "H": "Async event bus — Redis pub/sub for user lifecycle and capability change events"
+  }
+}

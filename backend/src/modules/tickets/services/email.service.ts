@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
 export interface TicketEmailData {
+  ticketId: string;
   ticketNumber: string;
   subject: string;
   description: string;
@@ -19,6 +20,7 @@ export interface TicketEmailData {
 }
 
 export interface TicketAssignedEmailData {
+  ticketId: string;
   ticketNumber: string;
   subject: string;
   ticketType: string;
@@ -29,6 +31,7 @@ export interface TicketAssignedEmailData {
 }
 
 export interface TicketResolvedEmailData {
+  ticketId: string;
   ticketNumber: string;
   subject: string;
   requesterName: string;
@@ -37,6 +40,7 @@ export interface TicketResolvedEmailData {
 }
 
 export interface TicketClosedOrRatedEmailData {
+  ticketId: string;
   ticketNumber: string;
   subject: string;
   technicianName: string;
@@ -50,6 +54,7 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter | null = null;
   private fromAddress: string;
+  private frontendUrl: string;
   private emailEnabled = true;
   /** When set, ALL outbound emails are redirected here instead of the real recipient */
   private testOverrideTo: string | null = null;
@@ -61,6 +66,7 @@ export class EmailService {
     const pass = this.configService.get<string>('SMTP_PASS');
     const rawFrom = this.configService.get<string>('SMTP_FROM') || 'noreply@rictms.gov.ph';
     const fromName = this.configService.get<string>('SMTP_FROM_NAME') || 'DSWD FO2 Compliance Hub';
+    this.frontendUrl = (this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000').replace(/\/$/, '');
     // Use "Display Name <email>" format so email clients show the friendly name
     this.fromAddress = `"${fromName}" <${rawFrom}>`;
 
@@ -88,16 +94,20 @@ export class EmailService {
       this.logger.warn('[EMAIL] Outbound email sending is disabled by EMAIL_ENABLED flag.');
     }
 
-    // Keep a single override target for QA routing when email is enabled.
-    const override = this.configService.get<string>('EMAIL_TEST_OVERRIDE') ?? 'mjdibay@dswd.gov.ph';
-    this.testOverrideTo = override;
-    this.logger.warn(`[EMAIL] All emails redirected to: ${override}`);
+    // ─── EMAIL TEST OVERRIDE ──────────────────────────────────────────────────
+    // Redirects ALL outgoing emails to a single test address when EMAIL_TEST_OVERRIDE is set.
+    // To remove this feature entirely: delete the 2 lines below AND the
+    // effectiveTo / testOverrideTo lines in the private send() method at the bottom.
+    const override = this.configService.get<string>('EMAIL_TEST_OVERRIDE') ?? '';
+    this.testOverrideTo = override || null;
+    // ─── END EMAIL TEST OVERRIDE ─────────────────────────────────────────────
   }
 
   /** Send a ticket creation confirmation email to the requester */
   async sendTicketCreatedEmail(data: TicketEmailData): Promise<void> {
     const typeLabel = data.ticketType === 'desktop_support' ? 'Desktop Support' : 'IT Support';
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — ${data.subject}`;
+    const ticketUrl = `${this.frontendUrl}/dashboard/tickets/${data.ticketId}`;
 
     let assignedLine = '';
     if (data.assignedToName) {
@@ -121,7 +131,7 @@ export class EmailService {
       <p style="margin:0 0 16px;">Your help desk ticket has been created. Here are the details:</p>
 
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;width:140px;">Ticket Number</td><td style="padding:6px 12px;font-weight:700;font-family:monospace;font-size:15px;">${data.ticketNumber}</td></tr>
+        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;width:140px;">Ticket Number</td><td style="padding:6px 12px;"><a href="${ticketUrl}" style="font-weight:700;font-family:monospace;font-size:15px;color:#1976d2;text-decoration:none;">${data.ticketNumber}</a></td></tr>
         <tr><td style="padding:6px 12px;font-weight:600;color:#555;">Subject</td><td style="padding:6px 12px;">${data.subject}</td></tr>
         <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Support Type</td><td style="padding:6px 12px;">${typeLabel}</td></tr>
         ${data.categoryName ? `<tr><td style="padding:6px 12px;font-weight:600;color:#555;">Category</td><td style="padding:6px 12px;">${data.categoryName}</td></tr>` : ''}
@@ -136,7 +146,10 @@ export class EmailService {
         <p style="margin:0;white-space:pre-wrap;font-size:14px;">${data.description}</p>
       </div>
 
-      <p style="margin:16px 0 0;font-size:13px;color:#888;">You can track your ticket status by logging in to the Compliance Hub portal.</p>
+      <div style="margin:20px 0;text-align:center;">
+        <a href="${ticketUrl}" style="background:#1976d2;color:#fff;padding:10px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block;">View Ticket</a>
+      </div>
+      <p style="margin:0;font-size:12px;color:#aaa;text-align:center;">If your session has expired, you will be prompted to log in and then redirected to the ticket.</p>
     </div>
     <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
       RICTMS Compliance Hub — IT Help Desk
@@ -165,6 +178,7 @@ export class EmailService {
       data.ticketType === 'pantawid_ict_support' ? 'Pantawid ICT Support' : 'IT Support';
 
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Assigned to You — ${data.subject}`;
+    const ticketUrl = `${this.frontendUrl}/dashboard/tickets/${data.ticketId}`;
 
     const html = `
 <!DOCTYPE html>
@@ -180,13 +194,16 @@ export class EmailService {
       <p style="margin:0 0 16px;">Hello <strong>${data.technicianName}</strong>,</p>
       <p style="margin:0 0 16px;">A ticket has been assigned to you. Please action it as soon as possible.</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;width:140px;">Ticket Number</td><td style="padding:6px 12px;font-weight:700;font-family:monospace;font-size:15px;">${data.ticketNumber}</td></tr>
+        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;width:140px;">Ticket Number</td><td style="padding:6px 12px;"><a href="${ticketUrl}" style="font-weight:700;font-family:monospace;font-size:15px;color:#e65100;text-decoration:none;">${data.ticketNumber}</a></td></tr>
         <tr><td style="padding:6px 12px;font-weight:600;color:#555;">Subject</td><td style="padding:6px 12px;">${data.subject}</td></tr>
         <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Support Type</td><td style="padding:6px 12px;">${typeLabel}</td></tr>
         <tr><td style="padding:6px 12px;font-weight:600;color:#555;">Priority</td><td style="padding:6px 12px;">${data.priority ? data.priority.toUpperCase() : 'N/A'}</td></tr>
         <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Status</td><td style="padding:6px 12px;">${data.status.replace('_', ' ').toUpperCase()}</td></tr>
       </table>
-      <p style="margin:16px 0 0;font-size:13px;color:#888;">Please log in to the Compliance Hub portal to view the full ticket details and take action.</p>
+      <div style="margin:20px 0;text-align:center;">
+        <a href="${ticketUrl}" style="background:#e65100;color:#fff;padding:10px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block;">View Ticket</a>
+      </div>
+      <p style="margin:0;font-size:12px;color:#aaa;text-align:center;">If your session has expired, you will be prompted to log in and then redirected to the ticket.</p>
     </div>
     <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
       RICTMS Compliance Hub — IT Help Desk
@@ -200,7 +217,8 @@ export class EmailService {
 
   /** Notify requester that the ticket was resolved and ask for technician rating */
   async sendTicketResolvedEmailToRequester(data: TicketResolvedEmailData): Promise<void> {
-    const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Ticket Resolved — Please Rate Technician`;
+    const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Ticket Resolved — Action Required`;
+    const ticketUrl = `${this.frontendUrl}/dashboard/tickets/${data.ticketId}`;
     const html = `
 <!DOCTYPE html>
 <html>
@@ -209,19 +227,33 @@ export class EmailService {
   <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
     <div style="background:#2e7d32;padding:20px 24px;">
       <h1 style="margin:0;color:#fff;font-size:18px;">RICTMS IT Help Desk</h1>
-      <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">Ticket Marked as Resolved</p>
+      <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">Ticket Marked as Resolved — Your Action Required</p>
     </div>
     <div style="padding:24px;">
       <p style="margin:0 0 16px;">Hello <strong>${data.requesterName}</strong>,</p>
-      <p style="margin:0 0 16px;">Your ticket has been marked as resolved.</p>
+      <p style="margin:0 0 16px;">Your ticket has been marked as resolved by the assigned technician. Please review and take one of the actions below.</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;width:140px;">Ticket Number</td><td style="padding:6px 12px;font-weight:700;font-family:monospace;font-size:15px;">${data.ticketNumber}</td></tr>
+        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;width:140px;">Ticket Number</td><td style="padding:6px 12px;"><a href="${ticketUrl}" style="font-weight:700;font-family:monospace;font-size:15px;color:#2e7d32;text-decoration:none;">${data.ticketNumber}</a></td></tr>
         <tr><td style="padding:6px 12px;font-weight:600;color:#555;">Subject</td><td style="padding:6px 12px;">${data.subject}</td></tr>
-        ${data.technicianName ? `<tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Technician</td><td style="padding:6px 12px;">${data.technicianName}</td></tr>` : ''}
+        ${data.technicianName ? `<tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Resolved By</td><td style="padding:6px 12px;">${data.technicianName}</td></tr>` : ''}
       </table>
-      <div style="background:#fff3e0;border:1px solid #ffe0b2;color:#e65100;padding:12px;border-radius:4px;">
-        Please log in to Compliance Hub and rate the technician for this resolved ticket.
+
+      <div style="background:#e8f5e9;border:1px solid #c8e6c9;padding:16px;border-radius:4px;margin:16px 0;">
+        <p style="margin:0 0 8px;font-weight:600;color:#1b5e20;font-size:14px;">What would you like to do?</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#388e3c;">Log in to Compliance Hub to take action on this ticket:</p>
+        <table style="width:100%;">
+          <tr>
+            <td style="padding:4px 8px 4px 0;width:50%;">
+              <a href="${ticketUrl}" style="background:#2e7d32;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:600;font-size:13px;display:block;text-align:center;">Close Ticket</a>
+            </td>
+            <td style="padding:4px 0 4px 8px;width:50%;">
+              <a href="${ticketUrl}" style="background:#1565c0;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:600;font-size:13px;display:block;text-align:center;">Rate Technician</a>
+            </td>
+          </tr>
+        </table>
       </div>
+
+      <p style="margin:0;font-size:12px;color:#aaa;text-align:center;">If your session has expired, you will be prompted to log in and then redirected to the ticket.</p>
     </div>
     <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
       RICTMS Compliance Hub — IT Help Desk
@@ -237,6 +269,7 @@ export class EmailService {
   async sendTicketClosedOrRatedEmailToTechnician(data: TicketClosedOrRatedEmailData): Promise<void> {
     const actionLabel = data.action === 'rated' ? 'Rated by Requester' : 'Closed by Requester';
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — ${actionLabel}`;
+    const ticketUrl = `${this.frontendUrl}/dashboard/tickets/${data.ticketId}`;
     const ratingLine = data.action === 'rated' && data.rating
       ? `<tr><td style="padding:6px 12px;font-weight:600;color:#555;">Rating</td><td style="padding:6px 12px;">${data.rating}/5</td></tr>`
       : '';
@@ -254,11 +287,15 @@ export class EmailService {
       <p style="margin:0 0 16px;">Hello <strong>${data.technicianName}</strong>,</p>
       <p style="margin:0 0 16px;">Ticket lifecycle update from the requester has been recorded.</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;width:140px;">Ticket Number</td><td style="padding:6px 12px;font-weight:700;font-family:monospace;font-size:15px;">${data.ticketNumber}</td></tr>
+        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;width:140px;">Ticket Number</td><td style="padding:6px 12px;"><a href="${ticketUrl}" style="font-weight:700;font-family:monospace;font-size:15px;color:#6a1b9a;text-decoration:none;">${data.ticketNumber}</a></td></tr>
         <tr><td style="padding:6px 12px;font-weight:600;color:#555;">Subject</td><td style="padding:6px 12px;">${data.subject}</td></tr>
         <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Update</td><td style="padding:6px 12px;">${actionLabel}</td></tr>
         ${ratingLine}
       </table>
+      <div style="margin:20px 0;text-align:center;">
+        <a href="${ticketUrl}" style="background:#6a1b9a;color:#fff;padding:10px 24px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block;">View Ticket</a>
+      </div>
+      <p style="margin:0;font-size:12px;color:#aaa;text-align:center;">If your session has expired, you will be prompted to log in and then redirected to the ticket.</p>
     </div>
     <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
       RICTMS Compliance Hub — IT Help Desk

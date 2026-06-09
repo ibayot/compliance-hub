@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Autocomplete,
-  Badge,
   Box,
   Button,
   Card,
@@ -21,15 +20,20 @@ import {
   Grid,
   IconButton,
   InputLabel,
+  InputAdornment,
   ListItemText,
   MenuItem,
   Select,
   Switch,
+  Tab,
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -40,18 +44,20 @@ import {
   Key as KeyIcon,
   Palette as PaletteIcon,
   PersonAdd as PersonAddIcon,
-  People as PeopleIcon,
   CheckCircle as ActiveIcon,
   Cancel as InactiveIcon,
   Delete as DeleteIcon,
+  Search as SearchIcon,
+  Security as SecurityIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { useThemeMode } from '@/contexts/ThemeModeContext';
 import { authApi } from '@/lib/api/auth';
-import { usersApi, RoleDefinition } from '@/lib/api/users';
+import { usersApi, RoleDefinition, RoleCapabilityRecord } from '@/lib/api/users';
 import { unitsApi, Unit } from '@/lib/api/units';
 import { UserRole } from '@/lib/types/auth';
+import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
 
 // --- Change Password Card ---------------------------------------------------
 
@@ -164,6 +170,155 @@ function ThemeCard() {
   );
 }
 
+// --- Role Capabilities Card ------------------------------------------------
+
+const CAPABILITY_COLUMNS: { key: keyof RoleCapabilityRecord; label: string; description: string }[] = [
+  { key: 'isFocal',              label: 'Focal',           description: 'Compliance document & focal-level access' },
+  { key: 'isDesktop',            label: 'Desktop',         description: 'Handle desktop/hardware support tickets' },
+  { key: 'isItSupport',          label: 'IT Support',      description: 'Handle IT/software support tickets' },
+  { key: 'isPantawidIct',        label: 'Pantawid ICT',    description: 'Handle Pantawid ICT support tickets' },
+  { key: 'isIto',                label: 'ITO Staff',       description: 'Non-technician ITO professional staff group' },
+  { key: 'isEscalationFocal',    label: 'Escalation',      description: 'Can receive escalated tickets' },
+  { key: 'isTicketSettingsFocal',label: 'Ticket Admin',    description: 'Full ticket settings & reports access' },
+  { key: 'isAllTickets',         label: 'See All Tickets', description: 'View all tickets system-wide (not just own)' },
+  { key: 'isTicketFocal',        label: 'Assign Tickets',  description: 'Manually assign/reassign tickets to technicians' },
+  { key: 'isKpiAccess',          label: 'KPI View',        description: 'Access KPI dashboard/read endpoints' },
+  { key: 'isKpiManage',          label: 'KPI Manage',      description: 'Create/update KPI master and monitoring records' },
+  { key: 'isAttendanceAccess',   label: 'Attendance View', description: 'Access attendance and office-day views' },
+  { key: 'isAttendanceManage',   label: 'Attendance Manage', description: 'Mutate attendance and office-day records' },
+  { key: 'isReportsAccess',      label: 'Reports',         description: 'Access consolidated compliance reports' },
+  { key: 'isReviewsAccess',      label: 'Reviews',         description: 'Access review workflows' },
+  { key: 'isMovAccess',          label: 'MoV',             description: 'Access MoV Builder' },
+  { key: 'isDocumentsAccess',    label: 'Documents',       description: 'Access Documents module' },
+  { key: 'isRepositoryAccess',   label: 'Repository',      description: 'Access Repository module' },
+  { key: 'isIssuancesAccess',    label: 'Issuances',       description: 'Access Issuances module' },
+  { key: 'isMetricsAccess',      label: 'Metrics',         description: 'Access Metrics module' },
+];
+
+function RoleCapabilitiesCard() {
+  const { user } = useAuth();
+  const canEdit = user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.SECTION_HEAD || user?.role === 'compliance_officer';
+  const [caps, setCaps] = useState<RoleCapabilityRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null); // roleValue being saved
+  const { enqueueSnackbar } = useSnackbar();
+
+  const load = useCallback(async () => {
+    try {
+      const data = await usersApi.listCapabilities();
+      setCaps(data);
+    } catch {
+      enqueueSnackbar('Failed to load role capabilities.', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [enqueueSnackbar]);
+
+  useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
+
+  const handleToggle = async (
+    roleValue: string,
+    field: keyof RoleCapabilityRecord,
+    newValue: boolean,
+  ) => {
+    setSaving(roleValue);
+    try {
+      const updated = await usersApi.updateCapability(roleValue, { [field]: newValue });
+      setCaps(prev => prev.map(c => c.roleValue === roleValue ? updated : c));
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to update capability.', { variant: 'error' });
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <Card elevation={2}>
+      <CardHeader
+        avatar={<SecurityIcon color="primary" />}
+        title="Role Capabilities Matrix"
+        subheader={canEdit
+          ? 'Toggle capability flags per role. Changes take effect immediately — the backend cache is reloaded on each save.'
+          : 'View-only. Role capability flags for the system. Contact the System Administrator to make changes.'}
+      />
+      <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+        {loading ? (
+          <Box p={2}><Typography variant="body2" color="text.secondary">Loading capabilities...</Typography></Box>
+        ) : (
+          <TableContainer>
+            <Table size="small" sx={{ minWidth: 900 }}>
+              <TableHead>
+              <TableRow>
+                <TableCell
+                  sx={{
+                    fontWeight: 700,
+                    minWidth: 160,
+                    position: 'sticky',
+                    left: 0,
+                    zIndex: 101,
+                    bgcolor: '#ffffff',
+                    borderRight: '1px solid',
+                    borderColor: 'divider',
+                  }}
+                >
+                  Role
+                </TableCell>
+                {CAPABILITY_COLUMNS.map(col => (
+                  <TableCell key={col.key} align="center" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    <Tooltip title={col.description} placement="top">
+                      <span>{col.label}</span>
+                    </Tooltip>
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {caps.map(cap => (
+                <TableRow key={cap.roleValue} hover sx={{ opacity: saving === cap.roleValue ? 0.6 : 1 }}>
+                  <TableCell
+                    sx={{
+                      position: 'sticky',
+                      left: 0,
+                      zIndex: 100,
+                      bgcolor: '#ffffff',
+                      borderRight: '1px solid',
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <Chip
+                      label={cap.roleValue}
+                      size="small"
+                      variant="outlined"
+                      color={cap.roleValue === 'super_admin' ? 'error' : 'default'}
+                    />
+                  </TableCell>
+                  {CAPABILITY_COLUMNS.map(col => {
+                    const val = cap[col.key] as boolean;
+                    const isLocked = cap.roleValue === 'super_admin' || !canEdit;
+                    return (
+                      <TableCell key={col.key} align="center">
+                        <Switch
+                          size="small"
+                          checked={cap.roleValue === 'super_admin' ? true : val}
+                          disabled={isLocked || saving === cap.roleValue}
+                          onChange={(e) => handleToggle(cap.roleValue, col.key, e.target.checked)}
+                          color="primary"
+                        />
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))}
+            </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // --- Role Management Card ---------------------------------------------------
 
 function RoleManagementCard() {
@@ -195,6 +350,7 @@ function RoleManagementCard() {
   useEffect(() => {
     loadRoles();
   }, [loadRoles]);
+  useAutoRefresh(loadRoles);
 
   const handleCreate = async () => {
     const codeVal = form.value.trim().toLowerCase().replace(/\s+/g, '_');
@@ -280,7 +436,7 @@ function RoleManagementCard() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {roles.map((role) => (
+                {roles.filter((role) => role.value !== 'super_admin').map((role) => (
                   <TableRow key={role.value} hover>
                     <TableCell>
                       <Typography variant="body2" fontWeight={600}>{role.label}</Typography>
@@ -449,7 +605,11 @@ function FocalUserManagementCard() {
   const [roles, setRoles] = useState<RoleDefinition[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [focalUsers, setFocalUsers] = useState<any[]>([]);
+  const [userTab, setUserTab] = useState(0); // 0 = RICTMS Staff, 1 = Regular Users
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [creating, setCreating] = useState(false);
   const [editUser, setEditUser] = useState<any | null>(null);
   const [editing, setEditing] = useState(false);
@@ -457,7 +617,7 @@ function FocalUserManagementCard() {
   const { enqueueSnackbar } = useSnackbar();
   const [form, setForm] = useState({
     email: '', password: '', firstName: '', middleName: '', lastName: '',
-    suffix: '', staffId: '', role: UserRole.FOCAL, position: '', positionFull: '', designation: '',
+    suffix: '', staffId: '', role: UserRole.USER, position: '', positionFull: '', designation: '',
     ticketMainFocal: false, ticketTechnician: false,
     unitIds: [] as number[],
   });
@@ -489,17 +649,18 @@ function FocalUserManagementCard() {
       ]);
       setRoles(roleList);
       setUnits(unitList);
-      const assignable = new Set(roleList.filter((r) => r.assignable).map((r) => r.value));
-      setFocalUsers(users.filter((u: any) => assignable.has(u.role as string)));
+      // Show ALL users — not filtered by assignable flag
+      setFocalUsers(users);
     } catch { /* non-blocking */ }
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
+  useAutoRefresh(reload);
 
   const resetForm = () => {
     setForm({
       email: '', password: '', firstName: '', middleName: '', lastName: '',
-      suffix: '', staffId: '', role: UserRole.FOCAL, position: '', positionFull: '', designation: '',
+      suffix: '', staffId: '', role: UserRole.USER, position: '', positionFull: '', designation: '',
       ticketMainFocal: false, ticketTechnician: false,
       unitIds: [],
     });
@@ -572,8 +733,8 @@ function FocalUserManagementCard() {
     <Card elevation={2}>
       <CardHeader
         avatar={<PersonAddIcon color="primary" />}
-        title="Focal & Operations User Management"
-        subheader="Create and manage user accounts for focal persons, technicians, reviewers, and auditors."
+        title="User Management"
+        subheader="Create and manage user accounts for RICTMS staff and regular users."
         action={
           <Button variant="contained" startIcon={<PersonAddIcon />} size="small" onClick={handleOpenCreate}>
             Create New User
@@ -592,77 +753,48 @@ function FocalUserManagementCard() {
             )}
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
               <Grid item xs={12} md={4}>
-                <Autocomplete
-                  freeSolo
-                  options={emailSuggestions.map((s) => s.email)}
-                  inputValue={emailInputValue}
-                  onInputChange={(_, value) => {
-                    setEmailInputValue(value);
-                    setForm({ ...form, email: value });
-                    setIsExistingEmail(false);
-                  }}
-                  onChange={(_, value) => {
-                    const v = value || '';
-                    setEmailInputValue(v);
-                    const match = emailSuggestions.find(s => s.email === v);
-                    setIsExistingEmail(!!match);
-                    setForm({
-                      ...form,
-                      email: v,
-                      firstName: match?.firstName ?? form.firstName,
-                      lastName: match?.lastName ?? form.lastName,
-                      password: '',
-                    });
-                  }}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Email Address"
-                      fullWidth
-                      helperText="Login credential — type to search existing accounts"
-                    />
-                  )}
+                <TextField
+                  label="Email Address"
+                  required
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  fullWidth
+                  autoComplete="off"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField label="Temporary Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} fullWidth helperText={isExistingEmail ? 'Leave blank to keep existing password unchanged' : 'Required for new accounts — user should change on first login'} />
+                <TextField required label="Temporary Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} fullWidth autoComplete="new-password" />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField select label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })} fullWidth helperText="Determines access permissions">
+                <TextField select required label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })} fullWidth>
                   {assignableRoles.map((r) => (
                     <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
                   ))}
                 </TextField>
               </Grid>
               <Grid item xs={12} md={3}>
-                <TextField label="First Name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} fullWidth />
+                <TextField required label="First Name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} fullWidth autoComplete="off" />
               </Grid>
               <Grid item xs={12} md={3}>
-                <TextField label="Middle Name" value={form.middleName} onChange={(e) => setForm({ ...form, middleName: e.target.value })} fullWidth />
+                <TextField label="Middle Name" value={form.middleName} onChange={(e) => setForm({ ...form, middleName: e.target.value })} fullWidth autoComplete="off" />
               </Grid>
               <Grid item xs={12} md={3}>
-                <TextField label="Last Name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} fullWidth />
+                <TextField required label="Last Name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} fullWidth autoComplete="off" />
               </Grid>
               <Grid item xs={12} md={3}>
-                <TextField label="Suffix (Jr./Sr.)" value={form.suffix} onChange={(e) => setForm({ ...form, suffix: e.target.value })} fullWidth />
+                <TextField label="Suffix (Jr./Sr.)" value={form.suffix} onChange={(e) => setForm({ ...form, suffix: e.target.value })} fullWidth autoComplete="off" />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField label="Staff ID" value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} fullWidth helperText="Optional employee identifier" />
+                <TextField label="Staff ID" value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} fullWidth disabled={form.role === UserRole.USER} autoComplete="off" />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField label="Position (Abbreviated)" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} fullWidth helperText="e.g. ITO I" />
+                <TextField label="Position (Abbreviated)" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} fullWidth autoComplete="off" />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField label="Full Position Title" value={form.positionFull} onChange={(e) => setForm({ ...form, positionFull: e.target.value })} fullWidth helperText="e.g. Information Technology Officer I" />
+                <TextField label="Full Position Title" value={form.positionFull} onChange={(e) => setForm({ ...form, positionFull: e.target.value })} fullWidth autoComplete="off" />
               </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField label="Designation / Title" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} fullWidth />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <FormControlLabel
-                  control={<Switch checked={form.ticketMainFocal} onChange={(e) => setForm({ ...form, ticketMainFocal: e.target.checked })} />}
-                  label="Ticket Main Focal"
-                />
+              <Grid item xs={12} md={6}>
+                <TextField label="Designation / Title" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} fullWidth autoComplete="off" />
               </Grid>
               <Grid item xs={12} md={4}>
                 <FormControlLabel
@@ -706,81 +838,127 @@ function FocalUserManagementCard() {
 
         <Divider sx={{ my: 3 }} />
 
-        <Box display="flex" alignItems="center" gap={1} mb={1.5}>
-          <PeopleIcon color="action" fontSize="small" />
-          <Typography variant="subtitle2">Existing Users</Typography>
-          <Badge badgeContent={focalUsers.length} color="primary" sx={{ ml: 1 }} />
+        {/* Controls: Tabs & Search */}
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 2, gap: 2 }}>
+          <Tabs value={userTab} onChange={(_, v) => { setUserTab(v); setPage(0); }} sx={{ minWidth: 0 }}>
+            <Tab label={`RICTMS Staff (${focalUsers.filter((u: any) => u.role !== 'user' && u.role !== 'super_admin').length})`} />
+            <Tab label={`Regular Users (${focalUsers.filter((u: any) => u.role === 'user').length})`} />
+          </Tabs>
+          <TextField
+            size="small"
+            placeholder="Search staff by name or email..."
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
+            InputProps={{
+              startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+            }}
+            sx={{ width: { xs: '100%', sm: 300 } }}
+          />
         </Box>
 
-        {focalUsers.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">No users provisioned yet.</Typography>
-        ) : (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell><strong>Name / Email</strong></TableCell>
-                <TableCell><strong>Staff ID</strong></TableCell>
-                <TableCell><strong>Role</strong></TableCell>
-                <TableCell><strong>Status</strong></TableCell>
-                <TableCell align="right"><strong>Actions</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {focalUsers.map((u) => (
-                <TableRow key={u.id} hover>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={600}>
-                      {[u.firstName, u.middleName, u.lastName, u.suffix].filter(Boolean).join(' ') || ''}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">{u.email}</Typography>
-                  </TableCell>
-                  <TableCell><Typography variant="body2">{u.staffId || ''}</Typography></TableCell>
-                  <TableCell>
-                    <Chip label={u.role?.replace('_', ' ').toUpperCase()} size="small" variant="outlined" />
-                  </TableCell>
-                  <TableCell>
-                    {(u.is_active || u.active)
-                      ? <Chip icon={<ActiveIcon />} label="Active" size="small" color="success" />
-                      : <Chip icon={<InactiveIcon />} label="Inactive" size="small" color="default" />}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip title="Edit user">
-                      <IconButton
-                        size="small"
-                        color="primary"
-                        onClick={() => {
-                          setEditUser({
-                            id: u.id,
-                            email: u.email || '',
-                            firstName: u.firstName || '',
-                            middleName: u.middleName || '',
-                            lastName: u.lastName || '',
-                            suffix: u.suffix || '',
-                            staffId: u.staffId || '',
-                            position: u.position || '',
-                            positionFull: u.positionFull || '',
-                            designation: u.designation || '',
-                            ticketMainFocal: Boolean(u.ticketMainFocal),
-                            ticketTechnician: Boolean(u.ticketTechnician),
-                            role: u.role,
-                            unitIds: Array.isArray(u.units) ? u.units.map((unit: any) => unit.id) : [],
-                          });
-                        }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={(u.is_active || u.active) ? 'Deactivate' : 'Activate'}>
-                      <IconButton size="small" color={(u.is_active || u.active) ? 'warning' : 'success'} onClick={() => handleToggleActive(u)}>
-                        {(u.is_active || u.active) ? <InactiveIcon fontSize="small" /> : <ActiveIcon fontSize="small" />}
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+        {(() => {
+          let displayUsers = userTab === 0
+            ? focalUsers.filter((u: any) => u.role !== 'user' && u.role !== 'super_admin')
+            : focalUsers.filter((u: any) => u.role === 'user');
+
+          if (searchQuery.trim()) {
+            const lowerQuery = searchQuery.toLowerCase();
+            displayUsers = displayUsers.filter((u: any) => {
+              const fullName = `${u.firstName || ''} ${u.middleName || ''} ${u.lastName || ''} ${u.suffix || ''}`.toLowerCase();
+              return fullName.includes(lowerQuery) || (u.email || '').toLowerCase().includes(lowerQuery) || (u.staffId || '').toLowerCase().includes(lowerQuery);
+            });
+          }
+
+          if (displayUsers.length === 0) {
+            return <Typography variant="body2" color="text.secondary">{searchQuery.trim() ? 'No users found matching your search.' : (userTab === 0 ? 'No RICTMS staff accounts provisioned yet.' : 'No regular user accounts provisioned yet.')}</Typography>;
+          }
+
+          const paginatedUsers = displayUsers.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+          return (
+            <>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell><strong>Name / Email</strong></TableCell>
+                      {userTab === 0 && <TableCell><strong>Staff ID</strong></TableCell>}
+                      <TableCell><strong>Role</strong></TableCell>
+                      <TableCell><strong>Status</strong></TableCell>
+                      <TableCell align="right"><strong>Actions</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {paginatedUsers.map((u: any) => (
+                      <TableRow key={u.id} hover>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>
+                            {[u.firstName, u.middleName, u.lastName, u.suffix].filter(Boolean).join(' ') || ''}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">{u.email}</Typography>
+                        </TableCell>
+                        {userTab === 0 && <TableCell><Typography variant="body2">{u.staffId || ''}</Typography></TableCell>}
+                        <TableCell>
+                          <Chip label={u.role?.replace(/_/g, ' ').toUpperCase()} size="small" variant="outlined" />
+                        </TableCell>
+                        <TableCell>
+                          {(u.is_active || u.active)
+                            ? <Chip icon={<ActiveIcon />} label="Active" size="small" color="success" />
+                            : <Chip icon={<InactiveIcon />} label="Inactive" size="small" color="default" />}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Tooltip title="Edit user">
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => {
+                                setEditUser({
+                                  id: u.id,
+                                  email: u.email || '',
+                                  firstName: u.firstName || '',
+                                  middleName: u.middleName || '',
+                                  lastName: u.lastName || '',
+                                  suffix: u.suffix || '',
+                                  staffId: u.staffId || '',
+                                  position: u.position || '',
+                                  positionFull: u.positionFull || '',
+                                  designation: u.designation || '',
+                                  ticketMainFocal: Boolean(u.ticketMainFocal),
+                                  ticketTechnician: Boolean(u.ticketTechnician),
+                                  role: u.role,
+                                  unitIds: Array.isArray(u.units) ? u.units.map((unit: any) => unit.id) : [],
+                                });
+                              }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={(u.is_active || u.active) ? 'Deactivate' : 'Activate'}>
+                            <IconButton size="small" color={(u.is_active || u.active) ? 'warning' : 'success'} onClick={() => handleToggleActive(u)}>
+                              {(u.is_active || u.active) ? <InactiveIcon fontSize="small" /> : <ActiveIcon fontSize="small" />}
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <TablePagination
+                component="div"
+                count={displayUsers.length}
+                page={page}
+                onPageChange={(_, newPage) => setPage(newPage)}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={(e) => {
+                  setRowsPerPage(parseInt(e.target.value, 10));
+                  setPage(0);
+                }}
+                rowsPerPageOptions={[5, 10, 25, 50]}
+              />
+            </>
+          );
+        })()}
 
         <Dialog open={Boolean(editUser)} onClose={() => setEditUser(null)} maxWidth="md" fullWidth>
           <DialogTitle>Edit User Profile</DialogTitle>
@@ -798,9 +976,10 @@ function FocalUserManagementCard() {
                 <TextField
                   label="Staff ID"
                   value={editUser?.staffId || ''}
+                  onChange={(e) => setEditUser((prev: any) => ({ ...prev, staffId: e.target.value }))}
                   fullWidth
-                  disabled
-                  helperText="Staff ID is immutable and cannot be updated."
+                  disabled={editUser?.role === UserRole.USER}
+                  helperText={editUser?.role === UserRole.USER ? "Not applicable for Regular Staff" : "Optional employee identifier"}
                 />
               </Grid>
               <Grid item xs={12} md={3}>
@@ -934,11 +1113,15 @@ function FocalUserManagementCard() {
   );
 }
 
-// --- Main Settings Page -----------------------------------------------------
+// --- Main Settings Page -----------------------------------------
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  
+  // Section Head, Compliance Officer, and Super Admin can manage roles, capabilities, and users
   const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
+  const isCapAdmin = isSuperAdmin || user?.role === UserRole.SECTION_HEAD || user?.role === 'compliance_officer';
+  const canManageUsersAndRoles = isCapAdmin;
 
   return (
     <Box>
@@ -961,16 +1144,16 @@ export default function SettingsPage() {
             <Grid item xs={12} sm={6} md={3}>
               <Typography variant="caption" color="text.secondary" display="block">Full Name</Typography>
               <Typography variant="body1">
-                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || '�'}
+                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || '—'}
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
               <Typography variant="caption" color="text.secondary" display="block">Email</Typography>
-              <Typography variant="body1">{user?.email || '�'}</Typography>
+              <Typography variant="body1">{user?.email || '—'}</Typography>
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <Typography variant="caption" color="text.secondary" display="block">Role</Typography>
-              <Chip label={user?.role?.replace('_', ' ').toUpperCase() || '�'} size="small" color="primary" variant="outlined" />
+              <Chip label={user?.role?.replace('_', ' ').toUpperCase() || '—'} size="small" color="primary" variant="outlined" />
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
               <Typography variant="caption" color="text.secondary" display="block">Assigned Units</Typography>
@@ -996,13 +1179,19 @@ export default function SettingsPage() {
           <ChangePasswordCard />
         </Grid>
 
-        {isSuperAdmin && (
+        {canManageUsersAndRoles && (
           <Grid item xs={12}>
             <RoleManagementCard />
           </Grid>
         )}
 
-        {isSuperAdmin && (
+        {canManageUsersAndRoles && (
+          <Grid item xs={12}>
+            <RoleCapabilitiesCard />
+          </Grid>
+        )}
+
+        {canManageUsersAndRoles && (
           <Grid item xs={12}>
             <FocalUserManagementCard />
           </Grid>

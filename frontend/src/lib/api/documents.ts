@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export interface Document {
   id: string;
@@ -26,7 +26,7 @@ export interface Document {
     id: string;
     username: string;
     email: string;
-    role?: 'super_admin' | 'reviewer' | 'focal' | 'technician' | 'auditor';
+    role?: 'super_admin' | 'compliance_officer' | string;
   };
   versions?: DocumentVersion[];
   issuances?: Array<{ id: string; issuance_number: string; title: string }>;

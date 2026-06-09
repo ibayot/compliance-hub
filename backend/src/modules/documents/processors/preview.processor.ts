@@ -5,13 +5,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DocumentVersion } from '../entities/document-version.entity';
 import { StorageService } from '../services/storage.service';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import * as mammoth from 'mammoth';
-
-const execAsync = promisify(exec);
 
 interface GeneratePreviewJob {
   versionId: string;
@@ -20,6 +17,34 @@ interface GeneratePreviewJob {
 @Processor('document-processing')
 export class PreviewGenerator {
   private readonly logger = new Logger(PreviewGenerator.name);
+
+  private runSofficeConvert(tempDir: string, sourcePath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const child = spawn(
+        'soffice',
+        ['--headless', '--convert-to', 'pdf', '--outdir', tempDir, sourcePath],
+        { shell: false },
+      );
+
+      let stderr = '';
+      let stdout = '';
+
+      child.stdout.on('data', (chunk) => {
+        stdout += chunk.toString();
+      });
+      child.stderr.on('data', (chunk) => {
+        stderr += chunk.toString();
+      });
+      child.on('error', (err) => reject(err));
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(new Error(`soffice exited with code ${code}. stdout=${stdout} stderr=${stderr}`));
+      });
+    });
+  }
 
   private escapeRegExp(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -105,16 +130,16 @@ export class PreviewGenerator {
       );
       await fs.mkdir(tempDir, { recursive: true });
 
-      const sourceExt = path.extname(version.file_name) || '.docx';
+      const extCandidate = (path.extname(version.file_name) || '.docx').toLowerCase();
+      const allowedExts = new Set(['.docx', '.doc', '.odt', '.rtf']);
+      const sourceExt = allowedExts.has(extCandidate) ? extCandidate : '.docx';
       const sourceFileName = `${version.id}${sourceExt}`;
       const sourcePath = path.join(tempDir, sourceFileName);
       await fs.writeFile(sourcePath, sourceBuffer);
 
       // Convert DOCX to PDF using LibreOffice
       // Note: LibreOffice must be installed on the system
-      const command = `soffice --headless --convert-to pdf --outdir "${tempDir}" "${sourcePath}"`;
-
-      this.logger.log(`Executing: ${command}`);
+      this.logger.log(`Executing soffice conversion for version ${versionId}`);
 
       let pdfBuffer: Buffer;
       const sourceBaseName = path.basename(sourceFileName, sourceExt);
@@ -122,7 +147,7 @@ export class PreviewGenerator {
       const tempPdfPath = path.join(tempDir, pdfFileName);
 
       try {
-        await execAsync(command, { timeout: 60000 }); // 60s timeout
+        await this.runSofficeConvert(tempDir, sourcePath);
         pdfBuffer = await fs.readFile(tempPdfPath);
 
         // Save PDF to storage

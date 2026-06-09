@@ -1,5 +1,14 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 
+/** Roles that bypass per-unit access scoping and can see all units. */
+const GLOBAL_ACCESS_ROLES = new Set([
+  'super_admin',
+  'section_head',        // Section heads oversee all units under their purview
+  'compliance_officer',
+  'cybersec',
+  'infosec',
+]);
+
 @Injectable()
 export class UnitAccessGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
@@ -7,13 +16,16 @@ export class UnitAccessGuard implements CanActivate {
     const user = request.user;
     const unitId = request.params.unitId || request.query.unitId || request.body.unitId;
 
-    // Admin and reviewers have access to all units
-    if (user.role === 'super_admin' || user.role === 'reviewer') {
+    // Roles (or roleCode mappings) with global unit visibility bypass per-unit restrictions
+    if (
+      GLOBAL_ACCESS_ROLES.has(user.role) ||
+      (user.roleCode && GLOBAL_ACCESS_ROLES.has(user.roleCode))
+    ) {
       return true;
     }
 
-    // Focal users and technicians can only access their assigned units
-    if (user.role === 'focal' || user.role === 'technician') {
+    // Focal users and technicians (matched via roleCode) can only access their assigned units
+    if (user.roleCode === 'focal' || user.roleCode === 'technician') {
       if (!unitId) {
         return true; // Let controller handle missing unitId
       }

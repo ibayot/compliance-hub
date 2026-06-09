@@ -1,93 +1,131 @@
 version: '3.8'
 
 services:
-  mariadb:
-    image: mariadb:11
-    container_name: ricms_mariadb
+  # -------------------------
+  # Database & Cache
+  # -------------------------
+  db:
+    image: mariadb:10.11
+    container_name: rictms_db
+    restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: ricms_password
-      MYSQL_DATABASE: ricms_compliance
-      MYSQL_USER: ricms_user
-      MYSQL_PASSWORD: ricms_password
+      MARIADB_ROOT_PASSWORD: admin
     ports:
-      - '3306:3306'
+      - "3307:3306"
     volumes:
-      - mariadb_data:/var/lib/mysql
-    networks:
-      - ricms-network
-    healthcheck:
-      test: ['CMD', 'healthcheck.sh', '--connect', '--innodbtempstatus']
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - ./db-init:/docker-entrypoint-initdb.d
+      - db_data:/var/lib/mysql
 
   redis:
     image: redis:7-alpine
-    container_name: ricms_redis
+    container_name: rictms_redis
+    restart: always
     ports:
-      - '6379:6379'
-    networks:
-      - ricms-network
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
 
-  backend:
+  # -------------------------
+  # Microservices
+  # -------------------------
+  users-service:
     build:
       context: ./backend
-      dockerfile: Dockerfile.dev
-    container_name: ricms_backend
-    ports:
-      - '4000:4000'
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-      - ./backend/storage:/app/storage
-    environment:
-      - NODE_ENV=development
-      - DB_HOST=mariadb
-      - DB_PORT=3306
-      - DB_USERNAME=ricms_user
-      - DB_PASSWORD=ricms_password
-      - DB_DATABASE=ricms_compliance
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - JWT_SECRET=dev-jwt-secret-change-in-production
-      - JWT_REFRESH_SECRET=dev-refresh-secret-change-in-production
-      - CORS_ORIGIN=http://localhost:3000
+      dockerfile: Dockerfile
+    container_name: rictms_users_service
+    restart: on-failure
     depends_on:
-      mariadb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - ricms-network
-    command: npm run start:dev
+      - db
+      - redis
+    command: ["node", "dist/apps/users-service.main.js"]
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=db
+      - DB_PASSWORD=admin
+      - REDIS_HOST=redis
+    ports:
+      - "4101:4101"
 
+  ticketing-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rictms_ticketing_service
+    restart: on-failure
+    depends_on:
+      - db
+      - redis
+    command: ["node", "dist/apps/ticketing-service.main.js"]
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=db
+      - DB_PASSWORD=admin
+      - REDIS_HOST=redis
+      - USERS_SERVICE_URL=http://users-service:4101
+    ports:
+      - "4102:4102"
+
+  compliance-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rictms_compliance_service
+    restart: on-failure
+    depends_on:
+      - db
+      - redis
+    command: ["node", "dist/apps/compliance-service.main.js"]
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=db
+      - DB_PASSWORD=admin
+      - REDIS_HOST=redis
+      - USERS_SERVICE_URL=http://users-service:4101
+    ports:
+      - "4103:4103"
+
+  # -------------------------
+  # API Gateway
+  # -------------------------
+  gateway:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rictms_gateway
+    restart: on-failure
+    depends_on:
+      - users-service
+      - ticketing-service
+      - compliance-service
+    command: ["node", "dist/apps/gateway.main.js"]
+    env_file:
+      - ./backend/.env
+    environment:
+      - USERS_SERVICE_URL=http://users-service:4101
+      - TICKETING_SERVICE_URL=http://ticketing-service:4102
+      - COMPLIANCE_SERVICE_URL=http://compliance-service:4103
+      - RATE_LIMIT_WINDOW_MS=60000
+      - RATE_LIMIT_MAX_REQUESTS=4000
+    ports:
+      - "4000:4000"
+
+  # -------------------------
+  # Frontend
+  # -------------------------
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev
-    container_name: ricms_frontend
-    ports:
-      - '3000:3000'
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:4000/api
+      dockerfile: Dockerfile
+    container_name: rictms_frontend
+    restart: on-failure
     depends_on:
-      - backend
-    networks:
-      - ricms-network
-    command: npm run dev
+      - gateway
+    ports:
+      - "3000:80"
 
 volumes:
-  mariadb_data:
-
-networks:
-  ricms-network:
-    driver: bridge
+  db_data:
+  redis_data:

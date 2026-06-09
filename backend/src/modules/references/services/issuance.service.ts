@@ -89,6 +89,7 @@ export interface LinkDocumentDto {
 @Injectable()
 export class IssuanceService implements OnModuleInit {
   private readonly logger = new Logger(IssuanceService.name);
+  private hasDocumentIssuancesTable: boolean | null = null;
 
   constructor(
     @InjectRepository(Issuance)
@@ -99,32 +100,28 @@ export class IssuanceService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    await this.dataSource.query(`
-      ALTER TABLE issuances
-      ADD COLUMN IF NOT EXISTS attachment_file_name VARCHAR(255) NULL,
-      ADD COLUMN IF NOT EXISTS attachment_mime_type VARCHAR(120) NULL,
-      ADD COLUMN IF NOT EXISTS attachment_blob LONGBLOB NULL,
-      ADD COLUMN IF NOT EXISTS attachment_uploaded_at DATETIME NULL,
-      ADD COLUMN IF NOT EXISTS binding_nature VARCHAR(60) NULL,
-      ADD COLUMN IF NOT EXISTS adoption_basis TEXT NULL,
-      ADD COLUMN IF NOT EXISTS applicable_provisions TEXT NULL,
-      ADD COLUMN IF NOT EXISTS compliance_obligations TEXT NULL,
-      ADD COLUMN IF NOT EXISTS required_evidence TEXT NULL,
-      ADD COLUMN IF NOT EXISTS evidence_location TEXT NULL,
-      ADD COLUMN IF NOT EXISTS process_owner VARCHAR(160) NULL,
-      ADD COLUMN IF NOT EXISTS frequency_cadence VARCHAR(80) NULL,
-      ADD COLUMN IF NOT EXISTS compliance_status VARCHAR(40) NULL,
-      ADD COLUMN IF NOT EXISTS gap_summary TEXT NULL,
-      ADD COLUMN IF NOT EXISTS action_required TEXT NULL,
-      ADD COLUMN IF NOT EXISTS target_date DATE NULL,
-      ADD COLUMN IF NOT EXISTS last_review_date DATE NULL,
-      ADD COLUMN IF NOT EXISTS quarterly_readiness VARCHAR(40) NULL,
-      ADD COLUMN IF NOT EXISTS q1_compliance_status VARCHAR(40) NULL,
-      ADD COLUMN IF NOT EXISTS q2_compliance_status VARCHAR(40) NULL,
-      ADD COLUMN IF NOT EXISTS q3_compliance_status VARCHAR(40) NULL,
-      ADD COLUMN IF NOT EXISTS q4_compliance_status VARCHAR(40) NULL,
-      ADD COLUMN IF NOT EXISTS register_added_at DATE NULL;
-    `);
+    // Schema DDL for this service is managed via versioned migration files in
+    // backend/database/migrations/. See v0.0.50-service-ddl-extraction.sql.
+    //
+    // NOTE: document_issuances pivot table is intentionally absent.
+    // The compliance_hub.issuances table is the source of truth.
+    // The ManyToMany join to document_issuances is guarded by canUseDocumentLinks().
+    this.logger.log('IssuanceService initialized. Schema managed via migration files.');
+  }
+
+  private async canUseDocumentLinks(): Promise<boolean> {
+    if (this.hasDocumentIssuancesTable !== null) {
+      return this.hasDocumentIssuancesTable;
+    }
+    try {
+      const rows = await this.dataSource.query(
+        "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'document_issuances' LIMIT 1",
+      );
+      this.hasDocumentIssuancesTable = Array.isArray(rows) && rows.length > 0;
+    } catch {
+      this.hasDocumentIssuancesTable = false;
+    }
+    return this.hasDocumentIssuancesTable;
   }
 
   /**
@@ -159,9 +156,11 @@ export class IssuanceService implements OnModuleInit {
     search?: string;
     is_active?: boolean;
   }): Promise<Issuance[]> {
-    const query = this.issuanceRepo
-      .createQueryBuilder('issuance')
-      .leftJoinAndSelect('issuance.documents', 'documents');
+    const canUseDocumentLinks = await this.canUseDocumentLinks();
+    const query = this.issuanceRepo.createQueryBuilder('issuance');
+    if (canUseDocumentLinks) {
+      query.leftJoinAndSelect('issuance.documents', 'documents');
+    }
 
     if (filters?.authority) {
       query.andWhere('issuance.issuing_authority LIKE :authority', {
@@ -190,20 +189,30 @@ export class IssuanceService implements OnModuleInit {
 
     query.orderBy('issuance.issue_date', 'DESC');
 
-    return query.getMany();
+    const results = await query.getMany();
+    if (!canUseDocumentLinks) {
+      results.forEach((item) => { (item as any).documents = []; });
+    }
+    return results;
   }
 
   /**
    * Get a single issuance by ID
    */
   async getIssuance(id: string): Promise<Issuance> {
-    const issuance = await this.issuanceRepo.findOne({
-      where: { id },
-      relations: ['documents', 'documents.unit'],
-    });
+    const canUseDocumentLinks = await this.canUseDocumentLinks();
+    const issuance = await this.issuanceRepo.findOne(
+      canUseDocumentLinks
+        ? { where: { id }, relations: ['documents', 'documents.unit'] }
+        : { where: { id } },
+    );
 
     if (!issuance) {
       throw new NotFoundException('Issuance not found');
+    }
+
+    if (!canUseDocumentLinks) {
+      (issuance as any).documents = [];
     }
 
     return issuance;
@@ -246,6 +255,11 @@ export class IssuanceService implements OnModuleInit {
    * Link a document to an issuance
    */
   async linkDocument(issuanceId: string, documentId: string): Promise<void> {
+    const canUseDocumentLinks = await this.canUseDocumentLinks();
+    if (!canUseDocumentLinks) {
+      throw new BadRequestException('Document-issuance linking is unavailable: document_issuances table does not exist in the current schema.');
+    }
+
     const issuance = await this.issuanceRepo.findOne({
       where: { id: issuanceId },
       relations: ['documents'],
@@ -283,6 +297,11 @@ export class IssuanceService implements OnModuleInit {
    * Unlink a document from an issuance
    */
   async unlinkDocument(issuanceId: string, documentId: string): Promise<void> {
+    const canUseDocumentLinks = await this.canUseDocumentLinks();
+    if (!canUseDocumentLinks) {
+      throw new BadRequestException('Document-issuance linking is unavailable: document_issuances table does not exist in the current schema.');
+    }
+
     await this.issuanceRepo
       .createQueryBuilder()
       .relation(Issuance, 'documents')

@@ -14,6 +14,9 @@ import {
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { CapabilityGuard } from '../../../common/guards/capability.guard';
+import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
+import { UserRole } from '../../users/entities/user.entity';
 import { KpiService } from '../services/kpi.service';
 import { CreateKpiMasterDto, UpdateKpiMasterDto } from '../dto/kpi-master.dto';
 import { UpdateKpiMonitoringDto, UpsertKpiMonitoringDto } from '../dto/kpi-monitoring.dto';
@@ -25,31 +28,35 @@ export class KpiController {
   constructor(private readonly kpiService: KpiService) {}
 
   @Get('master')
-  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiAccess')
   listKpiMaster(@Request() req: any) {
     return this.kpiService.listKpiMaster(req.user);
   }
 
   @Post('master')
-  @Roles('super_admin', 'reviewer', 'compliance_officer', 'section_head')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiManage')
   createKpiMaster(@Request() req: any, @Body() dto: CreateKpiMasterDto) {
     return this.kpiService.createKpiMaster(req.user, dto);
   }
 
   @Patch('master/:code')
-  @Roles('super_admin', 'reviewer', 'compliance_officer', 'section_head')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiManage')
   updateKpiMaster(@Request() req: any, @Param('code') code: string, @Body() dto: UpdateKpiMasterDto) {
     return this.kpiService.updateKpiMaster(req.user, code, dto);
   }
 
   @Delete('master/:code')
-  @Roles('super_admin')
+  @Roles(UserRole.SUPER_ADMIN)
   removeKpiMaster(@Request() req: any, @Param('code') code: string) {
     return this.kpiService.removeKpiMaster(req.user, code);
   }
 
   @Get('monitoring')
-  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiAccess')
   listMonitoring(
     @Request() req: any,
     @Query('periodYear') periodYear?: number,
@@ -61,25 +68,29 @@ export class KpiController {
   }
 
   @Post('monitoring')
-  @Roles('super_admin', 'reviewer', 'compliance_officer', 'section_head')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiManage')
   upsertMonitoring(@Request() req: any, @Body() dto: UpsertKpiMonitoringDto) {
     return this.kpiService.upsertMonitoring(req.user, dto);
   }
 
   @Patch('monitoring/:id')
-  @Roles('super_admin', 'reviewer', 'compliance_officer', 'section_head')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiManage')
   updateMonitoring(@Request() req: any, @Param('id', ParseIntPipe) id: number, @Body() dto: UpdateKpiMonitoringDto) {
     return this.kpiService.updateMonitoring(req.user, id, dto);
   }
 
   @Patch('monitoring/:id/lock')
-  @Roles('super_admin', 'reviewer', 'compliance_officer', 'section_head')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiManage')
   lockMonitoring(@Request() req: any, @Param('id', ParseIntPipe) id: number) {
     return this.kpiService.lockMonitoring(req.user, id);
   }
 
   @Get('dashboard/summary')
-  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiAccess')
   dashboardSummary(
     @Request() req: any,
     @Query('periodYear') periodYear?: string,
@@ -91,7 +102,8 @@ export class KpiController {
   }
 
   @Get('dashboard/unit/:unitId')
-  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiAccess')
   dashboardUnit(
     @Request() req: any,
     @Param('unitId', ParseIntPipe) unitId: number,
@@ -104,7 +116,8 @@ export class KpiController {
   }
 
   @Get('dashboard/unit/:unitId/timeseries')
-  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiAccess')
   dashboardUnitTimeseries(
     @Request() req: any,
     @Param('unitId', ParseIntPipe) unitId: number,
@@ -121,7 +134,8 @@ export class KpiController {
   }
 
   @Get('action-plans')
-  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiAccess')
   generateActionPlans(
     @Request() req: any,
     @Query('periodYear') periodYear: string,
@@ -136,19 +150,20 @@ export class KpiController {
   }
 
   @Get('lookups/thresholds')
-  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiAccess')
   listThresholds() {
     return this.kpiService.listThresholds();
   }
 
   @Post('lookups/thresholds')
-  @Roles('super_admin')
+  @Roles(UserRole.SUPER_ADMIN)
   createThreshold(@Request() req: any, @Body() dto: UpsertKpiThresholdDto) {
     return this.kpiService.upsertThreshold(req.user, null, dto);
   }
 
   @Patch('lookups/thresholds/:id')
-  @Roles('super_admin')
+  @Roles(UserRole.SUPER_ADMIN)
   updateThreshold(
     @Request() req: any,
     @Param('id', ParseIntPipe) id: number,
@@ -158,19 +173,20 @@ export class KpiController {
   }
 
   @Get('lookups/scoring-rules')
-  @Roles('super_admin', 'reviewer', 'compliance_officer', 'focal', 'auditor', 'technician', 'section_head')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiAccess')
   listScoringRules() {
     return this.kpiService.listScoringRules();
   }
 
   @Post('lookups/scoring-rules')
-  @Roles('super_admin')
+  @Roles(UserRole.SUPER_ADMIN)
   createScoringRule(@Request() req: any, @Body() dto: UpsertKpiScoringRuleDto) {
     return this.kpiService.upsertScoringRule(req.user, null, dto);
   }
 
   @Patch('lookups/scoring-rules/:id')
-  @Roles('super_admin')
+  @Roles(UserRole.SUPER_ADMIN)
   updateScoringRule(
     @Request() req: any,
     @Param('id', ParseIntPipe) id: number,

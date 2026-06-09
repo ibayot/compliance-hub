@@ -2,13 +2,42 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Incident, IncidentStatus, IncidentSeverity } from '../entities/incident.entity';
+import { UsersHttpClient, UserStub } from '../../../common/http-clients/users.http-client';
 
 @Injectable()
 export class IncidentsService {
   constructor(
     @InjectRepository(Incident)
     private incidentRepository: Repository<Incident>,
+    private readonly usersHttpClient: UsersHttpClient,
   ) {}
+
+  private async hydrateIncidentUsers(incidents: Incident[]): Promise<Incident[]> {
+    const ids = new Set<number>();
+    incidents.forEach((incident) => {
+      if (Number.isFinite(Number(incident.reported_by_id))) {
+        ids.add(Number(incident.reported_by_id));
+      }
+      if (Number.isFinite(Number(incident.assigned_to_id))) {
+        ids.add(Number(incident.assigned_to_id));
+      }
+    });
+
+    const userMap = new Map<number, UserStub | null>();
+    await Promise.all(
+      [...ids].map(async (id) => {
+        const user = await this.usersHttpClient.getUserById(id);
+        userMap.set(id, user);
+      }),
+    );
+
+    incidents.forEach((incident) => {
+      incident.reported_by = userMap.get(Number(incident.reported_by_id)) ?? null;
+      incident.assigned_to = userMap.get(Number(incident.assigned_to_id)) ?? null;
+    });
+
+    return incidents;
+  }
 
   async create(createDto: Partial<Incident>): Promise<Incident> {
     const incident = this.incidentRepository.create(createDto);
@@ -16,17 +45,23 @@ export class IncidentsService {
   }
 
   async findAll(): Promise<Incident[]> {
-    return await this.incidentRepository.find({
-      relations: ['reported_by', 'assigned_to'],
+    const incidents = await this.incidentRepository.find({
       order: { created_at: 'DESC' },
     });
+    return this.hydrateIncidentUsers(incidents);
   }
 
   async findOne(id: number): Promise<Incident | null> {
-    return await this.incidentRepository.findOne({
+    const incident = await this.incidentRepository.findOne({
       where: { id },
-      relations: ['reported_by', 'assigned_to'],
     });
+
+    if (!incident) {
+      return null;
+    }
+
+    const [enriched] = await this.hydrateIncidentUsers([incident]);
+    return enriched;
   }
 
   async update(id: number, updateDto: Partial<Incident>): Promise<Incident | null> {

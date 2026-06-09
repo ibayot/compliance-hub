@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { Unit } from '../../units/entities/unit.entity';
-import { User } from '../../users/entities/user.entity';
+import { Unit } from '../../shared/entities';
+import { User, UserRole } from '../../shared/entities';
 import { KpiFrequency, KpiMaster, KpiType } from '../entities/kpi-master.entity';
 import { KpiMonitoring, KpiMonitoringStatus } from '../entities/kpi-monitoring.entity';
 import { KpiThreshold } from '../entities/kpi-threshold.entity';
@@ -15,6 +15,7 @@ import { KpiScoringRule } from '../entities/kpi-scoring-rule.entity';
 import { CreateKpiMasterDto, UpdateKpiMasterDto } from '../dto/kpi-master.dto';
 import { UpdateKpiMonitoringDto, UpsertKpiMonitoringDto } from '../dto/kpi-monitoring.dto';
 import { UpsertKpiScoringRuleDto, UpsertKpiThresholdDto } from '../dto/kpi-lookups.dto';
+import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 
 interface AuthUser {
   id: number;
@@ -38,6 +39,7 @@ export class KpiService {
     private readonly unitRepo: Repository<Unit>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    private readonly roleCapSvc: RoleCapabilitiesService,
   ) {
     this.ensureLookups().catch(() => undefined);
   }
@@ -67,14 +69,14 @@ export class KpiService {
     }
   }
 
-  private canManage(user: AuthUser) {
-    return ['super_admin', 'reviewer', 'section_head', 'compliance_officer'].includes(user.role)
-      || user.roleCode === 'compliance_officer';
+  private canManage(user: AuthUser): boolean {
+    if (!user?.role) return false;
+    return this.roleCapSvc.isKpiManage(user.role);
   }
 
-  private canViewAll(user: AuthUser) {
-    return ['super_admin', 'reviewer', 'section_head', 'compliance_officer'].includes(user.role)
-      || user.roleCode === 'compliance_officer';
+  private canViewAll(user: AuthUser): boolean {
+    if (!user?.role) return false;
+    return this.roleCapSvc.isKpiManage(user.role);
   }
 
   private normalizeUnitId(value: number | string | { id?: number | string } | undefined): number | null {
@@ -98,7 +100,12 @@ export class KpiService {
       return Array.from(new Set(fromToken));
     }
 
-    const actor = await this.userRepo.findOne({ where: { id: user.id }, relations: ['units'] });
+    const userId = Number(user?.id);
+    if (!Number.isFinite(userId) || userId <= 0) {
+      return [];
+    }
+
+    const actor = await this.userRepo.findOne({ where: { id: userId }, relations: ['units'] }).catch(() => null);
     if (!actor?.units?.length) {
       return [];
     }

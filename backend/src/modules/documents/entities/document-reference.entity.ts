@@ -8,7 +8,7 @@ import {
   Unique,
 } from 'typeorm';
 import { Document } from './document.entity';
-import { User } from '../../users/entities/user.entity';
+import { UserRef } from '../../../shared/contracts/user-ref';
 
 @Entity('document_references')
 @Unique('uq_document_reference_pair', ['source_document_id', 'target_document_id'])
@@ -36,9 +36,8 @@ export class DocumentReference {
   @Column({ type: 'int', nullable: true })
   created_by: number | null;
 
-  @ManyToOne(() => User, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'created_by' })
-  creator: User;
+  // Virtual enrichment field populated by UsersHttpClient.
+  creator?: UserRef | null;
 
   @CreateDateColumn()
   created_at: Date;

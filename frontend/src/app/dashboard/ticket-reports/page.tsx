@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
+  Button,
   Card,
   CardContent,
   Typography,
@@ -20,8 +21,14 @@ import {
   Chip,
   Stack,
   LinearProgress,
+  ToggleButtonGroup,
+  ToggleButton,
 } from '@mui/material';
-import { ticketsApi, TechnicianOption, TicketReportResult } from '@/app/api/references';
+import PrintIcon from '@mui/icons-material/Print';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { ticketsApi, TicketReportResult, RatingsReportResult } from '@/app/api/references';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
 
 const TYPE_LABELS: Record<string, string> = {
   desktop_support: 'Desktop Support',
@@ -66,7 +73,18 @@ function RatingBar({ avg }: { avg: number }) {
   );
 }
 
+const PIE_COLORS = ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#F44336', '#00BCD4'];
+const ESC_PIE_COLORS: Record<string, string> = {
+  Accepted: '#4CAF50',
+  Returned: '#F44336',
+  Pending: '#FF9800',
+};
+
 export default function TicketReportsPage() {
+  const { user, myCap } = useAuth();
+  /** True for all staff with ticket settings admin access (DB-driven via is_ticket_settings_focal flag) */
+  const isTicketSettingsFocal = user?.role === 'super_admin' || !!myCap?.isTicketSettingsFocal;
+
   const [year, setYear] = useState<number>(CURRENT_YEAR);
   const [periodMode, setPeriodMode] = useState<PeriodMode>('month');
   const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
@@ -74,14 +92,23 @@ export default function TicketReportsPage() {
   const [semester, setSemester] = useState<number>(new Date().getMonth() < 6 ? 1 : 2);
   const [technicianId, setTechnicianId] = useState<number | ''>('');
   const [ticketType, setTicketType] = useState<string>('');
-  const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
+  const [technicians, setTechnicians] = useState<Array<{ id: number; firstName: string; lastName: string; role: string }>>([]);
   const [result, setResult] = useState<TicketReportResult | null>(null);
+  const [detailedResult, setDetailedResult] = useState<RatingsReportResult | null>(null);
+  const [viewMode, setViewMode] = useState<'overview' | 'detailed'>('overview');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Period-filtered technician dropdown
   useEffect(() => {
-    ticketsApi.getTechnicians().then(setTechnicians).catch(() => {});
-  }, []);
+    if (!isTicketSettingsFocal) return;
+    const filters: Parameters<typeof ticketsApi.getReportTechnicians>[0] = { year };
+    if (periodMode === 'month') filters.month = month;
+    else if (periodMode === 'quarter') filters.quarter = quarter;
+    else if (periodMode === 'semester') filters.semester = semester;
+    if (ticketType) filters.ticketType = ticketType;
+    ticketsApi.getReportTechnicians(filters).then(setTechnicians).catch(() => {});
+  }, [isTicketSettingsFocal, year, periodMode, month, quarter, semester, ticketType]);
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
@@ -91,20 +118,39 @@ export default function TicketReportsPage() {
       if (periodMode === 'month') filters.month = month;
       else if (periodMode === 'quarter') filters.quarter = quarter;
       else if (periodMode === 'semester') filters.semester = semester;
-      if (technicianId) filters.technicianId = technicianId as number;
+      // Privileged users: filter by chosen technician (optional); non-privileged: always filter to own id
+      const effectiveTechId = isTicketSettingsFocal
+        ? (technicianId !== '' ? (technicianId as number) : undefined)
+        : (user?.id ?? undefined);
+      if (effectiveTechId) filters.technicianId = effectiveTechId;
       if (ticketType) filters.ticketType = ticketType;
       const data = await ticketsApi.getReports(filters);
       setResult(data);
+
+      try {
+        const dData = await ticketsApi.getRatingsReport({
+          year,
+          month: periodMode === 'month' ? month : undefined,
+          quarter: periodMode === 'quarter' ? quarter : undefined,
+          semester: periodMode === 'semester' ? semester : undefined,
+          technicianId: effectiveTechId,
+          ticketType: ticketType ? ticketType : undefined,
+        });
+        setDetailedResult(dData);
+      } catch (err) {
+        console.error('Failed to fetch detailed ratings', err);
+      }
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to load report data.');
     } finally {
       setLoading(false);
     }
-  }, [year, periodMode, month, quarter, semester, technicianId, ticketType]);
+  }, [year, periodMode, month, quarter, semester, technicianId, ticketType, isTicketSettingsFocal, user?.id]);
 
   useEffect(() => {
     fetchReports();
   }, [fetchReports]);
+  useAutoRefresh(fetchReports);
 
   const periodLabel = (() => {
     if (periodMode === 'month') return MONTHS.find(m => m.value === month)?.label ?? '';
@@ -113,17 +159,73 @@ export default function TicketReportsPage() {
     return 'Full Year';
   })();
 
+  const pieData = result?.avgRatingByType.map(row => ({
+    name: TYPE_LABELS[row.type] ?? row.type,
+    value: row.count,
+  })) ?? [];
+
+  const barData = result?.avgRatingByTechnician.map(row => ({
+    name: row.techName.split(' ').pop() ?? row.techName,
+    avg: parseFloat(row.avg.toFixed(2)),
+    count: row.count,
+  })) ?? [];
+
+  // Ticket count per technician (grouped view — 2nd bar chart)
+  const countBarData = result?.avgRatingByTechnician.map(row => ({
+    name: row.techName.split(' ').pop() ?? row.techName,
+    tickets: row.count,
+  })) ?? [];
+
+  // Escalation outcome pie (individual view — shown when escalations exist)
+  const escalationPieData: { name: string; value: number }[] = [];
+  if (result && result.totalEscalations > 0) {
+    const pending = result.totalEscalations - result.acceptedEscalations - result.returnedEscalations;
+    if (result.acceptedEscalations > 0) escalationPieData.push({ name: 'Accepted', value: result.acceptedEscalations });
+    if (result.returnedEscalations > 0) escalationPieData.push({ name: 'Returned', value: result.returnedEscalations });
+    if (pending > 0) escalationPieData.push({ name: 'Pending', value: pending });
+  }
+
+  // Individual view = specific technician selected (privileged) OR non-privileged user viewing own data
+  const isIndividualView = isTicketSettingsFocal ? !!technicianId : true;
+
   return (
     <Box>
-      <Typography variant="h5" fontWeight={700} gutterBottom>
-        Ticket Reports
-      </Typography>
-      <Typography variant="body2" color="text.secondary" mb={3}>
-        Satisfaction ratings overview — average overall, per support type, and per technician.
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1} sx={{ '@media print': { display: 'none' } }}>
+        <Typography variant="h5" fontWeight={700}>
+          Ticket Reports
+        </Typography>
+        <Button
+          variant="outlined"
+          startIcon={<PrintIcon />}
+          onClick={() => window.print()}
+          size="small"
+        >
+          Print
+        </Button>
+      </Box>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} sx={{ '@media print': { display: 'none' } }}>
+        <Typography variant="body2" color="text.secondary">
+          Satisfaction ratings overview — average overall, per support type, and per technician.
+        </Typography>
+        <ToggleButtonGroup
+          value={viewMode}
+          exclusive
+          onChange={(_, val) => val && setViewMode(val)}
+          size="small"
+        >
+          <ToggleButton value="overview">Overview</ToggleButton>
+          <ToggleButton value="detailed">Detailed Ratings</ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+
+      {/* ── Print header (only visible in print) ── */}
+      <Box sx={{ display: 'none', '@media print': { display: 'block', mb: 2 } }}>
+        <Typography variant="h5" fontWeight={700}>Ticket Reports — {periodLabel} {year}</Typography>
+        {ticketType && <Typography variant="body2">Support Type: {TYPE_LABELS[ticketType] ?? ticketType}</Typography>}
+      </Box>
 
       {/* ── Filters ── */}
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ mb: 3, '@media print': { display: 'none' } }}>
         <CardContent>
           <Typography variant="subtitle2" fontWeight={600} gutterBottom>Filters</Typography>
           <Grid container spacing={2} alignItems="center">
@@ -188,19 +290,21 @@ export default function TicketReportsPage() {
                 <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
               </TextField>
             </Grid>
-            <Grid item xs={12} sm={4} md={2}>
-              <TextField
-                select fullWidth size="small" label="Technician"
-                value={technicianId} onChange={(e) => setTechnicianId(e.target.value === '' ? '' : Number(e.target.value))}
-              >
-                <MenuItem value="">All Technicians</MenuItem>
-                {technicians.map(t => (
-                  <MenuItem key={t.id} value={t.id}>
-                    {t.firstName} {t.lastName}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
+            {isTicketSettingsFocal && (
+              <Grid item xs={12} sm={4} md={2}>
+                <TextField
+                  select fullWidth size="small" label="Technician"
+                  value={technicianId} onChange={(e) => setTechnicianId(e.target.value === '' ? '' : Number(e.target.value))}
+                >
+                  <MenuItem value="">All Technicians</MenuItem>
+                  {technicians.map(t => (
+                    <MenuItem key={t.id} value={t.id}>
+                      {t.firstName} {t.lastName}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+            )}
           </Grid>
         </CardContent>
       </Card>
@@ -208,7 +312,7 @@ export default function TicketReportsPage() {
       {loading && <Box textAlign="center" py={4}><CircularProgress /></Box>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      {!loading && result && (
+      {!loading && viewMode === 'overview' && result && (
         <>
           {/* ── Summary Cards ── */}
           <Grid container spacing={2} mb={3}>
@@ -289,64 +393,325 @@ export default function TicketReportsPage() {
           )}
 
           <Grid container spacing={3}>
-            {/* ── Per Support Type ── */}
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent>
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>Average Rating by Support Type</Typography>
-                  {result.avgRatingByType.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">No rated tickets in this period.</Typography>
-                  ) : (
-                    <Stack spacing={2} mt={1}>
-                      {result.avgRatingByType.map(row => (
-                        <Box key={row.type}>
-                          <Box display="flex" justifyContent="space-between" mb={0.5}>
-                            <Typography variant="body2" fontWeight={500}>{TYPE_LABELS[row.type] ?? row.type}</Typography>
-                            <Typography variant="caption" color="text.secondary">{row.count} rated</Typography>
-                          </Box>
-                          <RatingBar avg={row.avg} />
-                        </Box>
-                      ))}
-                    </Stack>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
+            {/* ═══════════════════════════════════════════════════════════
+                INDIVIDUAL VIEW — specific technician selected (or non-focal user's own data)
+                Shows pie charts for each parameter
+                ═════════════════════════════════════════════════════════ */}
+            {isIndividualView && (
+              <>
+                {/* Pie 1 — Ticket distribution by support type */}
+                <Grid item xs={12} md={escalationPieData.length > 0 ? 6 : 8}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        Tickets by Support Type
+                      </Typography>
+                      {pieData.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">No data for this period.</Typography>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <PieChart>
+                            <Pie
+                              data={pieData} cx="50%" cy="50%" outerRadius={80}
+                              dataKey="value"
+                            >
+                              {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                            </Pie>
+                            <Tooltip />
+                            <Legend 
+                              formatter={(value, entry: any) => {
+                                const payload = entry.payload;
+                                if (!payload) return value;
+                                const total = pieData.reduce((acc, curr) => acc + curr.value, 0);
+                                const percent = total > 0 ? ((payload.value / total) * 100).toFixed(0) : 0;
+                                return `${value} (${percent}%)`;
+                              }} 
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
 
-            {/* ── Per Technician ── */}
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent>
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>Average Rating by Technician</Typography>
-                  {result.avgRatingByTechnician.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">No rated tickets in this period.</Typography>
-                  ) : (
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Technician</TableCell>
-                          <TableCell align="right">Rated</TableCell>
-                          <TableCell>Rating</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {result.avgRatingByTechnician.map(row => (
-                          <TableRow key={row.techId}>
-                            <TableCell>{row.techName}</TableCell>
-                            <TableCell align="right">{row.count}</TableCell>
-                            <TableCell>
+                {/* Pie 2 — Escalation outcome (only if escalations exist) */}
+                {escalationPieData.length > 0 && (
+                  <Grid item xs={12} md={6}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                          Escalation Outcome
+                        </Typography>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <PieChart>
+                            <Pie
+                              data={escalationPieData} cx="50%" cy="50%" outerRadius={80}
+                              dataKey="value"
+                              label={({ name, value }) => `${name}: ${value}`}
+                            >
+                              {escalationPieData.map((entry) => (
+                                <Cell key={entry.name} fill={ESC_PIE_COLORS[entry.name] ?? '#9C27B0'} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                            <Legend />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+
+                {/* Avg Rating by Support Type (table + rating bars) */}
+                <Grid item xs={12}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        Average Rating by Support Type
+                      </Typography>
+                      {result!.avgRatingByType.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">No rated tickets in this period.</Typography>
+                      ) : (
+                        <Stack spacing={2} mt={1}>
+                          {result!.avgRatingByType.map(row => (
+                            <Box key={row.type}>
+                              <Box display="flex" justifyContent="space-between" mb={0.5}>
+                                <Typography variant="body2" fontWeight={500}>{TYPE_LABELS[row.type] ?? row.type}</Typography>
+                                <Typography variant="caption" color="text.secondary">{row.count} rated</Typography>
+                              </Box>
                               <RatingBar avg={row.avg} />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
+                            </Box>
+                          ))}
+                        </Stack>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════
+                GROUPED VIEW — all technicians, privileged user, no tech filter
+                Shows bar charts for each parameter
+                ═════════════════════════════════════════════════════════ */}
+            {!isIndividualView && (
+              <>
+                {/* Type distribution pie — always useful context */}
+                <Grid item xs={12} md={4}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        Tickets by Support Type
+                      </Typography>
+                      {pieData.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">No data.</Typography>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <PieChart>
+                            <Pie
+                              data={pieData} cx="50%" cy="50%" outerRadius={80}
+                              dataKey="value"
+                            >
+                              {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                            </Pie>
+                            <Tooltip />
+                            <Legend 
+                              formatter={(value, entry: any) => {
+                                const payload = entry.payload;
+                                if (!payload) return value;
+                                const total = pieData.reduce((acc, curr) => acc + curr.value, 0);
+                                const percent = total > 0 ? ((payload.value / total) * 100).toFixed(0) : 0;
+                                return `${value} (${percent}%)`;
+                              }} 
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Bar 1 — Avg rating per technician */}
+                <Grid item xs={12} md={8}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        Average Rating by Technician
+                      </Typography>
+                      {barData.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">No rated tickets in this period.</Typography>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={barData} margin={{ top: 4, right: 8, left: -20, bottom: 4 }}>
+                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                            <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
+                            <Tooltip formatter={(v: number) => v.toFixed(2)} />
+                            <Legend />
+                            <Bar dataKey="avg" name="Avg Rating" fill="#2196F3" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Bar 2 — Ticket count per technician */}
+                <Grid item xs={12} md={6}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        Ticket Volume by Technician
+                      </Typography>
+                      {countBarData.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">No data.</Typography>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={countBarData} margin={{ top: 4, right: 8, left: -20, bottom: 4 }}>
+                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="tickets" name="Total Tickets" fill="#4CAF50" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Avg Rating by Type — table */}
+                <Grid item xs={12} md={6}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        Average Rating by Support Type
+                      </Typography>
+                      {result!.avgRatingByType.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">No rated tickets in this period.</Typography>
+                      ) : (
+                        <Stack spacing={2} mt={1}>
+                          {result!.avgRatingByType.map(row => (
+                            <Box key={row.type}>
+                              <Box display="flex" justifyContent="space-between" mb={0.5}>
+                                <Typography variant="body2" fontWeight={500}>{TYPE_LABELS[row.type] ?? row.type}</Typography>
+                                <Typography variant="caption" color="text.secondary">{row.ratedCount ?? 0} rated / {row.count} resolved</Typography>
+                              </Box>
+                              <RatingBar avg={row.avg} />
+                            </Box>
+                          ))}
+                        </Stack>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Technician detail table (grouped view reference) */}
+                {result!.avgRatingByTechnician.length > 0 && (
+                  <Grid item xs={12}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                          Technician Detail
+                        </Typography>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Technician</TableCell>
+                              <TableCell align="right">Resolved Tickets</TableCell>
+                              <TableCell align="right">Rated Tickets</TableCell>
+                              <TableCell>Avg Rating</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {result!.avgRatingByTechnician.map(row => (
+                              <TableRow key={row.techId}>
+                                <TableCell>{row.techName}</TableCell>
+                                <TableCell align="right">{row.count}</TableCell>
+                                <TableCell align="right">{row.ratedCount ?? 0}</TableCell>
+                                <TableCell><RatingBar avg={row.avg} /></TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+              </>
+            )}
           </Grid>
         </>
+      )}
+
+      {!loading && viewMode === 'detailed' && detailedResult && (
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>Average Rating By Day</Typography>
+                {detailedResult.byDay.length === 0 ? <Typography variant="body2" color="text.secondary">No data.</Typography> : (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={detailedResult.byDay} margin={{ top: 4, right: 8, left: -20, bottom: 4 }}>
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                      <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="avgRating" name="Avg Rating" fill="#9C27B0" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>Average Rating By Week</Typography>
+                {detailedResult.byWeek.length === 0 ? <Typography variant="body2" color="text.secondary">No data.</Typography> : (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={detailedResult.byWeek} margin={{ top: 4, right: 8, left: -20, bottom: 4 }}>
+                      <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                      <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="avgRating" name="Avg Rating" fill="#FF9800" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>Ratings Per Ticket</Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Ticket</TableCell>
+                      <TableCell>Subject</TableCell>
+                      <TableCell>Submitted At</TableCell>
+                      <TableCell align="right">Rating</TableCell>
+                      <TableCell>Comment</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {detailedResult.byTicket.map(t => (
+                      <TableRow key={t.ticketId}>
+                        <TableCell sx={{ fontFamily: 'monospace' }}>{t.ticketNumber}</TableCell>
+                        <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.subject}</TableCell>
+                        <TableCell>{new Date(t.submittedAt).toLocaleDateString()}</TableCell>
+                        <TableCell align="right"><Chip size="small" label={t.rating} color={RATING_COLOR(t.rating)} /></TableCell>
+                        <TableCell sx={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.comment || '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                    {detailedResult.byTicket.length === 0 && (
+                      <TableRow><TableCell colSpan={5} align="center"><Typography variant="body2" color="text.secondary" py={2}>No rated tickets found.</Typography></TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
       )}
     </Box>
   );

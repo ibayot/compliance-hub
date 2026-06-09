@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 import { Document } from '../../documents/entities/document.entity';
 import { DocumentVersion } from '../../documents/entities/document-version.entity';
-import { User } from '../../users/entities/user.entity';
+import { User } from '../../shared/entities';
 
 export enum ReviewDecision {
   COMPLIANT = 'compliant',

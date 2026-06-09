@@ -1,5 +1,9 @@
-﻿# RICTMS Compliance Hub - Installation Guide
+# RICTMS Compliance Hub - Installation Guide (v0.0.83)
+> **Updated for `v0.0.83` (2026-06-09)**
 
+> **Release `v0.0.66` (2026-06-04):** This release updates frontend behavior to strictly enforce unrated CSAT reminders and open ticket restrictions. You can run `cd frontend && npx playwright test` to verify the full Ticket SLA, Escalation, and CSAT Rating enforcement flow. Make sure the backend APIs are up and the rate limiting clears (or restart the backend) before re-running the test suite to prevent HTTP 429 failures in Playwright.
+
+> **Release `v0.0.61` (2026-06-03):** This release includes frontend automated tests with Playwright. You can run them via `cd frontend && npx playwright test` to verify Ticketing SLAs, Escalation, and Ratings UI features!
 > **Release `v1.4.0` (2026-03-03):** Pull latest code, run `npm run db:seed` in `backend/`, then restart backend/frontend. This release expands Issuances baseline references (laws, IRRs, standards, Executive Orders, DICT/NPC circular references, NCSP) and adds amendment metadata fields displayed in Issuances UI. Package versions are aligned to `1.4.0` (backend/frontend).
 
 > **Patch (`v1.4.0`, 2026-03-03):** Install VS Code PDF viewer extension (`tomoki1207.pdf`) for local PDF inspection. For manual issuance validation, place files under `issuance-file-drop/` and run `python scripts/classify_issuance_drop.py` to generate `issuance-file-drop/classification-results.csv` with Included / Mark-for-Removal / Mark-for-Review outputs. This workflow does not delete existing seeded issuances.
@@ -63,6 +67,7 @@
 
 ## Table of Contents
 1. [Prerequisites](#prerequisites)
+2. [Short ENV Reference](#short-env-reference)
 2. [Installation Methods](#installation-methods)
 3. [Manual Installation](#manual-installation)
 4. [Docker Installation](#docker-installation)
@@ -70,6 +75,29 @@
 6. [Database Setup](#database-setup)
 7. [Running the Application](#running-the-application)
 8. [Troubleshooting](#troubleshooting)
+
+---
+
+## Short ENV Reference
+
+Use the following as a quick baseline for microservices deployments. Keep secrets out of source control.
+
+| Variable | Purpose | Example |
+|---|---|---|
+| `DB_HOST` | MariaDB host for services | `mariadb` |
+| `DB_PORT` | MariaDB port | `3306` |
+| `DB_USERNAME` | DB username | `ricms_user` |
+| `DB_PASSWORD` | DB password | `change_me` |
+| `USERS_DB_DATABASE` | Users service database | `compliance_hub_users` |
+| `TICKETING_DB_DATABASE` | Ticketing service database | `compliance_hub_ticketing` |
+| `COMPLIANCE_DB_DATABASE` | Compliance service database | `compliance_hub` |
+| `JWT_SECRET` | Access token signing secret | `long_random_secret` |
+| `JWT_REFRESH_SECRET` | Refresh token signing secret | `another_long_secret` |
+| `CORS_ORIGIN` | Allowed frontend origin | `http://localhost:3000` |
+| `USERS_SERVICE_URL` | Gateway route target for users service | `http://users-service:4101` |
+| `TICKETING_SERVICE_URL` | Gateway route target for ticketing service | `http://ticketing-service:4102` |
+| `COMPLIANCE_SERVICE_URL` | Gateway route target for compliance service | `http://compliance-service:4103` |
+| `NEXT_PUBLIC_API_URL` | Frontend API base URL | `http://localhost:4000/api` |
 
 ---
 

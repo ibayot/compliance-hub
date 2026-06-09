@@ -8,9 +8,9 @@ from typing import Dict, List, Tuple
 from pypdf import PdfReader
 
 ROOT = Path(__file__).resolve().parents[1]
-DROP = ROOT / "issuance-file-drop"
-OUT = ROOT / "issuance-file-drop" / "classification-results.csv"
-OUT_MD = ROOT / "issuance-file-drop" / "deepdive-assessment.md"
+DROP = ROOT / "regulatory-issuances"
+OUT = ROOT / "regulatory-issuances" / "classification-results.csv"
+OUT_MD = ROOT / "regulatory-issuances" / "deepdive-assessment.md"
 
 INCLUDED_CANONICAL = {
     "RA-10173": [r"\bra\s*10173\b", r"data privacy act"],

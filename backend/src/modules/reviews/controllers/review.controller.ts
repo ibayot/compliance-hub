@@ -12,8 +12,8 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
-import { Roles } from '../../../common/decorators/roles.decorator';
-import { UserRole } from '../../users/entities/user.entity';
+import { CapabilityGuard } from '../../../common/guards/capability.guard';
+import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { ReviewService, SubmitReviewDto } from '../services/review.service';
 
 @Controller('documents/:documentId/reviews')
@@ -28,7 +28,8 @@ export class ReviewController {
    * POST /documents/:documentId/reviews
    */
   @Post()
-  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isReviewsAccess')
   @HttpCode(HttpStatus.CREATED)
   async submitReview(
     @Param('documentId') documentId: string,
@@ -59,9 +60,8 @@ export class ReviewController {
    * GET /documents/:documentId/reviews/latest
    */
   @Get('latest')
-  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN,
-    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
-    UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isReviewsAccess')
   async getLatestReview(@Param('documentId') documentId: string) {
     return this.reviewService.getLatestReview(documentId);
   }
@@ -71,9 +71,8 @@ export class ReviewController {
    * GET /documents/:documentId/reviews
    */
   @Get()
-  @Roles(UserRole.FOCAL, UserRole.TECHNICIAN, UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN,
-    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
-    UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isReviewsAccess')
   async getReviewHistory(@Param('documentId') documentId: string) {
     return this.reviewService.getReviewHistory(documentId);
   }
@@ -83,7 +82,8 @@ export class ReviewController {
    * GET /documents/:documentId/reviews/evidence-report
    */
   @Get('evidence-report')
-  @Roles(UserRole.REVIEWER, UserRole.AUDITOR, UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isReviewsAccess')
   async getEvidenceReport(@Param('documentId') documentId: string) {
     return this.reviewService.getEvidenceReport(documentId);
   }

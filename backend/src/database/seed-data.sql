@@ -1,7 +1,11 @@
-﻿-- RICTMS Compliance Hub Seed Data (v1.1.2 Clean Baseline)
--- Aligned with actual MariaDB schema (auto-detected column names).
+-- RICTMS Compliance Hub Seed Data (v1.2.0 -- 3-Database Structure)
+-- Databases: compliance_hub_users | compliance_hub | compliance_hub_ticketing
+-- Test account password: Admin@123
 
-USE rictms_compliance;
+-- ============================================================
+-- SECTION 1: compliance_hub -- units (seeded first for cross-DB refs)
+-- ============================================================
+USE compliance_hub;
 
 SET FOREIGN_KEY_CHECKS = 0;
 CREATE TABLE IF NOT EXISTS mov_artifacts (
@@ -20,26 +24,15 @@ CREATE TABLE IF NOT EXISTS mov_artifacts (
 	updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 	PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-TRUNCATE TABLE mov_artifacts;
-TRUNCATE TABLE ticket_comments;
-TRUNCATE TABLE tickets;
-TRUNCATE TABLE document_issuances;
-TRUNCATE TABLE version_comparisons;
-TRUNCATE TABLE manual_reviews;
-TRUNCATE TABLE metric_results;
-TRUNCATE TABLE metric_applicability;
-TRUNCATE TABLE metric_templates;
-TRUNCATE TABLE kpi_monitoring;
-TRUNCATE TABLE kpi_master;
-TRUNCATE TABLE kpi_thresholds;
-TRUNCATE TABLE kpi_scoring_rules;
-TRUNCATE TABLE role_definitions;
-TRUNCATE TABLE document_versions;
-TRUNCATE TABLE documents;
-TRUNCATE TABLE issuances;
-TRUNCATE TABLE user_unit_access;
+CREATE TABLE IF NOT EXISTS units (
+	id INT NOT NULL AUTO_INCREMENT,
+	name VARCHAR(255) NOT NULL,
+	description TEXT NULL,
+	active TINYINT(1) NOT NULL DEFAULT 1,
+	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 TRUNCATE TABLE units;
-TRUNCATE TABLE users;
 SET FOREIGN_KEY_CHECKS = 1;
 
 ALTER TABLE issuances ADD COLUMN IF NOT EXISTS issuance_type VARCHAR(80) NULL AFTER description;
@@ -72,48 +65,101 @@ ALTER TABLE issuances ADD COLUMN IF NOT EXISTS attachment_mime_type VARCHAR(120)
 ALTER TABLE issuances ADD COLUMN IF NOT EXISTS attachment_blob LONGBLOB NULL AFTER attachment_mime_type;
 ALTER TABLE issuances ADD COLUMN IF NOT EXISTS attachment_uploaded_at DATETIME NULL AFTER attachment_blob;
 
--- Users: column is `active` (not is_active)
+-- ============================================================
+-- SECTION 2: compliance_hub_users -- users, roles, unit access
+-- ============================================================
+USE compliance_hub_users;
+
+SET FOREIGN_KEY_CHECKS = 0;
+TRUNCATE TABLE user_unit_access;
+TRUNCATE TABLE role_definitions;
+TRUNCATE TABLE users;
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- Test/seed accounts (all use password: password123 bcrypt hash)
+-- Hash below verified: bcrypt.compare('password123', hash) === true
 INSERT INTO users (id, email, passwordHash, first_name, last_name, role, active, created_at, updated_at) VALUES
-(1, 'admin@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'System', 'Admin', 'super_admin', 1, NOW(), NOW()),
-(2, 'reviewer@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'QA', 'Reviewer', 'reviewer', 1, NOW(), NOW()),
-(3, 'focal@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Unit', 'Focal', 'focal', 1, NOW(), NOW()),
-(4, 'desktop.tech@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Desktop', 'Technician', 'technician_desktop', 1, NOW(), NOW()),
-(5, 'it.tech@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'IT', 'Technician', 'technician_it_support', 1, NOW(), NOW()),
-(6, 'user1@example.com', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Juan', 'Dela Cruz', 'user', 1, NOW(), NOW()),
-(7, 'user2@example.com', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Maria', 'Santos', 'user', 1, NOW(), NOW()),
-(8, 'mjdibay@dswd.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'Mark John', 'Dibay', 'user', 1, NOW(), NOW());
+(1,  'admin@rictms.gov.ph',     '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'System',      'Admin',    'super_admin',        1, NOW(), NOW()),
+(2,  'bejuan@dswd.gov.ph',      '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Bernardo',    'Juan',     'section_head',       1, NOW(), NOW()),
+(3,  'gmjavierjr@dswd.gov.ph',  '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Godofredo',   'Javier',   'it_support_jr',      1, NOW(), NOW()),
+(4,  'jailingan@dswd.gov.ph',   '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'James Arnel', 'Lingan',   'pantawid_ict',       1, NOW(), NOW()),
+(5,  'jcbucayu@dswd.gov.ph',    '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Jaylord',     'Bucayu',   'dev_lead',           1, NOW(), NOW()),
+(6,  'jrcardona@dswd.gov.ph',   '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Jaymark',     'Cardona',  'desktop_jr',         1, NOW(), NOW()),
+(7,  'mpmabazza@dswd.gov.ph',   '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Mylord',      'Mabazza',  'desktop_sr',         1, NOW(), NOW()),
+(8,  'fggarcia@dswd.gov.ph',    '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Ferdinand',   'Garcia',   'desktop_sr',         1, NOW(), NOW()),
+(9,  'mjdibay@dswd.gov.ph',     '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Marc Jayson', 'Ibay',     'compliance_officer', 1, NOW(), NOW()),
+(10, 'jmmmaguigad@dswd.gov.ph', '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'John Manuel', 'Maguigad', 'cybersec',           1, NOW(), NOW()),
+(95, 'test@dswd.gov.ph',        '$2b$10$Ss.Uo7M6VlsWT41XtJpnc.swTKIEthDKIljZahdObwDZU6nA7NdM2', 'Test',        'User',     'user',               1, NOW(), NOW())
+ON DUPLICATE KEY UPDATE passwordHash=VALUES(passwordHash), first_name=VALUES(first_name), last_name=VALUES(last_name), role=VALUES(role), active=VALUES(active);
 
--- Seed tickets (ticket_number format: DESK-YYYYMMDD-NNNN or IT-YYYYMMDD-NNNN)
-INSERT INTO tickets (id, ticket_number, subject, description, ticket_type, priority, status, requester_id, assigned_to_id, resolution_notes, created_at, updated_at) VALUES
-(UUID(), 'DESK-20250101-0001', 'My computer won''t turn on', 'Pressed the power button but nothing happens. No lights or fans.', 'desktop_support', 'high', 'assigned', 6, 4, NULL, NOW(), NOW()),
-(UUID(), 'IT-20250101-0001', 'Cannot connect to the internet', 'Getting "No internet access" despite being connected to the office WiFi.', 'it_support', 'medium', 'assigned', 7, 5, NULL, NOW(), NOW()),
-(UUID(), 'DESK-20250101-0002', 'Printer not printing', 'Document sent to shared printer but nothing comes out. Queue shows it pending.', 'desktop_support', 'low', 'open', 6, NULL, NULL, NOW(), NOW()),
-(UUID(), 'IT-20250101-0002', 'Email not syncing on phone', 'Work email stopped syncing on my mobile device after password reset.', 'it_support', 'medium', 'resolved', 7, 5, 'Exchange profile was re-configured on the device. Issue resolved.', NOW(), NOW()),
--- mjdibay sample tickets: keyword auto-tag correction demo
--- "internet" keyword → auto-shifted to it_support (originally submitted as desktop_support)
-(UUID(), 'IT-20250115-0001', 'Internet connectivity issue at workstation', 'My workstation cannot access the internet. Other devices on the same desk work fine. Possibly a cable or port issue.', 'it_support', 'medium', 'open', 8, NULL, NULL, NOW(), NOW()),
--- "printer repair" keyword → auto-shifted to desktop_support (originally submitted as it_support)
-(UUID(), 'DESK-20250115-0001', 'Printer repair request — unit 3B shared printer', 'The shared printer in unit 3B is making a grinding noise and not feeding paper properly. Needs physical inspection and repair.', 'desktop_support', 'low', 'open', 8, NULL, NULL, NOW(), NOW());
-
+-- ============================================================
+-- Back to compliance_hub for units INSERT
+-- ============================================================
+USE compliance_hub;
 
 -- Units: id is auto_increment int; columns: id, name, description, active, created_at
 INSERT INTO units (id, name, description, active, created_at) VALUES
 (1, 'Information Technology Unit', 'Handles ICT compliance and digital services.', 1, NOW()),
 (2, 'Finance Unit', 'Handles financial compliance and reporting.', 1, NOW());
 
--- user_unit_access: user_id int, unit_id int
-INSERT INTO user_unit_access (user_id, unit_id) VALUES
-(1, 1), (1, 2),
-(2, 1), (2, 2),
-(3, 1),
-(8, 1);
+-- ============================================================
+-- Back to compliance_hub_users for unit access and role definitions
+-- ============================================================
+USE compliance_hub_users;
 
-INSERT INTO role_definitions (`value`, `label`, `description`, `assignable`, `is_system`, `created_at`, `updated_at`) VALUES
-('super_admin', 'Super Admin', 'Full system access including user and security administration.', 0, 1, NOW(), NOW()),
-('reviewer', 'Reviewer / Compliance Officer', 'Consolidated compliance oversight and KPI monitoring input.', 1, 1, NOW(), NOW()),
-('focal', 'Focal Person', 'Unit-level dashboard visibility and document operations.', 1, 1, NOW(), NOW()),
-('technician', 'Technician', 'Operational support role with limited visibility.', 1, 1, NOW(), NOW()),
-('auditor', 'Auditor', 'Read-only compliance and KPI access for audit.', 1, 1, NOW(), NOW());
+-- user_unit_access: user_id int, unit_id int
+INSERT IGNORE INTO user_unit_access (user_id, unit_id) VALUES
+(1, 1), (1, 2);   -- admin: IT + Finance
+
+INSERT INTO role_definitions (`value`, `label`, `description`, `assignable`, `is_system`, `role_code`, `technician_type`, `created_at`, `updated_at`) VALUES
+-- Core system roles
+('super_admin', 'Super Admin', 'Full system access. Manages users, roles, settings, and all data.', 0, 1, NULL, NULL, NOW(), NOW()),
+('section_head', 'Section Head', 'Section-level supervisor. Manages staff tickets and unit attendance within their section.', 1, 1, 'section_head', NULL, NOW(), NOW()),
+('user', 'Regular Staff', 'Standard staff user. Can submit tickets and view personal dashboards.', 1, 1, NULL, NULL, NOW(), NOW()),
+-- RICTMS named compliance roles
+('compliance_officer', 'Compliance Officer', 'Primary compliance and quality management role. Full access to documents, KPI, MOV, reviews, and issuances.', 1, 1, NULL, NULL, NOW(), NOW()),
+('cybersec', 'Cybersecurity Officer', 'Cybersecurity-focused compliance officer. Manages cybersecurity metrics, reviews, and IAM-related compliance.', 1, 1, 'compliance_officer', NULL, NOW(), NOW()),
+('infosec', 'Information Security Officer', 'Information security governance and compliance. Reviews documents and manages security-related policy compliance.', 1, 1, 'compliance_officer', NULL, NOW(), NOW()),
+-- RICTMS named focal-equivalent infrastructure roles
+('lead_infra', 'Lead Infrastructure Officer', 'Leads infrastructure operations. Focal-level access to tickets, attendance management, and compliance.', 1, 1, 'focal', NULL, NOW(), NOW()),
+('server_admin', 'Server Administrator', 'Manages server infrastructure. Focal-level access for compliance and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
+('db_admin', 'Database Administrator', 'Manages database systems. Focal-level access for compliance and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
+('network_admin', 'Network Administrator', 'Manages network infrastructure. Focal-level access for compliance and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
+-- RICTMS named focal-equivalent project/development roles
+('project_mgr', 'Project Manager', 'Manages ICT projects. Focal-level access for compliance documentation and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
+('dev_lead', 'Development Lead', 'Leads software development. Focal-level access for compliance and ticket management.', 1, 1, 'focal', NULL, NOW(), NOW()),
+('sqa_lead', 'SQA Lead', 'Leads software quality assurance. Focal-level access for compliance and review participation.', 1, 1, 'focal', NULL, NOW(), NOW()),
+-- RICTMS named focal-equivalent administrative roles
+('records_officer', 'Records Officer', 'Manages administrative records. Focal-level access for document handling and compliance tracking.', 1, 1, 'focal', NULL, NOW(), NOW()),
+('hr_id_officer', 'HR / ID Officer', 'HR and identification management. Focal-level access for compliance and operational documentation.', 1, 1, 'focal', NULL, NOW(), NOW()),
+-- RICTMS named technician roles with technician type mapping
+('desktop_sr', 'Desktop Support Senior', 'Senior desktop technician with attendance management authority over their team.', 1, 1, 'focal', 'desktop_support', NOW(), NOW()),
+('it_support_sr', 'IT Support Senior', 'Senior IT support technician with attendance management authority over their team.', 1, 1, 'focal', 'it_support', NOW(), NOW()),
+('desktop_jr', 'Desktop Support Junior', 'Junior desktop technician assigned to escalate unresolved hardware issues.', 1, 1, 'technician', 'desktop_support', NOW(), NOW()),
+('it_support_jr', 'IT Support Junior', 'Junior IT support assigned to resolve basic network and software support tickets.', 1, 1, 'technician', 'it_support', NOW(), NOW()),
+('pantawid_ict', 'Pantawid ICT Support', 'ICT support for the Pantawid Pamilyang Pilipino program. Manages Pantawid-specific ICT tickets with focal-level oversight.', 1, 1, 'focal', 'pantawid_ict_support', NOW(), NOW());
+
+-- ============================================================
+-- SECTION 3: compliance_hub -- compliance data
+-- ============================================================
+USE compliance_hub;
+
+SET FOREIGN_KEY_CHECKS = 0;
+TRUNCATE TABLE mov_artifacts;
+TRUNCATE TABLE document_issuances;
+TRUNCATE TABLE version_comparisons;
+TRUNCATE TABLE manual_reviews;
+TRUNCATE TABLE metric_results;
+TRUNCATE TABLE metric_applicability;
+TRUNCATE TABLE metric_templates;
+TRUNCATE TABLE kpi_monitoring;
+TRUNCATE TABLE kpi_master;
+TRUNCATE TABLE kpi_thresholds;
+TRUNCATE TABLE kpi_scoring_rules;
+TRUNCATE TABLE document_versions;
+TRUNCATE TABLE documents;
+TRUNCATE TABLE issuances;
+SET FOREIGN_KEY_CHECKS = 1;
 
 INSERT INTO mov_artifacts (id, artifact_type, scope, title, period_year, quarter, unit_id, status, content_markdown, metadata_json, created_by, created_at, updated_at) VALUES
 ('mov-001', 'assessment_plan', 'regional', 'Assessment Plan Q1 2026', 2026, 1, 1, 'draft',
@@ -659,6 +705,51 @@ INSERT INTO metric_results (id, version_id, metric_template_id, status, score, m
 ('result-028', 'ver-014', 'metric-002', 'pass', 100.00, 'All required keywords found.',         JSON_OBJECT('count', 3, 'matches', JSON_ARRAY('compliance', 'regulation', 'policy')), NOW()),
 ('result-029', 'ver-014', 'metric-003', 'pass', 100.00, 'Incident count meets threshold.',      JSON_OBJECT('extracted_value', 2, 'comparison', '>=', 'threshold', 1), NOW()),
 ('result-030', 'ver-014', 'metric-004', 'pass', 100.00, 'Document submitted on time.',          JSON_OBJECT('on_time', TRUE, 'days_late', 0), NOW());
+
+COMMIT;
+
+-- ============================================================
+-- SECTION 4: compliance_hub_ticketing -- categories, rules, tickets
+-- NOTE: role_definitions, users, units, attendance are VIEWs pointing to
+--       their authoritative databases. They are created automatically by
+--       ticket.service.ts::runMigrations() on first service startup.
+--       Do NOT seed role_definitions here.
+-- ============================================================
+USE compliance_hub_ticketing;
+
+SET FOREIGN_KEY_CHECKS = 0;
+TRUNCATE TABLE ticket_comments;
+TRUNCATE TABLE tickets;
+TRUNCATE TABLE ticket_keyword_rules;
+TRUNCATE TABLE ticket_categories;
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- Ticket categories
+INSERT INTO ticket_categories (id, `key`, name, ticket_type, description, is_active, is_deleted, sla_hours, created_by, updated_by, created_at, updated_at) VALUES
+('cat-it-0001', 'hardware_issue', 'Hardware Issue', 'desktop_support', 'Physical hardware problems including desktops, keyboards, mice, monitors, and peripherals.', 1, 0, 24, 1, NULL, NOW(), NOW()),
+('cat-it-0002', 'software_issue', 'Software Issue', 'it_support', 'Software installation, configuration, crashes, or malfunction issues.', 1, 0, 8, 1, NULL, NOW(), NOW()),
+('cat-it-0003', 'network_connectivity', 'Network & Connectivity', 'it_support', 'Network, internet, WiFi, or VPN access problems.', 1, 0, 4, 1, NULL, NOW(), NOW()),
+('cat-it-0004', 'printer_peripheral', 'Printer & Peripheral', 'desktop_support', 'Printer, scanner, and other peripheral device issues.', 1, 0, 24, 1, NULL, NOW(), NOW()),
+('cat-it-0005', 'account_email_access', 'Account & Email Access', 'it_support', 'Password resets, account lockouts, email access, and email sync problems.', 1, 0, 4, 1, NULL, NOW(), NOW()),
+('cat-it-0006', 'general_it_request', 'General IT Request', 'it_support', 'General ICT support requests and assistance not covered by other categories.', 1, 0, NULL, 1, NULL, NOW(), NOW());
+
+-- Keyword rules for auto-type detection
+INSERT INTO ticket_keyword_rules (id, keyword, keywords, target_ticket_type, target_category_id, is_active, created_by, created_at, updated_at) VALUES
+('kwr-0001', 'internet', '["internet","internet access","no internet","cannot connect to internet","wifi issue","wifi not working"]', 'it_support', 'cat-it-0003', 1, 1, NOW(), NOW()),
+('kwr-0002', 'printer', '["printer","print issue","cannot print","printer repair","printer not working","printing problem"]', 'desktop_support', 'cat-it-0004', 1, 1, NOW(), NOW()),
+('kwr-0003', 'password', '["password","password reset","forgot password","account locked","cannot login","login problem"]', 'it_support', 'cat-it-0005', 1, 1, NOW(), NOW()),
+('kwr-0004', 'email', '["email","email not working","mail not syncing","email access","cannot send email","outlook"]', 'it_support', 'cat-it-0005', 1, 1, NOW(), NOW()),
+('kwr-0005', 'network', '["network","network issue","no network","lan cable","ethernet","vpn","network access"]', 'it_support', 'cat-it-0003', 1, 1, NOW(), NOW()),
+('kwr-0006', 'hardware', '["hardware","hardware issue","computer not turning on","broken hardware","physical damage"]', 'desktop_support', 'cat-it-0001', 1, 1, NOW(), NOW());
+
+-- Sample tickets
+INSERT INTO tickets (id, ticket_number, subject, description, ticket_type, priority, status, requester_id, assigned_to_id, resolution_notes, created_at, updated_at) VALUES
+(UUID(), 'DESK-20250101-0001', 'My computer won''t turn on', 'Pressed the power button but nothing happens. No lights or fans.', 'desktop_support', 'high', 'assigned', 6, 4, NULL, NOW(), NOW()),
+(UUID(), 'IT-20250101-0001', 'Cannot connect to the internet', 'Getting "No internet access" despite being connected to the office WiFi.', 'it_support', 'medium', 'assigned', 7, 5, NULL, NOW(), NOW()),
+(UUID(), 'DESK-20250101-0002', 'Printer not printing', 'Document sent to shared printer but nothing comes out. Queue shows it pending.', 'desktop_support', 'low', 'open', 6, NULL, NULL, NOW(), NOW()),
+(UUID(), 'IT-20250101-0002', 'Email not syncing on phone', 'Work email stopped syncing on my mobile device after password reset.', 'it_support', 'medium', 'resolved', 7, 5, 'Exchange profile was re-configured on the device. Issue resolved.', NOW(), NOW()),
+(UUID(), 'IT-20250115-0001', 'Internet connectivity issue at workstation', 'Workstation cannot access the internet. Other devices on the same desk work fine. Possibly a cable or port issue.', 'it_support', 'medium', 'open', 7, NULL, NULL, NOW(), NOW()),
+(UUID(), 'DESK-20250115-0001', 'Printer repair request -- unit 3B shared printer', 'The shared printer in unit 3B is making a grinding noise and not feeding paper properly. Needs physical inspection and repair.', 'desktop_support', 'low', 'open', 6, NULL, NULL, NOW(), NOW());
 
 COMMIT;
 

@@ -6,6 +6,7 @@ import { User, UserRole, AuthProvider } from './entities/user.entity';
 import { CreateRoleDefinitionDto, UpdateRoleDefinitionDto, CreateUserDto, UpdateUserDto } from './dto';
 import { Unit } from '../units/entities/unit.entity';
 import { RoleDefinitionEntity } from './entities/role-definition.entity';
+import { RoleCapability } from './entities/role-capability.entity';
 
 const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'label' | 'description' | 'assignable' | 'isSystem'> & { roleCode?: string | null; technicianType?: string | null }> = [
   // ── Core administrative roles ────────────────────────────────────────────
@@ -204,42 +205,80 @@ export class UsersService {
     private readonly unitsRepository: Repository<Unit>,
     @InjectRepository(RoleDefinitionEntity)
     private readonly roleDefinitionsRepository: Repository<RoleDefinitionEntity>,
+    @InjectRepository(RoleCapability)
+    private readonly roleCapabilitiesRepository: Repository<RoleCapability>,
   ) {
-    this.ensureSchema().catch(() => undefined);
-    this.ensureRoleDefinitions().catch(() => undefined);
+    this.ensureUnitsView().catch(() => undefined);
+    this.ensureRoleDefinitions()
+      .then(() => this.ensureRoleCapabilityRows())
+      .catch(() => undefined);
   }
 
-  private async ensureSchema() {
-    const queryRunner = this.usersRepository.manager.connection.createQueryRunner();
-    await queryRunner.connect();
-    try {
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS middle_name VARCHAR(255) NULL');
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS suffix VARCHAR(255) NULL');
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS staff_id VARCHAR(255) NULL');
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS position VARCHAR(255) NULL');
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS position_full VARCHAR(255) NULL');
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS designation VARCHAR(255) NULL');
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS ticket_main_focal TINYINT(1) NOT NULL DEFAULT 0');
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS ticket_technician TINYINT(1) NOT NULL DEFAULT 0');
-      await queryRunner.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider ENUM('local','google') NOT NULL DEFAULT 'local'");
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(255) NULL');
-      await queryRunner.query('CREATE UNIQUE INDEX IF NOT EXISTS uq_users_google_sub ON users (google_sub)');
-      // Extend the role enum to include new roles (safe: only adds values, never removes)
-      await queryRunner.query(
-        `ALTER TABLE users MODIFY COLUMN role ENUM('super_admin','reviewer','section_head','focal','technician','technician_desktop','technician_it_support','technician_it_staff','technician_desktop_staff','auditor','user','compliance_officer','cybersec','infosec','project_mgr','dev_lead','sqa_lead','lead_infra','server_admin','db_admin','network_admin','desktop_sr','it_support_sr','desktop_jr','it_support_jr','pantawid_ict','records_officer','hr_id_officer') NOT NULL DEFAULT 'focal'`,
-      ).catch(() => undefined); // Catch if enum already has these values
-      // Add last_login column for staff activity tracking
-      await queryRunner.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login DATETIME NULL').catch(() => undefined);
-      // QA v0.6.4: Add technician_type to role_definitions for custom-role attendance tagging
-      await queryRunner.query('ALTER TABLE role_definitions ADD COLUMN IF NOT EXISTS technician_type VARCHAR(30) NULL DEFAULT NULL').catch(() => undefined);
-      // QA v0.6.10: Add role_code to role_definitions for platform feature-set routing
-      await queryRunner.query('ALTER TABLE role_definitions ADD COLUMN IF NOT EXISTS role_code VARCHAR(50) NULL DEFAULT NULL').catch(() => undefined);
-      // Seed roleCode for existing system roles
-      await queryRunner.query(`UPDATE role_definitions SET role_code = 'compliance_officer' WHERE \`value\` = 'reviewer' AND role_code IS NULL`).catch(() => undefined);
-      await queryRunner.query(`UPDATE role_definitions SET role_code = 'section_head' WHERE \`value\` = 'section_head' AND role_code IS NULL`).catch(() => undefined);
-    } finally {
-      await queryRunner.release();
+  private buildCapabilitySeed(role: RoleDefinitionEntity) {
+    const roleValue = role.value;
+    const roleCode = role.roleCode ?? null;
+    const technicianType = role.technicianType ?? null;
+    const isSuperAdmin = roleValue === UserRole.SUPER_ADMIN;
+    const isComplianceRole = roleValue === UserRole.COMPLIANCE_OFFICER;
+    const isSectionHead = roleValue === UserRole.SECTION_HEAD;
+    const isCyberRole = roleValue === UserRole.CYBERSEC || roleValue === UserRole.INFOSEC;
+    const isFocal = isSuperAdmin || roleCode === 'focal' || isComplianceRole || isSectionHead;
+    const isDesktop = technicianType === 'desktop_support';
+    const isItSupport = technicianType === 'it_support';
+    const isPantawidIct = technicianType === 'pantawid_ict_support';
+    const isTech = isDesktop || isItSupport || isPantawidIct;
+
+    return this.roleCapabilitiesRepository.create({
+      roleValue,
+      isFocal,
+      isDesktop,
+      isItSupport,
+      isPantawidIct,
+      isIto: isCyberRole,
+      isEscalationFocal: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
+      isTicketSettingsFocal: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
+      isAllTickets: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
+      isTicketFocal: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
+      isKpiAccess: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
+      isKpiManage: isSuperAdmin || isSectionHead || isComplianceRole,
+      isAttendanceAccess: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal || isTech,
+      isAttendanceManage: isSuperAdmin || isSectionHead || isComplianceRole || isFocal || isTech,
+      isReportsAccess: isSuperAdmin || isComplianceRole,
+      isReviewsAccess: isSuperAdmin || isComplianceRole || isCyberRole,
+      isMovAccess: isSuperAdmin || isComplianceRole,
+      isDocumentsAccess: isSuperAdmin || isFocal,
+      isRepositoryAccess: isSuperAdmin || isFocal,
+      isIssuancesAccess: isSuperAdmin || isComplianceRole,
+      isMetricsAccess: isSuperAdmin || isComplianceRole,
+    });
+  }
+
+  private async ensureRoleCapabilityRows() {
+    const [roleDefs, existingCaps] = await Promise.all([
+      this.roleDefinitionsRepository.find(),
+      this.roleCapabilitiesRepository.find({ select: ['roleValue'] }),
+    ]);
+
+    const existingRoleValues = new Set(existingCaps.map((row) => row.roleValue));
+    const missing = roleDefs.filter((role) => !existingRoleValues.has(role.value));
+
+    if (missing.length > 0) {
+      await this.roleCapabilitiesRepository.save(missing.map((role) => this.buildCapabilitySeed(role)));
     }
+  }
+
+  /**
+   * Ensures the cross-DB `units` VIEW exists in the users database.
+   *
+   * This VIEW is required so that the User TypeORM entity can JOIN to
+   * units stored in compliance_hub. All DDL column migrations have been
+   * extracted to backend/database/migrations/v0.0.50-service-ddl-extraction.sql.
+   */
+  private async ensureUnitsView(): Promise<void> {
+    const complianceDb = process.env.COMPLIANCE_DB_DATABASE || 'compliance_hub';
+    await this.usersRepository.manager.connection
+      .query(`CREATE OR REPLACE VIEW units AS SELECT * FROM \`${complianceDb}\`.units`)
+      .catch(() => undefined);
   }
 
   private async ensureRoleDefinitions() {
@@ -261,6 +300,12 @@ export class UsersService {
     return this.roleDefinitionsRepository.find({ order: { label: 'ASC' } });
   }
 
+  /** Look up the role_code for a given role value from role_definitions. */
+  async getRoleCodeForRole(roleValue: string): Promise<string | null> {
+    const def = await this.roleDefinitionsRepository.findOne({ where: { value: roleValue } });
+    return def?.roleCode ?? null;
+  }
+
   async createRoleDefinition(dto: CreateRoleDefinitionDto) {
     const existing = await this.roleDefinitionsRepository.findOne({ where: { value: dto.value } });
     if (existing) {
@@ -278,7 +323,9 @@ export class UsersService {
       roleCode: dto.roleCode ?? null,
     });
 
-    return this.roleDefinitionsRepository.save(role);
+    const savedRole = await this.roleDefinitionsRepository.save(role);
+    await this.ensureRoleCapabilityRows();
+    return savedRole;
   }
 
   async updateRoleDefinition(value: string, dto: UpdateRoleDefinitionDto) {
@@ -311,7 +358,13 @@ export class UsersService {
       role.roleCode = dto.roleCode ?? null;
     }
 
-    return this.roleDefinitionsRepository.save(role);
+    const previousValue = value;
+    const saved = await this.roleDefinitionsRepository.save(role);
+    if (saved.value !== previousValue) {
+      await this.roleCapabilitiesRepository.delete({ roleValue: previousValue });
+      await this.ensureRoleCapabilityRows();
+    }
+    return saved;
   }
 
   async deleteRoleDefinition(value: string) {
@@ -323,6 +376,15 @@ export class UsersService {
       throw new BadRequestException(`System role '${value}' cannot be deleted. Only custom roles can be removed.`);
     }
     await this.roleDefinitionsRepository.remove(role);
+    await this.roleCapabilitiesRepository.delete({ roleValue: value });
+  }
+
+  private isMissingUserUnitAccessError(error: unknown): boolean {
+    const message = String((error as any)?.message || '').toLowerCase();
+    return (
+      message.includes('user_unit_access') ||
+      (message.includes("doesn't exist") && message.includes("table '"))
+    );
   }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -386,7 +448,7 @@ export class UsersService {
       authProvider: AuthProvider.LOCAL,
       googleSub: null,
       // Admin-created users are always RICTMS staff → default to FOCAL unless explicitly set
-      role: createUserDto.role ?? UserRole.FOCAL,
+      role: createUserDto.role ?? UserRole.USER,
       units,
     });
 
@@ -394,10 +456,19 @@ export class UsersService {
   }
 
   async findAll(): Promise<User[]> {
-    return await this.usersRepository.find({
-      relations: ['units'],
-      // Return all users (including inactive) so management UI can show/toggle them
-    });
+    try {
+      return await this.usersRepository.find({
+        relations: ['units'],
+        // Return all users (including inactive) so management UI can show/toggle them
+      });
+    } catch (error) {
+      if (!this.isMissingUserUnitAccessError(error)) {
+        throw error;
+      }
+
+      const users = await this.usersRepository.find();
+      return users.map((user) => ({ ...user, units: [] } as User));
+    }
   }
 
   /** Look up a role definition by value string — returns null if not found. Used for roleCode lookups. */
@@ -406,10 +477,23 @@ export class UsersService {
   }
 
   async findOne(id: number): Promise<User> {
-    const user = await this.usersRepository.findOne({
-      where: { id },
-      relations: ['units'],
-    });
+    let user: User | null = null;
+
+    try {
+      user = await this.usersRepository.findOne({
+        where: { id },
+        relations: ['units'],
+      });
+    } catch (error) {
+      if (!this.isMissingUserUnitAccessError(error)) {
+        throw error;
+      }
+
+      user = await this.usersRepository.findOne({ where: { id } });
+      if (user) {
+        user.units = [];
+      }
+    }
 
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
@@ -424,10 +508,22 @@ export class UsersService {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return await this.usersRepository.findOne({
-      where: { email },
-      relations: ['units'],
-    });
+    try {
+      return await this.usersRepository.findOne({
+        where: { email },
+        relations: ['units'],
+      });
+    } catch (error) {
+      if (!this.isMissingUserUnitAccessError(error)) {
+        throw error;
+      }
+
+      const user = await this.usersRepository.findOne({ where: { email } });
+      if (user) {
+        user.units = [];
+      }
+      return user;
+    }
   }
 
   /** Record last login timestamp for staff activity tracking */
@@ -455,11 +551,71 @@ export class UsersService {
     }));
   }
 
+  /**
+   * Cross-database compatible user listing.
+   * Works with physical tables or passthrough views depending on split-db deployment state.
+   */
+  async getFederatedUsers(): Promise<Array<{
+    id: number;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    active: boolean;
+    unitIds: number[];
+    unitNames: string[];
+  }>> {
+    const rows = await this.usersRepository.query(`
+      SELECT
+        u.id,
+        u.email,
+        u.first_name AS firstName,
+        u.last_name AS lastName,
+        u.role,
+        u.active,
+        GROUP_CONCAT(DISTINCT uu.id ORDER BY uu.id SEPARATOR ',') AS unitIds,
+        GROUP_CONCAT(DISTINCT uu.name ORDER BY uu.name SEPARATOR '|') AS unitNames
+      FROM users u
+      LEFT JOIN user_unit_access uua ON uua.user_id = u.id
+      LEFT JOIN units uu ON uu.id = uua.unit_id
+      GROUP BY u.id, u.email, u.first_name, u.last_name, u.role, u.active
+      ORDER BY u.last_name ASC, u.first_name ASC
+    `);
+
+    return (rows || []).map((row: any) => ({
+      id: Number(row.id),
+      email: String(row.email || ''),
+      firstName: String(row.firstName || ''),
+      lastName: String(row.lastName || ''),
+      role: String(row.role || ''),
+      active: Boolean(row.active),
+      unitIds: String(row.unitIds || '')
+        .split(',')
+        .filter((v) => v !== '')
+        .map((v) => Number(v)),
+      unitNames: String(row.unitNames || '')
+        .split('|')
+        .filter((v) => v !== ''),
+    }));
+  }
+
   async findByGoogleSub(googleSub: string): Promise<User | null> {
-    return await this.usersRepository.findOne({
-      where: { googleSub },
-      relations: ['units'],
-    });
+    try {
+      return await this.usersRepository.findOne({
+        where: { googleSub },
+        relations: ['units'],
+      });
+    } catch (error) {
+      if (!this.isMissingUserUnitAccessError(error)) {
+        throw error;
+      }
+
+      const user = await this.usersRepository.findOne({ where: { googleSub } });
+      if (user) {
+        user.units = [];
+      }
+      return user;
+    }
   }
 
   async linkGoogleIdentity(userId: number, googleSub: string): Promise<User> {
@@ -489,7 +645,7 @@ export class UsersService {
       passwordHash,
       firstName: payload.firstName || 'Google',
       lastName: payload.lastName || 'User',
-      role: payload.role || UserRole.FOCAL,
+      role: payload.role || UserRole.USER,
       authProvider: AuthProvider.GOOGLE,
       googleSub: payload.googleSub,
       ticketMainFocal: false,

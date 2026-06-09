@@ -1,10 +1,956 @@
-﻿# RICTMS Compliance Hub - Changelog
+# RICTMS Compliance Hub - Changelog
 
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
+
+## [0.0.83] (Backend) / [0.0.74] (Frontend) - 2026-06-09 - UI & Analytics Bug Fixes
+
+### Fixed
+- **Detailed Ratings Support Filter**: Fixed an issue where the `Support Type` dropdown in the Detailed Ratings view did not actually filter the dataset. The backend and frontend APIs now correctly pass and process the `ticketType` query parameter.
+- **Role Capabilities Matrix UI**: Fixed a horizontal scrolling display issue where column headers and toggles visibly bled outside the intended table boundary. Moving the overflow to a strictly bound `TableContainer` resolves the bleed while keeping the Role column safely sticky.
+
+## [0.0.82] (Backend) / [0.0.73] (Frontend) - 2026-06-09 - Detailed Ratings and User Manual Updates
+
+### Changed
+- **User Manual**: Updated the Frontend User Manual to reflect recent UI simplifications (removed helper texts, email autofill disabled), integrated Pantawid ICT Support in the IT Help Desk Dashboard, and added a brand new section detailing the Ticket Reports feature.
+- **Backend Analytics**: Extended the `getRatingsReport` backend service and controller to accept the `semester` filter and calculate `byWeek` averages.
+
+### Fixed
+- **Ticket Reports (Detailed Ratings)**: Fixed a bug where the Detailed Ratings view crashed on render because the `byWeek` dataset was undefined. Re-wired the frontend API call to correctly pass the `semester` parameter.
+
+## [0.0.81] (Backend) / [0.0.72] (Frontend) - 2026-06-09 - User Settings and Reports Enhancements
+
+### Changed
+- **Create User & Edit Profile UX**: Removed `helperText` descriptions from all fields to unclutter the interface, deferring these instructions to the User Manual.
+- **Form Autofill Restrictions**: Enforced `autoComplete="off"` (and `new-password`) across User forms to prevent browser autofill interference.
+- **Support Type Metrics**: Rewrote the "Tickets by Support Type" analytic to base the support-type volume distribution off of *all* tickets rather than strictly resolved/closed tickets, ensuring a holistic system-tagged count.
+
+### Fixed
+- **Role Capabilities Matrix UI**: Fixed transparency issues in the sticky Role column. Toggles and headers no longer visually bleed through the sticky column by establishing an explicit hex white background and reinforcing z-index stacking.
+
+## [0.0.80] (Backend) / [0.0.71] (Frontend) - 2026-06-09 - User Settings and Dashboard Enhancements
+
+### Added
+- **Pantawid ICT Support Metrics**: Added Pantawid ICT Support to the IT Help Desk Overview breakdown in the dashboard to accurately reflect the categorization of support tickets.
+- **Create User Validation**: Added required field validations to Create New User dialog (Email, Password, Role, First Name, Last Name).
+
+### Changed
+- **Edit User Profile**: Enabled Staff ID editing for all users except Regular Staff ("User").
+- **Create User UX**: Removed existing email suggestions (`Autocomplete`) from the Create New User dialog, replacing it with a standard `TextField` with `autoComplete="off"`.
+
+### Fixed
+- **Role Capabilities Matrix UX**: Fixed a z-index issue where column text and toggles were visible under the sticky "Role" column during horizontal scrolling.
+
+
+## [0.0.66] - 2026-06-04 - E2E Refinements and CSAT Enforcements
+
+### Added
+- **Open Ticket Restriction**: Added restriction preventing users with unclosed tickets from creating new tickets.
+- **Pending Satisfaction Reminder**: Added enforcement reminder blocking new ticket creation if the user has an unrated resolved ticket.
+- **Enhanced E2E Tests**: Fully extended Playwright tests covering Likert-scale rating loops and pending satisfaction reminders.
+
+### Changed
+- Refactored `getSlaStatus` utility to render a unified SLA chip that covers both 'Nearing SLA' (below 40% time left) and 'Overdue' scenarios, eliminating duplicate badges.
+
+
+
+## [0.0.61] - 2026-06-03 - E2E Testing, Detailed Ratings Report, and SLA Enhancements
+
+### Added
+- Front-end End-to-End automated test suite using Playwright (`tests/e2e/tickets.spec.ts`).
+- `Detailed Ratings` view in Ticket Reports module, incorporating `byDay`, `byWeek`, `byMonth`, `byQuarter` and `byTicket` analytics.
+- Overdue and Nearing SLA visual chips on the ticket table row for quick monitoring.
+
+### Changed
+- `isNearingSLA` logic updated to dynamically compute a 40% threshold of the total SLA time instead of a static 2 hours.
+
+## [0.0.60] - 2026-06-02 - Escalation Metrics and SLA logic
+
+### Added
+- `isOverdue` and `isNearingSLA` initial SLA indicators based on deadline computation.
+- Support for detailed API endpoints for Ratings parameters.
+
+## [0.0.54] - 2026-05-13 - Boundary Decoupling Step 1/2 + API v1 Alias + Service Token Hardening
+
+### Changed
+- Executed Step 1 and Step 2 decoupling pattern for selected cross-boundary paths without changing endpoint behavior:
+  - Added shared contracts under `backend/src/shared/contracts/` (`UserRef`, `UnitRef`)
+  - Removed direct ORM `ManyToOne(() => User)` coupling in incidents and replaced it with HTTP user enrichment via `UsersHttpClient`
+  - Removed direct ORM `User` relation coupling in document assignments/references and preserved response shape through HTTP user enrichment
+
+- Added gateway API version alias support:
+  - Existing routes remain at `/api/*`
+  - New compatibility aliases added at `/api/v1/*` (same behavior, proxied to existing service endpoints)
+
+- Hardened inter-service authentication for constrained microservices deployment:
+  - `InternalServiceGuard` now supports per-service token mapping via `INTERNAL_SERVICE_TOKENS`
+  - Kept backward-compatible fallback to `INTERNAL_SERVICE_SECRET`
+  - `UsersHttpClient` and `ComplianceHttpClient` now send service identity (`X-Service-Origin`) and prefer `INTERNAL_SERVICE_TOKEN` with fallback to shared secret
+
+- Updated compose environment for per-service identity/tokens while preserving legacy secret compatibility.
+
+### Notes
+- This pass reduces C1/M1 in targeted modules and lowers H1 reliance in those read paths while preserving existing logic and payload keys.
+- No database schema changes were introduced.
+- Fixed runtime health-route shadowing by changing service health handlers from `app.use(...)` to exact `app.get(...)`, ensuring `/api/health/ready` returns readiness payload instead of base health payload.
+
+### Versioning
+- Patch version bump only: `0.0.53` -> `0.0.54`.
+
+## [0.0.53] - 2026-05-13 - Re-Audit Hardening Pass (Topology-Aware Readiness + Correlation Middleware Wiring)
+
+### Changed
+- Wired correlation ID middleware at app-module level for all microservices:
+  - `users-service`
+  - `ticketing-service`
+  - `compliance-service`
+
+- Enhanced service readiness responses (`GET /api/health/ready`) to include explicit topology metadata reflecting deployed constraints:
+  - runtime mode (`single-vm-multi-container`)
+  - service container role
+  - DB server host
+  - owned logical DB name
+  - shared DB server flag
+
+- Updated architecture governance artifacts to encode real infrastructure constraints:
+  - `ARCHITECTURE-AUDIT-v2.md` now includes 2026-05-13 re-audit addendum
+  - `backend/SERVICE-OWNERSHIP.md` infrastructure and readiness notes clarified
+  - `backend/SERVICE-DEPENDENCY-GRAPH.json` now includes `deployment_topology`
+
+### Notes
+- Deployment reality is preserved by design: 4 application containers on one virtual server and 3 logical databases in one MariaDB server.
+- No schema changes were introduced.
+
+### Versioning
+- Patch version bump only: `0.0.52` -> `0.0.53`.
+
+## [0.0.50] - 2026-05-01 - Service DDL Extraction, HTTP Inter-Service Clients, Correlation IDs, Gateway Hardening
+
+### Changed
+
+#### ⚡ Service DDL Extraction (all 4 services)
+- Removed all `ALTER TABLE` / `CREATE TABLE` / `CREATE UNIQUE INDEX` DDL from service startup code (`onModuleInit()` / `runMigrations()`).
+- Services no longer self-heal the schema at runtime. Schema is governed exclusively by versioned migration files.
+- `issuance.service.ts`: empty `onModuleInit()` replaced with a startup log; defensive `canUseDocumentLinks()` guard retained.
+- `document.service.ts`: CREATE TABLE `document_assignments` / `document_references`, ALTER TABLE `document_versions` / `documents` removed; startup recovery and `role_capabilities` VIEW creation retained.
+- `users.service.ts`: `ensureSchema()` method removed; new `ensureUnitsView()` method retains the cross-DB `units` VIEW creation required by TypeORM entity JOINs.
+- `ticket.service.ts`: All DDL ALTERs / CREATEs removed from `runMigrations()`; cross-DB view creation (users, units, role_definitions, attendance, role_capabilities) and default data seeding retained.
+
+#### 🌐 HTTP Inter-Service API Clients
+- **New** `backend/src/common/http-clients/users.http-client.ts` — `UsersHttpClient`: injectable NestJS service that calls `users-service` via HTTP for user data enrichment. Replaces cross-DB SQL views for non-JOIN data paths. Methods: `getUserById()`, `getUsers()`. Timeout: 2000ms, graceful null fallback.
+- **New** `backend/src/common/http-clients/compliance.http-client.ts` — `ComplianceHttpClient`: same pattern for compliance-service unit data. Methods: `getUnits()`, `getUnitById()`.
+- **New** `backend/src/common/http-clients/http-clients.module.ts` — `HttpClientsModule`: exports both clients; imported by all 3 service app modules.
+- Cross-DB views remain as the compatibility bridge for existing TypeORM entity JOIN relationships. HTTP clients are the path forward for new non-JOIN code.
+
+#### 🔒 Internal Service Guard + Endpoints
+- **New** `backend/src/common/guards/internal-service.guard.ts` — `InternalServiceGuard`: replaces `JwtAuthGuard` on internal-only endpoints. Validates `X-Service-Token` header against `INTERNAL_SERVICE_SECRET` env var. Permissive (warning-only) when secret is unset in dev.
+- **New** `backend/src/modules/internal/internal.controller.ts` — `InternalController`: serves `GET /api/internal/users`, `GET /api/internal/users/:id`, `GET /api/internal/units`, `GET /api/internal/units/:id`. Protected by `InternalServiceGuard`.
+- **New** `backend/src/modules/internal/internal.module.ts` — `InternalModule`: wires `InternalController` with `UsersModule` and `UnitsModule`; imported by `UsersServiceAppModule`.
+
+#### 🔗 Correlation ID Propagation
+- **New** `backend/src/common/middleware/correlation-id.middleware.ts` — generates/preserves `X-Request-ID` UUID per request.
+- `gateway.main.ts`: adds `X-Request-ID` middleware on all incoming requests and propagates the header to every proxied downstream request via `proxyReq` event.
+- All services echo `X-Request-ID` back in every response so client traces are end-to-end.
+
+#### ⏱ Gateway Proxy Timeouts
+- `createServiceProxy()` now sets `proxyTimeout: 30_000ms` and `timeout: 31_000ms` — prevents the gateway from hanging indefinitely on slow or stuck upstream service responses.
+
+#### 🐳 Docker Image Tagging
+- All 4 microservice containers (`users-service`, `ticketing-service`, `compliance-service`, `api-gateway`) now include `image: compliance-hub/<service>:${VERSION:-latest}`.
+- Set `VERSION=0.0.50` in your environment before `docker compose build --profile microservices` to tag images for that version.
+
+#### 🌍 Inter-Service URL Environment Variables
+- `USERS_SERVICE_URL` added to `compliance-service` and `ticketing-service` docker-compose env blocks.
+- `COMPLIANCE_SERVICE_URL` added to `users-service` and `ticketing-service` docker-compose env blocks.
+- `INTERNAL_SERVICE_SECRET` added to all 4 microservice containers (dev placeholder value included; **must be replaced before production deployment**).
+
+### Added
+- `backend/database/migrations/v0.0.50-service-ddl-extraction.sql` — complete audit trail of all DDL removed from service startup code; acts as the migration to run on a fresh database alongside `v0.0.49-schema-baseline.sql`.
+- `scripts/contract-tests.cjs` — API contract tests. Validates health endpoint shapes, response contracts (documents, issuances, tickets, units), correlation ID propagation, and internal inter-service endpoints. Run with `node scripts/contract-tests.cjs`. Set `AUTH_TOKEN` for authenticated endpoint tests.
+
+### Versioning
+- Patch version bump: `0.0.49` → `0.0.50`.
+
+---
+
+## [0.0.49] - 2026-04-30 - document_issuances Table Creation + Hardening Plan Priority 1-4
+
+### Fixed
+- `document_issuances` pivot table is now created on compliance-service startup via `issuance.service.ts onModuleInit()`. This fully enables document↔issuance linking and restores the `Documents` module data.
+- Removed defensive `canUseDocumentIssuanceLinks()` / `canUseDocumentLinks()` pattern from both `document.service.ts` and `issuance.service.ts` (v0.0.48 workaround no longer needed).
+- Unconditional `leftJoinAndSelect('doc.issuances')` restored in `listDocuments()` and `getDocumentById()`.
+- Unconditional `leftJoinAndSelect('issuance.documents')` restored in `getIssuances()` and `getIssuance()`.
+- `linkDocument()` and `unlinkDocument()` no longer throw "unavailable in current schema" errors.
+
+### Added (Hardening Plan Priorities 1-4)
+- **Priority 1.3**: `backend/SERVICE-OWNERSHIP.md` — machine-readable table/API ownership map, cross-DB view registry, and write rules per service.
+- **Priority 2.2**: `backend/database/migrations/v0.0.49-schema-baseline.sql` — versioned migration capturing all ALTER TABLE / CREATE TABLE statements currently in runtime self-healing across users, ticketing, and compliance services.
+- **Priority 2.2**: `document_issuances` added to `microservices-migrate.sql` copy list.
+- **Priority 3.2**: `/api/health/live` (always 200) and `/api/health/ready` (DB SELECT 1 check, 503 on fail) endpoints added to users-service, ticketing-service, and compliance-service. Existing `/api/health` retained for gateway backward compatibility.
+- **Priority 4.1**: `scripts/release-checklist.ps1` — manual CI/CD substitute script that validates backend build, frontend tsc, smoke tests, and records a release artifact JSON with rollback command.
+
+### Infrastructure Constraint Acknowledgment
+- Architecture: 1 server, 3 Docker containers per microservice + gateway container, 1 MariaDB instance with 3 databases (`compliance_hub`, `compliance_hub_users`, `compliance_hub_ticketing`).
+- Cross-schema views are the accepted compatibility bridge under current constraints. Marked as deprecated in SERVICE-OWNERSHIP.md with HTTP API migration as future target.
+
+### Versioning
+- Patch version bump only: `0.0.48` → `0.0.49`.
+
+## [0.0.48] - 2026-04-30 - Documents Availability Fix and Rollback Baseline Tag
+
+### Fixed
+- Documents API no longer hard-fails when `document_issuances` join table is absent.
+- `DocumentService` now conditionally joins/loads `issuances` only when the join table exists, and safely returns empty `issuances` arrays otherwise.
+- This prevents false empty-state behavior in the Documents module when records exist in `compliance_hub.documents`.
+
+### Ops
+- Added rollback baseline git tag: `rollback-baseline-2026-04-30-b712167`.
+
+### Versioning
+- Patch version bump only: `0.0.47` -> `0.0.48`.
+
+## [0.0.47] - 2026-04-30 - KPI No-Unit Toast Dedup and Access-Scoped Manual Content
+
+### Fixed
+- Removed duplicate KPI no-unit snackbar warning (`No unit is assigned to your account yet...`) so the in-page notice is the single source of truth.
+
+### Changed
+- User Manual now supports access-only guidance separate from management guidance.
+- Added access-scoped content for Attendance: users with `isAttendanceAccess` but without `isAttendanceManage` now see read-only/access explanations instead of management/edit instructions.
+
+### Versioning
+- Patch version bump only: `0.0.46` -> `0.0.47`.
+
+## [0.0.46] - 2026-04-29 - Schema-Safe Issuance Fix and Compliance Unavailable UX Hardening
+
+### Fixed
+- Removed compliance-service startup DDL that attempted to create `document_issuances`.
+- Issuance service now checks whether `document_issuances` exists before using mapping relations.
+- When linkage table is absent, issuance reads still work and return an empty `documents` array instead of crashing.
+
+### Changed
+- Dashboard layout now waits for service availability check before mounting compliance pages, preventing startup toast floods when compliance service is down.
+- Compliance routes now show a consistent page-level message: `Service currently unavailable. Please try again later.`
+
+### Validation
+- Live schema check against `compliance_hub` confirmed only `documents` and `issuances` tables exist for issuance/document domain in current environment.
+
+### Versioning
+- Patch version bump only: `0.0.45` -> `0.0.46`.
+
+## [0.0.45] - 2026-04-29 - Issuance Join-Table Recovery and Ticket Report Scope Split
+
+### Fixed
+- Added startup recovery for issuance-document mapping table: `document_issuances` is now created automatically if missing, preventing compliance service runtime failures when loading issuance-linked documents.
+- Tightened User Manual visibility filtering so sections are no longer default-allowed for unmapped paths.
+
+### Changed
+- Ticket reports now support two scopes:
+  - Basic scope for non-focal users: automatically limited to their own requested tickets.
+  - Full scope for ticket-settings focal/admin users: supports technician-wide and period filters.
+- Opened `/dashboard/ticket-reports` route and sidebar entry to all authenticated users; backend now enforces data scope.
+- Clarified Attendance module helper text: today is editable, past dates remain locked.
+
+### Versioning
+- Patch version bump only: `0.0.44` -> `0.0.45`.
+
+## [0.0.44] - 2026-04-29 - Frontend Route Guard Hardening and KPI Error Mitigation
+
+### Fixed
+- Added centralized route-level capability/role guarding in frontend router so hardcoded URLs cannot bypass feature restrictions.
+- Standardized access-denied messaging across modules to: `You do not have access to this feature.`
+- Fixed User Manual visibility logic to be capability/path-driven, preventing empty manual content for valid roles such as `cybersec`.
+- Added sticky/frozen `Role` column in Role Capabilities Matrix for easier horizontal scrolling.
+- Hardened KPI unit-resolution fallback: user-unit relation lookup failures now safely degrade to empty access scope instead of surfacing internal server errors.
+
+### Reviewed
+- Verified `INSTALLATION.md` changes are documentation-only and have no runtime effect.
+- Verified `backend/src/apps/gateway.main.ts` change adds a proxy alias route only and does not alter existing route behavior.
+
+### Versioning
+- Patch version bump only: `0.0.43` -> `0.0.44`.
+
+## [0.0.43] - 2026-04-29 - Matrix Role Row Sync and Phase 2 Capability Migration
+
+### Fixed
+- Resolved empty role-capability matrix rows by syncing `role_capabilities` records from `role_definitions` on startup and role CRUD.
+- Role capability list endpoint now reloads cache before returning rows, preventing stale/empty matrix display.
+
+### Changed
+- Phase 2 capability migration applied to backend controllers:
+  - KPI controller now uses `CapabilityGuard` with `isKpiAccess` / `isKpiManage` instead of large hardcoded role lists.
+  - MoV controller now uses `CapabilityGuard` with `isMovAccess`.
+  - Reviews controllers now use `CapabilityGuard` with `isReviewsAccess`.
+  - Issuance read endpoints now use `CapabilityGuard` with `isIssuancesAccess`.
+- Registered capability-guard dependencies in affected modules (`kpi`, `mov`, `reviews`, `references`).
+
+### Notes
+- No database schema drops or destructive migrations were introduced.
+
+### Versioning
+- Patch version bump only: `0.0.42` -> `0.0.43`.
+
+## [0.0.42] - 2026-04-29 - KPI No-Unit Hard Stop and Capability Matrix Expansion
+
+### Fixed
+- KPI page now hard-stops rendering and API loading when a non-manage user has no assigned unit, preventing forced dashboard load and avoiding the no-unit error path.
+- KPI page now blocks access when role capability `isKpiAccess` is not granted.
+
+### Changed
+- Expanded `role_capabilities` matrix with module-level flags:
+  - `isKpiAccess`, `isKpiManage`
+  - `isAttendanceAccess`, `isAttendanceManage`
+  - `isReportsAccess`, `isReviewsAccess`, `isMovAccess`
+  - `isDocumentsAccess`, `isRepositoryAccess`
+  - `isIssuancesAccess`, `isMetricsAccess`
+- Added backend guard and service support for all new capability keys.
+- Sidebar and page-level access gates for KPI, Attendance, Reports, Reviews, MoV, Documents, and Repository now use capability matrix flags.
+- Added hardcoded-permission scrape report: `CAPABILITY-MATRIX-AUDIT-2026-04-29.md`.
+
+### Notes
+- No destructive database changes were introduced. New capability columns are added with backward-compatible defaults during schema bootstrap.
+
+### Versioning
+- Patch version bump only: `0.0.41` -> `0.0.42`.
+
+## [0.0.41] - 2026-04-29 - KPI No-Unit Guard and Reports Scope Tightening
+
+### Fixed
+- Added KPI no-unit trapping for non-manage users so dashboard/monitoring requests are skipped when no unit is assigned.
+- Added frontend warning states for users without assigned units to prevent forced KPI dashboard loading and related server errors.
+- Added backend defensive guard in KPI allowed-unit resolution for invalid/missing user IDs to safely return empty unit access instead of failing.
+- Restricted Reports module visibility and in-page access checks to `super_admin` and `compliance_officer` only.
+
+### Notes
+- No database schema changes were made.
+
+### Versioning
+- Patch version bump only: `0.0.40` -> `0.0.41`.
+
+## [0.0.40] - 2026-04-29 - KPI and Attendance Permission Regression Fix
+
+### Fixed
+- Resolved over-permission behavior where `cybersec` could access/manage KPI and Attendance actions through role-code fallback paths.
+- KPI manage/view-all enforcement now uses strict role matching in service-layer authorization checks.
+- Attendance mutation endpoints now enforce strict role checks (exact role, no roleCode fallback) for:
+  - `POST /api/attendance`
+  - `POST /api/attendance/bulk`
+  - `POST /api/attendance/office-days`
+  - `POST /api/attendance/office-days/bulk`
+- Frontend permission checks updated so `cybersec`/`infosec` are no longer treated as attendance managers.
+- Frontend KPI management tab visibility now uses strict role matching (no compliance roleCode fallback).
+
+### Notes
+- No database schema changes were made.
+
+### Versioning
+- Patch version bump only: `0.0.39` -> `0.0.40`.
+
+## [0.0.39] - 2026-04-29 - Capability Scope Alignment and ENV Reference
+
+### Changed
+- Added gateway alias for role capabilities under compliance namespace:
+  - `GET /api/compliance/role-capabilities`
+  - `GET /api/compliance/role-capabilities/me`
+  - `PATCH /api/compliance/role-capabilities/:roleValue`
+- Frontend role capability API calls now use the compliance namespace alias.
+- Restricted MoV endpoints to `super_admin` and `compliance_officer` only.
+- Aligned sidebar visibility so `MoV Builder` and `Reviews` are visible only to `super_admin` and `compliance_officer`.
+- Added a concise `Short ENV Reference` section to `INSTALLATION.md` for key microservices environment variables.
+
+### Notes
+- No database schema changes were introduced.
+- Existing users-service role capability endpoints remain available for backward compatibility.
+
+### Versioning
+- Patch version bump only: `0.0.38` -> `0.0.39`.
+
+## [0.0.38] - 2026-04-22 - Documentation Cleanup and Deployment Alignment
+
+### Changed
+- Restructured `README.md` to keep it focused on overview, quick start, architecture, and documentation links.
+- Removed release-log style content from `README.md`; release history remains in `CHANGELOG.md`.
+- Aligned `deployment.md` environment variable guidance with the current microservices layout (`compliance_hub_users`, `compliance_hub_ticketing`, `compliance_hub`) and gateway service URL variables.
+
+### Reviewed
+- Repository cleanup candidates were reviewed:
+  - `regulatory-issuances/` remains intentionally tracked because it is an active source corpus for issuance deep-dive classification workflows.
+  - `scripts/classify_issuance_drop.py` and `scripts/quick-escalation-smoke.mjs` remain as maintained utility scripts.
+
+### Versioning
+- Patch version bump only: `0.0.37` -> `0.0.38`.
+
+## [0.0.37] - 2026-04-22 - Security Hardening Pass (OWASP-focused)
+
+### Fixed
+- Replaced dynamic print rendering pattern that used `document.write` and dynamic HTML string injection in reports printing flow.
+- Replaced `dangerouslySetInnerHTML` render paths in MoV report preview and review diff viewer with sandboxed iframe rendering.
+- Moved frontend token persistence from `localStorage` to `sessionStorage` in auth context and API client.
+- Hardened storage path resolution with canonical root-bound checks to block traversal attempts.
+- Replaced shell command string execution for preview conversion with argument-safe child process spawning.
+- Added stricter URL safety checks in document viewer before issuing browser fetch requests.
+- Removed dynamic `any` dispatch in capability guard and replaced with explicit capability checker mapping.
+- Added timing-safe password equality comparison helper for password-change self-comparison path.
+
+### Added
+- Safe keyword JSON parsing and schema validation logic for ticket keyword-rule payload handling in frontend references API.
+- Issuance payload key allowlist sanitizer to enforce accepted keys before create/update submission.
+- Prototype-pollution-resistant dynamic key generation in reports charting data.
+- Centralized security validator utilities and unit tests in backend:
+  - `backend/src/common/security/security-validators.ts`
+  - `backend/src/common/security/security-validators.spec.ts`
+
+### Changed
+- Removed tracked `.env.example` files from frontend and backend and tightened `.gitignore` env patterns.
+
+---
+
+## [0.0.31] - 2026-04-16 — role_capabilities Table, RoleCapabilitiesService, Sub-Q Focal Elevation
+
+### Added
+- **`compliance_hub_users.role_capabilities` BASE TABLE** with 6 boolean flags per role (`is_focal`, `is_desktop`, `is_it_support`, `is_pantawid_ict`, `is_ito`, `is_escalation_focal`). 20 rows seeded for all active roles.
+- **VIEWs** in `compliance_hub_ticketing` and `compliance_hub` pointing to the base table in `compliance_hub_users`. These DBs no longer need their own hardcoded role knowledge.
+- **`backend/src/modules/users/entities/role-capability.entity.ts`** — TypeORM entity for the new table.
+- **`backend/src/modules/users/role-capabilities.service.ts`** — Startup-cached role capability lookup service. Loaded via `onModuleInit()`. Provides bool helpers (`isFocal`, `isIto`, `isDesktop`, `isItSupport`, `isPantawidIct`, `isEscalationFocal`, `isTechnician`, `isSeniorTech`, `isSeniorDesktop`, `isSeniorItSupport`) and compound helpers (`canSeeAllTickets`, `canChangePriority`, `isSeniorAuthority`, `canAssignTickets`) and bulk query helpers (`getRolesWhere`, `getSeniorTechRoles`, `getTechnicianRoles`).
+- **Migration**: `backend/database/v0.0.31-migration.sql` — creates table, seeds 20 rows, creates VIEWs, elevates roleCode for `desktop_sr`/`it_support_sr`/`pantawid_ict`.
+
+### Changed
+- **Sub-Q: `desktop_sr`, `it_support_sr`, `pantawid_ict` now have `role_definitions.role_code = 'focal'`**. These roles now pass `@Roles('focal')` controller guards and `user.roleCode === 'focal'` frontend checks. They gain full access to compliance endpoints, document pages, issuances, and all other focal-gated routes.
+- **`ticket.service.ts`**: Removed `FOCAL_NAMED_ROLES` const. All 8+ hardcoded role arrays replaced with `RoleCapabilitiesService` method calls (`canSeeAllTickets`, `canChangePriority`, `isSeniorAuthority`, `isSeniorTech`, `canAssignTickets`, `isFocal`, `getRolesWhere`).
+- **`attendance.service.ts`**: `getItoRoles()` now uses `roleCapSvc.getRolesWhere('isIto')`. Attendance scope restriction checks use `isSeniorDesktop()` / `isSeniorItSupport()` / `isDesktop()` / `isItSupport()`.
+- **`document.service.ts`**: Removed module-level `FOCAL_NAMED_ROLES` Set constant. All 4 `FOCAL_NAMED_ROLES.has()` calls replaced with `this.roleCapSvc.isFocal()`.
+- **`unit-access.guard.ts`**: Added `section_head` to `GLOBAL_ACCESS_ROLES` (was previously missing, causing section_head to be unit-scoped unintentionally).
+- **`users.module.ts`**, **`tickets.module.ts`**, **`documents.module.ts`**: Registered `RoleCapability` entity and `RoleCapabilitiesService`.
+
+### Fixed
+- **Pre-existing bug: cybersec/infosec/ITO focal roles could not see all tickets** despite being able to assign them. `canSeeAllTickets()` now correctly includes ALL focal roles, not just the narrow previous list.
+- **`section_head` unit-access bypass was missing**: Added to `GLOBAL_ACCESS_ROLES` so section heads can access all units without being unit-scoped.
+
+---
+
+## [0.0.30] - 2026-04-17 — Legacy Role Cleanup, DB Table Restructuring, Attendance Table Creation
+
+### Removed
+- **8 legacy roles permanently removed** from the entire codebase and database:
+  - `reviewer`, `focal`, `technician`, `auditor`
+  - `technician_desktop`, `technician_it_support`, `technician_it_staff`, `technician_desktop_staff`
+- Removed from: `seed-data.sql`, `role_definitions` table, `UserRole` enum (backend + frontend), all `@Roles()` decorators, service-layer role checks, sidebar nav items, and all frontend page-level role comparisons.
+- `UserRole.FOCAL` default replaced with `UserRole.USER` in `users.service.ts` and `settings/page.tsx`.
+- `REVIEWER` references in 12+ files replaced with `COMPLIANCE_OFFICER` (backend) or removed (frontend).
+
+### Changed (Database)
+- **Removed misplaced tables from `compliance_hub_users`:** `escalation_focal_configs`, `office_days`, `ticket_events`, `ticket_keyword_rules` (these belong only in `compliance_hub_ticketing`).
+- **Removed misplaced tables from `compliance_hub`:** Same 4 tables dropped (they existed as BASE TABLEs when they should only be in `compliance_hub_ticketing`).
+- **Created `attendance` BASE TABLE in `compliance_hub_users`** (was missing; `compliance_hub` and `compliance_hub_ticketing` already have VIEWs pointing to it).
+- **Altered `users.role` ENUM** in `compliance_hub_users` to remove the 8 legacy values; DEFAULT changed to `'user'`.
+- Migration script: `backend/database/v0.0.30-migration.sql`
+
+### Changed (Code Patterns)
+- **Backend:** All `@Roles()` decorators updated to use roleCode-matching strings `'focal'`, `'technician'` instead of deleted `UserRole.FOCAL` / `UserRole.TECHNICIAN`.
+- **Backend:** `FOCAL_NAMED_ROLES` constant added in `ticket.service.ts` and `document.service.ts` to identify named focal-equivalent roles for service-level business logic.
+- **Backend:** `unit-access.guard.ts` now checks `user.roleCode === 'focal'` instead of `user.role === UserRole.FOCAL`.
+- **Backend:** `excludedAttendanceRoleValues` in `attendance.service.ts` simplified to `['user', 'super_admin']`.
+- **Frontend:** `isFocal` checks updated from `user?.role === 'focal'` → `user?.roleCode === 'focal'` across 6 files.
+- **Frontend:** `isComplianceOfficer` checks no longer include `user?.role === 'reviewer'`.
+- **Frontend:** `isFocalTech` arrays updated to remove `technician*` legacy values; `isLowerLevelTech` now only includes `desktop_jr`, `it_support_jr`.
+
+
+
+### Fixed
+- **ITO roles wrongly saw all tickets (v0.0.28 regression):** Removed `UserRole.CYBERSEC` and `UserRole.INFOSEC` from `SEE_ALL_ROLES` in `getTickets()`. ITO staff roles now correctly see only tickets assigned to them or submitted by them.
+- **isComplianceOfficer wrongly included cybersec/infosec (v0.0.28 regression):** Reverted `isComplianceOfficer` to `reviewer || roleCode === 'compliance_officer'` only. Cybersec and infosec are NOT management roles and should not have the full management ticket view.
+- **Auto-attendance not working on login:** Two root causes fixed:
+  1. `AuthModule` now imports `AttendanceModule` (a focused re-export in `users/attendance.module.ts`), making `AttendanceService` properly injectable into `AuthService`. Importing the full `TicketsModule` was avoided to prevent circular dependency risk.
+  2. `autoCorrectAbsentOnLogin()` now uses an exclusion-based check (`user` and `super_admin` excluded) instead of `getRoleGroups().all` (which only included `assignable=true` roles from `role_definitions`, silently skipping ITO roles).
+- **ITO roles not available as escalation focals:** `listAvailableEscalationRoles()` in `TicketSettingsService` now returns ALL defined roles (instead of `assignable=true` only), excluding only `user`, `super_admin`, `section_head`, and `compliance_officer`. ITO specialist roles are now selectable as escalation focal targets in Settings.
+
+### Added
+- **ITO role restricted ticket view (frontend):** Added `isItoRole` constant covering all ITO specialist roles. These roles are included in `isTechnician` for a 4-tab restricted view (Active, Resolved/Closed, Frozen, Duplicate) — they see only their own tickets. `canEscalate` now includes `isItoRole` so ITO staff can escalate assigned tickets.
+- **MICROSERVICES-REFERENCE.md:** Working documentation file (not committed) covering all services, modules, API endpoints, entities, role reference, and environment variables.
+
+
+## [0.0.28] - 2026-04-15 — Cybersec Ticket Views, Auto-Progress on Accept, Proof Photo Fix, Reports Enhancement
+
+### Fixed
+- **Cybersec/infosec roles see all tickets:** Added `UserRole.CYBERSEC`, `UserRole.INFOSEC`, and `UserRole.PANTAWID_ICT` to the `SEE_ALL_ROLES` array in `getTickets()`. These roles now see the full managed ticket list.
+- **Cybersec 5-tab ticket view:** `isComplianceOfficer` now explicitly includes `cybersec` and `infosec` roles in addition to the `roleCode === 'compliance_officer'` check. `canManageAll` now includes `pantawid_ict`.
+- **JWT roleCode always populated:** `generateTokens()` now resolves and embeds `roleCode` from `role_definitions` in the JWT payload. `buildAuthResponse`, `login`, `googleLogin`, and `refresh` all propagate `roleCode`. This ensures `user?.roleCode` is available client-side for role checks.
+- **Escalation auto-sets ticket to In Progress:** `acceptEscalation()` now sets ticket status to `in_progress` (unless already resolved/closed) when an escalation is accepted. The status change is logged via `logEvent`.
+- **Proof photo spinner resolved:** Failed proof photo loads are now marked with an `'error'` sentinel in `proofBlobUrls` instead of silently discarded. The thumbnail shows a `✕` indicator instead of an indefinite spinner. Lightbox filters out error entries.
+- **Proof route sendFile fix:** `serveProofFile` now uses `res.sendFile(filename, { root })` instead of `res.sendFile(absolutePath)` to avoid Windows path behavior differences. 404 is returned via `res.status(404).json(...)` instead of throwing `NotFoundException` (bypassed by `@Res()` decorator).
+- **"Focal User" removed from technician availability:** `getTechnicianAvailability()` no longer includes `{ role: UserRole.FOCAL, ticketMainFocal: true }` in the technician query, removing the "Focal User" entry from the Reports dropdown and escalation assign dialog.
+- **Escalation dropdown attendance-filtered:** `listTechnicians()` in `AttendanceService` now filters out technicians who are `absent` or `out_of_office` for today before returning the list.
+- **super_admin hidden from Role Management UI:** Role Management card in Settings now filters out `super_admin` from the displayed role list.
+- **focal@rictms.gov.ph removed:** Removed from `excludedAttendanceEmails` (now empty array), CHANGELOG.md, and QA-USER-MANUAL.md.
+
+### Added
+- **Period-filtered technician dropdown in Reports:** New endpoint `GET /tickets/report-technicians` returns technicians who had assigned tickets in the selected period. Frontend reports page uses this endpoint for the technician filter dropdown, replacing the static `getTechnicians()` call. Technician dropdown is only shown to privileged roles.
+- **Role-gated ticket reports:** Reports page now determines `isPrivileged` based on role set (super_admin, section_head, reviewer, compliance_officer, cybersec, infosec, desktop_sr, it_support_sr, pantawid_ict). Technician filter is hidden from non-privileged users.
+- **Charts in reports page:** Added recharts `PieChart` (ticket distribution by support type) and `BarChart` (average rating per technician) to the Ticket Reports page.
+- **Print functionality:** Added Print button to Ticket Reports page using `window.print()`. Filters and header are hidden in print via `@media print` CSS.
+- **`getTechniciansByPeriod` service method:** New method returns distinct technicians (excluding focal role) who had tickets in a date range derived from year/month/quarter/semester filters.
+- **`getRoleCodeForRole` in UsersService:** New helper to look up `role_code` from `role_definitions` by role value — used by auth service to populate JWT roleCode.
+
+
+
+### Fixed
+- **Cybersec/infosec escalation visibility:** `cybersec` and `infosec` added to `isStaffRole` so they get `canManageAll=true` and see the full ticket list. Added `isCybersecOfficer` flag used in `canViewEscalatedQueue` and `canAssign`, so they can see the "Escalated To Me" filter and assign tickets. Added `cybersec`/`infosec` as valid escalation targets for IT-type tickets in the assign dialog.
+- **Ticket tabs for all technician roles:** Tabs (Active / Resolved+Closed / Frozen / Duplicate) now appear for all `isTechnician` roles — this covers `desktop_sr`, `it_support_sr` (before), plus `technician`, `technician_desktop`, `technician_it_support`, `technician_it_staff`, `technician_desktop_staff`, `desktop_jr`, `it_support_jr` (newly added). Tabs are rendered in a dedicated Card below any existing control cards so they compose cleanly with the filter bar for canManageAll roles.
+- **Section head nav:** Added `section_head` role (and `roleCode: 'section_head'`) access to: Documents, Repository, Units, KPI, Ticket Settings, Attendance. Ticket Reports and Reports already included `section_head`. Section head now sees the full set requested: Dashboard, Tickets, Documents, Repository, Units, KPI, Ticket Settings, Ticket Reports, Attendance, Reports.
+- **Junior techs blocked from Documents/Repository:** Removed `desktop_jr` and `it_support_jr` from the Documents and Repository nav item role arrays. Junior desktop/IT support engineers no longer see these compliance modules.
+
+## [0.0.24] - 2026-04-15 — Nav Access Fix, Ticket Tabs, Service Warning Cleanup
+
+### Fixed
+- **Compliance officer / section head nav (critical):** Removed service-availability gate from sidebar `hasAccess()`. Nav items are now always shown to authorized roles regardless of microservice health. The page-level "Service currently unavailable" banner (in DashboardLayout) already provides the correct user feedback when a service is actually down — hiding nav items was redundant and harmful.
+- **Pantawid ICT / desktop_sr / it_support_sr Ticket Settings & Reports:** These roles were already listed in the nav item role arrays but were blocked by the same service gate. Fixed by the same `hasAccess` change above.
+- **Section head nav:** Same fix — section_head was blocked from KPI, Reports, Ticket Reports, and Attendance because those are `service: 'compliance'` or `service: 'ticketing'`.
+- **Service unavailable warning:** Removed the redundant "The Compliance service is offline. Start the compliance microservice..." text. The `Alert severity="warning"` with "Service currently unavailable" is sufficient.
+- **`Document.uploader.role` TS type too narrow:** Added `'compliance_officer' | string` to the `uploader.role` union in `documents.ts` to prevent false TypeScript errors when comparing against newer role values.
+
+### Added
+- **Ticket tabs for senior technicians (`desktop_sr`, `it_support_sr`):** Four tabs added to the senior tech ticket view:
+  - **Active** — open, assigned, in_progress tickets
+  - **Resolved / Closed** — resolved and closed tickets
+  - **Frozen** — freeze status tickets
+  - **Duplicate** — duplicate status tickets
+  - Each tab label shows a live count badge from the current ticket list.
+
+## [0.0.23] - 2026-04-15 — Remove Legacy Roles, Super Admin Full Access Bypass
+
+### Fixed
+- **Legacy role definitions removed:** The 8 legacy/compat roles (`reviewer`, `focal`, `technician`, `auditor`, `technician_desktop`, `technician_it_support`, `technician_it_staff`, `technician_desktop_staff`) that were incorrectly added to `DEFAULT_ROLE_DEFINITIONS` in v0.0.22 have been removed. The authoritative 20 correct roles remain.
+- **Super admin always sees full nav:** Added `super_admin` early-exit bypass in sidebar `hasAccess()` — fires immediately after the `roles: ['all']` check, before the service-availability gate. Super admin now sees all nav items regardless of microservice health status.
+
+## [0.0.22] - 2026-04-15 — Health Endpoints, Units VIEW Self-Heal, Role Definitions Completeness, Frontend Role Guards
+
+### Fixed
+- **All nav items hidden after login (critical):** All 3 microservices now expose `/api/health` endpoints. Gateway health checks were receiving `404` → all services reported as DOWN → `hasAccess()` blocked all service-tagged nav items (Documents, Issuances, KPI, MoV, Tickets, Reports, Reviews, etc.). Only Dashboard and Tickets (tagged `roles: ['all']`) were visible.
+- **`getProfile()` 500 crash on login (critical):** Users service `ensureSchema()` now creates a `units` VIEW in `compliance_hub_users` pointing to `compliance_hub.units`. Previously `findOne(userId, { relations: ['units'] })` threw `Table 'compliance_hub_users.units' doesn't exist` → `initAuth()` removed tokens → `user = null` → sidebar collapsed to Dashboard + Tickets only.
+- **`isMissingUserUnitAccessError` too narrow:** Now catches any `Table '...' doesn't exist` MySQL error (not just `user_unit_access`), making DB resilience cover all missing table/view scenarios on the users DB.
+- **`DEFAULT_ROLE_DEFINITIONS` incomplete:** Added 8 missing legacy/compat roles: `reviewer` (roleCode: `compliance_officer`), `focal` (roleCode: `focal`), `technician`, `auditor`, `technician_desktop`, `technician_it_support`, `technician_it_staff`, `technician_desktop_staff`. Fresh installs without seed would have lacked these entries, causing roleCode-based feature routing to fail for legacy users.
+- **Compliance service cross-DB VIEWs at startup:** `compliance-service.main.ts` now creates/updates `users` and `role_definitions` VIEWs in `compliance_hub` at startup, ensuring KPI and compliance modules can JOIN user data even without running `migrate.sql`.
+- **Frontend `UserRole` enum outdated:** Added 20 missing roles to match backend enum: `SECTION_HEAD`, `COMPLIANCE_OFFICER`, `CYBERSEC`, `INFOSEC`, `LEAD_INFRA`, `SERVER_ADMIN`, `DB_ADMIN`, `NETWORK_ADMIN`, `PROJECT_MGR`, `DEV_LEAD`, `SQA_LEAD`, `RECORDS_OFFICER`, `HR_ID_OFFICER`, `DESKTOP_SR`, `IT_SUPPORT_SR`, `DESKTOP_JR`, `IT_SUPPORT_JR`, `PANTAWID_ICT`, `TECHNICIAN_IT_STAFF`, `TECHNICIAN_DESKTOP_STAFF`.
+- **Issuances page:** `canManageIssuances` now includes `compliance_officer` role and `roleCode === 'compliance_officer'` check. Previously only `super_admin` and `reviewer` could manage issuances.
+- **MoV page:** `allowed` gate now includes `compliance_officer` and `roleCode === 'compliance_officer'`. Previously blocked all compliance officers from accessing the MoV module.
+- **Documents page:** `isSuperOrCompliance` in `getWorkflowStatus`, `canReturnDocument`, and `canDeleteDocument` now includes `compliance_officer` and `roleCode` check. Uploader role checks also updated to include `compliance_officer`.
+- **Document detail page:** Same `isSuperOrCompliance` fix applied to workflow status display logic.
+- **Reports page:** `isSuperOrReviewer` now includes `UserRole.COMPLIANCE_OFFICER` and `roleCode === 'compliance_officer'`. Previously compliance officers were blocked from the Reports module.
+
+## [0.0.21] - 2026-04-15 — Cross-DB role_definitions Fix + Attendance Service Routing
+
+### Fixed
+- **`Table 'compliance_hub.role_definitions' doesn't exist` runtime error:** Root cause was `USERS_DB_DATABASE=compliance_hub` in `.env` — corrected to `USERS_DB_DATABASE=compliance_hub_users` so the users service connects to the correct authoritative database.
+- **Attendance service routing:** `AttendanceController` added to `TicketsModule` and `/api/attendance` gateway route changed to ticketing service (`4102`). Previously routed to users service which lacked `office_days` table; ticketing service has all required tables via VIEWs (`attendance`, `users`, `role_definitions`) and the actual `office_days` table.
+- **`AttendanceModule` removed from users service:** No longer registering ticketing-scoped entities (`TechAttendance`, `OfficeDay`) in the users service TypeORM context. Prevents missing-table errors on users DB.
+- **`schema.sql` alignment:** Updated `users` table (expanded `role` enum with all RICTMS roles, fixed `is_active` → `active`, added `position_full`, `ticket_main_focal`, `ticket_technician`, `auth_provider`, `google_sub`, `last_login` columns). Updated `role_definitions` table to include `technician_type` and `role_code` columns matching the TypeORM entity.
+
+## [0.0.20] - 2026-04-15 — role_definitions Cross-DB VIEW Fix
+
+### Fixed
+- **`microservices-migrate.sql`:** Added `DROP TABLE + CREATE VIEW role_definitions` enforcement for both `compliance_hub_ticketing` and `compliance_hub` DBs, pointing to `compliance_hub_users.role_definitions`.
+- **`ticket.service.ts` `runMigrations()`:** Added VIEW creation for `role_definitions` in `compliance_hub_ticketing` (alongside existing `users`, `units`, `attendance` VIEWs).
+- **`seed-data.sql` Section 4:** Removed erroneous TRUNCATE + INSERT for `role_definitions` in ticketing DB (it is a VIEW, not a table).
+
+## [0.0.19] - 2026-04-14 — Clickable Email Links, Redirect-After-Login, 3-DB Seed, File Cleanup
+
+### Added
+- **Clickable ticket links in emails:** All 4 email templates now include a clickable ticket number heading and a "View Ticket" CTA button linking to `${FRONTEND_URL}/dashboard/tickets/${ticketId}`.
+- **Resolve email with dual CTAs:** `sendTicketResolvedEmailToRequester` now shows side-by-side "Close Ticket" and "Rate Technician" action buttons, with a session-expiry note.
+- **Redirect-after-login:** `ProtectedDashboard` (App.tsx) now encodes the current path as `?redirect=<path>` when redirecting unauthenticated users to `/login`. `AuthContext.login` and `loginWithGoogle` accept optional `redirectTo?: string` param and use it for post-login navigation. Login page reads and passes the `redirect` query param.
+- **EMAIL_TEST_OVERRIDE env var:** Documented in `.env.example` with clear removal instructions in `email.service.ts`.
+- **SMTP_FROM_NAME and EMAIL_ENABLED:** Added to `.env.example`.
+- **seed-data.sql 3-DB restructure:** Reorganized into 4 USE sections covering `compliance_hub_users`, `compliance_hub`, and `compliance_hub_ticketing`. Removed reviewer/focal test accounts (id=2, id=3 now are `cybersec.test` and `lead.infra`).
+- **ticket_categories seed:** 6 default IT support categories seeded in `compliance_hub_ticketing`.
+- **ticket_keyword_rules seed:** 6 default keyword rules for auto-type detection seeded.
+- **role_definitions copy in ticketing DB:** `compliance_hub_ticketing.role_definitions` now seeded alongside the primary `compliance_hub_users.role_definitions`.
+
+### Changed
+- **email.service.ts:** Added `ticketId: string` to all 4 email data interfaces. Added `frontendUrl` read from `FRONTEND_URL` env var. All 4 email templates updated with structured HTML, clickable ticket number, action buttons.
+- **ticket.service.ts:** All 7 `emailService.*` call sites now pass `ticketId`.
+- **seed-data.sql:** Single `USE compliance_hub` replaced with proper 3-section layout. Sample tickets moved to `compliance_hub_ticketing` section.
+
+### Removed
+- **Unnecessary project files deleted:** `IMPLEMENTATION-PLAN.md`, `IMPLEMENTATION_STATUS.md`, `CURRENT-STATUS.md`, `DATABASE-SETUP-COMPLETE.md`, `PROJECT_STATUS.md`, `RELEASE-NOTES-v1.2.0.4.md`, `KPI-FEATURE-PLAN.md`, `KPI-MOV-AUDIT-2026-03-04.md`, `ICT-ISSUANCE-RELEVANCE-MAP.md`, `smoke-test.ps1`, `smoke-artifacts/`, `tentative-compliance-report/`, `services/`, `scripts/reset-for-uat.*`.
+
+### How To Test
+- Email: Create a ticket, check email — ticket number should be a link to the ticket detail URL.
+- Email: Resolve a ticket, check requester email — Close Ticket and Rate Technician buttons should appear.
+- Auth: Log out while on `/dashboard/tickets/:id`, go back to that URL — should redirect to `/login?redirect=...` and land on the ticket after login.
+- Seed: Run `seed-data.sql` against the 3-DB microservices setup — all 4 sections should succeed without foreign key errors.
+
+### Rollback Steps
+- Revert `backend/src/modules/tickets/services/email.service.ts` and `ticket.service.ts` to remove `ticketId` if email format causes issues.
+- Revert `frontend/src/App.tsx` `ProtectedDashboard` redirect if redirect loop is observed.
+- Restore deleted files from git if needed: `git checkout HEAD~1 -- <file>`.
+
+- **Patch version bump only** — `0.0.18` -> `0.0.19` (x/y unchanged).
+
+---
+
+## [0.0.14] - 2026-04-14 - DB Reference Hardening + Attendance Route Ownership Correction
+
+### Changed
+- **Runtime DB reference hardening:** replaced remaining runtime/config/script defaults that used `rictms_compliance` with `compliance_hub`.
+- **Users/Ticketing/Compliance DB env alignment:** added explicit split DB variables in backend env templates.
+- **Attendance API ownership corrected:** gateway now routes `/api/attendance` to users service.
+- **Ticketing attendance route removed:** attendance controller is no longer exposed by ticketing service.
+- **Users service attendance API added:** users service now serves attendance endpoints via a dedicated attendance module import.
+- **Auth module decoupled from static ticket-module import:** prevents users-service from loading ticket routes by static module resolution.
+- **Patch version bump only** - `0.0.13` -> `0.0.14` (x/y unchanged).
+
+### How To Test
+- Build backend and frontend.
+- Run backend unit tests.
+- Start users, ticketing, compliance, and gateway services.
+- Verify `/api/attendance/*` works through users service routing.
+- Verify direct ticketing `/api/attendance` returns 404 (route ownership check).
+
+### Migration Steps
+- Ensure split schemas and compatibility objects are present (`compliance_hub`, `compliance_hub_users`, `compliance_hub_ticketing`).
+- Run `backend/database/microservices-init.sql` and `backend/database/microservices-migrate.sql` using a MariaDB/MySQL client in environments that have not been migrated.
+
+### Rollback Steps
+- Revert this release commit.
+- Restore previous gateway attendance proxy target if needed.
+- Redeploy users, ticketing, compliance, and gateway services.
+
+## [0.0.13] - 2026-04-14 - Inactivity Re-Authentication + Deployment/Documentation Baseline
+
+### Added
+- **15-minute inactivity lock workflow (frontend):** authenticated sessions are locked after 15 minutes of no user activity and require explicit unlock before continuing.
+- **Session unlock UI:** added password re-entry dialog in auth context flow for local-auth users, including validation and clear failure messaging.
+- **Backend re-auth endpoint:** added `POST /auth/reauthenticate` for password verification without full logout/login cycle.
+- **Provider-aware unlock behavior:** Google-authenticated users are prompted to sign in again when session lock is triggered.
+- **Deployment guide:** added root `deployment.md` with step-by-step, repo-based split-container deployment procedure.
+- **In-house QA user stories:** added `INHOUSE-QA-USER-STORIES.md`.
+- **Main system documentation:** added `MAIN-SYSTEM-DOCUMENTATION.md` with context diagram, system profile, specs table, DB dictionary, ERD overview, manuals, and web app link section.
+
+### Changed
+- **Auth profile payload extended:** `GET /auth/me` now includes `authProvider` for client-side lock/unlock decisioning.
+- **Patch version bump only** - `0.0.12` -> `0.0.13` (x/y unchanged).
+
+### How To Test
+- Build backend and frontend.
+- Run backend unit tests.
+- Authenticate as local account, wait 15 minutes without activity, verify lock dialog appears and valid password unlocks session.
+- Authenticate as Google account, wait 15 minutes without activity, verify sign-in-again flow prompt appears.
+
+### Migration Steps
+- No database schema migration required.
+
+### Rollback Steps
+- Revert this release commit and redeploy backend/frontend.
+
+## [0.0.12] - 2026-04-14 — Split-DB Ownership Enforcement + Federated User Access
+
+### Changed
+- **Single-table ownership enforced (no duplicated base tables):**
+  - `users` is now owned only by `compliance_hub_users`.
+  - `units` is now owned only by `compliance_hub`.
+  - `attendance` is now owned only by `compliance_hub_users`.
+- **Backward-compatible cross-db access added via passthrough views:**
+  - `compliance_hub_ticketing.users` (VIEW) -> `compliance_hub_users.users`
+  - `compliance_hub_ticketing.units` (VIEW) -> `compliance_hub.units`
+  - `compliance_hub_ticketing.attendance` (VIEW) -> `compliance_hub_users.attendance`
+  - `compliance_hub.users` (VIEW) -> `compliance_hub_users.users`
+  - `compliance_hub_users.units` (VIEW) -> `compliance_hub.units`
+- **Migration hardening:** microservice migration SQL now supports repeated runs safely with view-aware cleanup and base-table checks.
+- **Ticketing runtime hardening:** startup migration now ensures attendance ownership in users DB and regenerates ticketing compatibility views for `users`, `units`, and `attendance`.
+- **Fallback API for cross-db user retrieval:** added `GET /api/users/federated` to return users with unit context through DB objects (works with base tables or views).
+- **Patch version bump only** — `0.0.11` -> `0.0.12` (x/y unchanged).
+
+### How To Test
+- Build backend and frontend.
+- Run backend unit tests.
+- Run migration SQL and verify ownership state:
+  - `compliance_hub_users.users` = BASE TABLE
+  - `compliance_hub.units` = BASE TABLE
+  - `compliance_hub_users.attendance` = BASE TABLE
+  - corresponding objects in other DBs are views, not duplicated tables.
+- Call `GET /api/users/federated` and verify user + unit output still resolves.
+
+### Migration Steps
+- Run `backend/database/microservices-migrate.sql` once (idempotent).
+- Restart users, ticketing, compliance, and gateway services.
+
+### Rollback Steps
+- Revert this release commit.
+- Re-run prior migration version if you need previous table-placement behavior.
+- Restart all services.
+
+## [0.0.11] - 2026-04-14 — DB Rename + Attendance Table Rename + Service Availability UX
+
+### Changed
+- **Split database naming standardized** — updated split DB naming to `compliance_hub_users`, `compliance_hub_ticketing`, and `compliance_hub` in init/migration scripts and compose service env wiring.
+- **Attendance table renamed** — ticketing attendance table now uses `attendance` instead of `tech_attendance`; backend entity/query references and UAT reset scripts were updated accordingly.
+- **Migration source DB detection hardened** — migration now selects a source schema with actual data and supports both legacy names (`ricms_compliance` and `rictms_compliance`) when `compliance_hub` exists but is empty.
+- **Service unavailable handling improved** — gateway now returns clear `503` responses with `Service currently unavailable` message for downed services and exposes per-service health booleans.
+- **Frontend availability behavior added** — dashboard/sidebar now hide or replace service-scoped views when corresponding microservice is offline.
+- **Patch version bump only** — `0.0.10` -> `0.0.11` (x/y unchanged).
+
+### How To Test
+- Build backend/frontend.
+- Run backend unit tests.
+- Run migration SQL and verify schema names include `compliance_hub*` and ticketing contains `attendance`.
+- Stop compliance service and verify compliance routes show unavailable messaging while users/ticketing routes remain accessible.
+
+### Migration Steps
+- Run `backend/database/microservices-init.sql` (for DB creation/grants).
+- Run `backend/database/microservices-migrate.sql` once to copy legacy data into split DBs with attendance compatibility copy (`tech_attendance` -> `attendance`).
+
+### Rollback Steps
+- Revert this release commit.
+- Restore previous split DB names and `tech_attendance` mapping if required by legacy runtime.
+
+## [0.0.10] - 2026-04-14 — QA Findings Closure: Attendance Legacy-Role Removal + RoleDefinition-Driven Grouping
+
+### Changed
+- **Removed legacy attendance roles from attendance logic** — eliminated direct use of `FOCAL`, `TECHNICIAN`, `TECHNICIAN_DESKTOP`, `TECHNICIAN_IT_SUPPORT`, `TECHNICIAN_IT_STAFF`, `TECHNICIAN_DESKTOP_STAFF` in attendance service/controller/frontend attendance role gates.
+- **Centralized attendance role grouping** — implemented grouped attendance role map (`desktop_support`, `it_support`, `pantawid_ict_support`, `ito`, `all`) in attendance service.
+- **RoleDefinition-driven attendance role selection** — attendance role resolution now reads from `role_definitions` (`assignable=true`) while excluding `user` and `super_admin`, plus legacy roles above.
+- **Attendance custom-role path cleanup** — removed legacy `customRoles` branching from attendance role filtering and replaced with centralized role-group resolution.
+- **Patch version bump only** — `0.0.9` -> `0.0.10` (x/y unchanged).
+
+### How To Test
+- Build backend/frontend.
+- Run backend unit tests.
+- Run repository smoke tests.
+- Verify attendance category filters return only expected role groups and legacy role accounts are not included by attendance role filters.
+
+### Migration Steps
+- No DB schema migration required.
+- Ensure `role_definitions` contains the current assignable roles used for attendance.
+
+### Rollback Steps
+- Revert this release commit.
+- Restart backend/frontend services.
+
+## [0.0.9] - 2026-04-14 — QA Findings Closure: Attendance Mapping + ITO Login Marking + Escalation Focal List
+
+### Changed
+- **Attendance default scope fixed** — default attendance category now consistently means `All (Technicians + ITOs)` in backend filtering and UI label.
+- **Support-category isolation fixed** — attendance category filters no longer leak cross-category technicians due to broad fallback technician-flag inclusion.
+- **ITO login attendance automation fixed** — auto-attendance on login now includes ITO/focal-equivalent roles.
+- **Escalation dropdown focal sourcing fixed** — ticket detail escalation dialog now builds candidate users from attendance category pools (`ito` + ticket type), then filters by configured escalation focal roles.
+- **Placeholder attendance users removed from operational views** — attendance queries now exclude seeded demo placeholder identities where present.
+- **Migration script cleanup extension** — `backend/database/microservices-migrate.sql` now includes optional post-copy cleanup that drops non-compliance tables from the source DB when `@cleanup_source_tables = 1`.
+- **Patch version bump only** — `0.0.8` -> `0.0.9` (x/y unchanged).
+
+### How To Test
+- In Attendance page, verify default category shows `All (Technicians + ITOs)` and includes ITO/focal-equivalent accounts.
+- Switch categories (`IT Support`, `Desktop Support`, `Pantawid ICT Support`, `ITOs`) and verify no cross-category leakage.
+- Login as ITO/focal-equivalent account and verify today attendance auto-marks present.
+- Open ticket detail escalation dialog and verify configured focal users are selectable.
+- Run backend/frontend build and backend tests.
+
+### Migration Steps
+- Run: `mysql -h <host> -u <user> -p < backend/database/microservices-migrate.sql`
+- Keep `SET @cleanup_source_tables = 1;` to remove users/ticketing tables from source DB after copy.
+
+### Rollback Steps
+- Revert this release commit.
+- Set `@cleanup_source_tables = 0` if you need copy-only behavior without source-table removal.
+
+## [0.0.8] - 2026-04-14 — QA Findings Closure: Escalation Visibility + Split-DB Data Migration
+
+### Added
+- **Escalated queue filter for focal accounts** — added `escalatedToMe` query support in ticket listing API and frontend toggle button `Escalated To Me` so focal/senior accounts can explicitly view escalated tickets.
+- **One-time split DB data migration script** — added `backend/database/microservices-migrate.sql` to copy existing tables/data from legacy shared DB into `ricms_users`, `ricms_ticketing`, and `ricms_compliance`.
+
+### Changed
+- **Escalation UI discoverability** — ticket detail now shows explicit `Upload Proof Photo(s)` button in the escalate dialog (instead of raw file input only).
+- **Escalation role visibility alignment** — frontend escalation eligibility now includes junior technician roles (`desktop_jr`, `it_support_jr`) to match backend-authorized escalation roles.
+- **Compose split DB wiring correction** — fixed swapped service DB env mappings in `docker-compose.yml`:
+  - `users-service` -> `USERS_DB_DATABASE=ricms_users`
+  - `ticketing-service` -> `TICKETING_DB_DATABASE=ricms_ticketing`
+  - `compliance-service` -> `COMPLIANCE_DB_DATABASE=ricms_compliance`
+- **Patch version bump only** — `0.0.7` -> `0.0.8` (x/y unchanged).
+
+### How To Test
+- Build backend and frontend.
+- Call `/api/tickets?escalatedToMe=true` as a focal/senior account and verify escalated tickets return.
+- In Tickets page, toggle `Escalated To Me` and verify list changes accordingly.
+- Open ticket detail, verify `Escalate Ticket` action is visible for technician roles (including junior roles), and verify `Upload Proof Photo(s)` appears in escalation dialog.
+- Run `backend/database/microservices-migrate.sql` on environments with pre-split data, then verify data exists in each service DB.
+
+### Migration Steps
+- Ensure split DBs exist (`ricms_users`, `ricms_ticketing`, `ricms_compliance`).
+- Run one-time migration script:
+  - `mysql -h <host> -u <user> -p < backend/database/microservices-migrate.sql`
+- Restart users, ticketing, and compliance services.
+
+### Rollback Steps
+- Revert this release commit.
+- Revert to shared DB routing by setting services back to one `DB_DATABASE` value.
+- Disable use of `escalatedToMe` filter in clients (if rolling back frontend only).
+
+## [0.0.7] - 2026-04-14 — QA Follow-up: Service DB Separation + Ticket Escalation Verification
+
+### Added
+- **Per-service DB initialization script** — added `backend/database/microservices-init.sql` to create `ricms_users`, `ricms_ticketing`, and `ricms_compliance` databases and grant access for `ricms_user`.
+- **Service-specific DB env overrides** — added optional env support in app modules:
+  - `USERS_DB_DATABASE` (users service)
+  - `TICKETING_DB_DATABASE` (ticketing service)
+  - `COMPLIANCE_DB_DATABASE` (compliance service)
+
+### Changed
+- **Compose DB split wiring** — `users-service` now uses `ricms_users`; `ticketing-service` now uses `ricms_ticketing`; `compliance-service` remains on `ricms_compliance`.
+- **MariaDB startup init mount** — compose now mounts `backend/database/microservices-init.sql` into `/docker-entrypoint-initdb.d` for first-boot DB creation.
+- **QA verification coverage** — confirmed escalation proof-photo upload and escalate action are already implemented in ticket detail flow (`/tickets/:id/escalate` multipart + frontend escalate dialog/button).
+- **Patch version bump only** — `0.0.6` → `0.0.7`.
+
+### How To Test
+- Build backend and frontend.
+- Start `users-service`, `ticketing-service`, and `api-gateway`; verify login and ticket flows still work.
+- In ticket detail as technician, verify `Escalate Ticket` button is visible on non-terminal tickets.
+- Escalate with proof image(s) and verify escalation record contains proof attachment count.
+- For Docker first boot, verify `ricms_users`, `ricms_ticketing`, `ricms_compliance` are created.
+
+### Migration Steps
+- If using Docker with an existing MariaDB volume, run SQL once manually (or recreate volume) to create the new databases and grants.
+- Ensure service env vars point to intended DB names (defaults in compose are already set).
+
+### Rollback Steps
+- Revert this release commit.
+- Point all services back to a single shared `DB_DATABASE` value (e.g., `ricms_compliance`) and remove service-specific overrides.
+
+## [0.0.6] - 2026-04-14 — Compliance Service Extraction (Users/Ticketing/Compliance Split)
+
+### Added
+- **Compliance service runtime** — new independent backend app entrypoint for non-users/non-ticketing modules on port `4103`.
+- **Compliance JWT strategy** — token validation for compliance service routes without coupling to users/ticketing runtime.
+- **Startup scripts** — `start:compliance` and `start:compliance:dev`.
+
+### Changed
+- **Gateway routing split** — non-users/non-ticketing API domains now proxy to compliance service:
+  - `/api/documents`, `/api/document-types`, `/api/comparisons`, `/api/issuances`, `/api/metrics`, `/api/incidents`, `/api/cybersecurity`, `/api/kpi`, `/api/mov`.
+- **Compose microservices profile** — added `compliance-service` and wired gateway dependency/env for `COMPLIANCE_SERVICE_URL`.
+- **Patch version bump only** — `0.0.5` → `0.0.6` (x/y unchanged).
+
+### How To Test
+- Start users (`4101`), ticketing (`4102`), compliance (`4103`), and gateway (`4000`).
+- Verify users endpoints route through gateway to users service.
+- Verify ticketing endpoints route through gateway to ticketing service.
+- Verify document/metrics/references/incidents/kpi/mov endpoints route through gateway to compliance service.
+
+### Migration Steps
+- No database schema migration required.
+- Restart all microservice processes to load the new compliance routing layout.
+
+### Rollback Steps
+- Revert `v0.0.6` commit on `microservices` branch.
+- Run prior users/ticketing split with strict fallback for unsupported routes.
+
+## [0.0.5] - 2026-04-14 — QA Fixes: Reassign Eligibility, Terminal Actions, Strict Split Runtime
+
+### Fixed
+- **Absent technicians appearing in Reassign dialog** — added backend assignment guard and frontend defensive filter so technicians marked `absent` or `out_of_office` are not assignable.
+- **Resolved/closed tickets reassign action behavior** — tickets table now keeps the reassign icon visible but disabled for `resolved`/`closed` tickets.
+- **Terminal status action visibility** — ticket detail now hides `Update Status` for technicians, section head, compliance officer, and super admin when ticket is already `resolved`/`closed`.
+
+### Added
+- **Strict split-runtime guard** — gateway now returns explicit `503` for unsupported `/api/*` routes when running in strict microservices mode, preventing false impression that non-users/ticketing modules are available from split runtime.
+
+### Changed
+- **Technician availability payload** — backend technician list now includes attendance state metadata (`attendanceStatus`, `isUnavailable`) used by frontend filtering.
+- **Patch version bump only** — `0.0.4` → `0.0.5` (x/y unchanged).
+
+### How To Test
+- Start users (`4101`), ticketing (`4102`), and gateway (`4000`), then open tickets table and click reassign on a ticket.
+- Verify technicians marked absent/out-of-office do not appear in assign/reassign list.
+- Verify reassign icon is visible but disabled for `resolved`/`closed` rows.
+- Open ticket detail as technician/section head/compliance officer/super admin on `resolved` or `closed` ticket and verify `Update Status` is hidden.
+- Call a non-ticketing/non-users API path through gateway and verify `503` with strict-mode message.
+
+### Migration Steps
+- No database schema migration required.
+- Restart gateway to apply strict unsupported-route handling.
+
+### Rollback Steps
+- Revert `v0.0.5` commit on `microservices` branch.
+- Set `MICROSERVICES_STRICT=false` (if needed) and/or run monolith backend for full-module APIs.
+
+## [0.0.4] - 2026-04-13 — API Gateway on 4000 for Separated Users/Ticketing
+
+### Fixed
+- **Cannot connect to server when only users/ticketing services are started** — added dedicated API gateway runtime on port `4000` that proxies users/auth/units to users service and tickets/attendance/ticket-settings to ticketing service.
+
+### Added
+- **Gateway runtime entrypoint** — `backend/src/apps/gateway.main.ts` and `backend/src/apps/gateway.module.ts`.
+- **Gateway startup scripts** — `start:gateway` and `start:gateway:dev`.
+- **Compose gateway service** — `api-gateway` in `microservices` profile bound to port `4000`.
+
+### Changed
+- **Service extraction cleanup** — removed old placeholder stubs under `services/users-service` and `services/ticketing-service`; active split runtime now uses backend app entrypoints only.
+- **Patch version bump only** — `0.0.3` → `0.0.4` (x/y unchanged).
+
+### How To Test
+- Start users service (`npm run start:users:dev`), ticketing service (`npm run start:ticketing:dev`), and gateway (`npm run start:gateway:dev`).
+- Verify `http://localhost:4000/api/health` responds.
+- Verify frontend calls to `/api/auth`, `/api/users`, `/api/tickets` succeed through gateway.
+
+### Migration Steps
+- No database schema migration required.
+- Run `npm install` in `backend` to install `http-proxy-middleware`.
+
+### Rollback Steps
+- Revert `v0.0.4` commit on `microservices` branch.
+- Run monolith backend only (`npm run start:dev`) on port `4000`.
+
+## [0.0.3] - 2026-04-13 — Full Users/Ticketing Microservice Runtime Split (microservices branch)
+
+### Added
+- **Users service runtime entrypoint** — `backend/src/apps/users-service.main.ts` and `backend/src/apps/users-service.module.ts` now run Users/Auth/Units domain as an independent service.
+- **Ticketing service runtime entrypoint** — `backend/src/apps/ticketing-service.main.ts` and `backend/src/apps/ticketing-service.module.ts` now run Tickets domain as an independent service.
+- **Ticketing JWT strategy** — `backend/src/apps/ticketing-jwt.strategy.ts` provides JWT validation for ticketing service without coupling to full auth module imports.
+- **Service start scripts** — backend scripts added: `start:users`, `start:users:dev`, `start:ticketing`, `start:ticketing:dev`.
+
+### Changed
+- **Auth decoupling for users service** — ticket-login hooks in auth are now optional; `AuthModule` imports `TicketsModule` only when `AUTH_ENABLE_TICKET_HOOKS=true`.
+- **Docker microservices profile** — `users-service` and `ticketing-service` containers now run full backend domain entrypoints, not placeholder stubs.
+- **Patch version bump only** — `0.0.2` → `0.0.3` (x/y unchanged).
+
+### How To Test
+- Start users service: `cd backend && npm run start:users:dev` (port `4101`).
+- Start ticketing service: `cd backend && npm run start:ticketing:dev` (port `4102`).
+- Keep frontend/main app on separate terminal as needed.
+- Run regression suite: backend build/unit/e2e + smoke script.
+
+### Migration Steps
+- No database schema migration required.
+- Ensure `.env` values are available to both services (DB/JWT/CORS).
+
+### Rollback Steps
+- Revert `v0.0.3` commit on `microservices` branch.
+- Run monolith backend (`npm run start:dev`) only.
+
+## [0.0.2] - 2026-04-13 — Microservices Transition Kickoff (microservices branch)
+
+### Added
+- **Users microservice scaffold** — new `services/users-service` NestJS skeleton with `/api/health` endpoint and independent runtime port `4101`.
+- **Ticketing microservice scaffold** — new `services/ticketing-service` NestJS skeleton with `/api/health` endpoint and independent runtime port `4102`.
+- **Container orchestration profile** — `docker-compose.yml` now includes optional `users-service` and `ticketing-service` containers under `microservices` profile for separate deploy/runtime startup.
+
+### Changed
+- **Patch version bump only** — `0.0.1` → `0.0.2` (x/y unchanged) for backend and frontend in `microservices` branch.
+
+### How To Test
+- Run current monolith smoke flow unchanged (`./smoke-test.ps1`) and verify pass.
+- Validate users service scaffold by calling `GET /api/health` on port `4101` after starting the service.
+- Validate ticketing service scaffold by calling `GET /api/health` on port `4102` after starting the service.
+- Start optional service containers: `docker compose --profile microservices up users-service ticketing-service`.
+
+### Migration Steps
+- No database migration required.
+- No runtime route switch performed yet; monolith remains active.
+
+### Rollback Steps
+- Revert `v0.0.2` commit on `microservices` branch.
+- Omit `microservices` compose profile at startup.
 
 ## [0.6.26] - 2026-04-13 — QA Fixes: Tickets Reminder Scope + Unrated Row Highlight
 
@@ -375,7 +1321,7 @@ Your machine is accessible at:
 - **`MovService.onModuleInit`** — added `private readonly logger = new Logger(MovService.name)` and wrapped `seedDefaultAssessmentArtifacts()` in `try/catch` with non-fatal WARN, matching the `DocumentService` pattern.
 
 #### Database
-- **Password reset** — all 4 user accounts reset to `password123` via bcrypt-10 hash generated in an isolated Node.js script (bypassing PowerShell `$` variable expansion). Hash `$2b$10$w0rNTO8B1FNZ7/7c1b2HHeONh0n4uNAXvtEGCqEbo3pYkLxymYzeu` applied to: `admin@rictms.gov.ph` (super_admin), `reviewer@rictms.gov.ph` (reviewer), `focal@rictms.gov.ph` (focal), `jmmmaguigad@dswd.gov.ph` (focal). Verified with `bcrypt.compare()` → `true`.
+- **Password reset** — all user accounts reset to `password123` via bcrypt-10 hash generated in an isolated Node.js script (bypassing PowerShell `$` variable expansion). Applied to: `admin@rictms.gov.ph` (super_admin), `reviewer@rictms.gov.ph` (reviewer), and other seeded accounts. Verified with `bcrypt.compare()` → `true`.
 
 #### Validation
 - Backend starts cleanly: `Nest application successfully started` ✅ — no crash, no unhandled `EntityMetadataNotFoundError`

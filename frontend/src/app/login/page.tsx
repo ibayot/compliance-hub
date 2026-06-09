@@ -25,6 +25,7 @@ export default function LoginPage() {
   const { enqueueSnackbar } = useSnackbar();
   const { search } = useLocation();
   const reason = new URLSearchParams(search).get('reason');
+  const redirect = new URLSearchParams(search).get('redirect');
   const hasGoogleClient = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim().length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -32,7 +33,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      await login(email, password, redirect ?? undefined);
     } catch (err: any) {
       const msg = err?.response?.data?.message
         || (err?.message === 'Network Error' || !err?.response
@@ -53,7 +54,7 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      await loginWithGoogle(idToken);
+      await loginWithGoogle(idToken, redirect ?? undefined);
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Google sign-in failed', { variant: 'error' });
     } finally {

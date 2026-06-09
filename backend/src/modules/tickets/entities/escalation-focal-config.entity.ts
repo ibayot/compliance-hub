@@ -7,7 +7,7 @@ import {
   JoinColumn,
   Unique,
 } from 'typeorm';
-import { User } from '../../users/entities/user.entity';
+import { User } from '../../shared/entities';
 
 /**
  * Configures which roles may RECEIVE escalated tickets for each ticket type.

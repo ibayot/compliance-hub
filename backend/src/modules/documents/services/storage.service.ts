@@ -4,18 +4,29 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { Readable } from 'stream';
+import { resolvePathWithinRoot } from '../../../common/security/security-validators';
 
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private readonly storageRoot: string;
+  private readonly storageRootAbs: string;
 
   constructor(private configService: ConfigService) {
     this.storageRoot = this.configService.get<string>(
       'STORAGE_PATH',
       './storage',
     );
+    this.storageRootAbs = path.resolve(this.storageRoot);
     this.ensureStorageDirectories();
+  }
+
+  private resolveWithinStorage(relativePath: string): string {
+    try {
+      return resolvePathWithinRoot(this.storageRootAbs, relativePath);
+    } catch {
+      throw new NotFoundException('Invalid storage path');
+    }
   }
 
   private async ensureStorageDirectories() {
@@ -32,7 +43,7 @@ export class StorageService {
   }
 
   private async ensureSubDirectoryExists(subDir: 'documents' | 'previews' | 'temp'): Promise<void> {
-    const fullPath = path.join(this.storageRoot, subDir);
+    const fullPath = this.resolveWithinStorage(subDir);
     await fs.mkdir(fullPath, { recursive: true });
   }
 
@@ -53,8 +64,8 @@ export class StorageService {
     const timestamp = Date.now();
     const sanitizedName = this.sanitizeFileName(fileName);
     const uniqueName = `${timestamp}-${sanitizedName}`;
-    const relativePath = path.join(subDir, uniqueName);
-    const fullPath = path.join(this.storageRoot, relativePath);
+    const relativePath = `${subDir}/${uniqueName}`;
+    const fullPath = this.resolveWithinStorage(relativePath);
 
     await fs.writeFile(fullPath, buffer);
     this.logger.log(`File saved: ${relativePath}`);
@@ -68,7 +79,7 @@ export class StorageService {
    * @returns File buffer
    */
   async readFile(filePath: string): Promise<Buffer> {
-    const fullPath = path.join(this.storageRoot, filePath);
+    const fullPath = this.resolveWithinStorage(filePath);
     try {
       return await fs.readFile(fullPath);
     } catch (error: any) {
@@ -93,7 +104,7 @@ export class StorageService {
    * @param filePath Relative path from storage root
    */
   async deleteFile(filePath: string): Promise<void> {
-    const fullPath = path.join(this.storageRoot, filePath);
+    const fullPath = this.resolveWithinStorage(filePath);
     try {
       await fs.unlink(fullPath);
       this.logger.log(`File deleted: ${filePath}`);
@@ -108,7 +119,7 @@ export class StorageService {
    * @returns Boolean indicating if file exists
    */
   async fileExists(filePath: string): Promise<boolean> {
-    const fullPath = path.join(this.storageRoot, filePath);
+    const fullPath = this.resolveWithinStorage(filePath);
     try {
       await fs.access(fullPath);
       return true;
@@ -132,7 +143,7 @@ export class StorageService {
    * @returns Absolute file system path
    */
   getFullPath(filePath: string): string {
-    return path.join(this.storageRoot, filePath);
+    return this.resolveWithinStorage(filePath);
   }
 
   /**

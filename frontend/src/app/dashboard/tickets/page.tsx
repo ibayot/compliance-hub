@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -6,7 +6,7 @@ import {
   TableContainer, TableHead, TableRow, IconButton, Chip, TextField, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions, Stack, CircularProgress,
   Rating, Tooltip, Alert, Autocomplete, ToggleButton, ToggleButtonGroup,
-  Checkbox, FormControlLabel, InputAdornment,
+  Checkbox, FormControlLabel, InputAdornment, Tab, Tabs, Badge, useMediaQuery, useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon, Visibility as ViewIcon, AssignmentInd as AssignIcon,
@@ -19,7 +19,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ticketsApi, Ticket, CreateTicketDto, TicketStatus, TicketType, TicketPriority,
-  TechnicianOption, TicketCategory, ticketSettingsApi, CsatFormData,
+  TechnicianOption, TicketCategory, ticketSettingsApi, attendanceApi, CsatFormData,
 } from '@/app/api/references';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
@@ -43,36 +43,36 @@ function ticketTypeIcon(t: TicketType) {
   return <ITIcon />;
 }
 
-function isStaffRole(role?: string) {
-  return ['super_admin','reviewer','focal','technician','technician_desktop','technician_it_support','technician_it_staff','technician_desktop_staff','auditor'].includes(role ?? '');
-}
 
-function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'warning' | 'breached' | null {
+
+function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | null {
   if (!ticket.slaDeadline) return null;
   const deadline = new Date(ticket.slaDeadline).getTime();
   const now = Date.now();
   const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
   if (isTerminal) {
     const resolvedTime = ticket.resolvedAt ? new Date(ticket.resolvedAt).getTime() : now;
-    return resolvedTime <= deadline ? 'met' : 'breached';
+    return resolvedTime <= deadline ? 'met' : 'overdue';
   }
-  if (now > deadline) return 'breached';
+  if (now > deadline) return 'overdue';
   const createdAt = ticket.createdAt ? new Date(ticket.createdAt).getTime() : now;
   const total = deadline - createdAt;
   const remaining = deadline - now;
-  return (total > 0 && remaining / total < 0.2) ? 'warning' : 'on_track';
+  return (total > 0 && remaining / total < 0.4) ? 'nearing_sla' : 'on_track';
 }
 
 const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'warning' | 'error' }> = {
   met: { label: 'Met', color: 'success' },
   on_track: { label: 'On Track', color: 'info' },
-  warning: { label: 'Warning', color: 'warning' },
-  breached: { label: 'Breached', color: 'error' },
+  nearing_sla: { label: 'Nearing SLA', color: 'warning' },
+  overdue: { label: 'Overdue', color: 'error' },
 };
 
 export default function TicketsPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { user, myCap } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -80,8 +80,7 @@ export default function TicketsPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType] = useState('');
   const [showMyTickets, setShowMyTickets] = useState(false);
-
-  // New ticket dialog
+  const [showEscalatedToMe, setShowEscalatedToMe] = useState(false);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [form, setForm] = useState<CreateTicketDto>({ subject: '', description: '', ticketType: 'it_support', priority: undefined });
   const [submitting, setSubmitting] = useState(false);
@@ -94,6 +93,7 @@ export default function TicketsPage() {
   const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
   const [selectedTechId, setSelectedTechId] = useState('');
   const [isEscalateMode, setIsEscalateMode] = useState(false);
+  const [escalationStateByTicket, setEscalationStateByTicket] = useState<Record<string, 'none' | 'returned' | 'active'>>({});
 
   // Satisfaction dialog
   const [satDialogOpen, setSatDialogOpen] = useState(false);
@@ -112,18 +112,110 @@ export default function TicketsPage() {
   const [reminderTitle, setReminderTitle] = useState('Pending Satisfaction Reminder');
   const [reminderMessage, setReminderMessage] = useState('');
 
-  const canManageAll = isStaffRole(user?.role) && !(['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? ''));
+  // DB-driven role capabilities (is_all_tickets, is_ticket_focal) — loaded from AuthContext
+  // (also available: myCap?.isEscalationFocal, myCap?.isTicketSettingsFocal, myCap?.isFocal)
+
   const isSuperAdmin = user?.role === 'super_admin';
-  const isFocalTech = ['technician', 'technician_desktop', 'technician_it_support'].includes(user?.role ?? '');
-  const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff'].includes(user?.role ?? '');
-  const isTechnician = isFocalTech || isLowerLevelTech;
-  const isFocal = user?.role === 'focal';
-  const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer';
+  const isFocalTech = ['desktop_sr', 'it_support_sr', 'pantawid_ict'].includes(user?.role ?? '');
+  const isLowerLevelTech = ['desktop_jr', 'it_support_jr'].includes(user?.role ?? '');
+  const isJuniorTech = isLowerLevelTech;
+  // ITO staff roles: see only their own tickets (restricted view), same as junior techs
+  const isItoRole = ['cybersec', 'infosec', 'lead_infra', 'server_admin', 'db_admin',
+    'network_admin', 'project_mgr', 'dev_lead', 'sqa_lead', 'records_officer', 'hr_id_officer',
+  ].includes(user?.role ?? '');
+  const isTechnician = isFocalTech || isLowerLevelTech || isJuniorTech || isItoRole;
+  const isFocal = user?.roleCode === 'focal';
+  const isComplianceOfficer = user?.roleCode === 'compliance_officer';
   const isSectionHead = user?.roleCode === 'section_head';
-  // canAssign: focal techs, CO, SH, super_admin can assign/reassign tickets
-  const canAssign = isSuperAdmin || isFocal || isFocalTech || isComplianceOfficer || isSectionHead;
-  // canEscalate: lower-level techs can escalate their assigned ticket to a focal technician
-  const canEscalate = isLowerLevelTech;
+  // DB-driven: is_all_tickets column — falls back to super_admin only until capabilities load
+  const canManageAll = isSuperAdmin || !!myCap?.isAllTickets;
+  // Matrix-driven: Escalated To Me tab is visible when Escalation capability is ticked.
+  const canViewEscalatedQueue = isSuperAdmin || !!myCap?.isEscalationFocal;
+  // DB-driven: is_ticket_focal column — who can manually assign/reassign tickets
+  const canAssign = isSuperAdmin || !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
+  // Matrix-driven escalation eligibility:
+  // show action for technician tracks plus ticket admin/assign/all-ticket capabilities.
+  const canEscalate = isSuperAdmin || !!(
+    myCap?.isDesktop ||
+    myCap?.isItSupport ||
+    myCap?.isPantawidIct ||
+    myCap?.isTicketFocal ||
+    myCap?.isTicketSettingsFocal ||
+    myCap?.isAllTickets
+  );
+
+  // Senior technician tab state (isFocalTech && !canManageAll view)
+  const [ticketTab, setTicketTab] = useState(0);
+  // Management tab state (canManageAll view: CO, SH, super_admin)
+  // 0=All, 1=Active, 2=Resolved/Closed, 3=Frozen, 4=Duplicate, 5=Proxy Requests
+  const [mgmtTab, setMgmtTab] = useState(0);
+  // User tab state (!isTechnician && !canManageAll view)
+  // 0 = All, 1 = Active, 2 = To Rate, 3 = Closed, 4 = Requested For
+  const [userTab, setUserTab] = useState(0);
+
+  const activeTickets = tickets.filter(t => ['open', 'assigned', 'in_progress'].includes(t.status));
+  const doneTickets = tickets.filter(t => ['resolved', 'closed'].includes(t.status));
+  const frozenTickets = tickets.filter(t => t.status === 'freeze');
+  const duplicateTickets = tickets.filter(t => t.status === 'duplicate');
+  
+  const toRateTickets = tickets.filter(t => 
+    (t.status === 'resolved' || t.status === 'closed') && 
+    t.requesterId === user?.id && 
+    !t.satisfactionSubmittedAt
+  );
+
+  // Tickets that were requested FOR this user (someone else filed on their behalf)
+  const requestedForTickets = tickets.filter(t =>
+    t.requesterId === user?.id &&
+    t.createdById != null &&
+    t.createdById !== user?.id
+  );
+
+  // For management/RICTMS: tickets this user created on behalf of someone else
+  const proxyCreatedTickets = tickets.filter(t =>
+    t.createdById === user?.id &&
+    t.requesterId !== user?.id
+  );
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('filter') === 'pending_satisfaction') {
+        setUserTab(1);
+      }
+    }
+  }, []);
+
+  const tabFilteredTickets = canManageAll
+    ? ([tickets, activeTickets, doneTickets, frozenTickets, duplicateTickets, proxyCreatedTickets][mgmtTab] ?? tickets)
+    : isTechnician
+      ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
+      : ([tickets, activeTickets, toRateTickets, doneTickets, proxyCreatedTickets][userTab] ?? tickets);
+
+  const refreshEscalationStates = useCallback(async (rows: Ticket[]) => {
+    if (!canEscalate) return;
+    const candidates = rows
+      .filter((t) => !['duplicate', 'closed', 'resolved'].includes(t.status))
+      .slice(0, 80);
+    if (candidates.length === 0) return;
+
+    const entries = await Promise.all(candidates.map(async (t) => {
+      try {
+        const escalations = await ticketsApi.getEscalations(t.id);
+        const latest = escalations[0];
+        const state: 'none' | 'returned' | 'active' = !latest
+          ? 'none'
+          : latest.status === 'returned'
+            ? 'returned'
+            : 'active';
+        return [t.id, state] as const;
+      } catch {
+        return [t.id, 'none'] as const;
+      }
+    }));
+
+    setEscalationStateByTicket((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
+  }, [canEscalate]);
 
   const fetchTickets = useCallback(async () => {
     try {
@@ -131,7 +223,8 @@ export default function TicketsPage() {
       const data = await ticketsApi.getAll({
         status: filterStatus as TicketStatus || undefined,
         ticketType: filterType as TicketType || undefined,
-        assignedToId: showMyTickets && isFocalTech ? user?.id : undefined,
+        assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
+        escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
       });
       setTickets(data);
     } catch {
@@ -139,9 +232,25 @@ export default function TicketsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterStatus, filterType, showMyTickets, isFocalTech, user?.id]);
+  }, [filterStatus, filterType, showMyTickets, showEscalatedToMe, canViewEscalatedQueue, isFocalTech, user?.id]);
 
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
+
+  useEffect(() => {
+    const rows = canManageAll
+      ? ([tickets, activeTickets, doneTickets, frozenTickets, duplicateTickets][mgmtTab] ?? tickets)
+      : isTechnician
+        ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
+        : tickets;
+    refreshEscalationStates(rows);
+  }, [
+    tickets,
+    canManageAll,
+    isTechnician,
+    mgmtTab,
+    ticketTab,
+    refreshEscalationStates,
+  ]);
 
   // For regular users: load pending satisfaction count to warn before new ticket
   useEffect(() => {
@@ -152,24 +261,28 @@ export default function TicketsPage() {
     }
   }, [canManageAll]);
 
+  // Check DB escalation_focal_configs to see if the current user's role is a configured focal
+  // NOTE: isEscalationFocal is now read from myCap?.isEscalationFocal (AuthContext)
+  // The escalation_focal_configs table is still used only for the assign dialog recipient list.
+
   // Silent auto-refresh — no loading spinner to avoid flicker on background polls
   const silentFetchTickets = useCallback(async () => {
     try {
       const data = await ticketsApi.getAll({
         status: filterStatus as TicketStatus || undefined,
         ticketType: filterType as TicketType || undefined,
-        assignedToId: showMyTickets && isFocalTech ? user?.id : undefined,
+        assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
+        escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
       });
       setTickets(data);
     } catch { /* silent */ }
-  }, [filterStatus, filterType, showMyTickets, isFocalTech, user?.id]);
+  }, [filterStatus, filterType, showMyTickets, showEscalatedToMe, canViewEscalatedQueue, isFocalTech, user?.id]);
   useAutoRefresh(silentFetchTickets);
 
   useEffect(() => {
-    if (canManageAll) {
-      usersApi.list().then(users => setAllUsers(users.filter(u => u.active))).catch(() => {});
-    }
-  }, [canManageAll]);
+    // Load users for everyone so they can request tickets for others (Proxy Creation)
+    usersApi.list().then(users => setAllUsers(users.filter(u => u.active))).catch(() => {});
+  }, []);
 
   // Fetch categories when the New Ticket dialog opens or support type changes
   // Pass activeOnly=true so only active categories appear in the creation dropdown
@@ -214,21 +327,12 @@ export default function TicketsPage() {
     if (!canManageAll) {
       ticketsApi.getDashboardStats().then(stats => {
         const pendingCount = stats.pendingSatisfactionTickets?.length ?? 0;
-        const unclosedCount = (stats.open ?? 0) + (stats.inProgress ?? 0) + (stats.resolved ?? 0);
         setPendingSatCount(pendingCount);
 
         if (pendingCount > 0) {
           setReminderTitle('Pending Satisfaction Reminder');
           setReminderMessage(
-            `You still have ${pendingCount} unresolved satisfaction rating${pendingCount > 1 ? 's' : ''}. Please rate your resolved tickets before opening a new request.`,
-          );
-          setReminderOpen(true);
-        }
-
-        if (unclosedCount > 0) {
-          setReminderTitle('Open Ticket Restriction');
-          setReminderMessage(
-            `You currently have ${unclosedCount} unclosed ticket${unclosedCount > 1 ? 's' : ''}. New ticket creation is disabled until your existing ticket is closed.`,
+            `You still have ${pendingCount} unresolved satisfaction rating${pendingCount > 1 ? 's' : ''}. We recommend rating your resolved tickets, but you may proceed to open a new request.`,
           );
           setReminderOpen(true);
           return;
@@ -245,29 +349,61 @@ export default function TicketsPage() {
   };
 
   const openAssignDialog = async (ticket: Ticket, escalate = false) => {
+    if (escalate) {
+      try {
+        const escalations = await ticketsApi.getEscalations(ticket.id);
+        const latest = escalations[0];
+        if (latest && latest.status !== 'returned') {
+          setEscalationStateByTicket((prev) => ({ ...prev, [ticket.id]: 'active' }));
+          enqueueSnackbar('This ticket already has an active escalation. You can escalate again only after it is returned.', { variant: 'warning' });
+          return;
+        }
+        setEscalationStateByTicket((prev) => ({ ...prev, [ticket.id]: latest?.status === 'returned' ? 'returned' : 'none' }));
+      } catch {
+      }
+    }
+
     setIsEscalateMode(escalate);
     setAssigningTicket(ticket);
-    setSelectedTechId(String(ticket.assignedToId ?? ''));
+    setSelectedTechId(escalate ? '' : String(ticket.assignedToId ?? ''));
     try {
-      const techs = await ticketsApi.getTechnicians();
-      const roleFiltered = techs.filter(t => {
-        // For escalation: only show focal-level technicians
-        if (escalate) {
-          if (ticket.ticketType === 'desktop_support')
-            return ['technician_desktop', 'technician', 'desktop_sr'].includes(t.role);
-          if (ticket.ticketType === 'pantawid_ict_support')
+      if (escalate) {
+        const [focals, itoUsers, supportUsers] = await Promise.all([
+          ticketSettingsApi.getEscalationFocals(ticket.ticketType),
+          attendanceApi.getTechnicians('ito'),
+          attendanceApi.getTechnicians(ticket.ticketType),
+        ]);
+        const mergedUsers = [...itoUsers, ...supportUsers]
+          .filter((u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx);
+        const allowedRoles = new Set(
+          focals
+            .filter((f) => f.ticketType === ticket.ticketType || f.ticketType === 'all')
+            .map((f) => f.roleValue),
+        );
+        const roleFiltered = mergedUsers.filter(
+          (t) => allowedRoles.size === 0 || allowedRoles.has(t.role),
+        );
+        const availableByAttendance = roleFiltered.filter(
+          (t) => !t.isUnavailable && !['absent', 'out_of_office'].includes(t.attendanceStatus ?? ''),
+        );
+        setTechnicians(availableByAttendance);
+      } else {
+        const techs = await ticketsApi.getTechnicians();
+        const roleFiltered = techs.filter((t) => {
+          if (ticket.ticketType === 'desktop_support') {
+            return ['technician_desktop', 'technician', 'technician_desktop_staff', 'desktop_sr', 'desktop_jr'].includes(t.role);
+          }
+          if (ticket.ticketType === 'pantawid_ict_support') {
             return ['technician', 'pantawid_ict'].includes(t.role);
-          return ['technician_it_support', 'technician', 'it_support_sr'].includes(t.role);
-        }
-        // Normal assign: filter by ticket type role
-        if (ticket.ticketType === 'desktop_support')
-          return ['technician_desktop', 'technician', 'technician_desktop_staff', 'desktop_sr', 'desktop_jr'].includes(t.role);
-        if (ticket.ticketType === 'pantawid_ict_support')
-          return ['technician', 'pantawid_ict'].includes(t.role);
-        return ['technician_it_support', 'technician', 'technician_it_staff', 'it_support_sr', 'it_support_jr'].includes(t.role);
-      });
-      // For normal assign: only show techs with no open tickets (same as ticket detail view)
-      setTechnicians(escalate ? roleFiltered : roleFiltered.filter(t => t.openCount === 0));
+          }
+          return ['technician_it_support', 'technician', 'technician_it_staff', 'it_support_sr', 'it_support_jr'].includes(t.role);
+        });
+        const availableByAttendance = roleFiltered.filter(
+          (t) => !t.isUnavailable && !['absent', 'out_of_office'].includes(t.attendanceStatus ?? ''),
+        );
+        // For normal assign: only show techs with no open tickets (same as ticket detail view)
+        setTechnicians(availableByAttendance.filter((t) => t.openCount === 0));
+      }
     } catch { setTechnicians([]); }
     setAssignDialogOpen(true);
   };
@@ -275,12 +411,20 @@ export default function TicketsPage() {
   const handleAssign = async () => {
     if (!assigningTicket || !selectedTechId) return;
     try {
-      await ticketsApi.assign(assigningTicket.id, Number(selectedTechId));
-      enqueueSnackbar('Ticket assigned.', { variant: 'success' });
+      if (isEscalateMode) {
+        const formData = new FormData();
+        formData.append('escalatedToId', String(Number(selectedTechId)));
+        await ticketsApi.escalateTicket(assigningTicket.id, formData);
+        enqueueSnackbar('Ticket escalated.', { variant: 'success' });
+        setEscalationStateByTicket((prev) => ({ ...prev, [assigningTicket.id]: 'active' }));
+      } else {
+        await ticketsApi.assign(assigningTicket.id, Number(selectedTechId));
+        enqueueSnackbar('Ticket assigned.', { variant: 'success' });
+      }
       setAssignDialogOpen(false);
       fetchTickets();
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to assign', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || (isEscalateMode ? 'Failed to escalate' : 'Failed to assign'), { variant: 'error' });
     }
   };
 
@@ -311,6 +455,7 @@ export default function TicketsPage() {
     if (!csatForm.clientFirstName.trim() || !csatForm.clientLastName.trim()) { enqueueSnackbar('Client name is required.', { variant: 'warning' }); return; }
     if (!csatForm.religion.trim()) { enqueueSnackbar('Religion is required.', { variant: 'warning' }); return; }
     if (!csatForm.age) { enqueueSnackbar('Age is required.', { variant: 'warning' }); return; }
+    if (csatForm.age < 20 || csatForm.age >= 90) { enqueueSnackbar('Age must be between 20 and 89.', { variant: 'warning' }); return; }
     if (!csatForm.sex) { enqueueSnackbar('Sex is required.', { variant: 'warning' }); return; }
     const ratedItems = csatForm.likert.filter((_, i) => ![3, 5, 8].includes(i));
     if (ratedItems.some(v => v === 0)) { enqueueSnackbar('Please rate all applicable items.', { variant: 'warning' }); return; }
@@ -329,7 +474,7 @@ export default function TicketsPage() {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} gap={{ xs: 2, sm: 0 }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} mb={3}>
         <Box>
           <Typography variant="h4" fontWeight={700}>Help Desk Tickets</Typography>
           <Typography variant="body2" color="text.secondary">
@@ -372,22 +517,50 @@ export default function TicketsPage() {
                   {showMyTickets ? 'My Tickets ✓' : 'My Tickets'}
                 </Button>
               )}
+              {canViewEscalatedQueue && (
+                <Button
+                  size="small"
+                  variant={showEscalatedToMe ? 'contained' : 'outlined'}
+                  color="warning"
+                  onClick={() => {
+                    setShowEscalatedToMe(v => !v);
+                    setShowMyTickets(false);
+                  }}
+                >
+                  {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
+                </Button>
+              )}
             </Stack>
           </CardContent>
         </Card>
       )}
-      {!canManageAll && isFocalTech && (
+      {!canManageAll && (isFocalTech || canViewEscalatedQueue) && (
         <Card sx={{ mb: 2 }}>
           <CardContent>
             <Stack direction="row" spacing={2}>
-              <Button
-                size="small"
-                variant={showMyTickets ? 'contained' : 'outlined'}
-                color="primary"
-                onClick={() => setShowMyTickets(v => !v)}
-              >
-                {showMyTickets ? 'My Assigned Tickets ✓' : 'All Tickets'}
-              </Button>
+              {isFocalTech && (
+                <Button
+                  size="small"
+                  variant={showMyTickets ? 'contained' : 'outlined'}
+                  color="primary"
+                  onClick={() => setShowMyTickets(v => !v)}
+                >
+                  {showMyTickets ? 'My Assigned Tickets ✓' : 'All Tickets'}
+                </Button>
+              )}
+              {canViewEscalatedQueue && (
+                <Button
+                  size="small"
+                  variant={showEscalatedToMe ? 'contained' : 'outlined'}
+                  color="warning"
+                  onClick={() => {
+                    setShowEscalatedToMe(v => !v);
+                    setShowMyTickets(false);
+                  }}
+                >
+                  {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
+                </Button>
+              )}
             </Stack>
           </CardContent>
         </Card>
@@ -401,7 +574,133 @@ export default function TicketsPage() {
           </CardContent>
         </Card>
       )}
+      {canManageAll && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent sx={{ pb: '0 !important' }}>
+            <Tabs value={mgmtTab} onChange={(_, v) => setMgmtTab(v)} variant="scrollable" scrollButtons="auto">
+              <Tab label={`All (${tickets.length})`} />
+              <Tab label={`Active (${activeTickets.length})`} />
+              <Tab label={`Resolved / Closed (${doneTickets.length})`} />
+              <Tab label={`Frozen (${frozenTickets.length})`} />
+              <Tab label={`Duplicate (${duplicateTickets.length})`} />
+              <Tab label={
+                <Badge color="info" variant="dot" invisible={proxyCreatedTickets.length === 0}>
+                  Proxy Requests ({proxyCreatedTickets.length})
+                </Badge>
+              } />
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
+      {isTechnician && !canManageAll && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent sx={{ pb: '0 !important' }}>
+            <Tabs value={ticketTab} onChange={(_, v) => setTicketTab(v)} variant="scrollable" scrollButtons="auto">
+              <Tab label={`Active (${activeTickets.length})`} />
+              <Tab label={`Resolved / Closed (${doneTickets.length})`} />
+              <Tab label={`Frozen (${frozenTickets.length})`} />
+              <Tab label={`Duplicate (${duplicateTickets.length})`} />
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
+      {!isTechnician && !canManageAll && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent sx={{ pb: '0 !important' }}>
+            <Tabs value={userTab} onChange={(_, v) => setUserTab(v)} variant="scrollable" scrollButtons="auto" sx={{ mb: 2 }}>
+              <Tab label={`All (${tickets.length})`} />
+              <Tab label={`Active (${activeTickets.length})`} />
+              <Tab label={
+                <Badge color="warning" variant="dot" invisible={toRateTickets.length === 0}>
+                  To Rate ({toRateTickets.length})
+                </Badge>
+              } />
+              <Tab label={`Closed / Resolved (${doneTickets.length})`} />
+              <Tab label={
+                <Badge color="info" variant="dot" invisible={proxyCreatedTickets.length === 0}>
+                  Requested For ({proxyCreatedTickets.length})
+                </Badge>
+              } />
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
 
+      {isMobile ? (
+        <Stack spacing={2}>
+          {loading ? (
+            <Box display="flex" justifyContent="center" p={3}><CircularProgress size={28} /></Box>
+          ) : tabFilteredTickets.length === 0 ? (
+            <Box display="flex" justifyContent="center" p={3}>
+              <Typography color="text.secondary">No tickets found in this category.</Typography>
+            </Box>
+          ) : tabFilteredTickets.map(ticket => {
+            const hasPendingSatisfaction =
+                (ticket.status === 'resolved' || ticket.status === 'closed') &&
+                ticket.requesterId === user?.id &&
+                !ticket.satisfactionSubmittedAt;
+
+            return (
+              <Card key={ticket.id} sx={hasPendingSatisfaction ? { backgroundColor: 'warning.50' } : {}}>
+                <CardContent>
+                  <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
+                    <Typography sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{ticket.ticketNumber}</Typography>
+                    <Box>
+                      {hasPendingSatisfaction && <Chip size="small" label="Unrated" color="warning" variant="filled" sx={{ mr: 1 }} />}
+                      <Chip size="small" label={ticket.status.replace('_', ' ')} color={STATUS_COLOR[ticket.status]} />
+                    </Box>
+                  </Box>
+                  <Typography variant="body1" sx={{ fontWeight: 600, mb: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {ticket.subject}
+                  </Typography>
+                  <Stack direction="row" flexWrap="wrap" gap={1} mb={2}>
+                    {ticket.requesterId !== user?.id && (
+                      <Chip size="small" label={`Requested for: ${ticket.requester?.firstName || ticket.requester?.email || 'Unknown'}`} color="secondary" />
+                    )}
+                    <Chip size="small" icon={ticketTypeIcon(ticket.ticketType)} label={TICKET_TYPE_LABELS[ticket.ticketType]} variant="outlined" />
+                    <Chip size="small" label={(ticket.priority ?? 'not set').toUpperCase()} color={PRIORITY_COLOR[ticket.priority ?? ''] ?? 'default'} />
+                    {(() => { const s = getSlaStatus(ticket); return s ? <Chip size="small" label={SLA_CHIP[s].label} color={SLA_CHIP[s].color} /> : null; })()}
+                  </Stack>
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography variant="caption" color="text.secondary">
+                      {new Date(ticket.createdAt).toLocaleDateString()}
+                    </Typography>
+                    <Stack direction="row" spacing={0.5}>
+                      <Tooltip title="View Details">
+                        <IconButton size="small" onClick={() => router.push(`/dashboard/tickets/${ticket.id}`)}><ViewIcon fontSize="small" /></IconButton>
+                      </Tooltip>
+                      {canAssign && ticket.status !== 'duplicate' && (
+                        <Tooltip title={['resolved', 'closed'].includes(ticket.status) ? 'Reassign disabled' : 'Assign Ticket'}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => openAssignDialog(ticket, false)}
+                              disabled={['resolved', 'closed'].includes(ticket.status)}
+                            >
+                              <AssignIcon fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      )}
+                      {canEscalate && escalationStateByTicket[ticket.id] !== 'active' && !['duplicate', 'closed', 'resolved'].includes(ticket.status) && (
+                        <Tooltip title="Escalate Ticket">
+                          <IconButton size="small" color="warning" onClick={() => openAssignDialog(ticket, true)}><AssignIcon fontSize="small" /></IconButton>
+                        </Tooltip>
+                      )}
+                      {hasPendingSatisfaction && (
+                        <Tooltip title="Rate this resolution">
+                          <IconButton size="small" color="success" onClick={() => openSatDialog(ticket)}><SatisfactionIcon fontSize="small" /></IconButton>
+                        </Tooltip>
+                      )}
+                    </Stack>
+                  </Box>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </Stack>
+      ) : (
       <TableContainer component={Card}>
         <Table>
           <TableHead>
@@ -422,11 +721,11 @@ export default function TicketsPage() {
           <TableBody>
             {loading ? (
               <TableRow><TableCell colSpan={11} align="center"><CircularProgress size={28} /></TableCell></TableRow>
-            ) : tickets.length === 0 ? (
+            ) : tabFilteredTickets.length === 0 ? (
               <TableRow><TableCell colSpan={11} align="center">
-                <Typography color="text.secondary" py={3}>No tickets found. Click "New Ticket" to submit your first request.</Typography>
+                <Typography color="text.secondary" py={3}>No tickets found in this category.</Typography>
               </TableCell></TableRow>
-            ) : tickets.map(ticket => {
+            ) : tabFilteredTickets.map(ticket => {
               const hasPendingSatisfaction =
                 (ticket.status === 'resolved' || ticket.status === 'closed') &&
                 ticket.requesterId === user?.id &&
@@ -441,9 +740,14 @@ export default function TicketsPage() {
                 <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{ticket.ticketNumber}</TableCell>
                 <TableCell sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ticket.subject}</TableCell>
                 <TableCell>
-                  <Chip size="small"
-                    icon={ticketTypeIcon(ticket.ticketType)}
-                    label={TICKET_TYPE_LABELS[ticket.ticketType]} variant="outlined" />
+                  <Stack direction="column" spacing={0.5}>
+                    {ticket.createdById && ticket.createdById !== ticket.requesterId && (
+                      <Chip size="small" label="Proxy Request" color="secondary" sx={{ alignSelf: 'flex-start' }} />
+                    )}
+                    <Chip size="small"
+                      icon={ticketTypeIcon(ticket.ticketType)}
+                      label={TICKET_TYPE_LABELS[ticket.ticketType]} variant="outlined" />
+                  </Stack>
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" color="text.secondary">{ticket.category?.name ?? '—'}</Typography>
@@ -458,7 +762,9 @@ export default function TicketsPage() {
                   </Stack>
                 </TableCell>
                 <TableCell>
-                  {(() => { const s = getSlaStatus(ticket); return s ? <Chip size="small" label={SLA_CHIP[s].label} color={SLA_CHIP[s].color} /> : <Typography variant="body2" color="text.disabled">—</Typography>; })()}
+                  <Stack direction="column" spacing={0.5}>
+                    {(() => { const s = getSlaStatus(ticket); return s ? <Chip size="small" label={SLA_CHIP[s].label} color={SLA_CHIP[s].color} /> : <Typography variant="body2" color="text.disabled">—</Typography>; })()}
+                  </Stack>
                 </TableCell>
                 {canManageAll && (
                   <TableCell>{ticket.requester ? `${ticket.requester.firstName ?? ''} ${ticket.requester.lastName ?? ''}`.trim() || ticket.requester.email : '—'}</TableCell>
@@ -486,11 +792,20 @@ export default function TicketsPage() {
                       <IconButton size="small" onClick={() => router.push(`/dashboard/tickets/${ticket.id}`)}><ViewIcon fontSize="small" /></IconButton>
                     </Tooltip>
                     {canAssign && ticket.status !== 'duplicate' && (
-                      <Tooltip title={ticket.assignedToId ? 'Reassign Ticket' : 'Assign Ticket'}>
-                        <IconButton size="small" color="primary" onClick={() => openAssignDialog(ticket, false)}><AssignIcon fontSize="small" /></IconButton>
+                      <Tooltip title={['resolved', 'closed'].includes(ticket.status) ? 'Reassign disabled for resolved/closed tickets' : (ticket.assignedToId ? 'Reassign Ticket' : 'Assign Ticket')}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => openAssignDialog(ticket, false)}
+                            disabled={['resolved', 'closed'].includes(ticket.status)}
+                          >
+                            <AssignIcon fontSize="small" />
+                          </IconButton>
+                        </span>
                       </Tooltip>
                     )}
-                    {canEscalate && !['duplicate', 'closed', 'resolved'].includes(ticket.status) && (
+                    {canEscalate && escalationStateByTicket[ticket.id] !== 'active' && !['duplicate', 'closed', 'resolved'].includes(ticket.status) && (
                       <Tooltip title="Escalate Ticket">
                         <IconButton size="small" color="warning" onClick={() => openAssignDialog(ticket, true)}><AssignIcon fontSize="small" /></IconButton>
                       </Tooltip>
@@ -507,6 +822,7 @@ export default function TicketsPage() {
           </TableBody>
         </Table>
       </TableContainer>
+      )}
 
       {/* New Ticket Dialog — Redesigned with highlighted support type cards + category dropdown */}
       <Dialog open={newDialogOpen} onClose={() => setNewDialogOpen(false)} maxWidth="sm" fullWidth>
@@ -514,7 +830,7 @@ export default function TicketsPage() {
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             <Typography variant="subtitle2" color="text.secondary">Choose Support Type</Typography>
-            <Stack direction="row" spacing={2} flexWrap="wrap">
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap={{ xs: 'nowrap', sm: 'wrap' }}>
               {([
                 { value: 'it_support' as TicketType, label: 'IT Support', icon: '💻', color: '#1976d2', desc: 'Software, network, email, accounts' },
                 { value: 'desktop_support' as TicketType, label: 'Desktop Support', icon: '🖥️', color: '#388e3c', desc: 'Hardware, printers, workstations' },
@@ -554,25 +870,23 @@ export default function TicketsPage() {
 
             <TextField label="Subject *" value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} fullWidth placeholder="Brief description of your issue" />
             <TextField label="Description *" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} fullWidth multiline rows={4} placeholder="Provide details: what happened, when, steps tried..." />
-            {canManageAll && (
-              <Autocomplete
-                options={allUsers.filter(u => u.role === 'user')}
-                getOptionLabel={u => `${[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email} (${u.email})`}
+            <Autocomplete
+                options={allUsers}
+                getOptionLabel={u => `${[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}`}
                 value={allUsers.find(u => u.id === form.requesterId) ?? null}
                 onChange={(_, newValue) => setForm({ ...form, requesterId: newValue?.id ?? undefined })}
                 isOptionEqualToValue={(option, value) => option.id === value.id}
                 renderInput={params => (
                   <TextField
                     {...params}
-                    label="Requester (Walk-in / Phone call)"
-                    helperText="Leave blank — ticket is automatically recorded as your own submission"
+                    label="Requested For (Optional)"
+                    helperText="Leave blank if you are requesting for yourself. Select a user to request on their behalf."
                     fullWidth
                   />
                 )}
                 clearOnEscape
                 fullWidth
               />
-            )}
             {(canManageAll || isTechnician) && (
               <TextField select label="Priority" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value as TicketPriority })} fullWidth>
                 <MenuItem value="low">Low — Not urgent</MenuItem>
@@ -604,6 +918,14 @@ export default function TicketsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setReminderOpen(false)}>Close</Button>
+          <Button
+            onClick={() => {
+              setReminderOpen(false);
+              setNewDialogOpen(true);
+            }}
+          >
+            Proceed Anyway
+          </Button>
           <Button
             variant="contained"
             color="warning"
@@ -696,18 +1018,18 @@ export default function TicketsPage() {
                 />
               </Stack>
 
-              <Stack direction="row" spacing={2}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField label="First Name *" value={csatForm.clientFirstName} onChange={e => setCsatForm(f => ({ ...f, clientFirstName: e.target.value }))} fullWidth />
                 <TextField label="M.I." value={csatForm.clientMiddleInitial ?? ''} onChange={e => setCsatForm(f => ({ ...f, clientMiddleInitial: e.target.value }))} inputProps={{ maxLength: 2 }} sx={{ maxWidth: 80 }} />
                 <TextField label="Last Name *" value={csatForm.clientLastName} onChange={e => setCsatForm(f => ({ ...f, clientLastName: e.target.value }))} fullWidth />
-                <TextField label="Suffix" value={csatForm.suffix ?? ''} onChange={e => setCsatForm(f => ({ ...f, suffix: e.target.value }))} sx={{ maxWidth: 100 }} />
+                <TextField label="Suffix" value={csatForm.suffix ?? ''} onChange={e => setCsatForm(f => ({ ...f, suffix: e.target.value }))} sx={{ maxWidth: { xs: '100%', sm: 100 } }} />
               </Stack>
 
-              <Stack direction="row" spacing={2} flexWrap="wrap">
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
                 <TextField
                   label="Age *"
                   type="number"
-                  inputProps={{ min: 1, max: 120 }}
+                  inputProps={{ min: 20, max: 89 }}
                   value={csatForm.age ?? ''}
                   onChange={e => setCsatForm(f => ({ ...f, age: e.target.value ? Number(e.target.value) : undefined }))}
                   sx={{ maxWidth: 100 }}
@@ -771,17 +1093,18 @@ export default function TicketsPage() {
                 const isNA = [3, 5, 8].includes(idx);
                 const val = csatForm.likert[idx];
                 return (
-                  <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }}>
+                  <Box key={idx} sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, gap: 1 }}>
+                    <Typography variant="body2" sx={{ flex: 1, minWidth: 0, mb: { xs: 1, sm: 0 } }}>
                       {idx}. {item}
                     </Typography>
                     {isNA ? (
-                      <Chip size="small" label="N/A" color="default" sx={{ minWidth: 64 }} />
+                      <Chip size="small" label="N/A" color="default" sx={{ minWidth: 64, alignSelf: { xs: 'flex-start', sm: 'auto' } }} />
                     ) : (
                       <ToggleButtonGroup
                         exclusive
                         size="small"
                         value={val === 0 ? null : val}
+                        sx={{ alignSelf: { xs: 'center', sm: 'auto' } }}
                         onChange={(_, v) => {
                           if (v !== null) {
                             const updated = [...csatForm.likert] as Array<number | 'NA'>;

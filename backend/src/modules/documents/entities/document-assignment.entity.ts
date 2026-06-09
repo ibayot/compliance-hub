@@ -8,8 +8,8 @@ import {
   UpdateDateColumn,
   Unique,
 } from 'typeorm';
-import { User } from '../../users/entities/user.entity';
 import { Unit } from '../../units/entities/unit.entity';
+import { UserRef } from '../../../shared/contracts/user-ref';
 
 export enum SubmissionFrequency {
   MONTHLY = 'monthly',
@@ -27,9 +27,8 @@ export class DocumentAssignment {
   @Column({ type: 'int' })
   user_id: number;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'user_id' })
-  user: User;
+  // Virtual enrichment field populated by UsersHttpClient.
+  user?: UserRef | null;
 
   @Column({ type: 'int' })
   unit_id: number;

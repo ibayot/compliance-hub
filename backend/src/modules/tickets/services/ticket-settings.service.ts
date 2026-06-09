@@ -8,8 +8,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TicketCategoryConfig } from '../entities/ticket-category.entity';
 import { TicketKeywordRule } from '../entities/ticket-keyword-rule.entity';
+import { TicketIssueType } from '../entities/ticket-issue-type.entity';
 import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
 import { RoleDefinitionEntity } from '../../users/entities/role-definition.entity';
+import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -49,6 +51,19 @@ export interface CreateEscalationFocalDto {
   label: string;
 }
 
+export interface CreateIssueTypeDto {
+  name: string;
+  description?: string;
+  categoryId?: string | null;
+}
+
+export interface UpdateIssueTypeDto {
+  name?: string;
+  description?: string;
+  isActive?: boolean;
+  categoryId?: string | null;
+}
+
 // --- Service ----------------------------------------------------------------
 
 @Injectable()
@@ -60,10 +75,13 @@ export class TicketSettingsService {
     private readonly categoryRepo: Repository<TicketCategoryConfig>,
     @InjectRepository(TicketKeywordRule)
     private readonly keywordRepo: Repository<TicketKeywordRule>,
+    @InjectRepository(TicketIssueType)
+    private readonly issueTypeRepo: Repository<TicketIssueType>,
     @InjectRepository(EscalationFocalConfig)
     private readonly escalationFocalRepo: Repository<EscalationFocalConfig>,
     @InjectRepository(RoleDefinitionEntity)
     private readonly roleDefRepo: Repository<RoleDefinitionEntity>,
+    private readonly roleCapSvc: RoleCapabilitiesService,
   ) {}
 
   // ── Categories ──────────────────────────────────────────────────────────
@@ -132,8 +150,8 @@ export class TicketSettingsService {
       cat.key = dto.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
     }
     if (dto.ticketType !== undefined) {
-      if (!['desktop_support', 'it_support'].includes(dto.ticketType)) {
-        throw new BadRequestException('ticketType must be desktop_support or it_support');
+      if (!['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.ticketType)) {
+        throw new BadRequestException('ticketType must be desktop_support, it_support, or pantawid_ict_support');
       }
       cat.ticketType = dto.ticketType;
     }
@@ -221,6 +239,100 @@ export class TicketSettingsService {
     await this.keywordRepo.remove(rule);
   }
 
+  // ── Issue Types ───────────────────────────────────────────────────────
+
+  async listIssueTypes(categoryId?: string): Promise<TicketIssueType[]> {
+    const qb = this.issueTypeRepo
+      .createQueryBuilder('it')
+      .leftJoinAndSelect('it.category', 'category')
+      .where('it.is_deleted = :deleted', { deleted: false })
+      .orderBy('it.name', 'ASC');
+
+    if (categoryId) {
+      qb.andWhere('it.category_id = :categoryId', { categoryId });
+    }
+
+    return qb.getMany();
+  }
+
+  async listActiveIssueTypes(categoryId?: string): Promise<TicketIssueType[]> {
+    const qb = this.issueTypeRepo
+      .createQueryBuilder('it')
+      .leftJoinAndSelect('it.category', 'category')
+      .where('it.is_deleted = :deleted', { deleted: false })
+      .andWhere('it.is_active = :active', { active: true })
+      .orderBy('it.name', 'ASC');
+
+    if (categoryId) {
+      qb.andWhere('it.category_id = :categoryId', { categoryId });
+    }
+
+    return qb.getMany();
+  }
+
+  async getIssueTypeById(id: string): Promise<TicketIssueType> {
+    const issueType = await this.issueTypeRepo.findOne({
+      where: { id, is_deleted: false },
+      relations: ['category'],
+    });
+    if (!issueType) throw new NotFoundException(`Issue type ${id} not found`);
+    return issueType;
+  }
+
+  async createIssueType(dto: CreateIssueTypeDto, actorId: number): Promise<TicketIssueType> {
+    if (!dto.name?.trim()) throw new BadRequestException('Issue type name is required');
+
+    const key = dto.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+    const existing = await this.issueTypeRepo.findOne({ where: { key, is_deleted: false } });
+    if (existing) throw new BadRequestException(`Issue type key "${key}" already exists`);
+
+    if (dto.categoryId) {
+      await this.getCategoryById(dto.categoryId);
+    }
+
+    const issueType = this.issueTypeRepo.create({
+      key,
+      name: dto.name.trim(),
+      description: dto.description?.trim() || null,
+      is_active: true,
+      is_deleted: false,
+      category_id: dto.categoryId || null,
+      created_by: actorId,
+      updated_by: actorId,
+    });
+
+    return this.issueTypeRepo.save(issueType);
+  }
+
+  async updateIssueType(id: string, dto: UpdateIssueTypeDto, actorId: number): Promise<TicketIssueType> {
+    const issueType = await this.getIssueTypeById(id);
+
+    if (dto.name !== undefined) {
+      if (!dto.name.trim()) throw new BadRequestException('Issue type name is required');
+      issueType.name = dto.name.trim();
+      issueType.key = dto.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+    }
+    if (dto.description !== undefined) issueType.description = dto.description?.trim() || null;
+    if (dto.isActive !== undefined) issueType.is_active = dto.isActive;
+    if (dto.categoryId !== undefined) {
+      if (dto.categoryId) {
+        await this.getCategoryById(dto.categoryId);
+      }
+      issueType.category_id = dto.categoryId || null;
+    }
+    issueType.updated_by = actorId;
+
+    return this.issueTypeRepo.save(issueType);
+  }
+
+  async deleteIssueType(id: string, actorId: number): Promise<void> {
+    const issueType = await this.getIssueTypeById(id);
+    issueType.is_deleted = true;
+    issueType.is_active = false;
+    issueType.updated_by = actorId;
+    await this.issueTypeRepo.save(issueType);
+  }
+
   /** Find the first matching keyword rule for a given text (subject + description) */
   async matchKeywordRules(text: string): Promise<TicketKeywordRule | null> {
     const rules = await this.keywordRepo.find({
@@ -259,13 +371,13 @@ export class TicketSettingsService {
 
   /**
    * List roles available to be designated as escalation focals.
-   * QA #13: Reads from role_definitions table, excludes non-assignable system roles.
+   * Includes all defined roles except non-staff system roles and management roles
+   * (user, super_admin, section_head, compliance_officer).
    */
   async listAvailableEscalationRoles(): Promise<{ value: string; label: string }[]> {
-    const excluded = ['user', 'super_admin', 'section_head'];
-    const rows = await this.roleDefRepo.find({ where: { assignable: true } });
+    const rows = await this.roleDefRepo.find();
     return rows
-      .filter(r => !excluded.includes(r.value))
+      .filter(r => this.roleCapSvc.isEscalationFocal(r.value))
       .map(r => ({ value: r.value, label: r.label }));
   }
 
@@ -275,6 +387,12 @@ export class TicketSettingsService {
     if (!validTypes.includes(dto.ticketType)) {
       throw new BadRequestException(`ticketType must be one of: ${validTypes.join(', ')}`);
     }
+    if (!this.roleCapSvc.isEscalationFocal(dto.roleValue)) {
+      throw new BadRequestException(
+        `Role "${dto.roleValue}" is not enabled for escalation focal in role capability matrix.`,
+      );
+    }
+
     const existing = await this.escalationFocalRepo.findOne({
       where: { ticketType: dto.ticketType, roleValue: dto.roleValue },
     });

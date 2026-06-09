@@ -37,6 +37,17 @@ export default function DocumentViewer({ pdfUrl, mimeType = 'application/pdf', v
 
   const isHtml = mimeType === 'text/html' || mimeType?.startsWith('text/html');
 
+  const isSafePreviewUrl = (candidate: string): boolean => {
+    try {
+      if (candidate.startsWith('blob:')) return true;
+      if (candidate.startsWith('/')) return true;
+      const parsed = new URL(candidate, window.location.origin);
+      return parsed.origin === window.location.origin;
+    } catch {
+      return false;
+    }
+  };
+
   useEffect(() => {
     if (!isHtml) {
       setHtmlPreviewUrl((previousUrl) => {
@@ -54,6 +65,9 @@ export default function DocumentViewer({ pdfUrl, mimeType = 'application/pdf', v
 
     (async () => {
       try {
+        if (!isSafePreviewUrl(pdfUrl)) {
+          throw new Error('Unsafe preview URL blocked');
+        }
         const response = await fetch(pdfUrl);
         const htmlText = await response.text();
         let normalizedHtml = htmlText;

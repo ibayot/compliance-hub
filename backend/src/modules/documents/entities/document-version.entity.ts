@@ -7,7 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Document } from './document.entity';
-import { User } from '../../users/entities/user.entity';
+import { User } from '../../shared/entities';
 
 @Entity('document_versions')
 export class DocumentVersion {

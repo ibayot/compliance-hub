@@ -1,7 +1,8 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { OAuth2Client, TokenPayload as GoogleTokenPayload } from 'google-auth-library';
 import { UsersService } from '../users/users.service';
 import { AttendanceService } from '../tickets/services/attendance.service';
@@ -17,9 +18,21 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly attendanceService: AttendanceService,
-    private readonly ticketService: TicketService,
+    @Optional() private readonly attendanceService?: AttendanceService,
+    @Optional() private readonly ticketService?: TicketService,
   ) {}
+
+  private timingSafeStringEquals(a: string, b: string): boolean {
+    const aBuf = Buffer.from(a, 'utf8');
+    const bBuf = Buffer.from(b, 'utf8');
+    const len = Math.max(aBuf.length, bBuf.length);
+    const aPadded = Buffer.alloc(len);
+    const bPadded = Buffer.alloc(len);
+    aBuf.copy(aPadded);
+    bBuf.copy(bPadded);
+    const equals = crypto.timingSafeEqual(aPadded, bPadded);
+    return equals && aBuf.length === bBuf.length;
+  }
 
   private get jwtIssuer(): string {
     return this.configService.get<string>('JWT_ISSUER') || 'compliance-hub-api';
@@ -29,7 +42,7 @@ export class AuthService {
     return this.configService.get<string>('JWT_AUDIENCE') || 'compliance-hub-client';
   }
 
-  private buildAuthResponse(user: User, tokens: { accessToken: string; refreshToken: string }): AuthResponse {
+  private buildAuthResponse(user: User, tokens: { accessToken: string; refreshToken: string }, roleCode?: string | null): AuthResponse {
     return {
       ...tokens,
       user: {
@@ -46,6 +59,7 @@ export class AuthService {
         ticketMainFocal: user.ticketMainFocal,
         ticketTechnician: user.ticketTechnician,
         role: user.role,
+        roleCode: roleCode ?? null,
         units: user.units?.map((u) => ({ id: u.id, name: u.name })) || [],
       },
     };
@@ -91,12 +105,12 @@ export class AuthService {
     await this.usersService.recordLogin(user.id);
 
     // Auto-correct: if technician was marked absent today and then logs in, set them present
-    this.attendanceService.autoCorrectAbsentOnLogin(user.id).catch(() => {});
+    this.attendanceService?.autoCorrectAbsentOnLogin(user.id).catch(() => {});
     // QA: trigger auto-assignment for pending OPEN tickets upon technician login
-    this.ticketService.assignPendingTicketsOnLogin(user.id).catch(() => {});
+    this.ticketService?.assignPendingTicketsOnLogin(user.id).catch(() => {});
 
     const tokens = await this.generateTokens(user);
-    return this.buildAuthResponse(user, tokens);
+    return this.buildAuthResponse(user, tokens, tokens.roleCode);
   }
 
   async googleLogin(idToken: string): Promise<AuthResponse> {
@@ -134,12 +148,12 @@ export class AuthService {
     await this.usersService.recordLogin(user.id);
 
     // Auto-correct: if user was marked absent today and logs in, set them present
-    this.attendanceService.autoCorrectAbsentOnLogin(user.id).catch(() => {});
+    this.attendanceService?.autoCorrectAbsentOnLogin(user.id).catch(() => {});
     // QA: trigger auto-assignment for pending OPEN tickets upon technician login
-    this.ticketService.assignPendingTicketsOnLogin(user.id).catch(() => {});
+    this.ticketService?.assignPendingTicketsOnLogin(user.id).catch(() => {});
 
     const tokens = await this.generateTokens(user);
-    return this.buildAuthResponse(user, tokens);
+    return this.buildAuthResponse(user, tokens, tokens.roleCode);
   }
 
   async validateUser(email: string, password: string): Promise<User | null> {
@@ -158,11 +172,13 @@ export class AuthService {
     return user;
   }
 
-  async generateTokens(user: User): Promise<{ accessToken: string; refreshToken: string }> {
+  async generateTokens(user: User): Promise<{ accessToken: string; refreshToken: string; roleCode: string | null }> {
+    const roleCode = await this.usersService.getRoleCodeForRole(user.role).catch(() => null);
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
+      roleCode: roleCode ?? null,
       units: user.units?.map((unit) => unit.id) || [],
     };
 
@@ -181,7 +197,7 @@ export class AuthService {
       }),
     ]);
 
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, roleCode: roleCode ?? null };
   }
 
   async refresh(refreshToken: string): Promise<{ accessToken: string }> {
@@ -204,6 +220,7 @@ export class AuthService {
           sub: user.id,
           email: user.email,
           role: user.role,
+          roleCode: await this.usersService.getRoleCodeForRole(user.role).catch(() => null),
           units: user.units?.map((unit) => unit.id) || [],
         },
         {
@@ -236,6 +253,7 @@ export class AuthService {
       designation: user.designation,
       ticketMainFocal: user.ticketMainFocal,
       ticketTechnician: user.ticketTechnician,
+      authProvider: user.authProvider,
       role: user.role,
       units: user.units?.map((u) => ({ id: u.id, name: u.name })) || [],
       roleCode: roleDef?.roleCode ?? null,
@@ -247,7 +265,7 @@ export class AuthService {
     currentPassword: string,
     newPassword: string,
   ): Promise<{ message: string }> {
-    if (currentPassword === newPassword) {
+    if (this.timingSafeStringEquals(currentPassword, newPassword)) {
       throw new BadRequestException('New password must be different from current password');
     }
 
@@ -262,5 +280,23 @@ export class AuthService {
     await this.usersService.updatePasswordHash(user.id, user.passwordHash);
 
     return { message: 'Password updated successfully' };
+  }
+
+  async reauthenticate(userId: number, password: string): Promise<{ message: string }> {
+    if (!password || password.trim().length === 0) {
+      throw new BadRequestException('Password is required');
+    }
+
+    const user = await this.usersService.findOne(userId);
+    if (user.authProvider === 'google') {
+      throw new BadRequestException('Password re-authentication is not available for Google accounts. Please sign in again.');
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Password is incorrect');
+    }
+
+    return { message: 'Re-authentication successful' };
   }
 }

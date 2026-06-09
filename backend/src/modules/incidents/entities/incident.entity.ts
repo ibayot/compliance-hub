@@ -4,10 +4,8 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
 } from 'typeorm';
-import { User } from '../../users/entities/user.entity';
+import { UserRef } from '../../../shared/contracts/user-ref';
 
 export enum IncidentSeverity {
   LOW = 'low',
@@ -70,17 +68,15 @@ export class Incident {
   @Column({ type: 'int' })
   reported_by_id: number;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'reported_by_id' })
-  reported_by: User;
+  // Virtual enrichment field populated via UsersHttpClient.
+  reported_by?: UserRef | null;
 
   // Assigned to (optional)
   @Column({ type: 'int', nullable: true })
   assigned_to_id: number;
 
-  @ManyToOne(() => User, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'assigned_to_id' })
-  assigned_to: User;
+  // Virtual enrichment field populated via UsersHttpClient.
+  assigned_to?: UserRef | null;
 
   @Column({ type: 'text', nullable: true })
   resolution_notes: string;

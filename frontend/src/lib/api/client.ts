@@ -4,6 +4,21 @@ import axios, { AxiosError, AxiosInstance } from 'axios';
 // VITE_API_URL can override for production deployments.
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
+const tokenStore = {
+  get: (key: 'accessToken' | 'refreshToken'): string | null => {
+    if (typeof window === 'undefined') return null;
+    return window.sessionStorage.getItem(key);
+  },
+  set: (key: 'accessToken' | 'refreshToken', value: string) => {
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.setItem(key, value);
+  },
+  remove: (key: 'accessToken' | 'refreshToken') => {
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.removeItem(key);
+  },
+};
+
 class ApiClient {
   private client: AxiosInstance;
   /** Guard: only one token-refresh attempt runs at a time */
@@ -29,7 +44,7 @@ class ApiClient {
     this.client.interceptors.request.use(
       (config) => {
         if (typeof window !== 'undefined') {
-          const token = localStorage.getItem('accessToken');
+          const token = tokenStore.get('accessToken');
           if (token) config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
@@ -50,10 +65,10 @@ class ApiClient {
 
         if (typeof window === 'undefined') return Promise.reject(error);
 
-        const refreshToken = localStorage.getItem('refreshToken');
+        const refreshToken = tokenStore.get('refreshToken');
         // No refresh token at all — clear access token and redirect immediately
         if (!refreshToken) {
-          localStorage.removeItem('accessToken');
+          tokenStore.remove('accessToken');
           window.location.href = '/login?reason=session_expired';
           return Promise.reject(error);
         }
@@ -75,15 +90,15 @@ class ApiClient {
         try {
           const response = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
           const { accessToken } = response.data;
-          localStorage.setItem('accessToken', accessToken);
+          tokenStore.set('accessToken', accessToken);
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
           this.processQueue(null, accessToken);
           return this.client(originalRequest);
         } catch (refreshError) {
           // Refresh failed (e.g. user deactivated) — log out and notify
           this.processQueue(refreshError, null);
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
+          tokenStore.remove('accessToken');
+          tokenStore.remove('refreshToken');
           window.location.href = '/login?reason=session_expired';
           return Promise.reject(refreshError);
         } finally {

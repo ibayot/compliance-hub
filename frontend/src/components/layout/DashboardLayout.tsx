@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { Box, Toolbar } from '@mui/material';
+import { useLocation } from 'react-router-dom';
+import { Alert, Box, CircularProgress, Paper, Toolbar, Typography } from '@mui/material';
 import Sidebar from './Sidebar';
 import AppBar from './AppBar';
 import { SidebarProvider } from '@/contexts/SidebarContext';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { PageTitleProvider } from '@/contexts/PageTitleContext';
+import { useServiceAvailability } from '@/lib/utils/useServiceAvailability';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -25,6 +27,22 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 function DashboardLayoutContent({ children }: DashboardLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { drawerWidth } = useSidebar();
+  const location = useLocation();
+  const { services, loaded } = useServiceAvailability();
+
+  const compliancePaths = [
+    '/dashboard/documents',
+    '/dashboard/repository',
+    '/dashboard/issuances',
+    '/dashboard/metrics',
+    '/dashboard/kpi',
+    '/dashboard/reviews',
+    '/dashboard/reports',
+    '/dashboard/mov',
+  ];
+  const isComplianceRoute = compliancePaths.some((p) => location.pathname === p || location.pathname.startsWith(`${p}/`));
+  const showComplianceUnavailable = isComplianceRoute && loaded && services.compliance === false;
+  const isComplianceLoading = isComplianceRoute && !loaded;
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -66,7 +84,22 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
             py: 4,
           }}
         >
-          {children}
+          {isComplianceLoading ? (
+            <Paper sx={{ p: 3, textAlign: 'center' }}>
+              <CircularProgress size={24} />
+              <Typography variant="body2" color="text.secondary" mt={1}>
+                Checking service availability...
+              </Typography>
+            </Paper>
+          ) : showComplianceUnavailable ? (
+            <Paper sx={{ p: 3 }}>
+              <Alert severity="warning">
+                Service currently unavailable. Please try again later.
+              </Alert>
+            </Paper>
+          ) : (
+            children
+          )}
         </Box>
       </Box>
     </Box>

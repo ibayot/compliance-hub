@@ -95,11 +95,11 @@ export default function DashboardPage() {
   const periodMonth = now.getMonth() + 1;
 
   const isRegularUser = user?.role === 'user';
-  const isTechnicianAny = ['technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff', 'pantawid_ict', 'desktop_sr', 'it_support_sr', 'desktop_jr', 'it_support_jr'].includes(user?.role ?? '');
-  const isLowerLevelTech = ['technician_it_staff', 'technician_desktop_staff', 'it_support_jr', 'desktop_jr'].includes(user?.role ?? '');
-  // Compliance Officer = reviewer or any role tagged with roleCode 'compliance_officer'
-  const isComplianceOfficer = user?.role === 'reviewer' || user?.roleCode === 'compliance_officer';
-  // Full dashboard: super_admin or CO; generic staff (focal, auditor, etc.) see doc cards + KPI only
+  const isTechnicianAny = ['pantawid_ict', 'desktop_sr', 'it_support_sr', 'desktop_jr', 'it_support_jr'].includes(user?.role ?? '');
+  const isLowerLevelTech = ['it_support_jr', 'desktop_jr'].includes(user?.role ?? '');
+  // Compliance Officer = any role tagged with roleCode 'compliance_officer'
+  const isComplianceOfficer = user?.roleCode === 'compliance_officer';
+  // Full dashboard: super_admin or CO; generic staff (focal, etc.) see doc cards + KPI only
   const isFullDashboard = user?.role === 'super_admin' || isComplianceOfficer;
   // Section Head and Cybersecurity Officer — identified via roleCode
   const isSectionHead = user?.roleCode === 'section_head';
@@ -435,7 +435,7 @@ export default function DashboardPage() {
               <>
                 <Grid container spacing={2} mb={1}>
                   {([
-                    { label: 'Open', value: techAssignedStats.open, color: 'warning' as const, Icon: TicketIcon },
+                    { label: 'Assigned', value: techAssignedStats.assigned, color: 'warning' as const, Icon: TicketIcon },
                     { label: 'In Progress', value: techAssignedStats.inProgress, color: 'primary' as const, Icon: InProgressIcon },
                     { label: 'Resolved', value: techAssignedStats.resolved, color: 'success' as const, Icon: ResolvedIcon },
                     { label: 'Closed', value: techAssignedStats.closed, color: 'default' as const, Icon: ClosedIcon },
@@ -453,6 +453,13 @@ export default function DashboardPage() {
                   <Box>
                     <Typography variant="caption" color="text.secondary">Total this month</Typography>
                     <Typography variant="h6">{techAssignedStats.total}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Total Resolved & Closed</Typography>
+                    <Typography variant="h6">{techAssignedStats.resolved + techAssignedStats.closed}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {techAssignedStats.ratedCount} of {techAssignedStats.resolved + techAssignedStats.closed} tickets have rating
+                    </Typography>
                   </Box>
                   {techAssignedStats.satisfactionAvg !== null && (
                     <Box>
@@ -688,7 +695,7 @@ export default function DashboardPage() {
 
             {/* Type Breakdown */}
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} md={4}>
                 <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5, border: 1, borderColor: 'info.main' }}>
                   <ItSupportIcon color="info" />
                   <Box>
@@ -697,12 +704,21 @@ export default function DashboardPage() {
                   </Box>
                 </Paper>
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} md={4}>
                 <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5, border: 1, borderColor: 'success.main' }}>
                   <DesktopIcon color="success" />
                   <Box>
                     <Typography variant="body2" color="text.secondary">Desktop Support</Typography>
                     <Typography variant="h6" color="success.main">{ticketMetrics.byType['desktop_support'] ?? 0} tickets</Typography>
+                  </Box>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5, border: 1, borderColor: 'warning.main' }}>
+                  <TicketIcon color="warning" />
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">Pantawid ICT Support</Typography>
+                    <Typography variant="h6" color="warning.main">{ticketMetrics.byType['pantawid_ict_support'] ?? 0} tickets</Typography>
                   </Box>
                 </Paper>
               </Grid>
@@ -795,7 +811,7 @@ export default function DashboardPage() {
             <Box>
               <Typography variant="h6">KPI Overview</Typography>
               <Typography variant="body2" color="text.secondary">
-                {user?.role === 'super_admin' || user?.role === 'reviewer'
+                {user?.role === 'super_admin' || isComplianceOfficer
                   ? 'Consolidated KPI visibility across all units.'
                   : 'KPI visibility scoped to your assigned unit(s).'}
               </Typography>

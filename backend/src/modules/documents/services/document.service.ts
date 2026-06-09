@@ -26,6 +26,8 @@ import * as net from 'net';
 import { ReportorialDocumentType } from '../entities/reportorial-document-type.entity';
 import { ReportorialDocTypeService } from './reportorial-doc-type.service';
 import { MetricsService } from '../../metrics/services/metrics.service';
+import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
+import { UsersHttpClient, UserStub } from '../../../common/http-clients/users.http-client';
 
 export interface UploadDocumentDto {
   title: string;
@@ -71,6 +73,22 @@ export interface ListDocumentsDto {
 @Injectable()
 export class DocumentService implements OnModuleInit {
   private readonly logger = new Logger(DocumentService.name);
+  private hasDocumentIssuancesTable: boolean | null = null;
+
+  private async canUseDocumentIssuanceLinks(): Promise<boolean> {
+    if (this.hasDocumentIssuancesTable !== null) {
+      return this.hasDocumentIssuancesTable;
+    }
+    try {
+      const rows = await this.dataSource.query(
+        "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'document_issuances' LIMIT 1",
+      );
+      this.hasDocumentIssuancesTable = Array.isArray(rows) && rows.length > 0;
+    } catch {
+      this.hasDocumentIssuancesTable = false;
+    }
+    return this.hasDocumentIssuancesTable;
+  }
 
   private extractGoogleDocId(inputUrl: string): string | null {
     try {
@@ -116,7 +134,46 @@ export class DocumentService implements OnModuleInit {
     @InjectQueue('document-processing') private documentQueue: Queue,
     private metricsService: MetricsService,
     private dataSource: DataSource,
+    private readonly roleCapSvc: RoleCapabilitiesService,
+    private readonly usersHttpClient: UsersHttpClient,
   ) {}
+
+  private async enrichUsersById(userIds: number[]): Promise<Map<number, UserStub | null>> {
+    const uniqueIds = Array.from(
+      new Set(userIds.filter((id) => Number.isFinite(Number(id))).map((id) => Number(id))),
+    );
+    const map = new Map<number, UserStub | null>();
+    await Promise.all(
+      uniqueIds.map(async (id) => {
+        const user = await this.usersHttpClient.getUserById(id);
+        map.set(id, user);
+      }),
+    );
+    return map;
+  }
+
+  private async enrichAssignmentsUsers(assignments: DocumentAssignment[]): Promise<DocumentAssignment[]> {
+    const userMap = await this.enrichUsersById(assignments.map((a) => Number(a.user_id)));
+    assignments.forEach((assignment) => {
+      assignment.user = userMap.get(Number(assignment.user_id)) ?? null;
+    });
+    return assignments;
+  }
+
+  private async enrichReferenceCreators(references: DocumentReference[]): Promise<DocumentReference[]> {
+    const userMap = await this.enrichUsersById(
+      references
+        .map((ref) => Number(ref.created_by))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    );
+    references.forEach((reference) => {
+      const creatorId = Number(reference.created_by);
+      reference.creator = Number.isFinite(creatorId) && creatorId > 0
+        ? userMap.get(creatorId) ?? null
+        : null;
+    });
+    return references;
+  }
 
   private async enqueueMetricsOrFallback(versionId: string, source: string): Promise<void> {
     const queueReachable = await this.isRedisReachable();
@@ -309,56 +366,8 @@ export class DocumentService implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS document_assignments (
-        id varchar(36) NOT NULL,
-        user_id int NOT NULL,
-        unit_id int NOT NULL,
-        document_type varchar(100) NOT NULL,
-        report_name varchar(255) DEFAULT NULL,
-        filename_prefix varchar(100) DEFAULT NULL,
-        submission_frequency enum('monthly','quarterly','annual','custom') NOT NULL DEFAULT 'monthly',
-        submission_month tinyint DEFAULT NULL,
-        is_active tinyint(1) NOT NULL DEFAULT 1,
-        created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-        updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-        PRIMARY KEY (id),
-        UNIQUE KEY uq_assignment_user_unit_type (user_id, unit_id, document_type),
-        KEY idx_assignment_user (user_id),
-        KEY idx_assignment_unit (unit_id),
-        CONSTRAINT fk_assignment_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-        CONSTRAINT fk_assignment_unit FOREIGN KEY (unit_id) REFERENCES units (id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS document_references (
-        id varchar(36) NOT NULL,
-        source_document_id varchar(36) NOT NULL,
-        target_document_id varchar(36) NOT NULL,
-        relationship_type varchar(50) NOT NULL DEFAULT 'references',
-        created_by int DEFAULT NULL,
-        created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-        PRIMARY KEY (id),
-        UNIQUE KEY uq_document_reference_pair (source_document_id, target_document_id),
-        KEY idx_doc_ref_source (source_document_id),
-        KEY idx_doc_ref_target (target_document_id),
-        CONSTRAINT fk_doc_ref_source FOREIGN KEY (source_document_id) REFERENCES documents (id) ON DELETE CASCADE,
-        CONSTRAINT fk_doc_ref_target FOREIGN KEY (target_document_id) REFERENCES documents (id) ON DELETE CASCADE,
-        CONSTRAINT fk_doc_ref_creator FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await this.dataSource.query(`
-      ALTER TABLE document_versions
-      ADD COLUMN IF NOT EXISTS file_blob LONGBLOB NULL,
-      ADD COLUMN IF NOT EXISTS preview_blob LONGBLOB NULL;
-    `);
-
-    await this.dataSource.query(`
-      ALTER TABLE documents
-      ADD COLUMN IF NOT EXISTS file_blob LONGBLOB NULL;
-    `);
+    // Schema DDL for this service is managed via versioned migration files in
+    // backend/database/migrations/. See v0.0.50-service-ddl-extraction.sql.
 
     // Startup recovery: re-enqueue any documents stuck in pending/processing due to
     // a previous backend crash or restart that dropped the Bull queue jobs.
@@ -394,6 +403,15 @@ export class DocumentService implements OnModuleInit {
       }
     } catch (err) {
       this.logger.warn(`Startup recovery failed (non-fatal): ${err?.message}`);
+    }
+
+    // v0.0.31: Ensure role_capabilities VIEW exists in this DB (failsafe for pre-migration deploy)
+    try {
+      const usersDb = process.env.USERS_DB_DATABASE || 'compliance_hub_users';
+      await this.dataSource.query(`CREATE OR REPLACE VIEW role_capabilities AS SELECT * FROM \`${usersDb}\`.role_capabilities`);
+      await this.roleCapSvc.reload();
+    } catch (err: any) {
+      this.logger.warn(`role_capabilities view setup failed (non-fatal — run v0.0.31 migration): ${err?.message}`);
     }
   }
 
@@ -638,7 +656,7 @@ export class DocumentService implements OnModuleInit {
 
     const normalizedDocumentType = this.normalizeDocumentType(metadata.document_type);
 
-    if (user_role === UserRole.FOCAL && !metadata.reportorial_doc_type_id) {
+    if (this.roleCapSvc.isFocal(user_role as string) && !metadata.reportorial_doc_type_id) {
       await this.validateFocalSubmission(
         { ...metadata, document_type: normalizedDocumentType, file },
         file.originalname,
@@ -691,7 +709,7 @@ export class DocumentService implements OnModuleInit {
     }
 
     // For focal users on the reportorial path, check for duplicate submissions
-    if (dto.user_role === UserRole.FOCAL && metadata.reportorial_doc_type_id) {
+    if (this.roleCapSvc.isFocal(dto.user_role as string) && metadata.reportorial_doc_type_id) {
       const existingReportorial = await this.documentRepo.findOne({
         where: {
           unit_id: Number(dto.unit_id),
@@ -861,14 +879,21 @@ export class DocumentService implements OnModuleInit {
    * Get document by ID with relations
    */
   async getDocumentById(id: string): Promise<Document> {
+    const canUseIssuanceLinks = await this.canUseDocumentIssuanceLinks();
     // Allow fetching archived (is_deleted=true) docs so focal can view detail on archived page
     const document = await this.documentRepo.findOne({
       where: { id },
-      relations: ['unit', 'uploader', 'versions', 'versions.uploader', 'issuances'],
+      relations: canUseIssuanceLinks
+        ? ['unit', 'uploader', 'versions', 'versions.uploader', 'issuances']
+        : ['unit', 'uploader', 'versions', 'versions.uploader'],
     });
 
     if (!document) {
       throw new NotFoundException(`Document with ID ${id} not found`);
+    }
+
+    if (!canUseIssuanceLinks) {
+      (document as any).issuances = [];
     }
 
     const [enriched] = await this.enrichDocumentsForWorkflow([document]);
@@ -898,13 +923,18 @@ export class DocumentService implements OnModuleInit {
       archived = false,
     } = dto;
 
+    const canUseIssuanceLinks = await this.canUseDocumentIssuanceLinks();
+
     const query = this.documentRepo
       .createQueryBuilder('doc')
       .leftJoinAndSelect('doc.unit', 'unit')
       .leftJoinAndSelect('doc.uploader', 'uploader')
-      .leftJoinAndSelect('doc.issuances', 'issuances')
       // archived mode shows soft-deleted docs for the owning focal; normal mode shows active docs
       .where('doc.is_deleted = :isDeleted', { isDeleted: archived ? true : false });
+
+    if (canUseIssuanceLinks) {
+      query.leftJoinAndSelect('doc.issuances', 'issuances');
+    }
 
     if (unit_id) {
       query.andWhere('doc.unit_id = :unit_id', { unit_id });
@@ -925,7 +955,7 @@ export class DocumentService implements OnModuleInit {
       query.andWhere('doc.status = :status', { status });
     }
 
-    if (actor_role === UserRole.FOCAL && actor_id) {
+    if (this.roleCapSvc.isFocal(actor_role as string) && actor_id) {
       query.andWhere('doc.uploaded_by = :actorId', { actorId: actor_id });
     }
 
@@ -934,7 +964,7 @@ export class DocumentService implements OnModuleInit {
     if (
       !archived &&
       !status &&
-      (actor_role === UserRole.SUPER_ADMIN || actor_role === UserRole.REVIEWER || actor_role === UserRole.COMPLIANCE_OFFICER)
+      (actor_role === UserRole.SUPER_ADMIN || actor_role === UserRole.COMPLIANCE_OFFICER)
     ) {
       query.andWhere(`
         COALESCE((
@@ -952,6 +982,9 @@ export class DocumentService implements OnModuleInit {
     query.skip((page - 1) * limit).take(limit);
 
     const [data, total] = await query.getManyAndCount();
+    if (!canUseIssuanceLinks) {
+      data.forEach((doc) => { (doc as any).issuances = []; });
+    }
     const enriched = await this.enrichDocumentsForWorkflow(data);
 
     return { data: enriched, total, page, limit };
@@ -982,7 +1015,12 @@ export class DocumentService implements OnModuleInit {
       }),
     ]);
 
-    return { outgoing, incoming };
+    const [enrichedOutgoing, enrichedIncoming] = await Promise.all([
+      this.enrichReferenceCreators(outgoing),
+      this.enrichReferenceCreators(incoming),
+    ]);
+
+    return { outgoing: enrichedOutgoing, incoming: enrichedIncoming };
   }
 
   async linkDocumentReference(payload: {
@@ -1104,7 +1142,6 @@ export class DocumentService implements OnModuleInit {
   }): Promise<DocumentAssignment[]> {
     const qb = this.assignmentRepo
       .createQueryBuilder('assignment')
-      .leftJoinAndSelect('assignment.user', 'user')
       .leftJoinAndSelect('assignment.unit', 'unit');
 
     if (filters?.user_id) {
@@ -1121,7 +1158,8 @@ export class DocumentService implements OnModuleInit {
 
     qb.orderBy('assignment.created_at', 'DESC');
 
-    return qb.getMany();
+    const assignments = await qb.getMany();
+    return this.enrichAssignmentsUsers(assignments);
   }
 
   async updateAssignment(
@@ -1153,10 +1191,17 @@ export class DocumentService implements OnModuleInit {
     Object.assign(assignment, payload);
     await this.assignmentRepo.save(assignment);
 
-    return this.assignmentRepo.findOne({
+    const updated = await this.assignmentRepo.findOne({
       where: { id },
-      relations: ['user', 'unit'],
-    }) as Promise<DocumentAssignment>;
+      relations: ['unit'],
+    });
+
+    if (!updated) {
+      throw new NotFoundException('Assignment not found');
+    }
+
+    const [enriched] = await this.enrichAssignmentsUsers([updated]);
+    return enriched;
   }
 
   async deleteAssignment(id: string): Promise<void> {
@@ -1286,7 +1331,7 @@ export class DocumentService implements OnModuleInit {
 
     const uploaderRole = document.uploader?.role;
     const shouldHardDelete =
-      uploaderRole === UserRole.SUPER_ADMIN || uploaderRole === UserRole.REVIEWER || uploaderRole === UserRole.COMPLIANCE_OFFICER;
+      uploaderRole === UserRole.SUPER_ADMIN || uploaderRole === UserRole.COMPLIANCE_OFFICER;
 
     if (shouldHardDelete) {
       for (const version of document.versions || []) {
@@ -1331,7 +1376,6 @@ export class DocumentService implements OnModuleInit {
 
     if (
       document.uploader?.role === UserRole.SUPER_ADMIN ||
-      document.uploader?.role === UserRole.REVIEWER ||
       document.uploader?.role === UserRole.COMPLIANCE_OFFICER
     ) {
       throw new BadRequestException(
@@ -1530,7 +1574,7 @@ export class DocumentService implements OnModuleInit {
       .where('doc.is_deleted = :d', { d: false })
       .andWhere('doc.status = :readyStatus', { readyStatus: DocumentStatus.READY });
 
-    if (actorRole === UserRole.FOCAL && actorId) {
+    if (this.roleCapSvc.isFocal(actorRole as string) && actorId) {
       qb.andWhere('doc.uploaded_by = :actorId', { actorId });
     }
 

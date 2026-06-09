@@ -84,7 +84,7 @@ export default function VersionComparison({
             border: '1px solid',
             borderColor: 'divider',
             borderRadius: 1,
-            p: 2,
+            p: 0,
             maxHeight: '600px',
             overflow: 'auto',
             backgroundColor: '#f5f5f5',
@@ -101,8 +101,15 @@ export default function VersionComparison({
               color: '#721c24',
             },
           }}
-          dangerouslySetInnerHTML={{ __html: htmlDiff }}
-        />
+        >
+          <Box
+            component="iframe"
+            title="version-diff-preview"
+            sandbox="allow-same-origin"
+            srcDoc={`<!doctype html><html><head><style>body{margin:0;padding:12px;font-family:monospace;font-size:.875rem;background:#f5f5f5;}ins{background:#d4edda;text-decoration:none;color:#155724;}del{background:#f8d7da;text-decoration:line-through;color:#721c24;}</style></head><body>${htmlDiff}</body></html>`}
+            sx={{ width: '100%', height: 560, border: 0, display: 'block' }}
+          />
+        </Box>
       </CardContent>
     </Card>
   );

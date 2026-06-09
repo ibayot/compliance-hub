@@ -25,6 +25,7 @@ import { DocumentService, UploadDocumentDto, UploadGoogleDocDto } from '../servi
 import { VersionService, CreateVersionDto } from '../services/version.service';
 import { Document, DocumentStatus } from '../entities/document.entity';
 import { SubmissionFrequency } from '../entities/document-assignment.entity';
+import { UploadBulkheadInterceptor } from '../../../common/interceptors/upload-bulkhead.interceptor';
 
 @Controller('documents')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -41,12 +42,12 @@ export class DocumentController {
   @Post()
   @Roles(
     UserRole.SUPER_ADMIN,
-    UserRole.REVIEWER,
     UserRole.COMPLIANCE_OFFICER,
-    UserRole.FOCAL,
-    UserRole.TECHNICIAN,
+    'focal',
+    'technician',
   )
   @UseInterceptors(
+    UploadBulkheadInterceptor,
     FileInterceptor('file', {
       limits: {
         fileSize: 50 * 1024 * 1024, // 50MB limit
@@ -75,11 +76,11 @@ export class DocumentController {
   @Post('google-doc')
   @Roles(
     UserRole.SUPER_ADMIN,
-    UserRole.REVIEWER,
     UserRole.COMPLIANCE_OFFICER,
-    UserRole.FOCAL,
-    UserRole.TECHNICIAN,
+    'focal',
+    'technician',
   )
+  @UseInterceptors(UploadBulkheadInterceptor)
   async uploadGoogleDoc(
     @Body() body: Omit<UploadGoogleDocDto, 'uploaded_by' | 'user_role' | 'unit_id'> & { unit_id: number | string },
     @CurrentUser() user: any,
@@ -134,10 +135,9 @@ export class DocumentController {
   @Get('upload-options')
   @Roles(
     UserRole.SUPER_ADMIN,
-    UserRole.REVIEWER,
     UserRole.COMPLIANCE_OFFICER,
-    UserRole.FOCAL,
-    UserRole.TECHNICIAN,
+    'focal',
+    'technician',
   )
   async getUploadOptions(
     @CurrentUser() user: any,
@@ -150,10 +150,9 @@ export class DocumentController {
   @Get('assignments')
   @Roles(
     UserRole.SUPER_ADMIN,
-    UserRole.REVIEWER,
     UserRole.COMPLIANCE_OFFICER,
-    UserRole.FOCAL,
-    UserRole.TECHNICIAN,
+    'focal',
+    'technician',
   )
   async listAssignments(
     @CurrentUser() user: any,
@@ -161,7 +160,7 @@ export class DocumentController {
     @Query('unit_id') unitId?: string,
     @Query('active_only') activeOnly?: string,
   ) {
-    const isPrivileged = user.role === UserRole.SUPER_ADMIN || user.role === UserRole.REVIEWER
+    const isPrivileged = user.role === UserRole.SUPER_ADMIN
       || user.role === UserRole.COMPLIANCE_OFFICER || user?.roleCode === 'compliance_officer';
     return this.documentService.listAssignments({
       user_id: isPrivileged && userId ? Number(userId) : user.id,
@@ -243,11 +242,9 @@ export class DocumentController {
   @Get(':id/references')
   @Roles(
     UserRole.SUPER_ADMIN,
-    UserRole.REVIEWER,
     UserRole.COMPLIANCE_OFFICER,
-    UserRole.FOCAL,
-    UserRole.TECHNICIAN,
-    UserRole.AUDITOR,
+    'focal',
+    'technician',
   )
   async getDocumentReferences(@Param('id') id: string) {
     return this.documentService.listDocumentReferences(id);
@@ -256,11 +253,9 @@ export class DocumentController {
   @Post(':id/references')
   @Roles(
     UserRole.SUPER_ADMIN,
-    UserRole.REVIEWER,
     UserRole.COMPLIANCE_OFFICER,
-    UserRole.FOCAL,
-    UserRole.TECHNICIAN,
-    UserRole.AUDITOR,
+    'focal',
+    'technician',
   )
   async linkDocumentReference(
     @Param('id') sourceDocumentId: string,
@@ -282,11 +277,9 @@ export class DocumentController {
   @Delete(':id/references/:targetId')
   @Roles(
     UserRole.SUPER_ADMIN,
-    UserRole.REVIEWER,
     UserRole.COMPLIANCE_OFFICER,
-    UserRole.FOCAL,
-    UserRole.TECHNICIAN,
-    UserRole.AUDITOR,
+    'focal',
+    'technician',
   )
   async unlinkDocumentReference(
     @Param('id') sourceDocumentId: string,
@@ -306,10 +299,9 @@ export class DocumentController {
   @Post(':id/versions')
   @Roles(
     UserRole.SUPER_ADMIN,
-    UserRole.REVIEWER,
     UserRole.COMPLIANCE_OFFICER,
-    UserRole.FOCAL,
-    UserRole.TECHNICIAN,
+    'focal',
+    'technician',
   )
   @UseInterceptors(
     FileInterceptor('file', {
@@ -381,7 +373,7 @@ export class DocumentController {
    * POST /documents/:id/archive
    */
   @Post(':id/archive')
-  @Roles(UserRole.FOCAL)
+  @Roles('focal')
   async archiveDocument(@Param('id') id: string, @CurrentUser() user: any) {
     await this.documentService.archiveDocument(id, user.id);
     return { message: 'Document archived successfully.' };
@@ -392,7 +384,7 @@ export class DocumentController {
    * POST /documents/:id/reprocess
    */
   @Post(':id/reprocess')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   async reprocessDocument(@Param('id') id: string) {
     await this.documentService.reprocessDocument(id);
     return { message: 'Document reprocessing enqueued.' };
@@ -403,7 +395,7 @@ export class DocumentController {
    * POST /documents/:id/return
    */
   @Post(':id/return')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   async returnDocument(
     @Param('id') id: string,
     @Body() body: { remarks: string },
@@ -426,7 +418,7 @@ export class DocumentController {
    * DELETE /documents/:id
    */
   @Delete(':id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.REVIEWER, UserRole.COMPLIANCE_OFFICER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   async deleteDocument(@Param('id') id: string) {
     await this.documentService.deleteDocument(id);
     return { message: 'Document deleted successfully' };

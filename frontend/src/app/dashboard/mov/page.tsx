@@ -100,14 +100,14 @@ function compressImageToBase64(file: File, maxPx = 400, quality = 0.75): Promise
 }
 
 export default function MovBuilderPage() {
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const now = new Date();
   const currentYear = now.getFullYear();
   const [tab, setTab] = useState(0);
 
   // ── Role Gate (render-time check) ─────────────────────────────────────────
-  const allowed = !user || [UserRole.SUPER_ADMIN, UserRole.REVIEWER].includes(user.role as UserRole);
+  const allowed = !user || user.role === 'super_admin' || !!myCap?.isMovAccess;
 
   const [year, setYear] = useState<number>(currentYear);
   const [quarter, setQuarter] = useState<number>(Math.floor((now.getMonth() + 3) / 3));
@@ -775,7 +775,7 @@ export default function MovBuilderPage() {
     return (
       <Box sx={{ p: 4 }}>
         <Alert severity="warning" variant="filled">
-          <strong>Access Restricted.</strong> The MoV Builder is available to System Administrators and Compliance Officers (Reviewer role) only.
+          You do not have access to this feature.
         </Alert>
       </Box>
     );
@@ -1065,15 +1065,22 @@ export default function MovBuilderPage() {
                       borderColor: 'divider',
                       borderRadius: 1,
                       minHeight: 520,
-                      p: 2,
+                      p: 0,
                       overflow: 'auto',
                       backgroundColor: '#fff',
                       color: '#111',
                       '&, & *': { color: '#111' },
                       '& th': { backgroundColor: '#87CEEB !important' },
                     }}
-                    dangerouslySetInnerHTML={{ __html: reportHtml || '<p style="color:#9ca3af">No report generated yet. Use the Generate buttons on the left.</p>' }}
-                  />
+                  >
+                    <Box
+                      component="iframe"
+                      title="mov-report-preview"
+                      sandbox="allow-same-origin"
+                      srcDoc={reportHtml || '<p style="color:#9ca3af">No report generated yet. Use the Generate buttons on the left.</p>'}
+                      sx={{ width: '100%', minHeight: 520, border: 0, display: 'block' }}
+                    />
+                  </Box>
                 </Stack>
               </CardContent>
             </Card>

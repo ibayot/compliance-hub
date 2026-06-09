@@ -51,9 +51,8 @@ function isWeekday(d: Date): boolean {
 }
 
 export default function AttendancePage() {
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   const isLowerLevelTech = [
-    'technician_it_staff', 'technician_desktop_staff',
     'it_support_jr', 'desktop_jr',
   ].includes(user?.role ?? '');
   /** All RICTMS staff (everyone except super_admin and regular users) sees their own attendance in the calendar */
@@ -281,22 +280,23 @@ export default function AttendancePage() {
   };
 
   const canManageAttendance = [
-    'super_admin', 'focal', 'reviewer', 'section_head',
-    'it_support_sr', 'desktop_sr', 'pantawid_ict',
-    'technician', 'technician_it_support', 'technician_desktop',
-    // ITO focal-equivalent roles
-    'lead_infra', 'server_admin', 'db_admin', 'network_admin',
-    'project_mgr', 'dev_lead', 'sqa_lead', 'records_officer', 'hr_id_officer',
-    'compliance_officer', 'cybersec', 'infosec',
-  ].includes(user?.role ?? '');
+    'super_admin',
+  ].includes(user?.role ?? '') || !!myCap?.isAttendanceManage;
 
   const canManageOfficeDays = [
-    'super_admin', 'focal', 'reviewer', 'section_head',
-    'lead_infra', 'server_admin', 'db_admin', 'network_admin',
-    'project_mgr', 'dev_lead', 'sqa_lead', 'records_officer', 'hr_id_officer',
-    'compliance_officer', 'cybersec', 'infosec',
-    'it_support_sr', 'desktop_sr', 'pantawid_ict',
-  ].includes(user?.role ?? '');
+    'super_admin',
+  ].includes(user?.role ?? '') || !!myCap?.isAttendanceManage;
+
+  const canAccessAttendance = user?.role === 'super_admin' || !!myCap?.isAttendanceAccess;
+
+  if (!canAccessAttendance) {
+    return (
+      <Box>
+        <Typography variant="h4" fontWeight={700} mb={0.5}>Attendance Management</Typography>
+        <Typography color="error">You do not have access to this feature.</Typography>
+      </Box>
+    );
+  }
 
   const canManage = canManageAttendance;
 
@@ -335,7 +335,7 @@ export default function AttendancePage() {
             ) : (
               <Box>
                 <Typography variant="body2" color="text.secondary" mb={2}>
-                  Click on a date to toggle it as an office day. Past dates cannot be changed. Weekdays default to office days.
+                  Click on today or a future date to toggle it as an office day. Past dates cannot be changed. Weekdays default to office days.
                 </Typography>
                 <Box display="grid" gridTemplateColumns="repeat(7, 1fr)" gap={0.5}>
                   {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
@@ -346,7 +346,7 @@ export default function AttendancePage() {
                   {days.map(d => {
                     const isOffice = isOfficeDayForDate(d);
                     const dStr = formatDate(d);
-                    // Today and past are not clickable (today is already treated as office day)
+                    // Past dates are not clickable; today remains editable for emergency declarations.
                     const isPastOrToday = dStr < todayStr;
                     const isToday = dStr === todayStr;
                     return (
@@ -412,14 +412,14 @@ export default function AttendancePage() {
               <Box textAlign="center" py={4}><CircularProgress /></Box>
             ) : technicians.length === 0 ? (
               <Typography color="text.secondary" py={3} textAlign="center">
-                No technicians found for this support type.
+                No staff found.
               </Typography>
             ) : (
               <TableContainer sx={{ maxHeight: 500 }}>
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ position: 'sticky', left: 0, zIndex: 3, bgcolor: 'background.paper', minWidth: 160 }}>Technician</TableCell>
+                      <TableCell sx={{ position: 'sticky', left: 0, zIndex: 3, bgcolor: 'background.paper', minWidth: 160 }}>Staff</TableCell>
                       {weekdays.map(d => {
                         const isOffice = isOfficeDayForDate(d);
                         return (

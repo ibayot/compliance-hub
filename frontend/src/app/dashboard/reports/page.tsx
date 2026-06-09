@@ -48,6 +48,7 @@ import { unitsApi } from '@/lib/api/units';
 import { metricsApi } from '@/lib/api/metrics';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types/auth';
+import { KpiMasterRecord, UnitTimeseriesPoint } from '@/lib/api/kpi';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -145,6 +146,19 @@ interface ReportParams {
   semester: number;
   unitId: string;
   unitName: string;
+}
+
+type ReportSeriesDatum = { label: string } & Record<string, number | null | string>;
+type UnitTimeseriesMap = Record<number, UnitTimeseriesPoint[]>;
+
+const SAFE_KEY_BLOCKLIST = new Set(['__proto__', 'prototype', 'constructor']);
+
+function toSafeDataKey(prefix: string, value: string | number): string {
+  const normalized = String(value).replace(/[^a-zA-Z0-9_]/g, '_');
+  if (!normalized || SAFE_KEY_BLOCKLIST.has(normalized)) {
+    return `${prefix}_invalid`;
+  }
+  return `${prefix}_${normalized}`;
 }
 
 function getPeriodLabel(p: ReportParams): string {
@@ -265,7 +279,7 @@ function ReportView({ params }: { params: ReportParams }) {
     // eslint-disable-next-line @tanstack/query/exhaustive-deps
     queryKey: ['report-all-units-ts', allUnits.map((u) => u.id), year, effectiveMonth, frequency],
     queryFn: async () => {
-      if (allUnits.length === 0) return {} as Record<number, any[]>;
+      if (allUnits.length === 0) return {} as UnitTimeseriesMap;
       const results = await Promise.all(
         allUnits.map((u) =>
           kpiApi.dashboardUnitTimeseries(
@@ -275,7 +289,7 @@ function ReportView({ params }: { params: ReportParams }) {
           ),
         ),
       );
-      const map: Record<number, any[]> = {};
+      const map: UnitTimeseriesMap = {};
       allUnits.forEach((u, i) => { map[Number(u.id)] = results[i]; });
       return map;
     },
@@ -310,7 +324,7 @@ function ReportView({ params }: { params: ReportParams }) {
     if (!allTs || Object.keys(allTs).length === 0) return [];
     const periodMap = new Map<string, { periodYear: number; periodMonth: number }>();
     Object.values(allTs).forEach((pts) => {
-      (pts || []).forEach((pt: any) => {
+      (pts || []).forEach((pt) => {
         const key = `${pt.periodYear}-${String(pt.periodMonth).padStart(2, '0')}`;
         if (!periodMap.has(key)) periodMap.set(key, { periodYear: pt.periodYear, periodMonth: pt.periodMonth });
       });
@@ -319,12 +333,12 @@ function ReportView({ params }: { params: ReportParams }) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, v]) => v);
     const mapped = sorted.map(({ periodYear, periodMonth }) => {
-      const datum: Record<string, any> = { label: getXAxisLabel(periodMonth, frequency) };
+      const datum: ReportSeriesDatum = { label: getXAxisLabel(periodMonth, frequency) };
       allUnits.forEach((u) => {
         const unitIdNum = Number(u.id);
-        const pts: any[] = allTs[unitIdNum] || [];
-        const pt = pts.find((p: any) => p.periodYear === periodYear && p.periodMonth === periodMonth);
-        datum[`u${unitIdNum}`] = pt?.hasData ? pt.score : null;
+        const pts: UnitTimeseriesPoint[] = allTs[unitIdNum] || [];
+        const pt = pts.find((p) => p.periodYear === periodYear && p.periodMonth === periodMonth);
+        datum[toSafeDataKey('u', unitIdNum)] = pt?.hasData ? pt.score : null;
       });
       return datum;
     });
@@ -333,7 +347,7 @@ function ReportView({ params }: { params: ReportParams }) {
     if (mapped.length > 0) {
       const first = { ...mapped[0] };
       allUnits.forEach((u) => {
-        const key = `u${Number(u.id)}`;
+        const key = toSafeDataKey('u', Number(u.id));
         if (first[key] === null) {
           const hasLater = mapped.slice(1).some((d) => d[key] !== null);
           if (hasLater) first[key] = 0;
@@ -346,8 +360,8 @@ function ReportView({ params }: { params: ReportParams }) {
         || (frequency === 'quarterly' && quarter === 1)
         || (frequency === 'semestral' && semester === 1);
       if (shouldPrependZero) {
-        const zeroAnchor: Record<string, any> = { label: '' };
-        allUnits.forEach((u) => { zeroAnchor[`u${Number(u.id)}`] = 0; });
+        const zeroAnchor: ReportSeriesDatum = { label: '' };
+        allUnits.forEach((u) => { zeroAnchor[toSafeDataKey('u', Number(u.id))] = 0; });
         return [zeroAnchor, ...adjusted];
       }
       return adjusted;
@@ -357,14 +371,18 @@ function ReportView({ params }: { params: ReportParams }) {
 
   /** KPI detail line data for a single selected unit */
   const kpiDetailLineData = useMemo(() => {
-    const ts: any[] = unitTsQuery.data || [];
-    if (ts.length === 0) return { data: [] as Record<string, any>[], codes: [] as string[] };
-    const codes = [...new Set(ts.flatMap((pt) => (pt.kpiScores || []).map((k: any) => k.code as string)))];
+    const ts: UnitTimeseriesPoint[] = unitTsQuery.data || [];
+    if (ts.length === 0) return { data: [] as ReportSeriesDatum[], codes: [] as string[], keyByCode: {} as Record<string, string> };
+    const codes = [...new Set(ts.flatMap((pt) => (pt.kpiScores || []).map((k) => k.code)))];
+    const keyByCode = codes.reduce<Record<string, string>>((acc, code) => {
+      acc[code] = toSafeDataKey('k', code);
+      return acc;
+    }, {});
     const data = ts.map((pt) => {
-      const datum: Record<string, any> = { label: getXAxisLabel(pt.periodMonth, frequency) };
+      const datum: ReportSeriesDatum = { label: getXAxisLabel(pt.periodMonth, frequency) };
       codes.forEach((code) => {
-        const kp = (pt.kpiScores || []).find((k: any) => k.code === code);
-        datum[code] = pt.hasData && kp ? kp.normalizedScore : null;
+        const kp = (pt.kpiScores || []).find((k) => k.code === code);
+        datum[keyByCode[code]] = pt.hasData && kp ? kp.normalizedScore : null;
       });
       return datum;
     });
@@ -373,9 +391,10 @@ function ReportView({ params }: { params: ReportParams }) {
     if (data.length > 0) {
       const first = { ...data[0] };
       codes.forEach((code) => {
-        if (first[code] === null) {
-          const hasLater = data.slice(1).some((d) => d[code] !== null);
-          if (hasLater) first[code] = 0;
+        const key = keyByCode[code];
+        if (first[key] === null) {
+          const hasLater = data.slice(1).some((d) => d[key] !== null);
+          if (hasLater) first[key] = 0;
         }
       });
       const adjusted = [first, ...data.slice(1)];
@@ -385,13 +404,13 @@ function ReportView({ params }: { params: ReportParams }) {
         || (frequency === 'quarterly' && quarter === 1)
         || (frequency === 'semestral' && semester === 1);
       if (shouldPrependZero) {
-        const zeroAnchor: Record<string, any> = { label: '' };
-        codes.forEach((code) => { zeroAnchor[code] = 0; });
-        return { data: [zeroAnchor, ...adjusted], codes };
+        const zeroAnchor: ReportSeriesDatum = { label: '' };
+        codes.forEach((code) => { zeroAnchor[keyByCode[code]] = 0; });
+        return { data: [zeroAnchor, ...adjusted], codes, keyByCode };
       }
-      return { data: adjusted, codes };
+      return { data: adjusted, codes, keyByCode };
     }
-    return { data, codes };
+    return { data, codes, keyByCode };
   }, [unitTsQuery.data, frequency, month, quarter, semester]);
 
   const summaryUnits = useMemo(() => kpiQuery.data?.units ?? [], [kpiQuery.data]);
@@ -415,8 +434,8 @@ function ReportView({ params }: { params: ReportParams }) {
     }>;
     const unitIdNum = Number(unitId);
     const detailMap = new Map(unitDashQuery.data.details.map((d) => [d.code, d]));
-    const masters = (mastersQuery.data || []).filter((m: any) => Number(m.unitId) === unitIdNum && m.active);
-    const rows = masters.map((m: any) => {
+    const masters = (mastersQuery.data || []).filter((m: KpiMasterRecord) => Number(m.unitId) === unitIdNum && m.active);
+    const rows = masters.map((m: KpiMasterRecord) => {
       const d = detailMap.get(m.code);
       return {
         id: d?.id ?? `master-${m.code}`,
@@ -430,7 +449,7 @@ function ReportView({ params }: { params: ReportParams }) {
         hasData: Boolean(d),
       };
     });
-    const masterCodes = new Set(masters.map((m: any) => m.code));
+    const masterCodes = new Set(masters.map((m: KpiMasterRecord) => m.code));
     const extras = unitDashQuery.data.details
       .filter((d) => !masterCodes.has(d.code))
       .map((d) => ({
@@ -480,12 +499,12 @@ function ReportView({ params }: { params: ReportParams }) {
       // All-units view: use last hasData kpiScores per unit
       allUnits.forEach((u) => {
         const unitIdNum = Number(u.id);
-        const pts: any[] = allUnitsTsQuery.data[unitIdNum] || [];
+        const pts: UnitTimeseriesPoint[] = allUnitsTsQuery.data[unitIdNum] || [];
         const lastPt = [...pts].reverse().find((p) => p.hasData);
         if (!lastPt) return;
         (lastPt.kpiScores || [])
-          .filter((k: any) => ['red', 'amber'].includes(String(k.band || '').toLowerCase()))
-          .forEach((k: any) => items.push({
+          .filter((k) => ['red', 'amber'].includes(String(k.band || '').toLowerCase()))
+          .forEach((k) => items.push({
             unitName: u.name, code: k.code, name: k.name,
             score: k.normalizedScore, band: String(k.band).toLowerCase(), actualValue: k.actualValue,
           }));
@@ -498,7 +517,7 @@ function ReportView({ params }: { params: ReportParams }) {
   const metricsPerDocType = useMemo(() => {
     const map: Record<string, number> = {};
     (metricsQuery.data ?? []).forEach((tmpl) => {
-      (tmpl.applicability || []).forEach((app: any) => {
+      (tmpl.applicability || []).forEach((app) => {
         if (app.document_type) {
           map[app.document_type] = (map[app.document_type] || 0) + 1;
         }
@@ -556,30 +575,34 @@ function ReportView({ params }: { params: ReportParams }) {
     if (!content) return;
     const win = window.open('', '_blank', 'width=960,height=720');
     if (!win) return;
-    win.document.write(`
-      <html>
-        <head>
-          <title>Consolidated Report — ${periodLabel}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 28px; color: #222; }
-            h1, h2, h3 { margin: 0 0 6px; }
-            table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-            th, td { border: 1px solid #ccc; padding: 6px 10px; font-size: 12px; }
-            th { background: #f4f4f4; font-weight: 600; }
-            .score-cards { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-            .score-card { padding: 16px 28px; border: 2px solid #1976d2; border-radius: 8px; text-align: center; min-width: 120px; }
-            .score-value { font-size: 2.2rem; font-weight: 700; color: #1976d2; }
-            .score-label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-            .section-title { font-size: 1rem; font-weight: 700; margin: 20px 0 8px; border-bottom: 2px solid #1976d2; padding-bottom: 4px; }
-            .no-data { padding: 10px 14px; background: #e3f2fd; border-left: 4px solid #1976d2; border-radius: 0 4px 4px 0; font-size: 13px; }
-            .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 11px; color: #999; }
-            svg { display: none !important; }
-          </style>
-        </head>
-        <body>${content.innerHTML}</body>
-      </html>
-    `);
-    win.document.close();
+    const doc = win.document;
+    if (!doc.head || !doc.body) return;
+    doc.title = `Consolidated Report - ${periodLabel}`;
+
+    while (doc.body.firstChild) {
+      doc.body.removeChild(doc.body.firstChild);
+    }
+
+    const style = doc.createElement('style');
+    style.textContent = `
+      body { font-family: Arial, sans-serif; padding: 28px; color: #222; }
+      h1, h2, h3 { margin: 0 0 6px; }
+      table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+      th, td { border: 1px solid #ccc; padding: 6px 10px; font-size: 12px; }
+      th { background: #f4f4f4; font-weight: 600; }
+      .score-cards { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+      .score-card { padding: 16px 28px; border: 2px solid #1976d2; border-radius: 8px; text-align: center; min-width: 120px; }
+      .score-value { font-size: 2.2rem; font-weight: 700; color: #1976d2; }
+      .score-label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+      .section-title { font-size: 1rem; font-weight: 700; margin: 20px 0 8px; border-bottom: 2px solid #1976d2; padding-bottom: 4px; }
+      .no-data { padding: 10px 14px; background: #e3f2fd; border-left: 4px solid #1976d2; border-radius: 0 4px 4px 0; font-size: 13px; }
+      .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 11px; color: #999; }
+      svg { display: none !important; }
+    `;
+    doc.head.appendChild(style);
+
+    const cloned = content.cloneNode(true) as HTMLElement;
+    doc.body.appendChild(cloned);
     win.focus();
     win.print();
   };
@@ -716,12 +739,12 @@ function ReportView({ params }: { params: ReportParams }) {
                         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                        <Tooltip formatter={(val: any) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
+                        <Tooltip formatter={(val: unknown) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
                         {kpiDetailLineData.codes.map((code, idx) => (
                           <Line
                             key={code}
                             type="monotone"
-                            dataKey={code}
+                            dataKey={kpiDetailLineData.keyByCode[code]}
                             name={code}
                             stroke={UNIT_COLORS[idx % UNIT_COLORS.length]}
                             strokeWidth={2}
@@ -752,7 +775,7 @@ function ReportView({ params }: { params: ReportParams }) {
                       <TableBody>
                         {unitDetailRows.map((item, idx) => {
                           const visibleTrendValues = kpiDetailLineData.data
-                            .map((d) => d[item.code])
+                            .map((d) => d[kpiDetailLineData.keyByCode[item.code] ?? toSafeDataKey('k', item.code)])
                             .filter((v) => v !== null && v !== undefined) as number[];
                           const trend = computeTrendValues(visibleTrendValues);
                           const prevKpiScore: number | null = trend.prev;
@@ -823,12 +846,12 @@ function ReportView({ params }: { params: ReportParams }) {
                         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                        <Tooltip formatter={(val: any) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
+                        <Tooltip formatter={(val: unknown) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
                         {allUnitsRows.map((u, idx) => (
                           <Line
                             key={u.id}
                             type="monotone"
-                            dataKey={`u${Number(u.id)}`}
+                            dataKey={toSafeDataKey('u', Number(u.id))}
                             name={u.name}
                             stroke={UNIT_COLORS[idx % UNIT_COLORS.length]}
                             strokeWidth={2}
@@ -861,7 +884,7 @@ function ReportView({ params }: { params: ReportParams }) {
                           const unitColor = UNIT_COLORS[idx % UNIT_COLORS.length];
                           const bandKey = String(summaryRow?.band || 'unclassified').toLowerCase();
                           const visibleTrendValues = allUnitsLineData
-                            .map((d) => d[`u${unitIdNum}`])
+                            .map((d) => d[toSafeDataKey('u', unitIdNum)])
                             .filter((v) => v !== null && v !== undefined) as number[];
                           const trend = computeTrendValues(visibleTrendValues);
                           const prevScore: number | null = trend.prev;
@@ -1084,19 +1107,13 @@ function ReportView({ params }: { params: ReportParams }) {
 
 export default function ReportsPage() {
   const now = new Date();
-  const { user } = useAuth();
-  const isSuperOrReviewer =
-    user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.REVIEWER;
+  const { user, myCap } = useAuth();
+  const canAccessReports = user?.role === UserRole.SUPER_ADMIN || !!myCap?.isReportsAccess;
 
-  if (!isSuperOrReviewer) {
+  if (!canAccessReports) {
     return (
       <Box p={4}>
-        <Typography variant="h5" color="error" gutterBottom>
-          Access Restricted
-        </Typography>
-        <Typography color="text.secondary">
-          The Reports module is only accessible to Super Admins and Compliance Officers.
-        </Typography>
+        <Typography color="error">You do not have access to this feature.</Typography>
       </Box>
     );
   }

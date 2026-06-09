@@ -79,6 +79,11 @@ export const getAppTheme = (mode: 'light' | 'dark' = 'light') =>
           },
         },
       },
+      MuiTextField: {
+        defaultProps: {
+          autoComplete: 'off',
+        },
+      },
     },
   });
 

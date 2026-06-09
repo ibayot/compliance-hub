@@ -13,15 +13,7 @@ import { Unit } from '../../units/entities/unit.entity';
 
 export enum UserRole {
   SUPER_ADMIN = 'super_admin',
-  REVIEWER = 'reviewer',
   SECTION_HEAD = 'section_head',
-  FOCAL = 'focal',
-  TECHNICIAN = 'technician',
-  TECHNICIAN_DESKTOP = 'technician_desktop',
-  TECHNICIAN_IT_SUPPORT = 'technician_it_support',
-  TECHNICIAN_IT_STAFF = 'technician_it_staff',
-  TECHNICIAN_DESKTOP_STAFF = 'technician_desktop_staff',
-  AUDITOR = 'auditor',
   USER = 'user',
   // v0.6.14: RICTMS-specific named roles (use roleCode for feature routing)
   COMPLIANCE_OFFICER = 'compliance_officer',
@@ -99,7 +91,7 @@ export class User {
   @Column({
     type: 'enum',
     enum: UserRole,
-    default: UserRole.FOCAL,
+    default: UserRole.USER,
   })
   role: UserRole;
 
