@@ -1,5 +1,36 @@
 # Staging Deployment Instructions (Dual-Server Cluster)
 
+## 0. Prerequisites (For Fresh Ubuntu Servers)
+
+Since your application is containerized, you **do not** need to install `npm` or `node` directly on your server. The only software Server A requires is **Docker** and **Docker Compose**. 
+
+Run these exact commands anywhere on Server A to install Docker cleanly:
+
+```bash
+# 1. Update your system
+sudo apt-get update
+sudo apt-get install ca-certificates curl
+
+# 2. Add Docker's official GPG key
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# 3. Add the repository to Apt sources
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+
+# 4. Install Docker Engine and Compose
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# 5. Verify the installation
+sudo docker compose version
+```
+*(You should see something like `Docker Compose version v2.x.x`)*
+
 This guide provides exactly what you need to deploy the application across two dedicated servers:
 - **Server A:** Hosts the Backend, Frontend, Gateway, and Redis caching.
 - **Server B:** Hosts the MariaDB Database.
