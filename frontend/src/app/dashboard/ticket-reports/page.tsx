@@ -28,6 +28,7 @@ import PrintIcon from '@mui/icons-material/Print';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { ticketsApi, TicketReportResult, RatingsReportResult } from '@/app/api/references';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
 
 const TYPE_LABELS: Record<string, string> = {
   desktop_support: 'Desktop Support',
@@ -149,6 +150,7 @@ export default function TicketReportsPage() {
   useEffect(() => {
     fetchReports();
   }, [fetchReports]);
+  useAutoRefresh(fetchReports);
 
   const periodLabel = (() => {
     if (periodMode === 'month') return MONTHS.find(m => m.value === month)?.label ?? '';

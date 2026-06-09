@@ -20,6 +20,7 @@ import {
   Grid,
   IconButton,
   InputLabel,
+  InputAdornment,
   ListItemText,
   MenuItem,
   Select,
@@ -30,6 +31,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Tabs,
   TextField,
@@ -45,6 +47,7 @@ import {
   CheckCircle as ActiveIcon,
   Cancel as InactiveIcon,
   Delete as DeleteIcon,
+  Search as SearchIcon,
   Security as SecurityIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
@@ -54,6 +57,7 @@ import { authApi } from '@/lib/api/auth';
 import { usersApi, RoleDefinition, RoleCapabilityRecord } from '@/lib/api/users';
 import { unitsApi, Unit } from '@/lib/api/units';
 import { UserRole } from '@/lib/types/auth';
+import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
 
 // --- Change Password Card ---------------------------------------------------
 
@@ -211,6 +215,7 @@ function RoleCapabilitiesCard() {
   }, [enqueueSnackbar]);
 
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
   const handleToggle = async (
     roleValue: string,
@@ -345,6 +350,7 @@ function RoleManagementCard() {
   useEffect(() => {
     loadRoles();
   }, [loadRoles]);
+  useAutoRefresh(loadRoles);
 
   const handleCreate = async () => {
     const codeVal = form.value.trim().toLowerCase().replace(/\s+/g, '_');
@@ -601,6 +607,9 @@ function FocalUserManagementCard() {
   const [focalUsers, setFocalUsers] = useState<any[]>([]);
   const [userTab, setUserTab] = useState(0); // 0 = RICTMS Staff, 1 = Regular Users
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [creating, setCreating] = useState(false);
   const [editUser, setEditUser] = useState<any | null>(null);
   const [editing, setEditing] = useState(false);
@@ -646,6 +655,7 @@ function FocalUserManagementCard() {
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
+  useAutoRefresh(reload);
 
   const resetForm = () => {
     setForm({
@@ -828,87 +838,125 @@ function FocalUserManagementCard() {
 
         <Divider sx={{ my: 3 }} />
 
-        {/* Tabs: RICTMS Staff / Regular Users */}
-        <Tabs value={userTab} onChange={(_, v) => setUserTab(v)} sx={{ mb: 2 }}>
-          <Tab label={`RICTMS Staff (${focalUsers.filter((u: any) => u.role !== 'user' && u.role !== 'super_admin').length})`} />
-          <Tab label={`Regular Users (${focalUsers.filter((u: any) => u.role === 'user').length})`} />
-        </Tabs>
+        {/* Controls: Tabs & Search */}
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 2, gap: 2 }}>
+          <Tabs value={userTab} onChange={(_, v) => { setUserTab(v); setPage(0); }} sx={{ minWidth: 0 }}>
+            <Tab label={`RICTMS Staff (${focalUsers.filter((u: any) => u.role !== 'user' && u.role !== 'super_admin').length})`} />
+            <Tab label={`Regular Users (${focalUsers.filter((u: any) => u.role === 'user').length})`} />
+          </Tabs>
+          <TextField
+            size="small"
+            placeholder="Search staff by name or email..."
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
+            InputProps={{
+              startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+            }}
+            sx={{ width: { xs: '100%', sm: 300 } }}
+          />
+        </Box>
 
         {(() => {
-          const displayUsers = userTab === 0
+          let displayUsers = userTab === 0
             ? focalUsers.filter((u: any) => u.role !== 'user' && u.role !== 'super_admin')
             : focalUsers.filter((u: any) => u.role === 'user');
 
-          if (displayUsers.length === 0) {
-            return <Typography variant="body2" color="text.secondary">{userTab === 0 ? 'No RICTMS staff accounts provisioned yet.' : 'No regular user accounts provisioned yet.'}</Typography>;
+          if (searchQuery.trim()) {
+            const lowerQuery = searchQuery.toLowerCase();
+            displayUsers = displayUsers.filter((u: any) => {
+              const fullName = `${u.firstName || ''} ${u.middleName || ''} ${u.lastName || ''} ${u.suffix || ''}`.toLowerCase();
+              return fullName.includes(lowerQuery) || (u.email || '').toLowerCase().includes(lowerQuery) || (u.staffId || '').toLowerCase().includes(lowerQuery);
+            });
           }
 
+          if (displayUsers.length === 0) {
+            return <Typography variant="body2" color="text.secondary">{searchQuery.trim() ? 'No users found matching your search.' : (userTab === 0 ? 'No RICTMS staff accounts provisioned yet.' : 'No regular user accounts provisioned yet.')}</Typography>;
+          }
+
+          const paginatedUsers = displayUsers.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
           return (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell><strong>Name / Email</strong></TableCell>
-                  <TableCell><strong>Staff ID</strong></TableCell>
-                  <TableCell><strong>Role</strong></TableCell>
-                  <TableCell><strong>Status</strong></TableCell>
-                  <TableCell align="right"><strong>Actions</strong></TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {displayUsers.map((u: any) => (
-                  <TableRow key={u.id} hover>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={600}>
-                        {[u.firstName, u.middleName, u.lastName, u.suffix].filter(Boolean).join(' ') || ''}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">{u.email}</Typography>
-                    </TableCell>
-                    <TableCell><Typography variant="body2">{u.staffId || ''}</Typography></TableCell>
-                    <TableCell>
-                      <Chip label={u.role?.replace(/_/g, ' ').toUpperCase()} size="small" variant="outlined" />
-                    </TableCell>
-                    <TableCell>
-                      {(u.is_active || u.active)
-                        ? <Chip icon={<ActiveIcon />} label="Active" size="small" color="success" />
-                        : <Chip icon={<InactiveIcon />} label="Inactive" size="small" color="default" />}
-                    </TableCell>
-                    <TableCell align="right">
-                      <Tooltip title="Edit user">
-                        <IconButton
-                          size="small"
-                          color="primary"
-                          onClick={() => {
-                            setEditUser({
-                              id: u.id,
-                              email: u.email || '',
-                              firstName: u.firstName || '',
-                              middleName: u.middleName || '',
-                              lastName: u.lastName || '',
-                              suffix: u.suffix || '',
-                              staffId: u.staffId || '',
-                              position: u.position || '',
-                              positionFull: u.positionFull || '',
-                              designation: u.designation || '',
-                              ticketMainFocal: Boolean(u.ticketMainFocal),
-                              ticketTechnician: Boolean(u.ticketTechnician),
-                              role: u.role,
-                              unitIds: Array.isArray(u.units) ? u.units.map((unit: any) => unit.id) : [],
-                            });
-                          }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title={(u.is_active || u.active) ? 'Deactivate' : 'Activate'}>
-                        <IconButton size="small" color={(u.is_active || u.active) ? 'warning' : 'success'} onClick={() => handleToggleActive(u)}>
-                          {(u.is_active || u.active) ? <InactiveIcon fontSize="small" /> : <ActiveIcon fontSize="small" />}
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell><strong>Name / Email</strong></TableCell>
+                      {userTab === 0 && <TableCell><strong>Staff ID</strong></TableCell>}
+                      <TableCell><strong>Role</strong></TableCell>
+                      <TableCell><strong>Status</strong></TableCell>
+                      <TableCell align="right"><strong>Actions</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {paginatedUsers.map((u: any) => (
+                      <TableRow key={u.id} hover>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>
+                            {[u.firstName, u.middleName, u.lastName, u.suffix].filter(Boolean).join(' ') || ''}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">{u.email}</Typography>
+                        </TableCell>
+                        {userTab === 0 && <TableCell><Typography variant="body2">{u.staffId || ''}</Typography></TableCell>}
+                        <TableCell>
+                          <Chip label={u.role?.replace(/_/g, ' ').toUpperCase()} size="small" variant="outlined" />
+                        </TableCell>
+                        <TableCell>
+                          {(u.is_active || u.active)
+                            ? <Chip icon={<ActiveIcon />} label="Active" size="small" color="success" />
+                            : <Chip icon={<InactiveIcon />} label="Inactive" size="small" color="default" />}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Tooltip title="Edit user">
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => {
+                                setEditUser({
+                                  id: u.id,
+                                  email: u.email || '',
+                                  firstName: u.firstName || '',
+                                  middleName: u.middleName || '',
+                                  lastName: u.lastName || '',
+                                  suffix: u.suffix || '',
+                                  staffId: u.staffId || '',
+                                  position: u.position || '',
+                                  positionFull: u.positionFull || '',
+                                  designation: u.designation || '',
+                                  ticketMainFocal: Boolean(u.ticketMainFocal),
+                                  ticketTechnician: Boolean(u.ticketTechnician),
+                                  role: u.role,
+                                  unitIds: Array.isArray(u.units) ? u.units.map((unit: any) => unit.id) : [],
+                                });
+                              }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={(u.is_active || u.active) ? 'Deactivate' : 'Activate'}>
+                            <IconButton size="small" color={(u.is_active || u.active) ? 'warning' : 'success'} onClick={() => handleToggleActive(u)}>
+                              {(u.is_active || u.active) ? <InactiveIcon fontSize="small" /> : <ActiveIcon fontSize="small" />}
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <TablePagination
+                component="div"
+                count={displayUsers.length}
+                page={page}
+                onPageChange={(_, newPage) => setPage(newPage)}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={(e) => {
+                  setRowsPerPage(parseInt(e.target.value, 10));
+                  setPage(0);
+                }}
+                rowsPerPageOptions={[5, 10, 25, 50]}
+              />
+            </>
           );
         })()}
 

@@ -1447,7 +1447,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       qb.andWhere('t.assignedToId = :techId', { techId: filters.technicianId });
     }
     if (filters.ticketType) {
-      qb.andWhere('t.supportType = :ticketType', { ticketType: filters.ticketType });
+      qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
     }
 
     const tickets = await qb.orderBy('t.satisfactionSubmittedAt', 'DESC').getMany();

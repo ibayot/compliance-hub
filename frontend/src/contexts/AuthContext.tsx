@@ -133,6 +133,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const profile = await authApi.getProfile();
         setUser(profile);          // also keeps displayed name/role up-to-date
+        try {
+          const caps = await usersApi.getMyCapabilities();
+          setMyCap(caps);
+        } catch {}
       } catch {
         // 401 is handled by the axios interceptor; other errors are safe to ignore
       }
