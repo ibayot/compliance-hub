@@ -455,6 +455,7 @@ export default function TicketsPage() {
     if (!csatForm.clientFirstName.trim() || !csatForm.clientLastName.trim()) { enqueueSnackbar('Client name is required.', { variant: 'warning' }); return; }
     if (!csatForm.religion.trim()) { enqueueSnackbar('Religion is required.', { variant: 'warning' }); return; }
     if (!csatForm.age) { enqueueSnackbar('Age is required.', { variant: 'warning' }); return; }
+    if (csatForm.age < 20 || csatForm.age >= 90) { enqueueSnackbar('Age must be between 20 and 89.', { variant: 'warning' }); return; }
     if (!csatForm.sex) { enqueueSnackbar('Sex is required.', { variant: 'warning' }); return; }
     const ratedItems = csatForm.likert.filter((_, i) => ![3, 5, 8].includes(i));
     if (ratedItems.some(v => v === 0)) { enqueueSnackbar('Please rate all applicable items.', { variant: 'warning' }); return; }
@@ -1028,7 +1029,7 @@ export default function TicketsPage() {
                 <TextField
                   label="Age *"
                   type="number"
-                  inputProps={{ min: 1, max: 120 }}
+                  inputProps={{ min: 20, max: 89 }}
                   value={csatForm.age ?? ''}
                   onChange={e => setCsatForm(f => ({ ...f, age: e.target.value ? Number(e.target.value) : undefined }))}
                   sx={{ maxWidth: 100 }}
