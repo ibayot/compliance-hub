@@ -1,4 +1,5 @@
 # Contributing to RICTMS Compliance Hub
+> **Updated for `v0.0.82` (2026-06-09)**
 
 ## Overview
 
