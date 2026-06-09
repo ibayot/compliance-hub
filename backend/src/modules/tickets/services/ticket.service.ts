@@ -2004,9 +2004,10 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     if (requesterIdFilter) totalQb = totalQb.andWhere('t.requesterId = :requesterId', { requesterId: requesterIdFilter });
     if (techIdFilter) totalQb = totalQb.andWhere('t.assignedToId = :techId', { techId: techIdFilter });
     if (filters.ticketType) totalQb = totalQb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
-    const totalTickets = await totalQb.getCount();
+    const allTickets = await totalQb.getMany();
+    const totalTickets = allTickets.length;
 
-    if (tickets.length === 0) {
+    if (tickets.length === 0 && allTickets.length === 0) {
       return { totalTickets, totalWithRating: 0, avgOverallRating: null, avgRatingByType: [], avgRatingByTechnician: [], totalEscalations: 0, acceptedEscalations: 0, returnedEscalations: 0 };
     }
 
@@ -2017,9 +2018,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     const overallSum = ratedTickets.reduce((s, t) => s + (t.satisfactionRating ?? 0), 0);
     const avgOverallRating = totalWithRating > 0 ? Math.round((overallSum / totalWithRating) * 10) / 10 : null;
 
-    // Per type (count total resolved/closed, but avg based on rated)
+    // Per type (count total ALL TICKETS, but avg based on rated)
     const byTypeMap = new Map<string, { sum: number; ratedCount: number; totalCount: number }>();
-    for (const t of tickets) {
+    for (const t of allTickets) {
       const key = t.ticketType;
       const cur = byTypeMap.get(key) ?? { sum: 0, ratedCount: 0, totalCount: 0 };
       if (t.satisfactionRating !== null) {

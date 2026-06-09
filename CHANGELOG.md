@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.81] (Backend) / [0.0.72] (Frontend) - 2026-06-09 - User Settings and Reports Enhancements
+
+### Changed
+- **Create User & Edit Profile UX**: Removed `helperText` descriptions from all fields to unclutter the interface, deferring these instructions to the User Manual.
+- **Form Autofill Restrictions**: Enforced `autoComplete="off"` (and `new-password`) across User forms to prevent browser autofill interference.
+- **Support Type Metrics**: Rewrote the "Tickets by Support Type" analytic to base the support-type volume distribution off of *all* tickets rather than strictly resolved/closed tickets, ensuring a holistic system-tagged count.
+
+### Fixed
+- **Role Capabilities Matrix UI**: Fixed transparency issues in the sticky Role column. Toggles and headers no longer visually bleed through the sticky column by establishing an explicit hex white background and reinforcing z-index stacking.
+
 ## [0.0.80] (Backend) / [0.0.71] (Frontend) - 2026-06-09 - User Settings and Dashboard Enhancements
 
 ### Added

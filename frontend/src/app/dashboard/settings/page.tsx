@@ -250,7 +250,7 @@ function RoleCapabilitiesCard() {
                     position: 'sticky',
                     left: 0,
                     zIndex: 101,
-                    backgroundColor: 'background.paper',
+                    bgcolor: '#ffffff',
                     borderRight: '1px solid',
                     borderColor: 'divider',
                   }}
@@ -274,7 +274,7 @@ function RoleCapabilitiesCard() {
                       position: 'sticky',
                       left: 0,
                       zIndex: 100,
-                      backgroundColor: 'background.paper',
+                      bgcolor: '#ffffff',
                       borderRight: '1px solid',
                       borderColor: 'divider',
                     }}
@@ -747,48 +747,41 @@ function FocalUserManagementCard() {
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   fullWidth
                   autoComplete="off"
-                  helperText="Login credential for the new account"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField required label="Temporary Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} fullWidth helperText="Required for new accounts — user should change on first login" />
+                <TextField required label="Temporary Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} fullWidth autoComplete="new-password" />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField select required label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })} fullWidth helperText="Determines access permissions">
+                <TextField select required label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })} fullWidth>
                   {assignableRoles.map((r) => (
                     <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
                   ))}
                 </TextField>
               </Grid>
               <Grid item xs={12} md={3}>
-                <TextField required label="First Name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} fullWidth />
+                <TextField required label="First Name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} fullWidth autoComplete="off" />
               </Grid>
               <Grid item xs={12} md={3}>
-                <TextField label="Middle Name" value={form.middleName} onChange={(e) => setForm({ ...form, middleName: e.target.value })} fullWidth />
+                <TextField label="Middle Name" value={form.middleName} onChange={(e) => setForm({ ...form, middleName: e.target.value })} fullWidth autoComplete="off" />
               </Grid>
               <Grid item xs={12} md={3}>
-                <TextField required label="Last Name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} fullWidth />
+                <TextField required label="Last Name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} fullWidth autoComplete="off" />
               </Grid>
               <Grid item xs={12} md={3}>
-                <TextField label="Suffix (Jr./Sr.)" value={form.suffix} onChange={(e) => setForm({ ...form, suffix: e.target.value })} fullWidth />
+                <TextField label="Suffix (Jr./Sr.)" value={form.suffix} onChange={(e) => setForm({ ...form, suffix: e.target.value })} fullWidth autoComplete="off" />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField label="Staff ID" value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} fullWidth helperText="Optional employee identifier" disabled={form.role === UserRole.USER} />
+                <TextField label="Staff ID" value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} fullWidth disabled={form.role === UserRole.USER} autoComplete="off" />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField label="Position (Abbreviated)" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} fullWidth helperText="e.g. ITO I" />
+                <TextField label="Position (Abbreviated)" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} fullWidth autoComplete="off" />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField label="Full Position Title" value={form.positionFull} onChange={(e) => setForm({ ...form, positionFull: e.target.value })} fullWidth helperText="e.g. Information Technology Officer I" />
+                <TextField label="Full Position Title" value={form.positionFull} onChange={(e) => setForm({ ...form, positionFull: e.target.value })} fullWidth autoComplete="off" />
               </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField label="Designation / Title" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} fullWidth />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <FormControlLabel
-                  control={<Switch checked={form.ticketMainFocal} onChange={(e) => setForm({ ...form, ticketMainFocal: e.target.checked })} />}
-                  label="Ticket Main Focal"
-                />
+              <Grid item xs={12} md={6}>
+                <TextField label="Designation / Title" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} fullWidth autoComplete="off" />
               </Grid>
               <Grid item xs={12} md={4}>
                 <FormControlLabel
