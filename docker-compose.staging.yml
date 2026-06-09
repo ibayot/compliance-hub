@@ -1,8 +1,82 @@
 version: '3.8'
 
-# STAGING DEPLOYMENT
-# This docker-compose file is intended for Server A (Frontend, Backend, Gateway, Redis).
-# It does NOT include the database service, as Server B holds the database.
+# STAGING DEPLOYMENT CONFIGURATION
+# -------------------------------------------------------------------------------------
+# This file is for SERVER A (Hosting the API Gateway, Frontend, Backend Microservices).
+# It relies on Server B for the Database (MariaDB).
+#
+# INSTRUCTIONS for targetted edits:
+# Search for the "TODO" keyword below to find exactly where you need to input:
+#  1. <SERVER_A_IP> - The actual IP Address or domain pointing to Server A.
+#  2. <SERVER_B_IP> - The actual IP Address pointing to Server B (Database Server).
+#  3. <DB_PASSWORD> - Your production database root password.
+#  4. <EMAIL_APP_PASSWORD> - Your SMTP app password for sending emails.
+#  5. <JWT_SECRETS> - Generate completely random strings for JWT tokens.
+# -------------------------------------------------------------------------------------
+
+x-common-env: &common-env
+  # Application Core
+  NODE_ENV: production
+  PORT: 4000
+  # TODO: Replace with Server A's IP
+  APP_URL: http://<SERVER_A_IP>:4000
+  FRONTEND_URL: http://<SERVER_A_IP>
+  CORS_ORIGIN: http://<SERVER_A_IP>
+
+  # Database Connection
+  # TODO: Replace with Server B's IP
+  DB_HOST: <SERVER_B_IP>
+  DB_PORT: 3306
+  DB_USERNAME: root
+  # TODO: Replace with the actual database root password
+  DB_PASSWORD: <DB_PASSWORD>
+  
+  DB_DATABASE: compliance_hub_ticketing
+  USERS_DB_DATABASE: compliance_hub_users
+  TICKETING_DB_DATABASE: compliance_hub_ticketing
+  COMPLIANCE_DB_DATABASE: compliance_hub
+  DB_SYNCHRONIZE: "true"
+
+  # JWT & Security Secrets
+  # TODO: Generate secure random strings for these two
+  JWT_SECRET: <JWT_SECRET>
+  JWT_REFRESH_SECRET: <JWT_REFRESH_SECRET>
+  JWT_EXPIRATION: 30m
+  JWT_REFRESH_EXPIRATION: 7d
+  JWT_ISSUER: compliance-hub-api
+  JWT_AUDIENCE: compliance-hub-client
+
+  # Internal Service communication secrets (can be left as-is for staging)
+  INTERNAL_SERVICE_SECRET: secure-internal-secret-staging
+  INTERNAL_SERVICE_TOKEN: secure-internal-secret-staging
+  INTERNAL_SERVICE_TOKENS: '{"ticketing-service":"secure-internal-ticket-token","compliance-service":"secure-internal-compliance-token","api-gateway":"secure-internal-gateway-token","users-service":"secure-internal-users-token"}'
+
+  # External Services & Redis
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  STORAGE_TYPE: local
+  STORAGE_PATH: ./storage
+
+  MAX_FILE_SIZE: 52428800
+  ALLOWED_MIME_TYPES: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  LIBREOFFICE_PATH: /usr/bin/soffice
+  RATE_LIMIT_MAX_REQUESTS: 100000
+
+  # SMTP Email Settings
+  EMAIL_ENABLED: "true"
+  SMTP_HOST: smtp.gmail.com
+  SMTP_PORT: 465
+  SMTP_USER: icts.fo2@dswd.gov.ph
+  # TODO: Replace with your actual Google App Password
+  SMTP_PASS: <EMAIL_APP_PASSWORD>
+  SMTP_FROM: fo2.compliancehub@rictms.gov.ph
+
+  # Google OAuth Configuration
+  GOOGLE_CLIENT_ID: 907503372813-5393jo7p27hhbq0ih49tjm0gknr01it4.apps.googleusercontent.com
+  GOOGLE_CLIENT_SECRET: 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
+  # TODO: Replace with Server A's IP for the google callback
+  GOOGLE_CALLBACK_URL: http://<SERVER_A_IP>:4000/api/auth/google/callback
+
 
 services:
   redis:
@@ -23,10 +97,8 @@ services:
     depends_on:
       - redis
     command: ["node", "dist/apps/users-service.main.js"]
-    env_file:
-      - .env
     environment:
-      - REDIS_HOST=redis
+      <<: *common-env
     ports:
       - "4101:4101"
 
@@ -39,11 +111,9 @@ services:
     depends_on:
       - redis
     command: ["node", "dist/apps/ticketing-service.main.js"]
-    env_file:
-      - .env
     environment:
-      - REDIS_HOST=redis
-      - USERS_SERVICE_URL=http://users-service:4101
+      <<: *common-env
+      USERS_SERVICE_URL: http://users-service:4101
     ports:
       - "4102:4102"
 
@@ -56,11 +126,9 @@ services:
     depends_on:
       - redis
     command: ["node", "dist/apps/compliance-service.main.js"]
-    env_file:
-      - .env
     environment:
-      - REDIS_HOST=redis
-      - USERS_SERVICE_URL=http://users-service:4101
+      <<: *common-env
+      USERS_SERVICE_URL: http://users-service:4101
     ports:
       - "4103:4103"
 
@@ -75,12 +143,11 @@ services:
       - ticketing-service
       - compliance-service
     command: ["node", "dist/apps/gateway.main.js"]
-    env_file:
-      - .env
     environment:
-      - USERS_SERVICE_URL=http://users-service:4101
-      - TICKETING_SERVICE_URL=http://ticketing-service:4102
-      - COMPLIANCE_SERVICE_URL=http://compliance-service:4103
+      <<: *common-env
+      USERS_SERVICE_URL: http://users-service:4101
+      TICKETING_SERVICE_URL: http://ticketing-service:4102
+      COMPLIANCE_SERVICE_URL: http://compliance-service:4103
     ports:
       - "4000:4000"
 
@@ -93,7 +160,7 @@ services:
     depends_on:
       - gateway
     ports:
-      - "80:80" # Exposed on port 80 for staging
+      - "80:80"
 
 volumes:
   redis_data:
