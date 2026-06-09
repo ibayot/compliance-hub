@@ -1,5 +1,5 @@
 # RICTMS Compliance Hub - Capability Matrix
-> **Updated for `v0.0.82` (2026-06-09)**
+> **Updated for `v0.0.83` (2026-06-09)**
 
 > **Release `v0.0.66` (2026-06-04):** Ticketing CSAT flow now restricts unclosed ticket users from creating new tickets and forces pending satisfaction reminders. Fully extended E2E test suites with strict validation covering dynamic Likert rating loops, assignment delays, and automated dialog assertions. Unified the SLA visual chip to intelligently toggle between 'Nearing SLA' (40% remaining threshold) and 'Overdue' dynamically.
 

@@ -609,6 +609,7 @@ export const ticketsApi = {
     quarter?: number;
     semester?: number;
     technicianId?: number;
+    ticketType?: string;
   }): Promise<RatingsReportResult> => {
     const params = new URLSearchParams();
     if (filters?.year) params.append('year', String(filters.year));
@@ -616,6 +617,7 @@ export const ticketsApi = {
     if (filters?.quarter) params.append('quarter', String(filters.quarter));
     if (filters?.semester) params.append('semester', String(filters.semester));
     if (filters?.technicianId) params.append('technicianId', String(filters.technicianId));
+    if (filters?.ticketType) params.append('ticketType', filters.ticketType);
     const response = await apiClient.get(`/tickets/ratings-report?${params}`);
     return response.data;
   },

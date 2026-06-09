@@ -1,5 +1,7 @@
 # RICTMS Compliance Hub - User Walkthrough Guide
 
+> **Release `v0.0.83` (2026-06-09):** Fixed a bug in the Detailed Ratings view where the Support Type filter was ignored by the backend API. Also fixed the horizontal scrolling bleed issue in the Role Capabilities Matrix Settings page by safely encapsulating the overflow area within an inner `TableContainer` component.
+
 > **Release `v0.0.82` (2026-06-09):** The User Manual Module in the frontend has been updated to reflect recent UI simplifications, including the removal of form helper texts and autofill features. Pantawid ICT Support is now integrated into the IT Help Desk Dashboard metrics. Additionally, the Ticket Reports module was fully documented in the manual, and a bug crashing the Detailed Ratings tab (due to missing `byWeek` support and missing `semester` filter) has been fixed.
 
 > **Release `v0.0.66` (2026-06-04):** The CSAT survey flow is now aggressively enforced: users cannot open new tickets if they have unresolved or unrated tickets. When attempting to create a new ticket, the UI will intercept the action and present a 'Pending Satisfaction Reminder' dialog or an 'Open Ticket Restriction' dialog. To satisfy E2E automation, Playwright now correctly mocks full rating submissions via the visual 5-point Likert scale. Also, Nearing SLA indicator logic now gracefully unifies with Overdue logic in a single visual table chip.

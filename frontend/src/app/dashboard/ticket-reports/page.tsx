@@ -132,7 +132,8 @@ export default function TicketReportsPage() {
           month: periodMode === 'month' ? month : undefined,
           quarter: periodMode === 'quarter' ? quarter : undefined,
           semester: periodMode === 'semester' ? semester : undefined,
-          technicianId: effectiveTechId
+          technicianId: effectiveTechId,
+          ticketType: ticketType ? ticketType : undefined,
         });
         setDetailedResult(dData);
       } catch (err) {

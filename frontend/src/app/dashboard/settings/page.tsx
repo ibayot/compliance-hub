@@ -28,6 +28,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   Tabs,
@@ -236,12 +237,13 @@ function RoleCapabilitiesCard() {
           ? 'Toggle capability flags per role. Changes take effect immediately — the backend cache is reloaded on each save.'
           : 'View-only. Role capability flags for the system. Contact the System Administrator to make changes.'}
       />
-      <CardContent sx={{ overflowX: 'auto' }}>
+      <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
         {loading ? (
-          <Typography variant="body2" color="text.secondary">Loading capabilities...</Typography>
+          <Box p={2}><Typography variant="body2" color="text.secondary">Loading capabilities...</Typography></Box>
         ) : (
-          <Table size="small" sx={{ minWidth: 900 }}>
-            <TableHead>
+          <TableContainer>
+            <Table size="small" sx={{ minWidth: 900 }}>
+              <TableHead>
               <TableRow>
                 <TableCell
                   sx={{
@@ -304,7 +306,8 @@ function RoleCapabilitiesCard() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+            </Table>
+          </TableContainer>
         )}
       </CardContent>
     </Card>

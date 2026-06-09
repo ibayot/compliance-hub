@@ -1,5 +1,5 @@
-# RICTMS Compliance Hub - Installation Guide (v0.0.82)
-> **Updated for `v0.0.82` (2026-06-09)**
+# RICTMS Compliance Hub - Installation Guide (v0.0.83)
+> **Updated for `v0.0.83` (2026-06-09)**
 
 > **Release `v0.0.66` (2026-06-04):** This release updates frontend behavior to strictly enforce unrated CSAT reminders and open ticket restrictions. You can run `cd frontend && npx playwright test` to verify the full Ticket SLA, Escalation, and CSAT Rating enforcement flow. Make sure the backend APIs are up and the rate limiting clears (or restart the backend) before re-running the test suite to prevent HTTP 429 failures in Playwright.
 

@@ -1415,6 +1415,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     quarter?: number;
     semester?: number;
     technicianId?: number;
+    ticketType?: string;
   }): Promise<{
     byDay: { date: string; avgRating: number }[];
     byWeek: { week: string; avgRating: number }[];
@@ -1444,6 +1445,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
     if (filters.technicianId) {
       qb.andWhere('t.assignedToId = :techId', { techId: filters.technicianId });
+    }
+    if (filters.ticketType) {
+      qb.andWhere('t.supportType = :ticketType', { ticketType: filters.ticketType });
     }
 
     const tickets = await qb.orderBy('t.satisfactionSubmittedAt', 'DESC').getMany();

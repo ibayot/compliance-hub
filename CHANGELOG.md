@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.83] (Backend) / [0.0.74] (Frontend) - 2026-06-09 - UI & Analytics Bug Fixes
+
+### Fixed
+- **Detailed Ratings Support Filter**: Fixed an issue where the `Support Type` dropdown in the Detailed Ratings view did not actually filter the dataset. The backend and frontend APIs now correctly pass and process the `ticketType` query parameter.
+- **Role Capabilities Matrix UI**: Fixed a horizontal scrolling display issue where column headers and toggles visibly bled outside the intended table boundary. Moving the overflow to a strictly bound `TableContainer` resolves the bleed while keeping the Role column safely sticky.
+
 ## [0.0.82] (Backend) / [0.0.73] (Frontend) - 2026-06-09 - Detailed Ratings and User Manual Updates
 
 ### Changed
