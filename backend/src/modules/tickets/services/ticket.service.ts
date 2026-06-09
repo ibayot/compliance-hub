@@ -1413,9 +1413,11 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     year?: number;
     month?: number;
     quarter?: number;
+    semester?: number;
     technicianId?: number;
   }): Promise<{
     byDay: { date: string; avgRating: number }[];
+    byWeek: { week: string; avgRating: number }[];
     byTicket: any[];
     byTechnician: Record<string, { average: number, count: number }>;
     summary: { average: number, count: number };
@@ -1432,6 +1434,13 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
     if (filters.quarter) {
       qb.andWhere('QUARTER(t.satisfactionSubmittedAt) = :quarter', { quarter: filters.quarter });
+    }
+    if (filters.semester) {
+      if (filters.semester === 1) {
+        qb.andWhere('MONTH(t.satisfactionSubmittedAt) BETWEEN 1 AND 6');
+      } else {
+        qb.andWhere('MONTH(t.satisfactionSubmittedAt) BETWEEN 7 AND 12');
+      }
     }
     if (filters.technicianId) {
       qb.andWhere('t.assignedToId = :techId', { techId: filters.technicianId });
@@ -1472,20 +1481,36 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
 
     const byDayMap: Record<string, { total: number, count: number }> = {};
+    const byWeekMap: Record<string, { total: number, count: number }> = {};
     for (const t of tickets) {
       if (!t.satisfactionSubmittedAt) continue;
       const dateStr = new Date(t.satisfactionSubmittedAt).toISOString().slice(0, 10);
       if (!byDayMap[dateStr]) byDayMap[dateStr] = { total: 0, count: 0 };
       byDayMap[dateStr].total += t.satisfactionRating!;
       byDayMap[dateStr].count += 1;
+
+      // Week calculation
+      const d = new Date(t.satisfactionSubmittedAt);
+      d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+      const weekStr = `${d.getUTCFullYear()}-W${weekNo.toString().padStart(2, '0')}`;
+      if (!byWeekMap[weekStr]) byWeekMap[weekStr] = { total: 0, count: 0 };
+      byWeekMap[weekStr].total += t.satisfactionRating!;
+      byWeekMap[weekStr].count += 1;
     }
     const byDay = Object.keys(byDayMap).sort().map(date => ({
       date,
       avgRating: Math.round((byDayMap[date].total / byDayMap[date].count) * 10) / 10
     }));
+    const byWeek = Object.keys(byWeekMap).sort().map(week => ({
+      week,
+      avgRating: Math.round((byWeekMap[week].total / byWeekMap[week].count) * 10) / 10
+    }));
 
     return {
       byDay,
+      byWeek,
       byTicket,
       byTechnician: technicianAverages,
       summary: {

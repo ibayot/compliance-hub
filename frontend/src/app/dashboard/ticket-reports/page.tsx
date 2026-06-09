@@ -127,7 +127,13 @@ export default function TicketReportsPage() {
       setResult(data);
 
       try {
-        const dData = await ticketsApi.getRatingsReport({ year, month, quarter, technicianId: effectiveTechId });
+        const dData = await ticketsApi.getRatingsReport({
+          year,
+          month: periodMode === 'month' ? month : undefined,
+          quarter: periodMode === 'quarter' ? quarter : undefined,
+          semester: periodMode === 'semester' ? semester : undefined,
+          technicianId: effectiveTechId
+        });
         setDetailedResult(dData);
       } catch (err) {
         console.error('Failed to fetch detailed ratings', err);

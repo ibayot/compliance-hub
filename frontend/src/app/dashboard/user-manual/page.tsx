@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useMemo, useState } from 'react';
 import {
@@ -498,32 +498,32 @@ const manualItems: ManualItem[] = [
         {
           field: 'New User: Email Address',
           explanation:
-            'The login email for the new account. Must be unique in the system. The user will log in with this email and the temporary password you set. Email cannot be changed after account creation  create a new account and deactivate the old one if needed.',
+            'The login email for the new account. Must be unique in the system. Type it manually (autofill and email suggestions have been disabled for security). The user will log in with this email and the temporary password you set. Email cannot be changed after account creation.',
         },
         {
           field: 'New User: Temporary Password',
           explanation:
-            'The initial password set by the administrator. Communicate this to the user through a secure channel. The user should change this password immediately using the Change Password form after their first login.',
+            'The initial password set by the administrator. Communicate this to the user through a secure channel. Browser autofill is disabled here. The user should change this password immediately using the Change Password form after their first login.',
         },
         {
           field: 'New User: Role',
           explanation:
-            'Determines what the user can see and do. Assignable roles are: Focal (document submission and ticket handling for assigned units), Technician (technical issue resolution), Reviewer (compliance review decisions), and Auditor (read-only compliance audit access). Super Admin is reserved for system administrators and cannot be assigned through this form.',
+            'Determines what the user can see and do. Assignable roles are: Focal, Technician, Reviewer, and Auditor. Super Admin is reserved for system administrators. Regular "User" roles receive limited dashboards.',
         },
         {
           field: 'New User: Name and Position Fields',
           explanation:
-            'First Name, Middle Name, Last Name, Suffix: form the user\'s display name shown in review records, ticket assignments, and audit logs. Position and Designation appear in official reports and correspondence. Staff ID is the optional HR/payroll reference number.',
+            'First Name, Middle Name, Last Name, Suffix: form the user\'s display name. Position and Designation appear in official reports. Note: Helper texts have been removed from these fields to keep the UI clean. Staff ID is strictly for non-regular staff (disabled for basic users).',
         },
         {
           field: 'Change User Role (existing user)',
           explanation:
-            'From the Existing Users table, click the Edit (pencil) icon next to any user to open the role-change dialog. Select the new role from the dropdown  each option shows the role name and its description. Save commits the change immediately; the user\'s access permissions update on their next page load.',
+            'From the Existing Users table, click the Edit (pencil) icon next to any user to open the role-change dialog. Select the new role from the dropdown. Save commits the change immediately. Staff ID becomes editable only if you assign a staff role.',
         },
         {
           field: 'Activate / Deactivate Account',
           explanation:
-            'Deactivating an account prevents the user from logging in or performing any actions. Their historical records (reviews, ticket actions, document uploads) are preserved. Reactivate at any time by clicking the Activate button. Do not delete accounts  deactivation maintains audit integrity.',
+            'Deactivating an account prevents the user from logging in. Historical records are preserved. Reactivate at any time by clicking the Activate button. Do not delete accounts.',
         },
       ],
       outputs: [
@@ -775,6 +775,11 @@ const manualItems: ManualItem[] = [
             'A time-ordered list of the most recent actions in your accessible modules (document uploads, ticket updates, review decisions). Helps you stay current without navigating separately to each module.',
         },
         {
+          field: 'IT Help Desk Overview (super_admin / reviewer / main focal)',
+          explanation:
+            'A volume summary of all tickets grouped by status (Open, In Progress, Resolved, Closed), alongside a type breakdown covering IT Support, Desktop Support, and Pantawid ICT Support ticket volumes.',
+        },
+        {
           field: 'Quick-Action Shortcuts',
           explanation:
             'Role-appropriate buttons at the top of the dashboard (e.g., "Upload Document", "Submit Ticket", "Review Pending"). These route directly to the relevant module screen pre-filtered to your pending items.',
@@ -792,9 +797,9 @@ const manualItems: ManualItem[] = [
         'The IT Help Desk Ticketing module is RICTMS\'s centralized system for managing all IT and desktop support requests. Any system user can submit a help desk ticket. Technicians receive automated assignment notifications and manage ticket lifecycle from Open to Resolved. Admins can override assignments, manage categories, and set keyword auto-routing rules. All ticket activity is logged for audit and performance tracking.',
       inputs: [
         {
-          field: 'Support Type (IT Support / Desktop Support)',
+          field: 'Support Type (IT Support / Desktop Support / Pantawid ICT Support)',
           explanation:
-            'Select the nature of your issue. IT Support covers software, network, internet connectivity, email, user accounts, and system-level issues. Desktop Support covers hardware (workstations, monitors, keyboards, mice), printers, peripherals, and physical equipment. Your selection determines which technician pool is assigned and which categories are available.',
+            'Select the nature of your issue. IT Support covers software, network, internet connectivity, email, user accounts, and system-level issues. Desktop Support covers hardware, printers, and physical equipment. Pantawid ICT Support is specific to Pantawid-related requests. Your selection determines which technician pool is assigned and which categories are available.',
         },
         {
           field: 'Category',
@@ -911,6 +916,45 @@ const manualItems: ManualItem[] = [
           field: 'Email Test Result',
           explanation:
             '"Test email sent successfully to [email]" confirms SMTP is working. If an error is returned, the SMTP error message is shown so the administrator can correct the configuration.',
+        },
+      ],
+    },
+  },
+  {
+    title: 'Ticket Reports',
+    description: 'View Help Desk analytics, SLA performance, and detailed user satisfaction ratings.',
+    roles: ['super_admin', 'reviewer', 'focal'],
+    path: '/dashboard/ticket-reports',
+    details: {
+      purpose:
+        'Provides comprehensive analytics on help desk operations. Ticket Admins and management can evaluate ticket volumes, technician workloads, SLA adherence, and end-user satisfaction ratings to improve service delivery.',
+      inputs: [
+        {
+          field: 'Date Range & Filter Controls',
+          explanation:
+            'Select the reporting period (Year, and optionally Month, Quarter, or Semester). You can also filter by specific Technician or Support Type to drill down into the performance metrics.',
+        },
+        {
+          field: 'Report Tabs (Overview / Detailed Ratings)',
+          explanation:
+            'Toggle between the high-level performance overview and the granular satisfaction ratings breakdown.',
+        },
+      ],
+      outputs: [
+        {
+          field: 'Ticket Volume by Support Type',
+          explanation:
+            'A pie chart showing the distribution of all tickets across IT Support, Desktop Support, and Pantawid ICT Support (regardless of resolution status).',
+        },
+        {
+          field: 'Technician Workload & Performance',
+          explanation:
+            'Bar charts detailing ticket resolution volume per technician and their corresponding average satisfaction rating scores.',
+        },
+        {
+          field: 'Detailed Ratings Analysis',
+          explanation:
+            'Provides day-by-day and week-by-week average rating charts, alongside a tabular list of every rated ticket and its specific user comments.',
         },
       ],
     },

@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.82] (Backend) / [0.0.73] (Frontend) - 2026-06-09 - Detailed Ratings and User Manual Updates
+
+### Changed
+- **User Manual**: Updated the Frontend User Manual to reflect recent UI simplifications (removed helper texts, email autofill disabled), integrated Pantawid ICT Support in the IT Help Desk Dashboard, and added a brand new section detailing the Ticket Reports feature.
+- **Backend Analytics**: Extended the `getRatingsReport` backend service and controller to accept the `semester` filter and calculate `byWeek` averages.
+
+### Fixed
+- **Ticket Reports (Detailed Ratings)**: Fixed a bug where the Detailed Ratings view crashed on render because the `byWeek` dataset was undefined. Re-wired the frontend API call to correctly pass the `semester` parameter.
+
 ## [0.0.81] (Backend) / [0.0.72] (Frontend) - 2026-06-09 - User Settings and Reports Enhancements
 
 ### Changed

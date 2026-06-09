@@ -169,12 +169,14 @@ export class TicketController {
     @Query('year') year?: string,
     @Query('month') month?: string,
     @Query('quarter') quarter?: string,
+    @Query('semester') semester?: string,
     @Query('technicianId') technicianId?: string,
   ) {
     return this.ticketService.getRatingsReport({
       year: year ? Number(year) : undefined,
       month: month ? Number(month) : undefined,
       quarter: quarter ? Number(quarter) : undefined,
+      semester: semester ? Number(semester) : undefined,
       technicianId: technicianId ? Number(technicianId) : undefined,
     });
   }
