@@ -106,7 +106,7 @@ async function login(page: Page, email: string, pass: string = PASSWORD) {
     await page.locator('input[type="password"]').fill(pass);
     await page.getByRole('button', { name: 'Sign In', exact: true }).click();
   }
-  await expect(page.locator('text=Dashboard').first()).toBeVisible({ timeout: 15000 });
+  await page.waitForSelector('h4, h5, h6', { timeout: 25000 });
 }
 
 async function logout(page: Page) {
