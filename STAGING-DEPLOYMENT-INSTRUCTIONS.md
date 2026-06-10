@@ -44,9 +44,9 @@ Since you already have a dedicated database server, Docker is not needed here.
 **Steps for your DBA:**
 1. Send your DBA the `staging-schema-full.sql` file provided in the repository root.
 2. The DBA must create the following three blank databases with `utf8mb4` encoding:
-   - `compliance_hub`
-   - `compliance_hub_users`
-   - `compliance_hub_ticketing`
+   - `02_db_stg_compliance_hub`
+   - `02_db_stg_compliance_hub_users`
+   - `02_db_stg_compliance_hub_ticketing`
 3. Have the DBA grant all privileges for these three databases to a secure user account (e.g., `compliance_service_user`).
 4. The DBA should then run the `staging-schema-full.sql` file against the database instance.
    - *This file automatically creates all tables, seeds the exact system roles (including `pantawid_ict_focal`), and creates a single administrator account (`fo2admin@dswd.gov.ph` with password `password123`).*
@@ -78,6 +78,21 @@ Search for the keyword `TODO` inside the `docker-compose.staging.yml` file to fi
 | `SMTP_PASS` | Your Google App Password to enable outbound emails. |
 | `GOOGLE_CALLBACK_URL` | The exact URL pointing to your Gateway server + callback path. E.g., `http://192.168.1.100:4000/api/auth/google/callback` |
 
+Important networking note:
+- `DB_HOST` must be a reachable IP address or DNS hostname of Server B from Server A.
+- Do not use `localhost` or `127.0.0.1` for `DB_HOST` in this staging setup, because containers on Server A would try to connect to themselves.
+
+### .env Database Values for Staging
+
+If you are also maintaining a `.env` file (outside Docker Compose), use these exact staging database values:
+
+```env
+DB_DATABASE=02_db_stg_compliance_hub_ticketing
+USERS_DB_DATABASE=02_db_stg_compliance_hub_users
+TICKETING_DB_DATABASE=02_db_stg_compliance_hub_ticketing
+COMPLIANCE_DB_DATABASE=02_db_stg_compliance_hub
+```
+
 ---
 
 ## 3. Starting the Application
@@ -91,7 +106,9 @@ docker compose -f docker-compose.staging.yml up -d --build
 ```
 
 **Verification:**
-- **Database Connection**: Run `docker logs rictms_users_service` to ensure the service says "Connected to database successfully".
+- **Container Health**: Run `docker compose -f docker-compose.staging.yml ps` and confirm all services are `Up` and become `healthy`.
+- **Database Connectivity**: Run `docker logs rictms_users_service --tail 100` and verify there are no repeated database connection failures.
+- **Gateway Health**: Run `curl http://<SERVER_A_IP>:4000/api/health` and confirm all service flags are `true`.
 - **Frontend Access**: Open `http://<SERVER_A_IP>` in your browser.
 - **Login**: Log in using `fo2admin@dswd.gov.ph` and `password123`.
 

@@ -61,6 +61,15 @@ If not installed, get it from https://git-scm.com/
 
 > For a typical intranet setup, you only need to open **port 3000** to end users. Everything else stays internal.
 
+### External Database Host Rule (Staging/Two-Server Setup)
+
+If your app containers run on one server and MariaDB runs on another server, set `DB_HOST` to the database server's routable IP or DNS name.
+
+- Correct example: `DB_HOST=10.10.20.15`
+- Incorrect in this topology: `DB_HOST=localhost` or `DB_HOST=127.0.0.1`
+
+When `DB_HOST` is `localhost` inside a container, it points to the container itself, not your remote database server.
+
 ### What the Services Do
 
 | Container Name | Role |
