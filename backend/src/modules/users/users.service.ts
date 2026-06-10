@@ -198,6 +198,10 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
 
 @Injectable()
 export class UsersService {
+  private isDbBootstrapEnabled(): boolean {
+    return String(process.env.DB_BOOTSTRAP ?? 'true').toLowerCase() === 'true';
+  }
+
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
@@ -208,6 +212,10 @@ export class UsersService {
     @InjectRepository(RoleCapability)
     private readonly roleCapabilitiesRepository: Repository<RoleCapability>,
   ) {
+    if (!this.isDbBootstrapEnabled()) {
+      return;
+    }
+
     this.ensureUnitsView().catch(() => undefined);
     this.ensureRoleDefinitions()
       .then(() => this.ensureRoleCapabilityRows())

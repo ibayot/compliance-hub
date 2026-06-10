@@ -101,6 +101,10 @@ export interface ReturnEscalationDto {
 export class TicketService implements OnModuleInit {
   private readonly logger = new Logger(TicketService.name);
 
+  private isDbBootstrapEnabled(): boolean {
+    return String(process.env.DB_BOOTSTRAP ?? 'true').toLowerCase() === 'true';
+  }
+
   constructor(
     @InjectRepository(Ticket)
     private readonly ticketRepo: Repository<Ticket>,
@@ -128,10 +132,14 @@ export class TicketService implements OnModuleInit {
   // --- Schema Migration ----------------------------------------------------
 
   async onModuleInit(): Promise<void> {
-    try {
-      await this.runMigrations();
-    } catch (err) {
-      this.logger.warn(`Ticket schema migration failed (non-fatal): ${err?.message}`);
+    if (this.isDbBootstrapEnabled()) {
+      try {
+        await this.runMigrations();
+      } catch (err) {
+        this.logger.warn(`Ticket schema migration failed (non-fatal): ${err?.message}`);
+      }
+    } else {
+      this.logger.log('DB bootstrap disabled; skipping ticket startup migration/views/seed.');
     }
 
     if (this.eventBus) {

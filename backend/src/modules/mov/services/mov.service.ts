@@ -13,6 +13,10 @@ import { KpiMaster } from '../../kpi/entities/kpi-master.entity';
 export class MovService implements OnModuleInit {
   private readonly logger = new Logger(MovService.name);
 
+  private isDbBootstrapEnabled(): boolean {
+    return String(process.env.DB_BOOTSTRAP ?? 'true').toLowerCase() === 'true';
+  }
+
   constructor(
     @InjectRepository(MovArtifact)
     private readonly movRepo: Repository<MovArtifact>,
@@ -26,6 +30,11 @@ export class MovService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    if (!this.isDbBootstrapEnabled()) {
+      this.logger.log('DB bootstrap disabled; skipping MOV startup DDL/seed.');
+      return;
+    }
+
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS mov_artifacts (
         id CHAR(36) NOT NULL,

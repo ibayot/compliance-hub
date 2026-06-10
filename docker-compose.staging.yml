@@ -33,7 +33,8 @@ x-common-env: &common-env
   USERS_DB_DATABASE: 02_db_stg_compliance_hub_users
   TICKETING_DB_DATABASE: 02_db_stg_compliance_hub_ticketing
   COMPLIANCE_DB_DATABASE: 02_db_stg_compliance_hub
-  DB_SYNCHRONIZE: "true"
+  DB_SYNCHRONIZE: "false"
+  DB_BOOTSTRAP: "false"
 
   # JWT & Security Secrets
   # TODO: Generate secure random strings for these two

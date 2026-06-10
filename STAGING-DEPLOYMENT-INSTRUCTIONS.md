@@ -93,6 +93,15 @@ TICKETING_DB_DATABASE=02_db_stg_compliance_hub_ticketing
 COMPLIANCE_DB_DATABASE=02_db_stg_compliance_hub
 ```
 
+For pre-provisioned staging databases with limited DB user permissions, keep these flags disabled:
+
+```env
+DB_SYNCHRONIZE=false
+DB_BOOTSTRAP=false
+```
+
+`DB_BOOTSTRAP=false` disables startup DDL/bootstrap behavior (table/view creation and startup seeding) across services.
+
 ---
 
 ## 3. Starting the Application

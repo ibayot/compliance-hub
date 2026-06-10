@@ -107,18 +107,20 @@ async function bootstrap() {
   });
 
   // Ensure cross-DB VIEWs so the compliance service can access user/role data from compliance_hub_users
-  try {
-    const dataSource = app.get(DataSource);
-    const usersDb = process.env.USERS_DB_DATABASE || 'compliance_hub_users';
-    const conn = dataSource.createQueryRunner();
-    await conn.connect();
+  if (String(process.env.DB_BOOTSTRAP ?? 'true').toLowerCase() === 'true') {
     try {
-      await conn.query(`CREATE OR REPLACE VIEW users AS SELECT * FROM \`${usersDb}\`.users`).catch(() => undefined);
-      await conn.query(`CREATE OR REPLACE VIEW role_definitions AS SELECT * FROM \`${usersDb}\`.role_definitions`).catch(() => undefined);
-    } finally {
-      await conn.release();
-    }
-  } catch (_e) { /* non-fatal: service starts regardless of VIEW creation status */ }
+      const dataSource = app.get(DataSource);
+      const usersDb = process.env.USERS_DB_DATABASE || 'compliance_hub_users';
+      const conn = dataSource.createQueryRunner();
+      await conn.connect();
+      try {
+        await conn.query(`CREATE OR REPLACE VIEW users AS SELECT * FROM \`${usersDb}\`.users`).catch(() => undefined);
+        await conn.query(`CREATE OR REPLACE VIEW role_definitions AS SELECT * FROM \`${usersDb}\`.role_definitions`).catch(() => undefined);
+      } finally {
+        await conn.release();
+      }
+    } catch (_e) { /* non-fatal: service starts regardless of VIEW creation status */ }
+  }
 
   // OpenAPI/Swagger — accessible at /api/docs (not proxied through gateway)
   const swaggerConfig = new DocumentBuilder()
