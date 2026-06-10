@@ -23,11 +23,11 @@ x-common-env: &common-env
 
   # Database Connection
   # TODO: Replace with Server B's routable IP or DNS hostname (do not use localhost)
-  DB_HOST: <SERVER_B_IP>
+  DB_HOST: 172.22.16.54
   DB_PORT: 3306
-  DB_USERNAME: root
+  DB_USERNAME: mjdibay
   # TODO: Replace with the actual database root password
-  DB_PASSWORD: <DB_PASSWORD>
+  DB_PASSWORD: 
   
   DB_DATABASE: 02_db_stg_compliance_hub_ticketing
   USERS_DB_DATABASE: 02_db_stg_compliance_hub_users
@@ -193,6 +193,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_GOOGLE_CLIENT_ID=907503372813-5393jo7p27hhbq0ih49tjm0gknr01it4.apps.googleusercontent.com
     container_name: rictms_frontend
     restart: on-failure
     depends_on:

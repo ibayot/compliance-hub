@@ -165,6 +165,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-907503372813-5393jo7p27hhbq0ih49tjm0gknr01it4.apps.googleusercontent.com}
     container_name: rictms_frontend
     restart: on-failure
     depends_on:

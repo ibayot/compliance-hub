@@ -15,12 +15,12 @@ const ACCOUNTS = {
 };
 
 // ─── DB helpers ───────────────────────────────────────────────────────────────
-async function getDb(database = 'compliance_hub_ticketing') {
+async function getDb(database = '02_db_stg_compliance_hub_ticketing') {
   return mysql.createConnection({
-    host: 'localhost',
-    port: 3307,
-    user: 'root',
-    password: 'admin',
+    host: '172.31.16.54',
+    port: 3306,
+    user: 'mjdibay',
+    password: 'acPZ+G&fJ\'pzY9*7',
     database,
     multipleStatements: true,
   });
@@ -32,7 +32,7 @@ async function getDb(database = 'compliance_hub_ticketing') {
  * We write directly to the source table.
  */
 async function markPresent(userIds: number[]) {
-  const conn = await getDb('compliance_hub_users');
+  const conn = await getDb('02_db_stg_compliance_hub_users');
   const today = new Date().toISOString().slice(0, 10);
   for (const userId of userIds) {
     const id = crypto.randomUUID();
@@ -50,7 +50,7 @@ async function markPresent(userIds: number[]) {
  * Remove any test-injected attendance records for today
  */
 async function cleanAttendance(userIds: number[]) {
-  const conn = await getDb('compliance_hub_users');
+  const conn = await getDb('02_db_stg_compliance_hub_users');
   const today = new Date().toISOString().slice(0, 10);
   await conn.execute(
     `DELETE FROM attendance WHERE user_id IN (${userIds.join(',')}) AND date = ? AND notes = 'e2e-test'`,
