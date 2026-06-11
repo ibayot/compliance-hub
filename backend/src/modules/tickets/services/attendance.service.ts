@@ -273,14 +273,19 @@ export class AttendanceService implements OnModuleInit {
 
   /** Get technicians filtered for the current session (all staff or filtered by type) */
   async listTechnicians(ticketType?: string, actorRole?: string): Promise<User[]> {
-    // Focal technicians see only their own staff tier when no explicit filter is set
+    // Focal technicians see only their own staff tier when no explicit filter is set,
+    // EXCEPT if they have the Attendance View Role Capability (isAttendanceAccess)
     let forcedType = ticketType;
-    if ([UserRole.IT_SUPPORT_SR].includes(actorRole as UserRole) && !ticketType) {
-      forcedType = 'it_support';
-    } else if ([UserRole.DESKTOP_SR].includes(actorRole as UserRole) && !ticketType) {
-      forcedType = 'desktop_support';
-    } else if ([UserRole.PANTAWID_ICT].includes(actorRole as UserRole) && !ticketType) {
-      forcedType = 'pantawid_ict_support';
+    const canViewAll = actorRole ? this.roleCapSvc.isAttendanceAccess(actorRole) : false;
+
+    if (!canViewAll && !ticketType) {
+      if ([UserRole.IT_SUPPORT_SR].includes(actorRole as UserRole)) {
+        forcedType = 'it_support';
+      } else if ([UserRole.DESKTOP_SR].includes(actorRole as UserRole)) {
+        forcedType = 'desktop_support';
+      } else if ([UserRole.PANTAWID_ICT].includes(actorRole as UserRole)) {
+        forcedType = 'pantawid_ict_support';
+      }
     }
 
     const groups = await this.getRoleGroups();

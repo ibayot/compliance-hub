@@ -160,15 +160,15 @@ export class TicketService implements OnModuleInit {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     try {
-      const usersDb = await this.resolveExistingSchemaName(
+      const usersDb = process.env.USERS_DB_DATABASE || await this.resolveExistingSchemaName(
         qr,
         ['compliance_hub_users', 'ricms_users', 'rictms_users'],
-        process.env.USERS_DB_DATABASE || 'compliance_hub_users',
+        'compliance_hub_users',
       );
-      const complianceDb = await this.resolveExistingSchemaName(
+      const complianceDb = process.env.COMPLIANCE_DB_DATABASE || await this.resolveExistingSchemaName(
         qr,
         ['compliance_hub', 'ricms_compliance', 'rictms_compliance'],
-        process.env.COMPLIANCE_DB_DATABASE || 'compliance_hub',
+        'compliance_hub',
       );
 
       // Schema DDL has been extracted to versioned migration files.
