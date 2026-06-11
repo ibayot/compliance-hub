@@ -43,12 +43,12 @@ test.describe.serial('Suite 2 — USER MANAGEMENT', () => {
     await userPage.verifyUserInTable(targetEmail);
 
     // Partial Search
-    await userPage.searchUser('ui_test_');
+    await userPage.searchUser('newuser_');
     await userPage.verifyUserInTable(targetEmail);
 
     // No-result Search
     await userPage.searchUser('nonexistent_user_12345@dswd.gov.ph');
-    const tableBody = page.locator('tbody');
+    const tableBody = page.locator('tbody').first();
     await expect(tableBody).not.toContainText(targetEmail);
   });
 
@@ -60,9 +60,10 @@ test.describe.serial('Suite 2 — USER MANAGEMENT', () => {
     }
 
     // We will update the newly created user from the previous test
-    await userPage.editUserRole(targetEmail, 'Desktop Senior');
+    await userPage.searchUser(targetEmail);
+    await userPage.editUserRole(targetEmail, 'Desktop Support Senior');
 
-    // Keep the role as Desktop Senior for the next test (Escalation Focals)
+    // Keep the role as Desktop Support Senior for the next test (Escalation Focals)
     // No revert needed.
 
     // Deactivate User (if applicable)

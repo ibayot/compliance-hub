@@ -472,7 +472,8 @@ export class TicketService implements OnModuleInit {
 
         if (availableTechs.length > 0) {
           // QA #2: Senior technicians are NOT eligible for auto-assignment
-          const eligibleTechs = availableTechs.filter(t => !this.roleCapSvc.isSeniorTech(t.role));
+          // Fix: Ensure a ticket is never assigned to its own requester
+          const eligibleTechs = availableTechs.filter(t => !this.roleCapSvc.isSeniorTech(t.role) && t.id !== requesterId);
           
           // Sort techs by tier: junior first, then others
           const tierPriority = (role: string): number => {
@@ -1056,10 +1057,12 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
 
           if (!absentRow) {
             // Find next oldest unassigned open ticket — no ticketType restriction (cross-type support)
+            // Fix: ensure the ticket requester is not the technician being assigned
             const nextTicket = await this.ticketRepo
               .createQueryBuilder('t')
               .where('t.status = :status', { status: TicketStatus.OPEN })
               .andWhere('t.assignedToId IS NULL')
+              .andWhere('t.requesterId != :assignedToId', { assignedToId: saved.assignedToId })
               .orderBy('t.createdAt', 'ASC')
               .getOne();
             if (nextTicket) {
@@ -1120,6 +1123,10 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
     if ([TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(ticket.status as TicketStatus)) {
       throw new ForbiddenException('Resolved or closed tickets cannot be reassigned.');
+    }
+
+    if (ticket.requesterId === dto.assignedToId) {
+      throw new BadRequestException('A ticket cannot be assigned to its own requester.');
     }
 
     const technician = await this.userRepo.findOne({ where: { id: dto.assignedToId } });
@@ -1809,11 +1816,13 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       if (currentOpen > 0) return;
 
       // Find the oldest unassigned OPEN ticket of the matching type
+      // Fix: ensure the ticket requester is not the technician being assigned
       const pending = await this.ticketRepo
         .createQueryBuilder('t')
         .where('t.status = :status', { status: TicketStatus.OPEN })
         .andWhere('t.assignedToId IS NULL')
         .andWhere('t.ticketType = :type', { type: ticketType })
+        .andWhere('t.requesterId != :techId', { techId })
         .orderBy('t.createdAt', 'ASC')
         .getOne();
 

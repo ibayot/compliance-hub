@@ -51,7 +51,7 @@ export class UserManagementPage {
     const row = this.page.locator('tr', { hasText: email }).first();
     await expect(row).toBeVisible({ timeout: 10000 });
 
-    const editBtn = row.locator('button[aria-label="edit"]');
+    const editBtn = row.getByRole('button', { name: /edit/i });
     await editBtn.click();
 
     const dialog = this.page.locator('.MuiDialog-root');
@@ -61,7 +61,7 @@ export class UserManagementPage {
     await this.page.getByRole('option', { name: new RegExp(newRoleName, 'i') }).click();
     await dialog.getByRole('button', { name: 'Save' }).click();
 
-    await expect(this.page.getByText(/User updated successfully/i)).toBeVisible({ timeout: 10000 });
+    await expect(this.page.getByText(/User profile updated successfully/i).first()).toBeVisible({ timeout: 10000 });
   }
 
   async deactivateUser(email: string) {
@@ -71,7 +71,7 @@ export class UserManagementPage {
     const row = this.page.locator('tr', { hasText: email }).first();
     await expect(row).toBeVisible({ timeout: 10000 });
 
-    const editBtn = row.locator('button[aria-label="edit"]');
+    const editBtn = row.getByRole('button', { name: /edit/i });
     await editBtn.click();
     
     const dialog = this.page.locator('.MuiDialog-root');
@@ -87,7 +87,7 @@ export class UserManagementPage {
     }
     
     await dialog.getByRole('button', { name: 'Save' }).click();
-    await expect(this.page.getByText(/User profile updated successfully/i)).toBeVisible({ timeout: 10000 });
+    await expect(this.page.getByText(/User profile updated successfully/i).first()).toBeVisible({ timeout: 10000 });
   }
 
   async nextPage() {

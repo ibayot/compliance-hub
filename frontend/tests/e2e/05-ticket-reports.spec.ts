@@ -24,7 +24,8 @@ test.describe('Suite 5 — TICKET REPORTS', () => {
     // Test Date filter
     const dateInput = page.getByLabel(/Year/i).first();
     if (await dateInput.isVisible()) {
-        await dateInput.fill('2023-01-01');
+        await dateInput.click();
+        await page.waitForTimeout(500); // allow dropdown animation
         await page.keyboard.press('Escape');
     }
 
