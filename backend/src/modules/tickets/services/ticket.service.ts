@@ -148,6 +148,11 @@ export class TicketService implements OnModuleInit {
           this.reassignUnavailableTechnicianTickets(payload.techId).catch(() => {});
         }
       });
+      this.eventBus.subscribe('user.login', (payload: any) => {
+        if (payload?.userId) {
+          this.assignPendingTicketsOnLogin(payload.userId).catch(() => {});
+        }
+      });
     }
   }
 
@@ -1137,9 +1142,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       const allowedRoles = focals
         .filter((f) => f.ticketType === ticket.ticketType || f.ticketType === 'all')
         .map((f) => f.roleValue);
-      if (allowedRoles.length > 0 && !allowedRoles.includes(technician.role)) {
+      if (allowedRoles.length > 0 && !allowedRoles.includes(String(technician.id))) {
         throw new ForbiddenException(
-          'During an accepted escalation, reassignment is limited to configured escalation focal roles for this ticket type.',
+          'During an accepted escalation, reassignment is limited to configured escalation focal users for this ticket type.',
         );
       }
     }
@@ -2162,7 +2167,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       .filter(f => f.ticketType === ticket.ticketType || f.ticketType === 'all')
       .map(f => f.roleValue);
 
-    if (allowedRoles.length > 0 && !allowedRoles.includes(focal.role)) {
+    if (allowedRoles.length > 0 && !allowedRoles.includes(String(focal.id))) {
       throw new ForbiddenException('The selected user is not designated as an escalation focal for this ticket type.');
     }
 

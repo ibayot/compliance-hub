@@ -477,9 +477,9 @@ export default function TicketDetailPage() {
       setEscalationFocals(focals);
       const mergedUsers = [...itoUsers, ...supportUsers]
         .filter((u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx);
-      // From all techs, keep only those whose role matches the configured escalation focal roles
-      const allowedRoles = new Set(focals.map(f => f.roleValue));
-      setEscalationFocalUsers(mergedUsers.filter(t => allowedRoles.has(t.role) || allowedRoles.size === 0));
+      // From all techs, keep only those whose user ID matches the configured escalation focals
+      const allowedUserIds = new Set(focals.map(f => String(f.roleValue)));
+      setEscalationFocalUsers(mergedUsers.filter(t => allowedUserIds.has(String(t.id)) || allowedUserIds.size === 0));
     } catch {
       setEscalationFocalUsers([]);
     }

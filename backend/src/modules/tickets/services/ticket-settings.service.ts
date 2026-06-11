@@ -369,16 +369,25 @@ export class TicketSettingsService {
     return this.escalationFocalRepo.find({ where, order: { ticketType: 'ASC', label: 'ASC' } });
   }
 
-  /**
-   * List roles available to be designated as escalation focals.
-   * Includes all defined roles except non-staff system roles and management roles
-   * (user, super_admin, section_head, compliance_officer).
-   */
   async listAvailableEscalationRoles(): Promise<{ value: string; label: string }[]> {
     const rows = await this.roleDefRepo.find();
-    return rows
-      .filter(r => this.roleCapSvc.isEscalationFocal(r.value))
-      .map(r => ({ value: r.value, label: r.label }));
+    const focalRoles = rows.filter(r => this.roleCapSvc.isEscalationFocal(r.value));
+    const roleMap = new Map(focalRoles.map(r => [r.value, r.label]));
+
+    // Fetch users with focal roles
+    const users = await this.categoryRepo.manager.query(
+      `SELECT id, first_name, last_name, email, role FROM users WHERE active = 1`
+    );
+
+    const focalUsers = users.filter((u: any) => roleMap.has(u.role));
+
+    return focalUsers.map((u: any) => {
+      const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email;
+      return {
+        value: String(u.id),
+        label: `${name} - ${roleMap.get(u.role)}`
+      };
+    });
   }
 
   /** Add a role as an escalation focal for a ticket type (QA #3, #13) */
@@ -387,11 +396,9 @@ export class TicketSettingsService {
     if (!validTypes.includes(dto.ticketType)) {
       throw new BadRequestException(`ticketType must be one of: ${validTypes.join(', ')}`);
     }
-    if (!this.roleCapSvc.isEscalationFocal(dto.roleValue)) {
-      throw new BadRequestException(
-        `Role "${dto.roleValue}" is not enabled for escalation focal in role capability matrix.`,
-      );
-    }
+
+    // Role validation is bypassed here because the dropdown passes user IDs (String) as the "roleValue" 
+    // instead of actual role identifiers to ensure uniqueness of target individuals.
 
     const existing = await this.escalationFocalRepo.findOne({
       where: { ticketType: dto.ticketType, roleValue: dto.roleValue },

@@ -7,11 +7,13 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { AttendanceModule } from '../users/attendance.module';
+import { EventBusModule } from '../../common/events/event-bus.module';
 
 @Module({
   imports: [
     UsersModule,
     AttendanceModule,
+    EventBusModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

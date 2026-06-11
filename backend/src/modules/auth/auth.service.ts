@@ -10,6 +10,8 @@ import { TicketService } from '../tickets/services/ticket.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload, AuthResponse } from './interfaces/auth.interface';
 import { User, UserRole } from '../users/entities/user.entity';
+import { EventBusService } from '../../common/events/event-bus.service';
+
 @Injectable()
 export class AuthService {
   private readonly googleClient = new OAuth2Client();
@@ -18,6 +20,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly eventBus: EventBusService,
     @Optional() private readonly attendanceService?: AttendanceService,
     @Optional() private readonly ticketService?: TicketService,
   ) {}
@@ -104,10 +107,8 @@ export class AuthService {
     // Record login timestamp for staff activity tracking
     await this.usersService.recordLogin(user.id);
 
-    // Auto-correct: if technician was marked absent today and then logs in, set them present
-    this.attendanceService?.autoCorrectAbsentOnLogin(user.id).catch(() => {});
-    // QA: trigger auto-assignment for pending OPEN tickets upon technician login
-    this.ticketService?.assignPendingTicketsOnLogin(user.id).catch(() => {});
+    // Emit event for ticketing/attendance services
+    await this.eventBus.publish('user.login', { userId: user.id });
 
     const tokens = await this.generateTokens(user);
     return this.buildAuthResponse(user, tokens, tokens.roleCode);
@@ -147,10 +148,8 @@ export class AuthService {
     // Record login timestamp for staff activity tracking
     await this.usersService.recordLogin(user.id);
 
-    // Auto-correct: if user was marked absent today and logs in, set them present
-    this.attendanceService?.autoCorrectAbsentOnLogin(user.id).catch(() => {});
-    // QA: trigger auto-assignment for pending OPEN tickets upon technician login
-    this.ticketService?.assignPendingTicketsOnLogin(user.id).catch(() => {});
+    // Emit event for ticketing/attendance services
+    await this.eventBus.publish('user.login', { userId: user.id });
 
     const tokens = await this.generateTokens(user);
     return this.buildAuthResponse(user, tokens, tokens.roleCode);

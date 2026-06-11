@@ -4,6 +4,7 @@ import {
   BadRequestException,
   forwardRef,
   Inject,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -40,7 +41,7 @@ export interface BulkSetOfficeDaysDto {
 // --- Service ----------------------------------------------------------------
 
 @Injectable()
-export class AttendanceService {
+export class AttendanceService implements OnModuleInit {
   private readonly logger = new Logger(AttendanceService.name);
   private readonly excludedAttendanceEmails: string[] = [];
   private readonly excludedAttendanceRoleValues = [
@@ -60,6 +61,16 @@ export class AttendanceService {
     private readonly roleCapSvc: RoleCapabilitiesService,
     private readonly eventBus: EventBusService,
   ) {}
+
+  async onModuleInit() {
+    this.eventBus.subscribe('user.login', (payload: { userId: number }) => {
+      if (payload && payload.userId) {
+        this.autoCorrectAbsentOnLogin(payload.userId).catch(err => {
+          this.logger.warn(`Failed autoCorrectAbsentOnLogin for user ${payload.userId}: ${err.message}`);
+        });
+      }
+    });
+  }
 
   // ── Attendance ──────────────────────────────────────────────────────────
 
@@ -217,6 +228,7 @@ export class AttendanceService {
     for (const u of byRole) {
       if (!seen.has(u.id)) { seen.add(u.id); allTechs.push(u); }
     }
+    this.logger.log(`[getAvailableTechnicians] ticketType=${ticketType}, date=${date}, roles=[${roles.join(',')}], allTechsCount=${allTechs.length}`);
 
     if (allTechs.length === 0) return [];
 
@@ -242,6 +254,7 @@ export class AttendanceService {
    */
   async getPresentTechnicians(ticketType: string, date: string): Promise<User[]> {
     const available = await this.getAvailableTechnicians(ticketType, date);
+    this.logger.log(`[getPresentTechnicians] ticketType=${ticketType}, date=${date}, availableCount=${available.length}`);
     if (available.length === 0) return [];
 
     const presentRows = await this.attendanceRepo.find({
@@ -251,6 +264,7 @@ export class AttendanceService {
         userId: In(available.map((u) => u.id)),
       },
     });
+    this.logger.log(`[getPresentTechnicians] presentRowsCount=${presentRows.length}, userIds=[${presentRows.map(r => r.userId).join(',')}]`);
     const presentIds = new Set<number>(presentRows.map((r) => r.userId));
     return available.filter((u) => presentIds.has(u.id));
   }

@@ -315,7 +315,7 @@ export default function TicketSettingsPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Ticket Type</TableCell>
-                    <TableCell>Role</TableCell>
+                    <TableCell>Focal User</TableCell>
                     <TableCell>Label</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
@@ -353,11 +353,11 @@ export default function TicketSettingsPage() {
               <MenuItem value="desktop_support">Desktop Support</MenuItem>
               <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
             </TextField>
-            <TextField select label="Role *" value={focalForm.roleValue} onChange={e => setFocalForm(f => ({ ...f, roleValue: e.target.value }))} fullWidth>
+            <TextField select label="Select Focal User *" value={focalForm.roleValue} onChange={e => setFocalForm(f => ({ ...f, roleValue: e.target.value }))} fullWidth>
               {availableRoles.length === 0 ? (
-                <MenuItem disabled value="">No roles available</MenuItem>
+                <MenuItem disabled value="">No eligible staff available</MenuItem>
               ) : availableRoles.map(r => (
-                <MenuItem key={r.value} value={r.value}>{r.label} ({r.value})</MenuItem>
+                <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
               ))}
             </TextField>
           </Stack>
