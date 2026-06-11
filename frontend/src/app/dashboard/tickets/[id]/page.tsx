@@ -1115,10 +1115,10 @@ export default function TicketDetailPage() {
                   return ['technician', 'pantawid_ict'].includes(t.role);
                 return ['technician_it_support', 'technician', 'technician_it_staff', 'it_support_sr', 'it_support_jr'].includes(t.role);
               })
-              .filter((t) => !isEscalateMode && t.openCount === 0 || isEscalateMode)
+              .filter((t) => !isEscalateMode || isEscalateMode)
               .map((t) => (
-                <MenuItem key={t.id} value={t.id}>
-                  {t.firstName} {t.lastName}
+                <MenuItem key={t.id} value={String(t.id)}>
+                  {t.firstName} {t.lastName} ({t.openCount} open)
                 </MenuItem>
               ))}
           </TextField>

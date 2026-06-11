@@ -8,7 +8,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, QueryRunner, Repository } from 'typeorm';
+import { DataSource, QueryRunner, Repository, Not } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Ticket, TicketType, TicketStatus, TicketPriority } from '../entities/ticket.entity';
@@ -1695,15 +1695,12 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
   }
 
   async getTechnicianAvailability(): Promise<Array<{ id: number; email: string; firstName: string; lastName: string; role: string; openCount: number; attendanceStatus: string | null; isUnavailable: boolean }>> {
+    // Fetch all active users except standard 'USER' role
     const technicians = await this.userRepo.find({
-      where: [
-        { role: UserRole.PANTAWID_ICT },
-        { role: UserRole.DESKTOP_SR },
-        { role: UserRole.IT_SUPPORT_SR },
-        { role: UserRole.DESKTOP_JR },
-        { role: UserRole.IT_SUPPORT_JR },
-        ...this.roleCapSvc.getRolesWhere('isFocal').map(r => ({ role: r as UserRole })),
-      ],
+      where: {
+        active: true,
+        role: Not(UserRole.USER),
+      },
     });
 
     // Read attendance for today so assignment UI can hide unavailable technicians.
@@ -1718,6 +1715,19 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     const attendanceMap = new Map<number, string>(attendanceRows.map((r) => [Number(r.userId), String(r.status)]));
     const unavailableStatuses = new Set(['absent', 'out_of_office']);
 
+    // Bulk fetch open ticket counts
+    const openCountsRaw = await this.ticketRepo
+      .createQueryBuilder('t')
+      .select('t.assignedToId', 'techId')
+      .addSelect('COUNT(t.id)', 'count')
+      .where('t.status NOT IN (:...closed)', {
+        closed: [TicketStatus.CLOSED, TicketStatus.DUPLICATE],
+      })
+      .andWhere('t.assignedToId IS NOT NULL')
+      .groupBy('t.assignedToId')
+      .getRawMany();
+    const countMap = new Map<number, number>(openCountsRaw.map(r => [Number(r.techId), Number(r.count)]));
+
     const results = [];
     for (const tech of technicians) {
       // Skip absent / out-of-office technicians — they cannot be assigned
@@ -1725,21 +1735,13 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       const isUnavailable = attendanceStatus ? unavailableStatuses.has(attendanceStatus) : false;
       if (isUnavailable) continue;
 
-      // "open" = anything that isn't CLOSED or DUPLICATE (terminal states)
-      const openCount = await this.ticketRepo
-        .createQueryBuilder('t')
-        .where('t.assignedToId = :id', { id: tech.id })
-        .andWhere('t.status NOT IN (:...closed)', {
-          closed: [TicketStatus.CLOSED, TicketStatus.DUPLICATE],
-        })
-        .getCount();
       results.push({
         id: tech.id,
         email: tech.email,
         firstName: tech.firstName,
         lastName: tech.lastName,
         role: tech.role,
-        openCount,
+        openCount: countMap.get(tech.id) ?? 0,
         attendanceStatus,
         isUnavailable,
       });

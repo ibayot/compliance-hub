@@ -401,8 +401,8 @@ export default function TicketsPage() {
         const availableByAttendance = roleFiltered.filter(
           (t) => !t.isUnavailable && !['absent', 'out_of_office'].includes(t.attendanceStatus ?? ''),
         );
-        // For normal assign: only show techs with no open tickets (same as ticket detail view)
-        setTechnicians(availableByAttendance.filter((t) => t.openCount === 0));
+        // For manual assign: show all eligible techs regardless of openCount, so admins can assign to anyone.
+        setTechnicians(availableByAttendance);
       }
     } catch { setTechnicians([]); }
     setAssignDialogOpen(true);
@@ -957,7 +957,7 @@ export default function TicketsPage() {
                 ? <MenuItem disabled value="">No eligible technicians found</MenuItem>
                 : technicians.map(t => (
                   <MenuItem key={t.id} value={String(t.id)}>
-                    {t.firstName} {t.lastName}
+                    {t.firstName} {t.lastName} ({t.openCount} open)
                   </MenuItem>
                 ))}
             </TextField>
