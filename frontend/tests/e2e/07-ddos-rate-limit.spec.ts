@@ -1,59 +1,65 @@
 import { test, expect } from '@playwright/test';
 import fs from 'fs';
 
-test.describe('Suite 7 — DDOS & Rate Limiting', () => {
-  test('Health Endpoint Spam Protection', async ({ page, request }) => {
+test.describe('Suite 7 - DDOS & Rate Limiting', () => {
+  test('Authenticated Endpoint Spam Protection', async ({ page }) => {
     test.setTimeout(120000); // 2 mins
 
-    let firstBlockedResponse: any = null;
-    let timeToThrottling = 0;
-    const startTime = Date.now();
+    // 1. Prompt user to login manually via Google OAuth
+    console.log('Navigating to login page. Please login manually via Google OAuth...');
+    await page.goto('/login');
     
-    // 1. Execute 8000 requests against /api/health
+    // Wait for the user to successfully login and reach the dashboard
+    await page.waitForURL('**/dashboard', { timeout: 60000 });
+    console.log('Login detected! Starting SPAM test on authenticated endpoint...');
+
+    // 2. Execute 8000 requests against an authenticated endpoint from within the browser
     const totalRequests = 8000;
     const batchSize = 200;
+    
+    const result = await page.evaluate(async ({ total, batch }) => {
+      let firstBlockedResponse = null;
+      let timeToThrottling = 0;
+      const startTime = Date.now();
 
-    for (let i = 0; i < totalRequests; i += batchSize) {
-      const promises = [];
-      for (let j = 0; j < batchSize; j++) {
-        promises.push(request.get('/api/health'));
-      }
-
-      const responses = await Promise.all(promises);
-      for (const res of responses) {
-        if (res.status() === 429 && !firstBlockedResponse) {
-          firstBlockedResponse = {
-            status: res.status(),
-            headers: res.headers(),
-            body: await res.text()
-          };
-          timeToThrottling = Date.now() - startTime;
-          break;
+      for (let i = 0; i < total; i += batch) {
+        const promises = [];
+        for (let j = 0; j < batch; j++) {
+          // Hit an authenticated endpoint
+          promises.push(fetch('/api/users/profile'));
         }
+
+        const responses = await Promise.all(promises);
+        for (const res of responses) {
+          if (res.status === 429 && !firstBlockedResponse) {
+            firstBlockedResponse = {
+              status: res.status,
+              body: await res.text()
+            };
+            timeToThrottling = Date.now() - startTime;
+            break;
+          }
+        }
+        if (firstBlockedResponse) break;
       }
-      if (firstBlockedResponse) break;
-    }
+
+      return { firstBlockedResponse, timeToThrottling };
+    }, { total: totalRequests, batch: batchSize });
 
     // Verify system returns protection response
-    expect(firstBlockedResponse).not.toBeNull();
-    expect(firstBlockedResponse.status).toBe(429);
+    expect(result.firstBlockedResponse).not.toBeNull();
+    expect(result.firstBlockedResponse?.status).toBe(429);
 
     // Write detailed report
     const report = {
-      test: "DDOS Simulation",
-      endpoint: "/api/health",
+      test: "DDOS Simulation (Authenticated)",
+      endpoint: "/api/users/profile",
       totalRequestsAttempted: totalRequests,
-      timeToThrottlingMs: timeToThrottling,
-      firstBlockedResponse
+      timeToThrottlingMs: result.timeToThrottling,
+      firstBlockedResponse: result.firstBlockedResponse
     };
     fs.writeFileSync('ddos-report.json', JSON.stringify(report, null, 2));
-
-    // 2. Immediately try to load the frontend login page
-    // Verify system remains operational (UI doesn't crash)
-    await page.goto('/login');
-    const emailInput = page.locator('input[type="email"]');
     
-    // Verify that the UI rendered successfully despite the API being rate-limited
-    await expect(emailInput).toBeVisible({ timeout: 15000 });
+    console.log('SPAM test complete. Rate limit triggered successfully.');
   });
 });

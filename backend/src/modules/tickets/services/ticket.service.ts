@@ -162,7 +162,7 @@ export class TicketService implements OnModuleInit {
     try {
       const usersDb = process.env.USERS_DB_DATABASE || await this.resolveExistingSchemaName(
         qr,
-        ['compliance_hub_users', 'ricms_users', 'rictms_users'],
+        ['02_db_stg_compliance_hub_users', 'compliance_hub_users', 'ricms_users', 'rictms_users'],
         'compliance_hub_users',
       );
       const complianceDb = process.env.COMPLIANCE_DB_DATABASE || await this.resolveExistingSchemaName(
