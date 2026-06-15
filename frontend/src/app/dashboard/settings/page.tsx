@@ -707,15 +707,18 @@ function FocalUserManagementCard() {
         role: editUser.role,
         unitIds: editUser.unitIds,
       });
+      const roleChanged = currentUser?.id === editUser.id && currentUser?.role !== editUser.role;
+
       enqueueSnackbar('User profile updated successfully.', { variant: 'success' });
       setEditUser(null);
-      await reload();
-
-      // Force logout if the user changed their own role to prevent JWT capability desync
-      if (currentUser?.id === editUser.id && currentUser?.role !== editUser.role) {
+      
+      if (roleChanged) {
         enqueueSnackbar('Your role has been updated. Please log in again to apply changes.', { variant: 'info' });
-        setTimeout(() => logout(), 1500);
+        setTimeout(() => logout(), 2000);
+        return; // Skip reload() to avoid triggering the global interceptor immediately
       }
+
+      await reload();
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to update user.', { variant: 'error' });
     } finally {
