@@ -477,9 +477,9 @@ export default function TicketDetailPage() {
       setEscalationFocals(focals);
       const mergedUsers = [...itoUsers, ...supportUsers]
         .filter((u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx);
-      // From all techs, keep only those whose user ID matches the configured escalation focals
-      const allowedUserIds = new Set(focals.map(f => String(f.roleValue)));
-      setEscalationFocalUsers(mergedUsers.filter(t => allowedUserIds.has(String(t.id))));
+      // From all techs, keep only those whose user ID or role matches the configured escalation focals
+      const allowedValues = new Set(focals.map(f => String(f.roleValue)));
+      setEscalationFocalUsers(mergedUsers.filter(t => allowedValues.has(String(t.id)) || allowedValues.has(String(t.role))));
     } catch {
       setEscalationFocalUsers([]);
     }
@@ -1085,13 +1085,8 @@ export default function TicketDetailPage() {
       <Dialog open={assignDialogOpen} onClose={() => setAssignDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>{isEscalateMode ? 'Escalate Ticket' : 'Assign Technician'}</DialogTitle>
         <DialogContent>
-          {isEscalateMode && (
-            <Alert severity="warning" sx={{ mb: 1, mt: 1 }}>
-              Only focal technicians are shown. Escalating will re-assign this ticket to the selected focal tech.
-            </Alert>
-          )}
           <Autocomplete
-            options={technicians.filter(t => t.id !== ticket.requesterId && t.id !== ticket.createdById)}
+            options={technicians}
             getOptionLabel={t => `${t.firstName} ${t.lastName} (${t.openCount} open)`}
             value={technicians.find(t => t.id === assignToId) ?? null}
             onChange={(_, newValue) => setAssignToId(newValue ? Number(newValue.id) : '')}
@@ -1099,10 +1094,12 @@ export default function TicketDetailPage() {
             renderInput={params => (
               <TextField
                 {...params}
-                label={isEscalateMode ? 'Focal Technician' : 'Technician'}
+                label="Assign Technician"
                 fullWidth
                 size="small"
                 sx={{ mt: 1 }}
+                error={technicians.length === 0}
+                helperText={technicians.length === 0 ? 'No eligible technicians found' : ''}
               />
             )}
             clearOnEscape

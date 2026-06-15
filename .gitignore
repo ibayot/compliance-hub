@@ -74,3 +74,8 @@ KPI-FEATURE-PLAN.md
 KPI-MOV-AUDIT-2026-03-04.md
 PROJECT_STATUS.md
 RELEASE-NOTES-v1.2.0.4.md
+
+# User requested temporary exclusions
+frontend/tests/
+backend/src/database/seed-data.sql
+db-init/

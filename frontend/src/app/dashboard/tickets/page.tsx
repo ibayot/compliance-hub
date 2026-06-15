@@ -12,7 +12,7 @@ import {
   Add as AddIcon, Visibility as ViewIcon, AssignmentInd as AssignIcon,
   ThumbUp as SatisfactionIcon, Computer as DesktopIcon, Wifi as ITIcon, Assignment as PantawidIcon,
   SentimentVerySatisfied, SentimentSatisfied, SentimentNeutral, SentimentDissatisfied, SentimentVeryDissatisfied,
-  FiberManualRecord,
+  FiberManualRecord, Upload as UploadIcon
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useRouter } from 'next/navigation';
@@ -94,6 +94,13 @@ export default function TicketsPage() {
   const [selectedTechId, setSelectedTechId] = useState('');
   const [isEscalateMode, setIsEscalateMode] = useState(false);
   const [escalationStateByTicket, setEscalationStateByTicket] = useState<Record<string, 'none' | 'returned' | 'active'>>({});
+
+  const [escalateDialogOpen, setEscalateDialogOpen] = useState(false);
+  const [escalationFocalUsers, setEscalationFocalUsers] = useState<TechnicianOption[]>([]);
+  const [escalateToId, setEscalateToId] = useState<string>('');
+  const [escalateNotes, setEscalateNotes] = useState('');
+  const [escalateFiles, setEscalateFiles] = useState<File[]>([]);
+  const [escalating, setEscalating] = useState(false);
 
   // Satisfaction dialog
   const [satDialogOpen, setSatDialogOpen] = useState(false);
@@ -348,74 +355,82 @@ export default function TicketsPage() {
     setNewDialogOpen(true);
   };
 
-  const openAssignDialog = async (ticket: Ticket, escalate = false) => {
-    if (escalate) {
-      try {
-        const escalations = await ticketsApi.getEscalations(ticket.id);
-        const latest = escalations[0];
-        if (latest && latest.status !== 'returned') {
-          setEscalationStateByTicket((prev) => ({ ...prev, [ticket.id]: 'active' }));
-          enqueueSnackbar('This ticket already has an active escalation. You can escalate again only after it is returned.', { variant: 'warning' });
-          return;
-        }
-        setEscalationStateByTicket((prev) => ({ ...prev, [ticket.id]: latest?.status === 'returned' ? 'returned' : 'none' }));
-      } catch {
-      }
-    }
-
-    setIsEscalateMode(escalate);
+  const openAssignDialog = async (ticket: Ticket) => {
     setAssigningTicket(ticket);
-    setSelectedTechId(escalate ? '' : String(ticket.assignedToId ?? ''));
+    setSelectedTechId(String(ticket.assignedToId ?? ''));
     try {
-      if (escalate) {
-        const [focals, itoUsers, supportUsers] = await Promise.all([
-          ticketSettingsApi.getEscalationFocals(ticket.ticketType),
-          attendanceApi.getTechnicians('ito'),
-          attendanceApi.getTechnicians(ticket.ticketType),
-        ]);
-        const mergedUsers = [...itoUsers, ...supportUsers]
-          .filter((u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx);
-        const allowedRoles = new Set(
-          focals
-            .filter((f) => f.ticketType === ticket.ticketType || f.ticketType === 'all')
-            .map((f) => f.roleValue),
-        );
-        const roleFiltered = mergedUsers.filter(
-          (t) => allowedRoles.has(t.role),
-        );
-        const availableByAttendance = roleFiltered.filter(
-          (t) => !t.isUnavailable && !['absent', 'out_of_office'].includes(t.attendanceStatus ?? ''),
-        );
-        setTechnicians(availableByAttendance);
-      } else {
-        const techs = await ticketsApi.getTechnicians();
-        const availableByAttendance = techs.filter(
-          (t) => !t.isUnavailable && !['absent', 'out_of_office'].includes(t.attendanceStatus ?? ''),
-        );
-        // For manual assign: show all eligible techs regardless of openCount, so admins can assign to anyone.
-        setTechnicians(availableByAttendance);
-      }
+      const techs = await ticketsApi.getTechnicians();
+      const availableByAttendance = techs.filter(
+        (t) => !t.isUnavailable && !['absent', 'out_of_office'].includes(t.attendanceStatus ?? ''),
+      );
+      setTechnicians(availableByAttendance);
     } catch { setTechnicians([]); }
     setAssignDialogOpen(true);
+  };
+
+  const openEscalateDialog = async (ticket: Ticket) => {
+    try {
+      const escalations = await ticketsApi.getEscalations(ticket.id);
+      const latest = escalations[0];
+      if (latest && latest.status !== 'returned') {
+        setEscalationStateByTicket((prev) => ({ ...prev, [ticket.id]: 'active' }));
+        enqueueSnackbar('This ticket already has an active escalation. You can escalate again only after it is returned.', { variant: 'warning' });
+        return;
+      }
+      setEscalationStateByTicket((prev) => ({ ...prev, [ticket.id]: latest?.status === 'returned' ? 'returned' : 'none' }));
+    } catch {}
+
+    setAssigningTicket(ticket);
+    try {
+      const [focals, itoUsers, supportUsers] = await Promise.all([
+        ticketSettingsApi.getEscalationFocals(ticket.ticketType),
+        attendanceApi.getTechnicians('ito'),
+        attendanceApi.getTechnicians(ticket.ticketType),
+      ]);
+      const mergedUsers = [...itoUsers, ...supportUsers]
+        .filter((u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx);
+      
+      const allowedValues = new Set(focals.map(f => String(f.roleValue)));
+      setEscalationFocalUsers(mergedUsers.filter(t => allowedValues.has(String(t.id)) || allowedValues.has(String(t.role))));
+    } catch {
+      setEscalationFocalUsers([]);
+    }
+    setEscalateToId('');
+    setEscalateNotes('');
+    setEscalateFiles([]);
+    setEscalateDialogOpen(true);
   };
 
   const handleAssign = async () => {
     if (!assigningTicket || !selectedTechId) return;
     try {
-      if (isEscalateMode) {
-        const formData = new FormData();
-        formData.append('escalatedToId', String(Number(selectedTechId)));
-        await ticketsApi.escalateTicket(assigningTicket.id, formData);
-        enqueueSnackbar('Ticket escalated.', { variant: 'success' });
-        setEscalationStateByTicket((prev) => ({ ...prev, [assigningTicket.id]: 'active' }));
-      } else {
-        await ticketsApi.assign(assigningTicket.id, Number(selectedTechId));
-        enqueueSnackbar('Ticket assigned.', { variant: 'success' });
-      }
+      await ticketsApi.assign(assigningTicket.id, Number(selectedTechId));
+      enqueueSnackbar('Ticket assigned.', { variant: 'success' });
       setAssignDialogOpen(false);
       fetchTickets();
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || (isEscalateMode ? 'Failed to escalate' : 'Failed to assign'), { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to assign', { variant: 'error' });
+    }
+  };
+
+  const handleEscalate = async () => {
+    if (!assigningTicket || !escalateToId) return;
+    try {
+      setEscalating(true);
+      const formData = new FormData();
+      formData.append('escalatedToId', escalateToId);
+      if (escalateNotes.trim()) formData.append('reason', escalateNotes.trim());
+      escalateFiles.forEach(f => formData.append('files', f));
+
+      await ticketsApi.escalateTicket(assigningTicket.id, formData);
+      enqueueSnackbar('Ticket escalated.', { variant: 'success' });
+      setEscalationStateByTicket((prev) => ({ ...prev, [assigningTicket.id]: 'active' }));
+      setEscalateDialogOpen(false);
+      fetchTickets();
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to escalate ticket', { variant: 'error' });
+    } finally {
+      setEscalating(false);
     }
   };
 
@@ -666,7 +681,7 @@ export default function TicketsPage() {
                             <IconButton
                               size="small"
                               color="primary"
-                              onClick={() => openAssignDialog(ticket, false)}
+                              onClick={() => openAssignDialog(ticket)}
                               disabled={['resolved', 'closed'].includes(ticket.status)}
                             >
                               <AssignIcon fontSize="small" />
@@ -676,7 +691,7 @@ export default function TicketsPage() {
                       )}
                       {canEscalate && escalationStateByTicket[ticket.id] !== 'active' && !['duplicate', 'closed', 'resolved'].includes(ticket.status) && (
                         <Tooltip title="Escalate Ticket">
-                          <IconButton size="small" color="warning" onClick={() => openAssignDialog(ticket, true)}><AssignIcon fontSize="small" /></IconButton>
+                          <IconButton size="small" color="warning" onClick={() => openEscalateDialog(ticket)}><AssignIcon fontSize="small" /></IconButton>
                         </Tooltip>
                       )}
                       {hasPendingSatisfaction && (
@@ -788,7 +803,7 @@ export default function TicketsPage() {
                           <IconButton
                             size="small"
                             color="primary"
-                            onClick={() => openAssignDialog(ticket, false)}
+                            onClick={() => openAssignDialog(ticket)}
                             disabled={['resolved', 'closed'].includes(ticket.status)}
                           >
                             <AssignIcon fontSize="small" />
@@ -798,7 +813,7 @@ export default function TicketsPage() {
                     )}
                     {canEscalate && escalationStateByTicket[ticket.id] !== 'active' && !['duplicate', 'closed', 'resolved'].includes(ticket.status) && (
                       <Tooltip title="Escalate Ticket">
-                        <IconButton size="small" color="warning" onClick={() => openAssignDialog(ticket, true)}><AssignIcon fontSize="small" /></IconButton>
+                        <IconButton size="small" color="warning" onClick={() => openEscalateDialog(ticket)}><AssignIcon fontSize="small" /></IconButton>
                       </Tooltip>
                     )}
                     {(ticket.status === 'resolved' || ticket.status === 'closed') && ticket.requesterId === user?.id && !ticket.satisfactionSubmittedAt && (
@@ -930,19 +945,14 @@ export default function TicketsPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Assign / Escalate Dialog */}
+      {/* Assign Dialog */}
       <Dialog open={assignDialogOpen} onClose={() => setAssignDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>{isEscalateMode ? 'Escalate Ticket' : (assigningTicket?.assignedToId ? 'Reassign Ticket' : 'Assign Ticket')}</DialogTitle>
+        <DialogTitle>{assigningTicket?.assignedToId ? 'Reassign Ticket' : 'Assign Ticket'}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Typography variant="body2" color="text.secondary">
               Ticket: <strong>{assigningTicket?.ticketNumber}</strong> — {TICKET_TYPE_LABELS[assigningTicket?.ticketType ?? 'it_support']}
             </Typography>
-            {isEscalateMode && (
-              <Typography variant="caption" color="warning.main">
-                Only focal technicians are shown. Escalating will re-assign this ticket.
-              </Typography>
-            )}
             <Autocomplete
               options={technicians}
               getOptionLabel={t => `${t.firstName} ${t.lastName} (${t.openCount} open)`}
@@ -952,7 +962,7 @@ export default function TicketsPage() {
               renderInput={params => (
                 <TextField
                   {...params}
-                  label={isEscalateMode ? 'Select Focal Technician' : 'Select Technician'}
+                  label="Select Technician"
                   fullWidth
                   error={technicians.length === 0}
                   helperText={technicians.length === 0 ? 'No eligible technicians found' : ''}
@@ -965,8 +975,72 @@ export default function TicketsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleAssign} variant="contained" color={isEscalateMode ? 'warning' : 'primary'} disabled={!selectedTechId}>
-            {isEscalateMode ? 'Escalate' : (assigningTicket?.assignedToId ? 'Reassign' : 'Assign')}
+          <Button onClick={handleAssign} variant="contained" color="primary" disabled={!selectedTechId}>
+            {assigningTicket?.assignedToId ? 'Reassign' : 'Assign'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dedicated Escalate Dialog */}
+      <Dialog open={escalateDialogOpen} onClose={() => setEscalateDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Escalate Ticket</DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
+            Escalate this ticket to a designated focal technician or senior staff.
+            You may attach photo proof of the issue.
+          </Alert>
+          <Autocomplete
+            options={escalationFocalUsers}
+            getOptionLabel={t => `${t.firstName} ${t.lastName}`}
+            value={escalationFocalUsers.find(t => String(t.id) === escalateToId) ?? null}
+            onChange={(_, newValue) => setEscalateToId(newValue ? String(newValue.id) : '')}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            renderInput={params => (
+              <TextField
+                {...params}
+                label="Escalate To"
+                fullWidth
+                size="small"
+                sx={{ mb: 2 }}
+                error={escalationFocalUsers.length === 0}
+                helperText={escalationFocalUsers.length === 0 ? 'No escalation focals configured for this ticket type' : ''}
+              />
+            )}
+            clearOnEscape
+            fullWidth
+          />
+          <TextField
+            fullWidth multiline rows={3} label="Reason for escalation (optional)"
+            value={escalateNotes} onChange={(e) => setEscalateNotes(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <Box>
+            <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+              Proof photos (optional, max 10 files, 10 MB each)
+            </Typography>
+            <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />}>
+              Upload Proof Photo(s)
+              <input type="file" hidden multiple accept="image/*"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  const validFiles = files.filter(f => f.type.startsWith('image/'));
+                  if (validFiles.length !== files.length) {
+                    enqueueSnackbar('Only image files are allowed for proof photos.', { variant: 'error' });
+                  }
+                  setEscalateFiles(validFiles);
+                }} />
+            </Button>
+            {escalateFiles.length > 0 && (
+              <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                {escalateFiles.length} file(s) selected
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEscalateDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" color="warning" onClick={handleEscalate} disabled={!escalateToId || escalating}>
+            {escalating ? 'Escalating...' : 'Escalate'}
           </Button>
         </DialogActions>
       </Dialog>
