@@ -57,6 +57,14 @@ class ApiClient {
       (response) => response,
       async (error: AxiosError) => {
         const originalRequest = error.config as any;
+        
+        if (typeof window !== 'undefined' && error.response?.status === 401 && (error.response?.data as any)?.message === 'ROLE_CHANGED') {
+          tokenStore.remove('accessToken');
+          tokenStore.remove('refreshToken');
+          window.location.href = '/login?reason=role_changed';
+          return Promise.reject(error);
+        }
+
         if (error.response?.status !== 401 || originalRequest._retry) {
           return Promise.reject(error);
         }

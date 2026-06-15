@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import {
@@ -85,6 +85,12 @@ export default function LoginPage() {
             {reason === 'session_expired' && (
               <Alert severity="warning" sx={{ mb: 2 }}>
                 Your session has expired or your account was deactivated. Please sign in again.
+              </Alert>
+            )}
+
+            {reason === 'role_changed' && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Your account's role has been updated. Please sign in again to apply the new capabilities.
               </Alert>
             )}
 
