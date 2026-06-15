@@ -1101,7 +1101,7 @@ export default function TicketDetailPage() {
           >
             {technicians
               .filter((t) => {
-                if (t.id === ticket.requesterId || t.id === ticket.reportedById) return false;
+                if (t.id === ticket.requesterId || t.id === ticket.createdById) return false;
                 if (isEscalateMode) {
                   // Escalation: only focal-level techs
                   if (ticket.ticketType === 'desktop_support') return ['technician_desktop', 'technician', 'desktop_sr'].includes(t.role);
