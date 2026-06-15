@@ -2,6 +2,8 @@
 # 1. Base stage
 # -------------------------------------
 FROM node:20-alpine AS base
+# Force IPv4 to prevent "network unreachable" errors on hosts with broken IPv6 routing
+ENV NODE_OPTIONS="--dns-result-order=ipv4first"
 WORKDIR /app
 COPY package*.json ./
 

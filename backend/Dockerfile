@@ -3,6 +3,9 @@
 # -------------------------------------
 FROM node:20-alpine AS base
 
+# Force IPv4 to prevent "network unreachable" errors on hosts with broken IPv6 routing
+ENV NODE_OPTIONS="--dns-result-order=ipv4first"
+
 RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
