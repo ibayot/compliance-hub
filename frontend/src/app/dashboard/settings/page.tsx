@@ -602,6 +602,7 @@ function RoleManagementCard() {
 // --- Focal User Management Card ---------------------------------------------
 
 function FocalUserManagementCard() {
+  const { user: currentUser, logout } = useAuth();
   const [roles, setRoles] = useState<RoleDefinition[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [focalUsers, setFocalUsers] = useState<any[]>([]);
@@ -709,6 +710,12 @@ function FocalUserManagementCard() {
       enqueueSnackbar('User profile updated successfully.', { variant: 'success' });
       setEditUser(null);
       await reload();
+
+      // Force logout if the user changed their own role to prevent JWT capability desync
+      if (currentUser?.id === editUser.id && currentUser?.role !== editUser.role) {
+        enqueueSnackbar('Your role has been updated. Please log in again to apply changes.', { variant: 'info' });
+        setTimeout(() => logout(), 1500);
+      }
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to update user.', { variant: 'error' });
     } finally {

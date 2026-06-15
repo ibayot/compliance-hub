@@ -1,16 +1,18 @@
 import { test, expect } from '@playwright/test';
 import fs from 'fs';
+import { LoginPage } from './pages/LoginPage';
+import accounts from './data/accounts.json';
 
 test.describe('Suite 7 - DDOS & Rate Limiting', () => {
   test('Authenticated Endpoint Spam Protection', async ({ page }) => {
     test.setTimeout(120000); // 2 mins
 
-    // 1. Prompt user to login manually via Google OAuth
-    console.log('Navigating to login page. Please login manually via Google OAuth...');
-    await page.goto('/login');
-    
-    // Wait for the user to successfully login and reach the dashboard
-    await page.waitForURL('**/dashboard', { timeout: 60000 });
+    // 1. Login using the test fallback mechanism
+    console.log('Logging in using test account...');
+    const loginPage = new LoginPage(page);
+    await loginPage.goto();
+    await loginPage.login(accounts.user.email, accounts.user.password);
+    await loginPage.verifyDashboardVisible();
     console.log('Login detected! Starting SPAM test on authenticated endpoint...');
 
     // 2. Execute 8000 requests against an authenticated endpoint from within the browser
