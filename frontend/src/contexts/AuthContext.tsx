@@ -25,6 +25,19 @@ const tokenStore = {
   },
 };
 
+function parseJwt(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+}
+
 interface AuthContextType {
   user: User | null;
   myCap: RoleCapabilityRecord | null;
@@ -91,8 +104,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           let jwtRole = null;
           try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            jwtRole = payload.role;
+            const payload = parseJwt(token);
+            if (payload) jwtRole = payload.role;
           } catch {}
 
           const roleChanged = jwtRole && jwtRole !== profile.role;
@@ -147,16 +160,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
 
     const id = setInterval(async () => {
-      try {
-        const profile = await authApi.getProfile();
-        let jwtRole = user?.role;
-        const token = tokenStore.get('accessToken');
         try {
-          if (token) {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            jwtRole = payload.role;
-          }
-        } catch {}
+          const profile = await authApi.getProfile();
+          let jwtRole = user?.role;
+          const token = tokenStore.get('accessToken');
+          try {
+            if (token) {
+              const payload = parseJwt(token);
+              if (payload) jwtRole = payload.role;
+            }
+          } catch {}
         
         const roleChanged = jwtRole && jwtRole !== profile.role;
         
