@@ -381,7 +381,7 @@ export default function TicketsPage() {
             .map((f) => f.roleValue),
         );
         const roleFiltered = mergedUsers.filter(
-          (t) => allowedRoles.size === 0 || allowedRoles.has(t.role),
+          (t) => allowedRoles.has(t.role),
         );
         const availableByAttendance = roleFiltered.filter(
           (t) => !t.isUnavailable && !['absent', 'out_of_office'].includes(t.attendanceStatus ?? ''),
@@ -389,16 +389,7 @@ export default function TicketsPage() {
         setTechnicians(availableByAttendance);
       } else {
         const techs = await ticketsApi.getTechnicians();
-        const roleFiltered = techs.filter((t) => {
-          if (ticket.ticketType === 'desktop_support') {
-            return ['technician_desktop', 'technician', 'technician_desktop_staff', 'desktop_sr', 'desktop_jr'].includes(t.role);
-          }
-          if (ticket.ticketType === 'pantawid_ict_support') {
-            return ['technician', 'pantawid_ict'].includes(t.role);
-          }
-          return ['technician_it_support', 'technician', 'technician_it_staff', 'it_support_sr', 'it_support_jr'].includes(t.role);
-        });
-        const availableByAttendance = roleFiltered.filter(
+        const availableByAttendance = techs.filter(
           (t) => !t.isUnavailable && !['absent', 'out_of_office'].includes(t.attendanceStatus ?? ''),
         );
         // For manual assign: show all eligible techs regardless of openCount, so admins can assign to anyone.
@@ -952,15 +943,24 @@ export default function TicketsPage() {
                 Only focal technicians are shown. Escalating will re-assign this ticket.
               </Typography>
             )}
-            <TextField select label={isEscalateMode ? 'Select Focal Technician' : 'Select Technician'} value={selectedTechId} onChange={e => setSelectedTechId(e.target.value)} fullWidth>
-              {technicians.length === 0
-                ? <MenuItem disabled value="">No eligible technicians found</MenuItem>
-                : technicians.map(t => (
-                  <MenuItem key={t.id} value={String(t.id)}>
-                    {t.firstName} {t.lastName} ({t.openCount} open)
-                  </MenuItem>
-                ))}
-            </TextField>
+            <Autocomplete
+              options={technicians}
+              getOptionLabel={t => `${t.firstName} ${t.lastName} (${t.openCount} open)`}
+              value={technicians.find(t => String(t.id) === selectedTechId) ?? null}
+              onChange={(_, newValue) => setSelectedTechId(newValue ? String(newValue.id) : '')}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              renderInput={params => (
+                <TextField
+                  {...params}
+                  label={isEscalateMode ? 'Select Focal Technician' : 'Select Technician'}
+                  fullWidth
+                  error={technicians.length === 0}
+                  helperText={technicians.length === 0 ? 'No eligible technicians found' : ''}
+                />
+              )}
+              clearOnEscape
+              fullWidth
+            />
           </Stack>
         </DialogContent>
         <DialogActions>

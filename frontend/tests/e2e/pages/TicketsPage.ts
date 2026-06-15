@@ -76,9 +76,12 @@ export class TicketsPage {
     const dialog = this.page.locator('.MuiDialog-root').first();
     await expect(dialog).toBeVisible({ timeout: 5000 });
 
-    await dialog.getByLabel(/Technician/i).first().click();
-    // Use regex to find the option with the partial name
-    await this.page.getByRole('option', { name: new RegExp(nameSubstring, 'i') }).click();
+    const input = dialog.getByRole('combobox', { name: /Technician/i }).first();
+    await input.fill(nameSubstring);
+    await this.page.waitForTimeout(1000);
+    const option = this.page.getByRole('option', { name: new RegExp(nameSubstring, 'i') }).first();
+    await expect(option).toBeVisible({ timeout: 5000 });
+    await option.click();
 
     await dialog.getByRole('button', { name: /Assign|Reassign/i }).click();
     await expect(dialog).toBeHidden({ timeout: 10000 });
@@ -119,8 +122,12 @@ export class TicketsPage {
     const dialog = this.page.locator('.MuiDialog-root');
     await expect(dialog).toBeVisible({ timeout: 5000 });
 
-    await dialog.locator('.MuiSelect-select').first().click();
-    await this.page.getByRole('option', { name: new RegExp(targetRole, 'i') }).click();
+    const input = dialog.getByRole('combobox', { name: /Escalate To/i });
+    await input.fill(targetRole);
+    await this.page.waitForTimeout(1000);
+    const option = this.page.getByRole('option', { name: new RegExp(targetRole, 'i') }).first();
+    await expect(option).toBeVisible({ timeout: 5000 });
+    await option.click();
     await this.page.getByLabel(/Reason/i).fill(reason);
     
     await this.page.getByRole('button', { name: 'Escalate', exact: true }).click();

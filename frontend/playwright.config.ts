@@ -7,7 +7,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://172.31.16.76:3000',
     trace: 'on-first-retry',
     actionTimeout: 15000,
     headless: false,
@@ -20,7 +20,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { 
+      use: {
         viewport: null,
       },
     },

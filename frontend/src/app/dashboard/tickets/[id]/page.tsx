@@ -479,7 +479,7 @@ export default function TicketDetailPage() {
         .filter((u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx);
       // From all techs, keep only those whose user ID matches the configured escalation focals
       const allowedUserIds = new Set(focals.map(f => String(f.roleValue)));
-      setEscalationFocalUsers(mergedUsers.filter(t => allowedUserIds.has(String(t.id)) || allowedUserIds.size === 0));
+      setEscalationFocalUsers(mergedUsers.filter(t => allowedUserIds.has(String(t.id))));
     } catch {
       setEscalationFocalUsers([]);
     }
@@ -1090,39 +1090,24 @@ export default function TicketDetailPage() {
               Only focal technicians are shown. Escalating will re-assign this ticket to the selected focal tech.
             </Alert>
           )}
-          <TextField
-            select
+          <Autocomplete
+            options={technicians.filter(t => t.id !== ticket.requesterId && t.id !== ticket.createdById)}
+            getOptionLabel={t => `${t.firstName} ${t.lastName} (${t.openCount} open)`}
+            value={technicians.find(t => t.id === assignToId) ?? null}
+            onChange={(_, newValue) => setAssignToId(newValue ? Number(newValue.id) : '')}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            renderInput={params => (
+              <TextField
+                {...params}
+                label={isEscalateMode ? 'Focal Technician' : 'Technician'}
+                fullWidth
+                size="small"
+                sx={{ mt: 1 }}
+              />
+            )}
+            clearOnEscape
             fullWidth
-            label={isEscalateMode ? 'Focal Technician' : 'Technician'}
-            value={assignToId}
-            onChange={(e) => setAssignToId(Number(e.target.value))}
-            size="small"
-            sx={{ mt: 1 }}
-          >
-            {technicians
-              .filter((t) => {
-                if (t.id === ticket.requesterId || t.id === ticket.createdById) return false;
-                if (isEscalateMode) {
-                  // Escalation: only focal-level techs
-                  if (ticket.ticketType === 'desktop_support') return ['technician_desktop', 'technician', 'desktop_sr'].includes(t.role);
-                  if (ticket.ticketType === 'pantawid_ict_support') return ['technician', 'pantawid_ict'].includes(t.role);
-                  return ['technician_it_support', 'technician', 'it_support_sr'].includes(t.role);
-                }
-                // Normal assign: show all relevant technicians for the ticket type.
-                // Do NOT pre-filter by openCount — backend enforces the busy guard on submit.
-                if (ticket.ticketType === 'desktop_support')
-                  return ['technician_desktop', 'technician', 'technician_desktop_staff', 'desktop_sr', 'desktop_jr'].includes(t.role);
-                if (ticket.ticketType === 'pantawid_ict_support')
-                  return ['technician', 'pantawid_ict'].includes(t.role);
-                return ['technician_it_support', 'technician', 'technician_it_staff', 'it_support_sr', 'it_support_jr'].includes(t.role);
-              })
-              .filter((t) => !isEscalateMode || isEscalateMode)
-              .map((t) => (
-                <MenuItem key={t.id} value={String(t.id)}>
-                  {t.firstName} {t.lastName} ({t.openCount} open)
-                </MenuItem>
-              ))}
-          </TextField>
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
@@ -1140,17 +1125,26 @@ export default function TicketDetailPage() {
             Escalate this ticket to a designated focal technician or senior staff.
             You may attach photo proof of the issue.
           </Alert>
-          <TextField
-            select fullWidth label="Escalate To" value={escalateToId}
-            onChange={(e) => setEscalateToId(Number(e.target.value))}
-            size="small" sx={{ mb: 2 }}
-          >
-            {escalationFocalUsers.length === 0 ? (
-              <MenuItem disabled value="">No escalation focals configured for this ticket type</MenuItem>
-            ) : escalationFocalUsers.map((t) => (
-              <MenuItem key={t.id} value={t.id}>{t.firstName} {t.lastName}</MenuItem>
-            ))}
-          </TextField>
+          <Autocomplete
+            options={escalationFocalUsers}
+            getOptionLabel={t => `${t.firstName} ${t.lastName}`}
+            value={escalationFocalUsers.find(t => t.id === escalateToId) ?? null}
+            onChange={(_, newValue) => setEscalateToId(newValue ? Number(newValue.id) : '')}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            renderInput={params => (
+              <TextField
+                {...params}
+                label="Escalate To"
+                fullWidth
+                size="small"
+                sx={{ mb: 2 }}
+                error={escalationFocalUsers.length === 0}
+                helperText={escalationFocalUsers.length === 0 ? 'No escalation focals configured for this ticket type' : ''}
+              />
+            )}
+            clearOnEscape
+            fullWidth
+          />
           <TextField
             fullWidth multiline rows={3} label="Reason for escalation (optional)"
             value={escalateNotes} onChange={(e) => setEscalateNotes(e.target.value)}

@@ -28,7 +28,7 @@ test.describe('Suite 7 - DDOS & Rate Limiting', () => {
         const promises = [];
         for (let j = 0; j < batch; j++) {
           // Hit an authenticated endpoint
-          promises.push(fetch('/api/users/profile'));
+          promises.push(fetch('/api/auth/profile'));
         }
 
         const responses = await Promise.all(promises);
