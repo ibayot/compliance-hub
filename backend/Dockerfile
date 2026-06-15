@@ -15,7 +15,7 @@ COPY package*.json ./
 # 2. Dependencies stage
 # -------------------------------------
 FROM base AS deps
-RUN npm ci
+RUN npm install
 
 # -------------------------------------
 # 3. Builder stage
@@ -27,7 +27,8 @@ RUN npm run build
 # -------------------------------------
 # 4. Production stage
 # -------------------------------------
-FROM node:20-alpine AS runner
+# We inherit from base so we keep the IPv4 NODE_OPTIONS environment variable
+FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -36,7 +37,7 @@ ENV NODE_ENV=production
 COPY --from=base /app/package*.json ./
 
 # Install only production dependencies
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # Copy built application
 COPY --from=builder /app/dist ./dist
