@@ -9,8 +9,8 @@ test.describe('Suite 7 — DDOS & Rate Limiting', () => {
     let timeToThrottling = 0;
     const startTime = Date.now();
     
-    // 1. Execute 4500 requests against /api/health
-    const totalRequests = 4500;
+    // 1. Execute 8000 requests against /api/health
+    const totalRequests = 8000;
     const batchSize = 200;
 
     for (let i = 0; i < totalRequests; i += batchSize) {

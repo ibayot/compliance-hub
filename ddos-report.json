@@ -2,12 +2,12 @@
   "test": "DDOS Simulation",
   "endpoint": "/api/health",
   "totalRequestsAttempted": 4500,
-  "timeToThrottlingMs": 26756,
+  "timeToThrottlingMs": 30723,
   "firstBlockedResponse": {
     "status": 429,
     "headers": {
       "server": "nginx/1.31.1",
-      "date": "Wed, 10 Jun 2026 09:47:38 GMT",
+      "date": "Thu, 11 Jun 2026 09:22:56 GMT",
       "content-type": "application/json; charset=utf-8",
       "content-length": "169",
       "connection": "keep-alive",
@@ -23,14 +23,14 @@
       "x-frame-options": "SAMEORIGIN",
       "x-permitted-cross-domain-policies": "none",
       "x-xss-protection": "0",
-      "x-request-id": "fe8ed2a4-3370-4a15-9000-fae791146167",
+      "x-request-id": "a9fc162c-c645-439d-bc4f-bfe39e316ec3",
       "vary": "Origin",
       "access-control-allow-credentials": "true",
       "ratelimit-policy": "4000;w=60",
       "ratelimit-limit": "4000",
       "ratelimit-remaining": "0",
-      "ratelimit-reset": "3",
-      "retry-after": "3",
+      "ratelimit-reset": "4",
+      "retry-after": "4",
       "etag": "W/\"a9-bdlfWqzi5BQoLDcUi3NsyCjlPe4\""
     },
     "body": "{\"error\":\"too_many_requests\",\"message\":\"Security Measure Triggered: You have exceeded the maximum number of requests allowed. Please wait a minute before trying again.\"}"

@@ -1125,8 +1125,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       throw new ForbiddenException('Resolved or closed tickets cannot be reassigned.');
     }
 
-    if (ticket.requesterId === dto.assignedToId) {
-      throw new BadRequestException('A ticket cannot be assigned to its own requester.');
+    // A ticket cannot be assigned to its requester or reporter
+    if (dto.assignedToId === ticket.requesterId || dto.assignedToId === ticket.reportedById) {
+      throw new ForbiddenException('A ticket cannot be assigned to the person who requested or reported it.');
     }
 
     const technician = await this.userRepo.findOne({ where: { id: dto.assignedToId } });
