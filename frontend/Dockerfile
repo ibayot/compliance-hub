@@ -9,7 +9,7 @@ COPY package*.json ./
 # 2. Dependencies stage
 # -------------------------------------
 FROM base AS deps
-RUN npm ci
+RUN npm install
 
 # -------------------------------------
 # 3. Builder stage
@@ -37,6 +37,11 @@ RUN echo 'server { \
     index index.html; \
     location / { \
         try_files $uri $uri/ /index.html; \
+    } \
+    location = /index.html { \
+        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
+        add_header Pragma "no-cache"; \
+        add_header Expires "0"; \
     } \
     location /api/ { \
         proxy_pass http://gateway:4000/api/; \
