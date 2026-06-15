@@ -385,7 +385,7 @@ export class TicketSettingsService {
       const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email;
       return {
         value: String(u.id),
-        label: `${name} (${roleMap.get(u.role)})`
+        label: `${name} - ${roleMap.get(u.role)}`
       };
     });
   }
