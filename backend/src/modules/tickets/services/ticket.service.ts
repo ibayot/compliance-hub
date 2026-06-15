@@ -1126,7 +1126,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
 
     // A ticket cannot be assigned to its requester or reporter
-    if (dto.assignedToId === ticket.requesterId || dto.assignedToId === ticket.reportedById) {
+    if (dto.assignedToId === ticket.requesterId || dto.assignedToId === ticket.createdById) {
       throw new ForbiddenException('A ticket cannot be assigned to the person who requested or reported it.');
     }
 
