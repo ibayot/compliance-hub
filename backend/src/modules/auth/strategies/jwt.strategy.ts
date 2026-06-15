@@ -29,11 +29,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user || !user.active) {
       throw new UnauthorizedException('Account not found or has been deactivated');
     }
-    
-    // Force logout if the user's role has changed since the token was issued
-    if (user.role !== payload.role) {
-      throw new UnauthorizedException('ROLE_CHANGED');
-    }
 
     const roleDef = await this.usersService.findRoleDefinition(user.role).catch(() => null);
     return {

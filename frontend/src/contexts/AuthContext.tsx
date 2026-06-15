@@ -3,6 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Typography } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import { User } from '@/lib/types/auth';
 import { authApi } from '@/lib/api/auth';
 import { usersApi, RoleCapabilityRecord } from '@/lib/api/users';
@@ -39,6 +40,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { enqueueSnackbar } = useSnackbar();
   const [user, setUser] = useState<User | null>(null);
   const [myCap, setMyCap] = useState<RoleCapabilityRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,8 +88,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (token) {
         try {
           const profile = await authApi.getProfile();
+          
+          let jwtRole = null;
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            jwtRole = payload.role;
+          } catch {}
+
+          const roleChanged = jwtRole && jwtRole !== profile.role;
+          
           setUser(profile);
-          usersApi.getMyCapabilities().then(setMyCap).catch(() => {});
+          
+          if (roleChanged) {
+            enqueueSnackbar('Your role has been updated. Please log in again to apply changes.', { variant: 'info' });
+            setTimeout(() => logout('role_changed'), 1500);
+          } else {
+            usersApi.getMyCapabilities().then(setMyCap).catch(() => {});
+          }
         } catch (error) {
           tokenStore.remove('accessToken');
           tokenStore.remove('refreshToken');
@@ -97,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     initAuth();
-  }, []);
+  }, [enqueueSnackbar]);
 
   useEffect(() => {
     if (!user || loading) {
@@ -132,18 +149,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const id = setInterval(async () => {
       try {
         const profile = await authApi.getProfile();
-        setUser(profile);          // also keeps displayed name/role up-to-date
+        let jwtRole = user?.role;
+        const token = tokenStore.get('accessToken');
         try {
-          const caps = await usersApi.getMyCapabilities();
-          setMyCap(caps);
+          if (token) {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            jwtRole = payload.role;
+          }
         } catch {}
+        
+        const roleChanged = jwtRole && jwtRole !== profile.role;
+        
+        setUser(profile);          // Immediately reflect visual changes to account
+        
+        if (roleChanged) {
+          enqueueSnackbar('Your role has been updated. Please log in again to apply changes.', { variant: 'info' });
+          setTimeout(() => logout('role_changed'), 1500);
+        } else {
+          try {
+            const caps = await usersApi.getMyCapabilities();
+            setMyCap(caps);
+          } catch {}
+        }
       } catch {
         // 401 is handled by the axios interceptor; other errors are safe to ignore
       }
     }, 60_000);   // 60 s
 
     return () => clearInterval(id);
-  }, [!!user]);
+  }, [!!user, enqueueSnackbar]);
 
   const login = async (email: string, password: string, redirectTo?: string) => {
     try {
@@ -184,7 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = async () => {
+  const logout = async (reason?: string) => {
     try {
       await authApi.logout();
     } catch (error) {
@@ -196,9 +230,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMyCap(null);
       setIsSessionLocked(false);
       clearInactivityTimer();
-      router.push('/login');
+      router.push(reason ? `/login?reason=${reason}` : '/login');
     }
   };
+
 
   const handleUnlock = async () => {
     setUnlocking(true);
