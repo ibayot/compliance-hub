@@ -128,13 +128,19 @@ export class TicketSettingsService {
       return this.categoryRepo.save(softDeleted);
     }
 
+    if (dto.slaHours !== undefined && dto.slaHours !== null) {
+      if (dto.slaHours < 0 || dto.slaHours > 168) {
+        throw new BadRequestException('SLA hours must be between 0 and 168');
+      }
+    }
+
     const cat = this.categoryRepo.create({
       key,
       name: dto.name.trim(),
       ticketType: dto.ticketType,
       description: dto.description?.trim() || null,
       slaHours: dto.slaHours ?? null,
-      isActive: true,
+      isActive: (dto.slaHours ?? null) !== null,
       isDeleted: false,
       created_by: actorId,
       updated_by: actorId,
@@ -156,8 +162,25 @@ export class TicketSettingsService {
       cat.ticketType = dto.ticketType;
     }
     if (dto.description !== undefined) cat.description = dto.description?.trim() || null;
-    if (dto.isActive !== undefined) cat.isActive = dto.isActive;
-    if (dto.slaHours !== undefined) cat.slaHours = dto.slaHours ?? null;
+    
+    if (dto.slaHours !== undefined) {
+      if (dto.slaHours !== null && (dto.slaHours < 0 || dto.slaHours > 168)) {
+        throw new BadRequestException('SLA hours must be between 0 and 168');
+      }
+      cat.slaHours = dto.slaHours ?? null;
+      if (cat.slaHours === null) {
+        cat.isActive = false; // Force inactive if SLA is blank
+      }
+    }
+
+    if (dto.isActive !== undefined) {
+      // Don't allow activating if SLA is blank
+      if (dto.isActive && cat.slaHours === null) {
+        throw new BadRequestException('Cannot activate category with blank SLA');
+      }
+      cat.isActive = dto.isActive;
+    }
+
     cat.updated_by = actorId;
 
     return this.categoryRepo.save(cat);

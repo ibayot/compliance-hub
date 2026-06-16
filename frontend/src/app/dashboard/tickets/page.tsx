@@ -23,19 +23,9 @@ import {
 } from '@/app/api/references';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
+import FeedbackModal from '@/components/FeedbackModal';
 
-const PRIORITY_COLOR: Record<string, 'default' | 'info' | 'warning' | 'error' | 'success'> = {
-  low: 'info', medium: 'warning', high: 'error', urgent: 'error',
-};
-const STATUS_COLOR: Record<string, 'default' | 'info' | 'warning' | 'success' | 'error' | 'secondary'> = {
-  open: 'info', assigned: 'warning', in_progress: 'warning', resolved: 'success', closed: 'default',
-  freeze: 'secondary', duplicate: 'default',
-};
-const TICKET_TYPE_LABELS: Record<TicketType, string> = {
-  desktop_support: 'Desktop Support',
-  it_support: 'IT Support',
-  pantawid_ict_support: 'Pantawid ICT Support',
-};
+import { PRIORITY_COLOR, STATUS_COLOR, TICKET_TYPE_LABELS } from '@/lib/utils/ticket-colors';
 
 function ticketTypeIcon(t: TicketType) {
   if (t === 'desktop_support') return <DesktopIcon />;
@@ -118,6 +108,9 @@ export default function TicketsPage() {
   const [reminderOpen, setReminderOpen] = useState(false);
   const [reminderTitle, setReminderTitle] = useState('Pending Satisfaction Reminder');
   const [reminderMessage, setReminderMessage] = useState('');
+
+  // Feedback modal state
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // DB-driven role capabilities (is_all_tickets, is_ticket_focal) — loaded from AuthContext
   // (also available: myCap?.isEscalationFocal, myCap?.isTicketSettingsFocal, myCap?.isFocal)
@@ -487,9 +480,14 @@ export default function TicketsPage() {
             Submit and track assistance requests for Desktop &amp; IT Support
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenNewTicket}>
-          New Ticket
-        </Button>
+        <Stack direction="row" spacing={2}>
+          <Button variant="outlined" onClick={() => setFeedbackOpen(true)}>
+            Submit Feedback
+          </Button>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenNewTicket}>
+            New Ticket
+          </Button>
+        </Stack>
       </Box>
 
       {canManageAll && (
@@ -1219,6 +1217,8 @@ export default function TicketsPage() {
           )}
         </DialogActions>
       </Dialog>
+
+      <FeedbackModal manualOpen={feedbackOpen} onManualClose={() => setFeedbackOpen(false)} />
     </Box>
   );
 }

@@ -51,6 +51,7 @@ export interface UpdateTicketDto {
   issueTypeId?: string | null;
   /** Required when status = DUPLICATE: UUID of the original ticket */
   duplicateOfId?: string;
+  ticketType?: TicketType;
 }
 
 export interface AssignTicketDto {
@@ -851,6 +852,15 @@ export class TicketService implements OnModuleInit {
     // Technicians / admins can update status + resolution
     if (dto.subject) ticket.subject = dto.subject.trim();
     if (dto.description) ticket.description = dto.description.trim();
+
+    if (dto.ticketType) {
+      const isSettingsFocal = this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
+      const isAssigned = ticket.assignedToId === actorId;
+      if (!isSettingsFocal && !isAssigned) {
+        throw new ForbiddenException('You do not have permission to change the ticket type.');
+      }
+      ticket.ticketType = dto.ticketType;
+    }
 
     if (dto.issueTypeId !== undefined) {
       if (!dto.issueTypeId) {

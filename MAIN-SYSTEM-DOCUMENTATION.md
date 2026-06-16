@@ -246,7 +246,14 @@ Reviews are triggered after a document reaches `ready` state from automated metr
 - Focal users see only their own unit. Reviewer and super_admin see all units.
 - Period frequency selector: Monthly / Quarterly / Semestral / Annual.
 
-### 8.5 Tickets Module
+### 8.5 Feedback Module
+
+The Feedback module allows users to submit suggestions to improve the service.
+- **Submission:** An auto-popup modal prompts users for feedback every 1 hour (between 7:30 AM to 6:30 PM). Users can also manually trigger this modal via the Tickets module.
+- **Administration:** Ticket Admins have a dedicated view to manage these suggestions (All, Pending, Accepted, Rejected), order them by submission date, and take action (Accept/Reject).
+- **Privacy:** To ensure candidness, regular users cannot view their own feedback history.
+
+### 8.6 Tickets Module
 
 **Creating a Ticket (any role):**
 1. Navigate to Dashboard → Tickets.
@@ -298,7 +305,13 @@ Issuances are managed regulatory references (laws, executive orders, circulars, 
 
 All API routes are served through the API Gateway at port `4000`. The gateway routes requests to the appropriate microservice.
 
-### 9.1 Authentication and Users (users-service, port 4101)
+### 9.1 API Library (OpenAPI / Swagger)
+The backend exposes its own OpenAPI/Swagger documentation endpoint at `/api/docs`:
+- Local API Docs: `http://localhost:4000/api/docs`
+
+This interface provides an interactive way to explore schemas, endpoints, and test requests using Bearer JWT authentication.
+
+### 9.2 Authentication and Users (users-service, port 4101)
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/auth/login` | Authenticate with email and password, returns access + refresh tokens |
@@ -316,8 +329,11 @@ All API routes are served through the API Gateway at port `4000`. The gateway ro
 | GET | `/api/attendance` | List attendance records |
 | POST | `/api/attendance` | Record attendance entry |
 | GET | `/api/health` (gateway) | Returns service availability for users, ticketing, compliance |
+| POST | `/api/feedback` | Submit new feedback (user suggestion) |
+| GET | `/api/feedback` | List feedback (Ticket Admins only) |
+| PATCH | `/api/feedback/:id/status`| Accept or reject feedback |
 
-### 9.2 Ticketing (ticketing-service, port 4102)
+### 9.3 Ticketing (ticketing-service, port 4102)
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/api/tickets` | List tickets (scope depends on role) |
@@ -328,9 +344,11 @@ All API routes are served through the API Gateway at port `4000`. The gateway ro
 | POST | `/api/tickets/:id/satisfaction` | Submit satisfaction form/rating |
 | POST | `/api/tickets/:id/rate` | Backward-compatible alias for satisfaction submission |
 | GET | `/api/tickets/sla/summary` | SLA summary (overdue, due-today, compliance rate) |
-| GET | `/api/ticket-settings` | List ticket categories, issue types, priorities |
+| GET | `/api/ticket-settings/categories` | List ticket categories (without Key column, max 168h SLA) |
+| GET | `/api/ticket-settings/keyword-rules` | List keyword-based auto-shift rules |
+| GET | `/api/ticket-settings/escalation-focals`| List configured escalation focals |
 
-### 9.3 Compliance (compliance-service, port 4103)
+### 9.4 Compliance (compliance-service, port 4103)
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/api/documents` | List documents (role/unit-scoped) |

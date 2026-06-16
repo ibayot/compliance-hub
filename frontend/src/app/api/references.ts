@@ -215,6 +215,7 @@ export interface UpdateTicketDto {
   resolutionNotes?: string;
   /** Required when status = 'duplicate' */
   duplicateOfId?: string;
+  ticketType?: TicketType;
 }
 
 export interface AssignTicketDto {

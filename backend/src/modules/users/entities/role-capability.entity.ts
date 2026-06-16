@@ -119,6 +119,14 @@ export class RoleCapability {
   @Column({ name: 'is_metrics_access', type: 'tinyint', width: 1, default: 0 })
   isMetricsAccess: boolean;
 
+  /** True for roles that can access the Role Capabilities Matrix. */
+  @Column({ name: 'is_role_capabilities_access', type: 'tinyint', width: 1, default: 0 })
+  isRoleCapabilitiesAccess: boolean;
+
+  /** True for roles that can access the System Role Definitions. */
+  @Column({ name: 'is_system_roles_access', type: 'tinyint', width: 1, default: 0 })
+  isSystemRolesAccess: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

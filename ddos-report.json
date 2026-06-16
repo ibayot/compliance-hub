@@ -1,38 +1,10 @@
 {
-  "test": "DDOS Simulation",
+  "test": "DDOS Simulation (Native API)",
   "endpoint": "/api/health",
   "totalRequestsAttempted": 4500,
-  "timeToThrottlingMs": 30723,
+  "timeToThrottlingMs": 22289,
   "firstBlockedResponse": {
     "status": 429,
-    "headers": {
-      "server": "nginx/1.31.1",
-      "date": "Thu, 11 Jun 2026 09:22:56 GMT",
-      "content-type": "application/json; charset=utf-8",
-      "content-length": "169",
-      "connection": "keep-alive",
-      "content-security-policy": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
-      "cross-origin-opener-policy": "same-origin",
-      "cross-origin-resource-policy": "same-origin",
-      "origin-agent-cluster": "?1",
-      "referrer-policy": "no-referrer",
-      "strict-transport-security": "max-age=15552000; includeSubDomains",
-      "x-content-type-options": "nosniff",
-      "x-dns-prefetch-control": "off",
-      "x-download-options": "noopen",
-      "x-frame-options": "SAMEORIGIN",
-      "x-permitted-cross-domain-policies": "none",
-      "x-xss-protection": "0",
-      "x-request-id": "a9fc162c-c645-439d-bc4f-bfe39e316ec3",
-      "vary": "Origin",
-      "access-control-allow-credentials": "true",
-      "ratelimit-policy": "4000;w=60",
-      "ratelimit-limit": "4000",
-      "ratelimit-remaining": "0",
-      "ratelimit-reset": "4",
-      "retry-after": "4",
-      "etag": "W/\"a9-bdlfWqzi5BQoLDcUi3NsyCjlPe4\""
-    },
     "body": "{\"error\":\"too_many_requests\",\"message\":\"Security Measure Triggered: You have exceeded the maximum number of requests allowed. Please wait a minute before trying again.\"}"
   }
 }

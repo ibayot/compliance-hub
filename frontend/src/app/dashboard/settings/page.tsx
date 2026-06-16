@@ -193,11 +193,13 @@ const CAPABILITY_COLUMNS: { key: keyof RoleCapabilityRecord; label: string; desc
   { key: 'isRepositoryAccess',   label: 'Repository',      description: 'Access Repository module' },
   { key: 'isIssuancesAccess',    label: 'Issuances',       description: 'Access Issuances module' },
   { key: 'isMetricsAccess',      label: 'Metrics',         description: 'Access Metrics module' },
+  { key: 'isRoleCapabilitiesAccess', label: 'Capabilities Admin', description: 'Access Role Capabilities Matrix' },
+  { key: 'isSystemRolesAccess',  label: 'System Roles Admin', description: 'Access System Role Definitions' },
 ];
 
 function RoleCapabilitiesCard() {
-  const { user } = useAuth();
-  const canEdit = user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.SECTION_HEAD || user?.role === 'compliance_officer';
+  const { user, myCap } = useAuth();
+  const canEdit = user?.role === UserRole.SUPER_ADMIN || Boolean(myCap?.isRoleCapabilitiesAccess);
   const [caps, setCaps] = useState<RoleCapabilityRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null); // roleValue being saved
@@ -1126,12 +1128,13 @@ function FocalUserManagementCard() {
 // --- Main Settings Page -----------------------------------------
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   
-  // Section Head, Compliance Officer, and Super Admin can manage roles, capabilities, and users
   const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
-  const isCapAdmin = isSuperAdmin || user?.role === UserRole.SECTION_HEAD || user?.role === 'compliance_officer';
-  const canManageUsersAndRoles = isCapAdmin;
+  // Users management uses the old cap admin logic for now unless requested otherwise, but roles and capabilities use their new specific DB-driven flags
+  const canManageUsers = isSuperAdmin || user?.role === UserRole.SECTION_HEAD || user?.role === 'compliance_officer';
+  const canManageSystemRoles = isSuperAdmin || Boolean(myCap?.isSystemRolesAccess);
+  const canManageRoleCapabilities = isSuperAdmin || Boolean(myCap?.isRoleCapabilitiesAccess);
 
   return (
     <Box>
@@ -1189,19 +1192,19 @@ export default function SettingsPage() {
           <ChangePasswordCard />
         </Grid>
 
-        {canManageUsersAndRoles && (
+        {canManageSystemRoles && (
           <Grid item xs={12}>
             <RoleManagementCard />
           </Grid>
         )}
 
-        {canManageUsersAndRoles && (
+        {canManageRoleCapabilities && (
           <Grid item xs={12}>
             <RoleCapabilitiesCard />
           </Grid>
         )}
 
-        {canManageUsersAndRoles && (
+        {canManageUsers && (
           <Grid item xs={12}>
             <FocalUserManagementCard />
           </Grid>

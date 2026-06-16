@@ -200,9 +200,19 @@ export class RoleCapabilitiesService implements OnModuleInit {
     return !!this.get(role)?.isMetricsAccess;
   }
 
+  isRoleCapabilitiesAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isRoleCapabilitiesAccess;
+  }
+
+  isSystemRolesAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isSystemRolesAccess;
+  }
+
   /** Return all role values that have a given capability set to true. */
   getRolesWhere(
-    capability: 'isFocal' | 'isIto' | 'isDesktop' | 'isItSupport' | 'isPantawidIct' | 'isEscalationFocal' | 'isTicketSettingsFocal' | 'isAllTickets' | 'isTicketFocal' | 'isKpiAccess' | 'isKpiManage' | 'isAttendanceAccess' | 'isAttendanceManage' | 'isReportsAccess' | 'isReviewsAccess' | 'isMovAccess' | 'isDocumentsAccess' | 'isRepositoryAccess' | 'isIssuancesAccess' | 'isMetricsAccess',
+    capability: 'isFocal' | 'isIto' | 'isDesktop' | 'isItSupport' | 'isPantawidIct' | 'isEscalationFocal' | 'isTicketSettingsFocal' | 'isAllTickets' | 'isTicketFocal' | 'isKpiAccess' | 'isKpiManage' | 'isAttendanceAccess' | 'isAttendanceManage' | 'isReportsAccess' | 'isReviewsAccess' | 'isMovAccess' | 'isDocumentsAccess' | 'isRepositoryAccess' | 'isIssuancesAccess' | 'isMetricsAccess' | 'isRoleCapabilitiesAccess' | 'isSystemRolesAccess',
   ): string[] {
     return [...this.cache.values()]
       .filter((r) => r[capability])

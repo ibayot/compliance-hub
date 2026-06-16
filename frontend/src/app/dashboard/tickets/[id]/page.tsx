@@ -48,6 +48,7 @@ import {
 } from '@/app/api/references';
 import { ArrowBack as BackIcon, Star as StarIcon, CloudUpload as UploadIcon, SentimentVerySatisfied, SentimentSatisfied, SentimentNeutral, SentimentDissatisfied, SentimentVeryDissatisfied, NavigateBefore, NavigateNext } from '@mui/icons-material';
 import { apiClient } from '@/lib/api/client';
+import { PRIORITY_COLOR, STATUS_COLOR, TICKET_TYPE_LABELS as TYPE_LABELS } from '@/lib/utils/ticket-colors';
 
 const STATUS_OPTS = [
   { value: 'open', label: 'Open' },
@@ -57,29 +58,6 @@ const STATUS_OPTS = [
   { value: 'freeze', label: 'Freeze (on hold)' },
   { value: 'duplicate', label: 'Duplicate' },
 ];
-
-const PRIORITY_COLOR: Record<string, 'error' | 'warning' | 'info' | 'success' | 'default'> = {
-  urgent: 'error',
-  high: 'error',
-  medium: 'warning',
-  low: 'info',
-};
-
-const STATUS_COLOR: Record<string, 'error' | 'warning' | 'info' | 'success' | 'default' | 'secondary'> = {
-  open: 'warning',
-  assigned: 'info',
-  in_progress: 'warning',
-  resolved: 'success',
-  closed: 'default',
-  freeze: 'secondary',
-  duplicate: 'default',
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  desktop_support: 'Desktop Support',
-  it_support: 'IT Support',
-  pantawid_ict_support: 'Pantawid ICT Support',
-};
 
 export default function TicketDetailPage() {
   const params = useParams();
@@ -559,12 +537,34 @@ export default function TicketDetailPage() {
                 {ticket.subject}
               </Typography>
               <Box display="flex" flexWrap="wrap" gap={1}>
-                <Chip
-                  label={TYPE_LABELS[ticket.ticketType] ?? ticket.ticketType}
-                  color="primary"
-                  size="small"
-                  variant="outlined"
-                />
+                {!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id ? (
+                  <TextField
+                    select
+                    size="small"
+                    value={ticket.ticketType}
+                    onChange={async (e) => {
+                      try {
+                        await ticketsApi.update(ticketId, { ticketType: e.target.value as any });
+                        fetchTicket();
+                        enqueueSnackbar('Ticket type updated.', { variant: 'success' });
+                      } catch (err: any) {
+                        enqueueSnackbar(err.response?.data?.message || 'Failed to update ticket type', { variant: 'error' });
+                      }
+                    }}
+                    sx={{ minWidth: 160, '& .MuiInputBase-root': { height: 26, fontSize: '0.8125rem', borderRadius: '16px' } }}
+                  >
+                    {Object.entries(TYPE_LABELS).map(([val, label]) => (
+                      <MenuItem key={val} value={val} sx={{ fontSize: '0.8125rem' }}>{label}</MenuItem>
+                    ))}
+                  </TextField>
+                ) : (
+                  <Chip
+                    label={TYPE_LABELS[ticket.ticketType] ?? ticket.ticketType}
+                    color="primary"
+                    size="small"
+                    variant="outlined"
+                  />
+                )}
                 <Chip
                   label={ticket.priority ? `Priority: ${ticket.priority.toUpperCase()}` : 'Priority: Not Set'}
                   color={ticket.priority ? (PRIORITY_COLOR[ticket.priority] ?? 'default') : 'default'}

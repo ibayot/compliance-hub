@@ -101,8 +101,10 @@ export interface RoleCapabilityRecord {
   isMovAccess: boolean;
   isDocumentsAccess: boolean;
   isRepositoryAccess: boolean;
-  isIssuancesAccess: boolean;
   isMetricsAccess: boolean;
+  isRoleCapabilitiesAccess: boolean;
+  isSystemRolesAccess: boolean;
+  isIssuancesAccess: boolean;
 }
 
 export interface UpdateRoleCapabilityPayload {
@@ -124,8 +126,10 @@ export interface UpdateRoleCapabilityPayload {
   isMovAccess?: boolean;
   isDocumentsAccess?: boolean;
   isRepositoryAccess?: boolean;
-  isIssuancesAccess?: boolean;
   isMetricsAccess?: boolean;
+  isRoleCapabilitiesAccess?: boolean;
+  isSystemRolesAccess?: boolean;
+  isIssuancesAccess?: boolean;
 }
 
 export const usersApi = {

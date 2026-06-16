@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   ticketSettingsApi, TicketCategory, TicketKeywordRule, EscalationFocalConfig,
 } from '@/app/api/references';
+import { feedbackApi, Feedback } from '@/lib/api/feedback';
 
 const TYPE_LABELS: Record<string, string> = {
   it_support: 'IT Support',
@@ -58,6 +59,27 @@ export default function TicketSettingsPage() {
     catch { enqueueSnackbar('Failed to load escalation focals', { variant: 'error' }); }
     finally { setFocalsLoading(false); }
   }, []);
+
+  // — Feedback —
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(true);
+  const [feedbackFilter, setFeedbackFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
+
+  const fetchFeedbacks = useCallback(async () => {
+    try { setFeedbackLoading(true); const res = await feedbackApi.list(feedbackFilter); setFeedbacks(res.data); }
+    catch { enqueueSnackbar('Failed to load feedback', { variant: 'error' }); }
+    finally { setFeedbackLoading(false); }
+  }, [feedbackFilter, enqueueSnackbar]);
+
+  const handleUpdateFeedbackStatus = async (id: number, status: 'accepted' | 'rejected') => {
+    try {
+      await feedbackApi.updateStatus(id, status);
+      enqueueSnackbar(`Feedback ${status}`, { variant: 'success' });
+      fetchFeedbacks();
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed', { variant: 'error' });
+    }
+  };
 
   const openFocalDialog = async () => {
     try {
@@ -106,7 +128,7 @@ export default function TicketSettingsPage() {
     finally { setRulesLoading(false); }
   }, []);
 
-  useEffect(() => { fetchCategories(); fetchRules(); fetchFocals(); }, [fetchCategories, fetchRules, fetchFocals]);
+  useEffect(() => { fetchCategories(); fetchRules(); fetchFocals(); fetchFeedbacks(); }, [fetchCategories, fetchRules, fetchFocals, fetchFeedbacks]);
 
   // Category CRUD
   const openCatDialog = (cat?: TicketCategory) => {
@@ -124,7 +146,24 @@ export default function TicketSettingsPage() {
     if (!catForm.name.trim()) { enqueueSnackbar('Name is required', { variant: 'warning' }); return; }
     try {
       setCatSubmitting(true);
-      const catPayload = { name: catForm.name, ticketType: catForm.ticketType, isActive: catForm.isActive, slaHours: catForm.slaHours !== '' ? Number(catForm.slaHours) : null };
+      const parsedSla = catForm.slaHours ? Number(catForm.slaHours) : null;
+      if (parsedSla !== null && (parsedSla < 0 || parsedSla > 168)) {
+        enqueueSnackbar('SLA must be between 0 and 168 hours', { variant: 'warning' });
+        setCatSubmitting(false);
+        return;
+      }
+
+      let finalIsActive = catForm.isActive;
+      if (parsedSla === null) {
+        finalIsActive = false;
+      }
+      const catPayload = {
+        name: catForm.name,
+        ticketType: catForm.ticketType,
+        slaHours: parsedSla,
+        isActive: finalIsActive,
+      };
+
       if (editCat) {
         await ticketSettingsApi.updateCategory(editCat.id, catPayload);
         enqueueSnackbar('Category updated', { variant: 'success' });
@@ -208,6 +247,7 @@ export default function TicketSettingsPage() {
           <Tab label={`Categories (${categories.filter(c => !c.isDeleted).length})`} />
           <Tab label={`Keyword Rules (${rules.length})`} />
           <Tab label={`Escalation Focals (${focals.length})`} />
+          <Tab label={`User Feedback`} />
         </Tabs>
 
         {/* ── Categories Tab ── */}
@@ -221,7 +261,6 @@ export default function TicketSettingsPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Name</TableCell>
-                    <TableCell>Key</TableCell>
                     <TableCell>Support Type</TableCell>
                     <TableCell>
                       <Tooltip title="Set per category via the Edit button">
@@ -240,7 +279,6 @@ export default function TicketSettingsPage() {
                   ) : categories.filter(c => !c.isDeleted).map(cat => (
                     <TableRow key={cat.id} hover>
                       <TableCell><Typography fontWeight={600}>{cat.name}</Typography></TableCell>
-                      <TableCell><Typography variant="body2" color="text.secondary" fontFamily="monospace">{cat.key}</Typography></TableCell>
                       <TableCell><Chip size="small" label={TYPE_LABELS[cat.ticketType] ?? cat.ticketType} variant="outlined" /></TableCell>
                       <TableCell>{cat.slaHours != null ? `${cat.slaHours}h` : '—'}</TableCell>
                       <TableCell><Chip size="small" label={cat.isActive ? 'Active' : 'Inactive'} color={cat.isActive ? 'success' : 'default'} /></TableCell>
@@ -340,6 +378,74 @@ export default function TicketSettingsPage() {
             </TableContainer>
           </CardContent>
         )}
+
+        {/* ── User Feedback Tab ── */}
+        {tab === 3 && (
+          <CardContent>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Typography variant="body2" color="text.secondary">
+                Review and act on user feedback/suggestions. Regular users cannot see this history.
+              </Typography>
+              <TextField 
+                select 
+                size="small" 
+                value={feedbackFilter} 
+                onChange={e => setFeedbackFilter(e.target.value as any)}
+                sx={{ width: 150 }}
+              >
+                <MenuItem value="all">All</MenuItem>
+                <MenuItem value="pending">Pending</MenuItem>
+                <MenuItem value="accepted">Accepted</MenuItem>
+                <MenuItem value="rejected">Rejected</MenuItem>
+              </TextField>
+            </Box>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Date</TableCell>
+                    <TableCell>Suggestion</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Acted By</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {feedbackLoading ? (
+                    <TableRow><TableCell colSpan={5} align="center"><CircularProgress size={24} /></TableCell></TableRow>
+                  ) : feedbacks.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} align="center"><Typography color="text.secondary" py={2}>No feedback entries found.</Typography></TableCell></TableRow>
+                  ) : feedbacks.map(f => (
+                    <TableRow key={f.id} hover>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(f.createdAt).toLocaleString()}</TableCell>
+                      <TableCell sx={{ maxWidth: 400, whiteSpace: 'pre-wrap' }}>{f.suggestion}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          size="small" 
+                          label={f.status.toUpperCase()} 
+                          color={f.status === 'accepted' ? 'success' : f.status === 'rejected' ? 'error' : 'default'} 
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {f.actedBy ? `${f.actedBy.firstName || ''} ${f.actedBy.lastName || ''}`.trim() || f.actedBy.email : '—'}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                          {f.status === 'pending' && (
+                            <>
+                              <Button size="small" variant="contained" color="success" onClick={() => handleUpdateFeedbackStatus(f.id, 'accepted')}>Accept</Button>
+                              <Button size="small" variant="outlined" color="error" onClick={() => handleUpdateFeedbackStatus(f.id, 'rejected')}>Reject</Button>
+                            </>
+                          )}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        )}
       </Card>
 
       {/* Escalation Focal Dialog */}
@@ -379,7 +485,7 @@ export default function TicketSettingsPage() {
             <TextField
               label="SLA Time Limit (hours)"
               type="number"
-              inputProps={{ min: 1 }}
+              inputProps={{ min: 1, max: 168 }}
               value={catForm.slaHours}
               onChange={e => setCatForm({ ...catForm, slaHours: e.target.value })}
               fullWidth
