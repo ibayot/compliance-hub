@@ -182,6 +182,9 @@ Self-service ticketing only:
 | User Management | Full | None | None | None | None |
 | Settings | Full | Theme/Password | Theme/Password | Theme/Password | None |
 
+### Frontend Version: `0.0.95`
+### Backend Version: `0.0.101`
+
 ## 8. User Operations Guide
 
 ### 8.1 Getting Started
@@ -249,8 +252,8 @@ Reviews are triggered after a document reaches `ready` state from automated metr
 ### 8.5 Feedback Module
 
 The Feedback module allows users to submit suggestions to improve the service.
-- **Submission:** An auto-popup modal prompts users for feedback every 1 hour (between 7:30 AM to 6:30 PM). Users can also manually trigger this modal via the Tickets module.
-- **Administration:** Ticket Admins have a dedicated view to manage these suggestions (All, Pending, Accepted, Rejected), order them by submission date, and take action (Accept/Reject).
+- **Feedback Form**: Manual feedback suggestion form accessed from the Quick Actions menu (Suggestions button). Allows all users to submit feedback which is stored in the database.
+- **Feedback Management**: Ticket settings focals (`isTicketSettingsFocal` role capability) can view, accept, or reject feedback submitted by users. History and action status are logged.
 - **Privacy:** To ensure candidness, regular users cannot view their own feedback history.
 
 ### 8.6 Tickets Module

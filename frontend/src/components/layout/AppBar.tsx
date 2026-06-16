@@ -22,6 +22,7 @@ import {
   Logout as LogoutIcon,
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
+  Feedback as FeedbackIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -29,6 +30,7 @@ import { useSidebar } from '@/contexts/SidebarContext';
 import { usePageTitle } from '@/contexts/PageTitleContext';
 import { useThemeMode } from '@/contexts/ThemeModeContext';
 import { useState } from 'react';
+import FeedbackModal from '../FeedbackModal';
 
 interface AppBarProps {
   onMenuClick: () => void;
@@ -47,6 +49,7 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
   const { pageTitle } = usePageTitle();
   const { mode, toggleMode } = useThemeMode();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // Generate breadcrumbs from pathname
   // Skip 'dashboard' segment — all pages are inside dashboard already
@@ -245,11 +248,16 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
               <AccountCircle sx={{ mr: 1 }} />
               Settings
             </MenuItem>
+            <MenuItem onClick={() => { setFeedbackOpen(true); handleProfileMenuClose(); }}>
+              <FeedbackIcon sx={{ mr: 1 }} />
+              Suggestions
+            </MenuItem>
             <MenuItem onClick={handleLogout}>
               <LogoutIcon sx={{ mr: 1 }} />
               Logout
             </MenuItem>
           </Menu>
+          <FeedbackModal manualOpen={feedbackOpen} onManualClose={() => setFeedbackOpen(false)} />
         </Box>
       </Toolbar>
     </MuiAppBar>

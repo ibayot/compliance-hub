@@ -85,4 +85,12 @@ export class UpdateRoleCapabilityDto {
   @IsOptional()
   @IsBoolean()
   isMetricsAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isRoleCapabilitiesAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isSystemRolesAccess?: boolean;
 }

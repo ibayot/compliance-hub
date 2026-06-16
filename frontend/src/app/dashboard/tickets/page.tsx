@@ -23,7 +23,7 @@ import {
 } from '@/app/api/references';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
-import FeedbackModal from '@/components/FeedbackModal';
+
 
 import { PRIORITY_COLOR, STATUS_COLOR, TICKET_TYPE_LABELS } from '@/lib/utils/ticket-colors';
 
@@ -109,8 +109,6 @@ export default function TicketsPage() {
   const [reminderTitle, setReminderTitle] = useState('Pending Satisfaction Reminder');
   const [reminderMessage, setReminderMessage] = useState('');
 
-  // Feedback modal state
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // DB-driven role capabilities (is_all_tickets, is_ticket_focal) — loaded from AuthContext
   // (also available: myCap?.isEscalationFocal, myCap?.isTicketSettingsFocal, myCap?.isFocal)
@@ -481,9 +479,7 @@ export default function TicketsPage() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
-          <Button variant="outlined" onClick={() => setFeedbackOpen(true)}>
-            Submit Feedback
-          </Button>
+
           <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenNewTicket}>
             New Ticket
           </Button>
@@ -651,7 +647,7 @@ export default function TicketsPage() {
                     <Typography sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{ticket.ticketNumber}</Typography>
                     <Box>
                       {hasPendingSatisfaction && <Chip size="small" label="Unrated" color="warning" variant="filled" sx={{ mr: 1 }} />}
-                      <Chip size="small" label={ticket.status.replace('_', ' ')} color={STATUS_COLOR[ticket.status]} />
+                      <Chip size="small" label={ticket.status.replace('_', ' ').toUpperCase()} color={STATUS_COLOR[ticket.status] ?? 'default'} />
                     </Box>
                   </Box>
                   <Typography variant="body1" sx={{ fontWeight: 600, mb: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -759,7 +755,7 @@ export default function TicketsPage() {
                 <TableCell><Chip size="small" label={(ticket.priority ?? 'not set').toUpperCase()} color={PRIORITY_COLOR[ticket.priority ?? ''] ?? 'default'} /></TableCell>
                 <TableCell>
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <Chip size="small" label={ticket.status.replace('_', ' ')} color={STATUS_COLOR[ticket.status]} />
+                    <Chip size="small" label={ticket.status.replace('_', ' ').toUpperCase()} color={STATUS_COLOR[ticket.status] ?? 'default'} />
                     {hasPendingSatisfaction && (
                       <Chip size="small" label="Unrated" color="warning" variant="filled" />
                     )}
@@ -1218,7 +1214,6 @@ export default function TicketsPage() {
         </DialogActions>
       </Dialog>
 
-      <FeedbackModal manualOpen={feedbackOpen} onManualClose={() => setFeedbackOpen(false)} />
     </Box>
   );
 }

@@ -9,41 +9,14 @@ interface FeedbackModalProps {
 }
 
 export default function FeedbackModal({ manualOpen = false, onManualClose }: FeedbackModalProps) {
-  const [autoOpen, setAutoOpen] = useState(false);
   const [suggestion, setSuggestion] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
 
-  useEffect(() => {
-    const checkAndShow = () => {
-      const now = new Date();
-      const hours = now.getHours();
-      const minutes = now.getMinutes();
-      const timeInMinutes = hours * 60 + minutes;
-      
-      // 7:30 AM is 450 minutes, 6:30 PM is 1110 minutes
-      if (timeInMinutes >= 450 && timeInMinutes <= 1110) {
-        const lastShown = localStorage.getItem('lastFeedbackShown');
-        if (!lastShown || now.getTime() - parseInt(lastShown, 10) > 60 * 60 * 1000) {
-          setAutoOpen(true);
-          localStorage.setItem('lastFeedbackShown', now.getTime().toString());
-        }
-      }
-    };
-
-    // Initial check
-    checkAndShow();
-
-    // Check every 5 minutes
-    const interval = setInterval(checkAndShow, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const open = manualOpen || autoOpen;
+  const open = manualOpen;
 
   const handleClose = () => {
     if (manualOpen && onManualClose) onManualClose();
-    if (autoOpen) setAutoOpen(false);
     setSuggestion('');
   };
 
