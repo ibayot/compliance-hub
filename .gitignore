@@ -79,3 +79,4 @@ RELEASE-NOTES-v1.2.0.4.md
 frontend/tests/
 backend/src/database/seed-data.sql
 db-init/
+frontend/ddos-report.json
