@@ -4,8 +4,8 @@ import { CreateFeedbackDto } from './dto/create-feedback.dto';
 import { UpdateFeedbackStatusDto } from './dto/update-feedback-status.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { CapabilityGuard } from '../../common/guards/capability.guard';
+import { RequireCapability } from '../../common/decorators/require-capability.decorator';
 
 @Controller('feedback')
 export class FeedbackController {
@@ -20,8 +20,8 @@ export class FeedbackController {
     return this.feedbackService.create(user.id, dto);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('isTicketSettingsFocal')
+  @UseGuards(JwtAuthGuard, CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
   @Get()
   async findAll(
     @Query('status') status?: 'all' | 'pending' | 'accepted' | 'rejected',
@@ -31,8 +31,8 @@ export class FeedbackController {
     return this.feedbackService.findAll(status, page, limit);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('isTicketSettingsFocal')
+  @UseGuards(JwtAuthGuard, CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
   @Patch(':id/status')
   async updateStatus(
     @Param('id', ParseIntPipe) id: number,

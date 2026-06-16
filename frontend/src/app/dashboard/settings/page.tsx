@@ -276,7 +276,7 @@ function RoleCapabilitiesCard() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {caps.map(cap => (
+              {caps.filter(c => c.roleValue !== 'user').map(cap => (
                 <TableRow key={cap.roleValue} hover sx={{ opacity: saving === cap.roleValue ? 0.6 : 1 }}>
                   <TableCell
                     sx={{
@@ -1199,10 +1199,7 @@ export default function SettingsPage() {
         )}
       </Grid>
       
-      {/* 
-      Temporarily hidden as per request because users do not have any tick enabled in the role capability matrix yet. 
-      */}
-      {false && canManageRoleCapabilities && (
+      {canManageRoleCapabilities && (
         <Box mt={4}>
           <RoleCapabilitiesCard />
         </Box>
