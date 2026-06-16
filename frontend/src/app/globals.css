@@ -14,3 +14,17 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+  
+  /* Ensure MUI dark mode overrides don't break print */
+  * {
+    color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

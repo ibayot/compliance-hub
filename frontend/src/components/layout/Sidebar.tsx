@@ -78,7 +78,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     { label: 'Metrics', icon: MetricsIcon, path: '/dashboard/metrics', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isMetricsAccess' },
     { label: 'KPI', icon: KpiIcon, path: '/dashboard/kpi', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isKpiAccess' },
     { label: 'Ticket Settings', icon: TicketSettingsIcon, path: '/dashboard/ticket-settings', roles: ['super_admin'], service: 'ticketing', capabilityKey: 'isTicketSettingsFocal' },
-    { label: 'Ticket Reports', icon: TicketReportsIcon, path: '/dashboard/ticket-reports', roles: ['all'], service: 'ticketing' },
+    { label: 'Ticket Reports', icon: TicketReportsIcon, path: '/dashboard/ticket-reports', roles: ['super_admin', 'section_head', 'compliance_officer'], service: 'ticketing' },
     { label: 'Attendance', icon: AttendanceIcon, path: '/dashboard/attendance', roles: ['super_admin'], service: 'ticketing', capabilityKey: 'isAttendanceAccess' },
     { label: 'Reviews', icon: SecurityIcon, path: '/dashboard/reviews', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isReviewsAccess' },
     { label: 'Reports', icon: ReportsIcon, path: '/dashboard/reports', roles: ['super_admin'], service: 'compliance', capabilityKey: 'isReportsAccess' },

@@ -259,7 +259,7 @@ function RoleCapabilitiesCard() {
                     position: 'sticky',
                     left: 0,
                     zIndex: 101,
-                    bgcolor: '#ffffff',
+                    bgcolor: 'background.paper',
                     borderRight: '1px solid',
                     borderColor: 'divider',
                   }}
@@ -283,7 +283,7 @@ function RoleCapabilitiesCard() {
                       position: 'sticky',
                       left: 0,
                       zIndex: 100,
-                      bgcolor: '#ffffff',
+                      bgcolor: 'background.paper',
                       borderRight: '1px solid',
                       borderColor: 'divider',
                     }}
@@ -1197,19 +1197,24 @@ export default function SettingsPage() {
             <RoleManagementCard />
           </Grid>
         )}
+      </Grid>
+      
+      {/* 
+      Temporarily hidden as per request because users do not have any tick enabled in the role capability matrix yet. 
+      */}
+      {false && canManageRoleCapabilities && (
+        <Box mt={4}>
+          <RoleCapabilitiesCard />
+        </Box>
+      )}
 
-        {canManageRoleCapabilities && (
-          <Grid item xs={12}>
-            <RoleCapabilitiesCard />
-          </Grid>
-        )}
-
-        {canManageUsers && (
+      {canManageUsers && (
+        <Box mt={4}>
           <Grid item xs={12}>
             <FocalUserManagementCard />
           </Grid>
-        )}
-      </Grid>
+        </Box>
+      )}
     </Box>
   );
 }

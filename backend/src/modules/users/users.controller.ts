@@ -11,6 +11,7 @@ import {
   UseGuards,
   ClassSerializerInterceptor,
   UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { RoleCapabilitiesService } from './role-capabilities.service';
@@ -118,7 +119,11 @@ export class UsersController {
   @Get(':id')
   @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
   findOne(@Param('id') id: string) {
-    return this.usersService.findOne(+id);
+    const parsedId = parseInt(id, 10);
+    if (isNaN(parsedId)) {
+      throw new BadRequestException('Invalid user ID');
+    }
+    return this.usersService.findOne(parsedId);
   }
 
   @Patch(':id')
