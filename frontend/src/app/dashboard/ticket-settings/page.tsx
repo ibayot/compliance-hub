@@ -315,8 +315,8 @@ export default function TicketSettingsPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Ticket Type</TableCell>
-                    <TableCell>Focal User</TableCell>
-                    <TableCell>Label</TableCell>
+                    {/*<TableCell>Focal User</TableCell>*/}
+                    <TableCell>User - Role</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -328,7 +328,7 @@ export default function TicketSettingsPage() {
                   ) : focals.map(f => (
                     <TableRow key={f.id} hover>
                       <TableCell><Chip size="small" label={TYPE_LABELS[f.ticketType] ?? f.ticketType} variant="outlined" /></TableCell>
-                      <TableCell><Typography variant="body2" fontFamily="monospace">{f.roleValue}</Typography></TableCell>
+                      {/*<TableCell><Typography variant="body2" fontFamily="monospace">{f.roleValue}</Typography></TableCell>*/}
                       <TableCell>{f.label}</TableCell>
                       <TableCell align="right">
                         <Tooltip title="Remove"><IconButton size="small" color="error" onClick={() => handleDeleteFocal(f.id)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
