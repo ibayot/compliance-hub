@@ -750,6 +750,19 @@ export default function TicketReportsPage() {
             <Typography variant="subtitle1" fontWeight={700} gutterBottom sx={{ mt: 4, borderBottom: '1px solid #ccc' }}>
               Tickets by Support Type
             </Typography>
+            {pieData.length > 0 && (
+              <Box height={250} width="100%">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={pieData} cx="50%" cy="50%" outerRadius={80} dataKey="value" isAnimationActive={false}>
+                      {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Box>
+            )}
             <Table size="small" sx={{ mb: 4 }}>
               <TableHead>
                 <TableRow>
@@ -796,6 +809,16 @@ export default function TicketReportsPage() {
                 <Typography variant="subtitle1" fontWeight={700} gutterBottom sx={{ mt: 4, borderBottom: '1px solid #ccc' }}>
                   Technician Performance Detail
                 </Typography>
+                <Box height={250} width="100%" mb={2}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="avg" name="Avg Rating" fill="#4CAF50" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Box>
                 <Table size="small" sx={{ mb: 4 }}>
                   <TableHead>
                     <TableRow>

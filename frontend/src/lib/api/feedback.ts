@@ -13,17 +13,17 @@ export interface Feedback {
 
 export const feedbackApi = {
   create: async (data: { suggestion: string }): Promise<Feedback> => {
-    const res = await api.post('/users/feedback', data);
+    const res = await api.post('/feedback', data);
     return res.data;
   },
   
   list: async (status: 'all' | 'pending' | 'accepted' | 'rejected' = 'all', page = 1, limit = 10): Promise<{ data: Feedback[]; total: number }> => {
-    const res = await api.get('/users/feedback', { params: { status, page, limit } });
+    const res = await api.get('/feedback', { params: { status, page, limit } });
     return res.data;
   },
 
   updateStatus: async (id: number, status: 'accepted' | 'rejected'): Promise<Feedback> => {
-    const res = await api.patch(`/users/feedback/${id}/status`, { status });
+    const res = await api.patch(`/feedback/${id}/status`, { status });
     return res.data;
   }
 };

@@ -131,6 +131,7 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
           easing: theme.transitions.easing.sharp,
           duration: theme.transitions.duration.enteringScreen,
         }),
+        '@media print': { display: 'none' }
       }}
     >
       <Toolbar>
