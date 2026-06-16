@@ -312,7 +312,8 @@ export default function TicketReportsPage() {
       {loading && <Box textAlign="center" py={4}><CircularProgress /></Box>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      {!loading && viewMode === 'overview' && result && (
+      <Box sx={{ '@media print': { display: 'none' } }}>
+        {!loading && viewMode === 'overview' && result && (
         <>
           {/* ── Summary Cards ── */}
           <Grid container spacing={2} mb={3}>
@@ -713,6 +714,113 @@ export default function TicketReportsPage() {
           </Grid>
         </Grid>
       )}
+      </Box>
+
+      {/* ── PRINT-ONLY LAYOUT ── */}
+      <Box sx={{ display: 'none', '@media print': { display: 'block' } }}>
+        {!loading && result && (
+          <Box>
+            <Grid container spacing={2} mb={3}>
+              <Grid item xs={4}>
+                <Typography variant="subtitle2" color="text.secondary">Total Tickets</Typography>
+                <Typography variant="h6">{result.totalTickets}</Typography>
+              </Grid>
+              <Grid item xs={4}>
+                <Typography variant="subtitle2" color="text.secondary">Tickets Rated</Typography>
+                <Typography variant="h6">{result.totalWithRating}</Typography>
+              </Grid>
+              <Grid item xs={4}>
+                <Typography variant="subtitle2" color="text.secondary">Avg Rating</Typography>
+                <Typography variant="h6">{result.avgOverallRating?.toFixed(1) ?? 'N/A'}</Typography>
+              </Grid>
+              {(result.totalEscalations ?? 0) > 0 && (
+                <>
+                  <Grid item xs={4}>
+                    <Typography variant="subtitle2" color="text.secondary">Total Escalations</Typography>
+                    <Typography variant="h6">{result.totalEscalations}</Typography>
+                  </Grid>
+                  <Grid item xs={4}>
+                    <Typography variant="subtitle2" color="text.secondary">Accepted / Returned</Typography>
+                    <Typography variant="h6">{result.acceptedEscalations} / {result.returnedEscalations}</Typography>
+                  </Grid>
+                </>
+              )}
+            </Grid>
+
+            <Typography variant="subtitle1" fontWeight={700} gutterBottom sx={{ mt: 4, borderBottom: '1px solid #ccc' }}>
+              Tickets by Support Type
+            </Typography>
+            <Table size="small" sx={{ mb: 4 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Support Type</TableCell>
+                  <TableCell align="right">Count</TableCell>
+                  <TableCell align="right">% of Total</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {pieData.map(row => (
+                  <TableRow key={row.name}>
+                    <TableCell>{row.name}</TableCell>
+                    <TableCell align="right">{row.value}</TableCell>
+                    <TableCell align="right">{((row.value / Math.max(result.totalTickets, 1)) * 100).toFixed(1)}%</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            <Typography variant="subtitle1" fontWeight={700} gutterBottom sx={{ mt: 4, borderBottom: '1px solid #ccc' }}>
+              Average Rating by Support Type
+            </Typography>
+            <Table size="small" sx={{ mb: 4 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Support Type</TableCell>
+                  <TableCell align="right">Rated Tickets</TableCell>
+                  <TableCell align="right">Average Rating</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {result.avgRatingByType.map(row => (
+                  <TableRow key={row.type}>
+                    <TableCell>{TYPE_LABELS[row.type] ?? row.type}</TableCell>
+                    <TableCell align="right">{row.ratedCount ?? 0}</TableCell>
+                    <TableCell align="right">{row.avg.toFixed(2)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            {!isIndividualView && result.avgRatingByTechnician.length > 0 && (
+              <>
+                <Typography variant="subtitle1" fontWeight={700} gutterBottom sx={{ mt: 4, borderBottom: '1px solid #ccc' }}>
+                  Technician Performance Detail
+                </Typography>
+                <Table size="small" sx={{ mb: 4 }}>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Technician</TableCell>
+                      <TableCell align="right">Resolved Tickets</TableCell>
+                      <TableCell align="right">Rated Tickets</TableCell>
+                      <TableCell align="right">Average Rating</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {result.avgRatingByTechnician.map(row => (
+                      <TableRow key={row.techId}>
+                        <TableCell>{row.techName}</TableCell>
+                        <TableCell align="right">{row.count}</TableCell>
+                        <TableCell align="right">{row.ratedCount ?? 0}</TableCell>
+                        <TableCell align="right">{row.avg.toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </>
+            )}
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 }

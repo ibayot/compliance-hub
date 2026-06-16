@@ -160,6 +160,7 @@ async function bootstrap() {
     app.use(`${prefix}/kpi`, createServiceProxy(`${complianceServiceUrl}/api/kpi`, 'compliance'));
     app.use(`${prefix}/mov`, createServiceProxy(`${complianceServiceUrl}/api/mov`, 'compliance'));
     app.use(`${prefix}/compliance/role-capabilities`, createServiceProxy(`${usersServiceUrl}/api/users/role-capabilities`, 'users'));
+    app.use(`${prefix}/feedback`, createServiceProxy(`${usersServiceUrl}/api/feedback`, 'users'));
 
     app.use(`${prefix}/health`, async (_req: Request, res: Response) => {
       const [usersAvailable, ticketingAvailable, complianceAvailable] = await Promise.all([
