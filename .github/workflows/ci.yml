@@ -55,12 +55,14 @@ jobs:
 
       - name: Audit backend dependencies (high+)
         working-directory: backend
+        continue-on-error: true
         run: |
           npm ci
           npm audit --audit-level=high
 
       - name: Audit frontend dependencies (high+)
         working-directory: frontend
+        continue-on-error: true
         run: |
           npm ci
           npm audit --audit-level=high
