@@ -7,6 +7,7 @@ export interface Feedback {
   status: 'pending' | 'accepted' | 'rejected';
   createdAt: string;
   submitterId: number | null;
+  submitter?: User;
   actedById: number | null;
   actedBy?: User;
 }
