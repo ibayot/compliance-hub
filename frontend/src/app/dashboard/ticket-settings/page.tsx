@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useAutoRefresh } from '@/lib/hooks/useAutoRefresh';
 import {
   Box, Button, Card, CardContent, Typography, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, IconButton, Chip, TextField, MenuItem,
@@ -129,6 +130,7 @@ export default function TicketSettingsPage() {
   }, []);
 
   useEffect(() => { fetchCategories(); fetchRules(); fetchFocals(); fetchFeedbacks(); }, [fetchCategories, fetchRules, fetchFocals, fetchFeedbacks]);
+  useAutoRefresh(fetchFeedbacks);
 
   // Category CRUD
   const openCatDialog = (cat?: TicketCategory) => {
