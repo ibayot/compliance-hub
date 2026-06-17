@@ -131,6 +131,15 @@ export class Ticket {
   @Column({ name: 'sla_deadline', type: 'datetime', nullable: true })
   slaDeadline: Date | null;
 
+  @Column({ name: 'sla_paused_at', type: 'datetime', nullable: true })
+  slaPausedAt: Date | null;
+
+  @Column({ name: 'accumulated_pause_seconds', type: 'int', default: 0 })
+  accumulatedPauseSeconds: number;
+
+  @Column({ name: 'last_assigned_at', type: 'datetime', nullable: true })
+  lastAssignedAt: Date | null;
+
   // --- Client Satisfaction ---
   /** Overall satisfaction rating derived from CSAT form item 0 */
   @Column({ name: 'satisfaction_rating', type: 'tinyint', nullable: true })

@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.0.105] (Backend) / [0.0.99] (Frontend) - 2026-06-17 - AI Knowledge Base and Routing Enhancements
+
+### Added
+- **AI-Powered Knowledge Base**: Added Gemini-powered Knowledge Base integration. When technicians resolve tickets, they can now optionally auto-generate KB articles. Sensitive data (PII) is scrubbed using regex before generating articles. 
+- **Self-Service KB Deflection**: Added KB article suggestions on the 'New Ticket' UI. When users start typing their ticket subject, matching articles slide down. If an article solves their issue, they can cancel the ticket. Helpfulness tracking is recorded via Thumbs Up / Thumbs Down.
+- **Duplicate KB Handling**: When generating a new article, the AI detects if a similar topic exists. If it does, the existing article is updated with additional solutions instead of duplicating it.
+- **SLA Insights UI**: Added an SLA Recalibration Insights table in the Ticket Settings page, allowing admins to compare actual resolution times against configured SLA hours.
+
+### Changed
+- **Advanced SLA Management**: Overhauled ticket SLA pause/resume mechanism using the \reeze\ status. Cron jobs automatically unfreeze tickets based on the category's configured \reeze_hours\ limit. Notifications are sent when a ticket unfreezes. Stale tickets are automatically closed.
+- **Routing Rules Toggle**: Added \TicketingConfig\ to toggle assignment strategy between 'Current Auto' (assigns to technicians with 0 active tickets) and 'Capped Round-Robin'. The latter assigns tickets using SLA hours load, skipping technicians who reach the SLA cap.
+- **Global Settings Configuration**: Moved routing configurations (Assignment Strategy, Round-Robin SLA Cap) to the Ticket Settings dashboard, providing dynamic control to ticket admins without code changes.
+
+
 ## [0.0.83] (Backend) / [0.0.74] (Frontend) - 2026-06-09 - UI & Analytics Bug Fixes
 
 ### Fixed

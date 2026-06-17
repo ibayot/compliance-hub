@@ -10,13 +10,18 @@ import { OfficeDay } from './entities/office-day.entity';
 import { TicketEvent } from './entities/ticket-event.entity';
 import { TicketEscalation } from './entities/ticket-escalation.entity';
 import { EscalationFocalConfig } from './entities/escalation-focal-config.entity';
+import { TicketingConfig } from './entities/ticketing-config.entity';
+import { KnowledgeArticle } from './entities/knowledge-article.entity';
 import { TicketService } from './services/ticket.service';
 import { TicketSettingsService } from './services/ticket-settings.service';
+import { TicketCronService } from './services/ticket-cron.service';
+import { KnowledgeBaseService } from './services/knowledge-base.service';
 import { AttendanceService } from './services/attendance.service';
 import { EmailService } from './services/email.service';
 import { AttendanceController } from './controllers/attendance.controller';
 import { TicketController } from './controllers/ticket.controller';
 import { TicketSettingsController } from './controllers/ticket-settings.controller';
+import { KnowledgeBaseController } from './controllers/knowledge-base.controller';
 import { User } from '../shared/entities';
 import { RoleDefinitionEntity } from '../shared/entities';
 import { RoleCapabilitiesService } from '../users/role-capabilities.service';
@@ -39,6 +44,8 @@ import { Unit } from '../shared/entities';
       TicketEvent,
       TicketEscalation,
       EscalationFocalConfig,
+      TicketingConfig,
+      KnowledgeArticle,
       User,
       Unit,
       RoleDefinitionEntity,
@@ -47,14 +54,14 @@ import { Unit } from '../shared/entities';
     HttpClientsModule,
     EventBusModule,
   ],
-  controllers: [AttendanceController, TicketController, TicketSettingsController],
+  controllers: [AttendanceController, TicketController, TicketSettingsController, KnowledgeBaseController],
   providers: [
-    TicketService, TicketSettingsService, AttendanceService, EmailService,
+    TicketService, TicketSettingsService, AttendanceService, EmailService, TicketCronService, KnowledgeBaseService,
     // Phase B: RoleCapabilitiesHttpClient provides all methods of RoleCapabilitiesService
     // without the TypeORM cross-DB View dependency.
     { provide: RoleCapabilitiesService, useClass: RoleCapabilitiesHttpClient },
     CapabilityGuard,
   ],
-  exports: [TicketService, AttendanceService, EmailService, RoleCapabilitiesService],
+  exports: [TicketService, AttendanceService, EmailService, RoleCapabilitiesService, KnowledgeBaseService],
 })
 export class TicketsModule {}

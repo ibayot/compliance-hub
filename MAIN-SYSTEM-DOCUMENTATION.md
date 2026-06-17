@@ -8,6 +8,7 @@ Primary goals:
 - Enforce role/unit-based access control
 - Provide actionable dashboards and auditable workflows
 - Support microservice-oriented deployment from a shared codebase
+- Deliver AI-powered Knowledge Base suggestions for self-service deflection
 
 ## 2. Context Diagram
 ```mermaid

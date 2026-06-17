@@ -12,6 +12,8 @@ import { TicketIssueType } from '../entities/ticket-issue-type.entity';
 import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
 import { RoleDefinitionEntity } from '../../users/entities/role-definition.entity';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
+import { TicketingConfig } from '../entities/ticketing-config.entity';
+import { Ticket, TicketStatus } from '../entities/ticket.entity';
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -64,6 +66,11 @@ export interface UpdateIssueTypeDto {
   categoryId?: string | null;
 }
 
+export interface UpdateGlobalConfigDto {
+  assignmentStrategy?: string;
+  roundRobinCapHours?: number;
+}
+
 // --- Service ----------------------------------------------------------------
 
 @Injectable()
@@ -81,6 +88,10 @@ export class TicketSettingsService {
     private readonly escalationFocalRepo: Repository<EscalationFocalConfig>,
     @InjectRepository(RoleDefinitionEntity)
     private readonly roleDefRepo: Repository<RoleDefinitionEntity>,
+    @InjectRepository(TicketingConfig)
+    private readonly configRepo: Repository<TicketingConfig>,
+    @InjectRepository(Ticket)
+    private readonly ticketRepo: Repository<Ticket>,
     private readonly roleCapSvc: RoleCapabilitiesService,
   ) {}
 
@@ -442,5 +453,48 @@ export class TicketSettingsService {
     const config = await this.escalationFocalRepo.findOne({ where: { id } });
     if (!config) throw new NotFoundException(`Escalation focal config ${id} not found`);
     await this.escalationFocalRepo.remove(config);
+  }
+
+  // ── Global Config ───────────────────────────────────────────────────────
+
+  async getGlobalConfig(): Promise<TicketingConfig> {
+    let config = await this.configRepo.findOne({ where: { id: 1 } });
+    if (!config) {
+      config = this.configRepo.create({ id: 1, assignmentStrategy: 'CURRENT_AUTO', roundRobinCapHours: 80 });
+      await this.configRepo.save(config);
+    }
+    return config;
+  }
+
+  async updateGlobalConfig(dto: UpdateGlobalConfigDto): Promise<TicketingConfig> {
+    const config = await this.getGlobalConfig();
+    if (dto.assignmentStrategy !== undefined) config.assignmentStrategy = dto.assignmentStrategy;
+    if (dto.roundRobinCapHours !== undefined) config.roundRobinCapHours = dto.roundRobinCapHours;
+    return this.configRepo.save(config);
+  }
+
+  // ── SLA Insights ───────────────────────────────────────────────────────
+
+  async getSlaInsights(): Promise<any[]> {
+    // Calculates the average resolution time in hours per category
+    const insights = await this.ticketRepo.query(`
+      SELECT 
+        tc.name as categoryName,
+        tc.sla_hours as configuredSlaHours,
+        COUNT(t.id) as resolvedTicketsCount,
+        AVG(TIMESTAMPDIFF(SECOND, t.created_at, t.resolved_at)) / 3600 as avgResolutionHours
+      FROM tickets t
+      JOIN ticket_categories tc ON t.category_id = tc.id
+      WHERE t.status IN ('RESOLVED', 'CLOSED')
+      GROUP BY tc.id
+    `);
+    
+    return insights.map((row: any) => ({
+      categoryName: row.categoryName,
+      configuredSlaHours: Number(row.configuredSlaHours),
+      resolvedTicketsCount: Number(row.resolvedTicketsCount),
+      avgResolutionHours: Number(row.avgResolutionHours),
+      isFailingSla: Number(row.avgResolutionHours) > Number(row.configuredSlaHours)
+    }));
   }
 }

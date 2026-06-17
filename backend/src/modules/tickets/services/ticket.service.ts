@@ -18,12 +18,14 @@ import { TicketIssueType } from '../entities/ticket-issue-type.entity';
 import { TicketEvent } from '../entities/ticket-event.entity';
 import { TicketEscalation, EscalationStatus } from '../entities/ticket-escalation.entity';
 import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
+import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { User, UserRole } from '../../shared/entities';
 import { TicketSettingsService } from './ticket-settings.service';
 import { AttendanceService } from './attendance.service';
 import { EmailService, TicketEmailData } from './email.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { EventBusService } from '../../../common/events/event-bus.service';
+import { KnowledgeBaseService } from './knowledge-base.service';
 
 // --- DTOs --------------------------------------------------------------------
 
@@ -52,6 +54,7 @@ export interface UpdateTicketDto {
   /** Required when status = DUPLICATE: UUID of the original ticket */
   duplicateOfId?: string;
   ticketType?: TicketType;
+  generateKb?: boolean;
 }
 
 export interface AssignTicketDto {
@@ -113,12 +116,14 @@ export class TicketService implements OnModuleInit {
     private readonly commentRepo: Repository<TicketComment>,
     @InjectRepository(TicketIssueType)
     private readonly issueTypeRepo: Repository<TicketIssueType>,
+    @InjectRepository(TicketEscalation)
+    private readonly escalationRepo: Repository<TicketEscalation>,
+    @InjectRepository(TicketingConfig)
+    private readonly configRepo: Repository<TicketingConfig>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     @InjectRepository(TicketEvent)
     private readonly eventRepo: Repository<TicketEvent>,
-    @InjectRepository(TicketEscalation)
-    private readonly escalationRepo: Repository<TicketEscalation>,
     @InjectRepository(EscalationFocalConfig)
     private readonly escalationFocalRepo: Repository<EscalationFocalConfig>,
     private readonly dataSource: DataSource,
@@ -126,6 +131,7 @@ export class TicketService implements OnModuleInit {
     private readonly attendanceService: AttendanceService,
     private readonly emailService: EmailService,
     private readonly roleCapSvc: RoleCapabilitiesService,
+    private readonly kbService: KnowledgeBaseService,
     @Optional()
     private readonly eventBus?: EventBusService,
   ) {}
@@ -476,33 +482,91 @@ export class TicketService implements OnModuleInit {
           // Fix: Ensure a ticket is never assigned to its own requester
           const eligibleTechs = availableTechs.filter(t => !this.roleCapSvc.isSeniorTech(t.role) && t.id !== requesterId);
           
-          // Sort techs by tier: junior first, then others
-          const tierPriority = (role: string): number => {
-            const juniorRoles: string[] = [UserRole.IT_SUPPORT_JR, UserRole.DESKTOP_JR];
-            if (juniorRoles.includes(role)) return 1;
-            return 3; 
-          };
-          eligibleTechs.sort((a, b) => tierPriority(a.role) - tierPriority(b.role));
+          // Fetch Routing Configuration
+          const config = await this.configRepo.findOne({ where: { id: 1 } });
+          const assignmentStrategy = config?.assignmentStrategy || 'CURRENT_AUTO';
+          const roundRobinCapHours = config?.roundRobinCapHours || 80;
 
-          let minCount = Infinity;
-          for (const tech of eligibleTechs) {
-            const openCount = await this.ticketRepo.count({
-              where: [
-                { assignedToId: tech.id, status: TicketStatus.OPEN },
-                { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
-                { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
-              ],
-            });
-            // Only consider techs with ZERO active tickets
-            if (openCount === 0 && openCount < minCount) {
-              minCount = openCount;
-              assignedTech = tech;
+          if (assignmentStrategy === 'CAPPED_ROUND_ROBIN') {
+            // Capped Round-Robin Mode
+            let minLastAssignedTime = Infinity;
+
+            for (const tech of eligibleTechs) {
+              // 1. Calculate Active SLA Load
+              const activeTickets = await this.ticketRepo.find({
+                where: [
+                  { assignedToId: tech.id, status: TicketStatus.OPEN },
+                  { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
+                  { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
+                ],
+                relations: ['category'],
+              });
+
+              let activeSlaLoad = 0;
+              for (const t of activeTickets) {
+                if (t.category?.slaHours) {
+                  activeSlaLoad += t.category.slaHours;
+                } else {
+                  activeSlaLoad += 24; // Default fallback if no SLA
+                }
+              }
+
+              // 2. Check Capacity Cap
+              if (activeSlaLoad < roundRobinCapHours) {
+                // 3. Find tech with oldest lastAssignedAt
+                const lastTicket = await this.ticketRepo.findOne({
+                  where: { assignedToId: tech.id },
+                  order: { lastAssignedAt: 'DESC' },
+                });
+
+                const techLastAssignedTime = lastTicket?.lastAssignedAt ? lastTicket.lastAssignedAt.getTime() : 0;
+
+                if (techLastAssignedTime < minLastAssignedTime) {
+                  minLastAssignedTime = techLastAssignedTime;
+                  assignedTech = tech;
+                }
+              }
+            }
+
+            // Fallback: If ALL eligible techs are at max capacity, fallback to the one with the lowest load
+            if (!assignedTech && eligibleTechs.length > 0) {
+              let minLoad = Infinity;
+              for (const tech of eligibleTechs) {
+                const openCount = await this.ticketRepo.count({
+                  where: [
+                    { assignedToId: tech.id, status: TicketStatus.OPEN },
+                    { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
+                    { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
+                  ],
+                });
+                if (openCount < minLoad) {
+                  minLoad = openCount;
+                  assignedTech = tech;
+                }
+              }
+            }
+          } else {
+            // CURRENT_AUTO Mode (Zero Active Tickets)
+            let minCount = Infinity;
+            for (const tech of eligibleTechs) {
+              const openCount = await this.ticketRepo.count({
+                where: [
+                  { assignedToId: tech.id, status: TicketStatus.OPEN },
+                  { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
+                  { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
+                ],
+              });
+              // Only consider techs with ZERO active tickets
+              if (openCount === 0 && openCount < minCount) {
+                minCount = openCount;
+                assignedTech = tech;
+              }
             }
           }
 
           if (assignedTech) {
             assignedToId = assignedTech.id;
-            this.logger.log(`Auto-assign resolved: original=${ticketType} → assigned=${tType} to ${assignedTech.email}`);
+            this.logger.log(`Auto-assign resolved: original=${ticketType} → assigned=${tType} to ${assignedTech.email} using ${assignmentStrategy}`);
             break;
           }
         }
@@ -537,6 +601,7 @@ export class TicketService implements OnModuleInit {
       status,
       categoryId,
       slaDeadline,
+      lastAssignedAt: assignedToId ? new Date() : null,
       issueTypeId,
       issueType: issueTypeKey,
       requesterId,
@@ -950,6 +1015,17 @@ export class TicketService implements OnModuleInit {
         const original = await this.ticketRepo.findOne({ where: { id: dto.duplicateOfId } });
         if (!original) throw new BadRequestException(`Original ticket ${dto.duplicateOfId} not found.`);
         ticket.duplicateOfId = dto.duplicateOfId;
+
+        // --- SLA Freezing Logic for Terminal DUPLICATE State ---
+        if (ticket.status === TicketStatus.FREEZE && ticket.slaPausedAt) {
+          const pausedTimeMs = new Date().getTime() - ticket.slaPausedAt.getTime();
+          ticket.accumulatedPauseSeconds = (ticket.accumulatedPauseSeconds || 0) + Math.floor(pausedTimeMs / 1000);
+          if (ticket.slaDeadline) {
+            ticket.slaDeadline = new Date(ticket.slaDeadline.getTime() + pausedTimeMs);
+          }
+          ticket.slaPausedAt = null;
+        }
+
         ticket.status = TicketStatus.DUPLICATE;
         // Duplicate tickets are terminal — treat like closed
         if (!ticket.resolvedAt) ticket.resolvedAt = new Date();
@@ -960,6 +1036,19 @@ export class TicketService implements OnModuleInit {
             'A priority must be set on this ticket before it can be marked as Resolved. Please set the priority first.',
           );
         }
+
+        // --- SLA Freezing Logic ---
+        if (dto.status === TicketStatus.FREEZE && ticket.status !== TicketStatus.FREEZE) {
+          ticket.slaPausedAt = new Date();
+        } else if (ticket.status === TicketStatus.FREEZE && dto.status !== TicketStatus.FREEZE && ticket.slaPausedAt) {
+          const pausedTimeMs = new Date().getTime() - ticket.slaPausedAt.getTime();
+          ticket.accumulatedPauseSeconds = (ticket.accumulatedPauseSeconds || 0) + Math.floor(pausedTimeMs / 1000);
+          if (ticket.slaDeadline) {
+            ticket.slaDeadline = new Date(ticket.slaDeadline.getTime() + pausedTimeMs);
+          }
+          ticket.slaPausedAt = null;
+        }
+
         ticket.status = dto.status;
         // QA: When transitioning back to OPEN, remove the assigned technician
         if (dto.status === TicketStatus.OPEN) {
@@ -975,22 +1064,78 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
             ? presentTechs
             : presentTechs.filter(t => !this.roleCapSvc.isSeniorTech(t.role));
 
-            // Pick first eligible tech with zero active tickets
-            for (const tech of eligibleTechs) {
-              const openCount = await this.ticketRepo.count({
-                where: [
-                  { assignedToId: tech.id, status: TicketStatus.OPEN },
-                  { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
-                  { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
-                ],
-              });
-              if (openCount === 0) {
-                ticket.assignedToId = tech.id;
-                ticket.status = TicketStatus.ASSIGNED;
-                break;
+            // Fetch Routing Configuration
+            const config = await this.configRepo.findOne({ where: { id: 1 } });
+            const assignmentStrategy = config?.assignmentStrategy || 'CURRENT_AUTO';
+            const roundRobinCapHours = config?.roundRobinCapHours || 80;
+            let assignedTech: User | null = null;
+
+            if (assignmentStrategy === 'CAPPED_ROUND_ROBIN') {
+              let minLastAssignedTime = Infinity;
+              for (const tech of eligibleTechs) {
+                const activeTickets = await this.ticketRepo.find({
+                  where: [
+                    { assignedToId: tech.id, status: TicketStatus.OPEN },
+                    { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
+                    { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
+                  ],
+                  relations: ['category'],
+                });
+                let activeSlaLoad = 0;
+                for (const t of activeTickets) {
+                  activeSlaLoad += t.category?.slaHours || 24;
+                }
+                if (activeSlaLoad < roundRobinCapHours) {
+                  const lastTicket = await this.ticketRepo.findOne({
+                    where: { assignedToId: tech.id },
+                    order: { lastAssignedAt: 'DESC' },
+                  });
+                  const techLastAssignedTime = lastTicket?.lastAssignedAt ? lastTicket.lastAssignedAt.getTime() : 0;
+                  if (techLastAssignedTime < minLastAssignedTime) {
+                    minLastAssignedTime = techLastAssignedTime;
+                    assignedTech = tech;
+                  }
+                }
+              }
+              if (!assignedTech && eligibleTechs.length > 0) {
+                let minLoad = Infinity;
+                for (const tech of eligibleTechs) {
+                  const openCount = await this.ticketRepo.count({
+                    where: [
+                      { assignedToId: tech.id, status: TicketStatus.OPEN },
+                      { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
+                      { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
+                    ],
+                  });
+                  if (openCount < minLoad) {
+                    minLoad = openCount;
+                    assignedTech = tech;
+                  }
+                }
+              }
+            } else {
+              let minCount = Infinity;
+              for (const tech of eligibleTechs) {
+                const openCount = await this.ticketRepo.count({
+                  where: [
+                    { assignedToId: tech.id, status: TicketStatus.OPEN },
+                    { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
+                    { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
+                  ],
+                });
+                if (openCount === 0 && openCount < minCount) {
+                  minCount = openCount;
+                  assignedTech = tech;
+                }
               }
             }
-          }
+
+            if (assignedTech) {
+              ticket.assignedToId = assignedTech.id;
+              ticket.status = TicketStatus.ASSIGNED;
+              ticket.lastAssignedAt = new Date();
+              // Break not needed here, no outer loop
+            }
         }
         if (dto.status === TicketStatus.RESOLVED && !ticket.resolvedAt) {
           ticket.resolvedAt = new Date();
@@ -1012,6 +1157,17 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
 
     const saved = await this.ticketRepo.save(ticket);
+
+    // AI Knowledge Base Generation
+    if (dto.status === TicketStatus.RESOLVED && dto.generateKb && saved.resolutionNotes) {
+      // Fire-and-forget generation
+      this.kbService.generateKbFromTicket(
+        saved.subject,
+        saved.description,
+        saved.resolutionNotes,
+        saved.resolutionSteps || ''
+      ).catch(err => this.logger.warn(`Failed to auto-generate KB: ${err.message}`));
+    }
 
     // Log status/priority change event
     if (dto.status) {
@@ -1209,8 +1365,8 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       );
     }
     }
-
     ticket.assignedToId = dto.assignedToId;
+    ticket.lastAssignedAt = new Date();
     if (ticket.status === TicketStatus.OPEN) {
       ticket.status = TicketStatus.ASSIGNED;
     }

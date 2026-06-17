@@ -83,7 +83,14 @@ export interface CreateIssuanceDto {
 }
 
 export type TicketType = 'desktop_support' | 'it_support' | 'pantawid_ict_support';
-export type TicketStatus = 'open' | 'assigned' | 'in_progress' | 'resolved' | 'closed' | 'freeze' | 'duplicate';
+export type TicketStatus =
+  | 'open'
+  | 'assigned'
+  | 'in_progress'
+  | 'resolved'
+  | 'closed'
+  | 'freeze'
+  | 'duplicate';
 export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
 
 export interface TicketEvent {
@@ -213,9 +220,11 @@ export interface UpdateTicketDto {
   status?: TicketStatus;
   priority?: TicketPriority;
   resolutionNotes?: string;
-  /** Required when status = 'duplicate' */
+  resolutionDate?: string;
+  issueTypeId?: string | null;
   duplicateOfId?: string;
   ticketType?: TicketType;
+  generateKb?: boolean;
 }
 
 export interface AssignTicketDto {
@@ -281,7 +290,13 @@ export interface TicketReportsData {
   totalWithRating: number;
   avgOverallRating: number | null;
   avgRatingByType: Array<{ type: string; avg: number; count: number; ratedCount?: number }>;
-  avgRatingByTechnician: Array<{ techId: number; techName: string; avg: number; count: number; ratedCount?: number }>;
+  avgRatingByTechnician: Array<{
+    techId: number;
+    techName: string;
+    avg: number;
+    count: number;
+    ratedCount?: number;
+  }>;
   totalEscalations: number;
   acceptedEscalations: number;
   returnedEscalations: number;
@@ -292,7 +307,13 @@ export interface TicketReportResult {
   totalWithRating: number;
   avgOverallRating: number | null;
   avgRatingByType: Array<{ type: string; avg: number; count: number; ratedCount?: number }>;
-  avgRatingByTechnician: Array<{ techId: number; techName: string; avg: number; count: number; ratedCount?: number }>;
+  avgRatingByTechnician: Array<{
+    techId: number;
+    techName: string;
+    avg: number;
+    count: number;
+    ratedCount?: number;
+  }>;
   totalEscalations: number;
   acceptedEscalations: number;
   returnedEscalations: number;
@@ -401,18 +422,19 @@ export interface OfficeDay {
   createdAt: string;
 }
 
-
 // Issuances API
 export const issuancesApi = {
-  getAll: async (
-    filters?: { authority?: string; category?: string; search?: string; is_active?: boolean },
-  ): Promise<Issuance[]> => {
+  getAll: async (filters?: {
+    authority?: string;
+    category?: string;
+    search?: string;
+    is_active?: boolean;
+  }): Promise<Issuance[]> => {
     const params = new URLSearchParams();
     if (filters?.authority) params.append('authority', filters.authority);
     if (filters?.category) params.append('category', filters.category);
     if (filters?.search) params.append('search', filters.search);
-    if (filters?.is_active !== undefined)
-      params.append('is_active', String(filters.is_active));
+    if (filters?.is_active !== undefined) params.append('is_active', String(filters.is_active));
 
     const response = await apiClient.get(`/issuances?${params}`);
     return response.data;
@@ -428,10 +450,7 @@ export const issuancesApi = {
     return response.data;
   },
 
-  update: async (
-    id: string,
-    data: Partial<CreateIssuanceDto>,
-  ): Promise<Issuance> => {
+  update: async (id: string, data: Partial<CreateIssuanceDto>): Promise<Issuance> => {
     const response = await apiClient.put(`/issuances/${id}`, data);
     return response.data;
   },
@@ -440,23 +459,12 @@ export const issuancesApi = {
     await apiClient.delete(`/issuances/${id}`);
   },
 
-  linkDocument: async (
-    issuanceId: string,
-    documentId: string,
-  ): Promise<void> => {
-    await apiClient.post(
-      `/issuances/${issuanceId}/documents/${documentId}`,
-      {},
-    );
+  linkDocument: async (issuanceId: string, documentId: string): Promise<void> => {
+    await apiClient.post(`/issuances/${issuanceId}/documents/${documentId}`, {});
   },
 
-  unlinkDocument: async (
-    issuanceId: string,
-    documentId: string,
-  ): Promise<void> => {
-    await apiClient.delete(
-      `/issuances/${issuanceId}/documents/${documentId}`,
-    );
+  unlinkDocument: async (issuanceId: string, documentId: string): Promise<void> => {
+    await apiClient.delete(`/issuances/${issuanceId}/documents/${documentId}`);
   },
 
   uploadAttachment: async (issuanceId: string, file: File): Promise<Issuance> => {
@@ -491,6 +499,8 @@ export const issuancesApi = {
 
 // Tickets API (IT Help Desk)
 export const ticketsApi = {
+  // ... existing methods
+
   getAll: async (filters?: {
     status?: TicketStatus;
     ticketType?: TicketType;
@@ -529,7 +539,11 @@ export const ticketsApi = {
     return response.data;
   },
 
-  addComment: async (ticketId: string, comment: string, isInternal = false): Promise<TicketComment> => {
+  addComment: async (
+    ticketId: string,
+    comment: string,
+    isInternal = false,
+  ): Promise<TicketComment> => {
     const response = await apiClient.post(`/tickets/${ticketId}/comments`, { comment, isInternal });
     return response.data;
   },
@@ -655,19 +669,36 @@ export const ticketsApi = {
   },
 
   acceptEscalation: async (ticketId: string, escalationId: string): Promise<TicketEscalation> => {
-    const response = await apiClient.patch(`/tickets/${ticketId}/escalation/${escalationId}/accept`);
+    const response = await apiClient.patch(
+      `/tickets/${ticketId}/escalation/${escalationId}/accept`,
+    );
     return response.data;
   },
 
-  returnEscalation: async (ticketId: string, escalationId: string, returnReason: string): Promise<TicketEscalation> => {
-    const response = await apiClient.patch(`/tickets/${ticketId}/escalation/${escalationId}/return`, { returnReason });
+  returnEscalation: async (
+    ticketId: string,
+    escalationId: string,
+    returnReason: string,
+  ): Promise<TicketEscalation> => {
+    const response = await apiClient.patch(
+      `/tickets/${ticketId}/escalation/${escalationId}/return`,
+      { returnReason },
+    );
     return response.data;
   },
 
-  updateEscalationProof: async (ticketId: string, escalationId: string, data: FormData): Promise<TicketEscalation> => {
-    const response = await apiClient.patch(`/tickets/${ticketId}/escalation/${escalationId}/update-proof`, data, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+  updateEscalationProof: async (
+    ticketId: string,
+    escalationId: string,
+    data: FormData,
+  ): Promise<TicketEscalation> => {
+    const response = await apiClient.patch(
+      `/tickets/${ticketId}/escalation/${escalationId}/update-proof`,
+      data,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      },
+    );
     return response.data;
   },
 };
@@ -688,11 +719,19 @@ export const ticketSettingsApi = {
     const response = await apiClient.get(`/ticket-settings/categories/${id}`);
     return response.data;
   },
-  createCategory: async (data: { name: string; ticketType: string; slaHours?: number | null; isActive?: boolean }): Promise<TicketCategory> => {
+  createCategory: async (data: {
+    name: string;
+    ticketType: string;
+    slaHours?: number | null;
+    isActive?: boolean;
+  }): Promise<TicketCategory> => {
     const response = await apiClient.post(`/ticket-settings/categories`, data);
     return response.data;
   },
-  updateCategory: async (id: string, data: Partial<{ name: string; ticketType: string; slaHours: number | null; isActive: boolean }>): Promise<TicketCategory> => {
+  updateCategory: async (
+    id: string,
+    data: Partial<{ name: string; ticketType: string; slaHours: number | null; isActive: boolean }>,
+  ): Promise<TicketCategory> => {
     const response = await apiClient.patch(`/ticket-settings/categories/${id}`, data);
     return response.data;
   },
@@ -704,16 +743,29 @@ export const ticketSettingsApi = {
   getKeywordRules: async (): Promise<TicketKeywordRule[]> => {
     const response = await apiClient.get(`/ticket-settings/keyword-rules`);
     // The backend stores keywords as JSON string in some rows; validate before accepting.
-    return (response.data as TicketKeywordRule[]).map(rule => ({
+    return (response.data as TicketKeywordRule[]).map((rule) => ({
       ...rule,
       keywords: parseKeywordListField(rule.keywords, rule.keyword),
     }));
   },
-  createKeywordRule: async (data: { keywords: string[]; targetTicketType: string; targetCategoryId?: string; isActive?: boolean }): Promise<TicketKeywordRule> => {
+  createKeywordRule: async (data: {
+    keywords: string[];
+    targetTicketType: string;
+    targetCategoryId?: string;
+    isActive?: boolean;
+  }): Promise<TicketKeywordRule> => {
     const response = await apiClient.post(`/ticket-settings/keyword-rules`, data);
     return response.data;
   },
-  updateKeywordRule: async (id: string, data: Partial<{ keywords: string[]; targetTicketType: string; targetCategoryId?: string; isActive: boolean }>): Promise<TicketKeywordRule> => {
+  updateKeywordRule: async (
+    id: string,
+    data: Partial<{
+      keywords: string[];
+      targetTicketType: string;
+      targetCategoryId?: string;
+      isActive: boolean;
+    }>,
+  ): Promise<TicketKeywordRule> => {
     const response = await apiClient.patch(`/ticket-settings/keyword-rules/${id}`, data);
     return response.data;
   },
@@ -731,34 +783,95 @@ export const ticketSettingsApi = {
     const response = await apiClient.get(`/ticket-settings/escalation-available-roles`);
     return response.data;
   },
-  addEscalationFocal: async (data: { ticketType: string; roleValue: string; label: string }): Promise<EscalationFocalConfig> => {
+  addEscalationFocal: async (data: {
+    ticketType: string;
+    roleValue: string;
+    label: string;
+  }): Promise<EscalationFocalConfig> => {
     const response = await apiClient.post(`/ticket-settings/escalation-focals`, data);
     return response.data;
   },
   removeEscalationFocal: async (id: number): Promise<void> => {
     await apiClient.delete(`/ticket-settings/escalation-focals/${id}`);
   },
+
+  // Global Config
+  getGlobalConfig: async (): Promise<{
+    assignmentStrategy: string;
+    roundRobinCapHours: number;
+  }> => {
+    const response = await apiClient.get(`/ticket-settings/global-config`);
+    return response.data;
+  },
+  updateGlobalConfig: async (data: {
+    assignmentStrategy?: string;
+    roundRobinCapHours?: number;
+  }): Promise<void> => {
+    const response = await apiClient.patch(`/ticket-settings/global-config`, data);
+    return response.data;
+  },
+
+  // SLA Insights
+  getSlaInsights: async (): Promise<
+    Array<{
+      categoryName: string;
+      configuredSlaHours: number;
+      resolvedTicketsCount: number;
+      avgResolutionHours: number;
+      isFailingSla: boolean;
+    }>
+  > => {
+    const response = await apiClient.get(`/ticket-settings/sla-insights`);
+    return response.data;
+  },
+};
+
+export const knowledgeBaseApi = {
+  search: async (query: string) => {
+    const res = await apiClient.get('/knowledge-base', { params: { q: query } });
+    return res.data;
+  },
+  rateArticle: async (id: number, isHelpful: boolean) => {
+    const res = await apiClient.post(`/knowledge-base/${id}/rate`, { isHelpful });
+    return res.data;
+  },
 };
 
 // Attendance API
 export const attendanceApi = {
   // Tech attendance
-  getAttendance: async (startDate: string, endDate: string, ticketType?: string): Promise<TechAttendance[]> => {
+  getAttendance: async (
+    startDate: string,
+    endDate: string,
+    ticketType?: string,
+  ): Promise<TechAttendance[]> => {
     const params = new URLSearchParams({ startDate, endDate });
     if (ticketType) params.append('ticketType', ticketType);
     const response = await apiClient.get(`/attendance?${params}`);
     return response.data;
   },
-  setAttendance: async (data: { userId: number; date: string; status: AttendanceStatus; notes?: string }): Promise<TechAttendance> => {
+  setAttendance: async (data: {
+    userId: number;
+    date: string;
+    status: AttendanceStatus;
+    notes?: string;
+  }): Promise<TechAttendance> => {
     const response = await apiClient.post(`/attendance`, data);
     return response.data;
   },
-  bulkSetAttendance: async (data: { entries: { userId: number; date: string; status: AttendanceStatus; notes?: string }[] }): Promise<TechAttendance[]> => {
+  bulkSetAttendance: async (data: {
+    entries: { userId: number; date: string; status: AttendanceStatus; notes?: string }[];
+  }): Promise<TechAttendance[]> => {
     const response = await apiClient.post(`/attendance/bulk`, data);
     return response.data;
   },
-  getAvailableTechnicians: async (ticketType: string, date: string): Promise<AttendanceTechnicianRecord[]> => {
-    const response = await apiClient.get(`/attendance/technicians?ticketType=${ticketType}&date=${date}`);
+  getAvailableTechnicians: async (
+    ticketType: string,
+    date: string,
+  ): Promise<AttendanceTechnicianRecord[]> => {
+    const response = await apiClient.get(
+      `/attendance/technicians?ticketType=${ticketType}&date=${date}`,
+    );
     return response.data;
   },
   getTechnicians: async (ticketType?: string): Promise<AttendanceTechnicianRecord[]> => {
@@ -771,8 +884,13 @@ export const attendanceApi = {
     const response = await apiClient.get(`/attendance/staff-logins${params}`);
     return response.data;
   },
-  getStaffLoginsMonthly: async (startDate: string, endDate: string): Promise<StaffLoginRecord[]> => {
-    const response = await apiClient.get(`/attendance/staff-logins-monthly?startDate=${startDate}&endDate=${endDate}`);
+  getStaffLoginsMonthly: async (
+    startDate: string,
+    endDate: string,
+  ): Promise<StaffLoginRecord[]> => {
+    const response = await apiClient.get(
+      `/attendance/staff-logins-monthly?startDate=${startDate}&endDate=${endDate}`,
+    );
     return response.data;
   },
 
@@ -784,11 +902,17 @@ export const attendanceApi = {
     const response = await apiClient.get(`/attendance/office-days?${params}`);
     return response.data;
   },
-  setOfficeDay: async (data: { date: string; isOfficeDay: boolean; notes?: string }): Promise<OfficeDay> => {
+  setOfficeDay: async (data: {
+    date: string;
+    isOfficeDay: boolean;
+    notes?: string;
+  }): Promise<OfficeDay> => {
     const response = await apiClient.post(`/attendance/office-days`, data);
     return response.data;
   },
-  bulkSetOfficeDays: async (data: { days: { date: string; isOfficeDay: boolean; notes?: string }[] }): Promise<OfficeDay[]> => {
+  bulkSetOfficeDays: async (data: {
+    days: { date: string; isOfficeDay: boolean; notes?: string }[];
+  }): Promise<OfficeDay[]> => {
     const response = await apiClient.post(`/attendance/office-days/bulk`, data);
     return response.data;
   },

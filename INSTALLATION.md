@@ -98,6 +98,7 @@ Use the following as a quick baseline for microservices deployments. Keep secret
 | `TICKETING_SERVICE_URL` | Gateway route target for ticketing service | `http://ticketing-service:4102` |
 | `COMPLIANCE_SERVICE_URL` | Gateway route target for compliance service | `http://compliance-service:4103` |
 | `NEXT_PUBLIC_API_URL` | Frontend API base URL | `http://localhost:4000/api` |
+| `GEMINI_API_KEY` | Gemini AI Key for Knowledge Base | `AIzaSy...` |
 
 ---
 
@@ -300,6 +301,9 @@ ALLOWED_FILE_TYPES=application/pdf,application/vnd.openxmlformats-officedocument
 
 # CORS
 CORS_ORIGIN=http://localhost:3000
+
+# Gemini AI (Knowledge Base)
+GEMINI_API_KEY=your-gemini-api-key
 
 # API Rate Limiting
 RATE_LIMIT_WINDOW_MS=900000

@@ -27,6 +27,7 @@ import {
   CreateEscalationFocalDto,
   CreateIssueTypeDto,
   UpdateIssueTypeDto,
+  UpdateGlobalConfigDto,
 } from '../services/ticket-settings.service';
 import { EmailService } from '../services/email.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
@@ -296,5 +297,33 @@ export class TicketSettingsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeEscalationFocal(@Param('id') id: string) {
     await this.settingsService.removeEscalationFocal(Number(id));
+  }
+
+  // ── Global Config ───────────────────────────────────────────────────────
+
+  @Get('global-config')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
+  async getGlobalConfig() {
+    return this.settingsService.getGlobalConfig();
+  }
+
+  @Patch('global-config')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
+  async updateGlobalConfig(@Body() dto: UpdateGlobalConfigDto) {
+    return this.settingsService.updateGlobalConfig(dto);
+  }
+
+  // ── SLA Insights ───────────────────────────────────────────────────────
+
+  @Get('sla-insights')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_STAFF_ROLES)
+  async getSlaInsights() {
+    return this.settingsService.getSlaInsights();
   }
 }

@@ -46,9 +46,24 @@ import {
   TicketEscalation,
   EscalationFocalConfig,
 } from '@/app/api/references';
-import { ArrowBack as BackIcon, Star as StarIcon, CloudUpload as UploadIcon, SentimentVerySatisfied, SentimentSatisfied, SentimentNeutral, SentimentDissatisfied, SentimentVeryDissatisfied, NavigateBefore, NavigateNext } from '@mui/icons-material';
+import {
+  ArrowBack as BackIcon,
+  Star as StarIcon,
+  CloudUpload as UploadIcon,
+  SentimentVerySatisfied,
+  SentimentSatisfied,
+  SentimentNeutral,
+  SentimentDissatisfied,
+  SentimentVeryDissatisfied,
+  NavigateBefore,
+  NavigateNext,
+} from '@mui/icons-material';
 import { apiClient } from '@/lib/api/client';
-import { PRIORITY_COLOR, STATUS_COLOR, TICKET_TYPE_LABELS as TYPE_LABELS } from '@/lib/utils/ticket-colors';
+import {
+  PRIORITY_COLOR,
+  STATUS_COLOR,
+  TICKET_TYPE_LABELS as TYPE_LABELS,
+} from '@/lib/utils/ticket-colors';
 
 const STATUS_OPTS = [
   { value: 'open', label: 'Open' },
@@ -82,6 +97,7 @@ export default function TicketDetailPage() {
   const [editingStatus, setEditingStatus] = useState(false);
   const [newStatus, setNewStatus] = useState('');
   const [resolutionNotes, setResolutionNotes] = useState('');
+  const [generateKb, setGenerateKb] = useState(false);
 
   // Assign dialog
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
@@ -120,9 +136,18 @@ export default function TicketDetailPage() {
   // Satisfaction dialog
   const [satDialogOpen, setSatDialogOpen] = useState(false);
   const [csatForm, setCsatForm] = useState<CsatFormData>({
-    consentGiven: false, unitSection: '', dateOfTransaction: '', clientFirstName: '',
-    clientMiddleInitial: '', clientLastName: '', suffix: '', religion: '', sex: '',
-    contactNumber: '', technicianName: '', likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
+    consentGiven: false,
+    unitSection: '',
+    dateOfTransaction: '',
+    clientFirstName: '',
+    clientMiddleInitial: '',
+    clientLastName: '',
+    suffix: '',
+    religion: '',
+    sex: '',
+    contactNumber: '',
+    technicianName: '',
+    likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
   });
   const [unitSuggestions, setUnitSuggestions] = useState<string[]>([]);
   const [csatSubmitting, setCsatSubmitting] = useState(false);
@@ -147,41 +172,54 @@ export default function TicketDetailPage() {
   const isTechnician = isFocalTech || isLowerLevelTech;
   const isFocal = user?.roleCode === 'focal';
   const isAdmin = user?.role === 'super_admin' || isFocal;
-  const canAssignByCapability = user?.role === 'super_admin' || !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
+  const canAssignByCapability =
+    user?.role === 'super_admin' || !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
   const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isAllTickets;
   const canPriority = canStaff;
   const isComplianceOfficer = user?.roleCode === 'compliance_officer';
   const isSectionHead = user?.roleCode === 'section_head';
-  const canEscalate = user?.role === 'super_admin' || !!(
-    myCap?.isDesktop ||
-    myCap?.isItSupport ||
-    myCap?.isPantawidIct ||
-    myCap?.isTicketFocal ||
-    myCap?.isTicketSettingsFocal ||
-    myCap?.isAllTickets
-  );
+  const canEscalate =
+    user?.role === 'super_admin' ||
+    !!(
+      myCap?.isDesktop ||
+      myCap?.isItSupport ||
+      myCap?.isPantawidIct ||
+      myCap?.isTicketFocal ||
+      myCap?.isTicketSettingsFocal ||
+      myCap?.isAllTickets
+    );
   const isEscalationAdmin = user?.role === 'super_admin' || isComplianceOfficer || isSectionHead;
   const latestEscalation = escalations.length > 0 ? escalations[0] : null;
   const hasPendingEscalation = latestEscalation?.status === 'pending';
   const hasAcceptedEscalation = latestEscalation?.status === 'accepted';
-  const isAcceptedEscalationFocal = hasAcceptedEscalation && (latestEscalation?.escalatedToId || latestEscalation?.escalatedTo?.id || (latestEscalation as any)?.escalated_to_id) === (user as any)?.id;
+  const isAcceptedEscalationFocal =
+    hasAcceptedEscalation &&
+    (latestEscalation?.escalatedToId ||
+      latestEscalation?.escalatedTo?.id ||
+      (latestEscalation as any)?.escalated_to_id) === (user as any)?.id;
   // UI policy: if escalation is pending, no top action buttons are shown.
   // If escalation is accepted, only Update Status may appear.
   const hideTopActionButtons = !!hasPendingEscalation;
   const acceptedEscalationOnlyStatusAction = !!hasAcceptedEscalation;
-  const canUpdateStatusNow = (canStaff && !hasAcceptedEscalation) || isEscalationAdmin || !!isAcceptedEscalationFocal;
+  const canUpdateStatusNow =
+    (canStaff && !hasAcceptedEscalation) || isEscalationAdmin || !!isAcceptedEscalationFocal;
   // Matrix-driven reassign privilege: ticket admin/assign capability, constrained after accepted escalations.
-  const canReassign = canAssignByCapability
-    && (!hasAcceptedEscalation || isEscalationAdmin);
+  const canReassign = canAssignByCapability && (!hasAcceptedEscalation || isEscalationAdmin);
   // Ticket can be escalated again if there is no pending escalation.
-  const canEscalateNow = canEscalate && (!latestEscalation || latestEscalation.status !== 'pending');
+  const canEscalateNow =
+    canEscalate && (!latestEscalation || latestEscalation.status !== 'pending');
   const isRequester = ticket?.requesterId === (user as any)?.id;
-  const canSatisfaction = isRequester && (ticket?.status === 'resolved' || ticket?.status === 'closed') && !ticket?.satisfactionSubmittedAt;
+  const canSatisfaction =
+    isRequester &&
+    (ticket?.status === 'resolved' || ticket?.status === 'closed') &&
+    !ticket?.satisfactionSubmittedAt;
   // Duplicate is terminal — no further modifications allowed
   const isDuplicate = ticket?.status === 'duplicate';
   const sortedComments = useMemo(() => {
-    const comments = [ ...(((ticket as any)?.comments ?? []) as any[]) ];
-    return comments.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const comments = [...(((ticket as any)?.comments ?? []) as any[])];
+    return comments.sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
   }, [ticket]);
   const timelineEvents = useMemo(() => {
     const eventPriority = (eventType: string) => {
@@ -208,8 +246,11 @@ export default function TicketDetailPage() {
       setEventsLoading(true);
       const data = await ticketsApi.getEvents(ticketId);
       setEvents(data);
-    } catch { /* silent */ }
-    finally { setEventsLoading(false); }
+    } catch {
+      /* silent */
+    } finally {
+      setEventsLoading(false);
+    }
   };
 
   const fetchEscalations = async () => {
@@ -218,36 +259,52 @@ export default function TicketDetailPage() {
       setEscalationsLoading(true);
       const data = await ticketsApi.getEscalations(ticketId);
       setEscalations(data);
-    } catch { /* silent */ }
-    finally { setEscalationsLoading(false); }
+    } catch {
+      /* silent */
+    } finally {
+      setEscalationsLoading(false);
+    }
   };
 
-  useEffect(() => { fetchEvents(); }, [ticketId]);
-  useEffect(() => { fetchEscalations(); }, [ticketId]);
+  useEffect(() => {
+    fetchEvents();
+  }, [ticketId]);
+  useEffect(() => {
+    fetchEscalations();
+  }, [ticketId]);
 
   // Load proof photos as authenticated blob URLs
   useEffect(() => {
     if (!escalations.length) return;
     const urlMap: Record<string, string> = {};
     const loaders: Promise<void>[] = [];
-    escalations.forEach(e => {
-      (e.proofFiles ?? []).forEach(filePath => {
+    escalations.forEach((e) => {
+      (e.proofFiles ?? []).forEach((filePath) => {
         const parts = filePath.replace('escalation-proofs/', '').split('/');
         const tid = parts[0] ?? ticketId;
         const fname = encodeURIComponent(parts[1] ?? filePath);
         const apiUrl = `/tickets/proof/${tid}/${fname}`;
         loaders.push(
-          apiClient.get(apiUrl, { responseType: 'blob' })
-            .then(r => { urlMap[apiUrl] = URL.createObjectURL(r.data); })
-            .catch(() => { urlMap[apiUrl] = 'error'; })
+          apiClient
+            .get(apiUrl, { responseType: 'blob' })
+            .then((r) => {
+              urlMap[apiUrl] = URL.createObjectURL(r.data);
+            })
+            .catch(() => {
+              urlMap[apiUrl] = 'error';
+            }),
         );
       });
     });
-    Promise.all(loaders).then(() => setProofBlobUrls(prev => {
-      Object.values(prev).forEach(u => URL.revokeObjectURL(u));
-      return { ...urlMap };
-    }));
-    return () => { Object.values(urlMap).forEach(u => URL.revokeObjectURL(u)); };
+    Promise.all(loaders).then(() =>
+      setProofBlobUrls((prev) => {
+        Object.values(prev).forEach((u) => URL.revokeObjectURL(u));
+        return { ...urlMap };
+      }),
+    );
+    return () => {
+      Object.values(urlMap).forEach((u) => URL.revokeObjectURL(u));
+    };
   }, [escalations, ticketId]);
 
   // Live updates – poll every 30 s for all users (QA #7: ensures user-side sees status changes)
@@ -262,7 +319,9 @@ export default function TicketDetailPage() {
         setTicket(ticketData);
         setEvents(eventsData);
         setEscalations(escalationsData);
-      } catch { /* silent */ }
+      } catch {
+        /* silent */
+      }
     }, 30_000);
     return () => clearInterval(id);
   }, [ticketId]);
@@ -287,12 +346,17 @@ export default function TicketDetailPage() {
         isTechnician
       ) {
         viewedRef.current = true;
-        ticketsApi.markViewed(ticketId).then(updated => {
-          if (updated) setTicket(updated);
-        }).catch(() => {});
+        ticketsApi
+          .markViewed(ticketId)
+          .then((updated) => {
+            if (updated) setTicket(updated);
+          })
+          .catch(() => {});
       }
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to fetch ticket', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to fetch ticket', {
+        variant: 'error',
+      });
     } finally {
       setLoading(false);
     }
@@ -302,7 +366,9 @@ export default function TicketDetailPage() {
     try {
       const data = await ticketsApi.getTechnicians();
       setTechnicians(data || []);
-    } catch { /* restricted */ }
+    } catch {
+      /* restricted */
+    }
   };
 
   const handleAddComment = async () => {
@@ -324,7 +390,9 @@ export default function TicketDetailPage() {
 
   const handleUpdateStatus = async (overrideDupOfId?: string) => {
     if (!canUpdateStatusNow) {
-      enqueueSnackbar('You cannot change status while this ticket has an accepted escalation.', { variant: 'warning' });
+      enqueueSnackbar('You cannot change status while this ticket has an accepted escalation.', {
+        variant: 'warning',
+      });
       return;
     }
 
@@ -338,6 +406,7 @@ export default function TicketDetailPage() {
       if (resolutionNotes) payload.resolutionNotes = resolutionNotes;
       if (newPriority && newPriority !== ticket?.priority) payload.priority = newPriority as any;
       if (overrideDupOfId) payload.duplicateOfId = overrideDupOfId;
+      if (newStatus === 'resolved') payload.generateKb = generateKb;
       await ticketsApi.update(ticketId, payload);
       setEditingStatus(false);
       setDupDialogOpen(false);
@@ -347,7 +416,9 @@ export default function TicketDetailPage() {
       fetchEvents();
       enqueueSnackbar('Ticket updated.', { variant: 'success' });
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to update ticket', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to update ticket', {
+        variant: 'error',
+      });
     }
   };
 
@@ -373,7 +444,9 @@ export default function TicketDetailPage() {
       fetchEvents();
       enqueueSnackbar('Ticket assigned.', { variant: 'success' });
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to assign ticket', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to assign ticket', {
+        variant: 'error',
+      });
     }
   };
 
@@ -384,7 +457,7 @@ export default function TicketDetailPage() {
       const formData = new FormData();
       formData.append('escalatedToId', String(escalateToId));
       if (escalateNotes) formData.append('notes', escalateNotes);
-      escalateFiles.forEach(f => formData.append('proofFiles', f));
+      escalateFiles.forEach((f) => formData.append('proofFiles', f));
       await ticketsApi.escalateTicket(ticketId, formData);
       setEscalateDialogOpen(false);
       setEscalateToId('');
@@ -395,7 +468,9 @@ export default function TicketDetailPage() {
       fetchEscalations();
       enqueueSnackbar('Ticket escalated successfully.', { variant: 'success' });
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to escalate ticket', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to escalate ticket', {
+        variant: 'error',
+      });
     } finally {
       setEscalating(false);
     }
@@ -408,7 +483,9 @@ export default function TicketDetailPage() {
       fetchTicket();
       enqueueSnackbar('Escalation accepted.', { variant: 'success' });
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to accept escalation', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to accept escalation', {
+        variant: 'error',
+      });
     }
   };
 
@@ -422,7 +499,9 @@ export default function TicketDetailPage() {
       // UX rule: after returning escalation, only the returner view should refresh and go back to list.
       router.push('/dashboard/tickets');
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to return escalation', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to return escalation', {
+        variant: 'error',
+      });
     }
   };
 
@@ -431,7 +510,7 @@ export default function TicketDetailPage() {
       setAddingProof(true);
       const formData = new FormData();
       if (addProofNotes !== undefined) formData.append('notes', addProofNotes);
-      addProofFiles.forEach(f => formData.append('proofFiles', f));
+      addProofFiles.forEach((f) => formData.append('proofFiles', f));
       await ticketsApi.updateEscalationProof(ticketId, addProofEscalationId, formData);
       setAddProofDialogOpen(false);
       setAddProofNotes('');
@@ -439,7 +518,9 @@ export default function TicketDetailPage() {
       fetchEscalations();
       enqueueSnackbar('Escalation notes and proof updated.', { variant: 'success' });
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to update escalation', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to update escalation', {
+        variant: 'error',
+      });
     } finally {
       setAddingProof(false);
     }
@@ -453,11 +534,16 @@ export default function TicketDetailPage() {
         attendanceApi.getTechnicians(ticket?.ticketType),
       ]);
       setEscalationFocals(focals);
-      const mergedUsers = [...itoUsers, ...supportUsers]
-        .filter((u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx);
+      const mergedUsers = [...itoUsers, ...supportUsers].filter(
+        (u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx,
+      );
       // From all techs, keep only those whose user ID or role matches the configured escalation focals
-      const allowedValues = new Set(focals.map(f => String(f.roleValue)));
-      setEscalationFocalUsers(mergedUsers.filter(t => allowedValues.has(String(t.id)) || allowedValues.has(String(t.role))));
+      const allowedValues = new Set(focals.map((f) => String(f.roleValue)));
+      setEscalationFocalUsers(
+        mergedUsers.filter(
+          (t) => allowedValues.has(String(t.id)) || allowedValues.has(String(t.role)),
+        ),
+      );
     } catch {
       setEscalationFocalUsers([]);
     }
@@ -473,20 +559,46 @@ export default function TicketDetailPage() {
       fetchTicket();
       enqueueSnackbar('Ticket closed successfully.', { variant: 'success' });
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to close ticket', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to close ticket', {
+        variant: 'error',
+      });
     }
   };
 
   const handleSubmitSatisfaction = async () => {
-    if (!csatForm.consentGiven) { enqueueSnackbar('Please provide consent before submitting.', { variant: 'warning' }); return; }
-    if (!csatForm.unitSection.trim()) { enqueueSnackbar('Unit/Section is required.', { variant: 'warning' }); return; }
-    if (!csatForm.clientFirstName.trim() || !csatForm.clientLastName.trim()) { enqueueSnackbar('Client name is required.', { variant: 'warning' }); return; }
-    if (!csatForm.religion.trim()) { enqueueSnackbar('Religion is required.', { variant: 'warning' }); return; }
-    if (!csatForm.age) { enqueueSnackbar('Age is required.', { variant: 'warning' }); return; }
-    if (csatForm.age < 20 || csatForm.age >= 90) { enqueueSnackbar('Age must be between 20 and 89.', { variant: 'warning' }); return; }
-    if (!csatForm.sex) { enqueueSnackbar('Sex is required.', { variant: 'warning' }); return; }
+    if (!csatForm.consentGiven) {
+      enqueueSnackbar('Please provide consent before submitting.', { variant: 'warning' });
+      return;
+    }
+    if (!csatForm.unitSection.trim()) {
+      enqueueSnackbar('Unit/Section is required.', { variant: 'warning' });
+      return;
+    }
+    if (!csatForm.clientFirstName.trim() || !csatForm.clientLastName.trim()) {
+      enqueueSnackbar('Client name is required.', { variant: 'warning' });
+      return;
+    }
+    if (!csatForm.religion.trim()) {
+      enqueueSnackbar('Religion is required.', { variant: 'warning' });
+      return;
+    }
+    if (!csatForm.age) {
+      enqueueSnackbar('Age is required.', { variant: 'warning' });
+      return;
+    }
+    if (csatForm.age < 20 || csatForm.age >= 90) {
+      enqueueSnackbar('Age must be between 20 and 89.', { variant: 'warning' });
+      return;
+    }
+    if (!csatForm.sex) {
+      enqueueSnackbar('Sex is required.', { variant: 'warning' });
+      return;
+    }
     const ratedItems = csatForm.likert.filter((_, i) => ![3, 5, 8].includes(i));
-    if (ratedItems.some(v => v === 0)) { enqueueSnackbar('Please rate all applicable items.', { variant: 'warning' }); return; }
+    if (ratedItems.some((v) => v === 0)) {
+      enqueueSnackbar('Please rate all applicable items.', { variant: 'warning' });
+      return;
+    }
     try {
       setCsatSubmitting(true);
       await ticketsApi.submitSatisfaction(ticketId, { formData: csatForm });
@@ -494,7 +606,9 @@ export default function TicketDetailPage() {
       fetchTicket();
       enqueueSnackbar('Thank you for your feedback!', { variant: 'success' });
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to submit satisfaction', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to submit satisfaction', {
+        variant: 'error',
+      });
     } finally {
       setCsatSubmitting(false);
     }
@@ -512,7 +626,11 @@ export default function TicketDetailPage() {
     return (
       <Box>
         <Typography color="error">Ticket not found</Typography>
-        <Button startIcon={<BackIcon />} onClick={() => router.push('/dashboard/tickets')} sx={{ mt: 2 }}>
+        <Button
+          startIcon={<BackIcon />}
+          onClick={() => router.push('/dashboard/tickets')}
+          sx={{ mt: 2 }}
+        >
           Back to Tickets
         </Button>
       </Box>
@@ -521,14 +639,24 @@ export default function TicketDetailPage() {
 
   return (
     <Box>
-      <Button startIcon={<BackIcon />} onClick={() => router.push('/dashboard/tickets')} sx={{ mb: 2 }}>
+      <Button
+        startIcon={<BackIcon />}
+        onClick={() => router.push('/dashboard/tickets')}
+        sx={{ mb: 2 }}
+      >
         Back to Tickets
       </Button>
 
       {/* ── Ticket Header ── */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Box display="flex" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={2}>
+          <Box
+            display="flex"
+            justifyContent="space-between"
+            alignItems="flex-start"
+            flexWrap="wrap"
+            gap={2}
+          >
             <Box flexGrow={1}>
               <Typography variant="overline" color="text.secondary">
                 {ticket.ticketNumber}
@@ -549,13 +677,25 @@ export default function TicketDetailPage() {
                         fetchTicket();
                         enqueueSnackbar('Ticket type updated.', { variant: 'success' });
                       } catch (err: any) {
-                        enqueueSnackbar(err.response?.data?.message || 'Failed to update ticket type', { variant: 'error' });
+                        enqueueSnackbar(
+                          err.response?.data?.message || 'Failed to update ticket type',
+                          { variant: 'error' },
+                        );
                       }
                     }}
-                    sx={{ minWidth: 160, '& .MuiInputBase-root': { height: 26, fontSize: '0.8125rem', borderRadius: '16px' } }}
+                    sx={{
+                      minWidth: 160,
+                      '& .MuiInputBase-root': {
+                        height: 26,
+                        fontSize: '0.8125rem',
+                        borderRadius: '16px',
+                      },
+                    }}
                   >
                     {Object.entries(TYPE_LABELS).map(([val, label]) => (
-                      <MenuItem key={val} value={val} sx={{ fontSize: '0.8125rem' }}>{label}</MenuItem>
+                      <MenuItem key={val} value={val} sx={{ fontSize: '0.8125rem' }}>
+                        {label}
+                      </MenuItem>
                     ))}
                   </TextField>
                 ) : (
@@ -567,8 +707,14 @@ export default function TicketDetailPage() {
                   />
                 )}
                 <Chip
-                  label={ticket.priority ? `Priority: ${ticket.priority.toUpperCase()}` : 'Priority: Not Set'}
-                  color={ticket.priority ? (PRIORITY_COLOR[ticket.priority] ?? 'default') : 'default'}
+                  label={
+                    ticket.priority
+                      ? `Priority: ${ticket.priority.toUpperCase()}`
+                      : 'Priority: Not Set'
+                  }
+                  color={
+                    ticket.priority ? (PRIORITY_COLOR[ticket.priority] ?? 'default') : 'default'
+                  }
                   size="small"
                 />
                 <Chip
@@ -581,41 +727,65 @@ export default function TicketDetailPage() {
 
             {/* Actions */}
             <Box display="flex" flexDirection="column" gap={1} minWidth={160}>
-              {!hideTopActionButtons && !editingStatus && !isDuplicate && !['resolved', 'closed'].includes(ticket.status) && (
-                (!hasAcceptedEscalation && canUpdateStatusNow && (isTechnician || isSectionHead || isComplianceOfficer || user?.role === 'super_admin')) ||
-                (hasAcceptedEscalation && isAcceptedEscalationFocal)
-              ) && (
-                <Button variant="outlined" size="small" onClick={() => setEditingStatus(true)}>
-                  Update Status
-                </Button>
-              )}
+              {!hideTopActionButtons &&
+                !editingStatus &&
+                !isDuplicate &&
+                !['resolved', 'closed'].includes(ticket.status) &&
+                ((!hasAcceptedEscalation &&
+                  canUpdateStatusNow &&
+                  (isTechnician ||
+                    isSectionHead ||
+                    isComplianceOfficer ||
+                    user?.role === 'super_admin')) ||
+                  (hasAcceptedEscalation && isAcceptedEscalationFocal)) && (
+                  <Button variant="outlined" size="small" onClick={() => setEditingStatus(true)}>
+                    Update Status
+                  </Button>
+                )}
               {!hideTopActionButtons && !acceptedEscalationOnlyStatusAction && isDuplicate && (
                 <Chip label="Duplicate (Terminal)" color="default" size="small" />
               )}
-              {!hideTopActionButtons && (!hasAcceptedEscalation || isAcceptedEscalationFocal) && canReassign && !isDuplicate && !['resolved', 'closed'].includes(ticket.status) && (
-                <Button variant="outlined" size="small" onClick={async () => {
-                  setIsEscalateMode(false);
-                  setAssignToId(ticket.assignedToId || '');
-                  await fetchTechnicians();
-                  setAssignDialogOpen(true);
-                }}>
-                  {ticket.assignedToId ? 'Reassign Ticket' : 'Assign Technician'}
-                </Button>
-              )}
-              {!hideTopActionButtons && !isDuplicate && !['closed', 'resolved'].includes(ticket.status) && (
-                (!hasAcceptedEscalation && canEscalateNow) ||
-                (hasAcceptedEscalation && isAcceptedEscalationFocal)
-              ) && (
-                <Button variant="outlined" size="small" color="warning" onClick={openEscalateDialog}>
-                  Escalate Ticket
-                </Button>
-              )}
+              {!hideTopActionButtons &&
+                (!hasAcceptedEscalation || isAcceptedEscalationFocal) &&
+                canReassign &&
+                !isDuplicate &&
+                !['resolved', 'closed'].includes(ticket.status) && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={async () => {
+                      setIsEscalateMode(false);
+                      setAssignToId(ticket.assignedToId || '');
+                      await fetchTechnicians();
+                      setAssignDialogOpen(true);
+                    }}
+                  >
+                    {ticket.assignedToId ? 'Reassign Ticket' : 'Assign Technician'}
+                  </Button>
+                )}
+              {!hideTopActionButtons &&
+                !isDuplicate &&
+                !['closed', 'resolved'].includes(ticket.status) &&
+                ((!hasAcceptedEscalation && canEscalateNow) ||
+                  (hasAcceptedEscalation && isAcceptedEscalationFocal)) && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="warning"
+                    onClick={openEscalateDialog}
+                  >
+                    Escalate Ticket
+                  </Button>
+                )}
               {/* Self-close: requester can close their own ticket once it is Resolved */}
-              {!hideTopActionButtons && isRegularUser && isRequester && ticket.status === 'resolved' && (
-                <Button variant="outlined" size="small" color="error" onClick={handleSelfClose}>
-                  Close Ticket
-                </Button>
-              )}
+              {!hideTopActionButtons &&
+                isRegularUser &&
+                isRequester &&
+                ticket.status === 'resolved' && (
+                  <Button variant="outlined" size="small" color="error" onClick={handleSelfClose}>
+                    Close Ticket
+                  </Button>
+                )}
               {!hideTopActionButtons && canSatisfaction && (
                 <Button
                   variant="contained"
@@ -624,18 +794,29 @@ export default function TicketDetailPage() {
                   startIcon={<StarIcon />}
                   onClick={() => {
                     const assignedName = ticket.assignedTo
-                      ? `${ticket.assignedTo.firstName ?? ''} ${ticket.assignedTo.lastName ?? ''}`.trim() || ticket.assignedTo.email
+                      ? `${ticket.assignedTo.firstName ?? ''} ${ticket.assignedTo.lastName ?? ''}`.trim() ||
+                        ticket.assignedTo.email
                       : '';
                     setCsatForm({
-                      consentGiven: false, unitSection: '', clientFirstName: '',
-                      clientMiddleInitial: '', clientLastName: '', suffix: '', religion: '', sex: '',
-                      contactNumber: '', technicianName: assignedName,
+                      consentGiven: false,
+                      unitSection: '',
+                      clientFirstName: '',
+                      clientMiddleInitial: '',
+                      clientLastName: '',
+                      suffix: '',
+                      religion: '',
+                      sex: '',
+                      contactNumber: '',
+                      technicianName: assignedName,
                       dateOfTransaction: ticket.resolvedAt
                         ? new Date(ticket.resolvedAt).toISOString().split('T')[0]
                         : new Date().toISOString().split('T')[0],
                       likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
                     });
-                    ticketsApi.getUnitSuggestions().then(setUnitSuggestions).catch(() => {});
+                    ticketsApi
+                      .getUnitSuggestions()
+                      .then(setUnitSuggestions)
+                      .catch(() => {});
                     setSatDialogOpen(true);
                   }}
                 >
@@ -648,25 +829,45 @@ export default function TicketDetailPage() {
           {/* Inline status editor */}
           {editingStatus && !hideTopActionButtons && canUpdateStatusNow && (
             <Box mt={3} p={2} bgcolor="action.hover" borderRadius={1}>
-              <Typography variant="subtitle2" gutterBottom>Update Ticket</Typography>
+              <Typography variant="subtitle2" gutterBottom>
+                Update Ticket
+              </Typography>
               {(() => {
                 // QA #3/#4/#6: Compute allowed next statuses based on current status and actor role
                 const isSeniorAuthority = [
-                  'super_admin', 'focal', 'reviewer', 'section_head', 'compliance_officer',
-                  'technician_it_support', 'technician_desktop', 'it_support_sr', 'desktop_sr',
+                  'super_admin',
+                  'focal',
+                  'reviewer',
+                  'section_head',
+                  'compliance_officer',
+                  'technician_it_support',
+                  'technician_desktop',
+                  'it_support_sr',
+                  'desktop_sr',
                 ].includes(user?.role ?? '');
                 let allowedValues: string[] = [];
                 switch (ticket?.status) {
-                  case 'open':       allowedValues = ['freeze', 'duplicate']; break;
-                  case 'assigned':   allowedValues = isSeniorAuthority
-                    ? ['in_progress', 'freeze', 'duplicate', 'open']
-                    : ['in_progress', 'freeze', 'duplicate']; break;
-                  case 'in_progress': allowedValues = ['resolved']; break;
-                  case 'resolved':   allowedValues = ['closed']; break;
-                  case 'freeze':     allowedValues = ['open', 'assigned', 'in_progress', 'resolved']; break;
-                  default:           allowedValues = [];
+                  case 'open':
+                    allowedValues = ['freeze', 'duplicate'];
+                    break;
+                  case 'assigned':
+                    allowedValues = isSeniorAuthority
+                      ? ['in_progress', 'freeze', 'duplicate', 'open']
+                      : ['in_progress', 'freeze', 'duplicate'];
+                    break;
+                  case 'in_progress':
+                    allowedValues = ['resolved'];
+                    break;
+                  case 'resolved':
+                    allowedValues = ['closed'];
+                    break;
+                  case 'freeze':
+                    allowedValues = ['open', 'assigned', 'in_progress', 'resolved'];
+                    break;
+                  default:
+                    allowedValues = [];
                 }
-                const allowedOpts = STATUS_OPTS.filter(s => allowedValues.includes(s.value));
+                const allowedOpts = STATUS_OPTS.filter((s) => allowedValues.includes(s.value));
                 // QA #5: Disable Save when transitioning to in_progress without a priority
                 const effectivePriority = newPriority || ticket?.priority;
                 const needsPriority = newStatus === 'in_progress' && !effectivePriority;
@@ -682,7 +883,9 @@ export default function TicketDetailPage() {
                         size="small"
                       >
                         {allowedOpts.map((s) => (
-                          <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
+                          <MenuItem key={s.value} value={s.value}>
+                            {s.label}
+                          </MenuItem>
                         ))}
                       </TextField>
                     </Grid>
@@ -696,10 +899,16 @@ export default function TicketDetailPage() {
                         size="small"
                         required={newStatus === 'in_progress'}
                         error={needsPriority}
-                        helperText={needsPriority ? 'Priority is required before moving to In Progress' : undefined}
+                        helperText={
+                          needsPriority
+                            ? 'Priority is required before moving to In Progress'
+                            : undefined
+                        }
                       >
                         {['low', 'medium', 'high', 'urgent'].map((p) => (
-                          <MenuItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</MenuItem>
+                          <MenuItem key={p} value={p}>
+                            {p.charAt(0).toUpperCase() + p.slice(1)}
+                          </MenuItem>
                         ))}
                       </TextField>
                     </Grid>
@@ -714,10 +923,42 @@ export default function TicketDetailPage() {
                         size="small"
                       />
                     </Grid>
+                    {newStatus === 'resolved' && (
+                      <Grid item xs={12}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={generateKb}
+                              onChange={(e) => setGenerateKb(e.target.checked)}
+                              size="small"
+                            />
+                          }
+                          label={
+                            <Typography variant="body2">
+                              Generate Knowledge Base Article
+                            </Typography>
+                          }
+                        />
+                        {generateKb && (
+                          <Typography variant="caption" color="text.secondary" display="block" ml={3.5}>
+                            Our AI will automatically scrub sensitive data and create/update an article based on your resolution.
+                          </Typography>
+                        )}
+                      </Grid>
+                    )}
                     <Grid item xs={12}>
                       <Box display="flex" gap={1}>
-                        <Button variant="contained" size="small" onClick={() => handleUpdateStatus()} disabled={needsPriority}>Save</Button>
-                        <Button size="small" onClick={() => setEditingStatus(false)}>Cancel</Button>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          onClick={() => handleUpdateStatus()}
+                          disabled={needsPriority}
+                        >
+                          Save
+                        </Button>
+                        <Button size="small" onClick={() => setEditingStatus(false)}>
+                          Cancel
+                        </Button>
                       </Box>
                     </Grid>
                   </Grid>
@@ -733,24 +974,43 @@ export default function TicketDetailPage() {
         <Grid item xs={12} md={8}>
           <Card>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={600} gutterBottom>Description</Typography>
-              <Typography variant="body2" whiteSpace="pre-wrap">{ticket.description}</Typography>
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                Description
+              </Typography>
+              <Typography variant="body2" whiteSpace="pre-wrap">
+                {ticket.description}
+              </Typography>
 
               {ticket.resolutionNotes && (
                 <>
                   <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>Resolution Notes</Typography>
-                  <Typography variant="body2" whiteSpace="pre-wrap">{ticket.resolutionNotes}</Typography>
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                    Resolution Notes
+                  </Typography>
+                  <Typography variant="body2" whiteSpace="pre-wrap">
+                    {ticket.resolutionNotes}
+                  </Typography>
                 </>
               )}
 
               {ticket.satisfactionRating && (
                 <>
                   <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>Client Satisfaction</Typography>
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                    Client Satisfaction
+                  </Typography>
                   <Box display="flex" alignItems="center" gap={0.5}>
                     {Array.from({ length: 5 }, (_, i) => (
-                      <StarIcon key={i} sx={{ fontSize: 20, color: i < (ticket.satisfactionRating ?? 0) ? 'warning.main' : 'action.disabled' }} />
+                      <StarIcon
+                        key={i}
+                        sx={{
+                          fontSize: 20,
+                          color:
+                            i < (ticket.satisfactionRating ?? 0)
+                              ? 'warning.main'
+                              : 'action.disabled',
+                        }}
+                      />
                     ))}
                     <Typography variant="body2" color="text.secondary" ml={0.5}>
                       {ticket.satisfactionRating}/5
@@ -770,15 +1030,20 @@ export default function TicketDetailPage() {
         <Grid item xs={12} md={4}>
           <Card>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={600} gutterBottom>Details</Typography>
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                Details
+              </Typography>
               <Box display="flex" flexDirection="column" gap={1.5}>
                 <Box>
-                  <Typography variant="caption" color="text.secondary">Ticket Number</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Ticket Number
+                  </Typography>
                   <Typography variant="body2">{ticket.ticketNumber}</Typography>
                 </Box>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
-                    {(ticket as any).createdById && (ticket as any).createdById !== ticket.requesterId
+                    {(ticket as any).createdById &&
+                    (ticket as any).createdById !== ticket.requesterId
                       ? 'Requested For'
                       : 'Requested By'}
                   </Typography>
@@ -788,19 +1053,24 @@ export default function TicketDetailPage() {
                       : `User #${ticket.requesterId}`}
                   </Typography>
                 </Box>
-                {(ticket as any).createdById && (ticket as any).createdById !== ticket.requesterId && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Filed By (Proxy)</Typography>
-                    <Typography variant="body2">
-                      {(ticket as any).createdBy
-                        ? `${(ticket as any).createdBy.firstName} ${(ticket as any).createdBy.lastName}`
-                        : `Staff #${(ticket as any).createdById}`}
-                    </Typography>
-                  </Box>
-                )}
+                {(ticket as any).createdById &&
+                  (ticket as any).createdById !== ticket.requesterId && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Filed By (Proxy)
+                      </Typography>
+                      <Typography variant="body2">
+                        {(ticket as any).createdBy
+                          ? `${(ticket as any).createdBy.firstName} ${(ticket as any).createdBy.lastName}`
+                          : `Staff #${(ticket as any).createdById}`}
+                      </Typography>
+                    </Box>
+                  )}
                 {ticket.assignedToId && (
                   <Box>
-                    <Typography variant="caption" color="text.secondary">Assigned To</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Assigned To
+                    </Typography>
                     <Typography variant="body2">
                       {(ticket as any).assignedTo
                         ? `${(ticket as any).assignedTo.firstName} ${(ticket as any).assignedTo.lastName}`
@@ -809,13 +1079,21 @@ export default function TicketDetailPage() {
                   </Box>
                 )}
                 <Box>
-                  <Typography variant="caption" color="text.secondary">Created</Typography>
-                  <Typography variant="body2">{new Date(ticket.createdAt).toLocaleString()}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Created
+                  </Typography>
+                  <Typography variant="body2">
+                    {new Date(ticket.createdAt).toLocaleString()}
+                  </Typography>
                 </Box>
                 {ticket.resolvedAt && (
                   <Box>
-                    <Typography variant="caption" color="text.secondary">Resolved</Typography>
-                    <Typography variant="body2">{new Date(ticket.resolvedAt).toLocaleString()}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Resolved
+                    </Typography>
+                    <Typography variant="body2">
+                      {new Date(ticket.resolvedAt).toLocaleString()}
+                    </Typography>
                   </Box>
                 )}
               </Box>
@@ -831,30 +1109,55 @@ export default function TicketDetailPage() {
             Escalation Details {escalations.length > 0 ? `(${escalations.length})` : ''}
           </Typography>
           {escalationsLoading ? (
-            <Box textAlign="center" py={2}><CircularProgress size={24} /></Box>
+            <Box textAlign="center" py={2}>
+              <CircularProgress size={24} />
+            </Box>
           ) : escalations.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">No escalations for this ticket.</Typography>
+            <Typography variant="body2" color="text.secondary">
+              No escalations for this ticket.
+            </Typography>
           ) : (
             escalations.map((e) => (
               <Box key={e.id} mb={2} p={1.5} bgcolor="action.hover" borderRadius={1}>
                 <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
-                  <Chip label={e.status.toUpperCase()} size="small"
-                    color={e.status === 'accepted' ? 'success' : e.status === 'returned' ? 'error' : 'warning'} />
+                  <Chip
+                    label={e.status.toUpperCase()}
+                    size="small"
+                    color={
+                      e.status === 'accepted'
+                        ? 'success'
+                        : e.status === 'returned'
+                          ? 'error'
+                          : 'warning'
+                    }
+                  />
                   <Typography variant="body2">
-                    <strong>{e.escalatedBy?.firstName} {e.escalatedBy?.lastName}</strong>
+                    <strong>
+                      {e.escalatedBy?.firstName} {e.escalatedBy?.lastName}
+                    </strong>
                     {' → '}
-                    <strong>{e.escalatedTo?.firstName} {e.escalatedTo?.lastName}</strong>
+                    <strong>
+                      {e.escalatedTo?.firstName} {e.escalatedTo?.lastName}
+                    </strong>
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {new Date(e.createdAt).toLocaleString()}
                   </Typography>
                 </Box>
                 {e.notes ? (
-                  <Typography variant="body2" mt={0.5}>Reason: {e.notes}</Typography>
+                  <Typography variant="body2" mt={0.5}>
+                    Reason: {e.notes}
+                  </Typography>
                 ) : (
-                  <Typography variant="body2" color="text.secondary" mt={0.5} fontStyle="italic">No reason provided.</Typography>
+                  <Typography variant="body2" color="text.secondary" mt={0.5} fontStyle="italic">
+                    No reason provided.
+                  </Typography>
                 )}
-                {e.returnReason && <Typography variant="body2" color="error.main" mt={0.5}>Return reason: {e.returnReason}</Typography>}
+                {e.returnReason && (
+                  <Typography variant="body2" color="error.main" mt={0.5}>
+                    Return reason: {e.returnReason}
+                  </Typography>
+                )}
                 {e.proofFiles && e.proofFiles.length > 0 ? (
                   <Box mt={1} display="flex" flexWrap="wrap" gap={1}>
                     {e.proofFiles.map((filePath, idx) => {
@@ -863,12 +1166,14 @@ export default function TicketDetailPage() {
                       const fname = encodeURIComponent(parts[1] ?? filePath);
                       const apiUrl = `/tickets/proof/${tid}/${fname}`;
                       const blobUrl = proofBlobUrls[apiUrl];
-                      const allBlobUrls = (e.proofFiles ?? []).map(fp => {
-                        const p = fp.replace('escalation-proofs/', '').split('/');
-                        const t2 = p[0] ?? ticketId;
-                        const f2 = encodeURIComponent(p[1] ?? fp);
-                        return proofBlobUrls[`/tickets/proof/${t2}/${f2}`];
-                      }).filter((u): u is string => Boolean(u) && u !== 'error');
+                      const allBlobUrls = (e.proofFiles ?? [])
+                        .map((fp) => {
+                          const p = fp.replace('escalation-proofs/', '').split('/');
+                          const t2 = p[0] ?? ticketId;
+                          const f2 = encodeURIComponent(p[1] ?? fp);
+                          return proofBlobUrls[`/tickets/proof/${t2}/${f2}`];
+                        })
+                        .filter((u): u is string => Boolean(u) && u !== 'error');
                       return (
                         <Box
                           key={idx}
@@ -880,9 +1185,18 @@ export default function TicketDetailPage() {
                             setPhotoModalOpen(true);
                           }}
                           sx={{
-                            p: 0, border: '1px solid', borderColor: 'divider', borderRadius: 1,
-                            cursor: 'pointer', background: 'transparent', overflow: 'hidden',
-                            width: 80, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            p: 0,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            borderRadius: 1,
+                            cursor: 'pointer',
+                            background: 'transparent',
+                            overflow: 'hidden',
+                            width: 80,
+                            height: 80,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                           }}
                         >
                           {blobUrl && blobUrl !== 'error' ? (
@@ -893,7 +1207,9 @@ export default function TicketDetailPage() {
                               sx={{ width: 80, height: 80, objectFit: 'cover' }}
                             />
                           ) : blobUrl === 'error' ? (
-                            <Box sx={{ color: 'text.disabled', fontSize: 32, lineHeight: 1 }}>✕</Box>
+                            <Box sx={{ color: 'text.disabled', fontSize: 32, lineHeight: 1 }}>
+                              ✕
+                            </Box>
                           ) : (
                             <CircularProgress size={20} />
                           )}
@@ -902,36 +1218,56 @@ export default function TicketDetailPage() {
                     })}
                   </Box>
                 ) : (
-                  <Typography variant="caption" color="text.secondary" mt={0.5} display="block">No proof photo attached.</Typography>
+                  <Typography variant="caption" color="text.secondary" mt={0.5} display="block">
+                    No proof photo attached.
+                  </Typography>
                 )}
-                {e.status === 'pending' && (e.escalatedToId || e.escalatedTo?.id || (e as any).escalated_to_id) === (user as any)?.id && (
-                  <Box mt={1} display="flex" gap={1}>
-                    <Button size="small" variant="contained" color="success"
-                      onClick={() => handleAcceptEscalation(e.id)}>Accept</Button>
-                    <Button size="small" variant="outlined" color="error"
-                      onClick={() => { setReturnEscalationId(e.id); setReturnReason(''); setReturnDialogOpen(true); }}>
-                      Return
-                    </Button>
-                  </Box>
-                )}
-                {e.status === 'pending' && (e.escalatedById || e.escalatedBy?.id || (e as any).escalated_by_id) === (user as any)?.id && (
-                  <Box mt={1}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="info"
-                      startIcon={<UploadIcon />}
-                      onClick={() => {
-                        setAddProofEscalationId(e.id);
-                        setAddProofNotes(e.notes ?? '');
-                        setAddProofFiles([]);
-                        setAddProofDialogOpen(true);
-                      }}
-                    >
-                      Add Notes / Proof
-                    </Button>
-                  </Box>
-                )}
+                {e.status === 'pending' &&
+                  (e.escalatedToId || e.escalatedTo?.id || (e as any).escalated_to_id) ===
+                    (user as any)?.id && (
+                    <Box mt={1} display="flex" gap={1}>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="success"
+                        onClick={() => handleAcceptEscalation(e.id)}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        onClick={() => {
+                          setReturnEscalationId(e.id);
+                          setReturnReason('');
+                          setReturnDialogOpen(true);
+                        }}
+                      >
+                        Return
+                      </Button>
+                    </Box>
+                  )}
+                {e.status === 'pending' &&
+                  (e.escalatedById || e.escalatedBy?.id || (e as any).escalated_by_id) ===
+                    (user as any)?.id && (
+                    <Box mt={1}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="info"
+                        startIcon={<UploadIcon />}
+                        onClick={() => {
+                          setAddProofEscalationId(e.id);
+                          setAddProofNotes(e.notes ?? '');
+                          setAddProofFiles([]);
+                          setAddProofDialogOpen(true);
+                        }}
+                      >
+                        Add Notes / Proof
+                      </Button>
+                    </Box>
+                  )}
               </Box>
             ))
           )}
@@ -959,7 +1295,12 @@ export default function TicketDetailPage() {
                               : `User #${c.userId}`}
                           </Typography>
                           {c.isInternal && (
-                            <Chip label="Internal" size="small" color="default" variant="outlined" />
+                            <Chip
+                              label="Internal"
+                              size="small"
+                              color="default"
+                              variant="outlined"
+                            />
                           )}
                           <Typography variant="caption" color="text.secondary">
                             {new Date(c.createdAt).toLocaleString()}
@@ -967,7 +1308,12 @@ export default function TicketDetailPage() {
                         </Box>
                       }
                       secondary={
-                        <Typography variant="body2" color="text.primary" whiteSpace="pre-wrap" mt={0.5}>
+                        <Typography
+                          variant="body2"
+                          color="text.primary"
+                          whiteSpace="pre-wrap"
+                          mt={0.5}
+                        >
                           {c.comment}
                         </Typography>
                       }
@@ -978,7 +1324,9 @@ export default function TicketDetailPage() {
               ))}
             </List>
           ) : (
-            <Typography variant="body2" color="text.secondary">No comments yet.</Typography>
+            <Typography variant="body2" color="text.secondary">
+              No comments yet.
+            </Typography>
           )}
 
           {/* Add comment */}
@@ -996,8 +1344,16 @@ export default function TicketDetailPage() {
               />
               {canStaff && (
                 <FormControlLabel
-                  control={<Switch checked={isInternal} onChange={(e) => setIsInternal(e.target.checked)} size="small" />}
-                  label={<Typography variant="caption">Internal note (hidden from requester)</Typography>}
+                  control={
+                    <Switch
+                      checked={isInternal}
+                      onChange={(e) => setIsInternal(e.target.checked)}
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Typography variant="caption">Internal note (hidden from requester)</Typography>
+                  }
                   sx={{ mt: 1 }}
                 />
               )}
@@ -1023,9 +1379,13 @@ export default function TicketDetailPage() {
             Timeline
           </Typography>
           {eventsLoading ? (
-            <Box textAlign="center" py={2}><CircularProgress size={24} /></Box>
+            <Box textAlign="center" py={2}>
+              <CircularProgress size={24} />
+            </Box>
           ) : timelineEvents.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">No events recorded yet.</Typography>
+            <Typography variant="body2" color="text.secondary">
+              No events recorded yet.
+            </Typography>
           ) : (
             <Box>
               {timelineEvents.map((ev, idx) => {
@@ -1048,17 +1408,36 @@ export default function TicketDetailPage() {
                 const label = EVENT_LABELS[ev.eventType] ?? ev.eventType.replace(/_/g, ' ');
                 const actorLine = ev.actorName
                   ? `by ${ev.actorName}`
-                  : (ev.eventType === 'auto_assigned' ? 'by System' : '');
+                  : ev.eventType === 'auto_assigned'
+                    ? 'by System'
+                    : '';
                 return (
                   <Box key={ev.id} display="flex" gap={2} mb={isLast ? 0 : 2}>
                     <Box display="flex" flexDirection="column" alignItems="center">
-                      <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'primary.main', mt: 0.5, flexShrink: 0 }} />
-                      {!isLast && <Box sx={{ width: 2, flex: 1, bgcolor: 'divider', mt: 0.5, minHeight: 20 }} />}
+                      <Box
+                        sx={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: '50%',
+                          bgcolor: 'primary.main',
+                          mt: 0.5,
+                          flexShrink: 0,
+                        }}
+                      />
+                      {!isLast && (
+                        <Box
+                          sx={{ width: 2, flex: 1, bgcolor: 'divider', mt: 0.5, minHeight: 20 }}
+                        />
+                      )}
                     </Box>
                     <Box pb={isLast ? 0 : 1}>
-                      <Typography variant="body2" fontWeight={600}>{label}</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {label}
+                      </Typography>
                       {actorLine && (
-                        <Typography variant="caption" color="text.secondary">{actorLine}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {actorLine}
+                        </Typography>
                       )}
                       {ev.meta?.technicianName && (
                         <Typography variant="caption" color="text.secondary" display="block">
@@ -1083,16 +1462,21 @@ export default function TicketDetailPage() {
       </Card>
 
       {/* ── Assign / Escalate Dialog ── */}
-      <Dialog open={assignDialogOpen} onClose={() => setAssignDialogOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={assignDialogOpen}
+        onClose={() => setAssignDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>{isEscalateMode ? 'Escalate Ticket' : 'Assign Technician'}</DialogTitle>
         <DialogContent>
           <Autocomplete
             options={technicians}
-            getOptionLabel={t => `${t.firstName} ${t.lastName} (${t.openCount} open)`}
-            value={technicians.find(t => t.id === assignToId) ?? null}
+            getOptionLabel={(t) => `${t.firstName} ${t.lastName} (${t.openCount} open)`}
+            value={technicians.find((t) => t.id === assignToId) ?? null}
             onChange={(_, newValue) => setAssignToId(newValue ? Number(newValue.id) : '')}
             isOptionEqualToValue={(option, value) => option.id === value.id}
-            renderInput={params => (
+            renderInput={(params) => (
               <TextField
                 {...params}
                 label="Assign Technician"
@@ -1109,27 +1493,37 @@ export default function TicketDetailPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" color={isEscalateMode ? 'warning' : 'primary'} onClick={handleAssign} disabled={!assignToId}>
+          <Button
+            variant="contained"
+            color={isEscalateMode ? 'warning' : 'primary'}
+            onClick={handleAssign}
+            disabled={!assignToId}
+          >
             {isEscalateMode ? 'Escalate' : 'Assign'}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* ── Dedicated Escalate Dialog ── */}
-      <Dialog open={escalateDialogOpen} onClose={() => setEscalateDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={escalateDialogOpen}
+        onClose={() => setEscalateDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Escalate Ticket</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
-            Escalate this ticket to a designated focal technician or senior staff.
-            You may attach photo proof of the issue.
+            Escalate this ticket to a designated focal technician or senior staff. You may attach
+            photo proof of the issue.
           </Alert>
           <Autocomplete
             options={escalationFocalUsers}
-            getOptionLabel={t => `${t.firstName} ${t.lastName}`}
-            value={escalationFocalUsers.find(t => t.id === escalateToId) ?? null}
+            getOptionLabel={(t) => `${t.firstName} ${t.lastName}`}
+            value={escalationFocalUsers.find((t) => t.id === escalateToId) ?? null}
             onChange={(_, newValue) => setEscalateToId(newValue ? Number(newValue.id) : '')}
             isOptionEqualToValue={(option, value) => option.id === value.id}
-            renderInput={params => (
+            renderInput={(params) => (
               <TextField
                 {...params}
                 label="Escalate To"
@@ -1137,16 +1531,25 @@ export default function TicketDetailPage() {
                 size="small"
                 sx={{ mb: 2 }}
                 error={escalationFocalUsers.length === 0}
-                helperText={escalationFocalUsers.length === 0 ? 'No escalation focals configured for this ticket type' : ''}
+                helperText={
+                  escalationFocalUsers.length === 0
+                    ? 'No escalation focals configured for this ticket type'
+                    : ''
+                }
               />
             )}
             clearOnEscape
             fullWidth
           />
           <TextField
-            fullWidth multiline rows={3} label="Reason for escalation (optional)"
-            value={escalateNotes} onChange={(e) => setEscalateNotes(e.target.value)}
-            size="small" sx={{ mb: 2 }}
+            fullWidth
+            multiline
+            rows={3}
+            label="Reason for escalation (optional)"
+            value={escalateNotes}
+            onChange={(e) => setEscalateNotes(e.target.value)}
+            size="small"
+            sx={{ mb: 2 }}
           />
           <Box>
             <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
@@ -1154,15 +1557,22 @@ export default function TicketDetailPage() {
             </Typography>
             <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />}>
               Upload Proof Photo(s)
-              <input type="file" hidden multiple accept="image/*"
+              <input
+                type="file"
+                hidden
+                multiple
+                accept="image/*"
                 onChange={(e) => {
                   const files = Array.from(e.target.files ?? []);
-                  const validFiles = files.filter(f => f.type.startsWith('image/'));
+                  const validFiles = files.filter((f) => f.type.startsWith('image/'));
                   if (validFiles.length !== files.length) {
-                    enqueueSnackbar('Only image files are allowed for proof photos.', { variant: 'error' });
+                    enqueueSnackbar('Only image files are allowed for proof photos.', {
+                      variant: 'error',
+                    });
                   }
                   setEscalateFiles(validFiles);
-                }} />
+                }}
+              />
             </Button>
             {escalateFiles.length > 0 && (
               <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
@@ -1173,43 +1583,71 @@ export default function TicketDetailPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEscalateDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" color="warning" onClick={handleEscalate}
-            disabled={!escalateToId || escalating}>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={handleEscalate}
+            disabled={!escalateToId || escalating}
+          >
             {escalating ? 'Escalating…' : 'Escalate'}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* ── Return Escalation Dialog ── */}
-      <Dialog open={returnDialogOpen} onClose={() => setReturnDialogOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={returnDialogOpen}
+        onClose={() => setReturnDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>Return Ticket</DialogTitle>
         <DialogContent>
           <TextField
-            fullWidth multiline rows={3} label="Reason for returning *"
-            value={returnReason} onChange={(e) => setReturnReason(e.target.value)}
-            size="small" sx={{ mt: 1 }}
+            fullWidth
+            multiline
+            rows={3}
+            label="Reason for returning *"
+            value={returnReason}
+            onChange={(e) => setReturnReason(e.target.value)}
+            size="small"
+            sx={{ mt: 1 }}
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setReturnDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" color="error" onClick={handleReturnEscalation}
-            disabled={!returnReason.trim()}>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleReturnEscalation}
+            disabled={!returnReason.trim()}
+          >
             Return Ticket
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* ── Add Notes / Proof to Pending Escalation Dialog ── */}
-      <Dialog open={addProofDialogOpen} onClose={() => setAddProofDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={addProofDialogOpen}
+        onClose={() => setAddProofDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Add Notes / Proof to Escalation</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
             You can update the reason and attach additional proof photos to your pending escalation.
           </Alert>
           <TextField
-            fullWidth multiline rows={3} label="Updated reason / notes"
-            value={addProofNotes} onChange={(e) => setAddProofNotes(e.target.value)}
-            size="small" sx={{ mb: 2 }}
+            fullWidth
+            multiline
+            rows={3}
+            label="Updated reason / notes"
+            value={addProofNotes}
+            onChange={(e) => setAddProofNotes(e.target.value)}
+            size="small"
+            sx={{ mb: 2 }}
           />
           <Box>
             <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
@@ -1217,15 +1655,22 @@ export default function TicketDetailPage() {
             </Typography>
             <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />}>
               Upload Photo(s)
-              <input type="file" hidden multiple accept="image/*"
+              <input
+                type="file"
+                hidden
+                multiple
+                accept="image/*"
                 onChange={(e) => {
                   const files = Array.from(e.target.files ?? []);
-                  const validFiles = files.filter(f => f.type.startsWith('image/'));
+                  const validFiles = files.filter((f) => f.type.startsWith('image/'));
                   if (validFiles.length !== files.length) {
-                    enqueueSnackbar('Only image files are allowed for proof photos.', { variant: 'error' });
+                    enqueueSnackbar('Only image files are allowed for proof photos.', {
+                      variant: 'error',
+                    });
                   }
                   setAddProofFiles(validFiles);
-                }} />
+                }}
+              />
             </Button>
             {addProofFiles.length > 0 && (
               <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
@@ -1236,20 +1681,30 @@ export default function TicketDetailPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAddProofDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" color="primary" onClick={handleAddProof}
-            disabled={addingProof || (!addProofNotes.trim() && addProofFiles.length === 0)}>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleAddProof}
+            disabled={addingProof || (!addProofNotes.trim() && addProofFiles.length === 0)}
+          >
             {addingProof ? 'Saving…' : 'Save'}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* ── Duplicate Confirmation Dialog ── */}
-      <Dialog open={dupConfirmOpen} onClose={() => setDupConfirmOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={dupConfirmOpen}
+        onClose={() => setDupConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>Mark Ticket as Duplicate?</DialogTitle>
         <DialogContent>
           <Alert severity="warning" sx={{ mt: 1 }}>
-            This action is <strong>permanent</strong>. Once a ticket is marked as Duplicate it cannot be updated or re-assigned.
-            You will be prompted to select the original ticket in the next step.
+            This action is <strong>permanent</strong>. Once a ticket is marked as Duplicate it
+            cannot be updated or re-assigned. You will be prompted to select the original ticket in
+            the next step.
           </Alert>
         </DialogContent>
         <DialogActions>
@@ -1268,7 +1723,9 @@ export default function TicketDetailPage() {
             Select the original ticket that this is a duplicate of.
           </Typography>
           {requesterOpenTickets.length === 0 ? (
-            <Alert severity="info" sx={{ mt: 1 }}>No other open tickets found for this requester.</Alert>
+            <Alert severity="info" sx={{ mt: 1 }}>
+              No other open tickets found for this requester.
+            </Alert>
           ) : (
             <TextField
               select
@@ -1310,106 +1767,249 @@ export default function TicketDetailPage() {
         </DialogTitle>
         <DialogContent>
           {ticket.satisfactionSubmittedAt ? (
-            <Alert severity="success" sx={{ mt: 2 }}>You have already submitted a satisfaction rating for this ticket. Thank you!</Alert>
+            <Alert severity="success" sx={{ mt: 2 }}>
+              You have already submitted a satisfaction rating for this ticket. Thank you!
+            </Alert>
           ) : (
             <Stack spacing={2} sx={{ pt: 1 }}>
               <FormControlLabel
-                control={<Checkbox checked={csatForm.consentGiven} onChange={e => setCsatForm(f => ({ ...f, consentGiven: e.target.checked }))} />}
+                control={
+                  <Checkbox
+                    checked={csatForm.consentGiven}
+                    onChange={(e) => setCsatForm((f) => ({ ...f, consentGiven: e.target.checked }))}
+                  />
+                }
                 label={
                   <Typography variant="body2">
-                    I voluntarily give my consent for the use of my personal information. I confirm that I have read the provided information, or it has been read to me. I have had the opportunity to ask questions about it, and any inquiries I made were answered to my satisfaction. I understand that any information collected will be utilized solely to enhance the basic social services provided by the DSWD.
+                    I voluntarily give my consent for the use of my personal information. I confirm
+                    that I have read the provided information, or it has been read to me. I have had
+                    the opportunity to ask questions about it, and any inquiries I made were
+                    answered to my satisfaction. I understand that any information collected will be
+                    utilized solely to enhance the basic social services provided by the DSWD.
                   </Typography>
                 }
               />
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <Autocomplete
-                  options={unitSuggestions} freeSolo fullWidth value={csatForm.unitSection}
-                  onInputChange={(_, v) => setCsatForm(f => ({ ...f, unitSection: v }))}
-                  renderInput={params => <TextField {...params} label="Unit/Section *" />}
+                  options={unitSuggestions}
+                  freeSolo
+                  fullWidth
+                  value={csatForm.unitSection}
+                  onInputChange={(_, v) => setCsatForm((f) => ({ ...f, unitSection: v }))}
+                  renderInput={(params) => <TextField {...params} label="Unit/Section *" />}
                 />
-                <TextField label="Date of Transaction *" type="date" value={csatForm.dateOfTransaction}
-                  InputProps={{ readOnly: true }} disabled fullWidth InputLabelProps={{ shrink: true }} />
+                <TextField
+                  label="Date of Transaction *"
+                  type="date"
+                  value={csatForm.dateOfTransaction}
+                  InputProps={{ readOnly: true }}
+                  disabled
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                />
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField label="First Name *" value={csatForm.clientFirstName} onChange={e => setCsatForm(f => ({ ...f, clientFirstName: e.target.value }))} fullWidth />
-                <TextField label="M.I." value={csatForm.clientMiddleInitial ?? ''} onChange={e => setCsatForm(f => ({ ...f, clientMiddleInitial: e.target.value }))} inputProps={{ maxLength: 2 }} sx={{ maxWidth: 80 }} />
-                <TextField label="Last Name *" value={csatForm.clientLastName} onChange={e => setCsatForm(f => ({ ...f, clientLastName: e.target.value }))} fullWidth />
-                <TextField label="Suffix" value={csatForm.suffix ?? ''} onChange={e => setCsatForm(f => ({ ...f, suffix: e.target.value }))} sx={{ maxWidth: { xs: '100%', sm: 100 } }} />
+                <TextField
+                  label="First Name *"
+                  value={csatForm.clientFirstName}
+                  onChange={(e) => setCsatForm((f) => ({ ...f, clientFirstName: e.target.value }))}
+                  fullWidth
+                />
+                <TextField
+                  label="M.I."
+                  value={csatForm.clientMiddleInitial ?? ''}
+                  onChange={(e) =>
+                    setCsatForm((f) => ({ ...f, clientMiddleInitial: e.target.value }))
+                  }
+                  inputProps={{ maxLength: 2 }}
+                  sx={{ maxWidth: 80 }}
+                />
+                <TextField
+                  label="Last Name *"
+                  value={csatForm.clientLastName}
+                  onChange={(e) => setCsatForm((f) => ({ ...f, clientLastName: e.target.value }))}
+                  fullWidth
+                />
+                <TextField
+                  label="Suffix"
+                  value={csatForm.suffix ?? ''}
+                  onChange={(e) => setCsatForm((f) => ({ ...f, suffix: e.target.value }))}
+                  sx={{ maxWidth: { xs: '100%', sm: 100 } }}
+                />
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
-                <TextField label="Age *" type="number" inputProps={{ min: 20, max: 89 }} value={csatForm.age ?? ''}
-                  onChange={e => setCsatForm(f => ({ ...f, age: e.target.value ? Number(e.target.value) : undefined }))} sx={{ maxWidth: 100 }} />
-                <TextField label="Religion *" value={csatForm.religion} onChange={e => setCsatForm(f => ({ ...f, religion: e.target.value }))} sx={{ flex: 1 }} />
-                <TextField select label="Sex *" value={csatForm.sex} onChange={e => setCsatForm(f => ({ ...f, sex: e.target.value }))} sx={{ minWidth: 120 }}>
+                <TextField
+                  label="Age *"
+                  type="number"
+                  inputProps={{ min: 20, max: 89 }}
+                  value={csatForm.age ?? ''}
+                  onChange={(e) =>
+                    setCsatForm((f) => ({
+                      ...f,
+                      age: e.target.value ? Number(e.target.value) : undefined,
+                    }))
+                  }
+                  sx={{ maxWidth: 100 }}
+                />
+                <TextField
+                  label="Religion *"
+                  value={csatForm.religion}
+                  onChange={(e) => setCsatForm((f) => ({ ...f, religion: e.target.value }))}
+                  sx={{ flex: 1 }}
+                />
+                <TextField
+                  select
+                  label="Sex *"
+                  value={csatForm.sex}
+                  onChange={(e) => setCsatForm((f) => ({ ...f, sex: e.target.value }))}
+                  sx={{ minWidth: 120 }}
+                >
                   <MenuItem value="Male">Male</MenuItem>
                   <MenuItem value="Female">Female</MenuItem>
                 </TextField>
                 <TextField
                   label="Contact Number"
                   value={csatForm.contactNumber ?? ''}
-                  onChange={e => {
+                  onChange={(e) => {
                     const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
-                    setCsatForm(f => ({ ...f, contactNumber: digits }));
+                    setCsatForm((f) => ({ ...f, contactNumber: digits }));
                   }}
-                  InputProps={{ startAdornment: <InputAdornment position="start">+63</InputAdornment> }}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">+63</InputAdornment>,
+                  }}
                   inputProps={{ inputMode: 'numeric' }}
                   sx={{ flex: 1 }}
                 />
               </Stack>
-              <TextField label="Technician Name" value={csatForm.technicianName} InputProps={{ readOnly: true }} disabled fullWidth />
+              <TextField
+                label="Technician Name"
+                value={csatForm.technicianName}
+                InputProps={{ readOnly: true }}
+                disabled
+                fullWidth
+              />
 
               <Typography variant="subtitle2" fontWeight={700} mt={1}>
                 INSTRUCTION:
               </Typography>
               <Typography variant="body2">
-                For Service Quality Dimension 0-8, please select the number that best corresponds to your answer.
+                For Service Quality Dimension 0-8, please select the number that best corresponds to
+                your answer.
               </Typography>
-              <Typography variant="caption" color="text.secondary">                5-Strongly Agree, 4-Agree, 3-Neither Agree nor Disagree, 2-Disagree, 1-Strongly Disagree, N/A-Not Applicable
+              <Typography variant="caption" color="text.secondary">
+                {' '}
+                5-Strongly Agree, 4-Agree, 3-Neither Agree nor Disagree, 2-Disagree, 1-Strongly
+                Disagree, N/A-Not Applicable
               </Typography>
 
-              {([
-                'I am satisfied with the service that I availed.',
-                'I spent a reasonable amount of time for my transaction.',
-                "The office followed the transaction's requirements and steps based on the information provided",
-                'The steps (including payment) I need to do for my transaction were easy and simple.',
-                'I easily found information about my transaction from the office or its website.',
-                "I paid a reasonable amount of fees for my transaction. (If services was free, mark the 'N/A' column) (You may skip this).",
-                'I feel the office was fair to everyone, or "walang palakasan", during my transaction.',
-                'I was treated courteously by the staff, and (if asked for help) the staff was helpful.',
-                'I got what I needed from the government office, or (if denied) denial of request was sufficiently explained to me.',
-              ] as string[]).map((item, idx) => {
+              {(
+                [
+                  'I am satisfied with the service that I availed.',
+                  'I spent a reasonable amount of time for my transaction.',
+                  "The office followed the transaction's requirements and steps based on the information provided",
+                  'The steps (including payment) I need to do for my transaction were easy and simple.',
+                  'I easily found information about my transaction from the office or its website.',
+                  "I paid a reasonable amount of fees for my transaction. (If services was free, mark the 'N/A' column) (You may skip this).",
+                  'I feel the office was fair to everyone, or "walang palakasan", during my transaction.',
+                  'I was treated courteously by the staff, and (if asked for help) the staff was helpful.',
+                  'I got what I needed from the government office, or (if denied) denial of request was sufficiently explained to me.',
+                ] as string[]
+              ).map((item, idx) => {
                 const isNA = [3, 5, 8].includes(idx);
                 const val = csatForm.likert[idx];
                 return (
-                  <Box key={idx} sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, gap: 1 }}>
-                    <Typography variant="body2" sx={{ flex: 1, minWidth: 0, mb: { xs: 1, sm: 0 } }}>{idx}. {item}</Typography>
+                  <Box
+                    key={idx}
+                    sx={{
+                      display: 'flex',
+                      flexDirection: { xs: 'column', sm: 'row' },
+                      alignItems: { xs: 'flex-start', sm: 'center' },
+                      gap: 1,
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ flex: 1, minWidth: 0, mb: { xs: 1, sm: 0 } }}>
+                      {idx}. {item}
+                    </Typography>
                     {isNA ? (
-                      <Chip size="small" label="N/A" color="default" sx={{ minWidth: 64, alignSelf: { xs: 'flex-start', sm: 'auto' } }} />
+                      <Chip
+                        size="small"
+                        label="N/A"
+                        color="default"
+                        sx={{ minWidth: 64, alignSelf: { xs: 'flex-start', sm: 'auto' } }}
+                      />
                     ) : (
-                      <ToggleButtonGroup exclusive size="small" value={val === 0 ? null : val}
+                      <ToggleButtonGroup
+                        exclusive
+                        size="small"
+                        value={val === 0 ? null : val}
                         sx={{ alignSelf: { xs: 'center', sm: 'auto' } }}
                         onChange={(_, v) => {
                           if (v !== null) {
                             const updated = [...csatForm.likert] as Array<number | 'NA'>;
                             updated[idx] = v as number;
-                            setCsatForm(f => ({ ...f, likert: updated }));
+                            setCsatForm((f) => ({ ...f, likert: updated }));
                           }
                         }}
                       >
-                        <ToggleButton value={1} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
-                          <SentimentVeryDissatisfied sx={{ color: val === 1 ? '#d32f2f' : 'action.disabled', fontSize: 28 }} />
+                        <ToggleButton
+                          value={1}
+                          sx={{
+                            px: 0.5,
+                            border: 'none',
+                            '&.Mui-selected': { bgcolor: 'transparent' },
+                          }}
+                        >
+                          <SentimentVeryDissatisfied
+                            sx={{ color: val === 1 ? '#d32f2f' : 'action.disabled', fontSize: 28 }}
+                          />
                         </ToggleButton>
-                        <ToggleButton value={2} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
-                          <SentimentDissatisfied sx={{ color: val === 2 ? '#ed6c02' : 'action.disabled', fontSize: 28 }} />
+                        <ToggleButton
+                          value={2}
+                          sx={{
+                            px: 0.5,
+                            border: 'none',
+                            '&.Mui-selected': { bgcolor: 'transparent' },
+                          }}
+                        >
+                          <SentimentDissatisfied
+                            sx={{ color: val === 2 ? '#ed6c02' : 'action.disabled', fontSize: 28 }}
+                          />
                         </ToggleButton>
-                        <ToggleButton value={3} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
-                          <SentimentNeutral sx={{ color: val === 3 ? '#f5a623' : 'action.disabled', fontSize: 28 }} />
+                        <ToggleButton
+                          value={3}
+                          sx={{
+                            px: 0.5,
+                            border: 'none',
+                            '&.Mui-selected': { bgcolor: 'transparent' },
+                          }}
+                        >
+                          <SentimentNeutral
+                            sx={{ color: val === 3 ? '#f5a623' : 'action.disabled', fontSize: 28 }}
+                          />
                         </ToggleButton>
-                        <ToggleButton value={4} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
-                          <SentimentSatisfied sx={{ color: val === 4 ? '#2e7d32' : 'action.disabled', fontSize: 28 }} />
+                        <ToggleButton
+                          value={4}
+                          sx={{
+                            px: 0.5,
+                            border: 'none',
+                            '&.Mui-selected': { bgcolor: 'transparent' },
+                          }}
+                        >
+                          <SentimentSatisfied
+                            sx={{ color: val === 4 ? '#2e7d32' : 'action.disabled', fontSize: 28 }}
+                          />
                         </ToggleButton>
-                        <ToggleButton value={5} sx={{ px: 0.5, border: 'none', '&.Mui-selected': { bgcolor: 'transparent' } }}>
-                          <SentimentVerySatisfied sx={{ color: val === 5 ? '#1976d2' : 'action.disabled', fontSize: 28 }} />
+                        <ToggleButton
+                          value={5}
+                          sx={{
+                            px: 0.5,
+                            border: 'none',
+                            '&.Mui-selected': { bgcolor: 'transparent' },
+                          }}
+                        >
+                          <SentimentVerySatisfied
+                            sx={{ color: val === 5 ? '#1976d2' : 'action.disabled', fontSize: 28 }}
+                          />
                         </ToggleButton>
                       </ToggleButtonGroup>
                     )}
@@ -1422,35 +2022,78 @@ export default function TicketDetailPage() {
         <DialogActions>
           <Button onClick={() => setSatDialogOpen(false)}>Close</Button>
           {!ticket.satisfactionSubmittedAt && (
-            <Button onClick={handleSubmitSatisfaction} variant="contained" color="warning" disabled={csatSubmitting || !csatForm.consentGiven}>
+            <Button
+              onClick={handleSubmitSatisfaction}
+              variant="contained"
+              color="warning"
+              disabled={csatSubmitting || !csatForm.consentGiven}
+            >
               {csatSubmitting ? 'Submitting…' : 'Submit Feedback'}
             </Button>
           )}
         </DialogActions>
       </Dialog>
       {/* ── Photo Lightbox Modal ── */}
-      <Dialog open={photoModalOpen} onClose={() => setPhotoModalOpen(false)} maxWidth="md" fullWidth
-        PaperProps={{ sx: { bgcolor: 'black', borderRadius: 2, position: 'relative' } }}>
-        <DialogContent sx={{ p: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400, position: 'relative' }}>
+      <Dialog
+        open={photoModalOpen}
+        onClose={() => setPhotoModalOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { bgcolor: 'black', borderRadius: 2, position: 'relative' } }}
+      >
+        <DialogContent
+          sx={{
+            p: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: 400,
+            position: 'relative',
+          }}
+        >
           {photoModalSrcs.length > 0 && (
             <Box
               component="img"
               src={photoModalSrcs[photoModalIdx]}
               alt={`Proof photo ${photoModalIdx + 1}`}
-              sx={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain', display: 'block', mx: 'auto' }}
+              sx={{
+                maxWidth: '100%',
+                maxHeight: '80vh',
+                objectFit: 'contain',
+                display: 'block',
+                mx: 'auto',
+              }}
             />
           )}
           {photoModalSrcs.length > 1 && (
             <>
               <IconButton
-                onClick={() => setPhotoModalIdx(i => (i - 1 + photoModalSrcs.length) % photoModalSrcs.length)}
-                sx={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'white', bgcolor: 'rgba(0,0,0,0.4)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
+                onClick={() =>
+                  setPhotoModalIdx((i) => (i - 1 + photoModalSrcs.length) % photoModalSrcs.length)
+                }
+                sx={{
+                  position: 'absolute',
+                  left: 8,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'white',
+                  bgcolor: 'rgba(0,0,0,0.4)',
+                  '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
+                }}
               >
                 <NavigateBefore />
               </IconButton>
               <IconButton
-                onClick={() => setPhotoModalIdx(i => (i + 1) % photoModalSrcs.length)}
-                sx={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: 'white', bgcolor: 'rgba(0,0,0,0.4)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
+                onClick={() => setPhotoModalIdx((i) => (i + 1) % photoModalSrcs.length)}
+                sx={{
+                  position: 'absolute',
+                  right: 8,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'white',
+                  bgcolor: 'rgba(0,0,0,0.4)',
+                  '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
+                }}
               >
                 <NavigateNext />
               </IconButton>
@@ -1461,7 +2104,9 @@ export default function TicketDetailPage() {
           <Typography variant="caption" color="grey.400">
             {photoModalSrcs.length > 1 ? `${photoModalIdx + 1} / ${photoModalSrcs.length}` : ''}
           </Typography>
-          <Button onClick={() => setPhotoModalOpen(false)} sx={{ color: 'grey.300' }}>Close</Button>
+          <Button onClick={() => setPhotoModalOpen(false)} sx={{ color: 'grey.300' }}>
+            Close
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

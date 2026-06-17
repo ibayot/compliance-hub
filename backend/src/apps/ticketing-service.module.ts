@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PassportModule } from '@nestjs/passport';
 import * as Joi from 'joi';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TicketsModule } from '../modules/tickets/tickets.module';
 import { TicketingJwtStrategy } from './ticketing-jwt.strategy';
 import { HttpClientsModule } from '../common/http-clients/http-clients.module';
@@ -43,6 +44,7 @@ import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.mid
         logging: Boolean(configService.get<boolean>('DB_LOGGING')),
       }),
     }),
+    ScheduleModule.forRoot(),
     PassportModule,
     TicketsModule,
     HttpClientsModule,
