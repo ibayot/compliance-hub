@@ -10,18 +10,8 @@ import {
   TimelineDot,
   TimelineOppositeContent,
 } from '@mui/lab';
-import {
-  Card,
-  CardContent,
-  Typography,
-  Button,
-  Box,
-  Chip,
-} from '@mui/material';
-import {
-  Download as DownloadIcon,
-  Visibility as ViewIcon,
-} from '@mui/icons-material';
+import { Card, CardContent, Typography, Button, Box, Chip } from '@mui/material';
+import { Download as DownloadIcon, Visibility as ViewIcon } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { DocumentVersion } from '@/lib/api/documents';
 
@@ -77,7 +67,9 @@ export default function VersionTimeline({
               }}
             >
               <CardContent sx={{ pb: '12px !important' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                <Box
+                  sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}
+                >
                   <Typography variant="subtitle2">Version {version.version_number}</Typography>
                   {version.id === currentVersionId && (
                     <Chip label="Current" color="primary" size="small" />

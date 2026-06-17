@@ -26,7 +26,11 @@ interface DocumentViewerProps {
 }
 
 /** Renders a document inline. Supports PDF (react-pdf) and HTML (styled iframe) previews. */
-export default function DocumentViewer({ pdfUrl, mimeType = 'application/pdf', viewerTitle = 'Document Viewer' }: DocumentViewerProps) {
+export default function DocumentViewer({
+  pdfUrl,
+  mimeType = 'application/pdf',
+  viewerTitle = 'Document Viewer',
+}: DocumentViewerProps) {
   const { enqueueSnackbar } = useSnackbar();
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
@@ -60,7 +64,8 @@ export default function DocumentViewer({ pdfUrl, mimeType = 'application/pdf', v
     }
 
     let isCancelled = false;
-    const filenameHeadingRegex = /(<h1\b[^>]*>)\s*([A-Za-z0-9_.\- ]+\.(?:docx|pdf|xlsx|xls|pptx|ppt))\s*(<\/h1>)/i;
+    const filenameHeadingRegex =
+      /(<h1\b[^>]*>)\s*([A-Za-z0-9_.\- ]+\.(?:docx|pdf|xlsx|xls|pptx|ppt))\s*(<\/h1>)/i;
     const headerDisplayNameRegex = /(<div\s+class="display-name"[^>]*>)([\s\S]*?)(<\/div>)/i;
 
     (async () => {
@@ -80,7 +85,9 @@ export default function DocumentViewer({ pdfUrl, mimeType = 'application/pdf', v
           normalizedHtml = normalizedHtml.replace(headerDisplayNameRegex, `$1${viewerTitle}$3`);
         }
 
-        const normalizedBlobUrl = URL.createObjectURL(new Blob([normalizedHtml], { type: 'text/html' }));
+        const normalizedBlobUrl = URL.createObjectURL(
+          new Blob([normalizedHtml], { type: 'text/html' }),
+        );
         if (isCancelled) {
           URL.revokeObjectURL(normalizedBlobUrl);
           return;
@@ -118,7 +125,9 @@ export default function DocumentViewer({ pdfUrl, mimeType = 'application/pdf', v
 
   const onDocumentLoadError = (err: Error) => {
     setError('Failed to load PDF preview. The file may still be processing.');
-    enqueueSnackbar('Failed to load PDF preview. The file may still be processing.', { variant: 'error' });
+    enqueueSnackbar('Failed to load PDF preview. The file may still be processing.', {
+      variant: 'error',
+    });
     setLoading(false);
     console.error('PDF load error:', err);
   };
@@ -147,7 +156,13 @@ export default function DocumentViewer({ pdfUrl, mimeType = 'application/pdf', v
           <Typography variant="body2" color="text.secondary">
             HTML Document Preview — rendered from extracted content
           </Typography>
-          <Button size="small" component="a" href={pdfUrl} target="_blank" rel="noopener noreferrer">
+          <Button
+            size="small"
+            component="a"
+            href={pdfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             Open in Tab
           </Button>
         </Box>

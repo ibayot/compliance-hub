@@ -79,7 +79,9 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
 
   // Load document types automatically when the accordion panel mounts (expands).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const openCreate = () => {
     setEditing(null);
@@ -141,15 +143,27 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
         <Typography variant="subtitle2" color="text.secondary">
           Reportorial Document Types
         </Typography>
-        <Button size="small" startIcon={<AddIcon />} onClick={(e) => { e.stopPropagation(); load(); openCreate(); }}>
+        <Button
+          size="small"
+          startIcon={<AddIcon />}
+          onClick={(e) => {
+            e.stopPropagation();
+            load();
+            openCreate();
+          }}
+        >
           Add
         </Button>
       </Box>
 
       {loading ? (
-        <Box py={2} display="flex" justifyContent="center"><CircularProgress size={20} /></Box>
+        <Box py={2} display="flex" justifyContent="center">
+          <CircularProgress size={20} />
+        </Box>
       ) : docTypes.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">None yet.</Typography>
+        <Typography variant="body2" color="text.secondary">
+          None yet.
+        </Typography>
       ) : (
         <Table size="small">
           <TableHead>
@@ -166,7 +180,9 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
             {docTypes.map((dt) => (
               <TableRow key={dt.id} hover>
                 <TableCell>{dt.display_name}</TableCell>
-                <TableCell><code>{dt.base_name}</code></TableCell>
+                <TableCell>
+                  <code>{dt.base_name}</code>
+                </TableCell>
                 <TableCell>{FREQ_LABELS[dt.submission_frequency]}</TableCell>
                 <TableCell>
                   <Typography variant="caption" color="text.secondary">
@@ -183,8 +199,16 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
                   />
                 </TableCell>
                 <TableCell align="right">
-                  <Tooltip title="Edit"><IconButton size="small" onClick={() => openEdit(dt)}><EditIcon fontSize="small" /></IconButton></Tooltip>
-                  <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => handleDelete(dt)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+                  <Tooltip title="Edit">
+                    <IconButton size="small" onClick={() => openEdit(dt)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete">
+                    <IconButton size="small" color="error" onClick={() => handleDelete(dt)}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </TableCell>
               </TableRow>
             ))}
@@ -195,15 +219,25 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editing ? 'Edit Document Type' : 'Add Document Type'}</DialogTitle>
         <DialogContent>
-          {err && <Typography color="error" sx={{ mb: 2 }}>{err}</Typography>}
+          {err && (
+            <Typography color="error" sx={{ mb: 2 }}>
+              {err}
+            </Typography>
+          )}
           <TextField
-            margin="dense" label="Display Name" fullWidth required
+            margin="dense"
+            label="Display Name"
+            fullWidth
+            required
             value={form.display_name}
             onChange={(e) => setForm({ ...form, display_name: e.target.value })}
             helperText="Human-readable label (e.g. Monthly Incident Report)"
           />
           <TextField
-            margin="dense" label="Base File Name" fullWidth required
+            margin="dense"
+            label="Base File Name"
+            fullWidth
+            required
             value={form.base_name}
             onChange={(e) => setForm({ ...form, base_name: e.target.value.replace(/\s+/g, '_') })}
             helperText="Underscore-separated, no spaces (e.g. Incident_Report)"
@@ -213,7 +247,9 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
             <Select
               value={form.submission_frequency}
               label="Submission Frequency"
-              onChange={(e) => setForm({ ...form, submission_frequency: e.target.value as SubmissionFrequency })}
+              onChange={(e) =>
+                setForm({ ...form, submission_frequency: e.target.value as SubmissionFrequency })
+              }
             >
               <MenuItem value="monthly">Monthly</MenuItem>
               <MenuItem value="quarterly">Quarterly</MenuItem>
@@ -221,19 +257,33 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
             </Select>
           </FormControl>
           <TextField
-            margin="dense" label="Description" fullWidth multiline minRows={2}
+            margin="dense"
+            label="Description"
+            fullWidth
+            multiline
+            minRows={2}
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
           {form.base_name && (
             <Typography color="text.secondary" sx={{ mt: 1 }}>
-              Sample filename: <strong>{computeExpectedFilename({ base_name: form.base_name, submission_frequency: form.submission_frequency } as ReportorialDocType)}</strong>
+              Sample filename:{' '}
+              <strong>
+                {computeExpectedFilename({
+                  base_name: form.base_name,
+                  submission_frequency: form.submission_frequency,
+                } as ReportorialDocType)}
+              </strong>
             </Typography>
           )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSave} disabled={saving || !form.base_name.trim() || !form.display_name.trim()}>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={saving || !form.base_name.trim() || !form.display_name.trim()}
+          >
             {saving ? 'Saving...' : 'Save'}
           </Button>
         </DialogActions>
@@ -263,7 +313,9 @@ export default function UnitsPage() {
     }
   };
 
-  useEffect(() => { loadUnits(); }, []);
+  useEffect(() => {
+    loadUnits();
+  }, []);
 
   const handleCreate = () => {
     setEditingUnit(null);
@@ -303,16 +355,22 @@ export default function UnitsPage() {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
         <Box>
-          <Typography variant="h4" component="h1" gutterBottom>Units Management</Typography>
+          <Typography variant="h4" component="h1" gutterBottom>
+            Units Management
+          </Typography>
           <Typography variant="body1" color="text.secondary">
             Manage organizational units and their reportorial document types
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>Add Unit</Button>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
+          Add Unit
+        </Button>
       </Box>
 
       {loading ? (
-        <Box display="flex" justifyContent="center" py={6}><CircularProgress /></Box>
+        <Box display="flex" justifyContent="center" py={6}>
+          <CircularProgress />
+        </Box>
       ) : (
         <Box>
           {units.map((unit) => (
@@ -330,15 +388,21 @@ export default function UnitsPage() {
                   <Box flex={1}>
                     <Typography fontWeight={600}>{unit.name}</Typography>
                     {unit.description && (
-                      <Typography variant="caption" color="text.secondary">{unit.description}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {unit.description}
+                      </Typography>
                     )}
                   </Box>
                   <Box onClick={(e) => e.stopPropagation()} display="flex" gap={1}>
                     <Tooltip title="Edit unit">
-                      <IconButton size="small" onClick={() => handleEdit(unit)}><EditIcon fontSize="small" /></IconButton>
+                      <IconButton size="small" onClick={() => handleEdit(unit)}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
                     </Tooltip>
                     <Tooltip title="Delete unit">
-                      <IconButton size="small" color="error" onClick={() => handleDelete(unit)}><DeleteIcon fontSize="small" /></IconButton>
+                      <IconButton size="small" color="error" onClick={() => handleDelete(unit)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
                     </Tooltip>
                   </Box>
                 </Box>
@@ -360,12 +424,21 @@ export default function UnitsPage() {
         <DialogTitle>{editingUnit ? 'Edit Unit' : 'Add Unit'}</DialogTitle>
         <DialogContent>
           <TextField
-            autoFocus margin="dense" label="Unit Name" fullWidth
-            value={name} onChange={(e) => setName(e.target.value)}
+            autoFocus
+            margin="dense"
+            label="Unit Name"
+            fullWidth
+            value={name}
+            onChange={(e) => setName(e.target.value)}
           />
           <TextField
-            margin="dense" label="Description" fullWidth multiline minRows={3}
-            value={description} onChange={(e) => setDescription(e.target.value)}
+            margin="dense"
+            label="Description"
+            fullWidth
+            multiline
+            minRows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
           />
         </DialogContent>
         <DialogActions>

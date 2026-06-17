@@ -96,11 +96,20 @@ const BAND_COLORS: Record<string, string> = {
 
 /** Distinct palette for units / KPIs in multi-line charts. */
 const UNIT_COLORS: string[] = [
-  '#1565c0', '#6a1b9a', '#00695c', '#e65100',
-  '#558b2f', '#4527a0', '#ad1457', '#00838f',
+  '#1565c0',
+  '#6a1b9a',
+  '#00695c',
+  '#e65100',
+  '#558b2f',
+  '#4527a0',
+  '#ad1457',
+  '#00838f',
 ];
 
-function computeBand(score: number, thresholds: Array<{ band: string; minScore: number; maxScore: number }>): string {
+function computeBand(
+  score: number,
+  thresholds: Array<{ band: string; minScore: number; maxScore: number }>,
+): string {
   const sorted = [...thresholds].sort((a, b) => b.minScore - a.minScore);
   for (const t of sorted) {
     if (score >= t.minScore && score <= t.maxScore) return t.band.toLowerCase();
@@ -110,7 +119,20 @@ function computeBand(score: number, thresholds: Array<{ band: string; minScore: 
   return 'red';
 }
 
-const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_ABBR = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
 /** Returns the from/to year+month range to fetch timeseries data for. */
 function getTimeseriesRange(
@@ -125,7 +147,12 @@ function getTimeseriesRange(
       // Monthly shows previous month -> selected month.
       // January has no prior month, so it starts at January and uses synthetic zero-anchor.
       if (periodMonth > 1) {
-        return { fromYear: periodYear, fromMonth: periodMonth - 1, toYear: periodYear, toMonth: periodMonth };
+        return {
+          fromYear: periodYear,
+          fromMonth: periodMonth - 1,
+          toYear: periodYear,
+          toMonth: periodMonth,
+        };
       }
       return { fromYear: periodYear, fromMonth: 1, toYear: periodYear, toMonth: 1 };
     case 'quarterly': {
@@ -145,7 +172,12 @@ function getTimeseriesRange(
     case 'annual':
       return { fromYear: periodYear, fromMonth: 1, toYear: periodYear, toMonth: 12 };
     default:
-      return { fromYear: periodYear, fromMonth: periodMonth, toYear: periodYear, toMonth: periodMonth };
+      return {
+        fromYear: periodYear,
+        fromMonth: periodMonth,
+        toYear: periodYear,
+        toMonth: periodMonth,
+      };
   }
 }
 
@@ -157,7 +189,8 @@ function getXAxisLabel(
   const month = point.periodMonth;
   const abbr = MONTH_ABBR[month - 1];
   switch (viewFrequency) {
-    case 'monthly': return abbr;
+    case 'monthly':
+      return abbr;
     case 'quarterly': {
       const q = Math.ceil(month / 3);
       const rel = ((month - 1) % 3) + 1;
@@ -168,21 +201,37 @@ function getXAxisLabel(
       const rel = ((month - 1) % 6) + 1;
       return `H${h}-${rel}`;
     }
-    case 'annual': return abbr;
-    default: return abbr;
+    case 'annual':
+      return abbr;
+    default:
+      return abbr;
   }
 }
 
 /** Sparkline for Trend column; supports multi-point zigzag via `points`. */
-function TrendSparkline({ prev, current, band, points }: { prev: number | null; current: number | null; band: string; points?: number[] }) {
+function TrendSparkline({
+  prev,
+  current,
+  band,
+  points,
+}: {
+  prev: number | null;
+  current: number | null;
+  band: string;
+  points?: number[];
+}) {
   const color = BAND_COLORS[band] || BAND_COLORS.unclassified;
-  const w = 60; const h = 24; const pad = 5;
+  const w = 60;
+  const h = 24;
+  const pad = 5;
   const fallbackSeries = [prev !== null ? prev : 0, current !== null ? current : 0];
-  const series = (points && points.length > 0 ? points : fallbackSeries).map((v) => Math.min(100, Math.max(0, Number(v))));
+  const series = (points && points.length > 0 ? points : fallbackSeries).map((v) =>
+    Math.min(100, Math.max(0, Number(v))),
+  );
   const toY = (v: number) => h - pad - (Math.min(100, Math.max(0, v)) / 100) * (h - 2 * pad);
   const xFor = (idx: number) => {
     if (series.length <= 1) return pad;
-    return pad + (idx / (series.length - 1)) * ((w - pad) - pad);
+    return pad + (idx / (series.length - 1)) * (w - pad - pad);
   };
   const pathPoints = series.map((val, idx) => `${xFor(idx)},${toY(val)}`).join(' ');
   const startX = xFor(0);
@@ -191,12 +240,19 @@ function TrendSparkline({ prev, current, band, points }: { prev: number | null; 
   const endY = toY(series[series.length - 1] ?? 0);
   const prevIdx = Math.max(0, series.length - 2);
   const prevX = xFor(prevIdx);
-  const prevY = toY(series[prevIdx] ?? (series[series.length - 1] ?? 0));
+  const prevY = toY(series[prevIdx] ?? series[series.length - 1] ?? 0);
   const angle = Math.atan2(endY - prevY, endX - prevX) * (180 / Math.PI);
-  const startColor = points && points.length > 0 ? color : (prev !== null ? color : '#b0bec5');
+  const startColor = points && points.length > 0 ? color : prev !== null ? color : '#b0bec5';
   return (
     <svg width={w} height={h} style={{ display: 'block', overflow: 'visible' }}>
-      <polyline points={pathPoints} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      <polyline
+        points={pathPoints}
+        fill="none"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
       <circle cx={startX} cy={startY} r={3} fill={startColor} stroke="#fff" strokeWidth={1} />
       <polygon
         points="-6,-4 0,0 -6,4"
@@ -209,12 +265,24 @@ function TrendSparkline({ prev, current, band, points }: { prev: number | null; 
 
 function DirectionIndicator({ direction }: { direction?: KpiDirection | null }) {
   if (direction === 'higher_is_better') {
-    return <Typography variant="caption" color="success.main">↑</Typography>;
+    return (
+      <Typography variant="caption" color="success.main">
+        ↑
+      </Typography>
+    );
   }
   if (direction === 'lower_is_better') {
-    return <Typography variant="caption" color="info.main">↓</Typography>;
+    return (
+      <Typography variant="caption" color="info.main">
+        ↓
+      </Typography>
+    );
   }
-  return <Typography variant="caption" color="text.secondary">—</Typography>;
+  return (
+    <Typography variant="caption" color="text.secondary">
+      —
+    </Typography>
+  );
 }
 
 export default function KpiPage() {
@@ -230,17 +298,25 @@ export default function KpiPage() {
   const [masters, setMasters] = useState<KpiMasterRecord[]>([]);
   const [monitoring, setMonitoring] = useState<KpiMonitoringRecord[]>([]);
   const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null);
-  const [selectedUnitDashboard, setSelectedUnitDashboard] = useState<UnitDashboardResponse | null>(null);
+  const [selectedUnitDashboard, setSelectedUnitDashboard] = useState<UnitDashboardResponse | null>(
+    null,
+  );
   const [unitTimeseries, setUnitTimeseries] = useState<UnitTimeseriesPoint[]>([]);
-  const [allUnitsTimeseries, setAllUnitsTimeseries] = useState<Record<number, UnitTimeseriesPoint[]>>({});
+  const [allUnitsTimeseries, setAllUnitsTimeseries] = useState<
+    Record<number, UnitTimeseriesPoint[]>
+  >({});
   const [actionPlans, setActionPlans] = useState<KpiActionPlanItem[]>([]);
   /** Tracks the currently-selected unit ID without being a useCallback dependency. */
   const selectedUnitIdRef = useRef<number | null>(null);
 
   const [periodYear, setPeriodYear] = useState(currentYear);
   const [periodMonth, setPeriodMonth] = useState(currentMonth);
-  const [viewFrequency, setViewFrequency] = useState<'monthly' | 'quarterly' | 'semestral' | 'annual'>('monthly');
-  const [periodQuarter, setPeriodQuarter] = useState<1 | 2 | 3 | 4>(Math.ceil(currentMonth / 3) as 1 | 2 | 3 | 4);
+  const [viewFrequency, setViewFrequency] = useState<
+    'monthly' | 'quarterly' | 'semestral' | 'annual'
+  >('monthly');
+  const [periodQuarter, setPeriodQuarter] = useState<1 | 2 | 3 | 4>(
+    Math.ceil(currentMonth / 3) as 1 | 2 | 3 | 4,
+  );
   const [periodSemester, setPeriodSemester] = useState<1 | 2>(currentMonth <= 6 ? 1 : 2);
   const [filterUnitId, setFilterUnitId] = useState<number | ''>('');
 
@@ -272,18 +348,26 @@ export default function KpiPage() {
     status: 'draft' as KpiMonitoringStatus,
   });
 
-  const canManage = user?.role === 'super_admin'
-    || !!myCap?.isKpiManage
-    || ['section_head', 'compliance_officer'].includes(String(user?.role));
+  const canManage =
+    user?.role === 'super_admin' ||
+    !!myCap?.isKpiManage ||
+    ['section_head', 'compliance_officer'].includes(String(user?.role));
   const canAccessKpi = user?.role === 'super_admin' || !!myCap?.isKpiAccess || canManage;
-  const userUnitIds = useMemo(() => ((user?.units || []) as any[]).map((u: any) => Number(u.id)).filter(Number.isFinite), [user?.units]);
+  const userUnitIds = useMemo(
+    () => ((user?.units || []) as any[]).map((u: any) => Number(u.id)).filter(Number.isFinite),
+    [user?.units],
+  );
 
   const effectiveMonth = useMemo(() => {
     switch (viewFrequency) {
-      case 'quarterly': return (periodQuarter as number) * 3;
-      case 'semestral': return (periodSemester as number) * 6;
-      case 'annual': return 12;
-      default: return periodMonth;
+      case 'quarterly':
+        return (periodQuarter as number) * 3;
+      case 'semestral':
+        return (periodSemester as number) * 6;
+      case 'annual':
+        return 12;
+      default:
+        return periodMonth;
     }
   }, [viewFrequency, periodMonth, periodQuarter, periodSemester]);
 
@@ -311,7 +395,9 @@ export default function KpiPage() {
       setUnits(unitList);
       setMasters(masterList);
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI master data.', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI master data.', {
+        variant: 'error',
+      });
     }
   }, [enqueueSnackbar, canAccessKpi]);
 
@@ -333,7 +419,9 @@ export default function KpiPage() {
       });
       setMonitoring(data);
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI monitoring data.', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI monitoring data.', {
+        variant: 'error',
+      });
     }
   }, [enqueueSnackbar, effectiveMonth, periodYear, filterUnitId, hasAssignedUnit, canAccessKpi]);
 
@@ -365,7 +453,11 @@ export default function KpiPage() {
       );
       setActionPlans(plans.items || []);
       const { fromYear, fromMonth, toYear, toMonth } = getTimeseriesRange(
-        viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester,
+        viewFrequency,
+        periodYear,
+        effectiveMonth,
+        periodQuarter,
+        periodSemester,
       );
       // Fetch timeseries for all visible units simultaneously (multi-line chart).
       // Fetch timeseries for ALL user-visible units (not just those with data in this period)
@@ -373,10 +465,14 @@ export default function KpiPage() {
       const summaryUnitIds = (data.units || []).map((u) => u.unitId);
       const allVisibleIds = [...new Set([...summaryUnitIds, ...availableUnits.map((u) => u.id)])];
       const tseriesArray = await Promise.all(
-        allVisibleIds.map((id) => kpiApi.dashboardUnitTimeseries(id, fromYear, fromMonth, toYear, toMonth)),
+        allVisibleIds.map((id) =>
+          kpiApi.dashboardUnitTimeseries(id, fromYear, fromMonth, toYear, toMonth),
+        ),
       );
       const tseriesMap: Record<number, UnitTimeseriesPoint[]> = {};
-      allVisibleIds.forEach((id, idx) => { tseriesMap[id] = tseriesArray[idx]; });
+      allVisibleIds.forEach((id, idx) => {
+        tseriesMap[id] = tseriesArray[idx];
+      });
       setAllUnitsTimeseries(tseriesMap);
       if (!canManage) {
         const ownUnit = availableUnits[0];
@@ -401,9 +497,23 @@ export default function KpiPage() {
         setUnitTimeseries(tseriesMap[uid] || []);
       }
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI dashboard.', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to load KPI dashboard.', {
+        variant: 'error',
+      });
     }
-  }, [enqueueSnackbar, effectiveMonth, periodYear, canManage, availableUnits, viewFrequency, periodQuarter, periodSemester, filterUnitId, hasAssignedUnit, canAccessKpi]);
+  }, [
+    enqueueSnackbar,
+    effectiveMonth,
+    periodYear,
+    canManage,
+    availableUnits,
+    viewFrequency,
+    periodQuarter,
+    periodSemester,
+    filterUnitId,
+    hasAssignedUnit,
+    canAccessKpi,
+  ]);
 
   useEffect(() => {
     loadInitial();
@@ -479,7 +589,9 @@ export default function KpiPage() {
       setMasterOpen(false);
       await loadInitial();
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to save KPI master.', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to save KPI master.', {
+        variant: 'error',
+      });
     }
   };
 
@@ -491,7 +603,9 @@ export default function KpiPage() {
       await loadMonitoring();
       await loadDashboard();
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to delete KPI master.', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to delete KPI master.', {
+        variant: 'error',
+      });
     }
   };
 
@@ -545,7 +659,9 @@ export default function KpiPage() {
       await loadMonitoring();
       await loadDashboard();
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to save KPI monitoring row.', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to save KPI monitoring row.', {
+        variant: 'error',
+      });
     }
   };
 
@@ -556,12 +672,19 @@ export default function KpiPage() {
       await loadMonitoring();
       await loadDashboard();
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to lock KPI monitoring row.', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to lock KPI monitoring row.', {
+        variant: 'error',
+      });
     }
   };
 
   const openUnitDashboard = async (unitId: number) => {
-    if (!Number.isFinite(unitId) || !Number.isFinite(periodYear) || !Number.isFinite(effectiveMonth)) return;
+    if (
+      !Number.isFinite(unitId) ||
+      !Number.isFinite(periodYear) ||
+      !Number.isFinite(effectiveMonth)
+    )
+      return;
     try {
       selectedUnitIdRef.current = unitId;
       // Fetch the unit detail timeseries using the period's natural range:
@@ -570,7 +693,11 @@ export default function KpiPage() {
       //   Semestral → only H months (e.g. H2 = Jul–Dec)
       //   Annual   → Jan–Dec
       const { fromYear, fromMonth, toYear, toMonth } = getTimeseriesRange(
-        viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester,
+        viewFrequency,
+        periodYear,
+        effectiveMonth,
+        periodQuarter,
+        periodSemester,
       );
       const [detail, tseries] = await Promise.all([
         kpiApi.dashboardUnit(unitId, periodYear, effectiveMonth),
@@ -579,7 +706,9 @@ export default function KpiPage() {
       setSelectedUnitDashboard(detail);
       setUnitTimeseries(tseries);
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to load unit KPI dashboard.', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to load unit KPI dashboard.', {
+        variant: 'error',
+      });
     }
   };
 
@@ -593,7 +722,9 @@ export default function KpiPage() {
   // Stable per-unit color map based on availableUnits order — consistent between chart lines and table swatches.
   const unitColorMap = useMemo(() => {
     const map: Record<number, string> = {};
-    availableUnits.forEach((u, idx) => { map[u.id] = UNIT_COLORS[idx % UNIT_COLORS.length]; });
+    availableUnits.forEach((u, idx) => {
+      map[u.id] = UNIT_COLORS[idx % UNIT_COLORS.length];
+    });
     return map;
   }, [availableUnits]);
 
@@ -607,7 +738,8 @@ export default function KpiPage() {
       const ts = allUnitsTimeseries[unit.id] || [];
       ts.forEach((pt) => {
         const key = `${pt.periodYear}-${String(pt.periodMonth).padStart(2, '0')}`;
-        if (!periodMap.has(key)) periodMap.set(key, { periodYear: pt.periodYear, periodMonth: pt.periodMonth });
+        if (!periodMap.has(key))
+          periodMap.set(key, { periodYear: pt.periodYear, periodMonth: pt.periodMonth });
       });
     });
     const sortedPeriods = [...periodMap.entries()]
@@ -620,7 +752,9 @@ export default function KpiPage() {
       const datum: Record<string, any> = { label };
       availableUnits.forEach((unit) => {
         const ts = allUnitsTimeseries[unit.id] || [];
-        const match = ts.find((p) => p.periodYear === pt.periodYear && p.periodMonth === pt.periodMonth);
+        const match = ts.find(
+          (p) => p.periodYear === pt.periodYear && p.periodMonth === pt.periodMonth,
+        );
         datum[`u${unit.id}`] = match?.hasData ? match.score : null;
       });
       return datum;
@@ -640,28 +774,39 @@ export default function KpiPage() {
       });
       const adjusted = [first, ...mapped.slice(1)];
       const shouldPrependZero =
-        viewFrequency === 'annual'
-        || (viewFrequency === 'monthly' && periodMonth === 1)
-        || (viewFrequency === 'quarterly' && periodQuarter === 1)
-        || (viewFrequency === 'semestral' && periodSemester === 1);
+        viewFrequency === 'annual' ||
+        (viewFrequency === 'monthly' && periodMonth === 1) ||
+        (viewFrequency === 'quarterly' && periodQuarter === 1) ||
+        (viewFrequency === 'semestral' && periodSemester === 1);
       if (shouldPrependZero) {
         const zeroAnchor: Record<string, any> = { label: '' };
-        availableUnits.forEach((unit) => { zeroAnchor[`u${unit.id}`] = 0; });
+        availableUnits.forEach((unit) => {
+          zeroAnchor[`u${unit.id}`] = 0;
+        });
         return [zeroAnchor, ...adjusted];
       }
       return adjusted;
     }
     return mapped;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allUnitsTimeseries, availableUnits, viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    allUnitsTimeseries,
+    availableUnits,
+    viewFrequency,
+    periodYear,
+    effectiveMonth,
+    periodQuarter,
+    periodSemester,
+  ]);
 
   /** KPI-level band distribution aligned to selected filters with transparent partial logic. */
   const kpiBandDistribution = useMemo(() => {
     const counts: Record<string, number> = {};
     let partialCount = 0;
-    const selectedUnitIds = filterUnitId === ''
-      ? availableUnits.map((u) => u.id)
-      : [Number(filterUnitId)].filter(Number.isFinite);
+    const selectedUnitIds =
+      filterUnitId === ''
+        ? availableUnits.map((u) => u.id)
+        : [Number(filterUnitId)].filter(Number.isFinite);
     const summaryUnitIds = new Set((summary?.units || []).map((u) => u.unitId));
     selectedUnitIds.forEach((unitId) => {
       const u = availableUnits.find((unit) => unit.id === unitId);
@@ -687,13 +832,16 @@ export default function KpiPage() {
       entries.push({ name: 'PARTIAL', value: partialCount, partial: true });
     }
     return entries;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableUnits, allUnitsTimeseries, filterUnitId, summary]);
 
   // KPI detail multi-line chart: { label, [kpiCode]: score|null } per period.
   const kpiDetailLineData = useMemo(() => {
-    if (unitTimeseries.length === 0) return { data: [] as Record<string, any>[], codes: [] as string[] };
-    const codes = [...new Set(unitTimeseries.flatMap((pt) => (pt.kpiScores || []).map((k) => k.code)))];
+    if (unitTimeseries.length === 0)
+      return { data: [] as Record<string, any>[], codes: [] as string[] };
+    const codes = [
+      ...new Set(unitTimeseries.flatMap((pt) => (pt.kpiScores || []).map((k) => k.code))),
+    ];
     const data = unitTimeseries.map((pt) => {
       const datum: Record<string, any> = { label: getXAxisLabel(pt, viewFrequency) };
       codes.forEach((code) => {
@@ -714,35 +862,40 @@ export default function KpiPage() {
       });
       const adjusted = [first, ...data.slice(1)];
       const shouldPrependZero =
-        viewFrequency === 'annual'
-        || (viewFrequency === 'monthly' && periodMonth === 1)
-        || (viewFrequency === 'quarterly' && periodQuarter === 1)
-        || (viewFrequency === 'semestral' && periodSemester === 1);
+        viewFrequency === 'annual' ||
+        (viewFrequency === 'monthly' && periodMonth === 1) ||
+        (viewFrequency === 'quarterly' && periodQuarter === 1) ||
+        (viewFrequency === 'semestral' && periodSemester === 1);
       if (shouldPrependZero) {
         const zeroAnchor: Record<string, any> = { label: '' };
-        codes.forEach((code) => { zeroAnchor[code] = 0; });
+        codes.forEach((code) => {
+          zeroAnchor[code] = 0;
+        });
         return { data: [zeroAnchor, ...adjusted], codes };
       }
       return { data: adjusted, codes };
     }
     return { data, codes };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unitTimeseries, viewFrequency, periodYear, effectiveMonth, periodQuarter, periodSemester]);
 
   const selectedUnitDetailRows = useMemo(() => {
-    if (!selectedUnitDashboard) return [] as Array<{
-      id: number | string;
-      code: string;
-      name: string;
-      direction: KpiDirection | null;
-      targetValue: number | null;
-      actualValue: number | null;
-      normalizedScore: number | null;
-      band: string;
-      hasData: boolean;
-    }>;
+    if (!selectedUnitDashboard)
+      return [] as Array<{
+        id: number | string;
+        code: string;
+        name: string;
+        direction: KpiDirection | null;
+        targetValue: number | null;
+        actualValue: number | null;
+        normalizedScore: number | null;
+        band: string;
+        hasData: boolean;
+      }>;
     const detailMap = new Map(selectedUnitDashboard.details.map((d) => [d.code, d]));
-    const unitMasters = masters.filter((m) => m.unitId === selectedUnitDashboard.unitId && m.active);
+    const unitMasters = masters.filter(
+      (m) => m.unitId === selectedUnitDashboard.unitId && m.active,
+    );
     const rows = unitMasters.map((m) => {
       const d = detailMap.get(m.code);
       return {
@@ -774,36 +927,47 @@ export default function KpiPage() {
     return [...rows, ...extras];
   }, [selectedUnitDashboard, masters]);
 
-  const computeTrendValues = useCallback((values: number[]) => {
-    if (values.length === 0) return { prev: null as number | null, current: null as number | null };
-    if (viewFrequency === 'monthly') {
-      if (values.length === 1) return { prev: null as number | null, current: values[0] };
-      return { prev: values[0], current: values[values.length - 1] };
-    }
-    const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
-    return { prev: values[0], current: Number(avg.toFixed(2)) };
-  }, [viewFrequency]);
+  const computeTrendValues = useCallback(
+    (values: number[]) => {
+      if (values.length === 0)
+        return { prev: null as number | null, current: null as number | null };
+      if (viewFrequency === 'monthly') {
+        if (values.length === 1) return { prev: null as number | null, current: values[0] };
+        return { prev: values[0], current: values[values.length - 1] };
+      }
+      const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
+      return { prev: values[0], current: Number(avg.toFixed(2)) };
+    },
+    [viewFrequency],
+  );
 
   const bandDistribution = Object.values(
-    (summary?.units || []).reduce((acc, unit) => {
-      const band = String(unit.band || 'unclassified').toLowerCase();
-      if (!acc[band]) acc[band] = { name: band.toUpperCase(), value: 0, partial: false };
-      acc[band].value += 1;
-      return acc;
-    }, {} as Record<string, { name: string; value: number; partial: boolean }>),
-  ).concat((() => {
-    // Units with timeseries data but no summary entry (partial-period, e.g. Finance in Q3)
-    const summaryIds = new Set((summary?.units || []).map((u) => u.unitId));
-    const partialCount = availableUnits.filter(
-      (u) => !summaryIds.has(u.id) && (allUnitsTimeseries[u.id] || []).some((p) => p.hasData),
-    ).length;
-    return partialCount > 0 ? [{ name: 'PARTIAL', value: partialCount, partial: true }] : [];
-  })());
+    (summary?.units || []).reduce(
+      (acc, unit) => {
+        const band = String(unit.band || 'unclassified').toLowerCase();
+        if (!acc[band]) acc[band] = { name: band.toUpperCase(), value: 0, partial: false };
+        acc[band].value += 1;
+        return acc;
+      },
+      {} as Record<string, { name: string; value: number; partial: boolean }>,
+    ),
+  ).concat(
+    (() => {
+      // Units with timeseries data but no summary entry (partial-period, e.g. Finance in Q3)
+      const summaryIds = new Set((summary?.units || []).map((u) => u.unitId));
+      const partialCount = availableUnits.filter(
+        (u) => !summaryIds.has(u.id) && (allUnitsTimeseries[u.id] || []).some((p) => p.hasData),
+      ).length;
+      return partialCount > 0 ? [{ name: 'PARTIAL', value: partialCount, partial: true }] : [];
+    })(),
+  );
 
   /** Stable lookup: unitId → summary unit row (may be absent for partial-period units). */
   const summaryUnitMap = useMemo(() => {
     const map: Record<number, DashboardSummaryResponse['units'][number]> = {};
-    (summary?.units || []).forEach((u) => { map[u.unitId] = u; });
+    (summary?.units || []).forEach((u) => {
+      map[u.unitId] = u;
+    });
     return map;
   }, [summary]);
 
@@ -816,9 +980,7 @@ export default function KpiPage() {
 
   /** True when at least one unit has a timeseries point with actual data for the selected period. */
   const hasDataForPeriod = useMemo(() => {
-    return availableUnits.some((u) =>
-      (allUnitsTimeseries[u.id] || []).some((p) => p.hasData),
-    );
+    return availableUnits.some((u) => (allUnitsTimeseries[u.id] || []).some((p) => p.hasData));
   }, [availableUnits, allUnitsTimeseries]);
 
   /** Auto-close the Unit Detail panel when the current period has no monitoring data. */
@@ -826,19 +988,22 @@ export default function KpiPage() {
     if (!hasDataForPeriod) {
       closeUnitDetail();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasDataForPeriod]);
 
-  const overallBand = computeBand(Number(summary?.summary.overallScore ?? 0), summary?.thresholds || []);
+  const overallBand = computeBand(
+    Number(summary?.summary.overallScore ?? 0),
+    summary?.thresholds || [],
+  );
   const overallBandColor = BAND_COLORS[overallBand] || BAND_COLORS.unclassified;
 
   if (!canAccessKpi) {
     return (
       <Box>
-        <Typography variant="h4" gutterBottom>KPI Monitoring & Dashboard</Typography>
-        <Alert severity="error">
-          You do not have access to this feature.
-        </Alert>
+        <Typography variant="h4" gutterBottom>
+          KPI Monitoring & Dashboard
+        </Typography>
+        <Alert severity="error">You do not have access to this feature.</Alert>
       </Box>
     );
   }
@@ -846,9 +1011,12 @@ export default function KpiPage() {
   if (!canManage && !hasAssignedUnit) {
     return (
       <Box>
-        <Typography variant="h4" gutterBottom>KPI Monitoring & Dashboard</Typography>
+        <Typography variant="h4" gutterBottom>
+          KPI Monitoring & Dashboard
+        </Typography>
         <Alert severity="warning">
-          No unit is assigned to your account. KPI dashboard loading is blocked until an administrator assigns your unit.
+          No unit is assigned to your account. KPI dashboard loading is blocked until an
+          administrator assigns your unit.
         </Alert>
       </Box>
     );
@@ -857,9 +1025,12 @@ export default function KpiPage() {
   return (
     <Box>
       <Box mb={3}>
-        <Typography variant="h4" gutterBottom>KPI Monitoring & Dashboard</Typography>
+        <Typography variant="h4" gutterBottom>
+          KPI Monitoring & Dashboard
+        </Typography>
         <Typography variant="body2" color="text.secondary">
-          KPI Master defines targets and weights. KPI Monitoring captures periodic values. KPI Dashboard computes normalized unit performance.
+          KPI Master defines targets and weights. KPI Monitoring captures periodic values. KPI
+          Dashboard computes normalized unit performance.
         </Typography>
       </Box>
 
@@ -880,7 +1051,11 @@ export default function KpiPage() {
                 select
                 label="Frequency"
                 value={viewFrequency}
-                onChange={(e) => setViewFrequency(e.target.value as 'monthly' | 'quarterly' | 'semestral' | 'annual')}
+                onChange={(e) =>
+                  setViewFrequency(
+                    e.target.value as 'monthly' | 'quarterly' | 'semestral' | 'annual',
+                  )
+                }
                 fullWidth
               >
                 <MenuItem value="monthly">Monthly</MenuItem>
@@ -891,12 +1066,28 @@ export default function KpiPage() {
             </Grid>
             <Grid item xs={12} md={3}>
               {viewFrequency === 'monthly' && (
-                <TextField select label="Period Month" value={periodMonth} onChange={(e) => setPeriodMonth(Number(e.target.value))} fullWidth>
-                  {monthOptions.map((m) => <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>)}
+                <TextField
+                  select
+                  label="Period Month"
+                  value={periodMonth}
+                  onChange={(e) => setPeriodMonth(Number(e.target.value))}
+                  fullWidth
+                >
+                  {monthOptions.map((m) => (
+                    <MenuItem key={m.value} value={m.value}>
+                      {m.label}
+                    </MenuItem>
+                  ))}
                 </TextField>
               )}
               {viewFrequency === 'quarterly' && (
-                <TextField select label="Quarter" value={periodQuarter} onChange={(e) => setPeriodQuarter(Number(e.target.value) as 1 | 2 | 3 | 4)} fullWidth>
+                <TextField
+                  select
+                  label="Quarter"
+                  value={periodQuarter}
+                  onChange={(e) => setPeriodQuarter(Number(e.target.value) as 1 | 2 | 3 | 4)}
+                  fullWidth
+                >
                   <MenuItem value={1}>Q1 (Jan–Mar)</MenuItem>
                   <MenuItem value={2}>Q2 (Apr–Jun)</MenuItem>
                   <MenuItem value={3}>Q3 (Jul–Sep)</MenuItem>
@@ -904,13 +1095,23 @@ export default function KpiPage() {
                 </TextField>
               )}
               {viewFrequency === 'semestral' && (
-                <TextField select label="Semester" value={periodSemester} onChange={(e) => setPeriodSemester(Number(e.target.value) as 1 | 2)} fullWidth>
+                <TextField
+                  select
+                  label="Semester"
+                  value={periodSemester}
+                  onChange={(e) => setPeriodSemester(Number(e.target.value) as 1 | 2)}
+                  fullWidth
+                >
                   <MenuItem value={1}>H1 (Jan–Jun)</MenuItem>
                   <MenuItem value={2}>H2 (Jul–Dec)</MenuItem>
                 </TextField>
               )}
               {viewFrequency === 'annual' && (
-                <Box sx={{ pt: 2 }}><Typography variant="body2" color="text.secondary">Full year {periodYear} — reporting month: Dec</Typography></Box>
+                <Box sx={{ pt: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Full year {periodYear} — reporting month: Dec
+                  </Typography>
+                </Box>
               )}
             </Grid>
             <Grid item xs={12} md={3}>
@@ -918,16 +1119,30 @@ export default function KpiPage() {
                 select
                 label="Unit Filter"
                 value={filterUnitId}
-                onChange={(e) => setFilterUnitId(e.target.value === '' ? '' : Number(e.target.value))}
+                onChange={(e) =>
+                  setFilterUnitId(e.target.value === '' ? '' : Number(e.target.value))
+                }
                 fullWidth
                 disabled={!canManage}
               >
                 <MenuItem value="">All allowed units</MenuItem>
-                {availableUnits.map((u) => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
+                {availableUnits.map((u) => (
+                  <MenuItem key={u.id} value={u.id}>
+                    {u.name}
+                  </MenuItem>
+                ))}
               </TextField>
             </Grid>
             <Grid item xs={12} md={2}>
-              <Button fullWidth variant="outlined" onClick={() => { loadMonitoring(); loadDashboard(); }} sx={{ height: '56px' }}>
+              <Button
+                fullWidth
+                variant="outlined"
+                onClick={() => {
+                  loadMonitoring();
+                  loadDashboard();
+                }}
+                sx={{ height: '56px' }}
+              >
                 Refresh
               </Button>
             </Grid>
@@ -937,7 +1152,8 @@ export default function KpiPage() {
 
       {!canManage && !hasAssignedUnit && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          No unit is assigned to your account. KPI data cannot be loaded until an administrator assigns your unit.
+          No unit is assigned to your account. KPI data cannot be loaded until an administrator
+          assigns your unit.
         </Alert>
       )}
 
@@ -951,7 +1167,11 @@ export default function KpiPage() {
         <Card>
           <CardHeader
             title="KPI Master"
-            action={<Button variant="contained" onClick={openCreateMaster}>Add KPI</Button>}
+            action={
+              <Button variant="contained" onClick={openCreateMaster}>
+                Add KPI
+              </Button>
+            }
           />
           <CardContent>
             <Table size="small">
@@ -980,8 +1200,12 @@ export default function KpiPage() {
                     <TableCell>{row.weight}</TableCell>
                     <TableCell>{row.frequency}</TableCell>
                     <TableCell align="right">
-                      <Button size="small" onClick={() => openEditMaster(row)}>Edit</Button>
-                      <Button size="small" color="error" onClick={() => removeMaster(row.code)}>Delete</Button>
+                      <Button size="small" onClick={() => openEditMaster(row)}>
+                        Edit
+                      </Button>
+                      <Button size="small" color="error" onClick={() => removeMaster(row.code)}>
+                        Delete
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -995,7 +1219,11 @@ export default function KpiPage() {
         <Card>
           <CardHeader
             title="KPI Monitoring"
-            action={<Button variant="contained" onClick={openCreateMonitoring}>Encode KPI</Button>}
+            action={
+              <Button variant="contained" onClick={openCreateMonitoring}>
+                Encode KPI
+              </Button>
+            }
           />
           <CardContent>
             <Table size="small">
@@ -1013,17 +1241,36 @@ export default function KpiPage() {
               <TableBody>
                 {monitoring.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell>{row.kpiMasterCode} - {row.kpiMaster?.name}</TableCell>
+                    <TableCell>
+                      {row.kpiMasterCode} - {row.kpiMaster?.name}
+                    </TableCell>
                     <TableCell>{row.unit?.name || row.unitId}</TableCell>
-                    <TableCell>{row.periodYear}-{String(row.periodMonth).padStart(2, '0')}</TableCell>
+                    <TableCell>
+                      {row.periodYear}-{String(row.periodMonth).padStart(2, '0')}
+                    </TableCell>
                     <TableCell>{row.actualValue}</TableCell>
                     <TableCell>
-                      <Chip label={row.status.toUpperCase()} size="small" color={row.status === 'locked' ? 'success' : 'default'} />
+                      <Chip
+                        label={row.status.toUpperCase()}
+                        size="small"
+                        color={row.status === 'locked' ? 'success' : 'default'}
+                      />
                     </TableCell>
-                    <TableCell>{row.enteredByStaffId || ''} {row.enteredByName ? `- ${row.enteredByName}` : ''}</TableCell>
+                    <TableCell>
+                      {row.enteredByStaffId || ''}{' '}
+                      {row.enteredByName ? `- ${row.enteredByName}` : ''}
+                    </TableCell>
                     <TableCell align="right">
-                      {row.status !== 'locked' && <Button size="small" onClick={() => openEditMonitoring(row)}>Edit</Button>}
-                      {row.status !== 'locked' && <Button size="small" color="warning" onClick={() => lockMonitoring(row.id)}>Lock</Button>}
+                      {row.status !== 'locked' && (
+                        <Button size="small" onClick={() => openEditMonitoring(row)}>
+                          Edit
+                        </Button>
+                      )}
+                      {row.status !== 'locked' && (
+                        <Button size="small" color="warning" onClick={() => lockMonitoring(row.id)}>
+                          Lock
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1039,13 +1286,22 @@ export default function KpiPage() {
           <Grid item xs={12} md={4}>
             <Card>
               <CardContent>
-                <Typography variant="overline" color="text.secondary">Overall KPI Score</Typography>
-                <Typography variant="h3" fontWeight={700}>{summary?.summary.overallScore ?? 0}</Typography>
+                <Typography variant="overline" color="text.secondary">
+                  Overall KPI Score
+                </Typography>
+                <Typography variant="h3" fontWeight={700}>
+                  {summary?.summary.overallScore ?? 0}
+                </Typography>
                 <LinearProgress
                   variant="determinate"
                   value={Math.min(Number(summary?.summary.overallScore ?? 0), 100)}
-                  sx={{ mt: 1, height: 8, borderRadius: 4, bgcolor: 'grey.200',
-                    '& .MuiLinearProgress-bar': { bgcolor: overallBandColor } }}
+                  sx={{
+                    mt: 1,
+                    height: 8,
+                    borderRadius: 4,
+                    bgcolor: 'grey.200',
+                    '& .MuiLinearProgress-bar': { bgcolor: overallBandColor },
+                  }}
                 />
               </CardContent>
             </Card>
@@ -1053,18 +1309,30 @@ export default function KpiPage() {
           <Grid item xs={12} md={4}>
             <Card sx={{ borderLeft: '6px solid #1976d2' }}>
               <CardContent>
-                <Typography variant="overline" color="text.secondary">Units in Dashboard</Typography>
-                <Typography variant="h3" fontWeight={700}>{summary?.summary.unitCount ?? 0}</Typography>
-                <Typography variant="caption" color="text.secondary">Units with at least one KPI entry</Typography>
+                <Typography variant="overline" color="text.secondary">
+                  Units in Dashboard
+                </Typography>
+                <Typography variant="h3" fontWeight={700}>
+                  {summary?.summary.unitCount ?? 0}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Units with at least one KPI entry
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
           <Grid item xs={12} md={4}>
             <Card sx={{ borderLeft: '6px solid #0288d1' }}>
               <CardContent>
-                <Typography variant="overline" color="text.secondary">Monitoring Rows</Typography>
-                <Typography variant="h3" fontWeight={700}>{summary?.summary.rowCount ?? 0}</Typography>
-                <Typography variant="caption" color="text.secondary">KPI entries for this period</Typography>
+                <Typography variant="overline" color="text.secondary">
+                  Monitoring Rows
+                </Typography>
+                <Typography variant="h3" fontWeight={700}>
+                  {summary?.summary.rowCount ?? 0}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  KPI entries for this period
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
@@ -1093,8 +1361,12 @@ export default function KpiPage() {
                         <TableRow key={`${item.kpiCode}-${index}`}>
                           <TableCell>{item.unitName}</TableCell>
                           <TableCell>
-                            <Typography variant="body2" fontWeight={600}>{item.kpiName}</Typography>
-                            <Typography variant="caption" color="text.secondary">{item.kpiCode}</Typography>
+                            <Typography variant="body2" fontWeight={600}>
+                              {item.kpiName}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {item.kpiCode}
+                            </Typography>
                           </TableCell>
                           <TableCell>
                             <Chip
@@ -1119,7 +1391,13 @@ export default function KpiPage() {
           {/* ── Band Color Legend ── */}
           <Grid item xs={12}>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center', px: 0.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5, fontWeight: 600 }}>KPI Band Scale:</Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mr: 0.5, fontWeight: 600 }}
+              >
+                KPI Band Scale:
+              </Typography>
               {(summary?.thresholds?.length
                 ? summary.thresholds
                 : [
@@ -1132,239 +1410,328 @@ export default function KpiPage() {
                   key={t.band}
                   size="small"
                   label={`${t.minScore}–${t.maxScore}`}
-                  sx={{ bgcolor: BAND_COLORS[String(t.band).toLowerCase()] || BAND_COLORS.unclassified, color: '#fff', fontWeight: 600, fontSize: 11 }}
+                  sx={{
+                    bgcolor: BAND_COLORS[String(t.band).toLowerCase()] || BAND_COLORS.unclassified,
+                    color: '#fff',
+                    fontWeight: 600,
+                    fontSize: 11,
+                  }}
                 />
               ))}
             </Box>
           </Grid>
 
           {filterUnitId === '' && (
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader title="Unit KPI Scores" subheader="Scoreboard view by unit — click a unit row to drill into individual KPIs" />
-              <CardContent>
-                {allUnitsLineData.length === 0 ? (
-                  <Box sx={{ py: 6, textAlign: 'center' }}>
-                    <Typography variant="body2" color="text.secondary">No KPI monitoring data for this period. Encode values in KPI Monitoring tab.</Typography>
-                  </Box>
-                ) : (
-                  <Box sx={{ width: '100%', height: 280 }}>
-                    <ResponsiveContainer>
-                      <LineChart data={allUnitsLineData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                        <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                        <Tooltip formatter={(val: any) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
-                        {availableUnits.map((unit) => {
-                          return (
-                            <Line
-                              key={unit.id}
-                              type="monotone"
-                              dataKey={`u${unit.id}`}
-                              name={unit.name}
-                              stroke={unitColorMap[unit.id]}
-                              strokeWidth={2}
-                              connectNulls={false}
-                              dot={{ r: 4, strokeWidth: 1.5 }}
-                              activeDot={{ r: 6 }}
-                            />
-                          );
-                        })}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </Box>
-                )}
-
-                <Divider sx={{ my: 1 }} />
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Unit</TableCell>
-                      <TableCell sx={{ width: 32, p: 0 }}>Color</TableCell>
-                      <TableCell>Score</TableCell>
-                      <TableCell>Trend</TableCell>
-                      <TableCell># KPIs</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {!hasDataForPeriod ? (
-                      <TableRow>
-                        <TableCell colSpan={5} align="center">
-                          <Typography variant="body2" color="text.secondary" sx={{ py: 1.5 }}>
-                            No KPI monitoring data for this period yet.
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ) : availableUnits.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} align="center"><Typography variant="caption" color="text.secondary">No unit data.</Typography></TableCell></TableRow>
-                    ) : (
-                      availableUnits.map((unit, idx) => {
-                        const summaryRow = summaryUnitMap[unit.id];
-                        const visibleTrendValues = allUnitsLineData
-                          .map((d) => d[`u${unit.id}`])
-                          .filter((v) => v !== null && v !== undefined) as number[];
-                        const trend = computeTrendValues(visibleTrendValues);
-                        const prevScore: number | null = trend.prev;
-                        const currScore: number | null = trend.current ?? (summaryRow ? Number(summaryRow.score) : null);
-                        const bandKey = summaryRow
-                          ? String(summaryRow.band || 'unclassified').toLowerCase()
-                          : 'unclassified';
-                        const unitColor = unitColorMap[unit.id] ?? UNIT_COLORS[idx % UNIT_COLORS.length];
-                        return (
-                          <TableRow key={unit.id} hover sx={{ cursor: 'pointer' }} onClick={() => openUnitDashboard(unit.id)}>
-                            <TableCell>{unit.name}</TableCell>
-                            <TableCell sx={{ p: 1 }}>
-                              <Box sx={{ width: 20, height: 20, borderRadius: '4px', bgcolor: unitColor }} />
-                            </TableCell>
-                            <TableCell>
-                              <strong>{summaryRow ? summaryRow.score : '—'}</strong>
-                            </TableCell>
-                            <TableCell>
-                              {currScore !== null ? (
-                                <TrendSparkline prev={prevScore} current={currScore} points={visibleTrendValues} band={bandKey} />
-                              ) : (
-                                <Typography variant="caption" color="text.secondary">—</Typography>
-                              )}
-                            </TableCell>
-                            <TableCell>{summaryRow ? summaryRow.kpiCount : '—'}</TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </Grid>
-          )}
-
-          {hasDataForPeriod && selectedUnitDashboard && (
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader
-                title={`Unit Detail — ${selectedUnitDashboard.unitName}`}
-                subheader={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                    <Typography variant="body2" color="text.secondary">Composite Score:</Typography>
-                    <Chip
-                      size="small"
-                      label={selectedUnitDetailRows.some((r) => r.hasData) ? String(selectedUnitDashboard.score) : '—'}
-                      sx={{
-                        bgcolor: selectedUnitDetailRows.some((r) => r.hasData)
-                          ? BAND_COLORS[String(selectedUnitDashboard.band || 'unclassified').toLowerCase()] || BAND_COLORS.unclassified
-                          : 'grey.400',
-                        color: '#fff', fontWeight: 700, fontSize: 13, px: 0.5,
-                      }}
-                    />
-                  </Box>
-                }
-                action={
-                  <IconButton size="small" onClick={closeUnitDetail} title="Close detail">
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                }
-              />
-              <CardContent>
-                <>
-                  {kpiDetailLineData.data.length === 0 ? (
-                    <Box sx={{ py: 3, textAlign: 'center' }}>
-                      <Typography variant="body2" color="text.secondary">No trend data for this unit/period.</Typography>
+            <Grid item xs={12}>
+              <Card>
+                <CardHeader
+                  title="Unit KPI Scores"
+                  subheader="Scoreboard view by unit — click a unit row to drill into individual KPIs"
+                />
+                <CardContent>
+                  {allUnitsLineData.length === 0 ? (
+                    <Box sx={{ py: 6, textAlign: 'center' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        No KPI monitoring data for this period. Encode values in KPI Monitoring tab.
+                      </Typography>
                     </Box>
                   ) : (
-                    <Box sx={{ width: '100%', height: 240, mb: 2 }}>
+                    <Box sx={{ width: '100%', height: 280 }}>
                       <ResponsiveContainer>
-                        <LineChart data={kpiDetailLineData.data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                        <LineChart
+                          data={allUnitsLineData}
+                          margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
+                        >
                           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                           <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                           <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                          <Tooltip formatter={(val: any) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
-                          {kpiDetailLineData.codes.map((code, idx) => (
-                            <Line
-                              key={code}
-                              type="monotone"
-                              dataKey={code}
-                              name={code}
-                              stroke={UNIT_COLORS[idx % UNIT_COLORS.length]}
-                              strokeWidth={2}
-                              connectNulls={false}
-                              dot={{ r: 4, strokeWidth: 1.5 }}
-                              activeDot={{ r: 6 }}
-                            />
-                          ))}
+                          <Tooltip
+                            formatter={(val: any) =>
+                              val != null ? [`${val}`, 'Score'] : ['—', 'No data']
+                            }
+                          />
+                          {availableUnits.map((unit) => {
+                            return (
+                              <Line
+                                key={unit.id}
+                                type="monotone"
+                                dataKey={`u${unit.id}`}
+                                name={unit.name}
+                                stroke={unitColorMap[unit.id]}
+                                strokeWidth={2}
+                                connectNulls={false}
+                                dot={{ r: 4, strokeWidth: 1.5 }}
+                                activeDot={{ r: 6 }}
+                              />
+                            );
+                          })}
                         </LineChart>
                       </ResponsiveContainer>
                     </Box>
                   )}
+
                   <Divider sx={{ my: 1 }} />
-                  {selectedUnitDetailRows.length === 0 ? (
-                    <Box sx={{ py: 3, textAlign: 'center' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        No KPI master definitions available for this unit.
-                      </Typography>
-                    </Box>
-                  ) : (
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>KPI</TableCell>
+                        <TableCell>Unit</TableCell>
                         <TableCell sx={{ width: 32, p: 0 }}>Color</TableCell>
-                        <TableCell>Direction</TableCell>
-                        <TableCell>Actual</TableCell>
-                        <TableCell>Target</TableCell>
                         <TableCell>Score</TableCell>
                         <TableCell>Trend</TableCell>
+                        <TableCell># KPIs</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {selectedUnitDetailRows.map((item, idx) => {
-                        const visibleTrendValues = kpiDetailLineData.data
-                          .map((d) => d[item.code])
-                          .filter((v) => v !== null && v !== undefined) as number[];
-                        const trend = computeTrendValues(visibleTrendValues);
-                        const prevKpiScore: number | null = trend.prev;
-                        const currScore = item.hasData ? (trend.current ?? item.normalizedScore) : null;
-                        const kpiColor = UNIT_COLORS[idx % UNIT_COLORS.length];
-                        return (
-                          <TableRow key={item.id}>
-                            <TableCell>
-                              <Typography variant="body2" fontWeight={600}>{item.name}</Typography>
-                              <Typography variant="caption" color="text.secondary">{item.code}</Typography>
-                            </TableCell>
-                            <TableCell sx={{ p: 1 }}>
-                              <Box sx={{ width: 20, height: 20, borderRadius: '4px', bgcolor: kpiColor }} />
-                            </TableCell>
-                            <TableCell>
-                              <DirectionIndicator direction={item.direction} />
-                            </TableCell>
-                            <TableCell>{item.hasData ? item.actualValue : '—'}</TableCell>
-                            <TableCell>{item.targetValue ?? '—'}</TableCell>
-                            <TableCell><strong>{item.hasData ? item.normalizedScore : '—'}</strong></TableCell>
-                            <TableCell>
-                              {currScore !== null ? (
-                                <TrendSparkline prev={prevKpiScore} current={currScore} points={visibleTrendValues} band={String(item.band || 'unclassified').toLowerCase()} />
-                              ) : (
-                                <Typography variant="caption" color="text.secondary">—</Typography>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
+                      {!hasDataForPeriod ? (
+                        <TableRow>
+                          <TableCell colSpan={5} align="center">
+                            <Typography variant="body2" color="text.secondary" sx={{ py: 1.5 }}>
+                              No KPI monitoring data for this period yet.
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ) : availableUnits.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} align="center">
+                            <Typography variant="caption" color="text.secondary">
+                              No unit data.
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        availableUnits.map((unit, idx) => {
+                          const summaryRow = summaryUnitMap[unit.id];
+                          const visibleTrendValues = allUnitsLineData
+                            .map((d) => d[`u${unit.id}`])
+                            .filter((v) => v !== null && v !== undefined) as number[];
+                          const trend = computeTrendValues(visibleTrendValues);
+                          const prevScore: number | null = trend.prev;
+                          const currScore: number | null =
+                            trend.current ?? (summaryRow ? Number(summaryRow.score) : null);
+                          const bandKey = summaryRow
+                            ? String(summaryRow.band || 'unclassified').toLowerCase()
+                            : 'unclassified';
+                          const unitColor =
+                            unitColorMap[unit.id] ?? UNIT_COLORS[idx % UNIT_COLORS.length];
+                          return (
+                            <TableRow
+                              key={unit.id}
+                              hover
+                              sx={{ cursor: 'pointer' }}
+                              onClick={() => openUnitDashboard(unit.id)}
+                            >
+                              <TableCell>{unit.name}</TableCell>
+                              <TableCell sx={{ p: 1 }}>
+                                <Box
+                                  sx={{
+                                    width: 20,
+                                    height: 20,
+                                    borderRadius: '4px',
+                                    bgcolor: unitColor,
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <strong>{summaryRow ? summaryRow.score : '—'}</strong>
+                              </TableCell>
+                              <TableCell>
+                                {currScore !== null ? (
+                                  <TrendSparkline
+                                    prev={prevScore}
+                                    current={currScore}
+                                    points={visibleTrendValues}
+                                    band={bandKey}
+                                  />
+                                ) : (
+                                  <Typography variant="caption" color="text.secondary">
+                                    —
+                                  </Typography>
+                                )}
+                              </TableCell>
+                              <TableCell>{summaryRow ? summaryRow.kpiCount : '—'}</TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
                     </TableBody>
                   </Table>
-                  )}
-                </>
-              </CardContent>
-            </Card>
-          </Grid>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
+
+          {hasDataForPeriod && selectedUnitDashboard && (
+            <Grid item xs={12}>
+              <Card>
+                <CardHeader
+                  title={`Unit Detail — ${selectedUnitDashboard.unitName}`}
+                  subheader={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Composite Score:
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={
+                          selectedUnitDetailRows.some((r) => r.hasData)
+                            ? String(selectedUnitDashboard.score)
+                            : '—'
+                        }
+                        sx={{
+                          bgcolor: selectedUnitDetailRows.some((r) => r.hasData)
+                            ? BAND_COLORS[
+                                String(selectedUnitDashboard.band || 'unclassified').toLowerCase()
+                              ] || BAND_COLORS.unclassified
+                            : 'grey.400',
+                          color: '#fff',
+                          fontWeight: 700,
+                          fontSize: 13,
+                          px: 0.5,
+                        }}
+                      />
+                    </Box>
+                  }
+                  action={
+                    <IconButton size="small" onClick={closeUnitDetail} title="Close detail">
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  }
+                />
+                <CardContent>
+                  <>
+                    {kpiDetailLineData.data.length === 0 ? (
+                      <Box sx={{ py: 3, textAlign: 'center' }}>
+                        <Typography variant="body2" color="text.secondary">
+                          No trend data for this unit/period.
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Box sx={{ width: '100%', height: 240, mb: 2 }}>
+                        <ResponsiveContainer>
+                          <LineChart
+                            data={kpiDetailLineData.data}
+                            margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                            <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                            <Tooltip
+                              formatter={(val: any) =>
+                                val != null ? [`${val}`, 'Score'] : ['—', 'No data']
+                              }
+                            />
+                            {kpiDetailLineData.codes.map((code, idx) => (
+                              <Line
+                                key={code}
+                                type="monotone"
+                                dataKey={code}
+                                name={code}
+                                stroke={UNIT_COLORS[idx % UNIT_COLORS.length]}
+                                strokeWidth={2}
+                                connectNulls={false}
+                                dot={{ r: 4, strokeWidth: 1.5 }}
+                                activeDot={{ r: 6 }}
+                              />
+                            ))}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </Box>
+                    )}
+                    <Divider sx={{ my: 1 }} />
+                    {selectedUnitDetailRows.length === 0 ? (
+                      <Box sx={{ py: 3, textAlign: 'center' }}>
+                        <Typography variant="body2" color="text.secondary">
+                          No KPI master definitions available for this unit.
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>KPI</TableCell>
+                            <TableCell sx={{ width: 32, p: 0 }}>Color</TableCell>
+                            <TableCell>Direction</TableCell>
+                            <TableCell>Actual</TableCell>
+                            <TableCell>Target</TableCell>
+                            <TableCell>Score</TableCell>
+                            <TableCell>Trend</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {selectedUnitDetailRows.map((item, idx) => {
+                            const visibleTrendValues = kpiDetailLineData.data
+                              .map((d) => d[item.code])
+                              .filter((v) => v !== null && v !== undefined) as number[];
+                            const trend = computeTrendValues(visibleTrendValues);
+                            const prevKpiScore: number | null = trend.prev;
+                            const currScore = item.hasData
+                              ? (trend.current ?? item.normalizedScore)
+                              : null;
+                            const kpiColor = UNIT_COLORS[idx % UNIT_COLORS.length];
+                            return (
+                              <TableRow key={item.id}>
+                                <TableCell>
+                                  <Typography variant="body2" fontWeight={600}>
+                                    {item.name}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {item.code}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell sx={{ p: 1 }}>
+                                  <Box
+                                    sx={{
+                                      width: 20,
+                                      height: 20,
+                                      borderRadius: '4px',
+                                      bgcolor: kpiColor,
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <DirectionIndicator direction={item.direction} />
+                                </TableCell>
+                                <TableCell>{item.hasData ? item.actualValue : '—'}</TableCell>
+                                <TableCell>{item.targetValue ?? '—'}</TableCell>
+                                <TableCell>
+                                  <strong>{item.hasData ? item.normalizedScore : '—'}</strong>
+                                </TableCell>
+                                <TableCell>
+                                  {currScore !== null ? (
+                                    <TrendSparkline
+                                      prev={prevKpiScore}
+                                      current={currScore}
+                                      points={visibleTrendValues}
+                                      band={String(item.band || 'unclassified').toLowerCase()}
+                                    />
+                                  ) : (
+                                    <Typography variant="caption" color="text.secondary">
+                                      —
+                                    </Typography>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </>
+                </CardContent>
+              </Card>
+            </Grid>
           )}
 
           <Grid item xs={12} md={6}>
             <Card>
               <CardHeader title="Band Distribution" subheader="Units by performance band" />
               <CardContent>
-                {bandDistribution.filter((e) => !e.partial).length === 0 && bandDistribution.filter((e) => e.partial).length === 0 ? (
+                {bandDistribution.filter((e) => !e.partial).length === 0 &&
+                bandDistribution.filter((e) => e.partial).length === 0 ? (
                   <Box sx={{ py: 6, textAlign: 'center' }}>
-                    <Typography variant="body2" color="text.secondary">No band data for this period.</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      No band data for this period.
+                    </Typography>
                   </Box>
                 ) : (
                   <Box sx={{ width: '100%', height: 280 }}>
@@ -1378,13 +1745,29 @@ export default function KpiPage() {
                           cy="50%"
                           outerRadius={90}
                           labelLine={false}
-                          label={({ cx, cy, midAngle, innerRadius, outerRadius, value, partial: isPartial }: any) => {
+                          label={({
+                            cx,
+                            cy,
+                            midAngle,
+                            innerRadius,
+                            outerRadius,
+                            value,
+                            partial: isPartial,
+                          }: any) => {
                             const RADIAN = Math.PI / 180;
                             const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
                             const x = cx + radius * Math.cos(-midAngle * RADIAN);
                             const y = cy + radius * Math.sin(-midAngle * RADIAN);
                             return (
-                              <text x={x} y={y} fill={isPartial ? '#888' : '#fff'} textAnchor="middle" dominantBaseline="central" fontSize={14} fontWeight={700}>
+                              <text
+                                x={x}
+                                y={y}
+                                fill={isPartial ? '#888' : '#fff'}
+                                textAnchor="middle"
+                                dominantBaseline="central"
+                                fontSize={14}
+                                fontWeight={700}
+                              >
                                 {value}
                               </text>
                             );
@@ -1396,7 +1779,8 @@ export default function KpiPage() {
                               fill={
                                 entry.partial
                                   ? 'transparent'
-                                  : (BAND_COLORS[String(entry.name).toLowerCase()] || BAND_COLORS.unclassified)
+                                  : BAND_COLORS[String(entry.name).toLowerCase()] ||
+                                    BAND_COLORS.unclassified
                               }
                               stroke={entry.partial ? '#ccc' : undefined}
                               strokeWidth={entry.partial ? 2 : undefined}
@@ -1414,11 +1798,16 @@ export default function KpiPage() {
 
           <Grid item xs={12} md={6}>
             <Card>
-              <CardHeader title="KPIs by Performance Band" subheader="KPI count per selected filters; partial units shown as transparent" />
+              <CardHeader
+                title="KPIs by Performance Band"
+                subheader="KPI count per selected filters; partial units shown as transparent"
+              />
               <CardContent>
                 {kpiBandDistribution.length === 0 ? (
                   <Box sx={{ py: 6, textAlign: 'center' }}>
-                    <Typography variant="body2" color="text.secondary">No KPI band data for this period.</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      No KPI band data for this period.
+                    </Typography>
                   </Box>
                 ) : (
                   <Box sx={{ width: '100%', height: 280 }}>
@@ -1432,13 +1821,29 @@ export default function KpiPage() {
                           cy="50%"
                           outerRadius={90}
                           labelLine={false}
-                          label={({ cx, cy, midAngle, innerRadius, outerRadius, value, partial: isPartial }: any) => {
+                          label={({
+                            cx,
+                            cy,
+                            midAngle,
+                            innerRadius,
+                            outerRadius,
+                            value,
+                            partial: isPartial,
+                          }: any) => {
                             const RADIAN = Math.PI / 180;
                             const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
                             const x = cx + radius * Math.cos(-midAngle * RADIAN);
                             const y = cy + radius * Math.sin(-midAngle * RADIAN);
                             return (
-                              <text x={x} y={y} fill={isPartial ? '#888' : '#fff'} textAnchor="middle" dominantBaseline="central" fontSize={14} fontWeight={700}>
+                              <text
+                                x={x}
+                                y={y}
+                                fill={isPartial ? '#888' : '#fff'}
+                                textAnchor="middle"
+                                dominantBaseline="central"
+                                fontSize={14}
+                                fontWeight={700}
+                              >
                                 {value}
                               </text>
                             );
@@ -1450,7 +1855,8 @@ export default function KpiPage() {
                               fill={
                                 entry.partial
                                   ? 'transparent'
-                                  : (BAND_COLORS[String(entry.name).toLowerCase()] || BAND_COLORS.unclassified)
+                                  : BAND_COLORS[String(entry.name).toLowerCase()] ||
+                                    BAND_COLORS.unclassified
                               }
                               stroke={entry.partial ? '#ccc' : undefined}
                               strokeWidth={entry.partial ? 2 : undefined}
@@ -1482,39 +1888,112 @@ export default function KpiPage() {
               />
             </Grid>
             <Grid item xs={12} md={8}>
-              <TextField label="KPI Name" value={masterForm.name} onChange={(e) => setMasterForm((prev) => ({ ...prev, name: e.target.value }))} fullWidth />
+              <TextField
+                label="KPI Name"
+                value={masterForm.name}
+                onChange={(e) => setMasterForm((prev) => ({ ...prev, name: e.target.value }))}
+                fullWidth
+              />
             </Grid>
             <Grid item xs={12}>
-              <TextField label="Description" value={masterForm.description} onChange={(e) => setMasterForm((prev) => ({ ...prev, description: e.target.value }))} fullWidth multiline minRows={2} />
+              <TextField
+                label="Description"
+                value={masterForm.description}
+                onChange={(e) =>
+                  setMasterForm((prev) => ({ ...prev, description: e.target.value }))
+                }
+                fullWidth
+                multiline
+                minRows={2}
+              />
             </Grid>
             <Grid item xs={12} md={4}>
-              <TextField select label="Unit" value={masterForm.unitId} onChange={(e) => setMasterForm((prev) => ({ ...prev, unitId: Number(e.target.value) }))} fullWidth>
-                {availableUnits.map((u) => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
+              <TextField
+                select
+                label="Unit"
+                value={masterForm.unitId}
+                onChange={(e) =>
+                  setMasterForm((prev) => ({ ...prev, unitId: Number(e.target.value) }))
+                }
+                fullWidth
+              >
+                {availableUnits.map((u) => (
+                  <MenuItem key={u.id} value={u.id}>
+                    {u.name}
+                  </MenuItem>
+                ))}
               </TextField>
             </Grid>
             <Grid item xs={12} md={4}>
-              <TextField select label="Type" value={masterForm.type} onChange={(e) => setMasterForm((prev) => ({ ...prev, type: e.target.value as KpiType }))} fullWidth>
+              <TextField
+                select
+                label="Type"
+                value={masterForm.type}
+                onChange={(e) =>
+                  setMasterForm((prev) => ({ ...prev, type: e.target.value as KpiType }))
+                }
+                fullWidth
+              >
                 <MenuItem value="measurement">Measurement</MenuItem>
                 <MenuItem value="yes_no">Yes/No</MenuItem>
               </TextField>
             </Grid>
             <Grid item xs={12} md={4}>
-              <TextField label="Unit of Measure" value={masterForm.unitOfMeasure} onChange={(e) => setMasterForm((prev) => ({ ...prev, unitOfMeasure: e.target.value }))} fullWidth />
+              <TextField
+                label="Unit of Measure"
+                value={masterForm.unitOfMeasure}
+                onChange={(e) =>
+                  setMasterForm((prev) => ({ ...prev, unitOfMeasure: e.target.value }))
+                }
+                fullWidth
+              />
             </Grid>
             <Grid item xs={12} md={4}>
-              <TextField select label="Direction" value={masterForm.direction} onChange={(e) => setMasterForm((prev) => ({ ...prev, direction: e.target.value as KpiDirection }))} fullWidth>
+              <TextField
+                select
+                label="Direction"
+                value={masterForm.direction}
+                onChange={(e) =>
+                  setMasterForm((prev) => ({ ...prev, direction: e.target.value as KpiDirection }))
+                }
+                fullWidth
+              >
                 <MenuItem value="higher_is_better">Higher is better</MenuItem>
                 <MenuItem value="lower_is_better">Lower is better</MenuItem>
               </TextField>
             </Grid>
             <Grid item xs={12} md={4}>
-              <TextField type="number" label="Target Value" value={masterForm.targetValue} onChange={(e) => setMasterForm((prev) => ({ ...prev, targetValue: Number(e.target.value) }))} fullWidth />
+              <TextField
+                type="number"
+                label="Target Value"
+                value={masterForm.targetValue}
+                onChange={(e) =>
+                  setMasterForm((prev) => ({ ...prev, targetValue: Number(e.target.value) }))
+                }
+                fullWidth
+              />
             </Grid>
             <Grid item xs={12} md={2}>
-              <TextField type="number" label="Weight" value={masterForm.weight} onChange={(e) => setMasterForm((prev) => ({ ...prev, weight: Number(e.target.value) }))} fullWidth />
+              <TextField
+                type="number"
+                label="Weight"
+                value={masterForm.weight}
+                onChange={(e) =>
+                  setMasterForm((prev) => ({ ...prev, weight: Number(e.target.value) }))
+                }
+                fullWidth
+              />
             </Grid>
             <Grid item xs={12} md={2}>
-              <TextField select label="Frequency" value={masterForm.frequency} onChange={(e) => setMasterForm((prev) => ({ ...prev, frequency: e.target.value as KpiFrequency }))} fullWidth>
+              <TextField
+                select
+                label="Frequency"
+                value={masterForm.frequency}
+                onChange={(e) =>
+                  setMasterForm((prev) => ({ ...prev, frequency: e.target.value as KpiFrequency }))
+                }
+                fullWidth
+              >
                 <MenuItem value="monthly">Monthly</MenuItem>
                 <MenuItem value="quarterly">Quarterly</MenuItem>
                 <MenuItem value="semestral">Semestral</MenuItem>
@@ -1525,12 +2004,21 @@ export default function KpiPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setMasterOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={saveMaster}>Save</Button>
+          <Button variant="contained" onClick={saveMaster}>
+            Save
+          </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={monitoringOpen} onClose={() => setMonitoringOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{monitoringEditingId ? 'Edit KPI Monitoring' : 'Encode KPI Monitoring'}</DialogTitle>
+      <Dialog
+        open={monitoringOpen}
+        onClose={() => setMonitoringOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {monitoringEditingId ? 'Edit KPI Monitoring' : 'Encode KPI Monitoring'}
+        </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
             <Grid item xs={12} md={6}>
@@ -1539,34 +2027,103 @@ export default function KpiPage() {
                 <Select
                   value={monitoringForm.kpiMasterCode}
                   label="KPI"
-                  onChange={(e) => setMonitoringForm((prev) => ({ ...prev, kpiMasterCode: e.target.value }))}
+                  onChange={(e) =>
+                    setMonitoringForm((prev) => ({ ...prev, kpiMasterCode: e.target.value }))
+                  }
                   disabled={Boolean(monitoringEditingId)}
                 >
-                  {masters.map((kpi) => <MenuItem key={kpi.code} value={kpi.code}>{kpi.code} - {kpi.name}</MenuItem>)}
+                  {masters.map((kpi) => (
+                    <MenuItem key={kpi.code} value={kpi.code}>
+                      {kpi.code} - {kpi.name}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
             <Grid item xs={12} md={6}>
-              <TextField select label="Unit" value={monitoringForm.unitId} onChange={(e) => setMonitoringForm((prev) => ({ ...prev, unitId: Number(e.target.value) }))} fullWidth disabled={Boolean(monitoringEditingId)}>
-                {availableUnits.map((u) => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
+              <TextField
+                select
+                label="Unit"
+                value={monitoringForm.unitId}
+                onChange={(e) =>
+                  setMonitoringForm((prev) => ({ ...prev, unitId: Number(e.target.value) }))
+                }
+                fullWidth
+                disabled={Boolean(monitoringEditingId)}
+              >
+                {availableUnits.map((u) => (
+                  <MenuItem key={u.id} value={u.id}>
+                    {u.name}
+                  </MenuItem>
+                ))}
               </TextField>
             </Grid>
             <Grid item xs={12} md={4}>
-              <TextField type="number" label="Period Year" value={monitoringForm.periodYear} onChange={(e) => setMonitoringForm((prev) => ({ ...prev, periodYear: Number(e.target.value) }))} fullWidth disabled={Boolean(monitoringEditingId)} />
+              <TextField
+                type="number"
+                label="Period Year"
+                value={monitoringForm.periodYear}
+                onChange={(e) =>
+                  setMonitoringForm((prev) => ({ ...prev, periodYear: Number(e.target.value) }))
+                }
+                fullWidth
+                disabled={Boolean(monitoringEditingId)}
+              />
             </Grid>
             <Grid item xs={12} md={4}>
-              <TextField select label="Period Month" value={monitoringForm.periodMonth} onChange={(e) => setMonitoringForm((prev) => ({ ...prev, periodMonth: Number(e.target.value) }))} fullWidth disabled={Boolean(monitoringEditingId)}>
-                {monthOptions.map((m) => <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>)}
+              <TextField
+                select
+                label="Period Month"
+                value={monitoringForm.periodMonth}
+                onChange={(e) =>
+                  setMonitoringForm((prev) => ({ ...prev, periodMonth: Number(e.target.value) }))
+                }
+                fullWidth
+                disabled={Boolean(monitoringEditingId)}
+              >
+                {monthOptions.map((m) => (
+                  <MenuItem key={m.value} value={m.value}>
+                    {m.label}
+                  </MenuItem>
+                ))}
               </TextField>
             </Grid>
             <Grid item xs={12} md={4}>
-              <TextField type="number" label="Actual Value" value={monitoringForm.actualValue} onChange={(e) => setMonitoringForm((prev) => ({ ...prev, actualValue: Number(e.target.value) }))} fullWidth />
+              <TextField
+                type="number"
+                label="Actual Value"
+                value={monitoringForm.actualValue}
+                onChange={(e) =>
+                  setMonitoringForm((prev) => ({ ...prev, actualValue: Number(e.target.value) }))
+                }
+                fullWidth
+              />
             </Grid>
             <Grid item xs={12}>
-              <TextField label="Remarks" value={monitoringForm.remarks} onChange={(e) => setMonitoringForm((prev) => ({ ...prev, remarks: e.target.value }))} fullWidth multiline minRows={2} />
+              <TextField
+                label="Remarks"
+                value={monitoringForm.remarks}
+                onChange={(e) =>
+                  setMonitoringForm((prev) => ({ ...prev, remarks: e.target.value }))
+                }
+                fullWidth
+                multiline
+                minRows={2}
+              />
             </Grid>
             <Grid item xs={12} md={4}>
-              <TextField select label="Status" value={monitoringForm.status} onChange={(e) => setMonitoringForm((prev) => ({ ...prev, status: e.target.value as KpiMonitoringStatus }))} fullWidth>
+              <TextField
+                select
+                label="Status"
+                value={monitoringForm.status}
+                onChange={(e) =>
+                  setMonitoringForm((prev) => ({
+                    ...prev,
+                    status: e.target.value as KpiMonitoringStatus,
+                  }))
+                }
+                fullWidth
+              >
                 <MenuItem value="draft">Draft</MenuItem>
                 <MenuItem value="locked">Locked</MenuItem>
               </TextField>
@@ -1575,7 +2132,9 @@ export default function KpiPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setMonitoringOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={saveMonitoring}>Save</Button>
+          <Button variant="contained" onClick={saveMonitoring}>
+            Save
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

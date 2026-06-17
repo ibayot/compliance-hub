@@ -18,10 +18,7 @@ import {
   TableRow,
   LinearProgress,
 } from '@mui/material';
-import {
-  BugReport as BugIcon,
-  Assessment as AssessmentIcon,
-} from '@mui/icons-material';
+import { BugReport as BugIcon, Assessment as AssessmentIcon } from '@mui/icons-material';
 import {
   incidentsApi,
   Incident,
@@ -65,21 +62,31 @@ export default function IncidentsPage() {
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case 'critical': return 'error';
-      case 'high': return 'error';
-      case 'medium': return 'warning';
-      case 'low': return 'info';
-      default: return 'default';
+      case 'critical':
+        return 'error';
+      case 'high':
+        return 'error';
+      case 'medium':
+        return 'warning';
+      case 'low':
+        return 'info';
+      default:
+        return 'default';
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'open': return 'error';
-      case 'in_progress': return 'warning';
-      case 'resolved': return 'success';
-      case 'closed': return 'default';
-      default: return 'default';
+      case 'open':
+        return 'error';
+      case 'in_progress':
+        return 'warning';
+      case 'resolved':
+        return 'success';
+      case 'closed':
+        return 'default';
+      default:
+        return 'default';
     }
   };
 
@@ -167,25 +174,38 @@ export default function IncidentsPage() {
                 <Grid item xs={6} sm={3}>
                   <Box textAlign="center">
                     <Chip label="Low" color="info" size="small" />
-                    <Typography variant="h6" mt={1}>{todayStats.severityBreakdown.low}</Typography>
+                    <Typography variant="h6" mt={1}>
+                      {todayStats.severityBreakdown.low}
+                    </Typography>
                   </Box>
                 </Grid>
                 <Grid item xs={6} sm={3}>
                   <Box textAlign="center">
                     <Chip label="Medium" color="warning" size="small" />
-                    <Typography variant="h6" mt={1}>{todayStats.severityBreakdown.medium}</Typography>
+                    <Typography variant="h6" mt={1}>
+                      {todayStats.severityBreakdown.medium}
+                    </Typography>
                   </Box>
                 </Grid>
                 <Grid item xs={6} sm={3}>
                   <Box textAlign="center">
                     <Chip label="High" color="error" size="small" />
-                    <Typography variant="h6" mt={1}>{todayStats.severityBreakdown.high}</Typography>
+                    <Typography variant="h6" mt={1}>
+                      {todayStats.severityBreakdown.high}
+                    </Typography>
                   </Box>
                 </Grid>
                 <Grid item xs={6} sm={3}>
                   <Box textAlign="center">
-                    <Chip label="Critical" color="error" size="small" sx={{ bgcolor: 'error.dark' }} />
-                    <Typography variant="h6" mt={1}>{todayStats.severityBreakdown.critical}</Typography>
+                    <Chip
+                      label="Critical"
+                      color="error"
+                      size="small"
+                      sx={{ bgcolor: 'error.dark' }}
+                    />
+                    <Typography variant="h6" mt={1}>
+                      {todayStats.severityBreakdown.critical}
+                    </Typography>
                   </Box>
                 </Grid>
               </Grid>
@@ -260,9 +280,9 @@ export default function IncidentsPage() {
                       {statistics.byStatus.open}
                     </Typography>
                   </Box>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={(statistics.byStatus.open / statistics.total) * 100} 
+                  <LinearProgress
+                    variant="determinate"
+                    value={(statistics.byStatus.open / statistics.total) * 100}
                     color="error"
                     sx={{ mb: 2 }}
                   />
@@ -273,9 +293,9 @@ export default function IncidentsPage() {
                       {statistics.byStatus.in_progress}
                     </Typography>
                   </Box>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={(statistics.byStatus.in_progress / statistics.total) * 100} 
+                  <LinearProgress
+                    variant="determinate"
+                    value={(statistics.byStatus.in_progress / statistics.total) * 100}
                     color="warning"
                     sx={{ mb: 2 }}
                   />
@@ -286,9 +306,9 @@ export default function IncidentsPage() {
                       {statistics.byStatus.resolved}
                     </Typography>
                   </Box>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={(statistics.byStatus.resolved / statistics.total) * 100} 
+                  <LinearProgress
+                    variant="determinate"
+                    value={(statistics.byStatus.resolved / statistics.total) * 100}
                     color="success"
                     sx={{ mb: 2 }}
                   />
@@ -299,9 +319,9 @@ export default function IncidentsPage() {
                       {statistics.byStatus.closed}
                     </Typography>
                   </Box>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={(statistics.byStatus.closed / statistics.total) * 100} 
+                  <LinearProgress
+                    variant="determinate"
+                    value={(statistics.byStatus.closed / statistics.total) * 100}
                     sx={{ mb: 2 }}
                   />
                 </Box>
@@ -322,10 +342,14 @@ export default function IncidentsPage() {
                       {statistics.bySeverity.critical}
                     </Typography>
                   </Box>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={(statistics.bySeverity.critical / statistics.total) * 100} 
-                    sx={{ mb: 2, bgcolor: 'grey.200', '& .MuiLinearProgress-bar': { bgcolor: 'error.dark' } }}
+                  <LinearProgress
+                    variant="determinate"
+                    value={(statistics.bySeverity.critical / statistics.total) * 100}
+                    sx={{
+                      mb: 2,
+                      bgcolor: 'grey.200',
+                      '& .MuiLinearProgress-bar': { bgcolor: 'error.dark' },
+                    }}
                   />
 
                   <Box display="flex" justifyContent="space-between" mb={1}>
@@ -334,9 +358,9 @@ export default function IncidentsPage() {
                       {statistics.bySeverity.high}
                     </Typography>
                   </Box>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={(statistics.bySeverity.high / statistics.total) * 100} 
+                  <LinearProgress
+                    variant="determinate"
+                    value={(statistics.bySeverity.high / statistics.total) * 100}
                     color="error"
                     sx={{ mb: 2 }}
                   />
@@ -347,9 +371,9 @@ export default function IncidentsPage() {
                       {statistics.bySeverity.medium}
                     </Typography>
                   </Box>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={(statistics.bySeverity.medium / statistics.total) * 100} 
+                  <LinearProgress
+                    variant="determinate"
+                    value={(statistics.bySeverity.medium / statistics.total) * 100}
                     color="warning"
                     sx={{ mb: 2 }}
                   />
@@ -360,9 +384,9 @@ export default function IncidentsPage() {
                       {statistics.bySeverity.low}
                     </Typography>
                   </Box>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={(statistics.bySeverity.low / statistics.total) * 100} 
+                  <LinearProgress
+                    variant="determinate"
+                    value={(statistics.bySeverity.low / statistics.total) * 100}
                     color="info"
                     sx={{ mb: 2 }}
                   />
@@ -413,11 +437,7 @@ export default function IncidentsPage() {
                   </TableRow>
                 ) : (
                   recentIncidents.map((incident) => (
-                    <TableRow 
-                      key={incident.id}
-                      hover
-                      sx={{ cursor: 'pointer' }}
-                    >
+                    <TableRow key={incident.id} hover sx={{ cursor: 'pointer' }}>
                       <TableCell>
                         <Typography variant="body2" fontWeight={600}>
                           {incident.title}
@@ -431,19 +451,22 @@ export default function IncidentsPage() {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
-                          {incident.category.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
+                          {incident.category
+                            .replace(/_/g, ' ')
+                            .toLowerCase()
+                            .replace(/\b\w/g, (l) => l.toUpperCase())}
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Chip 
-                          label={incident.severity.toUpperCase()} 
+                        <Chip
+                          label={incident.severity.toUpperCase()}
                           color={getSeverityColor(incident.severity) as any}
                           size="small"
                         />
                       </TableCell>
                       <TableCell>
-                        <Chip 
-                          label={incident.status.replace('_', ' ').toUpperCase()} 
+                        <Chip
+                          label={incident.status.replace('_', ' ').toUpperCase()}
                           color={getStatusColor(incident.status) as any}
                           size="small"
                         />

@@ -32,7 +32,10 @@ export interface UpdateReportorialDocTypePayload {
 }
 
 /** Compute period suffix client-side for preview (mirrors backend logic) */
-export function computePeriodSuffix(frequency: SubmissionFrequency, ref: Date = new Date()): string {
+export function computePeriodSuffix(
+  frequency: SubmissionFrequency,
+  ref: Date = new Date(),
+): string {
   const year = ref.getFullYear();
   const month = ref.getMonth() + 1; // 1-based
 
@@ -78,7 +81,10 @@ export function computePeriodSuffixExplicit(
   return String(year);
 }
 
-export function computeExpectedFilename(docType: ReportorialDocType, ref: Date = new Date()): string {
+export function computeExpectedFilename(
+  docType: ReportorialDocType,
+  ref: Date = new Date(),
+): string {
   const suffix = computePeriodSuffix(docType.submission_frequency, ref);
   return `${docType.base_name}_${suffix}`;
 }
@@ -115,7 +121,10 @@ export const docTypesApi = {
     return res.data;
   },
 
-  update: async (id: number, payload: UpdateReportorialDocTypePayload): Promise<ReportorialDocType> => {
+  update: async (
+    id: number,
+    payload: UpdateReportorialDocTypePayload,
+  ): Promise<ReportorialDocType> => {
     const res = await apiClient.patch(`/document-types/${id}`, payload);
     return res.data;
   },

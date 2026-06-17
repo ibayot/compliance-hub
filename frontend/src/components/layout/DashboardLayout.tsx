@@ -40,7 +40,9 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
     '/dashboard/reports',
     '/dashboard/mov',
   ];
-  const isComplianceRoute = compliancePaths.some((p) => location.pathname === p || location.pathname.startsWith(`${p}/`));
+  const isComplianceRoute = compliancePaths.some(
+    (p) => location.pathname === p || location.pathname.startsWith(`${p}/`),
+  );
   const showComplianceUnavailable = isComplianceRoute && loaded && services.compliance === false;
   const isComplianceLoading = isComplianceRoute && !loaded;
 

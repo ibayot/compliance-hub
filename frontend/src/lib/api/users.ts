@@ -171,7 +171,10 @@ export const usersApi = {
     return response.data;
   },
 
-  updateRoleDefinition: async (value: string, payload: UpdateRolePayload): Promise<RoleDefinition> => {
+  updateRoleDefinition: async (
+    value: string,
+    payload: UpdateRolePayload,
+  ): Promise<RoleDefinition> => {
     const response = await apiClient.patch(`/users/roles/${value}`, payload);
     return response.data;
   },
@@ -180,7 +183,9 @@ export const usersApi = {
     await apiClient.delete(`/users/roles/${value}`);
   },
 
-  searchEmails: async (q: string): Promise<{ id: number; email: string; firstName?: string; lastName?: string }[]> => {
+  searchEmails: async (
+    q: string,
+  ): Promise<{ id: number; email: string; firstName?: string; lastName?: string }[]> => {
     const response = await apiClient.get(`/users/search-email?q=${encodeURIComponent(q)}`);
     return response.data;
   },
@@ -198,8 +203,14 @@ export const usersApi = {
   },
 
   /** Update capability flags for a specific role. Super admin only. */
-  updateCapability: async (roleValue: string, payload: UpdateRoleCapabilityPayload): Promise<RoleCapabilityRecord> => {
-    const response = await apiClient.patch(`/users/role-capabilities/${encodeURIComponent(roleValue)}`, payload);
+  updateCapability: async (
+    roleValue: string,
+    payload: UpdateRoleCapabilityPayload,
+  ): Promise<RoleCapabilityRecord> => {
+    const response = await apiClient.patch(
+      `/users/role-capabilities/${encodeURIComponent(roleValue)}`,
+      payload,
+    );
     return response.data;
   },
 };

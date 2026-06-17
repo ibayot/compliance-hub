@@ -34,10 +34,7 @@ export interface SubmitReviewDto {
 }
 
 export const reviewsApi = {
-  submitReview: async (
-    documentId: string,
-    data: SubmitReviewDto,
-  ): Promise<ManualReview> => {
+  submitReview: async (documentId: string, data: SubmitReviewDto): Promise<ManualReview> => {
     const response = await apiClient.post(`/documents/${documentId}/reviews`, data);
     return response.data;
   },

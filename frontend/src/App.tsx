@@ -58,8 +58,10 @@ function ProtectedDashboard({
 
   const isSuperAdmin = user?.role === 'super_admin';
   const hasCapability = requiredCapability ? Boolean(myCap?.[requiredCapability]) : true;
-  const hasRoleAccess = allowedRoles ? Boolean(user?.role && allowedRoles.includes(user.role)) : true;
-  const isAllowed = isSuperAdmin || (requiredCapability ? hasCapability : true) && hasRoleAccess;
+  const hasRoleAccess = allowedRoles
+    ? Boolean(user?.role && allowedRoles.includes(user.role))
+    : true;
+  const isAllowed = isSuperAdmin || ((requiredCapability ? hasCapability : true) && hasRoleAccess);
 
   if (!isAllowed) {
     return (

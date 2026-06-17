@@ -390,6 +390,10 @@ export class EmailService {
 
   // ── Core send ───────────────────────────────────────────────────────────
 
+  public async sendGenericEmail(to: string, subject: string, html: string): Promise<void> {
+    await this.send(to, subject, html);
+  }
+
   private async send(to: string, subject: string, html: string): Promise<void> {
     if (!this.emailEnabled) {
       this.logger.log(`[EMAIL-DISABLED] Suppressed email to ${to}: ${subject}`);

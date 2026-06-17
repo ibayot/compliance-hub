@@ -1,24 +1,14 @@
 'use client';
 
 import React from 'react';
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Chip,
-  Divider,
-  Grid,
-} from '@mui/material';
+import { Box, Card, CardContent, Typography, Chip, Divider, Grid } from '@mui/material';
 import { VersionComparison as VersionComparisonType } from '@/app/api/reviews';
 
 interface VersionComparisonProps {
   comparison: VersionComparisonType;
 }
 
-export default function VersionComparison({
-  comparison,
-}: VersionComparisonProps) {
+export default function VersionComparison({ comparison }: VersionComparisonProps) {
   const { diff_output, version_a, version_b } = comparison;
   const { stats, htmlDiff } = diff_output;
 
@@ -57,26 +47,10 @@ export default function VersionComparison({
         <Divider sx={{ mb: 2 }} />
 
         <Box display="flex" gap={2} mb={3}>
-          <Chip
-            label={`${stats.additions} additions`}
-            color="success"
-            size="small"
-          />
-          <Chip
-            label={`${stats.deletions} deletions`}
-            color="error"
-            size="small"
-          />
-          <Chip
-            label={`${stats.unchanged} unchanged`}
-            color="default"
-            size="small"
-          />
-          <Chip
-            label={`${stats.changePercentage.toFixed(1)}% changed`}
-            color="info"
-            size="small"
-          />
+          <Chip label={`${stats.additions} additions`} color="success" size="small" />
+          <Chip label={`${stats.deletions} deletions`} color="error" size="small" />
+          <Chip label={`${stats.unchanged} unchanged`} color="default" size="small" />
+          <Chip label={`${stats.changePercentage.toFixed(1)}% changed`} color="info" size="small" />
         </Box>
 
         <Box

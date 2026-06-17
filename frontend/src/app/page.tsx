@@ -20,12 +20,7 @@ export default function Home() {
   }, [isAuthenticated, loading, router]);
 
   return (
-    <Box
-      display="flex"
-      justifyContent="center"
-      alignItems="center"
-      minHeight="100vh"
-    >
+    <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
       <CircularProgress />
     </Box>
   );

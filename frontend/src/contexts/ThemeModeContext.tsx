@@ -31,10 +31,7 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
     setMode(mode === 'light' ? 'dark' : 'light');
   };
 
-  const value = useMemo(
-    () => ({ mode, setMode, toggleMode }),
-    [mode],
-  );
+  const value = useMemo(() => ({ mode, setMode, toggleMode }), [mode]);
 
   const theme = useMemo(() => getAppTheme(mode), [mode]);
 

@@ -1,8 +1,19 @@
 # RICTMS Compliance Hub - Changelog
+# RICTMS Compliance Hub - Changelog
 
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+---
+
+## [0.0.106] (Backend) / [0.0.99] (Frontend) - 2026-06-17 - Bugfixes and SLA Alerts
+
+### Fixed
+- **Ticket Auto-Unfreeze Logic**: Corrected the auto-unfreeze functionality to transition frozen tickets to `IN_PROGRESS` instead of `OPEN` when the maximum freeze limit expires, properly resuming the SLA clock without dropping assigned technicians. Added an automated internal note upon unfreezing.
+- **SLA Alerts**: Implemented percentage-based SLA warning email alerts at 75% and 150% of the SLA deadline, triggering via the hourly cron job.
+- **AI PII Scrubbing enhancements**: The AI Knowledge Base generation scrubber now dynamically queries the `users` table to properly identify and scrub technician and user names/emails before feeding prompts to Gemini.
+- **Syntax Errors**: Resolved a blocking syntax compiler error within `ticket.service.ts` that broke backend deployments.
 
 ---
 

@@ -67,7 +67,8 @@ export default function ArchivedDocumentsPage() {
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Documents you archived after they were returned. Review the remarks to understand why each was returned.
+          Documents you archived after they were returned. Review the remarks to understand why each
+          was returned.
         </Typography>
 
         {isLoading ? (
@@ -117,7 +118,11 @@ export default function ArchivedDocumentsPage() {
                         <TableCell>{getStatusChip(doc)}</TableCell>
                         <TableCell>
                           {doc.latest_review_remarks ? (
-                            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 400 }}>
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ maxWidth: 400 }}
+                            >
                               {doc.latest_review_remarks}
                             </Typography>
                           ) : (
@@ -139,7 +144,11 @@ export default function ArchivedDocumentsPage() {
         )}
 
         <Box sx={{ mt: 3 }}>
-          <Button variant="outlined" startIcon={<BackIcon />} onClick={() => router.push('/dashboard/documents')}>
+          <Button
+            variant="outlined"
+            startIcon={<BackIcon />}
+            onClick={() => router.push('/dashboard/documents')}
+          >
             Back to Documents
           </Button>
         </Box>

@@ -44,12 +44,9 @@ function DocumentTable({
   documents: Document[];
   onView: (doc: Document) => void;
 }) {
-
   const handleDownload = async (doc: Document) => {
     if (!doc.versions?.length) return;
-    const latest = doc.versions.reduce(
-      (a, b) => (a.version_number >= b.version_number ? a : b),
-    );
+    const latest = doc.versions.reduce((a, b) => (a.version_number >= b.version_number ? a : b));
     const { blob, fileName } = await documentsApi.downloadVersionBlob(doc.id, latest.id);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -82,10 +79,7 @@ function DocumentTable({
               </TableCell>
               <TableCell align="center">
                 <Tooltip title="View preview">
-                  <IconButton
-                    size="small"
-                    onClick={() => onView(doc)}
-                  >
+                  <IconButton size="small" onClick={() => onView(doc)}>
                     <ViewIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
@@ -168,8 +162,8 @@ export default function RepositoryPage() {
         documentsApi.getVersionHistory(doc.id),
       ]);
       const target =
-        versions.find((v) => v.version_number === fullDoc.current_version)
-        || versions.reduce((a, b) => (a.version_number >= b.version_number ? a : b), versions[0]);
+        versions.find((v) => v.version_number === fullDoc.current_version) ||
+        versions.reduce((a, b) => (a.version_number >= b.version_number ? a : b), versions[0]);
       if (!target) return;
       const { blob, fileName } = await documentsApi.downloadVersionBlob(doc.id, target.id);
       const url = URL.createObjectURL(blob);
@@ -178,8 +172,7 @@ export default function RepositoryPage() {
       a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-    }
+    } catch {}
   };
 
   const { data, isLoading, isError } = useQuery({
@@ -238,8 +231,8 @@ export default function RepositoryPage() {
         documentsApi.getVersionHistory(doc.id),
       ]);
       const target =
-        versions.find((v) => v.version_number === fullDoc.current_version)
-        || versions.reduce((a, b) => (a.version_number >= b.version_number ? a : b), versions[0]);
+        versions.find((v) => v.version_number === fullDoc.current_version) ||
+        versions.reduce((a, b) => (a.version_number >= b.version_number ? a : b), versions[0]);
       if (!target) {
         setPreviewLoading(false);
         return;
@@ -321,7 +314,8 @@ export default function RepositoryPage() {
               return activeBucket ? (
                 <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
                   <Typography variant="subtitle2" fontWeight={600} mb={1} color="primary.main">
-                    {activeBucket.label} — {activeBucket.count} document{activeBucket.count !== 1 ? 's' : ''}
+                    {activeBucket.label} — {activeBucket.count} document
+                    {activeBucket.count !== 1 ? 's' : ''}
                   </Typography>
                   <DocumentTable documents={activeBucket.documents} onView={openPreview} />
                 </Box>
@@ -331,20 +325,24 @@ export default function RepositoryPage() {
         </Accordion>
       ))}
 
-      <Dialog
-        open={Boolean(previewDoc)}
-        onClose={closePreview}
-        fullWidth
-        maxWidth="lg"
-      >
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
-          <Typography variant="h6" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <Dialog open={Boolean(previewDoc)} onClose={closePreview} fullWidth maxWidth="lg">
+        <DialogTitle
+          sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}
+        >
+          <Typography
+            variant="h6"
+            sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
             {previewDoc?.title ?? 'Document Preview'}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Tooltip title="Download latest version">
               <span>
-                <IconButton size="small" onClick={() => downloadLatestVersion(previewDoc)} disabled={!previewDoc || previewLoading}>
+                <IconButton
+                  size="small"
+                  onClick={() => downloadLatestVersion(previewDoc)}
+                  disabled={!previewDoc || previewLoading}
+                >
                   <DownloadIcon fontSize="small" />
                 </IconButton>
               </span>
@@ -366,7 +364,9 @@ export default function RepositoryPage() {
               viewerTitle={previewDoc?.title || 'Document Preview'}
             />
           ) : (
-            <Typography color="text.secondary">Preview is not available for this document.</Typography>
+            <Typography color="text.secondary">
+              Preview is not available for this document.
+            </Typography>
           )}
         </DialogContent>
       </Dialog>

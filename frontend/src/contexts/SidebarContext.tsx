@@ -12,12 +12,12 @@ const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  
+
   const FULL_WIDTH = 260;
   const COLLAPSED_WIDTH = 72;
 
   const toggleSidebar = () => {
-    setIsCollapsed(prev => !prev);
+    setIsCollapsed((prev) => !prev);
   };
 
   const drawerWidth = isCollapsed ? COLLAPSED_WIDTH : FULL_WIDTH;

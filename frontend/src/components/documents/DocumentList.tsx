@@ -144,27 +144,31 @@ export default function DocumentList({
                     {doc.title}
                   </Typography>
                 </TableCell>
-                {!archivedMode && !hideUnitColumn && <TableCell>{doc.unit?.name || 'N/A'}</TableCell>}
+                {!archivedMode && !hideUnitColumn && (
+                  <TableCell>{doc.unit?.name || 'N/A'}</TableCell>
+                )}
                 <TableCell>{doc.document_type}</TableCell>
-                <TableCell>
-                  {formatDocumentPeriod(doc.year, doc.period)}
-                </TableCell>
+                <TableCell>{formatDocumentPeriod(doc.year, doc.period)}</TableCell>
                 <TableCell>
                   {(() => {
                     const statusView = statusFormatter
                       ? statusFormatter(doc)
                       : { label: doc.status.toUpperCase(), color: getStatusColor(doc.status) };
-                    return (
-                      <Chip label={statusView.label} color={statusView.color} size="small" />
-                    );
+                    return <Chip label={statusView.label} color={statusView.color} size="small" />;
                   })()}
                 </TableCell>
-                {!archivedMode && !hideUploaderColumn && <TableCell>{doc.uploader?.username || 'N/A'}</TableCell>}
+                {!archivedMode && !hideUploaderColumn && (
+                  <TableCell>{doc.uploader?.username || 'N/A'}</TableCell>
+                )}
                 {archivedMode ? (
                   <TableCell>
                     {doc.latest_review_remarks ? (
                       <Box sx={{ px: 1.25, py: 0.75, borderRadius: 1, bgcolor: 'action.hover' }}>
-                        <Typography variant="body2" color="text.primary" sx={{ maxWidth: 400, whiteSpace: 'pre-line' }}>
+                        <Typography
+                          variant="body2"
+                          color="text.primary"
+                          sx={{ maxWidth: 400, whiteSpace: 'pre-line' }}
+                        >
                           {doc.latest_review_remarks}
                         </Typography>
                       </Box>
@@ -175,64 +179,103 @@ export default function DocumentList({
                     )}
                   </TableCell>
                 ) : null}
-                <TableCell>{format(new Date(archivedMode ? (doc.updated_at || doc.created_at) : doc.created_at), 'MMM dd, yyyy')}</TableCell>
+                <TableCell>
+                  {format(
+                    new Date(archivedMode ? doc.updated_at || doc.created_at : doc.created_at),
+                    'MMM dd, yyyy',
+                  )}
+                </TableCell>
                 <TableCell align="right">
                   <Tooltip title="View Details">
-                    <IconButton size="small" onClick={() => handleViewDocument(doc.id)} color="primary">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleViewDocument(doc.id)}
+                      color="primary"
+                    >
                       <ViewIcon />
                     </IconButton>
                   </Tooltip>
-                  {!archivedMode && onReturn && (() => {
-                    const permission = canReturnDocument ? canReturnDocument(doc) : { allowed: true };
-                    return (
-                      <Tooltip title={permission.allowed ? 'Return to Focal' : permission.reason || 'Return is not allowed'}>
-                        <span>
-                          <IconButton
-                            size="small"
-                            onClick={() => permission.allowed && onReturn(doc)}
-                            color="warning"
-                            disabled={!permission.allowed}
-                          >
-                            <ReturnIcon />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    );
-                  })()}
-                  {!archivedMode && onArchive && (() => {
-                    const permission = canArchiveDocument ? canArchiveDocument(doc) : { allowed: true };
-                    return (
-                      <Tooltip title={permission.allowed ? 'Archive Document' : permission.reason || 'Archive not allowed'}>
-                        <span>
-                          <IconButton
-                            size="small"
-                            onClick={() => permission.allowed && onArchive(doc)}
-                            color="default"
-                            disabled={!permission.allowed}
-                          >
-                            <ArchiveIcon />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    );
-                  })()}
-                  {!archivedMode && onDelete && (() => {
-                    const permission = canDeleteDocument ? canDeleteDocument(doc) : { allowed: true };
-                    return (
-                      <Tooltip title={permission.allowed ? 'Hard Delete' : permission.reason || 'Delete is not allowed'}>
-                        <span>
-                          <IconButton
-                            size="small"
-                            onClick={() => permission.allowed && onDelete(doc)}
-                            color="error"
-                            disabled={!permission.allowed}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    );
-                  })()}
+                  {!archivedMode &&
+                    onReturn &&
+                    (() => {
+                      const permission = canReturnDocument
+                        ? canReturnDocument(doc)
+                        : { allowed: true };
+                      return (
+                        <Tooltip
+                          title={
+                            permission.allowed
+                              ? 'Return to Focal'
+                              : permission.reason || 'Return is not allowed'
+                          }
+                        >
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={() => permission.allowed && onReturn(doc)}
+                              color="warning"
+                              disabled={!permission.allowed}
+                            >
+                              <ReturnIcon />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      );
+                    })()}
+                  {!archivedMode &&
+                    onArchive &&
+                    (() => {
+                      const permission = canArchiveDocument
+                        ? canArchiveDocument(doc)
+                        : { allowed: true };
+                      return (
+                        <Tooltip
+                          title={
+                            permission.allowed
+                              ? 'Archive Document'
+                              : permission.reason || 'Archive not allowed'
+                          }
+                        >
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={() => permission.allowed && onArchive(doc)}
+                              color="default"
+                              disabled={!permission.allowed}
+                            >
+                              <ArchiveIcon />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      );
+                    })()}
+                  {!archivedMode &&
+                    onDelete &&
+                    (() => {
+                      const permission = canDeleteDocument
+                        ? canDeleteDocument(doc)
+                        : { allowed: true };
+                      return (
+                        <Tooltip
+                          title={
+                            permission.allowed
+                              ? 'Hard Delete'
+                              : permission.reason || 'Delete is not allowed'
+                          }
+                        >
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={() => permission.allowed && onDelete(doc)}
+                              color="error"
+                              disabled={!permission.allowed}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      );
+                    })()}
                 </TableCell>
               </TableRow>
             ))}

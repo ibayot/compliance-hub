@@ -35,8 +35,9 @@ export default function LoginPage() {
     try {
       await login(email, password, redirect ?? undefined);
     } catch (err: any) {
-      const msg = err?.response?.data?.message
-        || (err?.message === 'Network Error' || !err?.response
+      const msg =
+        err?.response?.data?.message ||
+        (err?.message === 'Network Error' || !err?.response
           ? 'Cannot connect to server. Please make sure backend API is running on port 4000.'
           : 'Invalid email or password');
       enqueueSnackbar(msg, { variant: 'error' });
@@ -90,7 +91,8 @@ export default function LoginPage() {
 
             {reason === 'role_changed' && (
               <Alert severity="info" sx={{ mb: 2 }}>
-                Your account's role has been updated. Please sign in again to apply the new capabilities.
+                Your account's role has been updated. Please sign in again to apply the new
+                capabilities.
               </Alert>
             )}
 
@@ -121,13 +123,7 @@ export default function LoginPage() {
                 InputLabelProps={{ shrink: true }}
               />
 
-              <Button
-                type="submit"
-                variant="contained"
-                fullWidth
-                size="large"
-                disabled={loading}
-              >
+              <Button type="submit" variant="contained" fullWidth size="large" disabled={loading}>
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
 

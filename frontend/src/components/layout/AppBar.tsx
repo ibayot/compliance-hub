@@ -38,8 +38,7 @@ interface AppBarProps {
 
 /** Detect UUID-like or numeric-id-like segments that shouldn't show verbatim in breadcrumbs */
 const isIdSegment = (s: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) ||
-  /^\d+$/.test(s);
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) || /^\d+$/.test(s);
 
 export default function AppBar({ onMenuClick }: AppBarProps) {
   const pathname = usePathname();
@@ -127,11 +126,12 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
         bgcolor: 'background.paper',
         color: 'text.primary',
         boxShadow: 1,
-        transition: (theme) => theme.transitions.create(['width', 'margin'], {
-          easing: theme.transitions.easing.sharp,
-          duration: theme.transitions.duration.enteringScreen,
-        }),
-        '@media print': { display: 'none' }
+        transition: (theme) =>
+          theme.transitions.create(['width', 'margin'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.enteringScreen,
+          }),
+        '@media print': { display: 'none' },
       }}
     >
       <Toolbar>
@@ -175,7 +175,7 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
           <Breadcrumbs aria-label="breadcrumb">
             {breadcrumbs.map((crumb, index) => {
               const isLast = index === breadcrumbs.length - 1;
-              
+
               if (isLast) {
                 return (
                   <Typography key={crumb.path} color="text.primary" fontWeight={600}>
@@ -214,7 +214,8 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
             color="inherit"
           >
             <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
-              {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}
+              {user?.firstName?.charAt(0)}
+              {user?.lastName?.charAt(0)}
             </Avatar>
           </IconButton>
           <Menu
@@ -249,7 +250,12 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
               <AccountCircle sx={{ mr: 1 }} />
               Settings
             </MenuItem>
-            <MenuItem onClick={() => { setFeedbackOpen(true); handleProfileMenuClose(); }}>
+            <MenuItem
+              onClick={() => {
+                setFeedbackOpen(true);
+                handleProfileMenuClose();
+              }}
+            >
               <FeedbackIcon sx={{ mr: 1 }} />
               Suggestions
             </MenuItem>

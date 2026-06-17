@@ -15,7 +15,12 @@ export function formatDocumentPeriod(year?: string | number, period?: string | n
     return `${compactRange[1]}-${compactRange[2]}-${compactRange[3]}`;
   }
 
-  if (yearValue && (periodValue.startsWith(`${yearValue}-`) || periodValue.startsWith(`${yearValue}Q`) || periodValue === yearValue)) {
+  if (
+    yearValue &&
+    (periodValue.startsWith(`${yearValue}-`) ||
+      periodValue.startsWith(`${yearValue}Q`) ||
+      periodValue === yearValue)
+  ) {
     return periodValue;
   }
 

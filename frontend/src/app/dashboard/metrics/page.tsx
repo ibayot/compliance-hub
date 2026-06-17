@@ -58,21 +58,29 @@ export default function MetricsPage() {
   const [weight, setWeight] = useState(1);
   const [reportorialDocTypeId, setReportorialDocTypeId] = useState('');
 
-  const [requiredSectionsText, setRequiredSectionsText] = useState('Introduction\nMethodology\nFindings\nRecommendations');
+  const [requiredSectionsText, setRequiredSectionsText] = useState(
+    'Introduction\nMethodology\nFindings\nRecommendations',
+  );
   const [keywordText, setKeywordText] = useState('compliance, report, memorandum, issuance');
   const [keywordMinMatches, setKeywordMinMatches] = useState(1);
   const [keywordCaseSensitive, setKeywordCaseSensitive] = useState(false);
   const [keywordWordBoundary, setKeywordWordBoundary] = useState(false);
 
-  const [extractKeywordsText, setExtractKeywordsText] = useState('total incidents\nresolved incidents\nopen incidents\nusers trained');
-  const [extractComparison, setExtractComparison] = useState<'gte' | 'lte' | 'eq' | 'gt' | 'lt'>('gte');
+  const [extractKeywordsText, setExtractKeywordsText] = useState(
+    'total incidents\nresolved incidents\nopen incidents\nusers trained',
+  );
+  const [extractComparison, setExtractComparison] = useState<'gte' | 'lte' | 'eq' | 'gt' | 'lt'>(
+    'gte',
+  );
   const [extractComparisonsText, setExtractComparisonsText] = useState('>=\n>=\n<=\n>=');
   const [extractExpectedNumbersText, setExtractExpectedNumbersText] = useState('1\n1\n0\n10');
 
   const [deadlineDay, setDeadlineDay] = useState(5);
   const [deadlineMonthOffset, setDeadlineMonthOffset] = useState(1);
   const [maxDaysLate, setMaxDaysLate] = useState(0);
-  const [submissionFrequency, setSubmissionFrequency] = useState<'monthly' | 'quarterly' | 'annual' | 'custom'>('monthly');
+  const [submissionFrequency, setSubmissionFrequency] = useState<
+    'monthly' | 'quarterly' | 'annual' | 'custom'
+  >('monthly');
   const [submissionMonth, setSubmissionMonth] = useState(12);
   const [customPeriodRegex, setCustomPeriodRegex] = useState('^(\\d{4})(\\d{2})$');
   const [customPeriodYearGroup, setCustomPeriodYearGroup] = useState(1);
@@ -151,7 +159,7 @@ export default function MetricsPage() {
     setReportorialDocTypeId(
       template.applicability?.[0]?.reportorial_doc_type_id
         ? String(template.applicability[0].reportorial_doc_type_id)
-        : ''
+        : '',
     );
 
     const ruleConfig = template.rule_config || {};
@@ -187,15 +195,22 @@ export default function MetricsPage() {
       setExtractComparisonsText(
         (existingComparisons.length > 0
           ? existingComparisons
-          : existingKeywords.map(() => (ruleConfig.comparison as any) || 'gte'))
+          : existingKeywords.map(() => (ruleConfig.comparison as any) || 'gte')
+        )
           .map((item: string) => {
             switch (String(item || '').trim()) {
-              case 'gte': return '>=';
-              case 'lte': return '<=';
-              case 'gt': return '>';
-              case 'lt': return '<';
-              case 'eq': return '=';
-              default: return '>=';
+              case 'gte':
+                return '>=';
+              case 'lte':
+                return '<=';
+              case 'gt':
+                return '>';
+              case 'lt':
+                return '<';
+              case 'eq':
+                return '=';
+              default:
+                return '>=';
             }
           })
           .join('\n'),
@@ -258,7 +273,8 @@ export default function MetricsPage() {
           if (value === '>') return 'gt';
           if (value === '<') return 'lt';
           if (value === '=') return 'eq';
-          if (['gte', 'lte', 'gt', 'lt', 'eq'].includes(value)) return value as 'gte' | 'lte' | 'gt' | 'lt' | 'eq';
+          if (['gte', 'lte', 'gt', 'lt', 'eq'].includes(value))
+            return value as 'gte' | 'lte' | 'gt' | 'lt' | 'eq';
           return null;
         })
         .filter((item): item is 'gte' | 'lte' | 'gt' | 'lt' | 'eq' => item !== null);
@@ -332,7 +348,9 @@ export default function MetricsPage() {
         return 'Comparisons must match the number of keywords.';
       }
 
-      const invalidComparison = comparisons.find((item) => !['>=', '<=', '>', '<', '=', 'gte', 'lte', 'gt', 'lt', 'eq'].includes(item));
+      const invalidComparison = comparisons.find(
+        (item) => !['>=', '<=', '>', '<', '=', 'gte', 'lte', 'gt', 'lt', 'eq'].includes(item),
+      );
       if (invalidComparison) {
         return `Invalid comparison operator: ${invalidComparison}. Use >=, <=, >, <, or =.`;
       }
@@ -420,7 +438,8 @@ export default function MetricsPage() {
             Metrics Template Builder
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Configure section checks, keyword checks, number extraction, and deadlines per unit/report type
+            Configure section checks, keyword checks, number extraction, and deadlines per
+            unit/report type
           </Typography>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
@@ -467,12 +486,17 @@ export default function MetricsPage() {
                     <TableCell>{metricTypeLabels[template.metric_type]}</TableCell>
                     <TableCell>{template.weight}</TableCell>
                     <TableCell>
-                      {template.applicability?.length && template.applicability[0].reportorial_doc_type_id ? (
+                      {template.applicability?.length &&
+                      template.applicability[0].reportorial_doc_type_id ? (
                         <Chip
                           size="small"
                           label={(() => {
-                            const dt = docTypes.find((d) => d.id === template.applicability![0].reportorial_doc_type_id);
-                            return dt ? `${dt.unit?.name ?? ''} • ${dt.display_name}` : `Doc Type #${template.applicability![0].reportorial_doc_type_id}`;
+                            const dt = docTypes.find(
+                              (d) => d.id === template.applicability![0].reportorial_doc_type_id,
+                            );
+                            return dt
+                              ? `${dt.unit?.name ?? ''} • ${dt.display_name}`
+                              : `Doc Type #${template.applicability![0].reportorial_doc_type_id}`;
                           })()}
                         />
                       ) : (
@@ -505,18 +529,40 @@ export default function MetricsPage() {
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{editing ? 'Edit Metric Template' : 'Create Metric Template'}</DialogTitle>
         <DialogContent>
-          <TextField margin="dense" label="Template Name" fullWidth value={name} onChange={(event) => setName(event.target.value)} />
-          <TextField margin="dense" label="Description" fullWidth value={description} onChange={(event) => setDescription(event.target.value)} />
+          <TextField
+            margin="dense"
+            label="Template Name"
+            fullWidth
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <TextField
+            margin="dense"
+            label="Description"
+            fullWidth
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
 
-            <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={2} mt={1}>
-              <TextField select label="Metric Type" value={metricType} onChange={(event) => setMetricType(event.target.value as MetricType)}>
-                <MenuItem value="section_check">Section Rules</MenuItem>
-                <MenuItem value="keyword_check">Keyword Rules</MenuItem>
-                <MenuItem value="property_check">Number Extraction</MenuItem>
-                <MenuItem value="date_check">Date / Deadline Check</MenuItem>
-              </TextField>
-              <TextField type="number" label="Weight" value={weight} onChange={(event) => setWeight(Math.max(Number(event.target.value) || 1, 1))} />
-            </Box>
+          <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={2} mt={1}>
+            <TextField
+              select
+              label="Metric Type"
+              value={metricType}
+              onChange={(event) => setMetricType(event.target.value as MetricType)}
+            >
+              <MenuItem value="section_check">Section Rules</MenuItem>
+              <MenuItem value="keyword_check">Keyword Rules</MenuItem>
+              <MenuItem value="property_check">Number Extraction</MenuItem>
+              <MenuItem value="date_check">Date / Deadline Check</MenuItem>
+            </TextField>
+            <TextField
+              type="number"
+              label="Weight"
+              value={weight}
+              onChange={(event) => setWeight(Math.max(Number(event.target.value) || 1, 1))}
+            />
+          </Box>
 
           <TextField
             margin="dense"
@@ -529,7 +575,8 @@ export default function MetricsPage() {
             <MenuItem value="">All Document Types (Global)</MenuItem>
             {docTypes.map((dt) => (
               <MenuItem key={dt.id} value={String(dt.id)}>
-                {dt.unit?.name ? `${dt.unit.name} — ` : ''}{dt.display_name}
+                {dt.unit?.name ? `${dt.unit.name} — ` : ''}
+                {dt.display_name}
               </MenuItem>
             ))}
           </TextField>
@@ -567,15 +614,27 @@ export default function MetricsPage() {
                   type="number"
                   label="Minimum Matches"
                   value={keywordMinMatches}
-                  onChange={(event) => setKeywordMinMatches(Math.max(Number(event.target.value) || 1, 1))}
+                  onChange={(event) =>
+                    setKeywordMinMatches(Math.max(Number(event.target.value) || 1, 1))
+                  }
                 />
                 <Box>
                   <FormControlLabel
-                    control={<Checkbox checked={keywordCaseSensitive} onChange={(event) => setKeywordCaseSensitive(event.target.checked)} />}
+                    control={
+                      <Checkbox
+                        checked={keywordCaseSensitive}
+                        onChange={(event) => setKeywordCaseSensitive(event.target.checked)}
+                      />
+                    }
                     label="Case sensitive"
                   />
                   <FormControlLabel
-                    control={<Checkbox checked={keywordWordBoundary} onChange={(event) => setKeywordWordBoundary(event.target.checked)} />}
+                    control={
+                      <Checkbox
+                        checked={keywordWordBoundary}
+                        onChange={(event) => setKeywordWordBoundary(event.target.checked)}
+                      />
+                    }
                     label="Match whole words only"
                   />
                 </Box>
@@ -588,7 +647,12 @@ export default function MetricsPage() {
 
           {metricType === 'property_check' && (
             <>
-              <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr 1fr 1fr' }} gap={2} mt={1}>
+              <Box
+                display="grid"
+                gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr 1fr 1fr' }}
+                gap={2}
+                mt={1}
+              >
                 <TextField
                   label="Keywords (comma or newline separated)"
                   value={extractKeywordsText}
@@ -625,85 +689,96 @@ export default function MetricsPage() {
                 />
               </Box>
               <Typography variant="caption" color="text.secondary">
-                Sample mapping: total incidents &gt;= 1, resolved incidents &gt;= 1, open incidents &lt;= 0, users trained &gt;= 10
+                Sample mapping: total incidents &gt;= 1, resolved incidents &gt;= 1, open incidents
+                &lt;= 0, users trained &gt;= 10
               </Typography>
             </>
           )}
 
           {metricType === 'date_check' && (
             <>
-            <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr 1fr' }} gap={2} mt={1}>
-              <TextField
-                select
-                label="Submission Frequency"
-                value={submissionFrequency}
-                onChange={(event) => setSubmissionFrequency(event.target.value as any)}
+              <Box
+                display="grid"
+                gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr 1fr' }}
+                gap={2}
+                mt={1}
               >
-                <MenuItem value="monthly">Monthly</MenuItem>
-                <MenuItem value="quarterly">Quarterly</MenuItem>
-                <MenuItem value="annual">Annual</MenuItem>
-                <MenuItem value="custom">Custom Period</MenuItem>
-              </TextField>
-              {submissionFrequency === 'annual' ? (
+                <TextField
+                  select
+                  label="Submission Frequency"
+                  value={submissionFrequency}
+                  onChange={(event) => setSubmissionFrequency(event.target.value as any)}
+                >
+                  <MenuItem value="monthly">Monthly</MenuItem>
+                  <MenuItem value="quarterly">Quarterly</MenuItem>
+                  <MenuItem value="annual">Annual</MenuItem>
+                  <MenuItem value="custom">Custom Period</MenuItem>
+                </TextField>
+                {submissionFrequency === 'annual' ? (
+                  <TextField
+                    type="number"
+                    label="Submission Month (1-12)"
+                    value={submissionMonth}
+                    onChange={(event) => setSubmissionMonth(Number(event.target.value) || 12)}
+                  />
+                ) : (
+                  <Box />
+                )}
+                <Box />
                 <TextField
                   type="number"
-                  label="Submission Month (1-12)"
-                  value={submissionMonth}
-                  onChange={(event) => setSubmissionMonth(Number(event.target.value) || 12)}
+                  label="Deadline Day (1-28)"
+                  value={deadlineDay}
+                  onChange={(event) => setDeadlineDay(Number(event.target.value) || 5)}
                 />
-              ) : (
-                <Box />
-              )}
-              <Box />
-              <TextField
-                type="number"
-                label="Deadline Day (1-28)"
-                value={deadlineDay}
-                onChange={(event) => setDeadlineDay(Number(event.target.value) || 5)}
-              />
-              <TextField
-                type="number"
-                label="Deadline Month Offset"
-                value={deadlineMonthOffset}
-                onChange={(event) => setDeadlineMonthOffset(Number(event.target.value) || 1)}
-              />
-              <TextField
-                type="number"
-                label="Max Allowed Days Late"
-                value={maxDaysLate}
-                onChange={(event) => setMaxDaysLate(Math.max(Number(event.target.value) || 0, 0))}
-              />
-              {submissionFrequency === 'custom' && (
-                <>
-                  <TextField
-                    label="Custom Period Regex"
-                    value={customPeriodRegex}
-                    onChange={(event) => setCustomPeriodRegex(event.target.value)}
-                  />
-                  <TextField
-                    type="number"
-                    label="Year Group Index"
-                    value={customPeriodYearGroup}
-                    onChange={(event) => setCustomPeriodYearGroup(Number(event.target.value) || 1)}
-                  />
-                  <TextField
-                    type="number"
-                    label="Month Group Index"
-                    value={customPeriodMonthGroup}
-                    onChange={(event) => setCustomPeriodMonthGroup(Number(event.target.value) || 2)}
-                  />
-                  <TextField
-                    type="number"
-                    label="Fallback Month (1-12)"
-                    value={customFallbackMonth}
-                    onChange={(event) => setCustomFallbackMonth(Number(event.target.value) || 12)}
-                  />
-                </>
-              )}
-            </Box>
-            <Typography variant="caption" color="text.secondary">
-              Sample scenarios (5): Monthly-5th+1 month, Quarterly-10th+1 month, Annual-month12 day15, Custom YYYYMM regex, Custom fallback month 12
-            </Typography>
+                <TextField
+                  type="number"
+                  label="Deadline Month Offset"
+                  value={deadlineMonthOffset}
+                  onChange={(event) => setDeadlineMonthOffset(Number(event.target.value) || 1)}
+                />
+                <TextField
+                  type="number"
+                  label="Max Allowed Days Late"
+                  value={maxDaysLate}
+                  onChange={(event) => setMaxDaysLate(Math.max(Number(event.target.value) || 0, 0))}
+                />
+                {submissionFrequency === 'custom' && (
+                  <>
+                    <TextField
+                      label="Custom Period Regex"
+                      value={customPeriodRegex}
+                      onChange={(event) => setCustomPeriodRegex(event.target.value)}
+                    />
+                    <TextField
+                      type="number"
+                      label="Year Group Index"
+                      value={customPeriodYearGroup}
+                      onChange={(event) =>
+                        setCustomPeriodYearGroup(Number(event.target.value) || 1)
+                      }
+                    />
+                    <TextField
+                      type="number"
+                      label="Month Group Index"
+                      value={customPeriodMonthGroup}
+                      onChange={(event) =>
+                        setCustomPeriodMonthGroup(Number(event.target.value) || 2)
+                      }
+                    />
+                    <TextField
+                      type="number"
+                      label="Fallback Month (1-12)"
+                      value={customFallbackMonth}
+                      onChange={(event) => setCustomFallbackMonth(Number(event.target.value) || 12)}
+                    />
+                  </>
+                )}
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                Sample scenarios (5): Monthly-5th+1 month, Quarterly-10th+1 month, Annual-month12
+                day15, Custom YYYYMM regex, Custom fallback month 12
+              </Typography>
             </>
           )}
         </DialogContent>

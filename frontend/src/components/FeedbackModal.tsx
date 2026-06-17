@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Typography, CircularProgress } from '@mui/material';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  Typography,
+  CircularProgress,
+} from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { feedbackApi } from '@/lib/api/feedback';
 
@@ -39,7 +48,8 @@ export default function FeedbackModal({ manualOpen = false, onManualClose }: Fee
       <DialogTitle>Help Us Improve</DialogTitle>
       <DialogContent dividers>
         <Typography variant="body2" color="text.secondary" mb={2}>
-          We are always looking for ways to improve our service. Do you have any suggestions or feedback?
+          We are always looking for ways to improve our service. Do you have any suggestions or
+          feedback?
         </Typography>
         <TextField
           label="Your Suggestion"
@@ -52,10 +62,12 @@ export default function FeedbackModal({ manualOpen = false, onManualClose }: Fee
         />
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose} disabled={submitting}>Close</Button>
-        <Button 
-          variant="contained" 
-          onClick={handleSubmit} 
+        <Button onClick={handleClose} disabled={submitting}>
+          Close
+        </Button>
+        <Button
+          variant="contained"
+          onClick={handleSubmit}
           disabled={!suggestion.trim() || submitting}
           startIcon={submitting ? <CircularProgress size={20} /> : undefined}
         >

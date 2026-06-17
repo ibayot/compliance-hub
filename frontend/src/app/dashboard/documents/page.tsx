@@ -17,7 +17,11 @@ import {
   DialogContent,
   DialogActions,
 } from '@mui/material';
-import { Add as AddIcon, FilterList as FilterIcon, Archive as ArchiveIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  FilterList as FilterIcon,
+  Archive as ArchiveIcon,
+} from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { documentsApi, Document, ListDocumentsParams } from '@/lib/api/documents';
@@ -46,7 +50,9 @@ export default function DocumentsPage() {
     return (
       <Container maxWidth="xl">
         <Box sx={{ py: 4 }}>
-          <Typography variant="h4" gutterBottom>Documents</Typography>
+          <Typography variant="h4" gutterBottom>
+            Documents
+          </Typography>
           <Typography color="error">You do not have access to this feature.</Typography>
         </Box>
       </Container>
@@ -200,8 +206,10 @@ export default function DocumentsPage() {
 
   const getWorkflowStatus = (document: Document) => {
     const complianceStatus = document.compliance_status || 'pending';
-    const isSuperOrCompliance = user?.role === 'super_admin' ||
-      user?.role === 'compliance_officer' || user?.roleCode === 'compliance_officer';
+    const isSuperOrCompliance =
+      user?.role === 'super_admin' ||
+      user?.role === 'compliance_officer' ||
+      user?.roleCode === 'compliance_officer';
 
     if (isSuperOrCompliance) {
       if (complianceStatus === 'compliant') {
@@ -214,10 +222,7 @@ export default function DocumentsPage() {
       return { label: 'Approved', color: 'success' as const };
     }
 
-    if (
-      complianceStatus === 'non_compliant' ||
-      complianceStatus === 'needs_revision'
-    ) {
+    if (complianceStatus === 'non_compliant' || complianceStatus === 'needs_revision') {
       return { label: 'Returned', color: 'error' as const };
     }
 
@@ -225,19 +230,31 @@ export default function DocumentsPage() {
   };
 
   const canReturnDocument = (document: Document) => {
-    const isSuperOrCompliance = user?.role === 'super_admin' ||
-      user?.role === 'compliance_officer' || user?.roleCode === 'compliance_officer';
+    const isSuperOrCompliance =
+      user?.role === 'super_admin' ||
+      user?.role === 'compliance_officer' ||
+      user?.roleCode === 'compliance_officer';
     if (!isSuperOrCompliance) {
-      return { allowed: false, reason: 'Only super admin and compliance roles can return documents.' };
+      return {
+        allowed: false,
+        reason: 'Only super admin and compliance roles can return documents.',
+      };
     }
 
     const uploaderRole = document.uploader?.role;
     if (uploaderRole === 'super_admin' || uploaderRole === 'compliance_officer') {
-      return { allowed: false, reason: 'Documents uploaded by compliance/super admin require hard delete instead of return.' };
+      return {
+        allowed: false,
+        reason:
+          'Documents uploaded by compliance/super admin require hard delete instead of return.',
+      };
     }
 
     if (document.status === 'processing' || document.status === 'failed') {
-      return { allowed: false, reason: 'Documents currently being processed or in failed state cannot be returned.' };
+      return {
+        allowed: false,
+        reason: 'Documents currently being processed or in failed state cannot be returned.',
+      };
     }
 
     if (document.compliance_status === 'compliant') {
@@ -248,15 +265,23 @@ export default function DocumentsPage() {
   };
 
   const canDeleteDocument = (document: Document) => {
-    const isSuperOrCompliance = user?.role === 'super_admin' ||
-      user?.role === 'compliance_officer' || user?.roleCode === 'compliance_officer';
+    const isSuperOrCompliance =
+      user?.role === 'super_admin' ||
+      user?.role === 'compliance_officer' ||
+      user?.roleCode === 'compliance_officer';
     if (!isSuperOrCompliance) {
-      return { allowed: false, reason: 'Only super admin and compliance roles can delete documents.' };
+      return {
+        allowed: false,
+        reason: 'Only super admin and compliance roles can delete documents.',
+      };
     }
 
     const uploaderRole = document.uploader?.role;
     if (uploaderRole !== 'super_admin' && uploaderRole !== 'compliance_officer') {
-      return { allowed: false, reason: 'Hard delete is only enabled for documents uploaded by compliance/super admin.' };
+      return {
+        allowed: false,
+        reason: 'Hard delete is only enabled for documents uploaded by compliance/super admin.',
+      };
     }
 
     return { allowed: true };
@@ -432,7 +457,12 @@ export default function DocumentsPage() {
         />
       </Box>
 
-      <Dialog open={returnDialogOpen} onClose={() => setReturnDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={returnDialogOpen}
+        onClose={() => setReturnDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Return Document to Focal</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -461,7 +491,12 @@ export default function DocumentsPage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={archiveDialogOpen} onClose={() => setArchiveDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={archiveDialogOpen}
+        onClose={() => setArchiveDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Archive Document</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -485,7 +520,12 @@ export default function DocumentsPage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Hard Delete Document</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

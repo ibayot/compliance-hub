@@ -28,35 +28,22 @@ interface ReviewFormProps {
   onCancel?: () => void;
 }
 
-export default function ReviewForm({
-  documentId,
-  onSubmit,
-  onCancel,
-}: ReviewFormProps) {
-  const [decision, setDecision] = useState<ReviewDecision>(
-    ReviewDecision.COMPLIANT,
-  );
+export default function ReviewForm({ documentId, onSubmit, onCancel }: ReviewFormProps) {
+  const [decision, setDecision] = useState<ReviewDecision>(ReviewDecision.COMPLIANT);
   const [remarks, setRemarks] = useState('');
   const [findings, setFindings] = useState<Finding[]>([]);
   const [loading, setLoading] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
 
   const handleAddFinding = () => {
-    setFindings([
-      ...findings,
-      { category: '', description: '', severity: 'low' },
-    ]);
+    setFindings([...findings, { category: '', description: '', severity: 'low' }]);
   };
 
   const handleRemoveFinding = (index: number) => {
     setFindings(findings.filter((_, i) => i !== index));
   };
 
-  const handleFindingChange = (
-    index: number,
-    field: keyof Finding,
-    value: string,
-  ) => {
+  const handleFindingChange = (index: number, field: keyof Finding, value: string) => {
     const newFindings = [...findings];
     newFindings[index] = { ...newFindings[index], [field]: value };
     setFindings(newFindings);
@@ -75,7 +62,9 @@ export default function ReviewForm({
 
       await onSubmit(reviewData);
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to submit review', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to submit review', {
+        variant: 'error',
+      });
     } finally {
       setLoading(false);
     }
@@ -128,11 +117,7 @@ export default function ReviewForm({
           <Box sx={{ mt: 3, mb: 2 }}>
             <Box display="flex" alignItems="center" justifyContent="space-between">
               <Typography variant="subtitle2">Findings</Typography>
-              <Button
-                startIcon={<AddIcon />}
-                onClick={handleAddFinding}
-                size="small"
-              >
+              <Button startIcon={<AddIcon />} onClick={handleAddFinding} size="small">
                 Add Finding
               </Button>
             </Box>
@@ -146,9 +131,7 @@ export default function ReviewForm({
                       size="small"
                       label="Category"
                       value={finding.category}
-                      onChange={(e) =>
-                        handleFindingChange(index, 'category', e.target.value)
-                      }
+                      onChange={(e) => handleFindingChange(index, 'category', e.target.value)}
                       margin="dense"
                     />
                     <TextField
@@ -158,18 +141,14 @@ export default function ReviewForm({
                       rows={2}
                       label="Description"
                       value={finding.description}
-                      onChange={(e) =>
-                        handleFindingChange(index, 'description', e.target.value)
-                      }
+                      onChange={(e) => handleFindingChange(index, 'description', e.target.value)}
                       margin="dense"
                     />
                     <FormControl fullWidth size="small" margin="dense">
                       <InputLabel>Severity</InputLabel>
                       <Select
                         value={finding.severity || 'low'}
-                        onChange={(e) =>
-                          handleFindingChange(index, 'severity', e.target.value)
-                        }
+                        onChange={(e) => handleFindingChange(index, 'severity', e.target.value)}
                         label="Severity"
                       >
                         <MenuItem value="low">Low</MenuItem>
@@ -178,11 +157,7 @@ export default function ReviewForm({
                       </Select>
                     </FormControl>
                   </Box>
-                  <IconButton
-                    onClick={() => handleRemoveFinding(index)}
-                    size="small"
-                    color="error"
-                  >
+                  <IconButton onClick={() => handleRemoveFinding(index)} size="small" color="error">
                     <DeleteIcon />
                   </IconButton>
                 </Box>
@@ -191,13 +166,7 @@ export default function ReviewForm({
           </Box>
 
           <Box display="flex" gap={2} mt={3}>
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-              disabled={loading}
-              fullWidth
-            >
+            <Button type="submit" variant="contained" color="primary" disabled={loading} fullWidth>
               {loading ? 'Submitting...' : 'Submit Review'}
             </Button>
             {onCancel && (

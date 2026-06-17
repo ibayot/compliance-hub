@@ -47,10 +47,13 @@ function AutoFeedback() {
 
     if (lastPrompt !== today) {
       // 5 minutes = 300,000 ms
-      const timerId = setTimeout(() => {
-        setOpen(true);
-        localStorage.setItem('lastFeedbackPromptDate', today);
-      }, 5 * 60 * 1000);
+      const timerId = setTimeout(
+        () => {
+          setOpen(true);
+          localStorage.setItem('lastFeedbackPromptDate', today);
+        },
+        5 * 60 * 1000,
+      );
 
       return () => clearTimeout(timerId);
     }

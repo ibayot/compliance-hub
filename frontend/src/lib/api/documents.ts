@@ -196,9 +196,7 @@ export const documentsApi = {
   /**
    * List documents with filters
    */
-  listDocuments: async (
-    params?: ListDocumentsParams,
-  ): Promise<ListDocumentsResponse> => {
+  listDocuments: async (params?: ListDocumentsParams): Promise<ListDocumentsResponse> => {
     const response = await apiClient.get('/documents', { params });
     return response.data;
   },
@@ -233,15 +231,11 @@ export const documentsApi = {
       formData.append('change_notes', changeNotes);
     }
 
-    const response = await apiClient.post(
-      `/documents/${documentId}/versions`,
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+    const response = await apiClient.post(`/documents/${documentId}/versions`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
       },
-    );
+    });
 
     return response.data;
   },
@@ -285,10 +279,9 @@ export const documentsApi = {
     documentId: string,
     versionId: string,
   ): Promise<{ blobUrl: string; mimeType: string }> => {
-    const response = await apiClient.get(
-      `/documents/${documentId}/versions/${versionId}/preview`,
-      { responseType: 'blob' },
-    );
+    const response = await apiClient.get(`/documents/${documentId}/versions/${versionId}/preview`, {
+      responseType: 'blob',
+    });
     const mimeType: string =
       (response.headers['content-type'] as string | undefined)?.split(';')[0]?.trim() ||
       'application/pdf';
@@ -331,10 +324,7 @@ export const documentsApi = {
     return response.data;
   },
 
-  unlinkDocumentReference: async (
-    documentId: string,
-    targetDocumentId: string,
-  ): Promise<void> => {
+  unlinkDocumentReference: async (documentId: string, targetDocumentId: string): Promise<void> => {
     await apiClient.delete(`/documents/${documentId}/references/${targetDocumentId}`);
   },
 

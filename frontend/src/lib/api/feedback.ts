@@ -17,8 +17,12 @@ export const feedbackApi = {
     const res = await api.post('/feedback', data);
     return res.data;
   },
-  
-  list: async (status: 'all' | 'pending' | 'accepted' | 'rejected' = 'all', page = 1, limit = 10): Promise<{ data: Feedback[]; total: number }> => {
+
+  list: async (
+    status: 'all' | 'pending' | 'accepted' | 'rejected' = 'all',
+    page = 1,
+    limit = 10,
+  ): Promise<{ data: Feedback[]; total: number }> => {
     const res = await api.get('/feedback', { params: { status, page, limit } });
     return res.data;
   },
@@ -26,5 +30,5 @@ export const feedbackApi = {
   updateStatus: async (id: number, status: 'accepted' | 'rejected'): Promise<Feedback> => {
     const res = await api.patch(`/feedback/${id}/status`, { status });
     return res.data;
-  }
+  },
 };

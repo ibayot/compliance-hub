@@ -28,13 +28,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import DocumentViewer from '@/components/documents/DocumentViewer';
 import { formatDocumentPeriod } from '@/lib/utils/documentPeriod';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-} from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
 
 export default function DocumentDetailsPage() {
   const params = useParams();
@@ -91,10 +85,7 @@ export default function DocumentDetailsPage() {
   };
 
   const handleDownloadVersion = async (versionId: string) => {
-    const { blob, fileName } = await documentsApi.downloadVersionBlob(
-      documentId,
-      versionId,
-    );
+    const { blob, fileName } = await documentsApi.downloadVersionBlob(documentId, versionId);
     const blobUrl = URL.createObjectURL(blob);
     const anchor = window.document.createElement('a');
     anchor.href = blobUrl;
@@ -107,9 +98,7 @@ export default function DocumentDetailsPage() {
 
   const handleDownloadCurrent = async () => {
     if (document && versions && versions.length > 0) {
-      const currentVersion = versions.find(
-        (v) => v.version_number === document.current_version,
-      );
+      const currentVersion = versions.find((v) => v.version_number === document.current_version);
       if (currentVersion) {
         await handleDownloadVersion(currentVersion.id);
       }
@@ -153,8 +142,10 @@ export default function DocumentDetailsPage() {
 
   const getWorkflowStatus = (doc: Document) => {
     const cs = doc.compliance_status;
-    const isSuperOrCompliance = user?.role === 'super_admin' || 
-      user?.role === 'compliance_officer' || user?.roleCode === 'compliance_officer';
+    const isSuperOrCompliance =
+      user?.role === 'super_admin' ||
+      user?.role === 'compliance_officer' ||
+      user?.roleCode === 'compliance_officer';
     if (cs === 'compliant') {
       return { label: isSuperOrCompliance ? 'COMPLIANT' : 'Approved', color: 'success' as const };
     }
@@ -163,7 +154,10 @@ export default function DocumentDetailsPage() {
     }
     if (doc.status === 'processing') return { label: 'PROCESSING', color: 'info' as const };
     if (doc.status === 'failed') return { label: 'FAILED', color: 'error' as const };
-    return { label: isSuperOrCompliance ? 'PENDING REVIEW' : 'Pending Review', color: 'warning' as const };
+    return {
+      label: isSuperOrCompliance ? 'PENDING REVIEW' : 'Pending Review',
+      color: 'warning' as const,
+    };
   };
 
   const getStatusColor = (status: string) => {
@@ -181,22 +175,27 @@ export default function DocumentDetailsPage() {
     }
   };
 
-  const currentVersion = versions?.find(
-    (v) => v.version_number === document?.current_version,
-  );
+  const currentVersion = versions?.find((v) => v.version_number === document?.current_version);
 
   const canDownloadCurrent = isFocal && !!currentVersion;
 
   useEffect(() => {
     const loadPreview = async () => {
       const targetVersionId = selectedVersionId || currentVersion?.id;
-      if (!document || !targetVersionId || (document.status !== 'ready' && document.status !== 'pending')) {
+      if (
+        !document ||
+        !targetVersionId ||
+        (document.status !== 'ready' && document.status !== 'pending')
+      ) {
         setPreviewBlobUrl(null);
         return;
       }
 
       try {
-        const { blobUrl, mimeType } = await documentsApi.getPreviewBlobUrl(documentId, targetVersionId);
+        const { blobUrl, mimeType } = await documentsApi.getPreviewBlobUrl(
+          documentId,
+          targetVersionId,
+        );
         setPreviewMimeType(mimeType);
         setPreviewBlobUrl((previousUrl) => {
           if (previousUrl && previousUrl.startsWith('blob:')) {
@@ -284,7 +283,8 @@ export default function DocumentDetailsPage() {
                 Unit
               </Typography>
               <Typography variant="body1" gutterBottom>
-                {document.unit?.name}{document.unit?.code ? ` (${document.unit.code})` : ''}
+                {document.unit?.name}
+                {document.unit?.code ? ` (${document.unit.code})` : ''}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
@@ -341,7 +341,9 @@ export default function DocumentDetailsPage() {
             variant="filled"
             sx={{ mb: 3, '& .MuiAlert-message': { color: 'common.white' } }}
           >
-            <Typography variant="subtitle2" gutterBottom>Return Remarks</Typography>
+            <Typography variant="subtitle2" gutterBottom>
+              Return Remarks
+            </Typography>
             <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
               {document.latest_review_remarks}
             </Typography>
@@ -383,14 +385,11 @@ export default function DocumentDetailsPage() {
                     borderRadius: 1,
                   }}
                 >
-                  <Typography color="text.secondary">
-                    Preview not available
-                  </Typography>
+                  <Typography color="text.secondary">Preview not available</Typography>
                 </Box>
               )}
             </Paper>
           </Grid>
-
         </Grid>
       </Box>
 
@@ -411,36 +410,73 @@ export default function DocumentDetailsPage() {
                 size="small"
               />
 
-              <Typography variant="subtitle1" fontWeight={600}>Outgoing References</Typography>
+              <Typography variant="subtitle1" fontWeight={600}>
+                Outgoing References
+              </Typography>
               {outgoingRefs.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">No outgoing references.</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  No outgoing references.
+                </Typography>
               ) : (
                 outgoingRefs.map((ref) => (
-                  <Box key={ref.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                  <Box
+                    key={ref.id}
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      p: 1,
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 1,
+                    }}
+                  >
                     <Box>
-                      <Typography fontWeight={600}>{ref.target_document?.title || ref.target_document_id}</Typography>
-                      <Typography variant="caption" color="text.secondary">{ref.relationship_type}</Typography>
+                      <Typography fontWeight={600}>
+                        {ref.target_document?.title || ref.target_document_id}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {ref.relationship_type}
+                      </Typography>
                     </Box>
-                    <Button size="small" color="warning" startIcon={<UnlinkIcon />} onClick={() => handleUnlinkReference(ref.target_document_id)}>
+                    <Button
+                      size="small"
+                      color="warning"
+                      startIcon={<UnlinkIcon />}
+                      onClick={() => handleUnlinkReference(ref.target_document_id)}
+                    >
                       Unlink
                     </Button>
                   </Box>
                 ))
               )}
 
-              <Typography variant="subtitle1" fontWeight={600}>Incoming References</Typography>
+              <Typography variant="subtitle1" fontWeight={600}>
+                Incoming References
+              </Typography>
               {incomingRefs.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">No incoming references.</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  No incoming references.
+                </Typography>
               ) : (
                 incomingRefs.map((ref) => (
-                  <Box key={ref.id} sx={{ p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                    <Typography fontWeight={600}>{ref.source_document?.title || ref.source_document_id}</Typography>
-                    <Typography variant="caption" color="text.secondary">{ref.relationship_type}</Typography>
+                  <Box
+                    key={ref.id}
+                    sx={{ p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}
+                  >
+                    <Typography fontWeight={600}>
+                      {ref.source_document?.title || ref.source_document_id}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {ref.relationship_type}
+                    </Typography>
                   </Box>
                 ))
               )}
 
-              <Typography variant="subtitle1" fontWeight={600}>Available Ready Documents</Typography>
+              <Typography variant="subtitle1" fontWeight={600}>
+                Available Ready Documents
+              </Typography>
               {allDocuments
                 .filter((doc) => doc.status === 'ready')
                 .filter((doc) => {
@@ -457,15 +493,32 @@ export default function DocumentDetailsPage() {
                 .map((doc) => {
                   const linked = outgoingRefs.some((ref) => ref.target_document_id === doc.id);
                   return (
-                    <Box key={doc.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                    <Box
+                      key={doc.id}
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        p: 1,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                      }}
+                    >
                       <Box>
                         <Typography fontWeight={600}>{doc.title}</Typography>
-                        <Typography variant="caption" color="text.secondary">{doc.document_type} • {formatDocumentPeriod(doc.year, doc.period)}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {doc.document_type} • {formatDocumentPeriod(doc.year, doc.period)}
+                        </Typography>
                       </Box>
                       {linked ? (
                         <Chip size="small" color="success" label="Linked" />
                       ) : (
-                        <Button size="small" startIcon={<LinkIcon />} onClick={() => handleLinkReference(doc.id)}>
+                        <Button
+                          size="small"
+                          startIcon={<LinkIcon />}
+                          onClick={() => handleLinkReference(doc.id)}
+                        >
                           Link
                         </Button>
                       )}

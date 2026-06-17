@@ -2,30 +2,65 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Box, Card, CardContent, Typography, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow, IconButton, Chip, MenuItem,
-  Stack, CircularProgress, Tabs, Tab, Tooltip, Select, FormControl, InputLabel,
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
+  Chip,
+  MenuItem,
+  Stack,
+  CircularProgress,
+  Tabs,
+  Tab,
+  Tooltip,
+  Select,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import {
-  ChevronLeft as PrevIcon, ChevronRight as NextIcon,
-  CheckCircle as PresentIcon, Cancel as AbsentIcon,
-  WbSunny as HalfDayIcon, FlightTakeoff as OOOIcon,
+  ChevronLeft as PrevIcon,
+  ChevronRight as NextIcon,
+  CheckCircle as PresentIcon,
+  Cancel as AbsentIcon,
+  WbSunny as HalfDayIcon,
+  FlightTakeoff as OOOIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  attendanceApi, TechAttendance, OfficeDay, AttendanceStatus,
-} from '@/app/api/references';
+import { attendanceApi, TechAttendance, OfficeDay, AttendanceStatus } from '@/app/api/references';
 import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
 
-const STATUS_CONFIG: Record<AttendanceStatus, { label: string; color: 'success' | 'error' | 'warning' | 'info'; icon: React.ReactNode }> = {
+const STATUS_CONFIG: Record<
+  AttendanceStatus,
+  { label: string; color: 'success' | 'error' | 'warning' | 'info'; icon: React.ReactNode }
+> = {
   present: { label: 'Present', color: 'success', icon: <PresentIcon fontSize="small" /> },
   absent: { label: 'Absent', color: 'error', icon: <AbsentIcon fontSize="small" /> },
   half_day: { label: 'Half Day', color: 'warning', icon: <HalfDayIcon fontSize="small" /> },
   out_of_office: { label: 'OOO', color: 'info', icon: <OOOIcon fontSize="small" /> },
 };
 
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
 
 function getDaysInMonth(year: number, month: number): Date[] {
   const days: Date[] = [];
@@ -52,9 +87,7 @@ function isWeekday(d: Date): boolean {
 
 export default function AttendancePage() {
   const { user, myCap } = useAuth();
-  const isLowerLevelTech = [
-    'it_support_jr', 'desktop_jr',
-  ].includes(user?.role ?? '');
+  const isLowerLevelTech = ['it_support_jr', 'desktop_jr'].includes(user?.role ?? '');
   /** All RICTMS staff (everyone except super_admin and regular users) sees their own attendance in the calendar */
   const isRICTMSStaff = !['super_admin', 'user'].includes(user?.role ?? '');
   const { enqueueSnackbar } = useSnackbar();
@@ -87,8 +120,11 @@ export default function AttendancePage() {
       setOdLoading(true);
       const data = await attendanceApi.getOfficeDays(String(month + 1), String(year));
       setOfficeDays(data);
-    } catch { enqueueSnackbar('Failed to load office days', { variant: 'error' }); }
-    finally { setOdLoading(false); }
+    } catch {
+      enqueueSnackbar('Failed to load office days', { variant: 'error' });
+    } finally {
+      setOdLoading(false);
+    }
   }, [year, month]);
 
   const fetchAttendance = useCallback(async () => {
@@ -96,8 +132,11 @@ export default function AttendancePage() {
       setAttLoading(true);
       const data = await attendanceApi.getAttendance(startDate, endDate, attType || undefined);
       setAttendance(data);
-    } catch { enqueueSnackbar('Failed to load attendance', { variant: 'error' }); }
-    finally { setAttLoading(false); }
+    } catch {
+      enqueueSnackbar('Failed to load attendance', { variant: 'error' });
+    } finally {
+      setAttLoading(false);
+    }
   }, [startDate, endDate, attType]);
 
   const fetchTechnicians = useCallback(async () => {
@@ -105,11 +144,16 @@ export default function AttendancePage() {
       setTechLoading(true);
       const data = await attendanceApi.getTechnicians(attType || undefined);
       setTechnicians(data);
-    } catch { enqueueSnackbar('Failed to load technicians', { variant: 'error' }); }
-    finally { setTechLoading(false); }
+    } catch {
+      enqueueSnackbar('Failed to load technicians', { variant: 'error' });
+    } finally {
+      setTechLoading(false);
+    }
   }, [attType]);
 
-  useEffect(() => { fetchOfficeDays(); }, [fetchOfficeDays]);
+  useEffect(() => {
+    fetchOfficeDays();
+  }, [fetchOfficeDays]);
   useEffect(() => {
     if (tab === 1) {
       fetchTechnicians();
@@ -125,7 +169,9 @@ export default function AttendancePage() {
     try {
       const data = await attendanceApi.getOfficeDays(String(month + 1), String(year));
       setOfficeDays(data);
-    } catch { /* silent — do not show error on background poll */ }
+    } catch {
+      /* silent — do not show error on background poll */
+    }
   }, [year, month]);
 
   const silentRefreshTab1 = useCallback(async () => {
@@ -137,7 +183,9 @@ export default function AttendancePage() {
       ]);
       setTechnicians(techs);
       setAttendance(att);
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   }, [tab, attType, startDate, endDate]);
 
   useAutoRefresh(silentRefreshOfficeDays);
@@ -150,14 +198,16 @@ export default function AttendancePage() {
     try {
       const data = await attendanceApi.getAttendance(startDate, endDate, attType || undefined);
       setAttendance(data);
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   }, [tab, isRICTMSStaff, startDate, endDate, attType]);
   useAutoRefresh(silentRefreshTab0Attendance);
 
   // Office day map: date → OfficeDay
   const odMap = useMemo(() => {
     const m = new Map<string, OfficeDay>();
-    officeDays.forEach(od => m.set(od.date.slice(0, 10), od));
+    officeDays.forEach((od) => m.set(od.date.slice(0, 10), od));
     return m;
   }, [officeDays]);
 
@@ -175,8 +225,8 @@ export default function AttendancePage() {
     const newValue = !current;
 
     // Optimistic update — reflect change immediately without showing loading spinner
-    setOfficeDays(prev => {
-      const idx = prev.findIndex(od => od.date.slice(0, 10) === dateStr);
+    setOfficeDays((prev) => {
+      const idx = prev.findIndex((od) => od.date.slice(0, 10) === dateStr);
       if (idx !== -1) {
         const arr = [...prev];
         arr[idx] = { ...arr[idx], isOfficeDay: newValue };
@@ -185,15 +235,22 @@ export default function AttendancePage() {
       // Create a local placeholder so the UI renders instantly
       return [
         ...prev,
-        { id: `temp-${dateStr}`, date: dateStr, isOfficeDay: newValue, notes: null, setById: null, createdAt: '' } as any,
+        {
+          id: `temp-${dateStr}`,
+          date: dateStr,
+          isOfficeDay: newValue,
+          notes: null,
+          setById: null,
+          createdAt: '',
+        } as any,
       ];
     });
 
     try {
       const updated = await attendanceApi.setOfficeDay({ date: dateStr, isOfficeDay: newValue });
       // Replace the optimistic placeholder with the real server record
-      setOfficeDays(prev => {
-        const idx = prev.findIndex(od => od.date.slice(0, 10) === dateStr);
+      setOfficeDays((prev) => {
+        const idx = prev.findIndex((od) => od.date.slice(0, 10) === dateStr);
         if (idx !== -1) {
           const arr = [...prev];
           arr[idx] = updated;
@@ -202,29 +259,34 @@ export default function AttendancePage() {
         return prev;
       });
       // Silently refresh attendance presence indicators (no loading spinner)
-      attendanceApi.getAttendance(startDate, endDate, attType || undefined)
-        .then(data => setAttendance(data))
+      attendanceApi
+        .getAttendance(startDate, endDate, attType || undefined)
+        .then((data) => setAttendance(data))
         .catch(() => {});
     } catch (err: any) {
       // Rollback: re-fetch silently to restore truthful server state
-      attendanceApi.getOfficeDays(String(month + 1), String(year))
-        .then(data => setOfficeDays(data))
+      attendanceApi
+        .getOfficeDays(String(month + 1), String(year))
+        .then((data) => setOfficeDays(data))
         .catch(() => {});
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to update office day', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to update office day', {
+        variant: 'error',
+      });
     }
   };
 
   // Attendance records map: userId → (date → TechAttendance)
   const attRecordsMap = useMemo(() => {
     const m = new Map<number, Map<string, TechAttendance>>();
-    attendance.forEach(att => {
+    attendance.forEach((att) => {
       if (!m.has(att.userId)) m.set(att.userId, new Map());
       m.get(att.userId)!.set(att.date.slice(0, 10), att);
     });
     return m;
   }, [attendance]);
 
-  const todayInViewedMonth = year === now.getFullYear() && month === now.getMonth() && isWeekday(now);
+  const todayInViewedMonth =
+    year === now.getFullYear() && month === now.getMonth() && isWeekday(now);
   const hasUnmarkedTodayAttendance = useMemo(() => {
     if (tab !== 1 || !todayInViewedMonth || technicians.length === 0) return false;
     return technicians.some((tech: any) => !attRecordsMap.get(tech.id)?.get(todayStr));
@@ -241,21 +303,24 @@ export default function AttendancePage() {
 
   const handleSetAttendance = async (userId: number, date: string, status: AttendanceStatus) => {
     // Optimistic update — immediately reflect in UI without showing loading spinner
-    setAttendance(prev => {
-      const idx = prev.findIndex(r => r.userId === userId && r.date.slice(0, 10) === date);
+    setAttendance((prev) => {
+      const idx = prev.findIndex((r) => r.userId === userId && r.date.slice(0, 10) === date);
       if (idx !== -1) {
         const arr = [...prev];
         arr[idx] = { ...arr[idx], status };
         return arr;
       }
       // No record yet: create a temporary placeholder
-      return [...prev, { id: `temp-${userId}-${date}`, userId, date, status, createdAt: '' } as TechAttendance];
+      return [
+        ...prev,
+        { id: `temp-${userId}-${date}`, userId, date, status, createdAt: '' } as TechAttendance,
+      ];
     });
     try {
       const updated = await attendanceApi.setAttendance({ userId, date, status });
       // Replace temp record with actual server response
-      setAttendance(prev => {
-        const idx = prev.findIndex(r => r.userId === userId && r.date.slice(0, 10) === date);
+      setAttendance((prev) => {
+        const idx = prev.findIndex((r) => r.userId === userId && r.date.slice(0, 10) === date);
         if (idx !== -1) {
           const arr = [...prev];
           arr[idx] = updated;
@@ -273,26 +338,32 @@ export default function AttendancePage() {
   const navMonth = (delta: number) => {
     let m = month + delta;
     let y = year;
-    if (m < 0) { m = 11; y--; }
-    if (m > 11) { m = 0; y++; }
+    if (m < 0) {
+      m = 11;
+      y--;
+    }
+    if (m > 11) {
+      m = 0;
+      y++;
+    }
     setMonth(m);
     setYear(y);
   };
 
-  const canManageAttendance = [
-    'super_admin',
-  ].includes(user?.role ?? '') || !!myCap?.isAttendanceManage;
+  const canManageAttendance =
+    ['super_admin'].includes(user?.role ?? '') || !!myCap?.isAttendanceManage;
 
-  const canManageOfficeDays = [
-    'super_admin',
-  ].includes(user?.role ?? '') || !!myCap?.isAttendanceManage;
+  const canManageOfficeDays =
+    ['super_admin'].includes(user?.role ?? '') || !!myCap?.isAttendanceManage;
 
   const canAccessAttendance = user?.role === 'super_admin' || !!myCap?.isAttendanceAccess;
 
   if (!canAccessAttendance) {
     return (
       <Box>
-        <Typography variant="h4" fontWeight={700} mb={0.5}>Attendance Management</Typography>
+        <Typography variant="h4" fontWeight={700} mb={0.5}>
+          Attendance Management
+        </Typography>
         <Typography color="error">You do not have access to this feature.</Typography>
       </Box>
     );
@@ -301,60 +372,85 @@ export default function AttendancePage() {
   const canManage = canManageAttendance;
 
   // Only show weekdays in the attendance grid
-  const weekdays = days.filter(d => isWeekday(d));
+  const weekdays = days.filter((d) => isWeekday(d));
 
   return (
     <Box>
-      <Typography variant="h4" fontWeight={700} mb={0.5}>Attendance Management</Typography>
+      <Typography variant="h4" fontWeight={700} mb={0.5}>
+        Attendance Management
+      </Typography>
       <Typography variant="body2" color="text.secondary" mb={3}>
         Manage the office day calendar and track technician attendance by support type
       </Typography>
 
       {/* Month Navigation */}
       <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-        <IconButton onClick={() => navMonth(-1)}><PrevIcon /></IconButton>
+        <IconButton onClick={() => navMonth(-1)}>
+          <PrevIcon />
+        </IconButton>
         <Typography variant="h6" fontWeight={600} sx={{ minWidth: 200, textAlign: 'center' }}>
           {MONTHS[month]} {year}
         </Typography>
-        <IconButton onClick={() => navMonth(1)}><NextIcon /></IconButton>
+        <IconButton onClick={() => navMonth(1)}>
+          <NextIcon />
+        </IconButton>
       </Stack>
 
       <Card>
         {!isLowerLevelTech && (
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Tab label="Office Days" />
-          <Tab label="Attendance" />
-        </Tabs>
+          <Tabs
+            value={tab}
+            onChange={(_, v) => setTab(v)}
+            sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}
+          >
+            <Tab label="Office Days" />
+            <Tab label="Attendance" />
+          </Tabs>
         )}
 
         {/* ── Office Days Calendar ── */}
         {tab === 0 && (
           <CardContent>
             {odLoading ? (
-              <Box textAlign="center" py={4}><CircularProgress /></Box>
+              <Box textAlign="center" py={4}>
+                <CircularProgress />
+              </Box>
             ) : (
               <Box>
                 <Typography variant="body2" color="text.secondary" mb={2}>
-                  Click on today or a future date to toggle it as an office day. Past dates cannot be changed. Weekdays default to office days.
+                  Click on today or a future date to toggle it as an office day. Past dates cannot
+                  be changed. Weekdays default to office days.
                 </Typography>
                 <Box display="grid" gridTemplateColumns="repeat(7, 1fr)" gap={0.5}>
-                  {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
-                    <Box key={d} textAlign="center" py={0.5}><Typography variant="caption" fontWeight={700}>{d}</Typography></Box>
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                    <Box key={d} textAlign="center" py={0.5}>
+                      <Typography variant="caption" fontWeight={700}>
+                        {d}
+                      </Typography>
+                    </Box>
                   ))}
                   {/* Pad first week */}
-                  {Array.from({ length: days[0].getDay() }).map((_, i) => <Box key={`pad-${i}`} />)}
-                  {days.map(d => {
+                  {Array.from({ length: days[0].getDay() }).map((_, i) => (
+                    <Box key={`pad-${i}`} />
+                  ))}
+                  {days.map((d) => {
                     const isOffice = isOfficeDayForDate(d);
                     const dStr = formatDate(d);
                     // Past dates are not clickable; today remains editable for emergency declarations.
                     const isPastOrToday = dStr < todayStr;
                     const isToday = dStr === todayStr;
                     return (
-                        <Box
+                      <Box
                         key={dStr}
-                        onClick={canManageOfficeDays && !isPastOrToday ? () => toggleOfficeDay(d) : undefined}
+                        onClick={
+                          canManageOfficeDays && !isPastOrToday
+                            ? () => toggleOfficeDay(d)
+                            : undefined
+                        }
                         sx={{
-                          textAlign: 'center', py: 1.5, borderRadius: 1,
+                          textAlign: 'center',
+                          py: 1.5,
+                          borderRadius: 1,
                           bgcolor: isOffice ? 'success.light' : 'grey.200',
                           color: isOffice ? 'success.contrastText' : 'text.disabled',
                           cursor: canManageOfficeDays && !isPastOrToday ? 'pointer' : 'default',
@@ -364,20 +460,34 @@ export default function AttendancePage() {
                           borderColor: 'primary.main',
                         }}
                       >
-                        <Typography variant="body2" fontWeight={600}>{d.getDate()}</Typography>
+                        <Typography variant="body2" fontWeight={600}>
+                          {d.getDate()}
+                        </Typography>
                         <Typography variant="caption">{isOffice ? 'Office' : 'Off'}</Typography>
-                        {isRICTMSStaff && isOffice && (() => {
-                          const myStatus = attRecordsMap.get(user?.id ?? 0)?.get(dStr)?.status ?? null;
-                          const myCfg = myStatus ? STATUS_CONFIG[myStatus] : null;
-                          return (
-                            <Box mt={0.5}>
-                              {myCfg
-                                ? <Chip size="small" icon={myCfg.icon as any} label={myCfg.label} color={myCfg.color} sx={{ transform: 'scale(0.75)', transformOrigin: 'center' }} />
-                                : <Typography variant="caption" color="inherit">—</Typography>
-                              }
-                            </Box>
-                          );
-                        })()}
+                        {isRICTMSStaff &&
+                          isOffice &&
+                          (() => {
+                            const myStatus =
+                              attRecordsMap.get(user?.id ?? 0)?.get(dStr)?.status ?? null;
+                            const myCfg = myStatus ? STATUS_CONFIG[myStatus] : null;
+                            return (
+                              <Box mt={0.5}>
+                                {myCfg ? (
+                                  <Chip
+                                    size="small"
+                                    icon={myCfg.icon as any}
+                                    label={myCfg.label}
+                                    color={myCfg.color}
+                                    sx={{ transform: 'scale(0.75)', transformOrigin: 'center' }}
+                                  />
+                                ) : (
+                                  <Typography variant="caption" color="inherit">
+                                    —
+                                  </Typography>
+                                )}
+                              </Box>
+                            );
+                          })()}
                       </Box>
                     );
                   })}
@@ -393,7 +503,11 @@ export default function AttendancePage() {
             <Stack direction="row" spacing={2} mb={2} alignItems="center">
               <FormControl size="small" sx={{ minWidth: 220 }}>
                 <InputLabel>Category</InputLabel>
-                <Select value={attType} label="Category" onChange={e => setAttType(e.target.value)}>
+                <Select
+                  value={attType}
+                  label="Category"
+                  onChange={(e) => setAttType(e.target.value)}
+                >
                   <MenuItem value="">All</MenuItem>
                   <MenuItem value="ito">ITOs</MenuItem>
                   <MenuItem value="it_support">IT Support</MenuItem>
@@ -403,13 +517,22 @@ export default function AttendancePage() {
               </FormControl>
               <Box display="flex" gap={1} flexWrap="wrap">
                 {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-                  <Chip key={key} size="small" icon={cfg.icon as any} label={cfg.label} color={cfg.color} variant="outlined" />
+                  <Chip
+                    key={key}
+                    size="small"
+                    icon={cfg.icon as any}
+                    label={cfg.label}
+                    color={cfg.color}
+                    variant="outlined"
+                  />
                 ))}
               </Box>
             </Stack>
 
-            {(attLoading || techLoading) ? (
-              <Box textAlign="center" py={4}><CircularProgress /></Box>
+            {attLoading || techLoading ? (
+              <Box textAlign="center" py={4}>
+                <CircularProgress />
+              </Box>
             ) : technicians.length === 0 ? (
               <Typography color="text.secondary" py={3} textAlign="center">
                 No staff found.
@@ -419,12 +542,35 @@ export default function AttendancePage() {
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ position: 'sticky', left: 0, zIndex: 3, bgcolor: 'background.paper', minWidth: 160 }}>Staff</TableCell>
-                      {weekdays.map(d => {
+                      <TableCell
+                        sx={{
+                          position: 'sticky',
+                          left: 0,
+                          zIndex: 3,
+                          bgcolor: 'background.paper',
+                          minWidth: 160,
+                        }}
+                      >
+                        Staff
+                      </TableCell>
+                      {weekdays.map((d) => {
                         const isOffice = isOfficeDayForDate(d);
                         return (
-                          <TableCell key={formatDate(d)} align="center" sx={{ minWidth: 36, px: 0.5, ...(isOffice ? {} : { bgcolor: 'action.disabledBackground' }) }}>
-                            <Typography variant="caption" color={isOffice ? 'text.primary' : 'text.disabled'}>{d.getDate()}</Typography>
+                          <TableCell
+                            key={formatDate(d)}
+                            align="center"
+                            sx={{
+                              minWidth: 36,
+                              px: 0.5,
+                              ...(isOffice ? {} : { bgcolor: 'action.disabledBackground' }),
+                            }}
+                          >
+                            <Typography
+                              variant="caption"
+                              color={isOffice ? 'text.primary' : 'text.disabled'}
+                            >
+                              {d.getDate()}
+                            </Typography>
                           </TableCell>
                         );
                       })}
@@ -433,18 +579,27 @@ export default function AttendancePage() {
                   <TableBody>
                     {technicians.map((tech: any) => {
                       const userId = tech.id;
-                      const records = attRecordsMap.get(userId) ?? new Map<string, TechAttendance>();
+                      const records =
+                        attRecordsMap.get(userId) ?? new Map<string, TechAttendance>();
                       return (
                         <TableRow key={userId}>
-                          <TableCell sx={{ position: 'sticky', left: 0, zIndex: 2, bgcolor: 'background.paper' }}>
+                          <TableCell
+                            sx={{
+                              position: 'sticky',
+                              left: 0,
+                              zIndex: 2,
+                              bgcolor: 'background.paper',
+                            }}
+                          >
                             <Typography variant="body2" noWrap>
-                              {[tech.firstName, tech.lastName].filter(Boolean).join(' ') || tech.email}
+                              {[tech.firstName, tech.lastName].filter(Boolean).join(' ') ||
+                                tech.email}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" noWrap>
                               {(tech.role ?? '').replace(/_/g, ' ')}
                             </Typography>
                           </TableCell>
-                          {weekdays.map(d => {
+                          {weekdays.map((d) => {
                             const dateStr = formatDate(d);
                             const rec = records.get(dateStr);
                             const status = rec?.status;
@@ -453,26 +608,66 @@ export default function AttendancePage() {
                             return (
                               <TableCell key={dateStr} align="center" sx={{ px: 0.5 }}>
                                 {canManage ? (
-                                  <Tooltip title={`Click to cycle: ${!status ? 'Set present' : status}`}>
+                                  <Tooltip
+                                    title={`Click to cycle: ${!status ? 'Set present' : status}`}
+                                  >
                                     <IconButton
                                       size="small"
                                       onClick={() => {
-                                        const cycle: AttendanceStatus[] = ['present', 'absent', 'half_day', 'out_of_office'];
-                                        const nextIdx = status ? (cycle.indexOf(status) + 1) % cycle.length : 0;
+                                        const cycle: AttendanceStatus[] = [
+                                          'present',
+                                          'absent',
+                                          'half_day',
+                                          'out_of_office',
+                                        ];
+                                        const nextIdx = status
+                                          ? (cycle.indexOf(status) + 1) % cycle.length
+                                          : 0;
                                         handleSetAttendance(userId, dateStr, cycle[nextIdx]);
                                       }}
                                       sx={{
                                         color: cfg ? `${cfg.color}.main` : 'action.active',
-                                        '&:hover': { bgcolor: cfg ? `${cfg.color}.light` : 'action.hover', opacity: 0.85 },
+                                        '&:hover': {
+                                          bgcolor: cfg ? `${cfg.color}.light` : 'action.hover',
+                                          opacity: 0.85,
+                                        },
                                       }}
                                     >
-                                      {cfg ? cfg.icon : <Typography variant="body1" sx={{ fontSize: '1.1rem', lineHeight: 1, color: 'text.secondary' }}>•</Typography>}
+                                      {cfg ? (
+                                        cfg.icon
+                                      ) : (
+                                        <Typography
+                                          variant="body1"
+                                          sx={{
+                                            fontSize: '1.1rem',
+                                            lineHeight: 1,
+                                            color: 'text.secondary',
+                                          }}
+                                        >
+                                          •
+                                        </Typography>
+                                      )}
                                     </IconButton>
                                   </Tooltip>
+                                ) : cfg ? (
+                                  <Chip
+                                    size="small"
+                                    icon={cfg.icon as any}
+                                    label={cfg.label}
+                                    color={cfg.color}
+                                    sx={{ transform: 'scale(0.85)', transformOrigin: 'center' }}
+                                  />
                                 ) : (
-                                  cfg
-                                    ? <Chip size="small" icon={cfg.icon as any} label={cfg.label} color={cfg.color} sx={{ transform: 'scale(0.85)', transformOrigin: 'center' }} />
-                                    : <Typography variant="body1" sx={{ fontSize: '1.1rem', lineHeight: 1, color: 'text.secondary' }}>•</Typography>
+                                  <Typography
+                                    variant="body1"
+                                    sx={{
+                                      fontSize: '1.1rem',
+                                      lineHeight: 1,
+                                      color: 'text.secondary',
+                                    }}
+                                  >
+                                    •
+                                  </Typography>
                                 )}
                               </TableCell>
                             );
@@ -486,7 +681,6 @@ export default function AttendancePage() {
             )}
           </CardContent>
         )}
-
       </Card>
     </Box>
   );

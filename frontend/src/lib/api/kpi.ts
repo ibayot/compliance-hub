@@ -141,7 +141,17 @@ export const kpiApi = {
     return response.data;
   },
 
-  createMaster: async (payload: Partial<KpiMasterRecord> & { code: string; name: string; unitId: number; type: KpiType; direction: KpiDirection; targetValue: number; weight: number; }) => {
+  createMaster: async (
+    payload: Partial<KpiMasterRecord> & {
+      code: string;
+      name: string;
+      unitId: number;
+      type: KpiType;
+      direction: KpiDirection;
+      targetValue: number;
+      weight: number;
+    },
+  ) => {
     const response = await apiClient.post('/kpi/master', payload);
     return response.data as KpiMasterRecord;
   },
@@ -156,7 +166,12 @@ export const kpiApi = {
     return response.data;
   },
 
-  listMonitoring: async (params: { periodYear?: number; periodMonth?: number; unitId?: number; kpiMasterCode?: string }) => {
+  listMonitoring: async (params: {
+    periodYear?: number;
+    periodMonth?: number;
+    unitId?: number;
+    kpiMasterCode?: string;
+  }) => {
     const response = await apiClient.get('/kpi/monitoring', { params });
     return response.data as KpiMonitoringRecord[];
   },
@@ -174,7 +189,10 @@ export const kpiApi = {
     return response.data as KpiMonitoringRecord;
   },
 
-  updateMonitoring: async (id: number, payload: Partial<{ actualValue: number; remarks: string; status: KpiMonitoringStatus }>) => {
+  updateMonitoring: async (
+    id: number,
+    payload: Partial<{ actualValue: number; remarks: string; status: KpiMonitoringStatus }>,
+  ) => {
     const response = await apiClient.patch(`/kpi/monitoring/${id}`, payload);
     return response.data as KpiMonitoringRecord;
   },
@@ -185,12 +203,16 @@ export const kpiApi = {
   },
 
   dashboardSummary: async (periodYear: number, periodMonth: number) => {
-    const response = await apiClient.get('/kpi/dashboard/summary', { params: { periodYear, periodMonth } });
+    const response = await apiClient.get('/kpi/dashboard/summary', {
+      params: { periodYear, periodMonth },
+    });
     return response.data as DashboardSummaryResponse;
   },
 
   dashboardUnit: async (unitId: number, periodYear: number, periodMonth: number) => {
-    const response = await apiClient.get(`/kpi/dashboard/unit/${unitId}`, { params: { periodYear, periodMonth } });
+    const response = await apiClient.get(`/kpi/dashboard/unit/${unitId}`, {
+      params: { periodYear, periodMonth },
+    });
     return response.data as UnitDashboardResponse;
   },
 

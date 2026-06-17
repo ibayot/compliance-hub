@@ -24,7 +24,8 @@ class ApiClient {
   /** Guard: only one token-refresh attempt runs at a time */
   private isRefreshing = false;
   /** Queue of request callbacks waiting for the refresh to complete */
-  private failedQueue: Array<{ resolve: (token: string) => void; reject: (err: unknown) => void }> = [];
+  private failedQueue: Array<{ resolve: (token: string) => void; reject: (err: unknown) => void }> =
+    [];
 
   private processQueue(error: unknown, token: string | null) {
     this.failedQueue.forEach((prom) => {

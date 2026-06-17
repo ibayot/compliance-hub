@@ -110,7 +110,9 @@ export default function IssuancesPage() {
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const [allIssuances, setAllIssuances] = useState<Issuance[]>([]);
-  const [processOwnerOptions, setProcessOwnerOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [processOwnerOptions, setProcessOwnerOptions] = useState<
+    Array<{ label: string; value: string }>
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -166,8 +168,10 @@ export default function IssuancesPage() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
   const [actionsIssuance, setActionsIssuance] = useState<Issuance | null>(null);
-  const canManageIssuances = user?.role === 'super_admin' ||
-    user?.role === 'compliance_officer' || user?.roleCode === 'compliance_officer';
+  const canManageIssuances =
+    user?.role === 'super_admin' ||
+    user?.role === 'compliance_officer' ||
+    user?.roleCode === 'compliance_officer';
 
   useEffect(() => {
     fetchIssuances();
@@ -198,8 +202,12 @@ export default function IssuancesPage() {
         .filter((entry: UserRecord) => {
           const role = String(entry.role);
           const rc = entry.roleCode;
-          return ['compliance_officer', 'section_head', 'super_admin'].includes(role) ||
-            rc === 'focal' || rc === 'section_head' || rc === 'compliance_officer';
+          return (
+            ['compliance_officer', 'section_head', 'super_admin'].includes(role) ||
+            rc === 'focal' ||
+            rc === 'section_head' ||
+            rc === 'compliance_officer'
+          );
         })
         .map((entry: UserRecord) => {
           const displayName = [entry.firstName, entry.middleName, entry.lastName, entry.suffix]
@@ -234,9 +242,9 @@ export default function IssuancesPage() {
         issuance_number: issuance.issuance_number,
         title: issuance.title,
         description: issuance.description || '',
-          issuance_type: issuance.issuance_type || '',
-          applicability_scope: issuance.applicability_scope || '',
-          relevance_notes: issuance.relevance_notes || '',
+        issuance_type: issuance.issuance_type || '',
+        applicability_scope: issuance.applicability_scope || '',
+        relevance_notes: issuance.relevance_notes || '',
         binding_nature: issuance.binding_nature || '',
         adoption_basis: issuance.adoption_basis || '',
         applicable_provisions: issuance.applicable_provisions || '',
@@ -255,15 +263,15 @@ export default function IssuancesPage() {
         q2_compliance_status: issuance.q2_compliance_status || 'compliant',
         q3_compliance_status: issuance.q3_compliance_status || 'compliant',
         q4_compliance_status: issuance.q4_compliance_status || 'compliant',
-        register_added_at: issuance.register_added_at ? issuance.register_added_at.split('T')[0] : new Date().toISOString().slice(0, 10),
+        register_added_at: issuance.register_added_at
+          ? issuance.register_added_at.split('T')[0]
+          : new Date().toISOString().slice(0, 10),
         is_amendment: Boolean(issuance.is_amendment),
         amended_issuance_number: issuance.amended_issuance_number || '',
         ict_amendment_notes: issuance.ict_amendment_notes || '',
         issuing_authority: issuance.issuing_authority,
         issue_date: issuance.issue_date.split('T')[0],
-        effectivity_date: issuance.effectivity_date
-          ? issuance.effectivity_date.split('T')[0]
-          : '',
+        effectivity_date: issuance.effectivity_date ? issuance.effectivity_date.split('T')[0] : '',
         source_url: issuance.source_url || '',
         is_active: issuance.is_active,
       });
@@ -341,7 +349,9 @@ export default function IssuancesPage() {
       handleCloseDialog();
       await fetchIssuances();
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to save issuance', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to save issuance', {
+        variant: 'error',
+      });
     }
   };
 
@@ -351,10 +361,15 @@ export default function IssuancesPage() {
     }
 
     try {
-      await issuancesApi.update(issuance.id, sanitizeIssuancePayload({ is_active: !issuance.is_active }));
+      await issuancesApi.update(
+        issuance.id,
+        sanitizeIssuancePayload({ is_active: !issuance.is_active }),
+      );
       await fetchIssuances();
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to update issuance status', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to update issuance status', {
+        variant: 'error',
+      });
     }
   };
 
@@ -363,21 +378,20 @@ export default function IssuancesPage() {
       return;
     }
 
-    if (!confirm('Are you sure you want to delete this issuance?'))
-      return;
+    if (!confirm('Are you sure you want to delete this issuance?')) return;
     try {
       await issuancesApi.delete(id);
       fetchIssuances();
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to delete issuance', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to delete issuance', {
+        variant: 'error',
+      });
     }
   };
 
   const authorityOptions = Array.from(
     new Set(
-      allIssuances
-        .map((item) => item.issuing_authority)
-        .filter((item) => Boolean(item?.trim())),
+      allIssuances.map((item) => item.issuing_authority).filter((item) => Boolean(item?.trim())),
     ),
   ).sort((a, b) => a.localeCompare(b));
 
@@ -390,17 +404,13 @@ export default function IssuancesPage() {
   ).sort((a, b) => a.localeCompare(b));
 
   const formatCategoryLabel = (value: string) =>
-    value
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
   const filteredIssuances = allIssuances.filter((issuance) => {
     const authorityMatch =
-      filterAuthorities.length === 0 ||
-      filterAuthorities.includes(issuance.issuing_authority);
+      filterAuthorities.length === 0 || filterAuthorities.includes(issuance.issuing_authority);
     const categoryMatch =
-      filterCategories.length === 0 ||
-      filterCategories.includes(issuance.issuance_type || '');
+      filterCategories.length === 0 || filterCategories.includes(issuance.issuance_type || '');
     const statusMatch =
       filterStatus === 'all' ||
       (filterStatus === 'active' && issuance.is_active) ||
@@ -442,9 +452,14 @@ export default function IssuancesPage() {
   const handleViewAttachment = async (issuance: Issuance) => {
     try {
       const blob = await issuancesApi.viewAttachment(issuance.id);
-      openBlobInNewTab(blob, issuance.attachment_file_name || `${issuance.issuance_number}-attachment`);
+      openBlobInNewTab(
+        blob,
+        issuance.attachment_file_name || `${issuance.issuance_number}-attachment`,
+      );
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to open attachment', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to open attachment', {
+        variant: 'error',
+      });
     }
   };
 
@@ -458,7 +473,9 @@ export default function IssuancesPage() {
       anchor.click();
       URL.revokeObjectURL(objectUrl);
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to download attachment', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to download attachment', {
+        variant: 'error',
+      });
     }
   };
 
@@ -508,7 +525,9 @@ export default function IssuancesPage() {
       setMappedDocuments(linkedDocs);
       setAvailableDocuments((docs.data || []).filter((document) => document.status === 'ready'));
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to load mapping details', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to load mapping details', {
+        variant: 'error',
+      });
     } finally {
       setMappingLoading(false);
     }
@@ -543,7 +562,9 @@ export default function IssuancesPage() {
       await openMappingDialog(selectedIssuance);
       await fetchIssuances();
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to link document', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to link document', {
+        variant: 'error',
+      });
     }
   };
 
@@ -557,7 +578,9 @@ export default function IssuancesPage() {
       await openMappingDialog(selectedIssuance);
       await fetchIssuances();
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to unlink document', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to unlink document', {
+        variant: 'error',
+      });
     }
   };
 
@@ -580,11 +603,7 @@ export default function IssuancesPage() {
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">Reference Issuances</Typography>
         {canManageIssuances && (
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-          >
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
             Add Issuance
           </Button>
         )}
@@ -592,11 +611,10 @@ export default function IssuancesPage() {
 
       {!canManageIssuances && (
         <Typography color="text.secondary" sx={{ mb: 2 }}>
-          Read-only view. Issuance CRUD and document mapping actions are available to compliance and super admin roles.
+          Read-only view. Issuance CRUD and document mapping actions are available to compliance and
+          super admin roles.
         </Typography>
       )}
-
-
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
@@ -670,7 +688,7 @@ export default function IssuancesPage() {
               <TableCell>Authority</TableCell>
               <TableCell>Issue Date</TableCell>
               <TableCell>Status</TableCell>
-                  <TableCell>Mapped Documents</TableCell>
+              <TableCell>Mapped Documents</TableCell>
               <TableCell>ICT Related Amendments</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -678,13 +696,13 @@ export default function IssuancesPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                    <TableCell colSpan={8} align="center">
+                <TableCell colSpan={8} align="center">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : filteredIssuances.length === 0 ? (
               <TableRow>
-                    <TableCell colSpan={8} align="center">
+                <TableCell colSpan={8} align="center">
                   No issuances found
                 </TableCell>
               </TableRow>
@@ -707,9 +725,7 @@ export default function IssuancesPage() {
                     )}
                   </TableCell>
                   <TableCell>{issuance.issuing_authority}</TableCell>
-                  <TableCell>
-                    {new Date(issuance.issue_date).toLocaleDateString()}
-                  </TableCell>
+                  <TableCell>{new Date(issuance.issue_date).toLocaleDateString()}</TableCell>
                   <TableCell>
                     <Chip
                       label={issuance.is_active ? 'Active' : 'Inactive'}
@@ -728,13 +744,21 @@ export default function IssuancesPage() {
                   <TableCell>
                     {issuance.is_amendment ? (
                       <Box>
-                        <Chip label={`Amends ${issuance.amended_issuance_number || 'N/A'}`} size="small" color="secondary" sx={{ mb: 0.5 }} />
+                        <Chip
+                          label={`Amends ${issuance.amended_issuance_number || 'N/A'}`}
+                          size="small"
+                          color="secondary"
+                          sx={{ mb: 0.5 }}
+                        />
                         <Typography variant="caption" color="text.secondary" display="block">
-                          {issuance.ict_amendment_notes || 'Includes ICT-related amendment provisions.'}
+                          {issuance.ict_amendment_notes ||
+                            'Includes ICT-related amendment provisions.'}
                         </Typography>
                       </Box>
                     ) : (
-                      <Typography variant="caption" color="text.secondary">None</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        None
+                      </Typography>
                     )}
                   </TableCell>
                   <TableCell align="right">
@@ -827,7 +851,11 @@ export default function IssuancesPage() {
             }}
           >
             <ListItemIcon>
-              {actionsIssuance.is_active ? <UnlinkIcon fontSize="small" /> : <LinkIcon fontSize="small" />}
+              {actionsIssuance.is_active ? (
+                <UnlinkIcon fontSize="small" />
+              ) : (
+                <LinkIcon fontSize="small" />
+              )}
             </ListItemIcon>
             <ListItemText primary={actionsIssuance.is_active ? 'Deactivate' : 'Activate'} />
           </MenuItem>
@@ -861,35 +889,27 @@ export default function IssuancesPage() {
       </Menu>
 
       <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {editingIssuance ? 'Edit Issuance' : 'Add Issuance'}
-        </DialogTitle>
+        <DialogTitle>{editingIssuance ? 'Edit Issuance' : 'Add Issuance'}</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField
               label="Issuance Number"
               value={formData.issuance_number}
-              onChange={(e) =>
-                setFormData({ ...formData, issuance_number: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, issuance_number: e.target.value })}
               required
               fullWidth
             />
             <TextField
               label="Title"
               value={formData.title}
-              onChange={(e) =>
-                setFormData({ ...formData, title: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               required
               fullWidth
             />
             <TextField
               label="Description"
               value={formData.description}
-              onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               multiline
               rows={3}
               fullWidth
@@ -898,9 +918,7 @@ export default function IssuancesPage() {
               select
               label="Issuance Type"
               value={formData.issuance_type || ''}
-              onChange={(e) =>
-                setFormData({ ...formData, issuance_type: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, issuance_type: e.target.value })}
               fullWidth
             >
               <MenuItem value="">None</MenuItem>
@@ -917,9 +935,7 @@ export default function IssuancesPage() {
               select
               label="Status"
               value={formData.is_active === false ? 'inactive' : 'active'}
-              onChange={(e) =>
-                setFormData({ ...formData, is_active: e.target.value === 'active' })
-              }
+              onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'active' })}
               fullWidth
             >
               <MenuItem value="active">Active</MenuItem>
@@ -928,9 +944,7 @@ export default function IssuancesPage() {
             <TextField
               label="Applicability Scope"
               value={formData.applicability_scope || ''}
-              onChange={(e) =>
-                setFormData({ ...formData, applicability_scope: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, applicability_scope: e.target.value })}
               multiline
               rows={5}
               fullWidth
@@ -939,9 +953,7 @@ export default function IssuancesPage() {
             <TextField
               label="Relevance Notes"
               value={formData.relevance_notes || ''}
-              onChange={(e) =>
-                setFormData({ ...formData, relevance_notes: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, relevance_notes: e.target.value })}
               multiline
               rows={6}
               fullWidth
@@ -1008,7 +1020,9 @@ export default function IssuancesPage() {
             >
               <MenuItem value="">None</MenuItem>
               {processOwnerOptions.map((owner) => (
-                <MenuItem key={owner.value} value={owner.value}>{owner.label}</MenuItem>
+                <MenuItem key={owner.value} value={owner.value}>
+                  {owner.label}
+                </MenuItem>
               ))}
             </TextField>
             <TextField
@@ -1138,9 +1152,7 @@ export default function IssuancesPage() {
               select
               label="Is Amendment"
               value={formData.is_amendment ? 'yes' : 'no'}
-              onChange={(e) =>
-                setFormData({ ...formData, is_amendment: e.target.value === 'yes' })
-              }
+              onChange={(e) => setFormData({ ...formData, is_amendment: e.target.value === 'yes' })}
               fullWidth
             >
               <MenuItem value="no">No</MenuItem>
@@ -1173,9 +1185,7 @@ export default function IssuancesPage() {
             <TextField
               label="Issuing Authority"
               value={formData.issuing_authority}
-              onChange={(e) =>
-                setFormData({ ...formData, issuing_authority: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, issuing_authority: e.target.value })}
               placeholder="e.g. CHED"
               required
               fullWidth
@@ -1184,9 +1194,7 @@ export default function IssuancesPage() {
               label="Issue Date"
               type="date"
               value={formData.issue_date}
-              onChange={(e) =>
-                setFormData({ ...formData, issue_date: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })}
               required
               fullWidth
               InputLabelProps={{ shrink: true }}
@@ -1195,18 +1203,14 @@ export default function IssuancesPage() {
               label="Effectivity Date"
               type="date"
               value={formData.effectivity_date}
-              onChange={(e) =>
-                setFormData({ ...formData, effectivity_date: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, effectivity_date: e.target.value })}
               fullWidth
               InputLabelProps={{ shrink: true }}
             />
             <TextField
               label="Source URL"
               value={formData.source_url}
-              onChange={(e) =>
-                setFormData({ ...formData, source_url: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, source_url: e.target.value })}
               fullWidth
             />
             {editingIssuance?.attachment_file_name && (
@@ -1214,12 +1218,10 @@ export default function IssuancesPage() {
                 Current Attachment: {editingIssuance.attachment_file_name}
               </Typography>
             )}
-            <Button
-              component="label"
-              variant="outlined"
-              startIcon={<CloudUploadIcon />}
-            >
-              {attachmentFile ? `Selected: ${attachmentFile.name}` : 'Upload Attachment (PDF/DOC/DOCX)'}
+            <Button component="label" variant="outlined" startIcon={<CloudUploadIcon />}>
+              {attachmentFile
+                ? `Selected: ${attachmentFile.name}`
+                : 'Upload Attachment (PDF/DOC/DOCX)'}
               <input
                 hidden
                 type="file"
@@ -1232,13 +1234,13 @@ export default function IssuancesPage() {
             </Button>
             {editingIssuance?.attachment_file_name && (
               <FormControlLabel
-                control={(
+                control={
                   <Checkbox
                     checked={removeExistingAttachment}
                     onChange={(event) => setRemoveExistingAttachment(event.target.checked)}
                     disabled={Boolean(attachmentFile)}
                   />
-                )}
+                }
                 label="Remove current attachment"
               />
             )}
@@ -1297,7 +1299,8 @@ export default function IssuancesPage() {
                       <Box>
                         <Typography fontWeight={600}>{document.title}</Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {document.document_type} • {document.year}-{document.period} • {document.unit?.name || 'No Unit'}
+                          {document.document_type} • {document.year}-{document.period} •{' '}
+                          {document.unit?.name || 'No Unit'}
                         </Typography>
                       </Box>
                       {canManageIssuances && (
@@ -1323,7 +1326,15 @@ export default function IssuancesPage() {
                   No documents matched your search.
                 </Typography>
               ) : (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 320, overflowY: 'auto' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1,
+                    maxHeight: 320,
+                    overflowY: 'auto',
+                  }}
+                >
                   {filteredDocuments.map((document) => {
                     const isLinked = mappedDocumentIds.has(document.id);
                     return (
@@ -1343,7 +1354,8 @@ export default function IssuancesPage() {
                         <Box>
                           <Typography fontWeight={600}>{document.title}</Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {document.document_type} • {document.year}-{document.period} • {document.unit?.name || 'No Unit'}
+                            {document.document_type} • {document.year}-{document.period} •{' '}
+                            {document.unit?.name || 'No Unit'}
                           </Typography>
                         </Box>
                         {isLinked ? (
@@ -1374,67 +1386,127 @@ export default function IssuancesPage() {
 
       <Dialog open={relevanceOpen} onClose={closeRelevanceDialog} maxWidth="md" fullWidth>
         <DialogTitle>
-          Applicability and Relevance {selectedIssuance ? `• ${selectedIssuance.issuance_number}` : ''}
+          Applicability and Relevance{' '}
+          {selectedIssuance ? `• ${selectedIssuance.issuance_number}` : ''}
         </DialogTitle>
         <DialogContent>
           {selectedIssuance ? (
             <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Box>
-                <Typography variant="subtitle2" color="text.secondary">Title</Typography>
-                <Typography variant="body1" fontWeight={600}>{selectedIssuance.title}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Issuance Type</Typography>
-                <Typography variant="body1">{selectedIssuance.issuance_type || 'Not specified'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Applicability Scope</Typography>
-                <Typography variant="body1">{selectedIssuance.applicability_scope || 'No applicability scope provided.'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Relevance Notes</Typography>
-                <Typography variant="body1">{selectedIssuance.relevance_notes || selectedIssuance.description || 'No relevance notes provided.'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Binding Nature</Typography>
-                <Typography variant="body1">{selectedIssuance.binding_nature || 'Not specified'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Applicable Provisions</Typography>
-                <Typography variant="body1">{selectedIssuance.applicable_provisions || 'Not specified'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Compliance Obligations</Typography>
-                <Typography variant="body1">{selectedIssuance.compliance_obligations || 'Not specified'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Required Evidence (MoV)</Typography>
-                <Typography variant="body1">{selectedIssuance.required_evidence || 'Not specified'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Process Owner</Typography>
-                <Typography variant="body1">{selectedIssuance.process_owner || 'Not specified'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Compliance Status</Typography>
-                <Typography variant="body1">{selectedIssuance.compliance_status || 'Not specified'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Quarterly Readiness</Typography>
-                <Typography variant="body1">{selectedIssuance.quarterly_readiness || 'Not specified'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Register Added Date</Typography>
-                <Typography variant="body1">{selectedIssuance.register_added_at ? selectedIssuance.register_added_at.split('T')[0] : 'Not specified'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">Quarterly Compliance Tags</Typography>
-                <Typography variant="body1">
-                  Q1: {selectedIssuance.q1_compliance_status || 'N/A'} · Q2: {selectedIssuance.q2_compliance_status || 'N/A'} · Q3: {selectedIssuance.q3_compliance_status || 'N/A'} · Q4: {selectedIssuance.q4_compliance_status || 'N/A'}
+                <Typography variant="subtitle2" color="text.secondary">
+                  Title
+                </Typography>
+                <Typography variant="body1" fontWeight={600}>
+                  {selectedIssuance.title}
                 </Typography>
               </Box>
               <Box>
-                <Typography variant="subtitle2" color="text.secondary">Amendment</Typography>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Issuance Type
+                </Typography>
+                <Typography variant="body1">
+                  {selectedIssuance.issuance_type || 'Not specified'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Applicability Scope
+                </Typography>
+                <Typography variant="body1">
+                  {selectedIssuance.applicability_scope || 'No applicability scope provided.'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Relevance Notes
+                </Typography>
+                <Typography variant="body1">
+                  {selectedIssuance.relevance_notes ||
+                    selectedIssuance.description ||
+                    'No relevance notes provided.'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Binding Nature
+                </Typography>
+                <Typography variant="body1">
+                  {selectedIssuance.binding_nature || 'Not specified'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Applicable Provisions
+                </Typography>
+                <Typography variant="body1">
+                  {selectedIssuance.applicable_provisions || 'Not specified'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Compliance Obligations
+                </Typography>
+                <Typography variant="body1">
+                  {selectedIssuance.compliance_obligations || 'Not specified'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Required Evidence (MoV)
+                </Typography>
+                <Typography variant="body1">
+                  {selectedIssuance.required_evidence || 'Not specified'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Process Owner
+                </Typography>
+                <Typography variant="body1">
+                  {selectedIssuance.process_owner || 'Not specified'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Compliance Status
+                </Typography>
+                <Typography variant="body1">
+                  {selectedIssuance.compliance_status || 'Not specified'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Quarterly Readiness
+                </Typography>
+                <Typography variant="body1">
+                  {selectedIssuance.quarterly_readiness || 'Not specified'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Register Added Date
+                </Typography>
+                <Typography variant="body1">
+                  {selectedIssuance.register_added_at
+                    ? selectedIssuance.register_added_at.split('T')[0]
+                    : 'Not specified'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Quarterly Compliance Tags
+                </Typography>
+                <Typography variant="body1">
+                  Q1: {selectedIssuance.q1_compliance_status || 'N/A'} · Q2:{' '}
+                  {selectedIssuance.q2_compliance_status || 'N/A'} · Q3:{' '}
+                  {selectedIssuance.q3_compliance_status || 'N/A'} · Q4:{' '}
+                  {selectedIssuance.q4_compliance_status || 'N/A'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Amendment
+                </Typography>
                 <Typography variant="body1">
                   {selectedIssuance.is_amendment
                     ? `Yes • Amends ${selectedIssuance.amended_issuance_number || 'N/A'}`
@@ -1443,14 +1515,18 @@ export default function IssuancesPage() {
               </Box>
               {selectedIssuance.is_amendment ? (
                 <Box>
-                  <Typography variant="subtitle2" color="text.secondary">ICT Related Amendment Notes</Typography>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    ICT Related Amendment Notes
+                  </Typography>
                   <Typography variant="body1">
                     {selectedIssuance.ict_amendment_notes || 'No ICT amendment notes provided.'}
                   </Typography>
                 </Box>
               ) : null}
               <Box>
-                <Typography variant="subtitle2" color="text.secondary">Mapped Documents</Typography>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Mapped Documents
+                </Typography>
                 <Typography variant="body1">{selectedIssuance.documents?.length || 0}</Typography>
               </Box>
             </Box>

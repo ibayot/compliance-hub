@@ -20,6 +20,8 @@ export function useRouter() {
   );
 }
 
-export function useParams<T extends Record<string, string | undefined> = Record<string, string | undefined>>() {
+export function useParams<
+  T extends Record<string, string | undefined> = Record<string, string | undefined>,
+>() {
   return useReactRouterParams() as T;
 }

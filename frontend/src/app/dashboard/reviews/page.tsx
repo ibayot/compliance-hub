@@ -114,14 +114,18 @@ export default function ReviewsPage() {
     if (!document || (document.status !== 'ready' && document.status !== 'pending')) {
       releasePreviewBlob();
       setPreviewError('Preview is not available yet. The document may still be processing.');
-      enqueueSnackbar('Preview is not available yet. The document may still be processing.', { variant: 'warning' });
+      enqueueSnackbar('Preview is not available yet. The document may still be processing.', {
+        variant: 'warning',
+      });
       return;
     }
 
     try {
       setPreviewLoading(true);
       const versions = await documentsApi.getVersionHistory(documentId);
-      const currentVersion = versions.find((version) => version.version_number === document.current_version);
+      const currentVersion = versions.find(
+        (version) => version.version_number === document.current_version,
+      );
 
       if (!currentVersion) {
         releasePreviewBlob();
@@ -130,7 +134,10 @@ export default function ReviewsPage() {
         return;
       }
 
-      const { blobUrl, mimeType } = await documentsApi.getPreviewBlobUrl(documentId, currentVersion.id);
+      const { blobUrl, mimeType } = await documentsApi.getPreviewBlobUrl(
+        documentId,
+        currentVersion.id,
+      );
       setPreviewMimeType(mimeType);
       setPreviewBlobUrl((previousUrl) => {
         if (previousUrl && previousUrl.startsWith('blob:')) {
@@ -166,15 +173,17 @@ export default function ReviewsPage() {
     }
 
     if (isSelectedDocumentAlreadyCompliant) {
-      enqueueSnackbar('This document is already compliant and does not require a new review tag.', { variant: 'warning' });
+      enqueueSnackbar('This document is already compliant and does not require a new review tag.', {
+        variant: 'warning',
+      });
       return;
     }
 
-    if (
-      (decision === 'needs_revision' || decision === 'non_compliant') &&
-      !remarks.trim()
-    ) {
-      enqueueSnackbar('Remarks are required when tagging a document as needs revision or non-compliant.', { variant: 'warning' });
+    if ((decision === 'needs_revision' || decision === 'non_compliant') && !remarks.trim()) {
+      enqueueSnackbar(
+        'Remarks are required when tagging a document as needs revision or non-compliant.',
+        { variant: 'warning' },
+      );
       return;
     }
 
@@ -189,7 +198,9 @@ export default function ReviewsPage() {
       closeDialog();
       await loadData();
     } catch (error: any) {
-      enqueueSnackbar(error?.response?.data?.message || 'Failed to submit review tag.', { variant: 'error' });
+      enqueueSnackbar(error?.response?.data?.message || 'Failed to submit review tag.', {
+        variant: 'error',
+      });
     } finally {
       setSaving(false);
     }
@@ -211,7 +222,8 @@ export default function ReviewsPage() {
             Manual Compliance Reviews
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Open each document digitally and tag compliance decision directly in the review workspace
+            Open each document digitally and tag compliance decision directly in the review
+            workspace
           </Typography>
         </Box>
         <Chip label={`${pendingCount} Pending Reviews`} color="primary" />
@@ -235,41 +247,47 @@ export default function ReviewsPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {documents.filter((document) => latestReviewByDoc[document.id] !== 'compliant').map((document) => {
-                  const reviewStatus = latestReviewByDoc[document.id] || 'not_reviewed';
-                  return (
-                    <TableRow key={document.id} hover>
-                      <TableCell>
-                        <Typography fontWeight={600}>{document.title}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {document.period} {document.year}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{document.document_type}</TableCell>
-                      <TableCell>{document.status}</TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          color={
-                            reviewStatus === 'compliant'
-                              ? 'success'
-                              : reviewStatus === 'non_compliant'
-                                ? 'error'
-                                : reviewStatus === 'needs_revision'
-                                  ? 'warning'
-                                  : 'default'
-                          }
-                          label={reviewStatus.replace('_', ' ')}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Button variant="outlined" size="small" onClick={() => openReviewDialog(document.id)}>
-                          Review
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {documents
+                  .filter((document) => latestReviewByDoc[document.id] !== 'compliant')
+                  .map((document) => {
+                    const reviewStatus = latestReviewByDoc[document.id] || 'not_reviewed';
+                    return (
+                      <TableRow key={document.id} hover>
+                        <TableCell>
+                          <Typography fontWeight={600}>{document.title}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {document.period} {document.year}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{document.document_type}</TableCell>
+                        <TableCell>{document.status}</TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            color={
+                              reviewStatus === 'compliant'
+                                ? 'success'
+                                : reviewStatus === 'non_compliant'
+                                  ? 'error'
+                                  : reviewStatus === 'needs_revision'
+                                    ? 'warning'
+                                    : 'default'
+                            }
+                            label={reviewStatus.replace('_', ' ')}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => openReviewDialog(document.id)}
+                          >
+                            Review
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 {documents.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} align="center">
@@ -293,7 +311,8 @@ export default function ReviewsPage() {
               </Typography>
               {selectedDocument && (
                 <Typography variant="body2" color="text.secondary" mb={2}>
-                  {selectedDocument.title} • {selectedDocument.document_type} • {selectedDocument.period} {selectedDocument.year}
+                  {selectedDocument.title} • {selectedDocument.document_type} •{' '}
+                  {selectedDocument.period} {selectedDocument.year}
                 </Typography>
               )}
 
@@ -323,7 +342,8 @@ export default function ReviewsPage() {
 
               {isSelectedDocumentAlreadyCompliant ? (
                 <Typography color="success.main">
-                  This document is already tagged as compliant. No additional review tagging is required.
+                  This document is already tagged as compliant. No additional review tagging is
+                  required.
                 </Typography>
               ) : (
                 <>
@@ -373,7 +393,11 @@ export default function ReviewsPage() {
         <DialogActions>
           <Button onClick={closeDialog}>Cancel</Button>
           {!isSelectedDocumentAlreadyCompliant && (
-            <Button variant="contained" onClick={submitReview} disabled={saving || !selectedDocumentId}>
+            <Button
+              variant="contained"
+              onClick={submitReview}
+              disabled={saving || !selectedDocumentId}
+            >
               {saving ? 'Submitting...' : 'Submit Review'}
             </Button>
           )}

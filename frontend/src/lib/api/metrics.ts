@@ -52,9 +52,7 @@ export const metricsApi = {
     return response.data;
   },
 
-  createTemplate: async (
-    data: CreateMetricTemplateRequest,
-  ): Promise<MetricTemplate> => {
+  createTemplate: async (data: CreateMetricTemplateRequest): Promise<MetricTemplate> => {
     const response = await apiClient.post('/metrics', data);
     return response.data;
   },

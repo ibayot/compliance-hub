@@ -30,8 +30,18 @@ interface DocumentUploadProps {
 }
 
 const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
@@ -108,7 +118,9 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
       onSuccess?.();
     },
     onError: (err: any) => {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to upload document', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to upload document', {
+        variant: 'error',
+      });
     },
   });
 
@@ -118,10 +130,10 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
 
     const isDocx =
       selectedFile.name.toLowerCase().endsWith('.docx') ||
-      selectedFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      selectedFile.type ===
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     const isPdf =
-      selectedFile.name.toLowerCase().endsWith('.pdf') ||
-      selectedFile.type === 'application/pdf';
+      selectedFile.name.toLowerCase().endsWith('.pdf') || selectedFile.type === 'application/pdf';
 
     if (!isDocx && !isPdf) {
       enqueueSnackbar('Only DOCX and PDF files are allowed', { variant: 'error' });
@@ -148,18 +160,25 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
     setFile(selectedFile);
 
     if (!title) {
-      const titleFromFile = selectedFile.name
-        .replace(/\.(docx|pdf)$/i, '')
-        .replace(/[_-]/g, ' ');
+      const titleFromFile = selectedFile.name.replace(/\.(docx|pdf)$/i, '').replace(/[_-]/g, ' ');
       setTitle(titleFromFile);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) { enqueueSnackbar('Please select a file', { variant: 'error' }); return; }
-    if (!unitId) { enqueueSnackbar('Please select a unit', { variant: 'error' }); return; }
-    if (!reportorialDocTypeId) { enqueueSnackbar('Please select a document type', { variant: 'error' }); return; }
+    if (!file) {
+      enqueueSnackbar('Please select a file', { variant: 'error' });
+      return;
+    }
+    if (!unitId) {
+      enqueueSnackbar('Please select a unit', { variant: 'error' });
+      return;
+    }
+    if (!reportorialDocTypeId) {
+      enqueueSnackbar('Please select a document type', { variant: 'error' });
+      return;
+    }
 
     // Compute period token for the backend
     let periodToken = '';
@@ -188,8 +207,14 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
       enqueueSnackbar('Please enter a Google Docs link', { variant: 'error' });
       return;
     }
-    if (!unitId) { enqueueSnackbar('Please select a unit', { variant: 'error' }); return; }
-    if (!reportorialDocTypeId) { enqueueSnackbar('Please select a document type', { variant: 'error' }); return; }
+    if (!unitId) {
+      enqueueSnackbar('Please select a unit', { variant: 'error' });
+      return;
+    }
+    if (!reportorialDocTypeId) {
+      enqueueSnackbar('Please select a document type', { variant: 'error' });
+      return;
+    }
 
     let periodToken = '';
     if (selectedDocType) {
@@ -221,7 +246,9 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
       enqueueSnackbar('Google Doc imported successfully!', { variant: 'success' });
       onSuccess?.();
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to import Google Doc', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'Failed to import Google Doc', {
+        variant: 'error',
+      });
     }
   };
 
@@ -260,7 +287,11 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
               />
             </Button>
             {file && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mt: 0.5, display: 'block' }}
+              >
                 Size: {(file.size / 1024 / 1024).toFixed(2)} MB
               </Typography>
             )}
@@ -308,11 +339,7 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
           ) : (
             <FormControl fullWidth required>
               <InputLabel>Unit</InputLabel>
-              <Select
-                value={unitId}
-                onChange={(e) => setUnitId(e.target.value)}
-                label="Unit"
-              >
+              <Select value={unitId} onChange={(e) => setUnitId(e.target.value)} label="Unit">
                 {unitOptions.map((unit) => (
                   <MenuItem key={unit.id} value={String(unit.id)}>
                     {unit.name}
@@ -330,11 +357,13 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
               onChange={(e) => setReportorialDocTypeId(e.target.value)}
               label="Document Type"
             >
-              {docTypes.filter((dt) => dt.active).map((dt) => (
-                <MenuItem key={dt.id} value={String(dt.id)}>
-                  {dt.display_name}
-                </MenuItem>
-              ))}
+              {docTypes
+                .filter((dt) => dt.active)
+                .map((dt) => (
+                  <MenuItem key={dt.id} value={String(dt.id)}>
+                    {dt.display_name}
+                  </MenuItem>
+                ))}
               {docTypes.length === 0 && (
                 <MenuItem disabled value="">
                   {unitId ? 'No document types for this unit' : 'Select a unit first'}
@@ -355,7 +384,9 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
                   label="Year"
                 >
                   {yearOptions.map((y) => (
-                    <MenuItem key={y} value={y}>{y}</MenuItem>
+                    <MenuItem key={y} value={y}>
+                      {y}
+                    </MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -370,7 +401,9 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
                     label="Month"
                   >
                     {MONTH_NAMES.map((name, idx) => (
-                      <MenuItem key={idx + 1} value={idx + 1}>{name}</MenuItem>
+                      <MenuItem key={idx + 1} value={idx + 1}>
+                        {name}
+                      </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -386,7 +419,9 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
                     label="Quarter"
                   >
                     {[1, 2, 3, 4].map((q) => (
-                      <MenuItem key={q} value={q}>Q{q}</MenuItem>
+                      <MenuItem key={q} value={q}>
+                        Q{q}
+                      </MenuItem>
                     ))}
                   </Select>
                 </FormControl>

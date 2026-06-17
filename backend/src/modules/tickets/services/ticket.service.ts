@@ -1136,6 +1136,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
               ticket.lastAssignedAt = new Date();
               // Break not needed here, no outer loop
             }
+            }
         }
         if (dto.status === TicketStatus.RESOLVED && !ticket.resolvedAt) {
           ticket.resolvedAt = new Date();

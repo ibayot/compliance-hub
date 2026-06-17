@@ -1,8 +1,26 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  ReactNode,
+} from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { User } from '@/lib/types/auth';
 import { authApi } from '@/lib/api/auth';
@@ -33,9 +51,15 @@ function parseJwt(token: string) {
     if (pad) {
       base64 += '='.repeat(4 - pad);
     }
-    const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
+    const jsonPayload = decodeURIComponent(
+      window
+        .atob(base64)
+        .split('')
+        .map(function (c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        })
+        .join(''),
+    );
     return JSON.parse(jsonPayload);
   } catch (e) {
     console.error('JWT parse error:', e);
@@ -86,18 +110,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, INACTIVITY_TIMEOUT_MS);
   }, [clearInactivityTimer, isSessionLocked, user]);
 
-  const unlockSession = useCallback(async (password: string) => {
-    if (!user) throw new Error('No active session');
-    const trimmed = password.trim();
-    if (!trimmed) {
-      throw new Error('Password is required');
-    }
-    await authApi.reauthenticate({ password: trimmed });
-    setIsSessionLocked(false);
-    setUnlockPassword('');
-    setUnlockError(null);
-    scheduleInactivityLock();
-  }, [scheduleInactivityLock, user]);
+  const unlockSession = useCallback(
+    async (password: string) => {
+      if (!user) throw new Error('No active session');
+      const trimmed = password.trim();
+      if (!trimmed) {
+        throw new Error('Password is required');
+      }
+      await authApi.reauthenticate({ password: trimmed });
+      setIsSessionLocked(false);
+      setUnlockPassword('');
+      setUnlockError(null);
+      scheduleInactivityLock();
+    },
+    [scheduleInactivityLock, user],
+  );
 
   useEffect(() => {
     // Check for existing token and fetch user profile
@@ -106,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (token) {
         try {
           const profile = await authApi.getProfile();
-          
+
           let jwtRole = null;
           try {
             const payload = parseJwt(token);
@@ -114,14 +141,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } catch {}
 
           const roleChanged = jwtRole && jwtRole !== profile.role;
-          
+
           setUser(profile);
-          
+
           if (roleChanged) {
-            enqueueSnackbar('Your role has been updated. Please log in again to apply changes.', { variant: 'info' });
+            enqueueSnackbar('Your role has been updated. Please log in again to apply changes.', {
+              variant: 'info',
+            });
             setTimeout(() => logout('role_changed'), 1500);
           } else {
-            usersApi.getMyCapabilities().then(setMyCap).catch(() => {});
+            usersApi
+              .getMyCapabilities()
+              .then(setMyCap)
+              .catch(() => {});
           }
         } catch (error) {
           tokenStore.remove('accessToken');
@@ -146,8 +178,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
-    events.forEach((eventName) => window.addEventListener(eventName, activityHandler, { passive: true }));
+    const events: Array<keyof WindowEventMap> = [
+      'mousemove',
+      'mousedown',
+      'keydown',
+      'scroll',
+      'touchstart',
+    ];
+    events.forEach((eventName) =>
+      window.addEventListener(eventName, activityHandler, { passive: true }),
+    );
     scheduleInactivityLock();
 
     return () => {
@@ -165,23 +205,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
 
     const id = setInterval(async () => {
+      try {
+        const profile = await authApi.getProfile();
+        let jwtRole = user?.role;
+        const token = tokenStore.get('accessToken');
         try {
-          const profile = await authApi.getProfile();
-          let jwtRole = user?.role;
-          const token = tokenStore.get('accessToken');
-          try {
-            if (token) {
-              const payload = parseJwt(token);
-              if (payload) jwtRole = payload.role;
-            }
-          } catch {}
-        
+          if (token) {
+            const payload = parseJwt(token);
+            if (payload) jwtRole = payload.role;
+          }
+        } catch {}
+
         const roleChanged = jwtRole && jwtRole !== profile.role;
-        
-        setUser(profile);          // Immediately reflect visual changes to account
-        
+
+        setUser(profile); // Immediately reflect visual changes to account
+
         if (roleChanged) {
-          enqueueSnackbar('Your role has been updated. Please log in again to apply changes.', { variant: 'info' });
+          enqueueSnackbar('Your role has been updated. Please log in again to apply changes.', {
+            variant: 'info',
+          });
           setTimeout(() => logout('role_changed'), 1500);
         } else {
           try {
@@ -192,7 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         // 401 is handled by the axios interceptor; other errors are safe to ignore
       }
-    }, 60_000);   // 60 s
+    }, 60_000); // 60 s
 
     return () => clearInterval(id);
   }, [!!user, enqueueSnackbar]);
@@ -211,7 +253,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         // Non-blocking: login response user data is still valid
       }
-      usersApi.getMyCapabilities().then(setMyCap).catch(() => {});
+      usersApi
+        .getMyCapabilities()
+        .then(setMyCap)
+        .catch(() => {});
       router.push(redirectTo ?? '/dashboard');
     } catch (error) {
       throw error;
@@ -227,9 +272,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const profile = await authApi.getProfile();
         setUser(profile);
-      } catch {
-      }
-      usersApi.getMyCapabilities().then(setMyCap).catch(() => {});
+      } catch {}
+      usersApi
+        .getMyCapabilities()
+        .then(setMyCap)
+        .catch(() => {});
       router.push(redirectTo ?? '/dashboard');
     } catch (error) {
       throw error;
@@ -252,7 +299,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-
   const handleUnlock = async () => {
     setUnlocking(true);
     setUnlockError(null);
@@ -262,7 +308,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       await unlockSession(unlockPassword);
     } catch (error: any) {
-      setUnlockError(error?.response?.data?.message || error?.message || 'Unable to unlock session');
+      setUnlockError(
+        error?.response?.data?.message || error?.message || 'Unable to unlock session',
+      );
     } finally {
       setUnlocking(false);
     }

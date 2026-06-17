@@ -24,14 +24,40 @@ export class KnowledgeBaseService {
   }
 
   // Very basic regex-based stripping of sensitive data before prompt
-  private stripSensitiveData(text: string): string {
+  private async stripSensitiveData(text: string): Promise<string> {
     if (!text) return '';
     let clean = text;
-    // Strip emails
+
+    // Fetch all users to scrub their names and emails
+    try {
+      const users = await this.kbRepo.manager.query('SELECT first_name, last_name, email FROM users');
+      for (const user of users) {
+        if (user.first_name && user.first_name.length > 2) {
+          const fnRegex = new RegExp(`\\b${this.escapeRegExp(user.first_name)}\\b`, 'gi');
+          clean = clean.replace(fnRegex, '[NAME_REMOVED]');
+        }
+        if (user.last_name && user.last_name.length > 2) {
+          const lnRegex = new RegExp(`\\b${this.escapeRegExp(user.last_name)}\\b`, 'gi');
+          clean = clean.replace(lnRegex, '[NAME_REMOVED]');
+        }
+        if (user.email && user.email.length > 5) {
+          const emRegex = new RegExp(this.escapeRegExp(user.email), 'gi');
+          clean = clean.replace(emRegex, '[EMAIL_REMOVED]');
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to fetch users for PII scrubbing: ${err?.message}`);
+    }
+
+    // Strip generic emails
     clean = clean.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL_REMOVED]');
     // Strip phone numbers (basic PH/US formats)
     clean = clean.replace(/\+?[0-9]{10,13}/g, '[PHONE_REMOVED]');
     return clean;
+  }
+
+  private escapeRegExp(string: string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
   }
 
   async generateKbFromTicket(
@@ -43,10 +69,10 @@ export class KnowledgeBaseService {
     if (!this.genAI) return null;
 
     try {
-      const cleanSubject = this.stripSensitiveData(subject);
-      const cleanDesc = this.stripSensitiveData(description);
-      const cleanNotes = this.stripSensitiveData(resolutionNotes);
-      const cleanSteps = this.stripSensitiveData(resolutionSteps);
+      const cleanSubject = await this.stripSensitiveData(subject);
+      const cleanDesc = await this.stripSensitiveData(description);
+      const cleanNotes = await this.stripSensitiveData(resolutionNotes);
+      const cleanSteps = await this.stripSensitiveData(resolutionSteps);
 
       // Fetch all existing KBs to pass to the prompt for duplicate checking
       // (If the KB grows huge, we'd need vector search, but for now we just fetch titles and IDs)

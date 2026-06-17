@@ -1,13 +1,17 @@
 import { TicketType } from '@/app/api/references';
 
-export const PRIORITY_COLOR: Record<string, 'default' | 'info' | 'warning' | 'error' | 'success'> = {
-  low: 'info',
-  medium: 'warning',
-  high: 'error',
-  urgent: 'error',
-};
+export const PRIORITY_COLOR: Record<string, 'default' | 'info' | 'warning' | 'error' | 'success'> =
+  {
+    low: 'info',
+    medium: 'warning',
+    high: 'error',
+    urgent: 'error',
+  };
 
-export const STATUS_COLOR: Record<string, 'default' | 'info' | 'warning' | 'success' | 'error' | 'secondary'> = {
+export const STATUS_COLOR: Record<
+  string,
+  'default' | 'info' | 'warning' | 'success' | 'error' | 'secondary'
+> = {
   open: 'info',
   assigned: 'warning',
   in_progress: 'warning',

@@ -22,7 +22,18 @@ import { Close as CloseIcon } from '@mui/icons-material';
 import { useAuth } from '@/contexts/AuthContext';
 import type { RoleCapabilityRecord } from '@/lib/api/users';
 
-type ManualRole = 'super_admin' | 'reviewer' | 'focal' | 'technician' | 'technician_desktop' | 'technician_it_support' | 'technician_it_staff' | 'technician_desktop_staff' | 'auditor' | 'section_head' | 'user';
+type ManualRole =
+  | 'super_admin'
+  | 'reviewer'
+  | 'focal'
+  | 'technician'
+  | 'technician_desktop'
+  | 'technician_it_support'
+  | 'technician_it_staff'
+  | 'technician_desktop_staff'
+  | 'auditor'
+  | 'section_head'
+  | 'user';
 
 type ManualItem = {
   title: string;
@@ -45,8 +56,17 @@ type ManualItem = {
 const manualItems: ManualItem[] = [
   {
     title: 'Documents Upload and Tracking',
-    description: 'Upload DOCX and track only pending-for-review submissions in the Documents work queue.',
-    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'],
+    description:
+      'Upload DOCX and track only pending-for-review submissions in the Documents work queue.',
+    roles: [
+      'super_admin',
+      'reviewer',
+      'focal',
+      'technician',
+      'technician_desktop',
+      'technician_it_support',
+      'auditor',
+    ],
     path: '/dashboard/documents',
     details: {
       purpose:
@@ -203,7 +223,8 @@ const manualItems: ManualItem[] = [
   },
   {
     title: 'Manual Compliance Reviews',
-    description: 'Review pending documents with inline viewer and tag as compliant, non-compliant, or needs revision.',
+    description:
+      'Review pending documents with inline viewer and tag as compliant, non-compliant, or needs revision.',
     roles: ['super_admin', 'reviewer', 'auditor'],
     path: '/dashboard/reviews',
     details: {
@@ -257,7 +278,8 @@ const manualItems: ManualItem[] = [
   },
   {
     title: 'Issuance and Mapping Management',
-    description: 'Manage issuances and map compliant documents to issuances through link/unlink actions.',
+    description:
+      'Manage issuances and map compliant documents to issuances through link/unlink actions.',
     roles: ['super_admin', 'reviewer'],
     path: '/dashboard/issuances',
     details: {
@@ -316,8 +338,17 @@ const manualItems: ManualItem[] = [
   },
   {
     title: 'Issue Documentation Workflow',
-    description: 'Create and track issues, update resolution steps/date, and monitor closure workflow.',
-    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'],
+    description:
+      'Create and track issues, update resolution steps/date, and monitor closure workflow.',
+    roles: [
+      'super_admin',
+      'reviewer',
+      'focal',
+      'technician',
+      'technician_desktop',
+      'technician_it_support',
+      'auditor',
+    ],
     path: '/dashboard/tickets',
     details: {
       purpose:
@@ -331,7 +362,7 @@ const manualItems: ManualItem[] = [
         {
           field: 'Issue Category',
           explanation:
-            'A secondary classification within the Issue Type that refines the problem label. Categories are defined by system administrators and aligned to the organization\'s compliance framework. If the appropriate category does not exist, notify the administrator to add it.',
+            "A secondary classification within the Issue Type that refines the problem label. Categories are defined by system administrators and aligned to the organization's compliance framework. If the appropriate category does not exist, notify the administrator to add it.",
         },
         {
           field: 'Issue Subject and Description',
@@ -380,7 +411,8 @@ const manualItems: ManualItem[] = [
   },
   {
     title: 'Unit Administration',
-    description: 'Manage organizational units and structural metadata used in assignment and reporting workflows.',
+    description:
+      'Manage organizational units and structural metadata used in assignment and reporting workflows.',
     roles: ['super_admin'],
     path: '/dashboard/units',
     details: {
@@ -422,14 +454,15 @@ const manualItems: ManualItem[] = [
         {
           field: 'Compliance Roll-Up Data',
           explanation:
-            'Once units are structured in a hierarchy, the Dashboard computes compliance percentages at each level. A parent unit\'s score is the weighted average of its child units\' document compliance rates.',
+            "Once units are structured in a hierarchy, the Dashboard computes compliance percentages at each level. A parent unit's score is the weighted average of its child units' document compliance rates.",
         },
       ],
     },
   },
   {
     title: 'Administration Metrics Dashboard',
-    description: 'View compliance metrics, document completion rates, issue KPIs, and system-wide audit summaries.',
+    description:
+      'View compliance metrics, document completion rates, issue KPIs, and system-wide audit summaries.',
     roles: ['super_admin'],
     path: '/dashboard/administration',
     details: {
@@ -444,7 +477,7 @@ const manualItems: ManualItem[] = [
         {
           field: 'Unit Filter',
           explanation:
-            'Narrow all metrics to a specific unit or sub-tree. Useful for preparing unit-level compliance reports or investigating a specific office\'s performance.',
+            "Narrow all metrics to a specific unit or sub-tree. Useful for preparing unit-level compliance reports or investigating a specific office's performance.",
         },
       ],
       outputs: [
@@ -478,8 +511,17 @@ const manualItems: ManualItem[] = [
   },
   {
     title: 'Settings and Role Management',
-    description: 'Update your profile, change password, toggle theme, and manage system users and role definitions.',
-    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'],
+    description:
+      'Update your profile, change password, toggle theme, and manage system users and role definitions.',
+    roles: [
+      'super_admin',
+      'reviewer',
+      'focal',
+      'technician',
+      'technician_desktop',
+      'technician_it_support',
+      'auditor',
+    ],
     path: '/dashboard/settings',
     details: {
       purpose:
@@ -513,7 +555,7 @@ const manualItems: ManualItem[] = [
         {
           field: 'New User: Name and Position Fields',
           explanation:
-            'First Name, Middle Name, Last Name, Suffix: form the user\'s display name. Position and Designation appear in official reports. Note: Helper texts have been removed from these fields to keep the UI clean. Staff ID is strictly for non-regular staff (disabled for basic users).',
+            "First Name, Middle Name, Last Name, Suffix: form the user's display name. Position and Designation appear in official reports. Note: Helper texts have been removed from these fields to keep the UI clean. Staff ID is strictly for non-regular staff (disabled for basic users).",
         },
         {
           field: 'Change User Role (existing user)',
@@ -535,7 +577,7 @@ const manualItems: ManualItem[] = [
         {
           field: 'User Created Confirmation',
           explanation:
-            'A success toast includes the new user\'s email address. The new user immediately appears in the Existing Users table with Active status.',
+            "A success toast includes the new user's email address. The new user immediately appears in the Existing Users table with Active status.",
         },
         {
           field: 'Role Definitions Reference Table',
@@ -552,8 +594,18 @@ const manualItems: ManualItem[] = [
   },
   {
     title: 'KPI Monitoring & Dashboard',
-    description: 'Track unit KPI targets, encode periodic actuals, and analyze performance through composite scoring and band classification.',
-    roles: ['super_admin', 'reviewer', 'section_head', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'],
+    description:
+      'Track unit KPI targets, encode periodic actuals, and analyze performance through composite scoring and band classification.',
+    roles: [
+      'super_admin',
+      'reviewer',
+      'section_head',
+      'focal',
+      'technician',
+      'technician_desktop',
+      'technician_it_support',
+      'auditor',
+    ],
     path: '/dashboard/kpi',
     details: {
       purpose:
@@ -646,7 +698,8 @@ const manualItems: ManualItem[] = [
   },
   {
     title: 'Consolidated Reports',
-    description: 'Generate period reports combining KPI performance scores and document submissions for management review.',
+    description:
+      'Generate period reports combining KPI performance scores and document submissions for management review.',
     roles: ['super_admin', 'reviewer', 'section_head'],
     path: '/dashboard/reports',
     details: {
@@ -700,12 +753,21 @@ const manualItems: ManualItem[] = [
   },
   {
     title: 'Report Repository',
-    description: 'Browse all submitted compliance documents organized by year and period in a folder-style view.',
-    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'auditor'],
+    description:
+      'Browse all submitted compliance documents organized by year and period in a folder-style view.',
+    roles: [
+      'super_admin',
+      'reviewer',
+      'focal',
+      'technician',
+      'technician_desktop',
+      'technician_it_support',
+      'auditor',
+    ],
     path: '/dashboard/repository',
     details: {
       purpose:
-        'Provides a folder-style view of compliant/ready documents grouped by Year → Period. Pending review documents are not shown here; they remain in the Documents and Reviews queues. Focal users see their own unit\'s compliant submissions; admins, reviewers, and auditors see all compliant units.',
+        "Provides a folder-style view of compliant/ready documents grouped by Year → Period. Pending review documents are not shown here; they remain in the Documents and Reviews queues. Focal users see their own unit's compliant submissions; admins, reviewers, and auditors see all compliant units.",
       inputs: [
         {
           field: 'Year Accordion',
@@ -740,12 +802,25 @@ const manualItems: ManualItem[] = [
   // ── New items added in v0.6.2 ──────────────────────────────────────────────
   {
     title: 'Dashboard',
-    description: 'Your role-specific home screen showing key compliance metrics, ticket summaries, and quick-action shortcuts.',
-    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff', 'auditor', 'section_head', 'user'],
+    description:
+      'Your role-specific home screen showing key compliance metrics, ticket summaries, and quick-action shortcuts.',
+    roles: [
+      'super_admin',
+      'reviewer',
+      'focal',
+      'technician',
+      'technician_desktop',
+      'technician_it_support',
+      'technician_it_staff',
+      'technician_desktop_staff',
+      'auditor',
+      'section_head',
+      'user',
+    ],
     path: '/dashboard',
     details: {
       purpose:
-        'The Dashboard is the first page you see after login. It is role-sensitive: what you see adapts to your assigned role so you only view metrics and actions relevant to your responsibilities. Admins see system-wide compliance health; focal staff see their unit\'s submission status; technicians see their assigned help desk tickets; regular users see their own ticket history.',
+        "The Dashboard is the first page you see after login. It is role-sensitive: what you see adapts to your assigned role so you only view metrics and actions relevant to your responsibilities. Admins see system-wide compliance health; focal staff see their unit's submission status; technicians see their assigned help desk tickets; regular users see their own ticket history.",
       inputs: [
         {
           field: 'No data entry — read-only view',
@@ -789,12 +864,23 @@ const manualItems: ManualItem[] = [
   },
   {
     title: 'IT Help Desk Ticketing',
-    description: 'Submit IT support or desktop support requests, track ticket status, and manage resolutions (technicians).',
-    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff', 'user'],
+    description:
+      'Submit IT support or desktop support requests, track ticket status, and manage resolutions (technicians).',
+    roles: [
+      'super_admin',
+      'reviewer',
+      'focal',
+      'technician',
+      'technician_desktop',
+      'technician_it_support',
+      'technician_it_staff',
+      'technician_desktop_staff',
+      'user',
+    ],
     path: '/dashboard/tickets',
     details: {
       purpose:
-        'The IT Help Desk Ticketing module is RICTMS\'s centralized system for managing all IT and desktop support requests. Any system user can submit a help desk ticket. Technicians receive automated assignment notifications and manage ticket lifecycle from Open to Resolved. Admins can override assignments, manage categories, and set keyword auto-routing rules. All ticket activity is logged for audit and performance tracking.',
+        "The IT Help Desk Ticketing module is RICTMS's centralized system for managing all IT and desktop support requests. Any system user can submit a help desk ticket. Technicians receive automated assignment notifications and manage ticket lifecycle from Open to Resolved. Admins can override assignments, manage categories, and set keyword auto-routing rules. All ticket activity is logged for audit and performance tracking.",
       inputs: [
         {
           field: 'Support Type (IT Support / Desktop Support / Pantawid ICT Support)',
@@ -858,7 +944,8 @@ const manualItems: ManualItem[] = [
   },
   {
     title: 'Ticket Settings',
-    description: 'Configure ticket categories, keyword auto-routing rules, and SMTP email settings for the Help Desk.',
+    description:
+      'Configure ticket categories, keyword auto-routing rules, and SMTP email settings for the Help Desk.',
     roles: ['super_admin'],
     path: '/dashboard/ticket-settings',
     details: {
@@ -873,7 +960,7 @@ const manualItems: ManualItem[] = [
         {
           field: 'Support Type (for Category)',
           explanation:
-            'Associates the category with IT Support or Desktop Support. Only categories matching the user\'s selected support type are shown in the ticket creation form. A category cannot span both types.',
+            "Associates the category with IT Support or Desktop Support. Only categories matching the user's selected support type are shown in the ticket creation form. A category cannot span both types.",
         },
         {
           field: 'Active / Inactive Status (for Category)',
@@ -888,7 +975,7 @@ const manualItems: ManualItem[] = [
         {
           field: 'Keyword Rule: Target Support Type',
           explanation:
-            'When the keyword is detected, the ticket\'s support type is overridden to this value (IT Support or Desktop Support). This reroutes the ticket to the correct technician team even if the user selected the wrong type during submission.',
+            "When the keyword is detected, the ticket's support type is overridden to this value (IT Support or Desktop Support). This reroutes the ticket to the correct technician team even if the user selected the wrong type during submission.",
         },
         {
           field: 'Keyword Rule: Active / Inactive',
@@ -922,7 +1009,8 @@ const manualItems: ManualItem[] = [
   },
   {
     title: 'Ticket Reports',
-    description: 'View Help Desk analytics, SLA performance, and detailed user satisfaction ratings.',
+    description:
+      'View Help Desk analytics, SLA performance, and detailed user satisfaction ratings.',
     roles: ['super_admin', 'reviewer', 'focal'],
     path: '/dashboard/ticket-reports',
     details: {
@@ -961,8 +1049,18 @@ const manualItems: ManualItem[] = [
   },
   {
     title: 'Attendance Management',
-    description: 'Track office days, manage technician attendance, and review daily staff login activity.',
-    roles: ['super_admin', 'reviewer', 'focal', 'technician', 'technician_desktop', 'technician_it_support', 'technician_it_staff', 'technician_desktop_staff'],
+    description:
+      'Track office days, manage technician attendance, and review daily staff login activity.',
+    roles: [
+      'super_admin',
+      'reviewer',
+      'focal',
+      'technician',
+      'technician_desktop',
+      'technician_it_support',
+      'technician_it_staff',
+      'technician_desktop_staff',
+    ],
     path: '/dashboard/attendance',
     managementCapabilityKey: 'isAttendanceManage',
     details: {
@@ -1014,7 +1112,7 @@ const manualItems: ManualItem[] = [
         {
           field: 'Auto-Assignment Impact',
           explanation:
-            'Technician attendance status directly drives ticket auto-assignment. Only technicians marked Present or Half Day on the ticket\'s creation date are eligible for assignment. Absent and OOO technicians are bypassed. This ensures tickets are never silently assigned to unavailable staff.',
+            "Technician attendance status directly drives ticket auto-assignment. Only technicians marked Present or Half Day on the ticket's creation date are eligible for assignment. Absent and OOO technicians are bypassed. This ensures tickets are never silently assigned to unavailable staff.",
         },
       ],
     },
@@ -1087,7 +1185,11 @@ export default function UserManualPage() {
     if (!user) return false;
     if (user.role === 'super_admin') return true;
 
-    if (path === '/dashboard' || path === '/dashboard/tickets' || path === '/dashboard/user-manual') {
+    if (
+      path === '/dashboard' ||
+      path === '/dashboard/tickets' ||
+      path === '/dashboard/user-manual'
+    ) {
       return true;
     }
 
@@ -1108,24 +1210,32 @@ export default function UserManualPage() {
   };
 
   const visibleItems = useMemo(
-    () => manualItems
-      .filter((item) => (role ? hasPathAccess(item.path) : false))
-      .map((item) => {
-        if (!item.accessOnlyDetails || !item.managementCapabilityKey || user?.role === 'super_admin') {
-          return item;
-        }
+    () =>
+      manualItems
+        .filter((item) => (role ? hasPathAccess(item.path) : false))
+        .map((item) => {
+          if (
+            !item.accessOnlyDetails ||
+            !item.managementCapabilityKey ||
+            user?.role === 'super_admin'
+          ) {
+            return item;
+          }
 
-        const canManage = Boolean(myCap?.[item.managementCapabilityKey]);
-        if (canManage) {
-          return item;
-        }
+          const canManage = Boolean(myCap?.[item.managementCapabilityKey]);
+          if (canManage) {
+            return item;
+          }
 
-        return {
-          ...item,
-          description: item.description.replace('Track office days, manage technician attendance, and review daily staff login activity.', 'View office days, attendance statuses, and daily staff login activity.'),
-          details: item.accessOnlyDetails,
-        };
-      }),
+          return {
+            ...item,
+            description: item.description.replace(
+              'Track office days, manage technician attendance, and review daily staff login activity.',
+              'View office days, attendance statuses, and daily staff login activity.',
+            ),
+            details: item.accessOnlyDetails,
+          };
+        }),
     [role, myCap, user?.role],
   );
 
@@ -1136,7 +1246,8 @@ export default function UserManualPage() {
           User Manual
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Field-level guide for every module. Only modules accessible to your account role are shown. Click any card for detailed field explanations.
+          Field-level guide for every module. Only modules accessible to your account role are
+          shown. Click any card for detailed field explanations.
         </Typography>
       </Box>
 
@@ -1146,7 +1257,9 @@ export default function UserManualPage() {
             <Card variant="outlined" sx={{ height: '100%' }}>
               <CardActionArea sx={{ height: '100%' }} onClick={() => setSelectedManual(item)}>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom>{item.title}</Typography>
+                  <Typography variant="h6" gutterBottom>
+                    {item.title}
+                  </Typography>
                   <Typography variant="body2" color="text.secondary" mb={2}>
                     {item.description}
                   </Typography>
@@ -1168,7 +1281,9 @@ export default function UserManualPage() {
         maxWidth="md"
         scroll="paper"
       >
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle
+          sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+        >
           {selectedManual?.title}
           <IconButton size="small" onClick={() => setSelectedManual(null)}>
             <CloseIcon />
@@ -1209,7 +1324,12 @@ export default function UserManualPage() {
               </Typography>
               <List dense disablePadding>
                 {selectedManual.details.outputs.map((output) => (
-                  <ListItem key={output.field} disableGutters alignItems="flex-start" sx={{ mb: 1 }}>
+                  <ListItem
+                    key={output.field}
+                    disableGutters
+                    alignItems="flex-start"
+                    sx={{ mb: 1 }}
+                  >
                     <ListItemText
                       primary={
                         <Typography variant="body2" fontWeight={600} component="span">

@@ -51,15 +51,44 @@ import { UserRole } from '@/lib/types/auth';
 import { KpiMasterRecord, UnitTimeseriesPoint } from '@/lib/api/kpi';
 
 const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
-const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_ABBR = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
 const UNIT_COLORS: string[] = [
-  '#1565c0', '#6a1b9a', '#00695c', '#e65100',
-  '#558b2f', '#4527a0', '#ad1457', '#00838f',
+  '#1565c0',
+  '#6a1b9a',
+  '#00695c',
+  '#e65100',
+  '#558b2f',
+  '#4527a0',
+  '#ad1457',
+  '#00838f',
 ];
 
 const BAND_COLORS: Record<string, string> = {
@@ -88,20 +117,35 @@ function getBandChipColor(band: string): 'error' | 'warning' | 'success' | 'info
   const b = band.toLowerCase();
   if (b === 'red' || b.includes('poor') || b.includes('critical')) return 'error';
   if (b === 'green' || b.includes('good') || b.includes('excellent')) return 'success';
-  if (b === 'amber' || b.includes('fair') || b.includes('average') || b.includes('yellow')) return 'warning';
+  if (b === 'amber' || b.includes('fair') || b.includes('average') || b.includes('yellow'))
+    return 'warning';
   return 'info';
 }
 
 /** Sparkline identical to KPI module trend column; supports multi-point zigzag via `points`. */
-function TrendSparkline({ prev, current, band, points }: { prev: number | null; current: number | null; band: string; points?: number[] }) {
+function TrendSparkline({
+  prev,
+  current,
+  band,
+  points,
+}: {
+  prev: number | null;
+  current: number | null;
+  band: string;
+  points?: number[];
+}) {
   const color = BAND_COLORS[band] || BAND_COLORS.unclassified;
-  const w = 60; const h = 24; const pad = 5;
+  const w = 60;
+  const h = 24;
+  const pad = 5;
   const fallbackSeries = [prev !== null ? prev : 0, current !== null ? current : 0];
-  const series = (points && points.length > 0 ? points : fallbackSeries).map((v) => Math.min(100, Math.max(0, Number(v))));
+  const series = (points && points.length > 0 ? points : fallbackSeries).map((v) =>
+    Math.min(100, Math.max(0, Number(v))),
+  );
   const toY = (v: number) => h - pad - (Math.min(100, Math.max(0, v)) / 100) * (h - 2 * pad);
   const xFor = (idx: number) => {
     if (series.length <= 1) return pad;
-    return pad + (idx / (series.length - 1)) * ((w - pad) - pad);
+    return pad + (idx / (series.length - 1)) * (w - pad - pad);
   };
   const pathPoints = series.map((val, idx) => `${xFor(idx)},${toY(val)}`).join(' ');
   const startX = xFor(0);
@@ -110,12 +154,19 @@ function TrendSparkline({ prev, current, band, points }: { prev: number | null; 
   const endY = toY(series[series.length - 1] ?? 0);
   const prevIdx = Math.max(0, series.length - 2);
   const prevX = xFor(prevIdx);
-  const prevY = toY(series[prevIdx] ?? (series[series.length - 1] ?? 0));
+  const prevY = toY(series[prevIdx] ?? series[series.length - 1] ?? 0);
   const angle = Math.atan2(endY - prevY, endX - prevX) * (180 / Math.PI);
-  const startColor = points && points.length > 0 ? color : (prev !== null ? color : '#b0bec5');
+  const startColor = points && points.length > 0 ? color : prev !== null ? color : '#b0bec5';
   return (
     <svg width={w} height={h} style={{ display: 'block', overflow: 'visible' }}>
-      <polyline points={pathPoints} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      <polyline
+        points={pathPoints}
+        fill="none"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
       <circle cx={startX} cy={startY} r={3} fill={startColor} stroke="#fff" strokeWidth={1} />
       <polygon
         points="-6,-4 0,0 -6,4"
@@ -128,12 +179,24 @@ function TrendSparkline({ prev, current, band, points }: { prev: number | null; 
 
 function DirectionIndicator({ direction }: { direction?: KpiDirection | null }) {
   if (direction === 'higher_is_better') {
-    return <Typography variant="caption" color="success.main">↑</Typography>;
+    return (
+      <Typography variant="caption" color="success.main">
+        ↑
+      </Typography>
+    );
   }
   if (direction === 'lower_is_better') {
-    return <Typography variant="caption" color="info.main">↓</Typography>;
+    return (
+      <Typography variant="caption" color="info.main">
+        ↓
+      </Typography>
+    );
   }
-  return <Typography variant="caption" color="text.secondary">—</Typography>;
+  return (
+    <Typography variant="caption" color="text.secondary">
+      —
+    </Typography>
+  );
 }
 
 type Frequency = 'monthly' | 'quarterly' | 'semestral' | 'annual';
@@ -163,7 +226,8 @@ function toSafeDataKey(prefix: string, value: string | number): string {
 
 function getPeriodLabel(p: ReportParams): string {
   switch (p.frequency) {
-    case 'monthly': return `${MONTH_NAMES[p.month - 1]} ${p.year}`;
+    case 'monthly':
+      return `${MONTH_NAMES[p.month - 1]} ${p.year}`;
     case 'quarterly': {
       const s = (p.quarter - 1) * 3 + 1;
       const e = p.quarter * 3;
@@ -174,8 +238,10 @@ function getPeriodLabel(p: ReportParams): string {
       const e = p.semester * 6;
       return `H${p.semester} ${p.year} (${MONTH_ABBR[s - 1]}–${MONTH_ABBR[e - 1]})`;
     }
-    case 'annual': return `Annual ${p.year}`;
-    default: return `${MONTH_NAMES[p.month - 1]} ${p.year}`;
+    case 'annual':
+      return `Annual ${p.year}`;
+    default:
+      return `${MONTH_NAMES[p.month - 1]} ${p.year}`;
   }
 }
 
@@ -190,11 +256,21 @@ function getTimeseriesRange(p: ReportParams) {
       return { fromYear: year, fromMonth: 1, toYear: year, toMonth: 1 };
     case 'quarterly': {
       const quarterStart = (quarter - 1) * 3 + 1;
-      return { fromYear: year, fromMonth: quarter > 1 ? quarterStart - 1 : quarterStart, toYear: year, toMonth: quarter * 3 };
+      return {
+        fromYear: year,
+        fromMonth: quarter > 1 ? quarterStart - 1 : quarterStart,
+        toYear: year,
+        toMonth: quarter * 3,
+      };
     }
     case 'semestral': {
       const semStart = (semester - 1) * 6 + 1;
-      return { fromYear: year, fromMonth: semester > 1 ? semStart - 1 : semStart, toYear: year, toMonth: semester * 6 };
+      return {
+        fromYear: year,
+        fromMonth: semester > 1 ? semStart - 1 : semStart,
+        toYear: year,
+        toMonth: semester * 6,
+      };
     }
     case 'annual':
       return { fromYear: year, fromMonth: 1, toYear: year, toMonth: 12 };
@@ -228,9 +304,13 @@ function ReportView({ params }: { params: ReportParams }) {
   const reportRef = useRef<HTMLDivElement>(null);
 
   const effectiveMonth =
-    frequency === 'quarterly' ? quarter * 3 :
-    frequency === 'semestral' ? semester * 6 :
-    frequency === 'annual' ? 12 : month;
+    frequency === 'quarterly'
+      ? quarter * 3
+      : frequency === 'semestral'
+        ? semester * 6
+        : frequency === 'annual'
+          ? 12
+          : month;
 
   const periodLabel = getPeriodLabel(params);
   const tsRange = getTimeseriesRange(params);
@@ -266,8 +346,10 @@ function ReportView({ params }: { params: ReportParams }) {
         Number(unitId),
         // tsRange.fromMonth is 1 for monthly (Jan → selectedMonth) and the period
         // start for quarterly/semestral/annual.
-        tsRange.fromYear, tsRange.fromMonth,
-        tsRange.toYear, tsRange.toMonth,
+        tsRange.fromYear,
+        tsRange.fromMonth,
+        tsRange.toYear,
+        tsRange.toMonth,
       ),
     enabled: Boolean(unitId),
   });
@@ -284,13 +366,17 @@ function ReportView({ params }: { params: ReportParams }) {
         allUnits.map((u) =>
           kpiApi.dashboardUnitTimeseries(
             Number(u.id),
-            tsRange.fromYear, tsRange.fromMonth,
-            tsRange.toYear, tsRange.toMonth,
+            tsRange.fromYear,
+            tsRange.fromMonth,
+            tsRange.toYear,
+            tsRange.toMonth,
           ),
         ),
       );
       const map: UnitTimeseriesMap = {};
-      allUnits.forEach((u, i) => { map[Number(u.id)] = results[i]; });
+      allUnits.forEach((u, i) => {
+        map[Number(u.id)] = results[i];
+      });
       return map;
     },
     enabled: !unitId && allUnits.length > 0,
@@ -326,7 +412,8 @@ function ReportView({ params }: { params: ReportParams }) {
     Object.values(allTs).forEach((pts) => {
       (pts || []).forEach((pt) => {
         const key = `${pt.periodYear}-${String(pt.periodMonth).padStart(2, '0')}`;
-        if (!periodMap.has(key)) periodMap.set(key, { periodYear: pt.periodYear, periodMonth: pt.periodMonth });
+        if (!periodMap.has(key))
+          periodMap.set(key, { periodYear: pt.periodYear, periodMonth: pt.periodMonth });
       });
     });
     const sorted = [...periodMap.entries()]
@@ -355,13 +442,15 @@ function ReportView({ params }: { params: ReportParams }) {
       });
       const adjusted = [first, ...mapped.slice(1)];
       const shouldPrependZero =
-        frequency === 'annual'
-        || (frequency === 'monthly' && month === 1)
-        || (frequency === 'quarterly' && quarter === 1)
-        || (frequency === 'semestral' && semester === 1);
+        frequency === 'annual' ||
+        (frequency === 'monthly' && month === 1) ||
+        (frequency === 'quarterly' && quarter === 1) ||
+        (frequency === 'semestral' && semester === 1);
       if (shouldPrependZero) {
         const zeroAnchor: ReportSeriesDatum = { label: '' };
-        allUnits.forEach((u) => { zeroAnchor[toSafeDataKey('u', Number(u.id))] = 0; });
+        allUnits.forEach((u) => {
+          zeroAnchor[toSafeDataKey('u', Number(u.id))] = 0;
+        });
         return [zeroAnchor, ...adjusted];
       }
       return adjusted;
@@ -372,7 +461,12 @@ function ReportView({ params }: { params: ReportParams }) {
   /** KPI detail line data for a single selected unit */
   const kpiDetailLineData = useMemo(() => {
     const ts: UnitTimeseriesPoint[] = unitTsQuery.data || [];
-    if (ts.length === 0) return { data: [] as ReportSeriesDatum[], codes: [] as string[], keyByCode: {} as Record<string, string> };
+    if (ts.length === 0)
+      return {
+        data: [] as ReportSeriesDatum[],
+        codes: [] as string[],
+        keyByCode: {} as Record<string, string>,
+      };
     const codes = [...new Set(ts.flatMap((pt) => (pt.kpiScores || []).map((k) => k.code)))];
     const keyByCode = codes.reduce<Record<string, string>>((acc, code) => {
       acc[code] = toSafeDataKey('k', code);
@@ -399,13 +493,15 @@ function ReportView({ params }: { params: ReportParams }) {
       });
       const adjusted = [first, ...data.slice(1)];
       const shouldPrependZero =
-        frequency === 'annual'
-        || (frequency === 'monthly' && month === 1)
-        || (frequency === 'quarterly' && quarter === 1)
-        || (frequency === 'semestral' && semester === 1);
+        frequency === 'annual' ||
+        (frequency === 'monthly' && month === 1) ||
+        (frequency === 'quarterly' && quarter === 1) ||
+        (frequency === 'semestral' && semester === 1);
       if (shouldPrependZero) {
         const zeroAnchor: ReportSeriesDatum = { label: '' };
-        codes.forEach((code) => { zeroAnchor[keyByCode[code]] = 0; });
+        codes.forEach((code) => {
+          zeroAnchor[keyByCode[code]] = 0;
+        });
         return { data: [zeroAnchor, ...adjusted], codes, keyByCode };
       }
       return { data: adjusted, codes, keyByCode };
@@ -415,26 +511,34 @@ function ReportView({ params }: { params: ReportParams }) {
 
   const summaryUnits = useMemo(() => kpiQuery.data?.units ?? [], [kpiQuery.data]);
   const summaryUnitMap = useMemo(() => {
-    const map: Record<number, { unitId: number; unitName: string; score: number; kpiCount: number; band: string }> = {};
-    summaryUnits.forEach((u) => { map[u.unitId] = u; });
+    const map: Record<
+      number,
+      { unitId: number; unitName: string; score: number; kpiCount: number; band: string }
+    > = {};
+    summaryUnits.forEach((u) => {
+      map[u.unitId] = u;
+    });
     return map;
   }, [summaryUnits]);
 
   const unitDetailRows = useMemo(() => {
-    if (!unitDashQuery.data) return [] as Array<{
-      id: number | string;
-      code: string;
-      name: string;
-      direction: KpiDirection | null;
-      targetValue: number | null;
-      actualValue: number | null;
-      normalizedScore: number | null;
-      band: string;
-      hasData: boolean;
-    }>;
+    if (!unitDashQuery.data)
+      return [] as Array<{
+        id: number | string;
+        code: string;
+        name: string;
+        direction: KpiDirection | null;
+        targetValue: number | null;
+        actualValue: number | null;
+        normalizedScore: number | null;
+        band: string;
+        hasData: boolean;
+      }>;
     const unitIdNum = Number(unitId);
     const detailMap = new Map(unitDashQuery.data.details.map((d) => [d.code, d]));
-    const masters = (mastersQuery.data || []).filter((m: KpiMasterRecord) => Number(m.unitId) === unitIdNum && m.active);
+    const masters = (mastersQuery.data || []).filter(
+      (m: KpiMasterRecord) => Number(m.unitId) === unitIdNum && m.active,
+    );
     const rows = masters.map((m: KpiMasterRecord) => {
       const d = detailMap.get(m.code);
       return {
@@ -468,7 +572,8 @@ function ReportView({ params }: { params: ReportParams }) {
 
   const computeTrendValues = useMemo(() => {
     return (values: number[]) => {
-      if (values.length === 0) return { prev: null as number | null, current: null as number | null };
+      if (values.length === 0)
+        return { prev: null as number | null, current: null as number | null };
       if (frequency === 'monthly') {
         if (values.length === 1) return { prev: null as number | null, current: values[0] };
         return { prev: values[0], current: values[values.length - 1] };
@@ -481,8 +586,12 @@ function ReportView({ params }: { params: ReportParams }) {
   /** KPIs needing attention: amber or red band, derived from existing timeseries data. */
   const kpisNeedingAttention = useMemo(() => {
     const items: Array<{
-      unitName: string; code: string; name: string; score: number;
-      band: string; actualValue: number;
+      unitName: string;
+      code: string;
+      name: string;
+      score: number;
+      band: string;
+      actualValue: number;
     }> = [];
     if (unitId) {
       // Single-unit view: use dashboardUnit details
@@ -490,10 +599,16 @@ function ReportView({ params }: { params: ReportParams }) {
       if (det?.details) {
         det.details
           .filter((d) => ['red', 'amber'].includes(String(d.band || '').toLowerCase()))
-          .forEach((d) => items.push({
-            unitName: det.unitName || unitName, code: d.code, name: d.name,
-            score: d.normalizedScore, band: String(d.band).toLowerCase(), actualValue: d.actualValue,
-          }));
+          .forEach((d) =>
+            items.push({
+              unitName: det.unitName || unitName,
+              code: d.code,
+              name: d.name,
+              score: d.normalizedScore,
+              band: String(d.band).toLowerCase(),
+              actualValue: d.actualValue,
+            }),
+          );
       }
     } else if (allUnitsTsQuery.data) {
       // All-units view: use last hasData kpiScores per unit
@@ -504,10 +619,16 @@ function ReportView({ params }: { params: ReportParams }) {
         if (!lastPt) return;
         (lastPt.kpiScores || [])
           .filter((k) => ['red', 'amber'].includes(String(k.band || '').toLowerCase()))
-          .forEach((k) => items.push({
-            unitName: u.name, code: k.code, name: k.name,
-            score: k.normalizedScore, band: String(k.band).toLowerCase(), actualValue: k.actualValue,
-          }));
+          .forEach((k) =>
+            items.push({
+              unitName: u.name,
+              code: k.code,
+              name: k.name,
+              score: k.normalizedScore,
+              band: String(k.band).toLowerCase(),
+              actualValue: k.actualValue,
+            }),
+          );
       });
     }
     return items;
@@ -620,7 +741,6 @@ function ReportView({ params }: { params: ReportParams }) {
 
       <Paper elevation={3} sx={{ p: 4, borderRadius: 2 }}>
         <div ref={reportRef}>
-
           {/* ── Report Header ── */}
           <Box sx={{ textAlign: 'center', mb: 3 }}>
             <Typography variant="h5" fontWeight={700} gutterBottom>
@@ -654,19 +774,30 @@ function ReportView({ params }: { params: ReportParams }) {
                   <Card
                     elevation={0}
                     variant="outlined"
-                    sx={{ textAlign: 'center', p: 2, borderColor: overallBandColor, borderWidth: 2 }}
+                    sx={{
+                      textAlign: 'center',
+                      p: 2,
+                      borderColor: overallBandColor,
+                      borderWidth: 2,
+                    }}
                   >
                     <Typography variant="h3" fontWeight={700} sx={{ color: overallBandColor }}>
                       {overallScore.toFixed(1)}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
+                    >
                       Overall Score
                     </Typography>
                     <LinearProgress
                       variant="determinate"
                       value={Math.min(overallScore, 100)}
                       sx={{
-                        mt: 1.5, height: 6, borderRadius: 3,
+                        mt: 1.5,
+                        height: 6,
+                        borderRadius: 3,
                         bgcolor: 'grey.200',
                         '& .MuiLinearProgress-bar': { bgcolor: overallBandColor },
                       }}
@@ -682,7 +813,11 @@ function ReportView({ params }: { params: ReportParams }) {
                         <Typography variant="h6" fontWeight={700} sx={{ mt: 1 }}>
                           {unitName || `Unit #${unitId}`}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
+                        >
                           Reporting Unit
                         </Typography>
                       </>
@@ -691,7 +826,11 @@ function ReportView({ params }: { params: ReportParams }) {
                         <Typography variant="h4" fontWeight={700} sx={{ mt: 1 }}>
                           All Units
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
+                        >
                           Reporting Scope
                         </Typography>
                       </>
@@ -705,15 +844,23 @@ function ReportView({ params }: { params: ReportParams }) {
                     <Typography variant="h3" fontWeight={700} color="text.secondary">
                       {summary.rowCount}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
+                    >
                       KPIs Monitored
                     </Typography>
                   </Card>
                 </Grid>
               </Grid>
             ) : (
-              <Box sx={{ p: 2, bgcolor: '#e3f2fd', borderRadius: 1, borderLeft: '4px solid #1976d2' }}>
-                <Typography variant="body2">No KPI summary data available for {periodLabel}.</Typography>
+              <Box
+                sx={{ p: 2, bgcolor: '#e3f2fd', borderRadius: 1, borderLeft: '4px solid #1976d2' }}
+              >
+                <Typography variant="body2">
+                  No KPI summary data available for {periodLabel}.
+                </Typography>
               </Box>
             )}
           </Box>
@@ -735,11 +882,18 @@ function ReportView({ params }: { params: ReportParams }) {
                 {kpiDetailLineData.data.length > 0 ? (
                   <Box sx={{ width: '100%', height: 260, mb: 2 }}>
                     <ResponsiveContainer>
-                      <LineChart data={kpiDetailLineData.data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                      <LineChart
+                        data={kpiDetailLineData.data}
+                        margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
+                      >
                         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                        <Tooltip formatter={(val: unknown) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
+                        <Tooltip
+                          formatter={(val: unknown) =>
+                            val != null ? [`${val}`, 'Score'] : ['—', 'No data']
+                          }
+                        />
                         {kpiDetailLineData.codes.map((code, idx) => (
                           <Line
                             key={code}
@@ -775,30 +929,62 @@ function ReportView({ params }: { params: ReportParams }) {
                       <TableBody>
                         {unitDetailRows.map((item, idx) => {
                           const visibleTrendValues = kpiDetailLineData.data
-                            .map((d) => d[kpiDetailLineData.keyByCode[item.code] ?? toSafeDataKey('k', item.code)])
+                            .map(
+                              (d) =>
+                                d[
+                                  kpiDetailLineData.keyByCode[item.code] ??
+                                    toSafeDataKey('k', item.code)
+                                ],
+                            )
                             .filter((v) => v !== null && v !== undefined) as number[];
                           const trend = computeTrendValues(visibleTrendValues);
                           const prevKpiScore: number | null = trend.prev;
-                          const currKpiScore = item.hasData ? (trend.current ?? item.normalizedScore) : null;
+                          const currKpiScore = item.hasData
+                            ? (trend.current ?? item.normalizedScore)
+                            : null;
                           const kpiColor = UNIT_COLORS[idx % UNIT_COLORS.length];
                           return (
                             <TableRow key={item.id} hover>
                               <TableCell sx={{ p: 1 }}>
-                                <Box sx={{ width: 16, height: 16, borderRadius: '3px', bgcolor: kpiColor }} />
+                                <Box
+                                  sx={{
+                                    width: 16,
+                                    height: 16,
+                                    borderRadius: '3px',
+                                    bgcolor: kpiColor,
+                                  }}
+                                />
                               </TableCell>
                               <TableCell>
-                                <Typography variant="body2" fontWeight={600}>{item.name}</Typography>
-                                <Typography variant="caption" color="text.secondary">{item.code}</Typography>
+                                <Typography variant="body2" fontWeight={600}>
+                                  {item.name}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {item.code}
+                                </Typography>
                               </TableCell>
-                              <TableCell><DirectionIndicator direction={item.direction} /></TableCell>
-                              <TableCell align="right">{item.hasData ? item.actualValue : '—'}</TableCell>
+                              <TableCell>
+                                <DirectionIndicator direction={item.direction} />
+                              </TableCell>
+                              <TableCell align="right">
+                                {item.hasData ? item.actualValue : '—'}
+                              </TableCell>
                               <TableCell align="right">{item.targetValue ?? '—'}</TableCell>
-                              <TableCell align="right"><strong>{item.hasData ? item.normalizedScore : '—'}</strong></TableCell>
+                              <TableCell align="right">
+                                <strong>{item.hasData ? item.normalizedScore : '—'}</strong>
+                              </TableCell>
                               <TableCell>
                                 {currKpiScore !== null ? (
-                                  <TrendSparkline prev={prevKpiScore} current={currKpiScore} points={visibleTrendValues} band={String(item.band || 'unclassified').toLowerCase()} />
+                                  <TrendSparkline
+                                    prev={prevKpiScore}
+                                    current={currKpiScore}
+                                    points={visibleTrendValues}
+                                    band={String(item.band || 'unclassified').toLowerCase()}
+                                  />
                                 ) : (
-                                  <Typography variant="caption" color="text.secondary">—</Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    —
+                                  </Typography>
                                 )}
                               </TableCell>
                             </TableRow>
@@ -822,8 +1008,16 @@ function ReportView({ params }: { params: ReportParams }) {
                         {filteredKpiUnits.map((u) => (
                           <TableRow key={u.unitId} hover>
                             <TableCell>{u.unitName}</TableCell>
-                            <TableCell align="right"><Typography fontWeight={600}>{Number(u.score).toFixed(1)}</Typography></TableCell>
-                            <TableCell><Chip label={u.band || '—'} size="small" color={getBandChipColor(u.band)} /></TableCell>
+                            <TableCell align="right">
+                              <Typography fontWeight={600}>{Number(u.score).toFixed(1)}</Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={u.band || '—'}
+                                size="small"
+                                color={getBandChipColor(u.band)}
+                              />
+                            </TableCell>
                             <TableCell align="right">{u.kpiCount}</TableCell>
                           </TableRow>
                         ))}
@@ -831,8 +1025,17 @@ function ReportView({ params }: { params: ReportParams }) {
                     </Table>
                   </TableContainer>
                 ) : (
-                  <Box sx={{ p: 2, bgcolor: '#e3f2fd', borderRadius: 1, borderLeft: '4px solid #1976d2' }}>
-                    <Typography variant="body2">No KPI data available for {periodLabel}.</Typography>
+                  <Box
+                    sx={{
+                      p: 2,
+                      bgcolor: '#e3f2fd',
+                      borderRadius: 1,
+                      borderLeft: '4px solid #1976d2',
+                    }}
+                  >
+                    <Typography variant="body2">
+                      No KPI data available for {periodLabel}.
+                    </Typography>
                   </Box>
                 )}
               </>
@@ -842,11 +1045,18 @@ function ReportView({ params }: { params: ReportParams }) {
                 {allUnitsLineData.length > 0 && (
                   <Box sx={{ width: '100%', height: 280, mb: 2 }}>
                     <ResponsiveContainer>
-                      <LineChart data={allUnitsLineData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                      <LineChart
+                        data={allUnitsLineData}
+                        margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
+                      >
                         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                        <Tooltip formatter={(val: unknown) => val != null ? [`${val}`, 'Score'] : ['—', 'No data']} />
+                        <Tooltip
+                          formatter={(val: unknown) =>
+                            val != null ? [`${val}`, 'Score'] : ['—', 'No data']
+                          }
+                        />
                         {allUnitsRows.map((u, idx) => (
                           <Line
                             key={u.id}
@@ -888,20 +1098,43 @@ function ReportView({ params }: { params: ReportParams }) {
                             .filter((v) => v !== null && v !== undefined) as number[];
                           const trend = computeTrendValues(visibleTrendValues);
                           const prevScore: number | null = trend.prev;
-                          const currScore: number | null = trend.current ?? (summaryRow ? Number(summaryRow.score) : null);
+                          const currScore: number | null =
+                            trend.current ?? (summaryRow ? Number(summaryRow.score) : null);
                           return (
                             <TableRow key={unitIdNum} hover>
                               <TableCell>{u.name}</TableCell>
                               <TableCell sx={{ p: 1 }}>
-                                <Box sx={{ width: 20, height: 20, borderRadius: '4px', bgcolor: unitColor }} />
+                                <Box
+                                  sx={{
+                                    width: 20,
+                                    height: 20,
+                                    borderRadius: '4px',
+                                    bgcolor: unitColor,
+                                  }}
+                                />
                               </TableCell>
-                              <TableCell align="right"><Typography fontWeight={600}>{summaryRow ? Number(summaryRow.score).toFixed(1) : '—'}</Typography></TableCell>
+                              <TableCell align="right">
+                                <Typography fontWeight={600}>
+                                  {summaryRow ? Number(summaryRow.score).toFixed(1) : '—'}
+                                </Typography>
+                              </TableCell>
                               <TableCell>
-                                {currScore !== null
-                                  ? <TrendSparkline prev={prevScore} current={currScore} points={visibleTrendValues} band={bandKey} />
-                                  : <Typography variant="caption" color="text.secondary">—</Typography>}
+                                {currScore !== null ? (
+                                  <TrendSparkline
+                                    prev={prevScore}
+                                    current={currScore}
+                                    points={visibleTrendValues}
+                                    band={bandKey}
+                                  />
+                                ) : (
+                                  <Typography variant="caption" color="text.secondary">
+                                    —
+                                  </Typography>
+                                )}
                               </TableCell>
-                              <TableCell align="right">{summaryRow ? summaryRow.kpiCount : '—'}</TableCell>
+                              <TableCell align="right">
+                                {summaryRow ? summaryRow.kpiCount : '—'}
+                              </TableCell>
                             </TableRow>
                           );
                         })}
@@ -909,8 +1142,17 @@ function ReportView({ params }: { params: ReportParams }) {
                     </Table>
                   </TableContainer>
                 ) : (
-                  <Box sx={{ p: 2, bgcolor: '#e3f2fd', borderRadius: 1, borderLeft: '4px solid #1976d2' }}>
-                    <Typography variant="body2">No KPI data available for {periodLabel}.</Typography>
+                  <Box
+                    sx={{
+                      p: 2,
+                      bgcolor: '#e3f2fd',
+                      borderRadius: 1,
+                      borderLeft: '4px solid #1976d2',
+                    }}
+                  >
+                    <Typography variant="body2">
+                      No KPI data available for {periodLabel}.
+                    </Typography>
                   </Box>
                 )}
               </>
@@ -931,27 +1173,57 @@ function ReportView({ params }: { params: ReportParams }) {
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                 The following KPIs are below acceptable thresholds and require immediate review.
               </Typography>
-              <TableContainer component={Paper} elevation={0} variant="outlined" sx={{ borderColor: 'error.light' }}>
+              <TableContainer
+                component={Paper}
+                elevation={0}
+                variant="outlined"
+                sx={{ borderColor: 'error.light' }}
+              >
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ bgcolor: 'error.50' }}>
-                      {!unitId && <TableCell><strong>Unit</strong></TableCell>}
-                      <TableCell><strong>KPI Name</strong></TableCell>
-                      <TableCell><strong>Code</strong></TableCell>
-                      <TableCell align="right"><strong>Score</strong></TableCell>
-                      <TableCell align="right"><strong>Actual</strong></TableCell>
+                      {!unitId && (
+                        <TableCell>
+                          <strong>Unit</strong>
+                        </TableCell>
+                      )}
+                      <TableCell>
+                        <strong>KPI Name</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Code</strong>
+                      </TableCell>
+                      <TableCell align="right">
+                        <strong>Score</strong>
+                      </TableCell>
+                      <TableCell align="right">
+                        <strong>Actual</strong>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {kpisNeedingAttention.map((item, idx) => (
-                      <TableRow key={idx} hover sx={{ bgcolor: item.band === 'red' ? 'rgb(253,237,237)' : 'rgb(255,249,240)' }}>
+                      <TableRow
+                        key={idx}
+                        hover
+                        sx={{
+                          bgcolor: item.band === 'red' ? 'rgb(253,237,237)' : 'rgb(255,249,240)',
+                        }}
+                      >
                         {!unitId && <TableCell>{item.unitName}</TableCell>}
-                        <TableCell><strong>{item.name}</strong></TableCell>
                         <TableCell>
-                          <Typography variant="caption" color="text.secondary">{item.code}</Typography>
+                          <strong>{item.name}</strong>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="caption" color="text.secondary">
+                            {item.code}
+                          </Typography>
                         </TableCell>
                         <TableCell align="right">
-                          <Typography fontWeight={700} color={item.band === 'red' ? 'error.main' : 'warning.main'}>
+                          <Typography
+                            fontWeight={700}
+                            color={item.band === 'red' ? 'error.main' : 'warning.main'}
+                          >
                             {item.score}
                           </Typography>
                         </TableCell>
@@ -975,16 +1247,35 @@ function ReportView({ params }: { params: ReportParams }) {
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                 Auto-generated recommendations based on KPI results, remarks, and risk keywords.
               </Typography>
-              <TableContainer component={Paper} elevation={0} variant="outlined" sx={{ borderColor: 'warning.light' }}>
+              <TableContainer
+                component={Paper}
+                elevation={0}
+                variant="outlined"
+                sx={{ borderColor: 'warning.light' }}
+              >
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      {!unitId && <TableCell><strong>Unit</strong></TableCell>}
-                      <TableCell><strong>KPI</strong></TableCell>
-                      <TableCell><strong>Priority</strong></TableCell>
-                      <TableCell><strong>Recommendation</strong></TableCell>
-                      <TableCell><strong>Owner</strong></TableCell>
-                      <TableCell><strong>Due Date</strong></TableCell>
+                      {!unitId && (
+                        <TableCell>
+                          <strong>Unit</strong>
+                        </TableCell>
+                      )}
+                      <TableCell>
+                        <strong>KPI</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Priority</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Recommendation</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Owner</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Due Date</strong>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -992,8 +1283,12 @@ function ReportView({ params }: { params: ReportParams }) {
                       <TableRow key={`${item.kpiCode}-${index}`} hover>
                         {!unitId && <TableCell>{item.unitName}</TableCell>}
                         <TableCell>
-                          <Typography variant="body2" fontWeight={600}>{item.kpiName}</Typography>
-                          <Typography variant="caption" color="text.secondary">{item.kpiCode}</Typography>
+                          <Typography variant="body2" fontWeight={600}>
+                            {item.kpiName}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {item.kpiCode}
+                          </Typography>
                         </TableCell>
                         <TableCell>
                           <Chip
@@ -1026,7 +1321,9 @@ function ReportView({ params }: { params: ReportParams }) {
             </Box>
 
             {filteredDocs.length === 0 ? (
-              <Box sx={{ p: 2, bgcolor: '#e3f2fd', borderRadius: 1, borderLeft: '4px solid #1976d2' }}>
+              <Box
+                sx={{ p: 2, bgcolor: '#e3f2fd', borderRadius: 1, borderLeft: '4px solid #1976d2' }}
+              >
                 <Typography variant="body2">No documents found for this period.</Typography>
               </Box>
             ) : (
@@ -1056,9 +1353,16 @@ function ReportView({ params }: { params: ReportParams }) {
                           <TableCell>{doc.unit?.name ?? '—'}</TableCell>
                           <TableCell align="right">
                             {metricsCount > 0 ? (
-                              <Chip label={metricsCount} size="small" color="info" variant="outlined" />
+                              <Chip
+                                label={metricsCount}
+                                size="small"
+                                color="info"
+                                variant="outlined"
+                              />
                             ) : (
-                              <Typography variant="caption" color="text.disabled">—</Typography>
+                              <Typography variant="caption" color="text.disabled">
+                                —
+                              </Typography>
                             )}
                           </TableCell>
                           <TableCell>
@@ -1098,7 +1402,6 @@ function ReportView({ params }: { params: ReportParams }) {
               Report generated on {new Date().toLocaleString()} · Compliance Hub
             </Typography>
           </Box>
-
         </div>
       </Paper>
     </Box>
@@ -1121,7 +1424,9 @@ export default function ReportsPage() {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedFrequency, setSelectedFrequency] = useState<Frequency>('monthly');
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
-  const [selectedQuarter, setSelectedQuarter] = useState<number>(Math.ceil((now.getMonth() + 1) / 3));
+  const [selectedQuarter, setSelectedQuarter] = useState<number>(
+    Math.ceil((now.getMonth() + 1) / 3),
+  );
   const [selectedSemester, setSelectedSemester] = useState<number>(now.getMonth() < 6 ? 1 : 2);
   const [selectedUnit, setSelectedUnit] = useState('');
   const [generateParams, setGenerateParams] = useState<ReportParams | null>(null);
@@ -1157,7 +1462,8 @@ export default function ReportsPage() {
             Consolidated Reports
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Generate a consolidated compliance report combining KPI scores and document submissions for a selected period.
+            Generate a consolidated compliance report combining KPI scores and document submissions
+            for a selected period.
           </Typography>
         </Box>
       </Box>
@@ -1166,7 +1472,10 @@ export default function ReportsPage() {
 
       {/* Filter / Controls */}
       <Card elevation={2} sx={{ mb: 3 }}>
-        <CardHeader title="Report Parameters" titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }} />
+        <CardHeader
+          title="Report Parameters"
+          titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
+        />
         <CardContent sx={{ pt: 0 }}>
           <Grid container spacing={2} alignItems="flex-end">
             {/* Year */}
@@ -1179,7 +1488,9 @@ export default function ReportsPage() {
                   label="Year"
                 >
                   {yearOptions.map((y) => (
-                    <MenuItem key={y} value={y}>{y}</MenuItem>
+                    <MenuItem key={y} value={y}>
+                      {y}
+                    </MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -1213,7 +1524,9 @@ export default function ReportsPage() {
                     label="Month"
                   >
                     {MONTH_NAMES.map((name, idx) => (
-                      <MenuItem key={idx + 1} value={idx + 1}>{name}</MenuItem>
+                      <MenuItem key={idx + 1} value={idx + 1}>
+                        {name}
+                      </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -1266,7 +1579,9 @@ export default function ReportsPage() {
                 >
                   <MenuItem value="">All Units</MenuItem>
                   {units.map((u) => (
-                    <MenuItem key={u.id} value={String(u.id)}>{u.name}</MenuItem>
+                    <MenuItem key={u.id} value={String(u.id)}>
+                      {u.name}
+                    </MenuItem>
                   ))}
                 </Select>
               </FormControl>
