@@ -247,7 +247,7 @@ export default function TicketSettingsPage() {
           <Tab label={`Categories (${categories.filter(c => !c.isDeleted).length})`} />
           <Tab label={`Keyword Rules (${rules.length})`} />
           <Tab label={`Escalation Focals (${focals.length})`} />
-          <Tab label={`User Feedback`} />
+          <Tab label={`User Feedback (${feedbacks.length})`} />
         </Tabs>
 
         {/* ── Categories Tab ── */}
@@ -405,6 +405,7 @@ export default function TicketSettingsPage() {
                   <TableRow>
                     <TableCell>Date</TableCell>
                     <TableCell>Suggestion</TableCell>
+                    <TableCell>Suggested By</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell>Acted By</TableCell>
                     <TableCell align="right">Actions</TableCell>
@@ -412,13 +413,16 @@ export default function TicketSettingsPage() {
                 </TableHead>
                 <TableBody>
                   {feedbackLoading ? (
-                    <TableRow><TableCell colSpan={5} align="center"><CircularProgress size={24} /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} align="center"><CircularProgress size={24} /></TableCell></TableRow>
                   ) : feedbacks.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} align="center"><Typography color="text.secondary" py={2}>No feedback entries found.</Typography></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} align="center"><Typography color="text.secondary" py={2}>No feedback entries found.</Typography></TableCell></TableRow>
                   ) : feedbacks.map(f => (
                     <TableRow key={f.id} hover>
                       <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(f.createdAt).toLocaleString()}</TableCell>
                       <TableCell sx={{ maxWidth: 400, whiteSpace: 'pre-wrap' }}>{f.suggestion}</TableCell>
+                      <TableCell>
+                        {f.submitter ? `${f.submitter.firstName || ''} ${f.submitter.lastName || ''}`.trim() || f.submitter.email : 'Anonymous'}
+                      </TableCell>
                       <TableCell>
                         <Chip 
                           size="small" 

@@ -182,8 +182,9 @@ Self-service ticketing only:
 | User Management | Full | None | None | None | None |
 | Settings | Full | Theme/Password | Theme/Password | Theme/Password | None |
 
-### Frontend Version: `0.0.98`
-### Backend Version: `0.0.104`
+- **Frontend:** v0.0.100
+- **Backend:** v0.0.106
+- **Ticketing Service:** v0.0.28
 
 ## 8. User Operations Guide
 

@@ -16,8 +16,9 @@ a {
 }
 
 @media print {
-  body {
+  body, .MuiPaper-root, .MuiCard-root, .MuiBox-root, .MuiTable-root, .MuiTableCell-root {
     background-color: white !important;
+    background: white !important;
     color: black !important;
   }
   

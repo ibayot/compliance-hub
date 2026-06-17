@@ -23,6 +23,7 @@ export class FeedbackService {
 
   async findAll(status?: 'all' | 'pending' | 'accepted' | 'rejected', page = 1, limit = 10): Promise<{ data: Feedback[]; total: number }> {
     const query = this.feedbackRepo.createQueryBuilder('feedback')
+      .leftJoinAndSelect('feedback.submitter', 'submitter')
       .leftJoinAndSelect('feedback.actedBy', 'actedBy')
       .orderBy('feedback.createdAt', 'DESC')
       .skip((page - 1) * limit)

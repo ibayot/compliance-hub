@@ -542,6 +542,7 @@ export default function TicketDetailPage() {
                     select
                     size="small"
                     value={ticket.ticketType}
+                    disabled={['resolved', 'closed'].includes(ticket.status)}
                     onChange={async (e) => {
                       try {
                         await ticketsApi.update(ticketId, { ticketType: e.target.value as any });
