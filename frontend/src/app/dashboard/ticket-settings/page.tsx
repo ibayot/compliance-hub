@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useAutoRefresh } from '@/lib/hooks/useAutoRefresh';
+import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
 import {
   Box,
   Button,
