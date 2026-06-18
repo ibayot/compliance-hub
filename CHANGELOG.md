@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+
+## [0.0.108] (Backend) / [0.0.101] (Frontend) - 2026-06-18 - Role Matrix Enforcement & Universal Auditing
+
+### Added
+- **Knowledge Base Standalone Module**: Extracted Knowledge Base from Ticket Settings into a dedicated standalone sidebar navigation module, with editing capability restricted strictly to Ticket Settings Focals.
+- **Universal Audit Logging**: Globally registered `AuditInterceptor` in the backend so that all database mutations (including settings and attendance changes) capture the `user_email` and `ip_address` context.
+
+### Changed
+- **Pure Role Capabilities Matrix Enforcement**: Eradicated all hardcoded `super_admin` role checks across the codebase. Bypasses are replaced by dynamic DB-backed capabilities, since the `super_admin` role capability record already explicitly has all permissions enabled (1).
+- **SLA Pause/Freeze UI Segregation**: Technicians without senior authority can now only pause tickets, while the "Freeze" action is restricted solely to Senior Techs and Ticket Admins, checking capabilities dynamically without hardcoding role strings.
+
 ---
 
 ## [0.0.106] (Backend) / [0.0.99] (Frontend) - 2026-06-17 - Bugfixes and SLA Alerts

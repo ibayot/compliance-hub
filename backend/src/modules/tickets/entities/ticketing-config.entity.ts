@@ -10,4 +10,7 @@ export class TicketingConfig {
 
   @Column({ name: 'round_robin_cap_hours', type: 'int', default: 80 })
   roundRobinCapHours: number;
+
+  @Column({ name: 'auto_close_days', type: 'int', default: 3 })
+  autoCloseDays: number;
 }

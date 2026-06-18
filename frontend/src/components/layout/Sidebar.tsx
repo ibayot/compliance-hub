@@ -33,6 +33,7 @@ import {
   Tune as TicketSettingsIcon,
   EventAvailable as AttendanceIcon,
   BarChart as TicketReportsIcon,
+  LibraryBooks as KBIcon,
 } from '@mui/icons-material';
 import type { ElementType } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -52,8 +53,8 @@ interface NavItem {
   service?: 'users' | 'ticketing' | 'compliance' | 'core';
   /** Optional roleCode values that also grant access (e.g. 'section_head') */
   roleCodes?: string[];
-  /** If set, also grant access when myCap[capabilityKey] is true */
-  capabilityKey?: keyof RoleCapabilityRecord;
+  /** If set, also grant access when any of myCap[capabilityKey] is true */
+  capabilityKeys?: (keyof RoleCapabilityRecord)[];
 }
 
 export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
@@ -80,12 +81,19 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       service: 'ticketing',
     },
     {
+      label: 'Knowledge Base',
+      icon: KBIcon,
+      path: '/dashboard/knowledge-base',
+      roles: ['all'],
+      service: 'ticketing',
+    },
+    {
       label: 'Documents',
       icon: DocumentsIcon,
       path: '/dashboard/documents',
       roles: ['super_admin'],
       service: 'compliance',
-      capabilityKey: 'isDocumentsAccess',
+      capabilityKeys: ['isDocumentsAccess'],
     },
     {
       label: 'Repository',
@@ -93,7 +101,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       path: '/dashboard/repository',
       roles: ['super_admin'],
       service: 'compliance',
-      capabilityKey: 'isRepositoryAccess',
+      capabilityKeys: ['isRepositoryAccess'],
     },
     {
       label: 'Issuances',
@@ -101,7 +109,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       path: '/dashboard/issuances',
       roles: ['super_admin'],
       service: 'compliance',
-      capabilityKey: 'isIssuancesAccess',
+      capabilityKeys: ['isIssuancesAccess'],
     },
   ];
 
@@ -119,7 +127,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       path: '/dashboard/metrics',
       roles: ['super_admin'],
       service: 'compliance',
-      capabilityKey: 'isMetricsAccess',
+      capabilityKeys: ['isMetricsAccess'],
     },
     {
       label: 'KPI',
@@ -127,7 +135,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       path: '/dashboard/kpi',
       roles: ['super_admin'],
       service: 'compliance',
-      capabilityKey: 'isKpiAccess',
+      capabilityKeys: ['isKpiAccess'],
     },
     {
       label: 'Ticket Settings',
@@ -135,21 +143,15 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       path: '/dashboard/ticket-settings',
       roles: ['super_admin'],
       service: 'ticketing',
-      capabilityKey: 'isTicketSettingsFocal',
+      capabilityKeys: ['isTicketSettingsFocal'],
     },
     {
       label: 'Ticket Reports',
       icon: TicketReportsIcon,
       path: '/dashboard/ticket-reports',
-      roles: [
-        'super_admin',
-        'section_head',
-        'compliance_officer',
-        'it_support',
-        'desktop_support',
-        'pantawid_ict_support',
-      ],
+      roles: ['super_admin', 'section_head'],
       service: 'ticketing',
+      capabilityKeys: ['isTicketSettingsFocal', 'isDesktop', 'isItSupport', 'isPantawidIct'],
     },
     {
       label: 'Attendance',
@@ -157,7 +159,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       path: '/dashboard/attendance',
       roles: ['super_admin'],
       service: 'ticketing',
-      capabilityKey: 'isAttendanceAccess',
+      capabilityKeys: ['isAttendanceAccess'],
     },
     {
       label: 'Reviews',
@@ -165,7 +167,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       path: '/dashboard/reviews',
       roles: ['super_admin'],
       service: 'compliance',
-      capabilityKey: 'isReviewsAccess',
+      capabilityKeys: ['isReviewsAccess'],
     },
     {
       label: 'Reports',
@@ -173,7 +175,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       path: '/dashboard/reports',
       roles: ['super_admin'],
       service: 'compliance',
-      capabilityKey: 'isReportsAccess',
+      capabilityKeys: ['isReportsAccess'],
     },
     {
       label: 'MoV Builder',
@@ -181,7 +183,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       path: '/dashboard/mov',
       roles: ['super_admin'],
       service: 'compliance',
-      capabilityKey: 'isMovAccess',
+      capabilityKeys: ['isMovAccess'],
     },
   ];
 
@@ -193,13 +195,12 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const hasAccess = (
     roles: string[],
     roleCodes?: string[],
-    capabilityKey?: keyof RoleCapabilityRecord,
+    capabilityKeys?: (keyof RoleCapabilityRecord)[],
     _service?: NavItem['service'],
   ) => {
     if (roles.includes('all')) return true;
-    if (user?.role === 'super_admin') return true;
     if (!user) return false;
-    if (capabilityKey && myCap && myCap[capabilityKey]) return true;
+    if (capabilityKeys && myCap && capabilityKeys.some((k) => !!myCap[k])) return true;
     if (roles.includes(user.role)) return true;
     if (roleCodes && user.roleCode && roleCodes.includes(user.roleCode)) return true;
     return false;
@@ -287,7 +288,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
       <List sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
         {mainNavItems
-          .filter((item) => hasAccess(item.roles, item.roleCodes, item.capabilityKey, item.service))
+          .filter((item) => hasAccess(item.roles, item.roleCodes, item.capabilityKeys, item.service))
           .map((item) => (
             <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
               {renderNavItem(item)}
@@ -296,7 +297,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       </List>
 
       {adminNavItems.some((item) =>
-        hasAccess(item.roles, item.roleCodes, item.capabilityKey, item.service),
+        hasAccess(item.roles, item.roleCodes, item.capabilityKeys, item.service),
       ) && (
         <>
           <Divider sx={{ mx: isCollapsed ? 1 : 2, my: 1 }} />
@@ -311,7 +312,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           <List sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
             {adminNavItems
               .filter((item) =>
-                hasAccess(item.roles, item.roleCodes, item.capabilityKey, item.service),
+                hasAccess(item.roles, item.roleCodes, item.capabilityKeys, item.service),
               )
               .map((item) => (
                 <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
@@ -328,7 +329,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
       <List sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
         {settingsNavItems
-          .filter((item) => hasAccess(item.roles, item.roleCodes, item.capabilityKey, item.service))
+          .filter((item) => hasAccess(item.roles, item.roleCodes, item.capabilityKeys, item.service))
           .map((item) => (
             <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
               {renderNavItem(item)}

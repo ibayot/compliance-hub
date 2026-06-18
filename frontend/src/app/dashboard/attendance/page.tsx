@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -87,9 +87,9 @@ function isWeekday(d: Date): boolean {
 
 export default function AttendancePage() {
   const { user, myCap } = useAuth();
-  const isLowerLevelTech = ['it_support_jr', 'desktop_jr'].includes(user?.role ?? '');
-  /** All RICTMS staff (everyone except super_admin and regular users) sees their own attendance in the calendar */
-  const isRICTMSStaff = !['super_admin', 'user'].includes(user?.role ?? '');
+  const isLowerLevelTech = (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
+  /** All RICTMS staff (everyone except regular users) sees their own attendance in the calendar */
+  const isRICTMSStaff = user?.role !== 'user';
   const { enqueueSnackbar } = useSnackbar();
 
   const [tab, setTab] = useState(0);
@@ -350,13 +350,11 @@ export default function AttendancePage() {
     setYear(y);
   };
 
-  const canManageAttendance =
-    ['super_admin'].includes(user?.role ?? '') || !!myCap?.isAttendanceManage;
+  const canManageAttendance = !!myCap?.isAttendanceManage;
 
-  const canManageOfficeDays =
-    ['super_admin'].includes(user?.role ?? '') || !!myCap?.isAttendanceManage;
+  const canManageOfficeDays = !!myCap?.isAttendanceManage;
 
-  const canAccessAttendance = user?.role === 'super_admin' || !!myCap?.isAttendanceAccess;
+  const canAccessAttendance = !!myCap?.isAttendanceAccess;
 
   if (!canAccessAttendance) {
     return (

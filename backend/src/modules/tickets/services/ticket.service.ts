@@ -980,11 +980,14 @@ export class TicketService implements OnModuleInit {
       const isSeniorAuthority = this.roleCapSvc.isSeniorAuthority(actorRole as string);
 
       const ALLOWED_TRANSITIONS: Partial<Record<TicketStatus, TicketStatus[]>> = {
-        [TicketStatus.OPEN]:        [TicketStatus.FREEZE, TicketStatus.DUPLICATE],
+        [TicketStatus.OPEN]:        isSeniorAuthority ? [TicketStatus.FREEZE, TicketStatus.DUPLICATE] : [TicketStatus.DUPLICATE],
         [TicketStatus.ASSIGNED]:    isSeniorAuthority
           ? [TicketStatus.IN_PROGRESS, TicketStatus.FREEZE, TicketStatus.DUPLICATE, TicketStatus.OPEN]
-          : [TicketStatus.IN_PROGRESS, TicketStatus.FREEZE, TicketStatus.DUPLICATE],
-        [TicketStatus.IN_PROGRESS]: [TicketStatus.RESOLVED],
+          : [TicketStatus.IN_PROGRESS, TicketStatus.DUPLICATE],
+        [TicketStatus.IN_PROGRESS]: isSeniorAuthority
+          ? [TicketStatus.RESOLVED, TicketStatus.PAUSE, TicketStatus.FREEZE]
+          : [TicketStatus.RESOLVED, TicketStatus.PAUSE],
+        [TicketStatus.PAUSE]:       [TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED],
         [TicketStatus.RESOLVED]:    [TicketStatus.CLOSED],
         [TicketStatus.FREEZE]:      [TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED],
         [TicketStatus.CLOSED]:      [],
@@ -1017,7 +1020,7 @@ export class TicketService implements OnModuleInit {
         ticket.duplicateOfId = dto.duplicateOfId;
 
         // --- SLA Freezing Logic for Terminal DUPLICATE State ---
-        if (ticket.status === TicketStatus.FREEZE && ticket.slaPausedAt) {
+        if ([TicketStatus.FREEZE, TicketStatus.PAUSE].includes(ticket.status as TicketStatus) && ticket.slaPausedAt) {
           const pausedTimeMs = new Date().getTime() - ticket.slaPausedAt.getTime();
           ticket.accumulatedPauseSeconds = (ticket.accumulatedPauseSeconds || 0) + Math.floor(pausedTimeMs / 1000);
           if (ticket.slaDeadline) {
@@ -1038,9 +1041,12 @@ export class TicketService implements OnModuleInit {
         }
 
         // --- SLA Freezing Logic ---
-        if (dto.status === TicketStatus.FREEZE && ticket.status !== TicketStatus.FREEZE) {
+        const wasPaused = [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(ticket.status as TicketStatus);
+        const willBePaused = [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(dto.status as TicketStatus);
+
+        if (willBePaused && !wasPaused) {
           ticket.slaPausedAt = new Date();
-        } else if (ticket.status === TicketStatus.FREEZE && dto.status !== TicketStatus.FREEZE && ticket.slaPausedAt) {
+        } else if (wasPaused && !willBePaused && ticket.slaPausedAt) {
           const pausedTimeMs = new Date().getTime() - ticket.slaPausedAt.getTime();
           ticket.accumulatedPauseSeconds = (ticket.accumulatedPauseSeconds || 0) + Math.floor(pausedTimeMs / 1000);
           if (ticket.slaDeadline) {

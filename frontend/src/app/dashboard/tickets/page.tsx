@@ -179,44 +179,28 @@ export default function TicketsPage() {
   // DB-driven role capabilities (is_all_tickets, is_ticket_focal) — loaded from AuthContext
   // (also available: myCap?.isEscalationFocal, myCap?.isTicketSettingsFocal, myCap?.isFocal)
 
-  const isSuperAdmin = user?.role === 'super_admin';
-  const isFocalTech = ['desktop_sr', 'it_support_sr', 'pantawid_ict'].includes(user?.role ?? '');
-  const isLowerLevelTech = ['desktop_jr', 'it_support_jr'].includes(user?.role ?? '');
+  const isFocalTech = !!myCap?.isFocal && (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct);
+  const isLowerLevelTech = (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
   const isJuniorTech = isLowerLevelTech;
   // ITO staff roles: see only their own tickets (restricted view), same as junior techs
-  const isItoRole = [
-    'cybersec',
-    'infosec',
-    'lead_infra',
-    'server_admin',
-    'db_admin',
-    'network_admin',
-    'project_mgr',
-    'dev_lead',
-    'sqa_lead',
-    'records_officer',
-    'hr_id_officer',
-  ].includes(user?.role ?? '');
+  const isItoRole = !!myCap?.isIto;
   const isTechnician = isFocalTech || isLowerLevelTech || isJuniorTech || isItoRole;
-  const isFocal = user?.roleCode === 'focal';
-  const isComplianceOfficer = user?.roleCode === 'compliance_officer';
-  const isSectionHead = user?.roleCode === 'section_head';
-  // DB-driven: is_all_tickets column — falls back to super_admin only until capabilities load
-  const canManageAll = isSuperAdmin || !!myCap?.isAllTickets;
+  const isFocal = !!myCap?.isFocal;
+  // DB-driven: is_all_tickets column
+  const canManageAll = !!myCap?.isAllTickets;
   // Matrix-driven: Escalated To Me tab is visible when Escalation capability is ticked.
-  const canViewEscalatedQueue = isSuperAdmin || !!myCap?.isEscalationFocal;
+  const canViewEscalatedQueue = !!myCap?.isEscalationFocal;
   // DB-driven: is_ticket_focal column — who can manually assign/reassign tickets
-  const canAssign = isSuperAdmin || !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
+  const canAssign = !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
   // Matrix-driven escalation eligibility:
   // show action for technician tracks plus ticket admin/assign/all-ticket capabilities.
   const canEscalate =
-    isSuperAdmin ||
+    !!myCap?.isTicketSettingsFocal ||
+    !!myCap?.isTicketFocal ||
     !!(
       myCap?.isDesktop ||
       myCap?.isItSupport ||
       myCap?.isPantawidIct ||
-      myCap?.isTicketFocal ||
-      myCap?.isTicketSettingsFocal ||
       myCap?.isAllTickets
     );
 
@@ -1184,7 +1168,7 @@ export default function TicketsPage() {
                                   ticket.assignedTo.email}
                               </span>
                               {ticket.assignedTechAbsent &&
-                                (isSuperAdmin || isComplianceOfficer || isSectionHead) && (
+                                (canAssign || canManageAll) && (
                                   <Tooltip title="Technician is absent today">
                                     <FiberManualRecord sx={{ color: 'error.main', fontSize: 10 }} />
                                   </Tooltip>

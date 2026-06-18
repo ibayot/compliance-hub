@@ -25,8 +25,10 @@ export enum TicketStatus {
   IN_PROGRESS = 'in_progress',
   RESOLVED = 'resolved',
   CLOSED = 'closed',
-  /** Ticket is temporarily put on hold (e.g. awaiting parts or info) */
+  /** Ticket is temporarily put on hold for third party */
   FREEZE = 'freeze',
+  /** Ticket is paused waiting for user reply */
+  PAUSE = 'pause',
   /** Ticket is a duplicate of an existing open ticket — auto-closes */
   DUPLICATE = 'duplicate',
 }

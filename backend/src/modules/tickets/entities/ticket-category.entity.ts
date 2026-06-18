@@ -34,8 +34,8 @@ export class TicketCategoryConfig {
   @Column({ name: 'sla_hours', type: 'int', nullable: true })
   slaHours: number | null;
 
-  @Column({ name: 'allowable_freeze_hours', type: 'int', default: 48 })
-  allowableFreezeHours: number;
+  @Column({ name: 'allowable_pause_hours', type: 'int', default: 48 })
+  allowablePauseHours: number;
 
   @Column({ type: 'int', nullable: true })
   created_by: number | null;

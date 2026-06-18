@@ -29,12 +29,16 @@ import {
   Switch,
   FormControlLabel,
   Tooltip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ticketSettingsApi,
+  knowledgeBaseApi,
   TicketCategory,
   TicketKeywordRule,
   EscalationFocalConfig,
@@ -62,8 +66,9 @@ export default function TicketSettingsPage() {
     name: string;
     ticketType: string;
     slaHours: string;
+    allowablePauseHours: string;
     isActive: boolean;
-  }>({ name: '', ticketType: 'it_support', slaHours: '', isActive: true });
+  }>({ name: '', ticketType: 'it_support', slaHours: '24', allowablePauseHours: '48', isActive: true });
   const [catSubmitting, setCatSubmitting] = useState(false);
 
   // — Keyword Rules —
@@ -125,16 +130,20 @@ export default function TicketSettingsPage() {
   const [globalConfig, setGlobalConfig] = useState<{
     assignmentStrategy: string;
     roundRobinCapHours: number;
-  }>({ assignmentStrategy: 'CURRENT_AUTO', roundRobinCapHours: 80 });
+    autoCloseDays: number;
+  }>({ assignmentStrategy: 'CURRENT_AUTO', roundRobinCapHours: 80, autoCloseDays: 3 });
   const [slaInsights, setSlaInsights] = useState<any[]>([]);
+  const [slaFilterDays, setSlaFilterDays] = useState<number>(30);
   const [globalLoading, setGlobalLoading] = useState(true);
+
+
 
   const fetchGlobalData = useCallback(async () => {
     try {
       setGlobalLoading(true);
       const [config, insights] = await Promise.all([
         ticketSettingsApi.getGlobalConfig(),
-        ticketSettingsApi.getSlaInsights(),
+        ticketSettingsApi.getSlaInsights(slaFilterDays),
       ]);
       setGlobalConfig(config);
       setSlaInsights(insights);
@@ -143,7 +152,11 @@ export default function TicketSettingsPage() {
     } finally {
       setGlobalLoading(false);
     }
-  }, [enqueueSnackbar]);
+  }, [enqueueSnackbar, slaFilterDays]);
+
+  useEffect(() => {
+    ticketSettingsApi.getSlaInsights(slaFilterDays).then(setSlaInsights).catch(() => {});
+  }, [slaFilterDays]);
 
   const handleUpdateGlobalConfig = async () => {
     try {
@@ -253,11 +266,12 @@ export default function TicketSettingsPage() {
         name: cat.name,
         ticketType: cat.ticketType,
         slaHours: cat.slaHours != null ? String(cat.slaHours) : '',
+        allowablePauseHours: String(cat.allowablePauseHours ?? 48),
         isActive: cat.isActive,
       });
     } else {
       setEditCat(null);
-      setCatForm({ name: '', ticketType: 'it_support', slaHours: '', isActive: true });
+      setCatForm({ name: '', ticketType: 'it_support', slaHours: '24', allowablePauseHours: '48', isActive: true });
     }
     setCatDialogOpen(true);
   };
@@ -270,21 +284,20 @@ export default function TicketSettingsPage() {
     try {
       setCatSubmitting(true);
       const parsedSla = catForm.slaHours ? Number(catForm.slaHours) : null;
-      if (parsedSla !== null && (parsedSla < 0 || parsedSla > 168)) {
-        enqueueSnackbar('SLA must be between 0 and 168 hours', { variant: 'warning' });
+      if (parsedSla === null || parsedSla <= 0 || parsedSla > 168) {
+        enqueueSnackbar('SLA must be between 1 and 168 hours', { variant: 'warning' });
         setCatSubmitting(false);
         return;
       }
 
-      let finalIsActive = catForm.isActive;
-      if (parsedSla === null) {
-        finalIsActive = false;
-      }
+      const parsedFreeze = catForm.allowablePauseHours ? Number(catForm.allowablePauseHours) : 48;
+      
       const catPayload = {
         name: catForm.name,
         ticketType: catForm.ticketType,
         slaHours: parsedSla,
-        isActive: finalIsActive,
+        allowablePauseHours: parsedFreeze,
+        isActive: catForm.isActive,
       };
 
       if (editCat) {
@@ -431,6 +444,7 @@ export default function TicketSettingsPage() {
                         <span>SLA Time Limit</span>
                       </Tooltip>
                     </TableCell>
+                    <TableCell>Allowable Pause Hours</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
@@ -466,6 +480,7 @@ export default function TicketSettingsPage() {
                             />
                           </TableCell>
                           <TableCell>{cat.slaHours != null ? `${cat.slaHours}h` : '—'}</TableCell>
+                          <TableCell>{cat.allowablePauseHours ?? 48}h</TableCell>
                           <TableCell>
                             <Chip
                               size="small"
@@ -688,9 +703,27 @@ export default function TicketSettingsPage() {
                       : 'Assigns tickets round-robin to the technician who has waited the longest, up to the defined SLA load capacity cap.'
                   }
                 >
-                  <MenuItem value="CURRENT_AUTO">Legacy Zero-Active (Current Auto)</MenuItem>
-                  <MenuItem value="CAPPED_ROUND_ROBIN">Capped Round-Robin</MenuItem>
+                  <MenuItem value="CURRENT_AUTO">
+                    Zero-Active {globalConfig.assignmentStrategy === 'CURRENT_AUTO' ? '(Active)' : ''}
+                  </MenuItem>
+                  <MenuItem value="CAPPED_ROUND_ROBIN">
+                    Capped Round-Robin {globalConfig.assignmentStrategy === 'CAPPED_ROUND_ROBIN' ? '(Active)' : ''}
+                  </MenuItem>
                 </TextField>
+
+                <TextField
+                  label="Auto Close (Days)"
+                  type="number"
+                  value={globalConfig.autoCloseDays}
+                  onChange={(e) =>
+                    setGlobalConfig((prev) => ({
+                      ...prev,
+                      autoCloseDays: Number(e.target.value),
+                    }))
+                  }
+                  fullWidth
+                  helperText="Number of days before a resolved ticket is automatically closed."
+                />
 
                 {globalConfig.assignmentStrategy === 'CAPPED_ROUND_ROBIN' && (
                   <TextField
@@ -719,10 +752,23 @@ export default function TicketSettingsPage() {
             <Typography variant="h6" fontWeight={600} mb={2}>
               SLA Recalibration Insights
             </Typography>
-            <Typography variant="body2" color="text.secondary" mb={2}>
-              Compare configured SLA hours against the actual average resolution time for each
-              category.
-            </Typography>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Typography variant="body2" color="text.secondary">
+                Compare configured SLA hours against the actual average resolution time for each
+                category.
+              </Typography>
+              <TextField
+                select
+                size="small"
+                value={slaFilterDays}
+                onChange={(e) => setSlaFilterDays(Number(e.target.value))}
+                sx={{ width: 150 }}
+              >
+                <MenuItem value={30}>Last 30 Days</MenuItem>
+                <MenuItem value={90}>Last 90 Days</MenuItem>
+                <MenuItem value={365}>Last 365 Days</MenuItem>
+              </TextField>
+            </Box>
 
             <TableContainer>
               <Table size="small">
@@ -733,6 +779,7 @@ export default function TicketSettingsPage() {
                     <TableCell align="right">Configured SLA</TableCell>
                     <TableCell align="right">Avg Actual Resolution</TableCell>
                     <TableCell>Status</TableCell>
+                    <TableCell>Interpretation</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -777,6 +824,17 @@ export default function TicketSettingsPage() {
                           ) : (
                             <Chip size="small" label="Unmonitored" color="default" />
                           )}
+                        </TableCell>
+                        <TableCell>
+                          {insight.configuredSlaHours > 0 ? (
+                            insight.isFailingSla ? (
+                              <Typography variant="caption" color="error">Consider extending SLA</Typography>
+                            ) : (insight.avgResolutionHours < insight.configuredSlaHours * 0.5) ? (
+                              <Typography variant="caption" color="success.main">SLA is very generous, consider tightening</Typography>
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">SLA is balanced</Typography>
+                            )
+                          ) : '—'}
                         </TableCell>
                       </TableRow>
                     ))
@@ -900,6 +958,7 @@ export default function TicketSettingsPage() {
             </TableContainer>
           </CardContent>
         )}
+
       </Card>
 
       {/* Escalation Focal Dialog */}
@@ -975,15 +1034,25 @@ export default function TicketSettingsPage() {
             >
               <MenuItem value="it_support">IT Support</MenuItem>
               <MenuItem value="desktop_support">Desktop Support</MenuItem>
+              <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
             </TextField>
             <TextField
-              label="SLA Time Limit (hours)"
+              label="SLA Time Limit (hours) *"
               type="number"
               inputProps={{ min: 1, max: 168 }}
               value={catForm.slaHours}
               onChange={(e) => setCatForm({ ...catForm, slaHours: e.target.value })}
               fullWidth
-              helperText="Leave blank for no SLA"
+              helperText="Required. Enter hours > 0."
+            />
+            <TextField
+              label="Allowable Pause Hours *"
+              type="number"
+              inputProps={{ min: 0, max: 168 }}
+              value={catForm.allowablePauseHours}
+              onChange={(e) => setCatForm({ ...catForm, allowablePauseHours: e.target.value })}
+              fullWidth
+              helperText="Maximum allowed cumulative pause hours before SLA freeze is rejected."
             />
             <FormControlLabel
               control={

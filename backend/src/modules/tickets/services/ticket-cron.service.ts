@@ -22,7 +22,8 @@ export class TicketCronService {
   async handleHourlyTasks() {
     this.logger.log('Running hourly ticketing cron tasks...');
     await this.processAutoClosure();
-    await this.processAutoUnfreeze();
+    await this.processAutoUnpause();
+    await this.processFrozenTicketsReminders();
     await this.processPercentageAlerts();
   }
 
@@ -53,18 +54,18 @@ export class TicketCronService {
     }
   }
 
-  private async processAutoUnfreeze() {
-    const frozenTickets = await this.ticketRepo.find({
-      where: { status: TicketStatus.FREEZE },
+  private async processAutoUnpause() {
+    const pausedTickets = await this.ticketRepo.find({
+      where: { status: TicketStatus.PAUSE },
       relations: ['assignedTo', 'category'],
     });
 
     const now = new Date().getTime();
 
-    for (const ticket of frozenTickets) {
+    for (const ticket of pausedTickets) {
       if (!ticket.slaPausedAt || !ticket.category) continue;
 
-      const allowableMs = (ticket.category.allowableFreezeHours || 48) * 60 * 60 * 1000;
+      const allowableMs = (ticket.category.allowablePauseHours || 48) * 60 * 60 * 1000;
       const pausedMs = now - ticket.slaPausedAt.getTime();
 
       if (pausedMs >= allowableMs) {
@@ -78,22 +79,42 @@ export class TicketCronService {
 
           await this.ticketService.addComment(
             ticket.id,
-            { content: 'System Note: Ticket has reached its maximum allowable freeze time and has been automatically unfrozen. The SLA clock has resumed.', isInternal: true },
+            { content: `System Note: Ticket has reached its maximum allowable pause time (${ticket.category.allowablePauseHours}h) and has been automatically unpaused. The SLA clock has resumed.`, isInternal: true },
             1, // System User
             UserRole.SUPER_ADMIN,
           );
 
-          if (ticket.assignedTo?.email) {
-            this.emailService.sendGenericEmail(
-              ticket.assignedTo.email,
-              `Ticket Auto-Unfrozen: ${ticket.ticketNumber}`,
-              `The ticket ${ticket.ticketNumber} has reached its maximum freeze limit of ${ticket.category.allowableFreezeHours} hours and has been automatically reopened. The SLA clock has resumed.`
-            ).catch(() => {});
-          }
-          this.logger.log(`Auto-unfroze ticket ${ticket.ticketNumber}`);
+          // Hardcoded email for testing as requested by user
+          this.emailService.sendGenericEmail(
+            'mjdibay@dswd.gov.ph',
+            `Ticket Auto-Unpaused: ${ticket.ticketNumber}`,
+            `The ticket ${ticket.ticketNumber} has reached its maximum pause limit of ${ticket.category.allowablePauseHours} hours and has been automatically reopened. The SLA clock has resumed.`
+          ).catch(() => {});
+
+          this.logger.log(`Auto-unpaused ticket ${ticket.ticketNumber}`);
         } catch (err) {
-          this.logger.error(`Failed to auto-unfreeze ticket ${ticket.ticketNumber}`, err);
+          this.logger.error(`Failed to auto-unpause ticket ${ticket.ticketNumber}`, err);
         }
+      }
+    }
+  }
+
+  private async processFrozenTicketsReminders() {
+    const frozenTickets = await this.ticketRepo.find({
+      where: { status: TicketStatus.FREEZE },
+    });
+
+    for (const ticket of frozenTickets) {
+      try {
+        await this.ticketService.addComment(
+          ticket.id,
+          { content: 'System Alert (Daily Reminder): This ticket is currently frozen waiting for third-party response. Ticket Admins, please follow up.', isInternal: true },
+          1,
+          UserRole.SUPER_ADMIN,
+        );
+        this.logger.log(`Sent daily reminder for frozen ticket ${ticket.ticketNumber}`);
+      } catch (err) {
+        this.logger.error(`Failed to send daily reminder for frozen ticket ${ticket.ticketNumber}`, err);
       }
     }
   }

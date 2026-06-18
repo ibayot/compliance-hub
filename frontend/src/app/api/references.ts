@@ -90,6 +90,7 @@ export type TicketStatus =
   | 'resolved'
   | 'closed'
   | 'freeze'
+  | 'pause'
   | 'duplicate';
 export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
 
@@ -378,6 +379,7 @@ export interface TicketCategory {
   name: string;
   ticketType: string;
   slaHours?: number | null;
+  allowablePauseHours: number;
   isActive: boolean;
   isDeleted: boolean;
   createdAt: string;
@@ -723,6 +725,7 @@ export const ticketSettingsApi = {
     name: string;
     ticketType: string;
     slaHours?: number | null;
+    allowablePauseHours?: number;
     isActive?: boolean;
   }): Promise<TicketCategory> => {
     const response = await apiClient.post(`/ticket-settings/categories`, data);
@@ -730,7 +733,7 @@ export const ticketSettingsApi = {
   },
   updateCategory: async (
     id: string,
-    data: Partial<{ name: string; ticketType: string; slaHours: number | null; isActive: boolean }>,
+    data: Partial<{ name: string; ticketType: string; slaHours: number | null; allowablePauseHours: number; isActive: boolean }>,
   ): Promise<TicketCategory> => {
     const response = await apiClient.patch(`/ticket-settings/categories/${id}`, data);
     return response.data;
@@ -799,6 +802,7 @@ export const ticketSettingsApi = {
   getGlobalConfig: async (): Promise<{
     assignmentStrategy: string;
     roundRobinCapHours: number;
+    autoCloseDays: number;
   }> => {
     const response = await apiClient.get(`/ticket-settings/global-config`);
     return response.data;
@@ -806,13 +810,14 @@ export const ticketSettingsApi = {
   updateGlobalConfig: async (data: {
     assignmentStrategy?: string;
     roundRobinCapHours?: number;
+    autoCloseDays?: number;
   }): Promise<void> => {
     const response = await apiClient.patch(`/ticket-settings/global-config`, data);
     return response.data;
   },
 
   // SLA Insights
-  getSlaInsights: async (): Promise<
+  getSlaInsights: async (days?: number): Promise<
     Array<{
       categoryName: string;
       configuredSlaHours: number;
@@ -821,7 +826,8 @@ export const ticketSettingsApi = {
       isFailingSla: boolean;
     }>
   > => {
-    const response = await apiClient.get(`/ticket-settings/sla-insights`);
+    const qs = days ? `?days=${days}` : '';
+    const response = await apiClient.get(`/ticket-settings/sla-insights${qs}`);
     return response.data;
   },
 };
@@ -833,6 +839,14 @@ export const knowledgeBaseApi = {
   },
   rateArticle: async (id: number, isHelpful: boolean) => {
     const res = await apiClient.post(`/knowledge-base/${id}/rate`, { isHelpful });
+    return res.data;
+  },
+  getInsights: async (): Promise<any[]> => {
+    const res = await apiClient.get('/knowledge-base');
+    return res.data;
+  },
+  update: async (id: number, data: { title: string; tags: string; content: string }): Promise<any> => {
+    const res = await apiClient.put(`/knowledge-base/${id}`, data);
     return res.data;
   },
 };

@@ -323,7 +323,8 @@ export class TicketSettingsController {
   @UseGuards(CapabilityGuard)
   @RequireCapability('isTicketSettingsFocal')
   @Roles(...ALL_STAFF_ROLES)
-  async getSlaInsights() {
-    return this.settingsService.getSlaInsights();
+  async getSlaInsights(@Query('days') days?: string) {
+    const d = days ? Number(days) : 30;
+    return this.settingsService.getSlaInsights(d);
   }
 }

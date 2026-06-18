@@ -52,7 +52,7 @@ import { cybersecurityApi, CybersecurityMetric } from '@/lib/api/cybersecurity';
 import { DashboardSummaryResponse, kpiApi } from '@/lib/api/kpi';
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -95,18 +95,12 @@ export default function DashboardPage() {
   const periodMonth = now.getMonth() + 1;
 
   const isRegularUser = user?.role === 'user';
-  const isTechnicianAny = [
-    'pantawid_ict',
-    'desktop_sr',
-    'it_support_sr',
-    'desktop_jr',
-    'it_support_jr',
-  ].includes(user?.role ?? '');
-  const isLowerLevelTech = ['it_support_jr', 'desktop_jr'].includes(user?.role ?? '');
+  const isTechnicianAny = !!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct;
+  const isLowerLevelTech = (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
   // Compliance Officer = any role tagged with roleCode 'compliance_officer'
   const isComplianceOfficer = user?.roleCode === 'compliance_officer';
   // Full dashboard: super_admin or CO; generic staff (focal, etc.) see doc cards + KPI only
-  const isFullDashboard = user?.role === 'super_admin' || isComplianceOfficer;
+  const isFullDashboard = !!myCap?.isReportsAccess || !!myCap?.isReviewsAccess || !!myCap?.isTicketSettingsFocal;
   // Section Head and Cybersecurity Officer — identified via roleCode
   const isSectionHead = user?.roleCode === 'section_head';
   const isCybersecurityOfficer = user?.roleCode === 'cybersecurity_officer';

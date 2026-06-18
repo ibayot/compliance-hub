@@ -22,6 +22,7 @@ export interface CreateCategoryDto {
   ticketType: string; // 'desktop_support' | 'it_support' | 'pantawid_ict_support'
   description?: string;
   slaHours?: number | null;
+  allowablePauseHours?: number | null;
 }
 
 export interface UpdateCategoryDto {
@@ -30,6 +31,7 @@ export interface UpdateCategoryDto {
   description?: string;
   isActive?: boolean;
   slaHours?: number | null;
+  allowablePauseHours?: number | null;
 }
 
 export interface CreateKeywordRuleDto {
@@ -69,6 +71,7 @@ export interface UpdateIssueTypeDto {
 export interface UpdateGlobalConfigDto {
   assignmentStrategy?: string;
   roundRobinCapHours?: number;
+  autoCloseDays?: number;
 }
 
 // --- Service ----------------------------------------------------------------
@@ -136,12 +139,20 @@ export class TicketSettingsService {
       softDeleted.isDeleted = false;
       softDeleted.created_by = actorId;
       softDeleted.updated_by = actorId;
+      if (dto.slaHours !== undefined) softDeleted.slaHours = dto.slaHours;
+      if (dto.allowablePauseHours !== undefined) softDeleted.allowablePauseHours = dto.allowablePauseHours ?? 48;
       return this.categoryRepo.save(softDeleted);
     }
 
     if (dto.slaHours !== undefined && dto.slaHours !== null) {
       if (dto.slaHours < 0 || dto.slaHours > 168) {
         throw new BadRequestException('SLA hours must be between 0 and 168');
+      }
+    }
+    
+    if (dto.allowablePauseHours !== undefined && dto.allowablePauseHours !== null) {
+      if (dto.allowablePauseHours < 0 || dto.allowablePauseHours > 168) {
+        throw new BadRequestException('Allowable Pause Hours must be between 0 and 168');
       }
     }
 
@@ -151,6 +162,7 @@ export class TicketSettingsService {
       ticketType: dto.ticketType,
       description: dto.description?.trim() || null,
       slaHours: dto.slaHours ?? null,
+      allowablePauseHours: dto.allowablePauseHours ?? 48,
       isActive: (dto.slaHours ?? null) !== null,
       isDeleted: false,
       created_by: actorId,
@@ -182,6 +194,13 @@ export class TicketSettingsService {
       if (cat.slaHours === null) {
         cat.isActive = false; // Force inactive if SLA is blank
       }
+    }
+
+    if (dto.allowablePauseHours !== undefined) {
+      if (dto.allowablePauseHours !== null && (dto.allowablePauseHours < 0 || dto.allowablePauseHours > 168)) {
+        throw new BadRequestException('Allowable Pause Hours must be between 0 and 168');
+      }
+      cat.allowablePauseHours = dto.allowablePauseHours ?? 48;
     }
 
     if (dto.isActive !== undefined) {
@@ -470,13 +489,14 @@ export class TicketSettingsService {
     const config = await this.getGlobalConfig();
     if (dto.assignmentStrategy !== undefined) config.assignmentStrategy = dto.assignmentStrategy;
     if (dto.roundRobinCapHours !== undefined) config.roundRobinCapHours = dto.roundRobinCapHours;
+    if (dto.autoCloseDays !== undefined) config.autoCloseDays = dto.autoCloseDays;
     return this.configRepo.save(config);
   }
 
   // ── SLA Insights ───────────────────────────────────────────────────────
 
-  async getSlaInsights(): Promise<any[]> {
-    // Calculates the average resolution time in hours per category
+  async getSlaInsights(days: number = 30): Promise<any[]> {
+    // Calculates the average resolution time in hours per category over the last X days
     const insights = await this.ticketRepo.query(`
       SELECT 
         tc.name as categoryName,
@@ -486,8 +506,10 @@ export class TicketSettingsService {
       FROM tickets t
       JOIN ticket_categories tc ON t.category_id = tc.id
       WHERE t.status IN ('RESOLVED', 'CLOSED')
+        AND t.resolved_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+        AND tc.sla_hours IS NOT NULL AND tc.sla_hours > 0
       GROUP BY tc.id
-    `);
+    `, [days]);
     
     return insights.map((row: any) => ({
       categoryName: row.categoryName,

@@ -21,6 +21,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { CredentialResponse, GoogleLogin } from '@react-oauth/google';
 import { useSnackbar } from 'notistack';
 import { User } from '@/lib/types/auth';
 import { authApi } from '@/lib/api/auth';
@@ -104,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearInactivityTimer();
     if (!user || isSessionLocked) return;
     inactivityTimerRef.current = setTimeout(() => {
+      sessionStorage.setItem('isSessionLocked', 'true');
       setIsSessionLocked(true);
       setUnlockPassword('');
       setUnlockError(null);
@@ -118,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Password is required');
       }
       await authApi.reauthenticate({ password: trimmed });
+      sessionStorage.removeItem('isSessionLocked');
       setIsSessionLocked(false);
       setUnlockPassword('');
       setUnlockError(null);
@@ -131,6 +134,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const initAuth = async () => {
       const token = tokenStore.get('accessToken');
       if (token) {
+        if (sessionStorage.getItem('isSessionLocked') === 'true') {
+          setIsSessionLocked(true);
+        }
         try {
           const profile = await authApi.getProfile();
 
@@ -291,6 +297,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       tokenStore.remove('accessToken');
       tokenStore.remove('refreshToken');
+      sessionStorage.removeItem('isSessionLocked');
       setUser(null);
       setMyCap(null);
       setIsSessionLocked(false);
@@ -320,6 +327,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await logout();
   };
 
+  const handleGoogleUnlock = async (response: CredentialResponse) => {
+    const idToken = response.credential;
+    if (!idToken) {
+      setUnlockError('Google sign-in did not return a valid token.');
+      return;
+    }
+    setUnlocking(true);
+    setUnlockError(null);
+    try {
+      const res = await authApi.loginWithGoogle({ idToken });
+      
+      if (user && res.user && (res.user as any).email !== user.email) {
+        throw new Error('You must sign in with the exact same Google account to unlock.');
+      }
+      
+      tokenStore.set('accessToken', res.accessToken);
+      tokenStore.set('refreshToken', res.refreshToken);
+      sessionStorage.removeItem('isSessionLocked');
+      setIsSessionLocked(false);
+      scheduleInactivityLock();
+    } catch (err: any) {
+      setUnlockError(err.response?.data?.message || err.message || 'Google sign-in failed');
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
   return (
     <>
       <AuthContext.Provider
@@ -345,7 +379,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             For security, your session was locked after 15 minutes of inactivity.
           </Typography>
           {user?.authProvider === 'google' ? (
-            <Alert severity="info">Please sign in again to continue.</Alert>
+            <Box mt={2} mb={2} display="flex" flexDirection="column" alignItems="center">
+              <Alert severity="info" sx={{ width: '100%', mb: 2 }}>
+                Please re-authenticate with your Google account to unlock your session.
+              </Alert>
+              <GoogleLogin
+                onSuccess={handleGoogleUnlock}
+                onError={() => setUnlockError('Google sign-in failed')}
+                useOneTap={false}
+                theme="outline"
+                size="large"
+                locale="en"
+              />
+            </Box>
           ) : (
             <TextField
               fullWidth

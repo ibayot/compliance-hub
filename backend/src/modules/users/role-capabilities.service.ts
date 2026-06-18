@@ -123,7 +123,6 @@ export class RoleCapabilitiesService implements OnModuleInit {
 
   /** True for roles with full ticket settings / ticket reports management access. */
   isTicketSettingsFocal(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isTicketSettingsFocal;
   }
 
@@ -132,7 +131,6 @@ export class RoleCapabilitiesService implements OnModuleInit {
    * DB-driven via is_all_tickets column (replaces previous derived logic).
    */
   isAllTickets(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isAllTickets;
   }
 
@@ -141,72 +139,58 @@ export class RoleCapabilitiesService implements OnModuleInit {
    * DB-driven via is_ticket_focal column (replaces previous derived logic).
    */
   isTicketFocal(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isTicketFocal;
   }
 
   isKpiAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isKpiAccess;
   }
 
   isKpiManage(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isKpiManage;
   }
 
   isAttendanceAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isAttendanceAccess;
   }
 
   isAttendanceManage(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isAttendanceManage;
   }
 
   isReportsAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isReportsAccess;
   }
 
   isReviewsAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isReviewsAccess;
   }
 
   isMovAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isMovAccess;
   }
 
   isDocumentsAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isDocumentsAccess;
   }
 
   isRepositoryAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isRepositoryAccess;
   }
 
   isIssuancesAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isIssuancesAccess;
   }
 
   isMetricsAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isMetricsAccess;
   }
 
   isRoleCapabilitiesAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isRoleCapabilitiesAccess;
   }
 
   isSystemRolesAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isSystemRolesAccess;
   }
 
@@ -246,19 +230,17 @@ export class RoleCapabilitiesService implements OnModuleInit {
    * Derived: is focal OR is any technician OR is ITO staff.
    */
   canChangePriority(role: string): boolean {
-    if (role === 'super_admin') return true;
     const c = this.get(role);
     return !!(c?.isFocal || c?.isIto || c?.isDesktop || c?.isItSupport || c?.isPantawidIct);
   }
 
   /**
    * True if the role has senior authority over ticket status transitions.
-   * Derived: super_admin OR isFocal OR isIto.
+   * Derived: isTicketSettingsFocal OR isTicketFocal.
    */
   isSeniorAuthority(role: string): boolean {
-    if (role === 'super_admin') return true;
     const c = this.get(role);
-    return !!(c?.isFocal || c?.isIto);
+    return !!(c?.isTicketSettingsFocal || c?.isTicketFocal);
   }
 
   /**

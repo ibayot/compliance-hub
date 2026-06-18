@@ -26,6 +26,7 @@ import MovPlannerPage from '@/app/dashboard/mov/page';
 import TicketSettingsPage from '@/app/dashboard/ticket-settings/page';
 import AttendancePage from '@/app/dashboard/attendance/page';
 import TicketReportsPage from '@/app/dashboard/ticket-reports/page';
+import KnowledgeBasePage from '@/app/dashboard/knowledge-base/page';
 
 function ProtectedDashboard({
   children,
@@ -56,12 +57,11 @@ function ProtectedDashboard({
     return <Navigate to="/dashboard" replace />;
   }
 
-  const isSuperAdmin = user?.role === 'super_admin';
   const hasCapability = requiredCapability ? Boolean(myCap?.[requiredCapability]) : true;
   const hasRoleAccess = allowedRoles
     ? Boolean(user?.role && allowedRoles.includes(user.role))
     : true;
-  const isAllowed = isSuperAdmin || ((requiredCapability ? hasCapability : true) && hasRoleAccess);
+  const isAllowed = (requiredCapability ? hasCapability : true) && hasRoleAccess;
 
   if (!isAllowed) {
     return (
@@ -239,6 +239,14 @@ export default function App() {
         element={
           <ProtectedDashboard>
             <TicketReportsPage />
+          </ProtectedDashboard>
+        }
+      />
+      <Route
+        path="/dashboard/knowledge-base"
+        element={
+          <ProtectedDashboard>
+            <KnowledgeBasePage />
           </ProtectedDashboard>
         }
       />

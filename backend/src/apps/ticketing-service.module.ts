@@ -8,6 +8,9 @@ import { TicketsModule } from '../modules/tickets/tickets.module';
 import { TicketingJwtStrategy } from './ticketing-jwt.strategy';
 import { HttpClientsModule } from '../common/http-clients/http-clients.module';
 import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditInterceptor } from '../shared/audit/audit.interceptor';
+import { AuditVariableSubscriber } from '../shared/audit/audit.subscriber';
 
 @Module({
   imports: [
@@ -49,7 +52,14 @@ import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.mid
     TicketsModule,
     HttpClientsModule,
   ],
-  providers: [TicketingJwtStrategy],
+  providers: [
+    TicketingJwtStrategy,
+    AuditVariableSubscriber,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
+    },
+  ],
 })
 export class TicketingServiceAppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

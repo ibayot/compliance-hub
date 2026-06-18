@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -193,6 +193,18 @@ ${kbListText}
     } else {
       article.unhelpfulCount += 1;
     }
+    return this.kbRepo.save(article);
+  }
+
+  async updateArticle(
+    id: number,
+    dto: { title: string; tags: string; content: string },
+  ): Promise<KnowledgeArticle> {
+    const article = await this.kbRepo.findOne({ where: { id } });
+    if (!article) throw new NotFoundException('Article not found');
+    article.title = dto.title;
+    article.tags = dto.tags;
+    article.content = dto.content;
     return this.kbRepo.save(article);
   }
 }

@@ -71,6 +71,7 @@ const STATUS_OPTS = [
   { value: 'in_progress', label: 'In Progress' },
   { value: 'resolved', label: 'Resolved' },
   { value: 'freeze', label: 'Freeze (on hold)' },
+  { value: 'pause', label: 'Pause' },
   { value: 'duplicate', label: 'Duplicate' },
 ];
 
@@ -166,29 +167,27 @@ export default function TicketDetailPage() {
   const [selectedDupOfId, setSelectedDupOfId] = useState('');
 
   const isRegularUser = user?.role === 'user';
-  const isFocalTech = ['desktop_sr', 'it_support_sr'].includes(user?.role ?? '');
-  const isLowerLevelTech = ['desktop_jr', 'it_support_jr'].includes(user?.role ?? '');
+  const isFocalTech = !!myCap?.isFocal && (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct);
+  const isLowerLevelTech = (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
   const isJuniorTech = isLowerLevelTech;
-  const isTechnician = isFocalTech || isLowerLevelTech;
-  const isFocal = user?.roleCode === 'focal';
-  const isAdmin = user?.role === 'super_admin' || isFocal;
-  const canAssignByCapability =
-    user?.role === 'super_admin' || !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
+  const isTechnician = isFocalTech || isLowerLevelTech || !!myCap?.isIto;
+  const isFocal = !!myCap?.isFocal;
+  const isAdmin = !!myCap?.isTicketSettingsFocal || !!myCap?.isTicketFocal;
+  const canAssignByCapability = !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
   const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isAllTickets;
   const canPriority = canStaff;
   const isComplianceOfficer = user?.roleCode === 'compliance_officer';
   const isSectionHead = user?.roleCode === 'section_head';
   const canEscalate =
-    user?.role === 'super_admin' ||
+    !!myCap?.isTicketSettingsFocal ||
+    !!myCap?.isTicketFocal ||
     !!(
       myCap?.isDesktop ||
       myCap?.isItSupport ||
       myCap?.isPantawidIct ||
-      myCap?.isTicketFocal ||
-      myCap?.isTicketSettingsFocal ||
       myCap?.isAllTickets
     );
-  const isEscalationAdmin = user?.role === 'super_admin' || isComplianceOfficer || isSectionHead;
+  const isEscalationAdmin = !!myCap?.isTicketSettingsFocal || isComplianceOfficer || isSectionHead;
   const latestEscalation = escalations.length > 0 ? escalations[0] : null;
   const hasPendingEscalation = latestEscalation?.status === 'pending';
   const hasAcceptedEscalation = latestEscalation?.status === 'accepted';
@@ -826,7 +825,6 @@ export default function TicketDetailPage() {
             </Box>
           </Box>
 
-          {/* Inline status editor */}
           {editingStatus && !hideTopActionButtons && canUpdateStatusNow && (
             <Box mt={3} p={2} bgcolor="action.hover" borderRadius={1}>
               <Typography variant="subtitle2" gutterBottom>
@@ -834,35 +832,30 @@ export default function TicketDetailPage() {
               </Typography>
               {(() => {
                 // QA #3/#4/#6: Compute allowed next statuses based on current status and actor role
-                const isSeniorAuthority = [
-                  'super_admin',
-                  'focal',
-                  'reviewer',
-                  'section_head',
-                  'compliance_officer',
-                  'technician_it_support',
-                  'technician_desktop',
-                  'it_support_sr',
-                  'desktop_sr',
-                ].includes(user?.role ?? '');
+                const isSeniorAuthority = !!myCap?.isTicketSettingsFocal || !!myCap?.isTicketFocal;
                 let allowedValues: string[] = [];
                 switch (ticket?.status) {
                   case 'open':
-                    allowedValues = ['freeze', 'duplicate'];
+                    allowedValues = isSeniorAuthority ? ['freeze', 'duplicate'] : ['duplicate'];
                     break;
                   case 'assigned':
                     allowedValues = isSeniorAuthority
                       ? ['in_progress', 'freeze', 'duplicate', 'open']
-                      : ['in_progress', 'freeze', 'duplicate'];
+                      : ['in_progress', 'duplicate'];
                     break;
                   case 'in_progress':
-                    allowedValues = ['resolved'];
+                    allowedValues = isSeniorAuthority
+                      ? ['resolved', 'pause', 'freeze']
+                      : ['resolved', 'pause'];
                     break;
                   case 'resolved':
                     allowedValues = ['closed'];
                     break;
                   case 'freeze':
-                    allowedValues = ['open', 'assigned', 'in_progress', 'resolved'];
+                    allowedValues = isSeniorAuthority ? ['open', 'assigned', 'in_progress', 'resolved'] : [];
+                    break;
+                  case 'pause':
+                    allowedValues = ['in_progress', 'resolved'];
                     break;
                   default:
                     allowedValues = [];

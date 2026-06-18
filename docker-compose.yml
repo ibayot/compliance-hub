@@ -85,7 +85,7 @@ services:
       - DB_PASSWORD=admin
       - REDIS_HOST=redis
       - USERS_SERVICE_URL=http://users-service:4101
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_API_KEY=AQ.Ab8RN6IeaGiQHevyy0zcQBVRtQYqOwYPeYu90-aX0q3E7dTU2w
     ports:
       - "4102:4102"
     healthcheck:

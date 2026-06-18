@@ -8,7 +8,7 @@ import { GatewayAppModule } from './gateway.module';
 
 const SERVICE_DOMAINS: Record<string, string[]> = {
   users: ['/api/auth', '/api/users', '/api/units'],
-  ticketing: ['/api/tickets', '/api/attendance', '/api/ticket-settings'],
+  ticketing: ['/api/tickets', '/api/attendance', '/api/ticket-settings', '/api/knowledge-base'],
   compliance: [
     '/api/documents',
     '/api/document-types',
@@ -149,6 +149,7 @@ async function bootstrap() {
     app.use(`${prefix}/tickets`, createServiceProxy(`${ticketingServiceUrl}/api/tickets`, 'ticketing'));
     app.use(`${prefix}/attendance`, createServiceProxy(`${ticketingServiceUrl}/api/attendance`, 'ticketing'));
     app.use(`${prefix}/ticket-settings`, createServiceProxy(`${ticketingServiceUrl}/api/ticket-settings`, 'ticketing'));
+    app.use(`${prefix}/knowledge-base`, createServiceProxy(`${ticketingServiceUrl}/api/knowledge-base`, 'ticketing'));
 
     app.use(`${prefix}/documents`, createServiceProxy(`${complianceServiceUrl}/api/documents`, 'compliance'));
     app.use(`${prefix}/document-types`, createServiceProxy(`${complianceServiceUrl}/api/document-types`, 'compliance'));

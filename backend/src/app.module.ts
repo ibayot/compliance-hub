@@ -16,6 +16,9 @@ import { IncidentsModule } from './modules/incidents/incidents.module';
 import { CybersecurityModule } from './modules/cybersecurity/cybersecurity.module';
 import { KpiModule } from './modules/kpi/kpi.module';
 import { MovModule } from './modules/mov/mov.module';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditInterceptor } from './shared/audit/audit.interceptor';
+import { AuditVariableSubscriber } from './shared/audit/audit.subscriber';
 
 @Module({
   imports: [
@@ -102,6 +105,12 @@ import { MovModule } from './modules/mov/mov.module';
     MovModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    AuditVariableSubscriber,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
+    },
+  ],
 })
 export class AppModule {}
