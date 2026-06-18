@@ -217,52 +217,7 @@ export class RoleCapabilitiesService implements OnModuleInit {
       .map((r) => r.roleValue);
   }
 
-  /**
-   * True if the role can see ALL tickets (not restricted to own-submitted/assigned).
-   * DB-driven via is_all_tickets column only.
-   */
-  canSeeAllTickets(role: string): boolean {
-    return this.isAllTickets(role);
-  }
 
-  /**
-   * True if the role can change ticket priority.
-   * Derived: is focal OR is any technician OR is ITO staff.
-   */
-  canChangePriority(role: string): boolean {
-    const c = this.get(role);
-    return !!(c?.isFocal || c?.isIto || c?.isDesktop || c?.isItSupport || c?.isPantawidIct);
-  }
-
-  /**
-   * True if the role has senior authority over ticket status transitions.
-   * Derived: isTicketSettingsFocal OR isTicketFocal.
-   */
-  isSeniorAuthority(role: string): boolean {
-    const c = this.get(role);
-    return !!(c?.isTicketSettingsFocal || c?.isTicketFocal);
-  }
-
-  /**
-   * True if the role can assign tickets to technicians.
-   * DB-driven via is_ticket_focal column.
-   * Ticket Settings Focals implicitly inherit this privilege (cascade).
-   */
-  canAssignTickets(role: string): boolean {
-    return this.isTicketFocal(role) || this.isTicketSettingsFocal(role);
-  }
-
-  /**
-   * True if the role can initiate ticket escalations.
-   * Matrix-driven: assignment/admin/all-ticket capabilities and technician tracks.
-   */
-  canEscalateTickets(role: string): boolean {
-    return this.canAssignTickets(role)
-      || this.canSeeAllTickets(role)
-      || this.isDesktop(role)
-      || this.isItSupport(role)
-      || this.isPantawidIct(role);
-  }
 
   // ── Admin CRUD ─────────────────────────────────────────────────────────────
 

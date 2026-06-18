@@ -22,23 +22,12 @@ import { Close as CloseIcon } from '@mui/icons-material';
 import { useAuth } from '@/contexts/AuthContext';
 import type { RoleCapabilityRecord } from '@/lib/api/users';
 
-type ManualRole =
-  | 'super_admin'
-  | 'reviewer'
-  | 'focal'
-  | 'technician'
-  | 'technician_desktop'
-  | 'technician_it_support'
-  | 'technician_it_staff'
-  | 'technician_desktop_staff'
-  | 'auditor'
-  | 'section_head'
-  | 'user';
+
 
 type ManualItem = {
   title: string;
   description: string;
-  roles: ManualRole[];
+  
   path: string;
   details: {
     purpose: string;
@@ -58,15 +47,7 @@ const manualItems: ManualItem[] = [
     title: 'Documents Upload and Tracking',
     description:
       'Upload DOCX and track only pending-for-review submissions in the Documents work queue.',
-    roles: [
-      'super_admin',
-      'reviewer',
-      'focal',
-      'technician',
-      'technician_desktop',
-      'technician_it_support',
-      'auditor',
-    ],
+    
     path: '/dashboard/documents',
     details: {
       purpose:
@@ -150,7 +131,7 @@ const manualItems: ManualItem[] = [
   {
     title: 'Metrics Template Builder',
     description: 'Create and maintain section, keyword, number extraction, and deadline templates.',
-    roles: ['super_admin', 'reviewer'],
+    
     path: '/dashboard/metrics',
     details: {
       purpose:
@@ -225,7 +206,7 @@ const manualItems: ManualItem[] = [
     title: 'Manual Compliance Reviews',
     description:
       'Review pending documents with inline viewer and tag as compliant, non-compliant, or needs revision.',
-    roles: ['super_admin', 'reviewer', 'auditor'],
+    
     path: '/dashboard/reviews',
     details: {
       purpose:
@@ -280,7 +261,7 @@ const manualItems: ManualItem[] = [
     title: 'Issuance and Mapping Management',
     description:
       'Manage issuances and map compliant documents to issuances through link/unlink actions.',
-    roles: ['super_admin', 'reviewer'],
+    
     path: '/dashboard/issuances',
     details: {
       purpose:
@@ -340,15 +321,7 @@ const manualItems: ManualItem[] = [
     title: 'Issue Documentation Workflow',
     description:
       'Create and track issues, update resolution steps/date, and monitor closure workflow.',
-    roles: [
-      'super_admin',
-      'reviewer',
-      'focal',
-      'technician',
-      'technician_desktop',
-      'technician_it_support',
-      'auditor',
-    ],
+    
     path: '/dashboard/tickets',
     details: {
       purpose:
@@ -413,7 +386,7 @@ const manualItems: ManualItem[] = [
     title: 'Unit Administration',
     description:
       'Manage organizational units and structural metadata used in assignment and reporting workflows.',
-    roles: ['super_admin'],
+    
     path: '/dashboard/units',
     details: {
       purpose:
@@ -463,7 +436,7 @@ const manualItems: ManualItem[] = [
     title: 'Administration Metrics Dashboard',
     description:
       'View compliance metrics, document completion rates, issue KPIs, and system-wide audit summaries.',
-    roles: ['super_admin'],
+    
     path: '/dashboard/administration',
     details: {
       purpose:
@@ -513,15 +486,7 @@ const manualItems: ManualItem[] = [
     title: 'Settings and Role Management',
     description:
       'Update your profile, change password, toggle theme, and manage system users and role definitions.',
-    roles: [
-      'super_admin',
-      'reviewer',
-      'focal',
-      'technician',
-      'technician_desktop',
-      'technician_it_support',
-      'auditor',
-    ],
+    
     path: '/dashboard/settings',
     details: {
       purpose:
@@ -596,16 +561,7 @@ const manualItems: ManualItem[] = [
     title: 'KPI Monitoring & Dashboard',
     description:
       'Track unit KPI targets, encode periodic actuals, and analyze performance through composite scoring and band classification.',
-    roles: [
-      'super_admin',
-      'reviewer',
-      'section_head',
-      'focal',
-      'technician',
-      'technician_desktop',
-      'technician_it_support',
-      'auditor',
-    ],
+    
     path: '/dashboard/kpi',
     details: {
       purpose:
@@ -700,7 +656,7 @@ const manualItems: ManualItem[] = [
     title: 'Consolidated Reports',
     description:
       'Generate period reports combining KPI performance scores and document submissions for management review.',
-    roles: ['super_admin', 'reviewer', 'section_head'],
+    
     path: '/dashboard/reports',
     details: {
       purpose:
@@ -755,15 +711,7 @@ const manualItems: ManualItem[] = [
     title: 'Report Repository',
     description:
       'Browse all submitted compliance documents organized by year and period in a folder-style view.',
-    roles: [
-      'super_admin',
-      'reviewer',
-      'focal',
-      'technician',
-      'technician_desktop',
-      'technician_it_support',
-      'auditor',
-    ],
+    
     path: '/dashboard/repository',
     details: {
       purpose:
@@ -804,19 +752,7 @@ const manualItems: ManualItem[] = [
     title: 'Dashboard',
     description:
       'Your role-specific home screen showing key compliance metrics, ticket summaries, and quick-action shortcuts.',
-    roles: [
-      'super_admin',
-      'reviewer',
-      'focal',
-      'technician',
-      'technician_desktop',
-      'technician_it_support',
-      'technician_it_staff',
-      'technician_desktop_staff',
-      'auditor',
-      'section_head',
-      'user',
-    ],
+    
     path: '/dashboard',
     details: {
       purpose:
@@ -866,17 +802,7 @@ const manualItems: ManualItem[] = [
     title: 'IT Help Desk Ticketing',
     description:
       'Submit IT support or desktop support requests, track ticket status, and manage resolutions (technicians).',
-    roles: [
-      'super_admin',
-      'reviewer',
-      'focal',
-      'technician',
-      'technician_desktop',
-      'technician_it_support',
-      'technician_it_staff',
-      'technician_desktop_staff',
-      'user',
-    ],
+    
     path: '/dashboard/tickets',
     details: {
       purpose:
@@ -946,7 +872,7 @@ const manualItems: ManualItem[] = [
     title: 'Ticket Settings',
     description:
       'Configure ticket categories, keyword auto-routing rules, and SMTP email settings for the Help Desk.',
-    roles: ['super_admin'],
+    
     path: '/dashboard/ticket-settings',
     details: {
       purpose:
@@ -1011,7 +937,7 @@ const manualItems: ManualItem[] = [
     title: 'Ticket Reports',
     description:
       'View Help Desk analytics, SLA performance, and detailed user satisfaction ratings.',
-    roles: ['super_admin', 'reviewer', 'focal'],
+    
     path: '/dashboard/ticket-reports',
     details: {
       purpose:
@@ -1051,16 +977,7 @@ const manualItems: ManualItem[] = [
     title: 'Attendance Management',
     description:
       'Track office days, manage technician attendance, and review daily staff login activity.',
-    roles: [
-      'super_admin',
-      'reviewer',
-      'focal',
-      'technician',
-      'technician_desktop',
-      'technician_it_support',
-      'technician_it_staff',
-      'technician_desktop_staff',
-    ],
+    
     path: '/dashboard/attendance',
     managementCapabilityKey: 'isAttendanceManage',
     details: {
@@ -1179,6 +1096,7 @@ export default function UserManualPage() {
     '/dashboard/attendance': 'isAttendanceAccess',
     '/dashboard/ticket-settings': 'isTicketSettingsFocal',
     '/dashboard/ticket-reports': 'isTicketSettingsFocal',
+    '/dashboard/units': 'isTicketSettingsFocal',
   };
 
   const hasPathAccess = (path: string): boolean => {

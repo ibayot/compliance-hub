@@ -365,7 +365,6 @@ export class TicketService implements OnModuleInit {
 
   private canViewEscalatedQueue(role?: string): boolean {
     if (!role) return false;
-    if (role === UserRole.SUPER_ADMIN) return true;
     return this.roleCapSvc.isEscalationFocal(role);
   }
 
@@ -945,7 +944,7 @@ export class TicketService implements OnModuleInit {
 
     // Priority changes allowed for all technician-level roles and above
     if (dto.priority !== undefined) {
-      if (!this.roleCapSvc.canChangePriority(actorRole as string)) {
+      if (!this.roleCapSvc.isFocal(actorRole as string) && !this.roleCapSvc.isIto(actorRole as string) && !this.roleCapSvc.isTechnician(actorRole as string)) {
         throw new ForbiddenException('Only technicians and above can change ticket priority.');
       }
       ticket.priority = dto.priority;
@@ -953,10 +952,7 @@ export class TicketService implements OnModuleInit {
 
     if (dto.status) {
       if (acceptedEscalation) {
-        const isEscalationAdmin =
-          actorRole === UserRole.SUPER_ADMIN ||
-          actorRole === UserRole.SECTION_HEAD ||
-          actorRole === UserRole.COMPLIANCE_OFFICER;
+        const isEscalationAdmin = this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
         const isAcceptedFocal = acceptedEscalation.escalatedToId === actorId;
         if (!isEscalationAdmin && !isAcceptedFocal) {
           throw new ForbiddenException(
@@ -965,11 +961,7 @@ export class TicketService implements OnModuleInit {
         }
       } else {
         // Enforce that only admins or the assigned technician can update status
-        const isStatusAdmin =
-          actorRole === UserRole.SUPER_ADMIN ||
-          actorRole === UserRole.SECTION_HEAD ||
-          actorRole === UserRole.COMPLIANCE_OFFICER ||
-          this.roleCapSvc.isSeniorAuthority(actorRole as string);
+        const isStatusAdmin = this.roleCapSvc.isTicketSettingsFocal(actorRole as string) || this.roleCapSvc.isTicketFocal(actorRole as string);
 
         if (!isStatusAdmin && ticket.assignedToId !== actorId) {
           throw new ForbiddenException('You can only update the status of tickets explicitly assigned to you.');
@@ -977,7 +969,7 @@ export class TicketService implements OnModuleInit {
       }
 
       // QA #4/#3/#6: Full status transition matrix enforcement
-      const isSeniorAuthority = this.roleCapSvc.isSeniorAuthority(actorRole as string);
+      const isSeniorAuthority = this.roleCapSvc.isTicketSettingsFocal(actorRole as string) || this.roleCapSvc.isTicketFocal(actorRole as string);
 
       const ALLOWED_TRANSITIONS: Partial<Record<TicketStatus, TicketStatus[]>> = {
         [TicketStatus.OPEN]:        isSeniorAuthority ? [TicketStatus.FREEZE, TicketStatus.DUPLICATE] : [TicketStatus.DUPLICATE],
@@ -1277,7 +1269,10 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
   }
 
   async assignTicket(id: string, dto: AssignTicketDto, actorRole: UserRole, actorId?: number): Promise<Ticket> {
-    if (!this.roleCapSvc.canAssignTickets(actorRole as string)) {
+    if (!this.roleCapSvc.isTicketFocal(actorRole as string) && 
+        !this.roleCapSvc.isTicketSettingsFocal(actorRole as string) && 
+        !this.roleCapSvc.isAllTickets(actorRole as string) && 
+        !this.roleCapSvc.isTechnician(actorRole as string)) {
       throw new ForbiddenException('Only admins, focal persons, and technicians can assign tickets.');
     }
 
@@ -1309,10 +1304,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     // Once an escalation is accepted, only CO/SH/super_admin may reassign,
     // and only to another configured escalation focal.
     if (acceptedEscalation) {
-      const isEscalationAdmin =
-        actorRole === UserRole.SUPER_ADMIN ||
-        actorRole === UserRole.SECTION_HEAD ||
-        actorRole === UserRole.COMPLIANCE_OFFICER;
+      const isEscalationAdmin = this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
       if (!isEscalationAdmin) {
         throw new ForbiddenException(
           'This ticket has an accepted escalation. Only compliance officer, section head, or super admin can reassign it.',
@@ -1348,8 +1340,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       const actorUser = await this.userRepo.findOne({ where: { id: actorId } });
       actorIsMainFocal = actorUser?.ticketMainFocal === true;
     }
-    const bypassBusyGuard = actorIsMainFocal || actorRole === UserRole.SUPER_ADMIN ||
-      actorRole === UserRole.SECTION_HEAD || this.roleCapSvc.isFocal(actorRole as string);
+    const bypassBusyGuard = actorIsMainFocal || this.roleCapSvc.isTicketSettingsFocal(actorRole as string) || this.roleCapSvc.isFocal(actorRole as string);
 
     // Guard: lower-level techs can only escalate to focal-level technicians
     const lowerLevelRoles: UserRole[] = [UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR];
@@ -2174,12 +2165,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
   }> {
     const now = new Date();
     const year = filters.year ?? now.getFullYear();
-    const isTicketSettingsViewer = (filters.viewerRole === UserRole.SUPER_ADMIN)
-      || this.roleCapSvc.isTicketSettingsFocal(filters.viewerRole || '');
+    const isTicketSettingsViewer = this.roleCapSvc.isTicketSettingsFocal(filters.viewerRole || '');
     
-    const isTechnician = filters.viewerRole && !isTicketSettingsViewer && [
-      UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR
-    ].includes(filters.viewerRole as UserRole);
+    const isTechnician = filters.viewerRole && !isTicketSettingsViewer && this.roleCapSvc.isTechnician(filters.viewerRole);
 
     const requesterIdFilter = (!isTicketSettingsViewer && !isTechnician) ? filters.viewerId : undefined;
     const techIdFilter = isTechnician ? filters.viewerId : (isTicketSettingsViewer ? filters.technicianId : undefined);
@@ -2322,7 +2310,10 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     actorId: number,
     actorRole: UserRole,
   ): Promise<TicketEscalation> {
-    if (!this.roleCapSvc.canEscalateTickets(actorRole as string)) {
+    if (!this.roleCapSvc.isTicketFocal(actorRole as string) && 
+        !this.roleCapSvc.isTicketSettingsFocal(actorRole as string) && 
+        !this.roleCapSvc.isAllTickets(actorRole as string) && 
+        !this.roleCapSvc.isTechnician(actorRole as string)) {
       throw new ForbiddenException('Your role is not allowed to escalate tickets.');
     }
 

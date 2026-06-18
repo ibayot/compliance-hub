@@ -5,6 +5,7 @@ import {
   forwardRef,
   Inject,
   OnModuleInit,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -155,17 +156,9 @@ export class AttendanceService implements OnModuleInit {
       throw new BadRequestException(`Invalid status: ${dto.status}`);
     }
 
-    // Scope restriction: senior support roles can only tag their own staff tier
-    if (this.roleCapSvc.isSeniorItSupport(actorRole as string)) {
-      const target = await this.userRepo.findOne({ where: { id: dto.userId } });
-      if (target && !this.roleCapSvc.isItSupport(target.role) && actorRole !== UserRole.SUPER_ADMIN) {
-        throw new BadRequestException('IT Support focal can only manage attendance for IT Support team members.');
-      }
-    } else if (this.roleCapSvc.isSeniorDesktop(actorRole as string)) {
-      const target = await this.userRepo.findOne({ where: { id: dto.userId } });
-      if (target && !this.roleCapSvc.isDesktop(target.role) && actorRole !== UserRole.SUPER_ADMIN) {
-        throw new BadRequestException('Desktop focal can only manage attendance for Desktop Support team members.');
-      }
+    // Scope restriction: strict matrix capability check
+    if (actorRole && !this.roleCapSvc.isAttendanceManage(actorRole)) {
+      throw new ForbiddenException('You do not have permission to manage attendance.');
     }
 
     let record = await this.attendanceRepo.findOne({
@@ -275,18 +268,14 @@ export class AttendanceService implements OnModuleInit {
   async listTechnicians(ticketType?: string, actorRole?: string): Promise<User[]> {
     // Focal technicians see only their own staff tier when no explicit filter is set,
     // EXCEPT if they have the Attendance View Role Capability (isAttendanceAccess)
-    let forcedType = ticketType;
     const canViewAll = actorRole ? this.roleCapSvc.isAttendanceAccess(actorRole) : false;
 
+    // If not allowed to view all and no specific ticketType requested, they get nothing
     if (!canViewAll && !ticketType) {
-      if ([UserRole.IT_SUPPORT_SR].includes(actorRole as UserRole)) {
-        forcedType = 'it_support';
-      } else if ([UserRole.DESKTOP_SR].includes(actorRole as UserRole)) {
-        forcedType = 'desktop_support';
-      } else if ([UserRole.PANTAWID_ICT].includes(actorRole as UserRole)) {
-        forcedType = 'pantawid_ict_support';
-      }
+      return [];
     }
+
+    const forcedType = ticketType;
 
     const groups = await this.getRoleGroups();
     const roles = groups[forcedType || 'all'] || groups.all;
