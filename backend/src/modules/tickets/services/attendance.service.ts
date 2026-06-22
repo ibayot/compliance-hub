@@ -351,7 +351,7 @@ export class AttendanceService implements OnModuleInit {
   /**
    * When a technician logs in, auto-mark them PRESENT for today.
    * - If no attendance record exists yet → create one with PRESENT status.
-   * - If they are already marked ABSENT or OUT_OF_OFFICE → correct to PRESENT.
+   * - If they are already marked ABSENT, OUT_OF_OFFICE, or HALF_DAY → correct to PRESENT.
    * - If already PRESENT → no change.
    * Non-technician roles are skipped so the table stays clean.
    * Called from AuthService.login() / googleLogin() after recording the login timestamp.
@@ -382,8 +382,8 @@ export class AttendanceService implements OnModuleInit {
               setById: null as any,
             }),
           );
-        } else if (record.status === AttendanceStatus.ABSENT || record.status === AttendanceStatus.OUT_OF_OFFICE) {
-          const prevStatus = record.status === AttendanceStatus.ABSENT ? 'absent' : 'OOO';
+        } else if (record.status === AttendanceStatus.ABSENT || record.status === AttendanceStatus.OUT_OF_OFFICE || record.status === AttendanceStatus.HALF_DAY) {
+          const prevStatus = record.status === AttendanceStatus.ABSENT ? 'absent' : record.status === AttendanceStatus.OUT_OF_OFFICE ? 'OOO' : 'half-day';
           record.status = AttendanceStatus.PRESENT;
           record.notes = (record.notes ? record.notes + ' | ' : '') + `Auto-corrected: logged in while marked ${prevStatus}`;
           await this.attendanceRepo.save(record);

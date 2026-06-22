@@ -4,11 +4,17 @@ import {
   InsertEvent,
   UpdateEvent,
   RemoveEvent,
+  DataSource,
 } from 'typeorm';
+import { Injectable } from '@nestjs/common';
 import { auditContext } from './audit.context';
 
+@Injectable()
 @EventSubscriber()
 export class AuditVariableSubscriber implements EntitySubscriberInterface {
+  constructor(private readonly dataSource: DataSource) {
+    this.dataSource.subscribers.push(this);
+  }
   async afterInsert(event: InsertEvent<any>) {
     await this.logAudit(event, 'INSERT');
   }
