@@ -15,6 +15,7 @@ import { User, UserRole } from '../../shared/entities';
 import { RoleDefinitionEntity } from '../../shared/entities';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { EventBusService } from '../../../common/events/event-bus.service';
+import { auditContext } from '../../../shared/audit/audit.context';
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -350,8 +351,8 @@ export class AttendanceService implements OnModuleInit {
   /**
    * When a technician logs in, auto-mark them PRESENT for today.
    * - If no attendance record exists yet → create one with PRESENT status.
-   * - If they are already marked ABSENT → correct to PRESENT.
-   * - If already PRESENT / OUT_OF_OFFICE → no change.
+   * - If they are already marked ABSENT or OUT_OF_OFFICE → correct to PRESENT.
+   * - If already PRESENT → no change.
    * Non-technician roles are skipped so the table stays clean.
    * Called from AuthService.login() / googleLogin() after recording the login timestamp.
    */
@@ -367,22 +368,28 @@ export class AttendanceService implements OnModuleInit {
     const today = new Date().toISOString().slice(0, 10);
     const record = await this.attendanceRepo.findOne({ where: { userId, date: today } });
 
-    if (!record) {
-      // No record for today — create a new PRESENT record
-      await this.attendanceRepo.save(
-        this.attendanceRepo.create({
-          userId,
-          date: today,
-          status: AttendanceStatus.PRESENT,
-          notes: 'Auto-marked present on login',
-          setById: null as any,
-        }),
-      );
-    } else if (record.status === AttendanceStatus.ABSENT) {
-      record.status = AttendanceStatus.PRESENT;
-      record.notes = (record.notes ? record.notes + ' | ' : '') + 'Auto-corrected: logged in while marked absent';
-      await this.attendanceRepo.save(record);
-    }
+    auditContext.run(
+      { email: user.email, ipAddress: 'system-auto-login', sessionId: 'auto-login-event' },
+      async () => {
+        if (!record) {
+          // No record for today — create a new PRESENT record
+          await this.attendanceRepo.save(
+            this.attendanceRepo.create({
+              userId,
+              date: today,
+              status: AttendanceStatus.PRESENT,
+              notes: 'Auto-marked present on login',
+              setById: null as any,
+            }),
+          );
+        } else if (record.status === AttendanceStatus.ABSENT || record.status === AttendanceStatus.OUT_OF_OFFICE) {
+          const prevStatus = record.status === AttendanceStatus.ABSENT ? 'absent' : 'OOO';
+          record.status = AttendanceStatus.PRESENT;
+          record.notes = (record.notes ? record.notes + ' | ' : '') + `Auto-corrected: logged in while marked ${prevStatus}`;
+          await this.attendanceRepo.save(record);
+        }
+      }
+    );
   }
 
   /** Get office days for a date range */

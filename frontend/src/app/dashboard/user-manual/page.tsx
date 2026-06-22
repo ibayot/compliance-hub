@@ -317,71 +317,7 @@ const manualItems: ManualItem[] = [
       ],
     },
   },
-  {
-    title: 'Issue Documentation Workflow',
-    description:
-      'Create and track issues, update resolution steps/date, and monitor closure workflow.',
-    
-    path: '/dashboard/tickets',
-    details: {
-      purpose:
-        'Capture non-compliance findings, operational deficiencies, and audit observations as trackable tickets. Drive each issue through a structured lifecycle from identification to closure, with documented corrective actions and resolution evidence.',
-      inputs: [
-        {
-          field: 'Issue Type',
-          explanation:
-            'The primary category of the problem: Documentation Gap, Process Deficiency, Data Quality Issue, Audit Finding, Technical Issue, or Policy Violation. Issue Type is used to route the ticket to the correct team and for dashboard grouping.',
-        },
-        {
-          field: 'Issue Category',
-          explanation:
-            "A secondary classification within the Issue Type that refines the problem label. Categories are defined by system administrators and aligned to the organization's compliance framework. If the appropriate category does not exist, notify the administrator to add it.",
-        },
-        {
-          field: 'Issue Subject and Description',
-          explanation:
-            'The subject is a short one-line summary. The description is a full narrative of the observed problem: what was found, when, by whom, and what evidence supports it. Reference document titles, section numbers, or policy codes where applicable. A detailed description accelerates assignment and resolution.',
-        },
-        {
-          field: 'Assigned Unit / Personnel',
-          explanation:
-            'The organizational unit or individual responsible for investigating and correcting the issue. Assignments trigger notifications. Reassignment is allowed and logged. Unassigned issues remain in a pending triage state.',
-        },
-        {
-          field: 'Priority / Severity',
-          explanation:
-            'Indicates urgency: Critical (compliance breach with immediate risk), High (significant gap requiring prompt action), Medium (improvement needed within the reporting period), Low (minor or cosmetic finding). Priority affects dashboard sorting and escalation rules.',
-        },
-        {
-          field: 'Resolution Remarks and Date',
-          explanation:
-            'When the assigned party has addressed the issue, enter detailed resolution remarks describing the corrective action taken, any policy updates made, and evidence produced (e.g., updated document version number). Enter the actual resolution date. This information is reviewed by the reopening authority before closure is accepted.',
-        },
-      ],
-      outputs: [
-        {
-          field: 'Ticket Status Track',
-          explanation:
-            'Each issue moves through: Open (newly created)  Assigned (owner set)  In Progress (owner working)  Pending Review (resolution submitted)  Closed (reviewer accepts) or Returned (reviewer rejects  issue re-enters In Progress). Every transition is timestamped.',
-        },
-        {
-          field: 'Action Trail / Audit Log',
-          explanation:
-            'A chronological list of every action taken on the ticket: creation, assignments, status changes, return remarks, and resolution notes. Each entry shows the actor name, role, timestamp, and the comment or action performed.',
-        },
-        {
-          field: 'Closure Certificate Record',
-          explanation:
-            'When a ticket is closed, a closure record is stored with the final reviewer, closing timestamp, and resolution summary. This record is used in compliance audits to demonstrate systematic issue management.',
-        },
-        {
-          field: 'Issue Dashboard Aggregates',
-          explanation:
-            'The dashboard shows open ticket count, average resolution time, overdue tickets (open beyond SLA), and breakdown by type, category, unit, and priority. These metrics are visible to super_admin and reviewer roles.',
-        },
-      ],
-    },
-  },
+
   {
     title: 'Unit Administration',
     description:

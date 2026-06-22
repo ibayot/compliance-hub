@@ -87,7 +87,6 @@ function isWeekday(d: Date): boolean {
 
 export default function AttendancePage() {
   const { user, myCap } = useAuth();
-  const isLowerLevelTech = (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
   /** All RICTMS staff (everyone except regular users) sees their own attendance in the calendar */
   const isRICTMSStaff = user?.role !== 'user';
   const { enqueueSnackbar } = useSnackbar();
@@ -395,16 +394,14 @@ export default function AttendancePage() {
       </Stack>
 
       <Card>
-        {!isLowerLevelTech && (
-          <Tabs
-            value={tab}
-            onChange={(_, v) => setTab(v)}
-            sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}
-          >
-            <Tab label="Office Days" />
-            <Tab label="Attendance" />
-          </Tabs>
-        )}
+        <Tabs
+          value={tab}
+          onChange={(_, v) => setTab(v)}
+          sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab label="Office Days" />
+          <Tab label="Attendance" />
+        </Tabs>
 
         {/* ── Office Days Calendar ── */}
         {tab === 0 && (
