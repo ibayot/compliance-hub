@@ -5,7 +5,7 @@ import { EventBusService, CAPABILITIES_UPDATED_EVENT, CapabilitiesUpdatedPayload
 /** All capability key names — mirrors RoleCapabilitiesService.getRolesWhere parameter type. */
 export type CapabilityKey =
   | 'isFocal' | 'isIto' | 'isDesktop' | 'isItSupport' | 'isPantawidIct' | 'isEscalationFocal'
-  | 'isTicketSettingsFocal' | 'isAllTickets' | 'isTicketFocal'
+  | 'isTicketSettingsFocal' | 'isSmtpSettingsAccess' | 'isAllTickets' | 'isTicketFocal'
   | 'isKpiAccess' | 'isKpiManage'
   | 'isAttendanceAccess' | 'isAttendanceManage'
   | 'isReportsAccess' | 'isReviewsAccess'
@@ -109,6 +109,11 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
   isTicketSettingsFocal(role: string): boolean {
     if (role === 'super_admin') return true;
     return !!this.get(role)?.isTicketSettingsFocal;
+  }
+
+  isSmtpSettingsAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isSmtpSettingsAccess;
   }
 
   isAllTickets(role: string): boolean {

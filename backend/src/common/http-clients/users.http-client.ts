@@ -20,6 +20,7 @@ export interface RoleCapabilityStub {
   isPantawidIct: boolean;
   isEscalationFocal: boolean;
   isTicketSettingsFocal: boolean;
+  isSmtpSettingsAccess: boolean;
   isAllTickets: boolean;
   isTicketFocal: boolean;
   isKpiAccess: boolean;

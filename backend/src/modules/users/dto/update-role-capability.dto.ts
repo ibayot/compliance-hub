@@ -36,6 +36,10 @@ export class UpdateRoleCapabilityDto {
 
   @IsOptional()
   @IsBoolean()
+  isSmtpSettingsAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   isAllTickets?: boolean;
 
   @IsOptional()
