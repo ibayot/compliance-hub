@@ -368,25 +368,34 @@ export class AttendanceService implements OnModuleInit {
     const today = new Date().toISOString().slice(0, 10);
     const record = await this.attendanceRepo.findOne({ where: { userId, date: today } });
 
-    auditContext.run(
+    await auditContext.run(
       { email: user.email, ipAddress: 'system-auto-login', sessionId: 'auto-login-event' },
       async () => {
-        if (!record) {
-          // No record for today — create a new PRESENT record
-          await this.attendanceRepo.save(
-            this.attendanceRepo.create({
-              userId,
-              date: today,
-              status: AttendanceStatus.PRESENT,
-              notes: 'Auto-marked present on login',
-              setById: null as any,
-            }),
-          );
-        } else if (record.status === AttendanceStatus.ABSENT || record.status === AttendanceStatus.OUT_OF_OFFICE || record.status === AttendanceStatus.HALF_DAY) {
-          const prevStatus = record.status === AttendanceStatus.ABSENT ? 'absent' : record.status === AttendanceStatus.OUT_OF_OFFICE ? 'OOO' : 'half-day';
-          record.status = AttendanceStatus.PRESENT;
-          record.notes = (record.notes ? record.notes + ' | ' : '') + `Auto-corrected: logged in while marked ${prevStatus}`;
-          await this.attendanceRepo.save(record);
+        try {
+          if (!record) {
+            // No record for today — create a new PRESENT record
+            await this.attendanceRepo.save(
+              this.attendanceRepo.create({
+                userId,
+                date: today,
+                status: AttendanceStatus.PRESENT,
+                notes: 'Auto-marked present on login',
+                setById: null as any,
+              }),
+            );
+          } else if (record.status === AttendanceStatus.ABSENT || record.status === AttendanceStatus.OUT_OF_OFFICE || record.status === AttendanceStatus.HALF_DAY) {
+            const prevStatus = record.status === AttendanceStatus.ABSENT ? 'absent' : record.status === AttendanceStatus.OUT_OF_OFFICE ? 'OOO' : 'half-day';
+            record.status = AttendanceStatus.PRESENT;
+            record.notes = (record.notes ? record.notes + ' | ' : '') + `Auto-corrected: logged in while marked ${prevStatus}`;
+            await this.attendanceRepo.save(record);
+          }
+        } catch (err: any) {
+          if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
+            // Harmless race condition during rapid test logins
+            this.logger.debug(`Skipped duplicate attendance entry for user ${userId}`);
+          } else {
+            throw err;
+          }
         }
       }
     );
