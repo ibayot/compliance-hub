@@ -18,6 +18,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   TextField,
   Typography,
 } from '@mui/material';
@@ -26,6 +27,7 @@ import { useSnackbar } from 'notistack';
 import { User } from '@/lib/types/auth';
 import { authApi } from '@/lib/api/auth';
 import { usersApi, RoleCapabilityRecord } from '@/lib/api/users';
+import ForcePasswordChangeModal from '@/components/ForcePasswordChangeModal';
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 
@@ -87,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [myCap, setMyCap] = useState<RoleCapabilityRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [requiresPasswordChange, setRequiresPasswordChange] = useState(false);
   const [isSessionLocked, setIsSessionLocked] = useState(false);
   const [unlockPassword, setUnlockPassword] = useState('');
   const [unlockError, setUnlockError] = useState<string | null>(null);
@@ -378,21 +381,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             For security, your session was locked after 15 minutes of inactivity.
           </Typography>
-          {user?.authProvider === 'google' ? (
-            <Box mt={2} mb={2} display="flex" flexDirection="column" alignItems="center">
-              <Alert severity="info" sx={{ width: '100%', mb: 2 }}>
-                Please re-authenticate with your Google account to unlock your session.
-              </Alert>
-              <GoogleLogin
-                onSuccess={handleGoogleUnlock}
-                onError={() => setUnlockError('Google sign-in failed')}
-                useOneTap={false}
-                theme="outline"
-                size="large"
-                locale="en"
-              />
-            </Box>
-          ) : (
+          <Box mt={2} mb={2} display="flex" flexDirection="column" alignItems="center">
+            <Alert severity="info" sx={{ width: '100%', mb: 2 }}>
+              Please re-authenticate to unlock your session.
+            </Alert>
             <TextField
               fullWidth
               type="password"
@@ -405,8 +397,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
               }}
               autoFocus
+              sx={{ mb: 2 }}
             />
-          )}
+            <Divider sx={{ width: '100%', mb: 2 }}>OR</Divider>
+            <GoogleLogin
+              onSuccess={handleGoogleUnlock}
+              onError={() => setUnlockError('Google sign-in failed')}
+              useOneTap={false}
+              theme="outline"
+              size="large"
+              locale="en"
+            />
+          </Box>
           {unlockError && (
             <Box mt={2}>
               <Alert severity="error">{unlockError}</Alert>
@@ -414,14 +416,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           )}
         </DialogContent>
         <DialogActions>
-          {user?.authProvider !== 'google' && (
-            <Button onClick={handleUnlock} variant="contained" disabled={unlocking}>
-              {unlocking ? 'Verifying...' : 'Unlock'}
-            </Button>
-          )}
+          <Button onClick={handleUnlock} variant="contained" disabled={unlocking}>
+            {unlocking ? 'Verifying...' : 'Unlock'}
+          </Button>
           <Button onClick={handleLockedSessionLogout}>Sign In Again</Button>
         </DialogActions>
       </Dialog>
+
+      <ForcePasswordChangeModal 
+        open={requiresPasswordChange} 
+        onClose={() => setRequiresPasswordChange(false)} 
+      />
     </>
   );
 }

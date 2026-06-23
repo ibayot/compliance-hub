@@ -9,7 +9,7 @@ services:
     environment:
       MARIADB_ROOT_PASSWORD: admin
     ports:
-      - "3307:3306"
+      - "0.0.0.0:3307:3306"
     volumes:
       - ./db-init:/docker-entrypoint-initdb.d
       - db_data:/var/lib/mysql
@@ -25,7 +25,7 @@ services:
     container_name: rictms_redis
     restart: always
     ports:
-      - "6379:6379"
+      - "0.0.0.0:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -56,7 +56,7 @@ services:
       - DB_PASSWORD=admin
       - REDIS_HOST=redis
     ports:
-      - "4101:4101"
+      - "0.0.0.0:4101:4101"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4101/api/docs').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
@@ -87,7 +87,7 @@ services:
       - USERS_SERVICE_URL=http://users-service:4101
       - GEMINI_API_KEY=AQ.Ab8RN6IeaGiQHevyy0zcQBVRtQYqOwYPeYu90-aX0q3E7dTU2w
     ports:
-      - "4102:4102"
+      - "0.0.0.0:4102:4102"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4102/api/docs').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
@@ -117,7 +117,7 @@ services:
       - REDIS_HOST=redis
       - USERS_SERVICE_URL=http://users-service:4101
     ports:
-      - "4103:4103"
+      - "0.0.0.0:4103:4103"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4103/api/docs').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
@@ -151,7 +151,7 @@ services:
       - RATE_LIMIT_WINDOW_MS=60000
       - RATE_LIMIT_MAX_REQUESTS=4000
     ports:
-      - "4000:4000"
+      - "0.0.0.0:4000:4000"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
@@ -174,7 +174,7 @@ services:
       gateway:
         condition: service_healthy
     ports:
-      - "3000:80"
+      - "0.0.0.0:3000:80"
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
       interval: 15s

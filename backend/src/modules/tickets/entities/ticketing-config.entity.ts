@@ -31,4 +31,13 @@ export class TicketingConfig {
 
   @Column({ name: 'smtp_from_name', type: 'varchar', length: 255, nullable: true })
   smtpFromName: string | null;
+
+  @Column({ name: 'primary_smtp_sent_today', type: 'int', default: 0 })
+  primarySmtpSentToday: number;
+
+  @Column({ name: 'primary_smtp_last_sent_date', type: 'date', nullable: true })
+  primarySmtpLastSentDate: string | null;
+
+  @Column({ name: 'primary_smtp_daily_limit', type: 'int', default: 500 })
+  primarySmtpDailyLimit: number;
 }

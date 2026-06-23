@@ -142,7 +142,7 @@ async function bootstrap() {
     jsonDocumentUrl: 'api/openapi.json',
   });
 
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   console.log(`Compliance service running on http://localhost:${port}/api`);
   console.log(`Compliance service OpenAPI docs: http://localhost:${port}/api/docs`);
 }

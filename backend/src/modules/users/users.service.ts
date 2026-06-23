@@ -639,14 +639,15 @@ export class UsersService {
     lastName?: string;
     googleSub: string;
     role?: UserRole;
+    defaultPassword?: string;
   }): Promise<User> {
     const existingUser = await this.usersRepository.findOne({ where: { email: payload.email } });
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
     }
 
-    const randomPassword = `google-oauth-${payload.googleSub}-${Date.now()}`;
-    const passwordHash = await bcrypt.hash(randomPassword, 10);
+    const passwordToHash = payload.defaultPassword || `google-oauth-${payload.googleSub}-${Date.now()}`;
+    const passwordHash = await bcrypt.hash(passwordToHash, 10);
 
     const user = this.usersRepository.create({
       email: payload.email,
@@ -691,6 +692,11 @@ export class UsersService {
       user.units = await this.unitsRepository.find({
         where: { id: In(dto.unitIds) },
       });
+    }
+
+    // Update password if provided
+    if (dto.password) {
+      user.passwordHash = await bcrypt.hash(dto.password, 10);
     }
 
     return await this.usersRepository.save(user);

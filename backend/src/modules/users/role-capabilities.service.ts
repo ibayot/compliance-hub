@@ -130,6 +130,10 @@ export class RoleCapabilitiesService implements OnModuleInit {
     return !!this.get(role)?.isSmtpSettingsAccess;
   }
 
+  isSecuritySettingsAccess(role: string): boolean {
+    return !!this.get(role)?.isSecuritySettingsAccess;
+  }
+
   /**
    * True if the role can see all tickets in the system (not just own-submitted/assigned).
    * DB-driven via is_all_tickets column (replaces previous derived logic).
@@ -200,7 +204,7 @@ export class RoleCapabilitiesService implements OnModuleInit {
 
   /** Return all role values that have a given capability set to true. */
   getRolesWhere(
-    capability: 'isFocal' | 'isIto' | 'isDesktop' | 'isItSupport' | 'isPantawidIct' | 'isEscalationFocal' | 'isTicketSettingsFocal' | 'isSmtpSettingsAccess' | 'isAllTickets' | 'isTicketFocal' | 'isKpiAccess' | 'isKpiManage' | 'isAttendanceAccess' | 'isAttendanceManage' | 'isReportsAccess' | 'isReviewsAccess' | 'isMovAccess' | 'isDocumentsAccess' | 'isRepositoryAccess' | 'isIssuancesAccess' | 'isMetricsAccess' | 'isRoleCapabilitiesAccess' | 'isSystemRolesAccess',
+    capability: 'isFocal' | 'isIto' | 'isDesktop' | 'isItSupport' | 'isPantawidIct' | 'isEscalationFocal' | 'isTicketSettingsFocal' | 'isSmtpSettingsAccess' | 'isSecuritySettingsAccess' | 'isAllTickets' | 'isTicketFocal' | 'isKpiAccess' | 'isKpiManage' | 'isAttendanceAccess' | 'isAttendanceManage' | 'isReportsAccess' | 'isReviewsAccess' | 'isMovAccess' | 'isDocumentsAccess' | 'isRepositoryAccess' | 'isIssuancesAccess' | 'isMetricsAccess' | 'isRoleCapabilitiesAccess' | 'isSystemRolesAccess',
   ): string[] {
     return [...this.cache.values()]
       .filter((r) => r[capability])

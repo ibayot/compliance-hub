@@ -40,6 +40,10 @@ export class UpdateRoleCapabilityDto {
 
   @IsOptional()
   @IsBoolean()
+  isSecuritySettingsAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   isAllTickets?: boolean;
 
   @IsOptional()

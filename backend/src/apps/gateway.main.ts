@@ -213,7 +213,7 @@ async function bootstrap() {
     });
   }
 
-  await app.listen(Number(process.env.PORT || 4000));
+  await app.listen(Number(process.env.PORT || 4000), '0.0.0.0');
   console.log(`API Gateway running on http://localhost:${process.env.PORT || 4000}/api`);
 }
 

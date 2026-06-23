@@ -325,6 +325,34 @@ const capabilityManuals: ManualItem[] = [
       ]
     }
   }
+,
+  {
+    title: 'SMTP Configuration',
+    path: 'isSmtpSettingsAccess',
+    details: {
+      purpose: 'As an SMTP administrator I need to configure the email server settings so that the application can send notifications reliably.',
+      activities: [
+        { name: 'Configure SMTP credentials', description: 'As an SMTP administrator I need to update the host, port, user, and password settings so that email delivery remains operational.' },
+        { name: 'Send test emails', description: 'As an SMTP administrator I need to trigger a test message so that I can verify the correctness of the SMTP configuration before applying it.' }
+      ],
+      results: [
+        { name: 'Apply SMTP configurations', description: 'As an SMTP administrator I need to observe that subsequent system emails are routed through the newly configured mail server.' }
+      ]
+    }
+  },
+  {
+    title: 'Security Settings Management',
+    path: 'isSecuritySettingsAccess',
+    details: {
+      purpose: 'As a security administrator I need to manage application-wide security settings so that compliance and access protocols are enforced.',
+      activities: [
+        { name: 'Configure default passwords', description: 'As a security administrator I need to set the default password that is assigned to newly created or reset user accounts so that standard onboarding security is maintained.' }
+      ],
+      results: [
+        { name: 'Apply security settings', description: 'As a security administrator I need to ensure that any user whose password matches the default password is required to change it upon their next login.' }
+      ]
+    }
+  }
 ];
 
 export default function UserManualPage() {

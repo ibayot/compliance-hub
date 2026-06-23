@@ -49,6 +49,7 @@ export interface RoleDefinition {
 
 export interface UpdateUserPayload {
   email?: string;
+  password?: string;
   firstName?: string;
   middleName?: string;
   lastName?: string;
@@ -106,6 +107,7 @@ export interface RoleCapabilityRecord {
   isRoleCapabilitiesAccess: boolean;
   isSystemRolesAccess: boolean;
   isIssuancesAccess: boolean;
+  isSecuritySettingsAccess: boolean;
 }
 
 export interface UpdateRoleCapabilityPayload {
@@ -132,9 +134,20 @@ export interface UpdateRoleCapabilityPayload {
   isRoleCapabilitiesAccess?: boolean;
   isSystemRolesAccess?: boolean;
   isIssuancesAccess?: boolean;
+  isSecuritySettingsAccess?: boolean;
 }
 
 export const usersApi = {
+  getSecurityConfig: async () => {
+    const response = await apiClient.get('/users/security-config');
+    return response.data;
+  },
+
+  updateSecurityConfig: async (payload: { defaultPassword?: string }) => {
+    const response = await apiClient.put('/users/security-config', payload);
+    return response.data;
+  },
+
   list: async (): Promise<UserRecord[]> => {
     const response = await apiClient.get('/users');
     return response.data;

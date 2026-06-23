@@ -11,6 +11,7 @@ import { LoginDto } from './dto/login.dto';
 import { JwtPayload, AuthResponse } from './interfaces/auth.interface';
 import { User, UserRole } from '../users/entities/user.entity';
 import { EventBusService } from '../../common/events/event-bus.service';
+import { SecurityConfigService } from '../users/security-config.service';
 
 @Injectable()
 export class AuthService {
@@ -21,6 +22,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly eventBus: EventBusService,
+    private readonly securityConfigService: SecurityConfigService,
     @Optional() private readonly attendanceService?: AttendanceService,
     @Optional() private readonly ticketService?: TicketService,
   ) {}
@@ -45,9 +47,10 @@ export class AuthService {
     return this.configService.get<string>('JWT_AUDIENCE') || 'compliance-hub-client';
   }
 
-  private buildAuthResponse(user: User, tokens: { accessToken: string; refreshToken: string }, roleCode?: string | null): AuthResponse {
+  private buildAuthResponse(user: User, tokens: { accessToken: string; refreshToken: string }, roleCode?: string | null, requiresPasswordChange?: boolean): AuthResponse {
     return {
       ...tokens,
+      requiresPasswordChange,
       user: {
         id: user.id,
         email: user.email,
@@ -110,8 +113,12 @@ export class AuthService {
     // Emit event for ticketing/attendance services
     await this.eventBus.publish('user.login', { userId: user.id });
 
+    // Check if user is using the default password
+    const securityConfig = await this.securityConfigService.getConfig();
+    const isUsingDefaultPassword = await bcrypt.compare(securityConfig.defaultPassword, user.passwordHash);
+
     const tokens = await this.generateTokens(user);
-    return this.buildAuthResponse(user, tokens, tokens.roleCode);
+    return this.buildAuthResponse(user, tokens, tokens.roleCode, isUsingDefaultPassword);
   }
 
   async googleLogin(idToken: string): Promise<AuthResponse> {
@@ -123,6 +130,8 @@ export class AuthService {
     }
 
     const normalizedEmail = String(payload.email || '').trim().toLowerCase();
+
+    const securityConfig = await this.securityConfigService.getConfig();
 
     let user = await this.usersService.findByGoogleSub(googleSub);
     if (!user) {
@@ -137,6 +146,7 @@ export class AuthService {
           lastName: String(payload.family_name || '').trim() || undefined,
           googleSub,
           role: UserRole.USER,
+          defaultPassword: securityConfig.defaultPassword,
         });
       }
     }
@@ -151,8 +161,10 @@ export class AuthService {
     // Emit event for ticketing/attendance services
     await this.eventBus.publish('user.login', { userId: user.id });
 
+    const isUsingDefaultPassword = await bcrypt.compare(securityConfig.defaultPassword, user.passwordHash);
+
     const tokens = await this.generateTokens(user);
-    return this.buildAuthResponse(user, tokens, tokens.roleCode);
+    return this.buildAuthResponse(user, tokens, tokens.roleCode, isUsingDefaultPassword);
   }
 
   async validateUser(email: string, password: string): Promise<User | null> {

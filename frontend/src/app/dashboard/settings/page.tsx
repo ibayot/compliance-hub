@@ -180,6 +180,85 @@ function ThemeCard() {
   );
 }
 
+
+// --- Security Settings Card -------------------------------------------------
+
+function SecuritySettingsCard() {
+  const { user, myCap } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
+  const [defaultPassword, setDefaultPassword] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const canManage = user?.role === UserRole.SUPER_ADMIN || Boolean(myCap?.isSecuritySettingsAccess);
+
+  useEffect(() => {
+    if (canManage) {
+      usersApi.getSecurityConfig().then(config => {
+        setDefaultPassword(config.defaultPassword || '');
+        setLoading(false);
+      }).catch(err => {
+        enqueueSnackbar('Failed to load security config', { variant: 'error' });
+        setLoading(false);
+      });
+    }
+  }, [canManage, enqueueSnackbar]);
+
+  const handleSave = async () => {
+    if (!defaultPassword) {
+      enqueueSnackbar('Default password cannot be empty', { variant: 'error' });
+      return;
+    }
+    setSaving(true);
+    try {
+      await usersApi.updateSecurityConfig({ defaultPassword });
+      enqueueSnackbar('Security settings updated successfully', { variant: 'success' });
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to update security settings', { variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!canManage) return null;
+
+  return (
+    <Card elevation={2} sx={{ mb: 3 }}>
+      <CardHeader
+        avatar={<SecurityIcon color="primary" />}
+        title="Security Settings"
+        subheader="Manage application-wide security settings."
+      />
+      <CardContent>
+        {loading ? (
+          <Typography>Loading...</Typography>
+        ) : (
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={8}>
+              <TextField
+                fullWidth
+                label="System Default Password"
+                value={defaultPassword}
+                onChange={(e) => setDefaultPassword(e.target.value)}
+                helperText="This password is used as the initial password for new users and when resetting passwords."
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Button
+                variant="contained"
+                onClick={handleSave}
+                disabled={saving || !defaultPassword}
+              >
+                {saving ? 'Saving...' : 'Save Settings'}
+              </Button>
+            </Grid>
+          </Grid>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // --- Role Capabilities Card ------------------------------------------------
 
 const CAPABILITY_COLUMNS: {
@@ -206,6 +285,11 @@ const CAPABILITY_COLUMNS: {
     key: 'isSmtpSettingsAccess',
     label: 'SMTP Admin',
     description: 'Manage SMTP credentials in Ticket Settings',
+  },
+  {
+    key: 'isSecuritySettingsAccess',
+    label: 'Security Admin',
+    description: 'Manage Default Password in Security Settings',
   },
   {
     key: 'isAllTickets',
@@ -1627,6 +1711,9 @@ export default function SettingsPage() {
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
           <ThemeCard />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <SecuritySettingsCard />
         </Grid>
         <Grid item xs={12} md={6}>
           <ChangePasswordCard />

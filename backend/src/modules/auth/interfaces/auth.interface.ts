@@ -9,6 +9,7 @@ export interface JwtPayload {
 export interface AuthResponse {
   accessToken: string;
   refreshToken: string;
+  requiresPasswordChange?: boolean;
   user: {
     id: number;
     email: string;

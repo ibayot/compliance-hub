@@ -21,6 +21,7 @@ export interface RoleCapabilityStub {
   isEscalationFocal: boolean;
   isTicketSettingsFocal: boolean;
   isSmtpSettingsAccess: boolean;
+  isSecuritySettingsAccess: boolean;
   isAllTickets: boolean;
   isTicketFocal: boolean;
   isKpiAccess: boolean;

@@ -55,8 +55,10 @@ export interface TicketClosedOrRatedEmailData {
 @Injectable()
 export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
-  private transporter: nodemailer.Transporter | null = null;
-  private fromAddress: string;
+  private primaryTransporter: nodemailer.Transporter | null = null;
+  private fallbackTransporter: nodemailer.Transporter | null = null;
+  private primaryFromAddress: string;
+  private fallbackFromAddress: string;
   private frontendUrl: string;
   private emailEnabled = true;
   private testOverrideTo: string | null = null;
@@ -67,7 +69,8 @@ export class EmailService implements OnModuleInit {
     private readonly configRepo: Repository<TicketingConfig>,
   ) {
     this.frontendUrl = (this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000').replace(/\/$/, '');
-    this.fromAddress = `"DSWD FO2 Compliance Hub" <noreply@rictms.gov.ph>`;
+    this.primaryFromAddress = '"DSWD FO2 Compliance Hub" <noreply@rictms.gov.ph>';
+    this.fallbackFromAddress = '"DSWD FO2 Compliance Hub" <noreply@rictms.gov.ph>';
 
     const emailEnabledRaw = String(this.configService.get<string>('EMAIL_ENABLED') ?? 'true').toLowerCase();
     this.emailEnabled = !['0', 'false', 'no', 'off'].includes(emailEnabledRaw);
@@ -87,34 +90,60 @@ export class EmailService implements OnModuleInit {
     try {
       const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });
       
-      // Fallback to environment variables if DB is empty for backward compatibility
-      const host = dbConfig?.smtpHost || this.configService.get<string>('SMTP_HOST');
-      const port = dbConfig?.smtpPort || this.configService.get<number>('SMTP_PORT');
-      const user = dbConfig?.smtpUser || this.configService.get<string>('SMTP_USER');
-      const pass = dbConfig?.smtpPass || this.configService.get<string>('SMTP_PASS');
-      const rawFrom = dbConfig?.smtpFrom || this.configService.get<string>('SMTP_FROM') || 'noreply@rictms.gov.ph';
-      const fromName = dbConfig?.smtpFromName || this.configService.get<string>('SMTP_FROM_NAME') || 'DSWD FO2 Compliance Hub';
-      
-      this.fromAddress = `"${fromName}" <${rawFrom}>`;
+      // Primary: Environment Variables
+      const pHost = this.configService.get<string>('SMTP_HOST');
+      const pPort = this.configService.get<number>('SMTP_PORT');
+      const pUser = this.configService.get<string>('SMTP_USER');
+      const pPass = this.configService.get<string>('SMTP_PASS');
+      const pFrom = this.configService.get<string>('SMTP_FROM') || 'noreply@rictms.gov.ph';
+      const pFromName = this.configService.get<string>('SMTP_FROM_NAME') || 'DSWD FO2 Compliance Hub';
+      this.primaryFromAddress = `"${pFromName}" <${pFrom}>`;
 
-      if (host) {
-        const smtpPort = parseInt(String(port || '587'), 10);
+      if (pHost) {
+        const smtpPort = parseInt(String(pPort || '587'), 10);
         const useSSL = smtpPort === 465;
-        this.transporter = nodemailer.createTransport({
-          host,
+        this.primaryTransporter = nodemailer.createTransport({
+          host: pHost,
           port: smtpPort,
           secure: useSSL,
           requireTLS: !useSSL,
           connectionTimeout: 15000,
           greetingTimeout: 15000,
-          auth: user && pass ? { user, pass } : undefined,
+          auth: pUser && pPass ? { user: pUser, pass: pPass } : undefined,
           tls: { rejectUnauthorized: false },
         });
-        this.logger.log(`Email service initialized (SMTP: ${host}:${smtpPort}, SSL=${useSSL})`);
+        this.logger.log(`Primary Email service initialized (SMTP: ${pHost}:${smtpPort})`);
       } else {
-        this.transporter = null;
-        this.logger.warn('SMTP not configured — emails will be logged but not sent. Update SMTP in Ticket Settings.');
+        this.primaryTransporter = null;
       }
+
+      // Fallback: Database Configuration
+      const fHost = dbConfig?.smtpHost;
+      const fPort = dbConfig?.smtpPort;
+      const fUser = dbConfig?.smtpUser;
+      const fPass = dbConfig?.smtpPass;
+      const fFrom = dbConfig?.smtpFrom || 'noreply@rictms.gov.ph';
+      const fFromName = dbConfig?.smtpFromName || 'DSWD FO2 Compliance Hub (Alternate)';
+      this.fallbackFromAddress = `"${fFromName} (Fallback)" <${fFrom}>`;
+
+      if (fHost) {
+        const smtpPort = parseInt(String(fPort || '587'), 10);
+        const useSSL = smtpPort === 465;
+        this.fallbackTransporter = nodemailer.createTransport({
+          host: fHost,
+          port: smtpPort,
+          secure: useSSL,
+          requireTLS: !useSSL,
+          connectionTimeout: 15000,
+          greetingTimeout: 15000,
+          auth: fUser && fPass ? { user: fUser, pass: fPass } : undefined,
+          tls: { rejectUnauthorized: false },
+        });
+        this.logger.log(`Fallback Email service initialized (SMTP: ${fHost}:${smtpPort})`);
+      } else {
+        this.fallbackTransporter = null;
+      }
+
     } catch (err: any) {
       this.logger.error(`Failed to load SMTP config: ${err.message}`);
     }
@@ -366,7 +395,7 @@ export class EmailService implements OnModuleInit {
       <p style="margin:0 0 16px;">This is a test email sent from the RICTMS Compliance Hub system.</p>
       <p style="margin:0 0 16px;">If you received this message, your SMTP configuration is working correctly.</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;width:140px;">From</td><td style="padding:6px 12px;">${this.fromAddress}</td></tr>
+        <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;width:140px;">From</td><td style="padding:6px 12px;">${this.primaryFromAddress}</td></tr>
         <tr><td style="padding:6px 12px;font-weight:600;color:#555;">To</td><td style="padding:6px 12px;">${to}</td></tr>
         <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;">Sent At</td><td style="padding:6px 12px;">${new Date().toISOString()}</td></tr>
       </table>
@@ -379,7 +408,7 @@ export class EmailService implements OnModuleInit {
 </body>
 </html>`;
 
-    if (!this.transporter) {
+    if (!this.primaryTransporter && !this.fallbackTransporter) {
       this.logger.warn('[EMAIL-TEST] SMTP not configured — test email was NOT sent.');
       return { sent: false, message: 'SMTP not configured. Please save SMTP credentials in Ticket Settings.' };
     }
@@ -390,7 +419,10 @@ export class EmailService implements OnModuleInit {
     }
 
     try {
-      await this.transporter.sendMail({ from: this.fromAddress, to, subject, html });
+      const transporter = this.primaryTransporter || this.fallbackTransporter;
+      if (!transporter) throw new Error('No SMTP configured');
+      const from = this.primaryTransporter ? this.primaryFromAddress : this.fallbackFromAddress;
+      await transporter.sendMail({ from, to, subject, html });
       this.logger.log(`[EMAIL-TEST] Test email sent to ${to}`);
       return { sent: true, message: `Test email sent successfully to ${to}` };
     } catch (err: any) {
@@ -414,19 +446,51 @@ export class EmailService implements OnModuleInit {
       this.logger.log(`[EMAIL-OVERRIDE] Redirecting from ${to} to ${this.testOverrideTo}`);
     }
 
-    if (!this.transporter) {
+    if (!this.primaryTransporter && !this.fallbackTransporter) {
       this.logger.log(`[EMAIL-LOG] To: ${effectiveTo} | Subject: ${subject}`);
       return;
     }
 
     try {
-      await this.transporter.sendMail({
-        from: this.fromAddress,
+      const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });
+      const today = new Date().toISOString().split('T')[0];
+      let limit = dbConfig?.primarySmtpDailyLimit || 500;
+      let sentToday = dbConfig?.primarySmtpSentToday || 0;
+      let lastSentDate = dbConfig?.primarySmtpLastSentDate;
+
+      if (lastSentDate !== today) {
+        sentToday = 0;
+      }
+
+      let activeTransporter = this.primaryTransporter;
+      let activeFrom = this.primaryFromAddress;
+      let usedFallback = false;
+
+      if (!activeTransporter || sentToday >= limit) {
+        activeTransporter = this.fallbackTransporter;
+        activeFrom = this.fallbackFromAddress;
+        usedFallback = true;
+      }
+
+      if (!activeTransporter) {
+        this.logger.error('No valid SMTP transporter available to send email.');
+        return;
+      }
+
+      await activeTransporter.sendMail({
+        from: activeFrom,
         to: effectiveTo,
         subject,
         html,
       });
-      this.logger.log(`Email sent to ${effectiveTo}: ${subject}`);
+
+      this.logger.log(`Email sent to ${effectiveTo}: ${subject} ${usedFallback ? '(Fallback)' : '(Primary)'}`);
+
+      if (!usedFallback && dbConfig) {
+        dbConfig.primarySmtpSentToday = sentToday + 1;
+        dbConfig.primarySmtpLastSentDate = today;
+        await this.configRepo.save(dbConfig);
+      }
     } catch (err: any) {
       this.logger.error(`Failed to send email to ${effectiveTo}: ${err?.message}`);
     }

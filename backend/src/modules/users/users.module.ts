@@ -11,14 +11,17 @@ import { EventBusModule } from '../../common/events/event-bus.module';
 import { Feedback } from './entities/feedback.entity';
 import { FeedbackController } from './feedback.controller';
 import { FeedbackService } from './feedback.service';
+import { SecurityConfig } from './entities/security-config.entity';
+import { SecurityConfigController } from './security-config.controller';
+import { SecurityConfigService } from './security-config.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Unit, RoleDefinitionEntity, RoleCapability, Feedback]),
+    TypeOrmModule.forFeature([User, Unit, RoleDefinitionEntity, RoleCapability, Feedback, SecurityConfig]),
     EventBusModule,
   ],
-  controllers: [UsersController, FeedbackController],
-  providers: [UsersService, RoleCapabilitiesService, FeedbackService],
-  exports: [UsersService, RoleCapabilitiesService, FeedbackService],
+  controllers: [UsersController, FeedbackController, SecurityConfigController],
+  providers: [UsersService, RoleCapabilitiesService, FeedbackService, SecurityConfigService],
+  exports: [UsersService, RoleCapabilitiesService, FeedbackService, SecurityConfigService],
 })
 export class UsersModule {}
