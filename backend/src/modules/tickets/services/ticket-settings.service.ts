@@ -72,6 +72,12 @@ export interface UpdateGlobalConfigDto {
   assignmentStrategy?: string;
   roundRobinCapHours?: number;
   autoCloseDays?: number;
+  smtpHost?: string | null;
+  smtpPort?: number | null;
+  smtpUser?: string | null;
+  smtpPass?: string | null;
+  smtpFrom?: string | null;
+  smtpFromName?: string | null;
 }
 
 // --- Service ----------------------------------------------------------------
@@ -490,6 +496,14 @@ export class TicketSettingsService {
     if (dto.assignmentStrategy !== undefined) config.assignmentStrategy = dto.assignmentStrategy;
     if (dto.roundRobinCapHours !== undefined) config.roundRobinCapHours = dto.roundRobinCapHours;
     if (dto.autoCloseDays !== undefined) config.autoCloseDays = dto.autoCloseDays;
+    
+    if (dto.smtpHost !== undefined) config.smtpHost = dto.smtpHost;
+    if (dto.smtpPort !== undefined) config.smtpPort = dto.smtpPort;
+    if (dto.smtpUser !== undefined) config.smtpUser = dto.smtpUser;
+    if (dto.smtpPass !== undefined) config.smtpPass = dto.smtpPass;
+    if (dto.smtpFrom !== undefined) config.smtpFrom = dto.smtpFrom;
+    if (dto.smtpFromName !== undefined) config.smtpFromName = dto.smtpFromName;
+
     return this.configRepo.save(config);
   }
 

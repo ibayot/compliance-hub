@@ -1,6 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import * as nodemailer from 'nodemailer';
+import { TicketingConfig } from '../entities/ticketing-config.entity';
 
 export interface TicketEmailData {
   ticketId: string;
@@ -50,43 +53,21 @@ export interface TicketClosedOrRatedEmailData {
 }
 
 @Injectable()
-export class EmailService {
+export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter | null = null;
   private fromAddress: string;
   private frontendUrl: string;
   private emailEnabled = true;
-  /** When set, ALL outbound emails are redirected here instead of the real recipient */
   private testOverrideTo: string | null = null;
 
-  constructor(private readonly configService: ConfigService) {
-    const host = this.configService.get<string>('SMTP_HOST');
-    const port = this.configService.get<number>('SMTP_PORT');
-    const user = this.configService.get<string>('SMTP_USER');
-    const pass = this.configService.get<string>('SMTP_PASS');
-    const rawFrom = this.configService.get<string>('SMTP_FROM') || 'noreply@rictms.gov.ph';
-    const fromName = this.configService.get<string>('SMTP_FROM_NAME') || 'DSWD FO2 Compliance Hub';
+  constructor(
+    private readonly configService: ConfigService,
+    @InjectRepository(TicketingConfig)
+    private readonly configRepo: Repository<TicketingConfig>,
+  ) {
     this.frontendUrl = (this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000').replace(/\/$/, '');
-    // Use "Display Name <email>" format so email clients show the friendly name
-    this.fromAddress = `"${fromName}" <${rawFrom}>`;
-
-    if (host) {
-      const smtpPort = parseInt(String(port || '587'), 10);
-      const useSSL = smtpPort === 465;
-      this.transporter = nodemailer.createTransport({
-        host,
-        port: smtpPort,
-        secure: useSSL,
-        requireTLS: !useSSL,   // force STARTTLS upgrade on port 587
-        connectionTimeout: 15000,
-        greetingTimeout: 15000,
-        auth: user && pass ? { user, pass } : undefined,
-        tls: { rejectUnauthorized: false },
-      });
-      this.logger.log(`Email service initialized (SMTP: ${host}:${smtpPort}, SSL=${useSSL})`);
-    } else {
-      this.logger.warn('SMTP not configured — emails will be logged but not sent. Set SMTP_HOST in .env to enable.');
-    }
+    this.fromAddress = `"DSWD FO2 Compliance Hub" <noreply@rictms.gov.ph>`;
 
     const emailEnabledRaw = String(this.configService.get<string>('EMAIL_ENABLED') ?? 'true').toLowerCase();
     this.emailEnabled = !['0', 'false', 'no', 'off'].includes(emailEnabledRaw);
@@ -94,16 +75,51 @@ export class EmailService {
       this.logger.warn('[EMAIL] Outbound email sending is disabled by EMAIL_ENABLED flag.');
     }
 
-    // ─── EMAIL TEST OVERRIDE ──────────────────────────────────────────────────
-    // Redirects ALL outgoing emails to a single test address when EMAIL_TEST_OVERRIDE is set.
-    // To remove this feature entirely: delete the 2 lines below AND the
-    // effectiveTo / testOverrideTo lines in the private send() method at the bottom.
     const override = this.configService.get<string>('EMAIL_TEST_OVERRIDE') ?? '';
     this.testOverrideTo = override || null;
-    // ─── END EMAIL TEST OVERRIDE ─────────────────────────────────────────────
   }
 
-  /** Send a ticket creation confirmation email to the requester */
+  async onModuleInit() {
+    await this.reloadSmtpConfig();
+  }
+
+  public async reloadSmtpConfig() {
+    try {
+      const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });
+      
+      // Fallback to environment variables if DB is empty for backward compatibility
+      const host = dbConfig?.smtpHost || this.configService.get<string>('SMTP_HOST');
+      const port = dbConfig?.smtpPort || this.configService.get<number>('SMTP_PORT');
+      const user = dbConfig?.smtpUser || this.configService.get<string>('SMTP_USER');
+      const pass = dbConfig?.smtpPass || this.configService.get<string>('SMTP_PASS');
+      const rawFrom = dbConfig?.smtpFrom || this.configService.get<string>('SMTP_FROM') || 'noreply@rictms.gov.ph';
+      const fromName = dbConfig?.smtpFromName || this.configService.get<string>('SMTP_FROM_NAME') || 'DSWD FO2 Compliance Hub';
+      
+      this.fromAddress = `"${fromName}" <${rawFrom}>`;
+
+      if (host) {
+        const smtpPort = parseInt(String(port || '587'), 10);
+        const useSSL = smtpPort === 465;
+        this.transporter = nodemailer.createTransport({
+          host,
+          port: smtpPort,
+          secure: useSSL,
+          requireTLS: !useSSL,
+          connectionTimeout: 15000,
+          greetingTimeout: 15000,
+          auth: user && pass ? { user, pass } : undefined,
+          tls: { rejectUnauthorized: false },
+        });
+        this.logger.log(`Email service initialized (SMTP: ${host}:${smtpPort}, SSL=${useSSL})`);
+      } else {
+        this.transporter = null;
+        this.logger.warn('SMTP not configured — emails will be logged but not sent. Update SMTP in Ticket Settings.');
+      }
+    } catch (err: any) {
+      this.logger.error(`Failed to load SMTP config: ${err.message}`);
+    }
+  }
+
   async sendTicketCreatedEmail(data: TicketEmailData): Promise<void> {
     const typeLabel = data.ticketType === 'desktop_support' ? 'Desktop Support' : 'IT Support';
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — ${data.subject}`;
@@ -171,7 +187,6 @@ export class EmailService {
     }
   }
 
-  /** Send an assignment notification to the technician when a ticket is manually assigned/reassigned */
   async sendTicketAssignedEmail(data: TicketAssignedEmailData): Promise<void> {
     const typeLabel =
       data.ticketType === 'desktop_support' ? 'Desktop Support' :
@@ -215,7 +230,6 @@ export class EmailService {
     await this.send(data.technicianEmail, subject, html);
   }
 
-  /** Notify requester that the ticket was resolved and ask for technician rating */
   async sendTicketResolvedEmailToRequester(data: TicketResolvedEmailData): Promise<void> {
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Ticket Resolved — Action Required`;
     const ticketUrl = `${this.frontendUrl}/dashboard/tickets/${data.ticketId}`;
@@ -265,7 +279,6 @@ export class EmailService {
     await this.send(data.requesterEmail, subject, html);
   }
 
-  /** Notify technician when ticket is closed by requester or when rating is submitted */
   async sendTicketClosedOrRatedEmailToTechnician(data: TicketClosedOrRatedEmailData): Promise<void> {
     const actionLabel = data.action === 'rated' ? 'Rated by Requester' : 'Closed by Requester';
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — ${actionLabel}`;
@@ -307,7 +320,6 @@ export class EmailService {
     await this.send(data.technicianEmail, subject, html);
   }
 
-  /** Send non-attendance consolidated email to section head */
   async sendNonAttendanceEmail(
     recipientEmail: string,
     recipientName: string,
@@ -338,7 +350,6 @@ export class EmailService {
     await this.send(recipientEmail, subject, html);
   }
 
-  /** Send a test email to verify SMTP connectivity */
   async sendTestEmail(to: string): Promise<{ sent: boolean; message: string }> {
     const subject = 'RICTMS Compliance Hub — SMTP Test Email';
     const html = `
@@ -370,7 +381,7 @@ export class EmailService {
 
     if (!this.transporter) {
       this.logger.warn('[EMAIL-TEST] SMTP not configured — test email was NOT sent.');
-      return { sent: false, message: 'SMTP not configured. Set SMTP_HOST in .env to enable email sending.' };
+      return { sent: false, message: 'SMTP not configured. Please save SMTP credentials in Ticket Settings.' };
     }
 
     if (!this.emailEnabled) {
@@ -388,8 +399,6 @@ export class EmailService {
     }
   }
 
-  // ── Core send ───────────────────────────────────────────────────────────
-
   public async sendGenericEmail(to: string, subject: string, html: string): Promise<void> {
     await this.send(to, subject, html);
   }
@@ -400,7 +409,6 @@ export class EmailService {
       return;
     }
 
-    // Redirect to test override if configured (testing mode — all emails go to override address)
     const effectiveTo = this.testOverrideTo ?? to;
     if (this.testOverrideTo && this.testOverrideTo !== to) {
       this.logger.log(`[EMAIL-OVERRIDE] Redirecting from ${to} to ${this.testOverrideTo}`);

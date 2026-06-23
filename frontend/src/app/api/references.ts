@@ -803,6 +803,12 @@ export const ticketSettingsApi = {
     assignmentStrategy: string;
     roundRobinCapHours: number;
     autoCloseDays: number;
+    smtpHost?: string | null;
+    smtpPort?: number | null;
+    smtpUser?: string | null;
+    smtpPass?: string | null;
+    smtpFrom?: string | null;
+    smtpFromName?: string | null;
   }> => {
     const response = await apiClient.get(`/ticket-settings/global-config`);
     return response.data;
@@ -811,6 +817,12 @@ export const ticketSettingsApi = {
     assignmentStrategy?: string;
     roundRobinCapHours?: number;
     autoCloseDays?: number;
+    smtpHost?: string | null;
+    smtpPort?: number | null;
+    smtpUser?: string | null;
+    smtpPass?: string | null;
+    smtpFrom?: string | null;
+    smtpFromName?: string | null;
   }): Promise<void> => {
     const response = await apiClient.patch(`/ticket-settings/global-config`, data);
     return response.data;
@@ -828,6 +840,11 @@ export const ticketSettingsApi = {
   > => {
     const qs = days ? `?days=${days}` : '';
     const response = await apiClient.get(`/ticket-settings/sla-insights${qs}`);
+    return response.data;
+  },
+
+  testEmail: async (to: string): Promise<{ sent: boolean; message: string }> => {
+    const response = await apiClient.post(`/ticket-settings/email-test`, { to });
     return response.data;
   },
 };

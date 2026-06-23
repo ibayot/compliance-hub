@@ -60,6 +60,13 @@ export class RoleCapability {
   isTicketSettingsFocal: boolean;
 
   /**
+   * True for roles that can manage SMTP Configuration credentials.
+   * This capability exposes the dynamic SMTP panel in the Ticket Settings module.
+   */
+  @Column({ name: 'is_smtp_settings_access', type: 'tinyint', width: 1, default: 0 })
+  isSmtpSettingsAccess: boolean;
+
+  /**
    * True for roles that can see ALL tickets in the system (not restricted to own-submitted/assigned).
    * Replaces the derived canSeeAllTickets() logic — now DB-configurable per role.
    * Includes: super_admin, section_head, compliance_officer, cybersec, infosec, desktop_sr, it_support_sr, pantawid_ict.

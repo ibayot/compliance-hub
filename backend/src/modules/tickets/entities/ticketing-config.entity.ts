@@ -13,4 +13,22 @@ export class TicketingConfig {
 
   @Column({ name: 'auto_close_days', type: 'int', default: 3 })
   autoCloseDays: number;
+
+  @Column({ name: 'smtp_host', type: 'varchar', length: 255, nullable: true })
+  smtpHost: string | null;
+
+  @Column({ name: 'smtp_port', type: 'int', nullable: true })
+  smtpPort: number | null;
+
+  @Column({ name: 'smtp_user', type: 'varchar', length: 255, nullable: true })
+  smtpUser: string | null;
+
+  @Column({ name: 'smtp_pass', type: 'varchar', length: 255, nullable: true })
+  smtpPass: string | null;
+
+  @Column({ name: 'smtp_from', type: 'varchar', length: 255, nullable: true })
+  smtpFrom: string | null;
+
+  @Column({ name: 'smtp_from_name', type: 'varchar', length: 255, nullable: true })
+  smtpFromName: string | null;
 }

@@ -203,6 +203,11 @@ const CAPABILITY_COLUMNS: {
     description: 'Full ticket settings & reports access',
   },
   {
+    key: 'isSmtpSettingsAccess',
+    label: 'SMTP Admin',
+    description: 'Manage SMTP credentials in Ticket Settings',
+  },
+  {
     key: 'isAllTickets',
     label: 'See All Tickets',
     description: 'View all tickets system-wide (not just own)',

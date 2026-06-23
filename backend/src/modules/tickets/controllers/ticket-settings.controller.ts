@@ -314,7 +314,14 @@ export class TicketSettingsController {
   @RequireCapability('isTicketSettingsFocal')
   @Roles(...ALL_STAFF_ROLES)
   async updateGlobalConfig(@Body() dto: UpdateGlobalConfigDto) {
-    return this.settingsService.updateGlobalConfig(dto);
+    const updated = await this.settingsService.updateGlobalConfig(dto);
+    
+    // If SMTP fields were touched, immediately trigger the email service to reload its Nodemailer transporter
+    if (dto.smtpHost !== undefined || dto.smtpPort !== undefined || dto.smtpUser !== undefined || dto.smtpPass !== undefined || dto.smtpFrom !== undefined || dto.smtpFromName !== undefined) {
+      await this.emailService.reloadSmtpConfig();
+    }
+    
+    return updated;
   }
 
   // ── SLA Insights ───────────────────────────────────────────────────────

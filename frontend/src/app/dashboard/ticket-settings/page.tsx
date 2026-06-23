@@ -52,7 +52,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default function TicketSettingsPage() {
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
 
   const [tab, setTab] = useState(0);
@@ -131,10 +131,18 @@ export default function TicketSettingsPage() {
     assignmentStrategy: string;
     roundRobinCapHours: number;
     autoCloseDays: number;
-  }>({ assignmentStrategy: 'CURRENT_AUTO', roundRobinCapHours: 80, autoCloseDays: 3 });
+    smtpHost?: string | null;
+    smtpPort?: number | null;
+    smtpUser?: string | null;
+    smtpPass?: string | null;
+    smtpFrom?: string | null;
+    smtpFromName?: string | null;
+  }>({ assignmentStrategy: 'CURRENT_AUTO', roundRobinCapHours: 80, autoCloseDays: 3, smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', smtpFrom: '', smtpFromName: '' });
   const [slaInsights, setSlaInsights] = useState<any[]>([]);
   const [slaFilterDays, setSlaFilterDays] = useState<number>(30);
   const [globalLoading, setGlobalLoading] = useState(true);
+  const [smtpTestLoading, setSmtpTestLoading] = useState(false);
+  const [smtpTestEmail, setSmtpTestEmail] = useState('');
 
 
 
@@ -167,6 +175,22 @@ export default function TicketSettingsPage() {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to update global settings', {
         variant: 'error',
       });
+    }
+  };
+
+  const handleTestSmtp = async () => {
+    if (!smtpTestEmail) {
+      enqueueSnackbar('Please enter an email address to test', { variant: 'warning' });
+      return;
+    }
+    setSmtpTestLoading(true);
+    try {
+      const res = await ticketSettingsApi.testEmail(smtpTestEmail);
+      enqueueSnackbar(res.message, { variant: res.sent ? 'success' : 'error' });
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Test email failed', { variant: 'error' });
+    } finally {
+      setSmtpTestLoading(false);
     }
   };
 
@@ -749,7 +773,86 @@ export default function TicketSettingsPage() {
               </Stack>
             )}
 
-            <Typography variant="h6" fontWeight={600} mb={2}>
+            {myCap?.isSmtpSettingsAccess && (
+              <>
+                <Typography variant="h6" fontWeight={600} mb={2} mt={4}>
+                  SMTP Configuration
+                </Typography>
+                <Typography variant="body2" color="text.secondary" mb={3}>
+                  Manage corporate email credentials for outbound ticket notifications.
+                </Typography>
+                {globalLoading ? (
+                  <Box textAlign="center" py={4}>
+                    <CircularProgress size={30} />
+                  </Box>
+                ) : (
+                  <Stack spacing={3} maxWidth={500} mb={4}>
+                    <TextField
+                      label="SMTP Host"
+                      value={globalConfig.smtpHost || ''}
+                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpHost: e.target.value }))}
+                      fullWidth
+                    />
+                    <TextField
+                      label="SMTP Port"
+                      type="number"
+                      value={globalConfig.smtpPort || ''}
+                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpPort: Number(e.target.value) }))}
+                      fullWidth
+                    />
+                    <TextField
+                      label="SMTP Username"
+                      value={globalConfig.smtpUser || ''}
+                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpUser: e.target.value }))}
+                      fullWidth
+                    />
+                    <TextField
+                      label="SMTP Password"
+                      type="password"
+                      value={globalConfig.smtpPass || ''}
+                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpPass: e.target.value }))}
+                      fullWidth
+                      helperText="Leave blank to keep existing password"
+                    />
+                    <TextField
+                      label="From Email Address"
+                      value={globalConfig.smtpFrom || ''}
+                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpFrom: e.target.value }))}
+                      fullWidth
+                    />
+                    <TextField
+                      label="From Name"
+                      value={globalConfig.smtpFromName || ''}
+                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpFromName: e.target.value }))}
+                      fullWidth
+                    />
+                    <Box display="flex" gap={2} alignItems="flex-start">
+                      <Button variant="contained" onClick={handleUpdateGlobalConfig}>
+                        Save SMTP Settings
+                      </Button>
+                    </Box>
+                    <Box display="flex" gap={2} alignItems="center" mt={2} p={2} border={1} borderColor="divider" borderRadius={1}>
+                      <TextField
+                        size="small"
+                        label="Test Recipient Email"
+                        value={smtpTestEmail}
+                        onChange={(e) => setSmtpTestEmail(e.target.value)}
+                        sx={{ flexGrow: 1 }}
+                      />
+                      <Button 
+                        variant="outlined" 
+                        onClick={handleTestSmtp} 
+                        disabled={smtpTestLoading}
+                      >
+                        {smtpTestLoading ? 'Sending...' : 'Test Connection'}
+                      </Button>
+                    </Box>
+                  </Stack>
+                )}
+              </>
+            )}
+
+            <Typography variant="h6" fontWeight={600} mb={2} mt={4}>
               SLA Recalibration Insights
             </Typography>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
