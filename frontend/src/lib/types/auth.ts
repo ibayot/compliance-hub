@@ -58,6 +58,7 @@ export interface AuthResponse {
   accessToken: string;
   refreshToken: string;
   user: User;
+  requiresPasswordChange?: boolean;
 }
 
 export interface ApiError {

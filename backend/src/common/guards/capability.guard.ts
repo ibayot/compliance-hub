@@ -56,6 +56,10 @@ export class CapabilityGuard implements CanActivate {
       isRepositoryAccess: (r) => this.roleCapSvc.isRepositoryAccess(r),
       isIssuancesAccess: (r) => this.roleCapSvc.isIssuancesAccess(r),
       isMetricsAccess: (r) => this.roleCapSvc.isMetricsAccess(r),
+      isRoleCapabilitiesAccess: (r) => this.roleCapSvc.isRoleCapabilitiesAccess(r),
+      isSystemRolesAccess: (r) => this.roleCapSvc.isSystemRolesAccess(r),
+      isSmtpSettingsAccess: (r) => this.roleCapSvc.isSmtpSettingsAccess(r),
+      isSecuritySettingsAccess: (r) => this.roleCapSvc.isSecuritySettingsAccess(r),
     };
 
     const checker = capabilityCheckers[required];

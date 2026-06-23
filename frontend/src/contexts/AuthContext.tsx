@@ -255,6 +255,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenStore.set('refreshToken', response.refreshToken);
       // Set user from login response first (includes units now)
       setUser(response.user as any);
+      if (response.requiresPasswordChange) {
+        setRequiresPasswordChange(true);
+      }
       // Then fetch full profile to guarantee units and all relations are populated
       try {
         const profile = await authApi.getProfile();
@@ -278,6 +281,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenStore.set('accessToken', response.accessToken);
       tokenStore.set('refreshToken', response.refreshToken);
       setUser(response.user as any);
+      if (response.requiresPasswordChange) {
+        setRequiresPasswordChange(true);
+      }
       try {
         const profile = await authApi.getProfile();
         setUser(profile);
