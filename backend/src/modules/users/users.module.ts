@@ -20,7 +20,7 @@ import { SecurityConfigService } from './security-config.service';
     TypeOrmModule.forFeature([User, Unit, RoleDefinitionEntity, RoleCapability, Feedback, SecurityConfig]),
     EventBusModule,
   ],
-  controllers: [UsersController, FeedbackController, SecurityConfigController],
+  controllers: [SecurityConfigController, UsersController, FeedbackController],
   providers: [UsersService, RoleCapabilitiesService, FeedbackService, SecurityConfigService],
   exports: [UsersService, RoleCapabilitiesService, FeedbackService, SecurityConfigService],
 })
