@@ -12,16 +12,15 @@ import {
   Alert,
 } from '@mui/material';
 import { usersApi } from '@/lib/api/users';
-import { useAuth } from '@/contexts/AuthContext';
 import { useSnackbar } from 'notistack';
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  userId: number;
 }
 
-export default function ForcePasswordChangeModal({ open, onClose }: Props) {
-  const { user } = useAuth();
+export default function ForcePasswordChangeModal({ open, onClose, userId }: Props) {
   const { enqueueSnackbar } = useSnackbar();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -30,7 +29,7 @@ export default function ForcePasswordChangeModal({ open, onClose }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!userId) return;
     if (newPassword.length < 8) {
       setError('Password must be at least 8 characters long.');
       return;
@@ -44,7 +43,7 @@ export default function ForcePasswordChangeModal({ open, onClose }: Props) {
     setError(null);
     try {
       // Assuming usersApi has an updateProfile method, or we use update endpoint
-      await usersApi.updateUser(user.id, { password: newPassword });
+      await usersApi.updateUser(userId, { password: newPassword });
       enqueueSnackbar('Password changed successfully', { variant: 'success' });
       onClose();
     } catch (err: any) {

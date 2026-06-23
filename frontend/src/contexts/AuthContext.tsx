@@ -423,10 +423,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         </DialogActions>
       </Dialog>
 
-      <ForcePasswordChangeModal 
-        open={requiresPasswordChange} 
-        onClose={() => setRequiresPasswordChange(false)} 
-      />
+      {user && (
+        <ForcePasswordChangeModal 
+          open={requiresPasswordChange} 
+          onClose={() => setRequiresPasswordChange(false)}
+          userId={user.id}
+        />
+      )}
     </>
   );
 }
