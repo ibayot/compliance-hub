@@ -50,6 +50,32 @@ const capabilityManuals: ManualItem[] = [
     }
   },
   {
+    title: 'Knowledge Base Access',
+    path: 'global',
+    details: {
+      purpose: 'As a system user I need a centralized repository of troubleshooting guides so that I can resolve common technical issues independently.',
+      activities: [
+        { name: 'Search troubleshooting guides', description: 'As a system user I need to browse published articles so that recurring technical issues are resolved using established methods.' }
+      ],
+      results: [
+        { name: 'Access technical solutions', description: 'As a system user I need to read detailed resolution procedures so that I can apply fixes without waiting for support staff.' }
+      ]
+    }
+  },
+  {
+    title: 'Account Profile',
+    path: 'global',
+    details: {
+      purpose: 'As a system user I need to view my account information so that I can confirm my identity and contact details.',
+      activities: [
+        { name: 'Review account details', description: 'As a system user I need to check my assigned role and unit so that my support requests are categorized accurately.' }
+      ],
+      results: [
+        { name: 'Verify identity information', description: 'As a system user I need to confirm my profile settings so that my access levels remain correct.' }
+      ]
+    }
+  },
+  {
     title: 'Support and Ticket Management',
     path: 'isSupportStaff',
     details: {
