@@ -49,7 +49,7 @@ Since you already have a dedicated database server, Docker is not needed here.
    - `02_db_stg_compliance_hub_ticketing`
    - `02_db_audit_stg`
 3. Have the DBA grant appropriate privileges for these databases to a secure user account (e.g., `compliance_service_user`):
-   - **For the 3 main databases**: Grant ALL PRIVILEGES (required for TypeORM to manage schemas).
+   - **For the 3 main databases (`02_db_stg_compliance_hub`, `02_db_stg_compliance_hub_users`, `02_db_stg_compliance_hub_ticketing`)**: Grant ALL PRIVILEGES (required for TypeORM to manage schemas).
    - **For the Audit database (`02_db_audit_stg`)**: Grant **ONLY** `SELECT` and `INSERT` privileges. (The app only needs to write logs and read them for the UI; it should never UPDATE, DELETE, or DROP audit logs for security reasons).
 4. The DBA should then run the `staging-schema-full.sql` file against the database instance.
    - *This file automatically creates all tables, seeds the exact system roles (including `pantawid_ict_focal`), and creates a single administrator account (`fo2admin@dswd.gov.ph` with password `password123`).*
