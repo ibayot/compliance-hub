@@ -429,6 +429,8 @@ export default function TicketsPage() {
           priority: undefined,
           categoryId: undefined,
         });
+      } else {
+        setKbSuggestions([]);
       }
     } catch {
       enqueueSnackbar('Failed to submit rating.', { variant: 'error' });

@@ -27,6 +27,7 @@ import TicketSettingsPage from '@/app/dashboard/ticket-settings/page';
 import AttendancePage from '@/app/dashboard/attendance/page';
 import TicketReportsPage from '@/app/dashboard/ticket-reports/page';
 import KnowledgeBasePage from '@/app/dashboard/knowledge-base/page';
+import AuditLogsPage from '@/app/dashboard/audit-logs/page';
 
 function ProtectedDashboard({
   children,
@@ -247,6 +248,14 @@ export default function App() {
         element={
           <ProtectedDashboard>
             <KnowledgeBasePage />
+          </ProtectedDashboard>
+        }
+      />
+      <Route
+        path="/dashboard/audit-logs"
+        element={
+          <ProtectedDashboard allowedRoles={['super_admin', 'compliance_officer']}>
+            <AuditLogsPage />
           </ProtectedDashboard>
         }
       />

@@ -132,6 +132,12 @@ export class UsersController {
     return this.usersService.update(+id, updateUserDto);
   }
 
+  @Post(':id/reset-password')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
+  resetPassword(@Param('id') id: string) {
+    return this.usersService.resetPassword(+id);
+  }
+
   @Delete(':id')
   @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
   remove(@Param('id') id: string) {

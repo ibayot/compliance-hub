@@ -5,6 +5,8 @@ services:
   db:
     image: mariadb:10.11
     container_name: rictms_db
+    networks:
+      - app_network
     restart: always
     environment:
       MARIADB_ROOT_PASSWORD: admin
@@ -23,6 +25,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: rictms_redis
+    networks:
+      - app_network
     restart: always
     ports:
       - "0.0.0.0:6379:6379"
@@ -42,6 +46,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: rictms_users_service
+    networks:
+      - app_network
     restart: on-failure
     depends_on:
       db:
@@ -69,6 +75,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: rictms_ticketing_service
+    networks:
+      - app_network
     restart: on-failure
     depends_on:
       db:
@@ -100,6 +108,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: rictms_compliance_service
+    networks:
+      - app_network
     restart: on-failure
     depends_on:
       db:
@@ -133,6 +143,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: rictms_gateway
+    networks:
+      - app_network
     restart: on-failure
     depends_on:
       users-service:
@@ -169,6 +181,8 @@ services:
       args:
         - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-907503372813-5393jo7p27hhbq0ih49tjm0gknr01it4.apps.googleusercontent.com}
     container_name: rictms_frontend
+    networks:
+      - app_network
     restart: on-failure
     depends_on:
       gateway:
@@ -184,3 +198,8 @@ services:
 volumes:
   db_data:
   redis_data:
+
+networks:
+  app_network:
+    enable_ipv6: false
+

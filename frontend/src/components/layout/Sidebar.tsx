@@ -34,6 +34,7 @@ import {
   EventAvailable as AttendanceIcon,
   BarChart as TicketReportsIcon,
   LibraryBooks as KBIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import type { ElementType } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -185,6 +186,13 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       service: 'compliance',
       capabilityKeys: ['isMovAccess'],
     },
+    {
+      label: 'Audit Logs',
+      icon: HistoryIcon,
+      path: '/dashboard/audit-logs',
+      roles: ['super_admin', 'compliance_officer'],
+      service: 'users',
+    },
   ];
 
   const settingsNavItems: NavItem[] = [
@@ -223,6 +231,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
     const content = (
       <ListItemButton
+        aria-label={item.label}
         onClick={() => handleNavigate(item.path)}
         selected={isActive}
         sx={{

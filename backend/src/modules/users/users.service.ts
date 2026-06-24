@@ -7,6 +7,7 @@ import { CreateRoleDefinitionDto, UpdateRoleDefinitionDto, CreateUserDto, Update
 import { Unit } from '../units/entities/unit.entity';
 import { RoleDefinitionEntity } from './entities/role-definition.entity';
 import { RoleCapability } from './entities/role-capability.entity';
+import { SecurityConfig } from './entities/security-config.entity';
 
 const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'label' | 'description' | 'assignable' | 'isSystem'> & { roleCode?: string | null; technicianType?: string | null }> = [
   // ── Core administrative roles ────────────────────────────────────────────
@@ -211,6 +212,8 @@ export class UsersService {
     private readonly roleDefinitionsRepository: Repository<RoleDefinitionEntity>,
     @InjectRepository(RoleCapability)
     private readonly roleCapabilitiesRepository: Repository<RoleCapability>,
+    @InjectRepository(SecurityConfig)
+    private readonly configRepository: Repository<SecurityConfig>,
   ) {
     if (!this.isDbBootstrapEnabled()) {
       return;
@@ -706,5 +709,13 @@ export class UsersService {
     const user = await this.findOne(id);
     user.active = false;
     await this.usersRepository.save(user);
+  }
+
+  async resetPassword(id: number): Promise<User> {
+    const user = await this.findOne(id);
+    let config = await this.configRepository.findOne({ where: { id: 1 } });
+    const defaultPassword = config?.defaultPassword || 'Changeme123!';
+    user.passwordHash = await bcrypt.hash(defaultPassword, 10);
+    return await this.usersRepository.save(user);
   }
 }

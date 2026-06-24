@@ -868,6 +868,18 @@ export const knowledgeBaseApi = {
   },
 };
 
+export const auditLogsApi = {
+  getLogs: async (params?: { page?: number; limit?: number; action?: string; tableName?: string; startDate?: string; endDate?: string }) => {
+    const res = await apiClient.get('/audit-logs', { params });
+    return res.data;
+  },
+  getTables: async () => {
+    const res = await apiClient.get('/audit-logs/tables');
+    return res.data;
+  },
+};
+
+
 // Attendance API
 export const attendanceApi = {
   // Tech attendance

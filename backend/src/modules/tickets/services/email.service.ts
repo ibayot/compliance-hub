@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as nodemailer from 'nodemailer';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
+import { auditContext } from '../../../shared/audit/audit.context';
 
 export interface TicketEmailData {
   ticketId: string;
@@ -197,7 +198,8 @@ export class EmailService implements OnModuleInit {
       <p style="margin:0;font-size:12px;color:#aaa;text-align:center;">If your session has expired, you will be prompted to log in and then redirected to the ticket.</p>
     </div>
     <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
-      RICTMS Compliance Hub — IT Help Desk
+      RICTMS Compliance Hub — IT Help Desk<br/>
+      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from the Compliance Hub application. Please do not reply.</span>
     </div>
   </div>
 </body>
@@ -250,7 +252,8 @@ export class EmailService implements OnModuleInit {
       <p style="margin:0;font-size:12px;color:#aaa;text-align:center;">If your session has expired, you will be prompted to log in and then redirected to the ticket.</p>
     </div>
     <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
-      RICTMS Compliance Hub — IT Help Desk
+      RICTMS Compliance Hub — IT Help Desk<br/>
+      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from the Compliance Hub application. Please do not reply.</span>
     </div>
   </div>
 </body>
@@ -299,7 +302,8 @@ export class EmailService implements OnModuleInit {
       <p style="margin:0;font-size:12px;color:#aaa;text-align:center;">If your session has expired, you will be prompted to log in and then redirected to the ticket.</p>
     </div>
     <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
-      RICTMS Compliance Hub — IT Help Desk
+      RICTMS Compliance Hub — IT Help Desk<br/>
+      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from the Compliance Hub application. Please do not reply.</span>
     </div>
   </div>
 </body>
@@ -340,7 +344,8 @@ export class EmailService implements OnModuleInit {
       <p style="margin:0;font-size:12px;color:#aaa;text-align:center;">If your session has expired, you will be prompted to log in and then redirected to the ticket.</p>
     </div>
     <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
-      RICTMS Compliance Hub — IT Help Desk
+      RICTMS Compliance Hub — IT Help Desk<br/>
+      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from the Compliance Hub application. Please do not reply.</span>
     </div>
   </div>
 </body>
@@ -402,7 +407,8 @@ export class EmailService implements OnModuleInit {
       <p style="margin:16px 0 0;font-size:13px;color:#888;">No action required — this is an automated test message.</p>
     </div>
     <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
-      RICTMS Compliance Hub — Email Test
+      RICTMS Compliance Hub — Email Test<br/>
+      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from the Compliance Hub application. Please do not reply.</span>
     </div>
   </div>
 </body>
@@ -489,7 +495,9 @@ export class EmailService implements OnModuleInit {
       if (!usedFallback && dbConfig) {
         dbConfig.primarySmtpSentToday = sentToday + 1;
         dbConfig.primarySmtpLastSentDate = today;
-        await this.configRepo.save(dbConfig);
+        await auditContext.run({ email: 'SYSTEM', ipAddress: '127.0.0.1', sessionId: 'system-email-job' }, async () => {
+          await this.configRepo.save(dbConfig);
+        });
       }
     } catch (err: any) {
       this.logger.error(`Failed to send email to ${effectiveTo}: ${err?.message}`);

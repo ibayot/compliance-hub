@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.114] (Backend) / [0.0.108] (Frontend) - 2026-06-24 - Audit Logs Refinement and Infrastructure IPv4 Hardening
+
+### Added
+- **Human-Readable Audit UI**: Enhanced the Audit Logs frontend interface to display JSON diffs cleanly inside side-by-side bound containers. Nested stringified JSON payloads and ISO dates are aggressively parsed into formatted components instead of raw strings.
+- **Payload Relationship Extraction**: Heavily bloated objects captured during audit logging (like User entities attached to `requester` or `createdBy`) are now automatically stripped in the backend, extracting strictly identifiable fields like `id`, `name`, and `email`.
+- **UPDATE Delta Logging**: Overhauled the TypeORM `AuditVariableSubscriber` to natively compute the exact diff on UPDATE transactions. It explicitly drops identical fields, keeping payloads small and preventing walls of "none".
+- **Strict IPv4 Infrastructure Hardening**: Enforced strict IPv4 bounds across Docker Compose (`enable_ipv6: false`) and Nginx (`listen 0.0.0.0:80`) to immunize the application from staging environment IPv6 routing conflicts.
+
+### Fixed
+- **Audit Logs DB Triggers Conflict**: Dropped aggressive, legacy MariaDB triggers on `tickets` and `ticket_comments` that were silently producing duplicate logs with `NULL` identity signatures in the background. The NestJS app layer is now the pure, singular source of truth.
+- **Audit Logs Noise Reduction**: Added explicit exclusions preventing the backend Audit Subscriber from capturing `ticket_events` modifications since `ticket_events` is fundamentally an audit table itself.
+- **SMTP Email Count Identity**: Wrapped backend `email.service.ts` configuration updates inside a hard `SYSTEM` execution context. `primarySmtpSentToday` increments no longer wrongly attribute automated actions to the active end-user.
+
+---
+
 
 ## [0.0.108] (Backend) / [0.0.101] (Frontend) - 2026-06-18 - Role Matrix Enforcement & Universal Auditing
 

@@ -228,4 +228,9 @@ export const usersApi = {
     );
     return response.data;
   },
+
+  /** Reset a user's password to default */
+  resetPassword: async (id: number): Promise<void> => {
+    await apiClient.post(`/users/${id}/reset-password`);
+  },
 };

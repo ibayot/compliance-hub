@@ -33,7 +33,7 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Replace default config with one that supports React Router and proxies /api
 RUN echo 'server { \
-    listen 80; \
+    listen 0.0.0.0:80; \
     server_name localhost; \
     root /usr/share/nginx/html; \
     index index.html; \

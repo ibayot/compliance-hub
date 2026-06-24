@@ -8,7 +8,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, QueryRunner, Repository, Not } from 'typeorm';
+import { DataSource, QueryRunner, Repository, Not, In } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Ticket, TicketType, TicketStatus, TicketPriority } from '../entities/ticket.entity';
@@ -1864,7 +1864,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     const technicians = await this.userRepo.find({
       where: {
         active: true,
-        role: Not(UserRole.USER),
+        role: Not(In([UserRole.USER, UserRole.SUPER_ADMIN])),
       },
     });
 

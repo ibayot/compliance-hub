@@ -861,6 +861,9 @@ function FocalUserManagementCard() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [creating, setCreating] = useState(false);
   const [editUser, setEditUser] = useState<any | null>(null);
+  const [resetUser, setResetUser] = useState<any | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [defaultPassword, setDefaultPassword] = useState('Changeme123!');
   const [editing, setEditing] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const { enqueueSnackbar } = useSnackbar();
@@ -908,15 +911,19 @@ function FocalUserManagementCard() {
 
   const reload = useCallback(async () => {
     try {
-      const [users, roleList, unitList] = await Promise.all([
+      const [users, roleList, unitList, securityConfig] = await Promise.all([
         usersApi.list(),
         usersApi.getRoles(),
         unitsApi.listAll(),
+        usersApi.getSecurityConfig().catch(() => ({ defaultPassword: 'Changeme123!' })),
       ]);
       setRoles(roleList);
       setUnits(unitList);
       // Show ALL users — not filtered by assignable flag
       setFocalUsers(users);
+      if (securityConfig?.defaultPassword) {
+        setDefaultPassword(securityConfig.defaultPassword);
+      }
     } catch {
       /* non-blocking */
     }
@@ -1025,6 +1032,20 @@ function FocalUserManagementCard() {
       await reload();
     } catch {
       enqueueSnackbar('Failed to update user status.', { variant: 'error' });
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetUser) return;
+    try {
+      setResetting(true);
+      await usersApi.resetPassword(resetUser.id);
+      enqueueSnackbar(`Password reset successfully to ${defaultPassword}!`, { variant: 'success' });
+      setResetUser(null);
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Failed to reset password', { variant: 'error' });
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -1374,6 +1395,15 @@ function FocalUserManagementCard() {
                           )}
                         </TableCell>
                         <TableCell align="right">
+                          <Tooltip title="Quick Reset Password">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => setResetUser(u)}
+                            >
+                              <KeyIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="Edit user">
                             <IconButton
                               size="small"
@@ -1617,6 +1647,24 @@ function FocalUserManagementCard() {
               disabled={editing || !editUser?.email || !editUser?.role}
             >
               {editing ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={Boolean(resetUser)} onClose={() => setResetUser(null)} maxWidth="xs" fullWidth>
+          <DialogTitle>Quick Reset Password</DialogTitle>
+          <DialogContent dividers>
+            <Typography variant="body1">
+              Are you sure you want to reset the password for <strong>{resetUser?.email}</strong> to the system default?
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              The new password will be <strong>{defaultPassword}</strong>
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setResetUser(null)} color="inherit">Cancel</Button>
+            <Button onClick={handleResetPassword} color="error" variant="contained" disabled={resetting}>
+              {resetting ? 'Resetting...' : 'Reset Password'}
             </Button>
           </DialogActions>
         </Dialog>
