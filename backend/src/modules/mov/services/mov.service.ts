@@ -65,33 +65,40 @@ export class MovService implements OnModuleInit {
   }
 
   private async seedDefaultAssessmentArtifacts(): Promise<void> {
-    const existingPlans = await this.movRepo.count({ where: { artifact_type: 'assessment_plan_year' } });
+    const existingPlans = await this.movRepo.count({
+      where: { artifact_type: 'assessment_plan_year' },
+    });
     if (existingPlans === 0) {
       const plans = [
         {
           title: 'Year 1 - Context, Governance, Risk Foundation',
           yearIndex: 1,
-          content: 'Map processes by unit, establish governance standards, identify stakeholders and responsibilities, perform baseline technical-operational-compliance risk analysis, map controls to ISO/IEC 27001 and DSWD QMS, then launch initial treatment and pilot validation.',
+          content:
+            'Map processes by unit, establish governance standards, identify stakeholders and responsibilities, perform baseline technical-operational-compliance risk analysis, map controls to ISO/IEC 27001 and DSWD QMS, then launch initial treatment and pilot validation.',
         },
         {
           title: 'Year 2 - Control Stabilization and Standardization',
           yearIndex: 2,
-          content: 'Standardize SOPs from year-1 pilots, expand treatment coverage, improve control consistency, and formalize quarterly management review routines.',
+          content:
+            'Standardize SOPs from year-1 pilots, expand treatment coverage, improve control consistency, and formalize quarterly management review routines.',
         },
         {
           title: 'Year 3 - Integration and Capability Maturity',
           yearIndex: 3,
-          content: 'Integrate regional/national requirements, strengthen evidence traceability, and track control effectiveness through KPI-linked review cycles.',
+          content:
+            'Integrate regional/national requirements, strengthen evidence traceability, and track control effectiveness through KPI-linked review cycles.',
         },
         {
           title: 'Year 4 - Optimization and Audit Readiness',
           yearIndex: 4,
-          content: 'Optimize process bottlenecks, close recurring findings, and ensure complete MoV evidence packs for planned internal and external audits.',
+          content:
+            'Optimize process bottlenecks, close recurring findings, and ensure complete MoV evidence packs for planned internal and external audits.',
         },
         {
           title: 'Year 5 - Sustainment and Continuous Improvement',
           yearIndex: 5,
-          content: 'Institutionalize continuous improvement, refresh risk methodology, and sustain quality-driven quarterly compliance reporting at maturity state.',
+          content:
+            'Institutionalize continuous improvement, refresh risk methodology, and sustain quality-driven quarterly compliance reporting at maturity state.',
         },
       ];
 
@@ -111,14 +118,36 @@ export class MovService implements OnModuleInit {
       );
     }
 
-    const existingSchedule = await this.movRepo.count({ where: { artifact_type: 'assessment_schedule_entry' } });
+    const existingSchedule = await this.movRepo.count({
+      where: { artifact_type: 'assessment_schedule_entry' },
+    });
     if (existingSchedule === 0) {
       const currentYear = new Date().getFullYear();
       const entries = [
-        { quarter: 1, title: 'Process Mapping and Governance Setup', owner: 'ICT Process Owner', due: `${currentYear}-03-31` },
-        { quarter: 2, title: 'Risk Analysis and ISMS/QMS Mapping', owner: 'Compliance Team', due: `${currentYear}-06-30` },
-        { quarter: 3, title: 'Risk Treatment and Awareness Rollout', owner: 'Unit Heads', due: `${currentYear}-09-30` },
-        { quarter: 4, title: 'Pilot Audit and Readiness Validation', owner: 'Internal Audit Team', due: `${currentYear}-12-15` },
+        {
+          quarter: 1,
+          title: 'Process Mapping and Governance Setup',
+          owner: 'ICT Process Owner',
+          due: `${currentYear}-03-31`,
+        },
+        {
+          quarter: 2,
+          title: 'Risk Analysis and ISMS/QMS Mapping',
+          owner: 'Compliance Team',
+          due: `${currentYear}-06-30`,
+        },
+        {
+          quarter: 3,
+          title: 'Risk Treatment and Awareness Rollout',
+          owner: 'Unit Heads',
+          due: `${currentYear}-09-30`,
+        },
+        {
+          quarter: 4,
+          title: 'Pilot Audit and Readiness Validation',
+          owner: 'Internal Audit Team',
+          due: `${currentYear}-12-15`,
+        },
       ];
 
       await this.movRepo.save(
@@ -142,11 +171,21 @@ export class MovService implements OnModuleInit {
     }
   }
 
-  list(filters?: { artifact_type?: string; period_year?: number; quarter?: number; scope?: string; unit_id?: number }) {
+  list(filters?: {
+    artifact_type?: string;
+    period_year?: number;
+    quarter?: number;
+    scope?: string;
+    unit_id?: number;
+  }) {
     const query = this.movRepo.createQueryBuilder('mov').orderBy('mov.updated_at', 'DESC');
 
-    if (filters?.artifact_type) query.andWhere('mov.artifact_type = :artifact_type', { artifact_type: filters.artifact_type });
-    if (filters?.period_year) query.andWhere('mov.period_year = :period_year', { period_year: filters.period_year });
+    if (filters?.artifact_type)
+      query.andWhere('mov.artifact_type = :artifact_type', {
+        artifact_type: filters.artifact_type,
+      });
+    if (filters?.period_year)
+      query.andWhere('mov.period_year = :period_year', { period_year: filters.period_year });
     if (filters?.quarter) query.andWhere('mov.quarter = :quarter', { quarter: filters.quarter });
     if (filters?.scope) query.andWhere('mov.scope = :scope', { scope: filters.scope });
     if (filters?.unit_id) query.andWhere('mov.unit_id = :unit_id', { unit_id: filters.unit_id });
@@ -247,7 +286,9 @@ export class MovService implements OnModuleInit {
       default:
         return {
           title: `Legal and Regulatory Register Template`,
-          content_markdown: `${baseHeader}\n## Recommended Columns\n${this.getRegisterColumns().map((column) => `- ${column}`).join('\n')}\n`,
+          content_markdown: `${baseHeader}\n## Recommended Columns\n${this.getRegisterColumns()
+            .map((column) => `- ${column}`)
+            .join('\n')}\n`,
         };
     }
   }
@@ -272,7 +313,20 @@ export class MovService implements OnModuleInit {
     if (!value) return '-';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '-';
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     const m = months[date.getUTCMonth()];
     const d = String(date.getUTCDate()).padStart(2, '0');
     const y = date.getUTCFullYear();
@@ -396,7 +450,9 @@ export class MovService implements OnModuleInit {
 
     const rows = items.map((item) => {
       const basis = `${item.issuance_number} · ${item.title}`;
-      const source = item.source_url ? `<a href="${this.escapeHtml(item.source_url)}" target="_blank" rel="noreferrer">Source</a>` : '-';
+      const source = item.source_url
+        ? `<a href="${this.escapeHtml(item.source_url)}" target="_blank" rel="noreferrer">Source</a>`
+        : '-';
 
       return `
         <tr>
@@ -430,7 +486,13 @@ export class MovService implements OnModuleInit {
     `;
   }
 
-  async generateRegisterReport(query: { year: number; quarter: number; scope?: string; unit?: string; register_type?: string }) {
+  async generateRegisterReport(query: {
+    year: number;
+    quarter: number;
+    scope?: string;
+    unit?: string;
+    register_type?: string;
+  }) {
     const issuances = await this.issuanceRepo.find({
       where: { is_active: true },
       relations: ['documents'],
@@ -447,17 +509,24 @@ export class MovService implements OnModuleInit {
       const titleValue = (item.title || '').toLowerCase();
       const authorityValue = (item.issuing_authority || '').toLowerCase();
 
-      const scopeMatch = scopeFilter && scopeFilter !== 'all' ? scopeValue.includes(scopeFilter) : true;
+      const scopeMatch =
+        scopeFilter && scopeFilter !== 'all' ? scopeValue.includes(scopeFilter) : true;
       const unitMatch = unitFilter
-        ? [scopeValue, ownerValue, titleValue, authorityValue].some((value) => value.includes(unitFilter))
+        ? [scopeValue, ownerValue, titleValue, authorityValue].some((value) =>
+            value.includes(unitFilter),
+          )
         : true;
 
       return scopeMatch && unitMatch;
     });
 
     const legalEntries = filtered.filter((item) => this.resolveRegisterGroup(item) === 'legal');
-    const standardsEntries = filtered.filter((item) => this.resolveRegisterGroup(item) === 'standards');
-    const internalEntries = filtered.filter((item) => this.resolveRegisterGroup(item) === 'internal');
+    const standardsEntries = filtered.filter(
+      (item) => this.resolveRegisterGroup(item) === 'standards',
+    );
+    const internalEntries = filtered.filter(
+      (item) => this.resolveRegisterGroup(item) === 'internal',
+    );
 
     const selectedEntries =
       registerType === 'legal'
@@ -479,8 +548,12 @@ export class MovService implements OnModuleInit {
       return yearMatch && month >= quarterStartMonth && month <= quarterEndMonth;
     }).length;
 
-    const compliant = selectedEntries.filter((item) => (item.compliance_status || '').toLowerCase() === 'compliant').length;
-    const ready = selectedEntries.filter((item) => (item.quarterly_readiness || '').toLowerCase() === 'ready').length;
+    const compliant = selectedEntries.filter(
+      (item) => (item.compliance_status || '').toLowerCase() === 'compliant',
+    ).length;
+    const ready = selectedEntries.filter(
+      (item) => (item.quarterly_readiness || '').toLowerCase() === 'ready',
+    ).length;
 
     const style = `
       <style>
@@ -562,7 +635,12 @@ export class MovService implements OnModuleInit {
     };
   }
 
-  async generateMonitoringMatrixReport(query: { year: number; quarter: number; scope?: string; unit?: string }) {
+  async generateMonitoringMatrixReport(query: {
+    year: number;
+    quarter: number;
+    scope?: string;
+    unit?: string;
+  }) {
     const issuances = await this.issuanceRepo.find({
       where: { is_active: true },
       order: { register_added_at: 'DESC', created_at: 'DESC' },
@@ -575,7 +653,8 @@ export class MovService implements OnModuleInit {
       const ownerValue = (item.process_owner || '').toLowerCase();
       const titleValue = (item.title || '').toLowerCase();
       const authorityValue = (item.issuing_authority || '').toLowerCase();
-      const scopeMatch = scopeFilter && scopeFilter !== 'all' ? scopeValue.includes(scopeFilter) : true;
+      const scopeMatch =
+        scopeFilter && scopeFilter !== 'all' ? scopeValue.includes(scopeFilter) : true;
       const unitMatch = unitFilter
         ? [scopeValue, ownerValue, titleValue, authorityValue].some((v) => v.includes(unitFilter))
         : true;
@@ -654,7 +733,12 @@ export class MovService implements OnModuleInit {
     };
   }
 
-  async generateAssessmentReport(query: { year: number; quarter: number; unit_id?: number; manual_remarks?: Record<string, string> }) {
+  async generateAssessmentReport(query: {
+    year: number;
+    quarter: number;
+    unit_id?: number;
+    manual_remarks?: Record<string, string>;
+  }) {
     const plans = await this.movRepo.find({
       where: { artifact_type: 'assessment_plan_year' },
       order: { updated_at: 'ASC' },
@@ -688,9 +772,12 @@ export class MovService implements OnModuleInit {
       return actual > target;
     });
 
-    const completedSchedule = schedule.filter((item) => ['completed', 'done'].includes((item.status || '').toLowerCase())).length;
+    const completedSchedule = schedule.filter((item) =>
+      ['completed', 'done'].includes((item.status || '').toLowerCase()),
+    ).length;
 
-    const selectedPlan = plans.find((item) => Number(item.period_year) === Number(query.year)) || plans[0];
+    const selectedPlan =
+      plans.find((item) => Number(item.period_year) === Number(query.year)) || plans[0];
     const planItemsFromMeta = Array.isArray(selectedPlan?.metadata_json?.items)
       ? (selectedPlan?.metadata_json?.items as string[])
       : [];
@@ -700,9 +787,15 @@ export class MovService implements OnModuleInit {
       .filter((line) => line.startsWith('- '))
       .map((line) => line.replace(/^-\s+/, '').trim());
 
-    const planChecklistItems = Array.from(new Set([...planItemsFromMeta, ...planItemsFromContent])).filter(Boolean);
+    const planChecklistItems = Array.from(
+      new Set([...planItemsFromMeta, ...planItemsFromContent]),
+    ).filter(Boolean);
 
-    const checklist = (planChecklistItems.length > 0 ? planChecklistItems : ['Assessment plan activities defined for selected year']).map((item) => ({
+    const checklist = (
+      planChecklistItems.length > 0
+        ? planChecklistItems
+        : ['Assessment plan activities defined for selected year']
+    ).map((item) => ({
       item,
       passed: schedule.length > 0 && kpiRows.length > 0,
       evidence: `${schedule.length} schedule entries, ${kpiRows.length} KPI rows`,
@@ -719,7 +812,7 @@ export class MovService implements OnModuleInit {
     const kpiRowsText = kpiBelowTarget.map((row) => {
       const key = `${row.kpiMasterCode}`;
       const overridden = manualRemarks[key]?.trim();
-      return `| ${row.unit?.name || row.unitId} | ${row.kpiMasterCode} | ${row.kpiMaster?.name || '-'} | ${row.actualValue} | ${row.kpiMaster?.targetValue || '-'} | ${(overridden || row.remarks || '-')} |`;
+      return `| ${row.unit?.name || row.unitId} | ${row.kpiMasterCode} | ${row.kpiMaster?.name || '-'} | ${row.actualValue} | ${row.kpiMaster?.targetValue || '-'} | ${overridden || row.remarks || '-'} |`;
     });
 
     const report_html = `
@@ -749,18 +842,36 @@ export class MovService implements OnModuleInit {
         <h3>Assessment Schedule</h3>
         <table>
           <thead><tr><th>Activity</th><th>Owner</th><th>Due Date</th><th>Status</th><th>Remarks</th></tr></thead>
-          <tbody>${scheduleRows.length ? scheduleRows.map((row) => {
-            const cells = row.split('|').map((cell) => cell.trim()).filter(Boolean);
-            return `<tr><td>${this.escapeHtml(cells[0] || '-')}</td><td>${this.escapeHtml(cells[1] || '-')}</td><td>${this.escapeHtml(cells[2] || '-')}</td><td>${this.escapeHtml(cells[3] || '-')}</td><td>${this.escapeHtml(cells[4] || '-')}</td></tr>`;
-          }).join('') : '<tr><td>No schedule entries found</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>'}</tbody>
+          <tbody>${
+            scheduleRows.length
+              ? scheduleRows
+                  .map((row) => {
+                    const cells = row
+                      .split('|')
+                      .map((cell) => cell.trim())
+                      .filter(Boolean);
+                    return `<tr><td>${this.escapeHtml(cells[0] || '-')}</td><td>${this.escapeHtml(cells[1] || '-')}</td><td>${this.escapeHtml(cells[2] || '-')}</td><td>${this.escapeHtml(cells[3] || '-')}</td><td>${this.escapeHtml(cells[4] || '-')}</td></tr>`;
+                  })
+                  .join('')
+              : '<tr><td>No schedule entries found</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>'
+          }</tbody>
         </table>
         <h3>KPI Gaps vs Plan</h3>
         <table>
           <thead><tr><th>Unit</th><th>KPI Code</th><th>KPI Name</th><th>Actual</th><th>Target</th><th>Remarks</th></tr></thead>
-          <tbody>${kpiRowsText.length ? kpiRowsText.map((row) => {
-            const cells = row.split('|').map((cell) => cell.trim()).filter(Boolean);
-            return `<tr><td>${this.escapeHtml(cells[0] || '-')}</td><td>${this.escapeHtml(cells[1] || '-')}</td><td>${this.escapeHtml(cells[2] || '-')}</td><td>${this.escapeHtml(cells[3] || '-')}</td><td>${this.escapeHtml(cells[4] || '-')}</td><td>${this.escapeHtml(cells[5] || '-')}</td></tr>`;
-          }).join('') : '<tr><td>No KPI gaps detected in this period</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>'}</tbody>
+          <tbody>${
+            kpiRowsText.length
+              ? kpiRowsText
+                  .map((row) => {
+                    const cells = row
+                      .split('|')
+                      .map((cell) => cell.trim())
+                      .filter(Boolean);
+                    return `<tr><td>${this.escapeHtml(cells[0] || '-')}</td><td>${this.escapeHtml(cells[1] || '-')}</td><td>${this.escapeHtml(cells[2] || '-')}</td><td>${this.escapeHtml(cells[3] || '-')}</td><td>${this.escapeHtml(cells[4] || '-')}</td><td>${this.escapeHtml(cells[5] || '-')}</td></tr>`;
+                  })
+                  .join('')
+              : '<tr><td>No KPI gaps detected in this period</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>'
+          }</tbody>
         </table>
       </body>
       </html>

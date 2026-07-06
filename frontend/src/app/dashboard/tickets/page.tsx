@@ -17,6 +17,7 @@ import {
   Chip,
   TextField,
   MenuItem,
+  Badge,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -34,9 +35,9 @@ import {
   InputAdornment,
   Tab,
   Tabs,
-  Badge,
   useMediaQuery,
   useTheme,
+  Grid,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -119,12 +120,23 @@ export default function TicketsPage() {
   const [filterType, setFilterType] = useState('');
   const [showMyTickets, setShowMyTickets] = useState(false);
   const [showEscalatedToMe, setShowEscalatedToMe] = useState(false);
+  const [myTicketsCount, setMyTicketsCount] = useState(0);
+  const [escalatedToMeCount, setEscalatedToMeCount] = useState(0);
+
+  // Pagination for non-admin active tabs
+  const [page, setPage] = useState(1);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [form, setForm] = useState<CreateTicketDto>({
     subject: '',
     description: '',
     ticketType: 'it_support',
     priority: undefined,
+  });
+  const [disposalDetails, setDisposalDetails] = useState({
+    equipmentType: '',
+    serialNumber: '',
+    propertyNumber: '',
+    reason: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [allUsers, setAllUsers] = useState<UserRecord[]>([]);
@@ -241,7 +253,7 @@ export default function TicketsPage() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.get('filter') === 'pending_satisfaction') {
-        setUserTab(1);
+        setUserTab(2);
       }
     }
   }, []);
@@ -323,13 +335,15 @@ export default function TicketsPage() {
     refreshEscalationStates(rows);
   }, [tickets, canManageAll, isTechnician, mgmtTab, ticketTab, refreshEscalationStates]);
 
-  // For regular users: load pending satisfaction count to warn before new ticket
+  // For non-super admins: load pending satisfaction count and badge counts
   useEffect(() => {
     if (!canManageAll) {
       ticketsApi
         .getDashboardStats()
         .then((stats) => {
           setPendingSatCount(stats.pendingSatisfactionTickets?.length ?? 0);
+          setMyTicketsCount(stats.myTicketsCount ?? 0);
+          setEscalatedToMeCount(stats.escalatedToMeCount ?? 0);
         })
         .catch(() => {});
     }
@@ -442,9 +456,16 @@ export default function TicketsPage() {
       enqueueSnackbar('Subject and description are required.', { variant: 'warning' });
       return;
     }
+    
+    let finalDescription = form.description;
+    const selectedCat = categories.find((c) => c.id === form.categoryId);
+    if (selectedCat && selectedCat.name.toLowerCase().includes('disposal')) {
+      finalDescription += `\n\n--- Disposal Details ---\nEquipment Type: ${disposalDetails.equipmentType}\nSerial Number: ${disposalDetails.serialNumber}\nProperty Number: ${disposalDetails.propertyNumber}\nReason: ${disposalDetails.reason}`;
+    }
+
     try {
       setSubmitting(true);
-      await ticketsApi.create(form);
+      await ticketsApi.create({ ...form, description: finalDescription });
       enqueueSnackbar('Ticket submitted successfully!', { variant: 'success' });
       setNewDialogOpen(false);
       setForm({
@@ -453,6 +474,12 @@ export default function TicketsPage() {
         ticketType: 'it_support',
         priority: undefined,
         categoryId: undefined,
+      });
+      setDisposalDetails({
+        equipmentType: '',
+        serialNumber: '',
+        propertyNumber: '',
+        reason: '',
       });
       setPendingSatCount(0);
       fetchTickets();
@@ -495,13 +522,20 @@ export default function TicketsPage() {
 
   const openAssignDialog = async (ticket: Ticket) => {
     setAssigningTicket(ticket);
-    setSelectedTechId(String(ticket.assignedToId ?? ''));
+    setSelectedTechId('');
     try {
       const techs = await ticketsApi.getTechnicians();
       const availableByAttendance = techs.filter(
-        (t) => !t.isUnavailable && !['absent', 'out_of_office'].includes(t.attendanceStatus ?? ''),
+        (t) => !t.isUnavailable && !['absent', 'out_of_office', 'half_day'].includes(t.attendanceStatus ?? ''),
       );
       setTechnicians(availableByAttendance);
+      // Only pre-select current assignee if they're still in the available list
+      const isCurrentAssigneeAvailable = availableByAttendance.some(
+        (t) => t.id === ticket.assignedToId,
+      );
+      if (isCurrentAssigneeAvailable && ticket.assignedToId) {
+        setSelectedTechId(String(ticket.assignedToId));
+      }
     } catch {
       setTechnicians([]);
     }
@@ -630,18 +664,6 @@ export default function TicketsPage() {
       enqueueSnackbar('Client name is required.', { variant: 'warning' });
       return;
     }
-    if (!csatForm.religion.trim()) {
-      enqueueSnackbar('Religion is required.', { variant: 'warning' });
-      return;
-    }
-    if (!csatForm.age) {
-      enqueueSnackbar('Age is required.', { variant: 'warning' });
-      return;
-    }
-    if (csatForm.age < 20 || csatForm.age >= 90) {
-      enqueueSnackbar('Age must be between 20 and 89.', { variant: 'warning' });
-      return;
-    }
     if (!csatForm.sex) {
       enqueueSnackbar('Sex is required.', { variant: 'warning' });
       return;
@@ -707,7 +729,7 @@ export default function TicketsPage() {
                 <MenuItem value="in_progress">In Progress</MenuItem>
                 <MenuItem value="resolved">Resolved</MenuItem>
                 <MenuItem value="closed">Closed</MenuItem>
-                <MenuItem value="freeze">Freeze</MenuItem>
+                <MenuItem value="freeze">On Hold</MenuItem>
                 <MenuItem value="duplicate">Duplicate</MenuItem>
               </TextField>
               <TextField
@@ -734,27 +756,31 @@ export default function TicketsPage() {
                 Reset
               </Button>
               {isTechnician && !isLowerLevelTech && (
-                <Button
-                  size="small"
-                  variant={showMyTickets ? 'contained' : 'outlined'}
-                  color="primary"
-                  onClick={() => setShowMyTickets((v) => !v)}
-                >
-                  {showMyTickets ? 'My Tickets ✓' : 'My Tickets'}
-                </Button>
+                <Badge badgeContent={myTicketsCount} color="error" overlap="circular">
+                  <Button
+                    size="small"
+                    variant={showMyTickets ? 'contained' : 'outlined'}
+                    color="primary"
+                    onClick={() => setShowMyTickets((v) => !v)}
+                  >
+                    {showMyTickets ? 'My Tickets ✓' : 'My Tickets'}
+                  </Button>
+                </Badge>
               )}
               {canViewEscalatedQueue && (
-                <Button
-                  size="small"
-                  variant={showEscalatedToMe ? 'contained' : 'outlined'}
-                  color="warning"
-                  onClick={() => {
-                    setShowEscalatedToMe((v) => !v);
-                    setShowMyTickets(false);
-                  }}
-                >
-                  {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
-                </Button>
+                <Badge badgeContent={escalatedToMeCount} color="error" overlap="circular">
+                  <Button
+                    size="small"
+                    variant={showEscalatedToMe ? 'contained' : 'outlined'}
+                    color="warning"
+                    onClick={() => {
+                      setShowEscalatedToMe((v) => !v);
+                      setShowMyTickets(false);
+                    }}
+                  >
+                    {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
+                  </Button>
+                </Badge>
               )}
             </Stack>
           </CardContent>
@@ -765,27 +791,31 @@ export default function TicketsPage() {
           <CardContent>
             <Stack direction="row" spacing={2}>
               {isFocalTech && (
-                <Button
-                  size="small"
-                  variant={showMyTickets ? 'contained' : 'outlined'}
-                  color="primary"
-                  onClick={() => setShowMyTickets((v) => !v)}
-                >
-                  {showMyTickets ? 'My Assigned Tickets ✓' : 'All Tickets'}
-                </Button>
+                <Badge badgeContent={myTicketsCount} color="error" overlap="circular">
+                  <Button
+                    size="small"
+                    variant={showMyTickets ? 'contained' : 'outlined'}
+                    color="primary"
+                    onClick={() => setShowMyTickets((v) => !v)}
+                  >
+                    {showMyTickets ? 'My Assigned Tickets ✓' : 'All Tickets'}
+                  </Button>
+                </Badge>
               )}
               {canViewEscalatedQueue && (
-                <Button
-                  size="small"
-                  variant={showEscalatedToMe ? 'contained' : 'outlined'}
-                  color="warning"
-                  onClick={() => {
-                    setShowEscalatedToMe((v) => !v);
-                    setShowMyTickets(false);
-                  }}
-                >
-                  {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
-                </Button>
+                <Badge badgeContent={escalatedToMeCount} color="error" overlap="circular">
+                  <Button
+                    size="small"
+                    variant={showEscalatedToMe ? 'contained' : 'outlined'}
+                    color="warning"
+                    onClick={() => {
+                      setShowEscalatedToMe((v) => !v);
+                      setShowMyTickets(false);
+                    }}
+                  >
+                    {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
+                  </Button>
+                </Badge>
               )}
             </Stack>
           </CardContent>
@@ -1348,6 +1378,51 @@ export default function TicketsPage() {
               fullWidth
               placeholder="Brief description of your issue"
             />
+            {categories.find(c => c.id === form.categoryId)?.name.toLowerCase().includes('disposal') && (
+              <Box p={2} mb={1} bgcolor="action.hover" borderRadius={1} border="1px solid" borderColor="divider">
+                <Typography variant="subtitle2" gutterBottom>
+                  Disposal Details
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Equipment Type *"
+                      size="small"
+                      fullWidth
+                      value={disposalDetails.equipmentType}
+                      onChange={(e) => setDisposalDetails({ ...disposalDetails, equipmentType: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Serial Number *"
+                      size="small"
+                      fullWidth
+                      value={disposalDetails.serialNumber}
+                      onChange={(e) => setDisposalDetails({ ...disposalDetails, serialNumber: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Property Number *"
+                      size="small"
+                      fullWidth
+                      value={disposalDetails.propertyNumber}
+                      onChange={(e) => setDisposalDetails({ ...disposalDetails, propertyNumber: e.target.value })}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Reason for Disposal *"
+                      size="small"
+                      fullWidth
+                      value={disposalDetails.reason}
+                      onChange={(e) => setDisposalDetails({ ...disposalDetails, reason: e.target.value })}
+                    />
+                  </Grid>
+                </Grid>
+              </Box>
+            )}
             {loadingKb && (
               <Box display="flex" alignItems="center" gap={1}>
                 <CircularProgress size={16} />
@@ -1403,7 +1478,7 @@ export default function TicketsPage() {
               placeholder="Provide details: what happened, when, steps tried..."
             />
             <Autocomplete
-              options={allUsers}
+              options={allUsers.filter((u) => u.role !== 'super_admin')}
               getOptionLabel={(u) =>
                 `${[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}`
               }
@@ -1705,7 +1780,7 @@ export default function TicketsPage() {
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
                 <TextField
-                  label="Age *"
+                  label="Age"
                   type="number"
                   inputProps={{ min: 20, max: 89 }}
                   value={csatForm.age ?? ''}
@@ -1718,7 +1793,7 @@ export default function TicketsPage() {
                   sx={{ maxWidth: 100 }}
                 />
                 <TextField
-                  label="Religion *"
+                  label="Religion"
                   value={csatForm.religion}
                   onChange={(e) => setCsatForm((f) => ({ ...f, religion: e.target.value }))}
                   sx={{ flex: 1 }}

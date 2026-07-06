@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as nodemailer from 'nodemailer';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
+import { EventBusService } from '../../../common/events/event-bus.service';
 import { auditContext } from '../../../shared/audit/audit.context';
 
 export interface TicketEmailData {
@@ -68,12 +69,17 @@ export class EmailService implements OnModuleInit {
     private readonly configService: ConfigService,
     @InjectRepository(TicketingConfig)
     private readonly configRepo: Repository<TicketingConfig>,
+    private readonly eventBus: EventBusService,
   ) {
-    this.frontendUrl = (this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000').replace(/\/$/, '');
+    this.frontendUrl = (
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'
+    ).replace(/\/$/, '');
     this.primaryFromAddress = '"DSWD FO2 Compliance Hub" <noreply@rictms.gov.ph>';
     this.fallbackFromAddress = '"DSWD FO2 Compliance Hub" <noreply@rictms.gov.ph>';
 
-    const emailEnabledRaw = String(this.configService.get<string>('EMAIL_ENABLED') ?? 'true').toLowerCase();
+    const emailEnabledRaw = String(
+      this.configService.get<string>('EMAIL_ENABLED') ?? 'true',
+    ).toLowerCase();
     this.emailEnabled = !['0', 'false', 'no', 'off'].includes(emailEnabledRaw);
     if (!this.emailEnabled) {
       this.logger.warn('[EMAIL] Outbound email sending is disabled by EMAIL_ENABLED flag.');
@@ -90,14 +96,15 @@ export class EmailService implements OnModuleInit {
   public async reloadSmtpConfig() {
     try {
       const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });
-      
+
       // Primary: Environment Variables
       const pHost = this.configService.get<string>('SMTP_HOST');
       const pPort = this.configService.get<number>('SMTP_PORT');
       const pUser = this.configService.get<string>('SMTP_USER');
       const pPass = this.configService.get<string>('SMTP_PASS');
       const pFrom = this.configService.get<string>('SMTP_FROM') || 'noreply@rictms.gov.ph';
-      const pFromName = this.configService.get<string>('SMTP_FROM_NAME') || 'DSWD FO2 Compliance Hub';
+      const pFromName =
+        this.configService.get<string>('SMTP_FROM_NAME') || 'DSWD FO2 Compliance Hub';
       this.primaryFromAddress = `"${pFromName}" <${pFrom}>`;
 
       if (pHost) {
@@ -144,7 +151,15 @@ export class EmailService implements OnModuleInit {
       } else {
         this.fallbackTransporter = null;
       }
+      this.logger.log('SMTP Configurations (Re)loaded.');
 
+      this.eventBus.subscribe('email.send', async (payload: { to: string; subject: string; text?: string; html?: string }) => {
+        try {
+          await this.send(payload.to, payload.subject, payload.html || payload.text || '');
+        } catch (error: any) {
+          this.logger.error(`Failed to send event-triggered email to ${payload.to}: ${error.message}`);
+        }
+      });
     } catch (err: any) {
       this.logger.error(`Failed to load SMTP config: ${err.message}`);
     }
@@ -212,16 +227,25 @@ export class EmailService implements OnModuleInit {
       const techSubject = `Compliance Hub - Ticketing #${data.ticketNumber} — Assigned to You — ${data.subject}`;
       const techHtml = html
         .replace('Ticket Created Successfully', 'New Ticket Assigned to You')
-        .replace(`Hello <strong>${data.requesterName}</strong>`, `Hello <strong>${data.assignedToName}</strong>`)
-        .replace('Your help desk ticket has been created.', `A new ticket has been assigned to you from <strong>${data.requesterName}</strong>.`);
+        .replace(
+          `Hello <strong>${data.requesterName}</strong>`,
+          `Hello <strong>${data.assignedToName}</strong>`,
+        )
+        .replace(
+          'Your help desk ticket has been created.',
+          `A new ticket has been assigned to you from <strong>${data.requesterName}</strong>.`,
+        );
       await this.send(data.assignedToEmail, techSubject, techHtml);
     }
   }
 
   async sendTicketAssignedEmail(data: TicketAssignedEmailData): Promise<void> {
     const typeLabel =
-      data.ticketType === 'desktop_support' ? 'Desktop Support' :
-      data.ticketType === 'pantawid_ict_support' ? 'Pantawid ICT Support' : 'IT Support';
+      data.ticketType === 'desktop_support'
+        ? 'Desktop Support'
+        : data.ticketType === 'pantawid_ict_support'
+          ? 'Pantawid ICT Support'
+          : 'IT Support';
 
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Assigned to You — ${data.subject}`;
     const ticketUrl = `${this.frontendUrl}/dashboard/tickets/${data.ticketId}`;
@@ -312,13 +336,16 @@ export class EmailService implements OnModuleInit {
     await this.send(data.requesterEmail, subject, html);
   }
 
-  async sendTicketClosedOrRatedEmailToTechnician(data: TicketClosedOrRatedEmailData): Promise<void> {
+  async sendTicketClosedOrRatedEmailToTechnician(
+    data: TicketClosedOrRatedEmailData,
+  ): Promise<void> {
     const actionLabel = data.action === 'rated' ? 'Rated by Requester' : 'Closed by Requester';
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — ${actionLabel}`;
     const ticketUrl = `${this.frontendUrl}/dashboard/tickets/${data.ticketId}`;
-    const ratingLine = data.action === 'rated' && data.rating
-      ? `<tr><td style="padding:6px 12px;font-weight:600;color:#555;">Rating</td><td style="padding:6px 12px;">${data.rating}/5</td></tr>`
-      : '';
+    const ratingLine =
+      data.action === 'rated' && data.rating
+        ? `<tr><td style="padding:6px 12px;font-weight:600;color:#555;">Rating</td><td style="padding:6px 12px;">${data.rating}/5</td></tr>`
+        : '';
     const html = `
 <!DOCTYPE html>
 <html>
@@ -362,7 +389,10 @@ export class EmailService implements OnModuleInit {
   ): Promise<void> {
     const subject = `[RICTMS] Non-Attendance Report — ${date}`;
     const rows = absentStaff
-      .map(s => `<tr><td style="padding:4px 8px;">${s.name}</td><td style="padding:4px 8px;">${s.email}</td><td style="padding:4px 8px;">${s.role.replace(/_/g,' ')}</td></tr>`)
+      .map(
+        (s) =>
+          `<tr><td style="padding:4px 8px;">${s.name}</td><td style="padding:4px 8px;">${s.email}</td><td style="padding:4px 8px;">${s.role.replace(/_/g, ' ')}</td></tr>`,
+      )
       .join('');
 
     const html = `
@@ -416,12 +446,18 @@ export class EmailService implements OnModuleInit {
 
     if (!this.primaryTransporter && !this.fallbackTransporter) {
       this.logger.warn('[EMAIL-TEST] SMTP not configured — test email was NOT sent.');
-      return { sent: false, message: 'SMTP not configured. Please save SMTP credentials in Ticket Settings.' };
+      return {
+        sent: false,
+        message: 'SMTP not configured. Please save SMTP credentials in Ticket Settings.',
+      };
     }
 
     if (!this.emailEnabled) {
       this.logger.warn('[EMAIL-TEST] Outbound email is disabled by EMAIL_ENABLED flag.');
-      return { sent: false, message: 'Email sending is currently disabled by EMAIL_ENABLED=false.' };
+      return {
+        sent: false,
+        message: 'Email sending is currently disabled by EMAIL_ENABLED=false.',
+      };
     }
 
     try {
@@ -460,9 +496,9 @@ export class EmailService implements OnModuleInit {
     try {
       const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });
       const today = new Date().toISOString().split('T')[0];
-      let limit = dbConfig?.primarySmtpDailyLimit || 500;
+      const limit = dbConfig?.primarySmtpDailyLimit || 500;
       let sentToday = dbConfig?.primarySmtpSentToday || 0;
-      let lastSentDate = dbConfig?.primarySmtpLastSentDate;
+      const lastSentDate = dbConfig?.primarySmtpLastSentDate;
 
       if (lastSentDate !== today) {
         sentToday = 0;
@@ -490,14 +526,19 @@ export class EmailService implements OnModuleInit {
         html,
       });
 
-      this.logger.log(`Email sent to ${effectiveTo}: ${subject} ${usedFallback ? '(Fallback)' : '(Primary)'}`);
+      this.logger.log(
+        `Email sent to ${effectiveTo}: ${subject} ${usedFallback ? '(Fallback)' : '(Primary)'}`,
+      );
 
       if (!usedFallback && dbConfig) {
         dbConfig.primarySmtpSentToday = sentToday + 1;
         dbConfig.primarySmtpLastSentDate = today;
-        await auditContext.run({ email: 'SYSTEM', ipAddress: '127.0.0.1', sessionId: 'system-email-job' }, async () => {
-          await this.configRepo.save(dbConfig);
-        });
+        await auditContext.run(
+          { email: 'SYSTEM', ipAddress: '127.0.0.1', sessionId: 'system-email-job' },
+          async () => {
+            await this.configRepo.save(dbConfig);
+          },
+        );
       }
     } catch (err: any) {
       this.logger.error(`Failed to send email to ${effectiveTo}: ${err?.message}`);

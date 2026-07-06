@@ -110,6 +110,9 @@ export default function TicketReportsPage() {
   const [quarter, setQuarter] = useState<number>(Math.ceil((new Date().getMonth() + 1) / 3));
   const [semester, setSemester] = useState<number>(new Date().getMonth() < 6 ? 1 : 2);
   const [technicianId, setTechnicianId] = useState<number | ''>('');
+  const [pieData, setPieData] = useState<any[]>([]);
+  const [escalationPieData, setEscalationPieData] = useState<any[]>([]);
+  const [slaPieData, setSlaPieData] = useState<any[]>([]);
   const [ticketType, setTicketType] = useState<string>('');
   const [technicians, setTechnicians] = useState<
     Array<{ id: number; firstName: string; lastName: string; role: string }>
@@ -153,6 +156,12 @@ export default function TicketReportsPage() {
       const data = await ticketsApi.getReports(filters);
       setResult(data);
 
+      const pData = data.avgRatingByType.map((row) => ({
+        name: TYPE_LABELS[row.type] ?? row.type,
+        value: row.count,
+      }));
+      setPieData(pData);
+
       try {
         const dData = await ticketsApi.getRatingsReport({
           year,
@@ -163,6 +172,27 @@ export default function TicketReportsPage() {
           ticketType: ticketType ? ticketType : undefined,
         });
         setDetailedResult(dData);
+
+        const escChartData = [];
+        if (data.acceptedEscalations > 0)
+          escChartData.push({ name: 'Accepted', value: data.acceptedEscalations });
+        if (data.returnedEscalations > 0)
+          escChartData.push({ name: 'Returned', value: data.returnedEscalations });
+        if (
+          data.totalEscalations > 0 &&
+          data.totalEscalations > data.acceptedEscalations + data.returnedEscalations
+        ) {
+          escChartData.push({
+            name: 'Pending/Other',
+            value: data.totalEscalations - (data.acceptedEscalations + data.returnedEscalations),
+          });
+        }
+        setEscalationPieData(escChartData);
+
+        const slaData = [];
+        if (data.slaStats?.met > 0) slaData.push({ name: 'Met SLA', value: data.slaStats.met });
+        if (data.slaStats?.missed > 0) slaData.push({ name: 'Missed SLA', value: data.slaStats.missed });
+        setSlaPieData(slaData);
       } catch (err) {
         console.error('Failed to fetch detailed ratings', err);
       }
@@ -195,12 +225,6 @@ export default function TicketReportsPage() {
     return 'Full Year';
   })();
 
-  const pieData =
-    result?.avgRatingByType.map((row) => ({
-      name: TYPE_LABELS[row.type] ?? row.type,
-      value: row.count,
-    })) ?? [];
-
   const barData =
     result?.avgRatingByTechnician.map((row) => ({
       name: row.techName.split(' ').pop() ?? row.techName,
@@ -214,18 +238,6 @@ export default function TicketReportsPage() {
       name: row.techName.split(' ').pop() ?? row.techName,
       tickets: row.count,
     })) ?? [];
-
-  // Escalation outcome pie (individual view — shown when escalations exist)
-  const escalationPieData: { name: string; value: number }[] = [];
-  if (result && result.totalEscalations > 0) {
-    const pending =
-      result.totalEscalations - result.acceptedEscalations - result.returnedEscalations;
-    if (result.acceptedEscalations > 0)
-      escalationPieData.push({ name: 'Accepted', value: result.acceptedEscalations });
-    if (result.returnedEscalations > 0)
-      escalationPieData.push({ name: 'Returned', value: result.returnedEscalations });
-    if (pending > 0) escalationPieData.push({ name: 'Pending', value: pending });
-  }
 
   // Individual view = specific technician selected (privileged) OR non-privileged user viewing own data
   const isIndividualView = isTicketSettingsFocal ? !!technicianId : true;
@@ -543,6 +555,53 @@ export default function TicketReportsPage() {
               </Grid>
             )}
 
+            {/* ── SLA Metrics ── */}
+            {result.slaStats && (result.slaStats.met > 0 || result.slaStats.missed > 0) && (
+              <Grid container spacing={2} mb={3}>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                    SLA & Resolution Time
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="caption" color="text.secondary">
+                        SLA Met
+                      </Typography>
+                      <Typography variant="h4" fontWeight={700} color="success.main">
+                        {result.slaStats.met}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="caption" color="text.secondary">
+                        SLA Missed
+                      </Typography>
+                      <Typography variant="h4" fontWeight={700} color="error.main">
+                        {result.slaStats.missed}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="caption" color="text.secondary">
+                        Avg Resolution Time
+                      </Typography>
+                      <Typography variant="h4" fontWeight={700}>
+                        {result.slaStats.avgResolutionTimeHours} hrs
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+            )}
+
             <Grid container spacing={3}>
               {/* ═══════════════════════════════════════════════════════════
                 INDIVIDUAL VIEW — specific technician selected (or non-focal user's own data)
@@ -658,6 +717,65 @@ export default function TicketReportsPage() {
                       </CardContent>
                     </Card>
                   </Grid>
+
+                  {/* Pie 3 — SLA */}
+                  {slaPieData.length > 0 && (
+                    <Grid item xs={12} md={4}>
+                      <Card>
+                        <CardContent>
+                          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                            SLA Performance
+                          </Typography>
+                          <ResponsiveContainer width="100%" height={220}>
+                            <PieChart>
+                              <Pie
+                                data={slaPieData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={40}
+                                outerRadius={80}
+                                dataKey="value"
+                                labelLine={false}
+                                label={({ cx, cy, midAngle, innerRadius, outerRadius, value }) => {
+                                  const RADIAN = Math.PI / 180;
+                                  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                                  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                  return (
+                                    <text
+                                      x={x}
+                                      y={y}
+                                      fill="white"
+                                      textAnchor="middle"
+                                      dominantBaseline="central"
+                                      fontSize={12}
+                                    >
+                                      {value}
+                                    </text>
+                                  );
+                                }}
+                              >
+                                {slaPieData.map((entry, index) => (
+                                  <Cell
+                                    key={`cell-${index}`}
+                                    fill={
+                                      entry.name === 'Met SLA'
+                                        ? '#2e7d32'
+                                        : entry.name === 'Missed SLA'
+                                          ? '#d32f2f'
+                                          : '#757575'
+                                    }
+                                  />
+                                ))}
+                              </Pie>
+                              <Tooltip />
+                              <Legend />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  )}
                 </>
               )}
 
@@ -845,6 +963,72 @@ export default function TicketReportsPage() {
                     </Grid>
                   )}
                 </>
+              )}
+
+              {/* SLA by Category */}
+              {result!.slaByType && result!.slaByType.length > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        SLA by Category
+                      </Typography>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Category</TableCell>
+                            <TableCell align="right">Met</TableCell>
+                            <TableCell align="right">Missed</TableCell>
+                            <TableCell align="right">Avg Time (hrs)</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {result!.slaByType.map((row) => (
+                            <TableRow key={row.type}>
+                              <TableCell>{row.type || 'Unknown'}</TableCell>
+                              <TableCell align="right">{row.met}</TableCell>
+                              <TableCell align="right">{row.missed}</TableCell>
+                              <TableCell align="right">{row.avgResolutionTimeHours}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              )}
+
+              {/* SLA by Technician */}
+              {result!.slaByTechnician && result!.slaByTechnician.length > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        SLA by Technician
+                      </Typography>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Technician</TableCell>
+                            <TableCell align="right">Met</TableCell>
+                            <TableCell align="right">Missed</TableCell>
+                            <TableCell align="right">Avg Time (hrs)</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {result!.slaByTechnician.map((row) => (
+                            <TableRow key={row.techId}>
+                              <TableCell>{row.techName}</TableCell>
+                              <TableCell align="right">{row.met}</TableCell>
+                              <TableCell align="right">{row.missed}</TableCell>
+                              <TableCell align="right">{row.avgResolutionTimeHours}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                </Grid>
               )}
             </Grid>
           </>
@@ -1147,6 +1331,72 @@ export default function TicketReportsPage() {
                         <TableCell align="right">{row.count}</TableCell>
                         <TableCell align="right">{row.ratedCount ?? 0}</TableCell>
                         <TableCell align="right">{row.avg.toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </>
+            )}
+
+            {result.slaByType && result.slaByType.length > 0 && (
+              <>
+                <Typography
+                  variant="subtitle1"
+                  fontWeight={700}
+                  gutterBottom
+                  sx={{ mt: 4, borderBottom: '1px solid #ccc' }}
+                >
+                  SLA Detail By Category
+                </Typography>
+                <Table size="small" sx={{ mb: 4 }}>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Category</TableCell>
+                      <TableCell align="right">Met SLA</TableCell>
+                      <TableCell align="right">Missed SLA</TableCell>
+                      <TableCell align="right">Avg Time (hrs)</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {result.slaByType.map((row) => (
+                      <TableRow key={row.type}>
+                        <TableCell>{row.type || 'Unknown'}</TableCell>
+                        <TableCell align="right">{row.met}</TableCell>
+                        <TableCell align="right">{row.missed}</TableCell>
+                        <TableCell align="right">{row.avgResolutionTimeHours}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </>
+            )}
+
+            {result.slaByTechnician && result.slaByTechnician.length > 0 && (
+              <>
+                <Typography
+                  variant="subtitle1"
+                  fontWeight={700}
+                  gutterBottom
+                  sx={{ mt: 4, borderBottom: '1px solid #ccc' }}
+                >
+                  SLA Detail By Technician
+                </Typography>
+                <Table size="small" sx={{ mb: 4 }}>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Technician</TableCell>
+                      <TableCell align="right">Met SLA</TableCell>
+                      <TableCell align="right">Missed SLA</TableCell>
+                      <TableCell align="right">Avg Time (hrs)</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {result.slaByTechnician.map((row) => (
+                      <TableRow key={row.techId}>
+                        <TableCell>{row.techName}</TableCell>
+                        <TableCell align="right">{row.met}</TableCell>
+                        <TableCell align="right">{row.missed}</TableCell>
+                        <TableCell align="right">{row.avgResolutionTimeHours}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

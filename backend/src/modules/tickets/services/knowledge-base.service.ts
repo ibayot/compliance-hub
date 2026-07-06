@@ -30,7 +30,9 @@ export class KnowledgeBaseService {
 
     // Fetch all users to scrub their names and emails
     try {
-      const users = await this.kbRepo.manager.query('SELECT first_name, last_name, email FROM users');
+      const users = await this.kbRepo.manager.query(
+        'SELECT first_name, last_name, email FROM users',
+      );
       for (const user of users) {
         if (user.first_name && user.first_name.length > 2) {
           const fnRegex = new RegExp(`\\b${this.escapeRegExp(user.first_name)}\\b`, 'gi');
@@ -77,7 +79,9 @@ export class KnowledgeBaseService {
       // Fetch all existing KBs to pass to the prompt for duplicate checking
       // (If the KB grows huge, we'd need vector search, but for now we just fetch titles and IDs)
       const existingKbs = await this.kbRepo.find({ select: ['id', 'title', 'content'] });
-      const kbListText = existingKbs.map(kb => `ID: ${kb.id}\nTitle: ${kb.title}\nContent: ${kb.content}\n---`).join('\n');
+      const kbListText = existingKbs
+        .map((kb) => `ID: ${kb.id}\nTitle: ${kb.title}\nContent: ${kb.content}\n---`)
+        .join('\n');
 
       const prompt = `
 You are an expert IT Helpdesk Knowledge Base article generator.
@@ -116,8 +120,13 @@ Format for UPDATE:
 
       const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
       const result = await model.generateContent(prompt);
-      const responseText = result.response.text().trim().replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '');
-      
+      const responseText = result.response
+        .text()
+        .trim()
+        .replace(/^```json/i, '')
+        .replace(/^```/i, '')
+        .replace(/```$/i, '');
+
       const parsed = JSON.parse(responseText);
 
       if (parsed.action === 'CREATE') {
@@ -147,17 +156,20 @@ Format for UPDATE:
 
   async searchKnowledgeBase(query: string): Promise<KnowledgeArticle[]> {
     if (!this.genAI) {
-       // fallback to simple DB search if no Gemini
-       return this.kbRepo.createQueryBuilder('kb')
-         .where('kb.title LIKE :q OR kb.content LIKE :q', { q: `%${query}%` })
-         .getMany();
+      // fallback to simple DB search if no Gemini
+      return this.kbRepo
+        .createQueryBuilder('kb')
+        .where('kb.title LIKE :q OR kb.content LIKE :q', { q: `%${query}%` })
+        .getMany();
     }
-    
+
     // Semantic search using Gemini
     try {
       const allKbs = await this.getKnowledgeBaseArticles();
-      const kbListText = allKbs.map(kb => `ID: ${kb.id}\nTitle: ${kb.title}\nContent: ${kb.content}\n---`).join('\n');
-      
+      const kbListText = allKbs
+        .map((kb) => `ID: ${kb.id}\nTitle: ${kb.title}\nContent: ${kb.content}\n---`)
+        .join('\n');
+
       const prompt = `
 Given the user's issue description: "${query}"
 Which of the following Knowledge Base articles might be helpful?
@@ -169,18 +181,24 @@ ${kbListText}
 `;
       const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
       const result = await model.generateContent(prompt);
-      const responseText = result.response.text().trim().replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '');
-      
+      const responseText = result.response
+        .text()
+        .trim()
+        .replace(/^```json/i, '')
+        .replace(/^```/i, '')
+        .replace(/```$/i, '');
+
       const parsedIds = JSON.parse(responseText);
       if (Array.isArray(parsedIds) && parsedIds.length > 0) {
-        return allKbs.filter(kb => parsedIds.includes(kb.id));
+        return allKbs.filter((kb) => parsedIds.includes(kb.id));
       }
       return [];
     } catch (err) {
-       this.logger.error('Failed to search KB using Gemini', err);
-       return this.kbRepo.createQueryBuilder('kb')
-         .where('kb.title LIKE :q OR kb.content LIKE :q', { q: `%${query}%` })
-         .getMany();
+      this.logger.error('Failed to search KB using Gemini', err);
+      return this.kbRepo
+        .createQueryBuilder('kb')
+        .where('kb.title LIKE :q OR kb.content LIKE :q', { q: `%${query}%` })
+        .getMany();
     }
   }
 

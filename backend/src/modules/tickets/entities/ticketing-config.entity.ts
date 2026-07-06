@@ -40,4 +40,28 @@ export class TicketingConfig {
 
   @Column({ name: 'primary_smtp_daily_limit', type: 'int', default: 500 })
   primarySmtpDailyLimit: number;
+
+  @Column({ name: 'schedule_mode', type: 'varchar', length: 20, default: 'OFFICE_HOURS' })
+  scheduleMode: string;
+
+  @Column({ name: 'office_clockin', type: 'time', default: '08:00:00' })
+  officeClockin: string;
+
+  @Column({ name: 'office_clockout', type: 'time', default: '17:00:00' })
+  officeClockout: string;
+
+  @Column({ name: 'cww_clockin_start', type: 'time', default: '07:00:00' })
+  cwwClockinStart: string;
+
+  @Column({ name: 'cww_clockin_end', type: 'time', default: '08:00:00' })
+  cwwClockinEnd: string;
+
+  @Column({ name: 'cww_clockout_start', type: 'time', default: '18:00:00' })
+  cwwClockoutStart: string;
+
+  @Column({ name: 'cww_clockout_end', type: 'time', default: '19:00:00' })
+  cwwClockoutEnd: string;
+
+  @Column({ name: 'is_flag_ceremony_paused', type: 'boolean', default: false })
+  isFlagCeremonyPaused: boolean;
 }

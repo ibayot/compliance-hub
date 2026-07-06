@@ -4,7 +4,9 @@ import { SubmissionFrequency } from '../entities/reportorial-document-type.entit
 export class UpdateReportorialDocTypeDto {
   @IsString()
   @MinLength(2)
-  @Matches(/^[A-Za-z0-9_]+$/, { message: 'base_name may only contain letters, digits, and underscores' })
+  @Matches(/^[A-Za-z0-9_]+$/, {
+    message: 'base_name may only contain letters, digits, and underscores',
+  })
   @IsOptional()
   base_name?: string;
 

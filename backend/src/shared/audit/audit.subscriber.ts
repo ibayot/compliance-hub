@@ -37,41 +37,57 @@ export class AuditVariableSubscriber implements EntitySubscriberInterface {
 
     const tableName = event.metadata.tableName;
     if (['ticket_events', 'audit_log'].includes(tableName)) return;
-    
+
     // Attempt to extract row ID.
     let rowId = null;
     if (event.entityId) {
-        rowId = String(event.entityId);
+      rowId = String(event.entityId);
     } else if (event.entity && event.entity.id) {
-        rowId = String(event.entity.id);
+      rowId = String(event.entity.id);
     }
 
     const sanitizeEntity = (entity: any) => {
       if (!entity) return null;
       const sanitized = { ...entity };
-      
-      const relationKeys = ['createdBy', 'requester', 'assignedTo', 'category', 'issueTypeConfig', 'escalatedBy', 'escalatedTo', 'ticket', 'user', 'unit', 'focal', 'events', 'comments'];
+
+      const relationKeys = [
+        'createdBy',
+        'requester',
+        'assignedTo',
+        'category',
+        'issueTypeConfig',
+        'escalatedBy',
+        'escalatedTo',
+        'ticket',
+        'user',
+        'unit',
+        'focal',
+        'events',
+        'comments',
+      ];
       for (const key of relationKeys) {
         if (sanitized[key] && typeof sanitized[key] === 'object') {
-            // Keep identifiable properties if available
-            const keepProps: any = {};
-            if (sanitized[key].id !== undefined) keepProps.id = sanitized[key].id;
-            if (sanitized[key].email !== undefined) keepProps.email = sanitized[key].email;
-            if (sanitized[key].name !== undefined) keepProps.name = sanitized[key].name;
-            if (sanitized[key].username !== undefined) keepProps.username = sanitized[key].username;
-            if (sanitized[key].firstName !== undefined || sanitized[key].lastName !== undefined) {
-              keepProps.name = `${sanitized[key].firstName || ''} ${sanitized[key].lastName || ''}`.trim();
-            }
+          // Keep identifiable properties if available
+          const keepProps: any = {};
+          if (sanitized[key].id !== undefined) keepProps.id = sanitized[key].id;
+          if (sanitized[key].email !== undefined) keepProps.email = sanitized[key].email;
+          if (sanitized[key].name !== undefined) keepProps.name = sanitized[key].name;
+          if (sanitized[key].username !== undefined) keepProps.username = sanitized[key].username;
+          if (sanitized[key].firstName !== undefined || sanitized[key].lastName !== undefined) {
+            keepProps.name =
+              `${sanitized[key].firstName || ''} ${sanitized[key].lastName || ''}`.trim();
+          }
 
-            sanitized[key] = Object.keys(keepProps).length > 0 ? keepProps : (sanitized[key].id || '{Object}');
+          sanitized[key] =
+            Object.keys(keepProps).length > 0 ? keepProps : sanitized[key].id || '{Object}';
         }
       }
 
       // Remove "null" or undefined fields to save space
       for (const key in sanitized) {
-          if (sanitized[key] === null || sanitized[key] === undefined) {
-              delete sanitized[key];
-          }
+        if (sanitized[key] === null || sanitized[key] === undefined) {
+          delete sanitized[key];
+        }
       }
       return sanitized;
     };
@@ -85,30 +101,36 @@ export class AuditVariableSubscriber implements EntitySubscriberInterface {
       const changesNew: any = {};
       const changesOld: any = {};
       const updatedColumns = event.updatedColumns;
-      
+
       if (updatedColumns && updatedColumns.length > 0) {
-         for (const col of updatedColumns) {
-             const propName = col.propertyName;
-             changesNew[propName] = event.entity[propName];
-             changesOld[propName] = event.databaseEntity ? event.databaseEntity[propName] : null;
-         }
+        for (const col of updatedColumns) {
+          const propName = col.propertyName;
+          changesNew[propName] = event.entity[propName];
+          changesOld[propName] = event.databaseEntity ? event.databaseEntity[propName] : null;
+        }
       } else {
-         // Fallback if updatedColumns is empty
-         for (const key of Object.keys(event.entity)) {
-             if (event.databaseEntity && JSON.stringify(event.entity[key]) !== JSON.stringify(event.databaseEntity[key])) {
-                 changesNew[key] = event.entity[key];
-                 changesOld[key] = event.databaseEntity[key];
-             }
-         }
+        // Fallback if updatedColumns is empty
+        for (const key of Object.keys(event.entity)) {
+          if (
+            event.databaseEntity &&
+            JSON.stringify(event.entity[key]) !== JSON.stringify(event.databaseEntity[key])
+          ) {
+            changesNew[key] = event.entity[key];
+            changesOld[key] = event.databaseEntity[key];
+          }
+        }
       }
-      
+
       const sanitizedNew = sanitizeEntity(changesNew);
       const sanitizedOld = sanitizeEntity(changesOld);
-      
-      if (Object.keys(sanitizedNew || {}).length === 0 && Object.keys(sanitizedOld || {}).length === 0) {
+
+      if (
+        Object.keys(sanitizedNew || {}).length === 0 &&
+        Object.keys(sanitizedOld || {}).length === 0
+      ) {
         return; // Nothing to log
       }
-      
+
       newValues = Object.keys(sanitizedNew || {}).length > 0 ? JSON.stringify(sanitizedNew) : null;
       oldValues = Object.keys(sanitizedOld || {}).length > 0 ? JSON.stringify(sanitizedOld) : null;
     } else if (action === 'DELETE') {
@@ -134,7 +156,7 @@ export class AuditVariableSubscriber implements EntitySubscriberInterface {
           newValues,
           ipAddress,
           sessionId,
-        ]
+        ],
       );
     } catch (err) {
       console.error(`AuditSubscriber failed to write audit log for ${tableName}:`, err);

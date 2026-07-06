@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  NotFoundException,
-  UseGuards,
-  ParseIntPipe,
-} from '@nestjs/common';
+import { Controller, Get, Param, NotFoundException, UseGuards, ParseIntPipe } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { UnitsService } from '../units/units.service';
 import { RoleCapabilitiesService } from '../users/role-capabilities.service';
@@ -48,6 +41,7 @@ export class InternalController {
       middle_name: u.middleName ?? null,
       role: u.role,
       staff_id: (u as any).staff_id ?? null,
+      ticketMainFocal: u.ticketMainFocal,
     }));
   }
 
@@ -65,6 +59,7 @@ export class InternalController {
       middle_name: user.middleName ?? null,
       role: user.role,
       staff_id: (user as any).staff_id ?? null,
+      ticketMainFocal: user.ticketMainFocal,
     };
   }
 

@@ -2,8 +2,6 @@ import {
   Injectable,
   Logger,
   BadRequestException,
-  forwardRef,
-  Inject,
   OnModuleInit,
   ForbiddenException,
 } from '@nestjs/common';
@@ -46,10 +44,7 @@ export interface BulkSetOfficeDaysDto {
 export class AttendanceService implements OnModuleInit {
   private readonly logger = new Logger(AttendanceService.name);
   private readonly excludedAttendanceEmails: string[] = [];
-  private readonly excludedAttendanceRoleValues = [
-    'user',
-    'super_admin',
-  ];
+  private readonly excludedAttendanceRoleValues = ['user', 'super_admin'];
 
   constructor(
     @InjectRepository(TechAttendance)
@@ -67,9 +62,15 @@ export class AttendanceService implements OnModuleInit {
   async onModuleInit() {
     this.eventBus.subscribe('user.login', (payload: { userId: number }) => {
       if (payload && payload.userId) {
-        this.autoCorrectAbsentOnLogin(payload.userId).catch(err => {
-          this.logger.warn(`Failed autoCorrectAbsentOnLogin for user ${payload.userId}: ${err.message}`);
-        });
+        this.autoCorrectAbsentOnLogin(payload.userId)
+          .then(() => {
+            this.eventBus.publish('attendance.verified', { userId: payload.userId }).catch(() => {});
+          })
+          .catch((err) => {
+            this.logger.warn(
+              `Failed autoCorrectAbsentOnLogin for user ${payload.userId}: ${err.message}`,
+            );
+          });
       }
     });
   }
@@ -112,7 +113,9 @@ export class AttendanceService implements OnModuleInit {
     ]);
 
     return {
-      desktop_support: [...new Set([UserRole.DESKTOP_SR, UserRole.DESKTOP_JR, ...desktopSupportRoles])],
+      desktop_support: [
+        ...new Set([UserRole.DESKTOP_SR, UserRole.DESKTOP_JR, ...desktopSupportRoles]),
+      ],
       it_support: [...new Set([UserRole.IT_SUPPORT_SR, UserRole.IT_SUPPORT_JR, ...itSupportRoles])],
       pantawid_ict_support: [...new Set([UserRole.PANTAWID_ICT, ...pantawidRoles])],
       ito: this.getItoRoles(),
@@ -147,7 +150,11 @@ export class AttendanceService implements OnModuleInit {
   }
 
   /** Set (upsert) attendance for a single user on a date */
-  async setAttendance(dto: SetAttendanceDto, setById: number, actorRole?: string): Promise<TechAttendance> {
+  async setAttendance(
+    dto: SetAttendanceDto,
+    setById: number,
+    actorRole?: string,
+  ): Promise<TechAttendance> {
     if (!dto.userId || !dto.date || !dto.status) {
       throw new BadRequestException('userId, date, and status are required');
     }
@@ -197,7 +204,11 @@ export class AttendanceService implements OnModuleInit {
   }
 
   /** Bulk set attendance for multiple users */
-  async bulkSetAttendance(dto: BulkSetAttendanceDto, setById: number, actorRole?: string): Promise<TechAttendance[]> {
+  async bulkSetAttendance(
+    dto: BulkSetAttendanceDto,
+    setById: number,
+    actorRole?: string,
+  ): Promise<TechAttendance[]> {
     const results: TechAttendance[] = [];
     for (const entry of dto.entries) {
       results.push(await this.setAttendance(entry, setById, actorRole));
@@ -220,22 +231,27 @@ export class AttendanceService implements OnModuleInit {
     const seen = new Set<number>();
     const allTechs: User[] = [];
     for (const u of byRole) {
-      if (!seen.has(u.id)) { seen.add(u.id); allTechs.push(u); }
+      if (!seen.has(u.id)) {
+        seen.add(u.id);
+        allTechs.push(u);
+      }
     }
-    this.logger.log(`[getAvailableTechnicians] ticketType=${ticketType}, date=${date}, roles=[${roles.join(',')}], allTechsCount=${allTechs.length}`);
+    this.logger.log(
+      `[getAvailableTechnicians] ticketType=${ticketType}, date=${date}, roles=[${roles.join(',')}], allTechsCount=${allTechs.length}`,
+    );
 
     if (allTechs.length === 0) return [];
 
     // Get attendance records for today for these techs
-    const techIds = allTechs.map(t => t.id);
+    const techIds = allTechs.map((t) => t.id);
     const attendance = await this.attendanceRepo.find({
       where: { date, userId: In(techIds) },
     });
 
-    const attendanceMap = new Map(attendance.map(a => [a.userId, a.status]));
+    const attendanceMap = new Map(attendance.map((a) => [a.userId, a.status]));
 
     // Filter: only techs marked present or half_day (or no record — assume present)
-    return allTechs.filter(tech => {
+    return allTechs.filter((tech) => {
       const status = attendanceMap.get(tech.id);
       if (!status) return true;
       return status === AttendanceStatus.PRESENT || status === AttendanceStatus.HALF_DAY;
@@ -248,7 +264,9 @@ export class AttendanceService implements OnModuleInit {
    */
   async getPresentTechnicians(ticketType: string, date: string): Promise<User[]> {
     const available = await this.getAvailableTechnicians(ticketType, date);
-    this.logger.log(`[getPresentTechnicians] ticketType=${ticketType}, date=${date}, availableCount=${available.length}`);
+    this.logger.log(
+      `[getPresentTechnicians] ticketType=${ticketType}, date=${date}, availableCount=${available.length}`,
+    );
     if (available.length === 0) return [];
 
     const presentRows = await this.attendanceRepo.find({
@@ -258,12 +276,12 @@ export class AttendanceService implements OnModuleInit {
         userId: In(available.map((u) => u.id)),
       },
     });
-    this.logger.log(`[getPresentTechnicians] presentRowsCount=${presentRows.length}, userIds=[${presentRows.map(r => r.userId).join(',')}]`);
+    this.logger.log(
+      `[getPresentTechnicians] presentRowsCount=${presentRows.length}, userIds=[${presentRows.map((r) => r.userId).join(',')}]`,
+    );
     const presentIds = new Set<number>(presentRows.map((r) => r.userId));
     return available.filter((u) => presentIds.has(u.id));
   }
-
-
 
   /** Get technicians filtered for the current session (all staff or filtered by type) */
   async listTechnicians(ticketType?: string, actorRole?: string): Promise<User[]> {
@@ -280,7 +298,7 @@ export class AttendanceService implements OnModuleInit {
 
     const groups = await this.getRoleGroups();
     const roles = groups[forcedType || 'all'] || groups.all;
-    
+
     if (!roles || roles.length === 0) {
       return [];
     }
@@ -324,7 +342,7 @@ export class AttendanceService implements OnModuleInit {
   }
 
   /** Get all non-user, non-technician, non-super-admin staff — returns each user with their lastLogin (for monthly grid) */
-  async getStaffLoginsMonthly(startDate: string, endDate: string): Promise<User[]> {
+  async getStaffLoginsMonthly(_startDate: string, _endDate: string): Promise<User[]> {
     const EXCLUDED_ROLES = [
       UserRole.SUPER_ADMIN,
       UserRole.DESKTOP_SR,
@@ -383,10 +401,21 @@ export class AttendanceService implements OnModuleInit {
                 setById: null as any,
               }),
             );
-          } else if (record.status === AttendanceStatus.ABSENT || record.status === AttendanceStatus.OUT_OF_OFFICE || record.status === AttendanceStatus.HALF_DAY) {
-            const prevStatus = record.status === AttendanceStatus.ABSENT ? 'absent' : record.status === AttendanceStatus.OUT_OF_OFFICE ? 'OOO' : 'half-day';
+          } else if (
+            record.status === AttendanceStatus.ABSENT ||
+            record.status === AttendanceStatus.OUT_OF_OFFICE ||
+            record.status === AttendanceStatus.HALF_DAY
+          ) {
+            const prevStatus =
+              record.status === AttendanceStatus.ABSENT
+                ? 'absent'
+                : record.status === AttendanceStatus.OUT_OF_OFFICE
+                  ? 'OOO'
+                  : 'half-day';
             record.status = AttendanceStatus.PRESENT;
-            record.notes = (record.notes ? record.notes + ' | ' : '') + `Auto-corrected: logged in while marked ${prevStatus}`;
+            record.notes =
+              (record.notes ? record.notes + ' | ' : '') +
+              `Auto-corrected: logged in while marked ${prevStatus}`;
             await this.attendanceRepo.save(record);
           }
         } catch (err: any) {
@@ -397,7 +426,7 @@ export class AttendanceService implements OnModuleInit {
             throw err;
           }
         }
-      }
+      },
     );
   }
 
@@ -480,10 +509,12 @@ export class AttendanceService implements OnModuleInit {
     const attendance = await this.attendanceRepo.find({ where: { date } });
     const attendedIds = new Set(
       attendance
-        .filter(a => a.status === AttendanceStatus.PRESENT || a.status === AttendanceStatus.HALF_DAY)
-        .map(a => a.userId),
+        .filter(
+          (a) => a.status === AttendanceStatus.PRESENT || a.status === AttendanceStatus.HALF_DAY,
+        )
+        .map((a) => a.userId),
     );
 
-    return staff.filter(s => !attendedIds.has(s.id));
+    return staff.filter((s) => !attendedIds.has(s.id));
   }
 }

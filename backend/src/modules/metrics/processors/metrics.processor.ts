@@ -11,9 +11,7 @@ interface ComputeMetricsJob {
 export class MetricsProcessor {
   private readonly logger = new Logger(MetricsProcessor.name);
 
-  constructor(
-    private metricsService: MetricsService,
-  ) {}
+  constructor(private metricsService: MetricsService) {}
 
   @Process('compute-metrics')
   async handleMetricsComputation(job: Job<ComputeMetricsJob>) {
@@ -22,7 +20,8 @@ export class MetricsProcessor {
     this.logger.log(`Computing metrics for version: ${versionId}`);
 
     try {
-      const { results, aggregate } = await this.metricsService.computeMetricsAndAutoReview(versionId);
+      const { results, aggregate } =
+        await this.metricsService.computeMetricsAndAutoReview(versionId);
 
       this.logger.log(
         `Metrics computed for version ${versionId}: Score=${aggregate.total_score}, Passed=${aggregate.passed}, Failed=${aggregate.failed}`,
@@ -30,10 +29,7 @@ export class MetricsProcessor {
 
       return { results, aggregate };
     } catch (error) {
-      this.logger.error(
-        `Failed to compute metrics for version ${versionId}`,
-        error.stack,
-      );
+      this.logger.error(`Failed to compute metrics for version ${versionId}`, error.stack);
       throw error;
     }
   }

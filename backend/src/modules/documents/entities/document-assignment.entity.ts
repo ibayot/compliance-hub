@@ -8,7 +8,7 @@ import {
   UpdateDateColumn,
   Unique,
 } from 'typeorm';
-import { Unit } from '../../units/entities/unit.entity';
+import { UnitRef } from '../../../shared/contracts/unit-ref';
 import { UserRef } from '../../../shared/contracts/user-ref';
 
 export enum SubmissionFrequency {
@@ -33,9 +33,8 @@ export class DocumentAssignment {
   @Column({ type: 'int' })
   unit_id: number;
 
-  @ManyToOne(() => Unit, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'unit_id' })
-  unit: Unit;
+  // Virtual field populated via UnitsHttpClient
+  unit?: UnitRef;
 
   @Column({ type: 'varchar', length: 100 })
   document_type: string;

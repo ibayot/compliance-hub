@@ -34,7 +34,9 @@ export class SectionCheckEngine {
     passCriteria: { all_present: boolean },
   ): SectionCheckResult {
     const requiredSections = Array.isArray(ruleConfig?.required_sections)
-      ? ruleConfig.required_sections.filter((section) => typeof section === 'string' && section.trim().length > 0)
+      ? ruleConfig.required_sections.filter(
+          (section) => typeof section === 'string' && section.trim().length > 0,
+        )
       : [];
 
     if (requiredSections.length === 0) {
@@ -65,10 +67,7 @@ export class SectionCheckEngine {
 
     // Determine pass/fail
     const allPresent = missingSections.length === 0;
-    const status =
-      allPresent === passCriteria.all_present
-        ? MetricStatus.PASS
-        : MetricStatus.FAIL;
+    const status = allPresent === passCriteria.all_present ? MetricStatus.PASS : MetricStatus.FAIL;
 
     // Calculate score
     const score = foundSections.length / requiredSections.length;

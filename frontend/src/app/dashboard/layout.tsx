@@ -8,14 +8,16 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import FeedbackModal from '@/components/FeedbackModal';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, requiresMfa } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
       router.push('/login');
+    } else if (!loading && isAuthenticated && requiresMfa) {
+      router.push('/mfa-verify');
     }
-  }, [isAuthenticated, loading, router]);
+  }, [isAuthenticated, loading, requiresMfa, router]);
 
   if (loading) {
     return (

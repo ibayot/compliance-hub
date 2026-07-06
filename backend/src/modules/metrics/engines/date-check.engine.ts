@@ -39,9 +39,7 @@ export class DateCheckEngine {
     passCriteria: { within_deadline: boolean },
   ): DateCheckResult {
     const maxDaysLateRaw = Number(ruleConfig?.max_days_late);
-    const maxDaysLate = Number.isFinite(maxDaysLateRaw)
-      ? Math.max(0, maxDaysLateRaw)
-      : 0;
+    const maxDaysLate = Number.isFinite(maxDaysLateRaw) ? Math.max(0, maxDaysLateRaw) : 0;
 
     // Calculate days late (negative if early)
     const diffMs = submittedDate.getTime() - deadline.getTime();
@@ -52,9 +50,7 @@ export class DateCheckEngine {
 
     // Determine pass/fail
     const status =
-      withinDeadline === passCriteria.within_deadline
-        ? MetricStatus.PASS
-        : MetricStatus.FAIL;
+      withinDeadline === passCriteria.within_deadline ? MetricStatus.PASS : MetricStatus.FAIL;
 
     // Calculate score (1.0 if on time, decreasing with delay)
     let score: number;

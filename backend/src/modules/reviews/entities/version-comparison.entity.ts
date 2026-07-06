@@ -37,11 +37,7 @@ export class VersionComparison {
   version_b: DocumentVersion;
 
   @Column({ type: 'int', nullable: true })
-  compared_by_id: number;
-
-  @ManyToOne(() => User, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'compared_by_id' })
-  compared_by: User;
+  compared_by_id: number | null;
 
   @Column({ type: 'json' })
   diff_output: any; // Store diffs and stats

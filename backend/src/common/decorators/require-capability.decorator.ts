@@ -7,5 +7,4 @@ export const CAPABILITY_KEY = 'requiredCapability';
  * Works in conjunction with CapabilityGuard.
  * Example: @RequireCapability('isTicketSettingsFocal')
  */
-export const RequireCapability = (capability: string) =>
-  SetMetadata(CAPABILITY_KEY, capability);
+export const RequireCapability = (capability: string) => SetMetadata(CAPABILITY_KEY, capability);

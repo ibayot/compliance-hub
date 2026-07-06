@@ -483,7 +483,7 @@ INSERT INTO users (id, username, email, password, role, is_active, created_at, u
 VALUES (
   UUID(), 
   'admin', 
-  'admin@rictms.gov.ph', 
+  'fo2admin@dswd.gov.ph', 
   '$2b$10$K7L1Ow1WlPqY5xZJX5Hn2.xvK3bC2aE9j9pFW6K7L1Ow1WlPqY5xZ',
   'admin', 
   TRUE, 

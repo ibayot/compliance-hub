@@ -9,8 +9,7 @@ import {
   UpdateDateColumn,
   JoinColumn,
 } from 'typeorm';
-import { Unit } from '../../units/entities/unit.entity';
-import { User } from '../../shared/entities';
+import { UserRef } from '../../../shared/contracts/user-ref';
 import { DocumentVersion } from './document-version.entity';
 import { ReportorialDocumentType } from './reportorial-document-type.entity';
 
@@ -20,6 +19,8 @@ export enum DocumentStatus {
   READY = 'ready',
   FAILED = 'failed',
 }
+
+import { UnitRef } from '../../../shared/contracts/unit-ref';
 
 @Entity('documents')
 export class Document {
@@ -65,16 +66,14 @@ export class Document {
   @Column({ type: 'int' })
   unit_id: number;
 
-  @ManyToOne(() => Unit, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'unit_id' })
-  unit: Unit;
+  // Virtual field populated via UnitsHttpClient
+  unit?: UnitRef;
 
   @Column({ type: 'int', nullable: true })
   uploaded_by: number;
 
-  @ManyToOne(() => User, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'uploaded_by' })
-  uploader: User;
+  // Virtual field populated via UsersHttpClient
+  uploader?: UserRef;
 
   @OneToMany(() => DocumentVersion, (version) => version.document, {
     cascade: true,

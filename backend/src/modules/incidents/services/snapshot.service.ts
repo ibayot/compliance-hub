@@ -14,7 +14,11 @@ export class SnapshotService {
     private incidentRepository: Repository<Incident>,
   ) {}
 
-  async createSnapshot(date: Date, time: string, type: 'start' | 'end'): Promise<IncidentDailySnapshot> {
+  async createSnapshot(
+    date: Date,
+    time: string,
+    type: 'start' | 'end',
+  ): Promise<IncidentDailySnapshot> {
     const incidents = await this.incidentRepository.find({
       where: { status: IncidentStatus.OPEN },
     });

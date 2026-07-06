@@ -80,6 +80,8 @@ interface AuthContextType {
   isSessionLocked: boolean;
   unlockSession: (password: string) => Promise<void>;
   isAuthenticated: boolean;
+  requiresMfa: boolean;
+  setRequiresMfa: (val: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -90,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [myCap, setMyCap] = useState<RoleCapabilityRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [requiresPasswordChange, setRequiresPasswordChange] = useState(false);
+  const [requiresMfa, setRequiresMfa] = useState(false);
   const [isSessionLocked, setIsSessionLocked] = useState(false);
   const [unlockPassword, setUnlockPassword] = useState('');
   const [unlockError, setUnlockError] = useState<string | null>(null);
@@ -147,11 +150,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           try {
             const payload = parseJwt(token);
             if (payload) jwtRole = payload.role;
-          } catch {}
+          } catch (err) { /* ignore */ }
 
           const roleChanged = jwtRole && jwtRole !== profile.role;
 
           setUser(profile);
+
+          if (profile.requiresPasswordChange) {
+            setRequiresPasswordChange(true);
+          }
+          
+          if (profile.requiresMfa) {
+            setRequiresMfa(true);
+          }
 
           if (roleChanged) {
             enqueueSnackbar('Your role has been updated. Please log in again to apply changes.', {
@@ -223,7 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const payload = parseJwt(token);
             if (payload) jwtRole = payload.role;
           }
-        } catch {}
+        } catch (err) { /* ignore */ }
 
         const roleChanged = jwtRole && jwtRole !== profile.role;
 
@@ -238,9 +249,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           try {
             const caps = await usersApi.getMyCapabilities();
             setMyCap(caps);
-          } catch {}
+          } catch (err) { /* ignore */ }
         }
-      } catch {
+      } catch (err) {
         // 401 is handled by the axios interceptor; other errors are safe to ignore
       }
     }, 60_000); // 60 s
@@ -249,52 +260,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [!!user, enqueueSnackbar]);
 
   const login = async (email: string, password: string, redirectTo?: string) => {
+    const response = await authApi.login({ email, password });
+    tokenStore.set('accessToken', response.accessToken);
+    tokenStore.set('refreshToken', response.refreshToken);
+    // Set user from login response first (includes units now)
+    setUser(response.user as any);
+    if (response.requiresPasswordChange) {
+      setRequiresPasswordChange(true);
+    }
+    if (response.requiresMfa) {
+      setRequiresMfa(true);
+    }
+    // Then fetch full profile to guarantee units and all relations are populated
     try {
-      const response = await authApi.login({ email, password });
-      tokenStore.set('accessToken', response.accessToken);
-      tokenStore.set('refreshToken', response.refreshToken);
-      // Set user from login response first (includes units now)
-      setUser(response.user as any);
-      if (response.requiresPasswordChange) {
-        setRequiresPasswordChange(true);
-      }
-      // Then fetch full profile to guarantee units and all relations are populated
-      try {
-        const profile = await authApi.getProfile();
-        setUser(profile);
-      } catch {
-        // Non-blocking: login response user data is still valid
-      }
-      usersApi
-        .getMyCapabilities()
-        .then(setMyCap)
-        .catch(() => {});
+      const profile = await authApi.getProfile();
+      setUser(profile);
+    } catch (err) {
+      // Non-blocking: login response user data is still valid
+    }
+    usersApi
+      .getMyCapabilities()
+      .then(setMyCap)
+      .catch(() => {});
+      
+    if (response.requiresMfa) {
+      router.push('/mfa-verify');
+    } else {
       router.push(redirectTo ?? '/dashboard');
-    } catch (error) {
-      throw error;
     }
   };
 
   const loginWithGoogle = async (idToken: string, redirectTo?: string) => {
+    const response = await authApi.loginWithGoogle({ idToken });
+    tokenStore.set('accessToken', response.accessToken);
+    tokenStore.set('refreshToken', response.refreshToken);
+    setUser(response.user as any);
+    if (response.requiresPasswordChange) {
+      setRequiresPasswordChange(true);
+    }
+    if (response.requiresMfa) {
+      setRequiresMfa(true);
+    }
     try {
-      const response = await authApi.loginWithGoogle({ idToken });
-      tokenStore.set('accessToken', response.accessToken);
-      tokenStore.set('refreshToken', response.refreshToken);
-      setUser(response.user as any);
-      if (response.requiresPasswordChange) {
-        setRequiresPasswordChange(true);
-      }
-      try {
-        const profile = await authApi.getProfile();
-        setUser(profile);
-      } catch {}
-      usersApi
-        .getMyCapabilities()
-        .then(setMyCap)
-        .catch(() => {});
+      const profile = await authApi.getProfile();
+      setUser(profile);
+    } catch (err) { /* ignore */ }
+    usersApi
+      .getMyCapabilities()
+      .then(setMyCap)
+      .catch(() => {});
+      
+    if (response.requiresMfa) {
+      router.push('/mfa-verify');
+    } else {
       router.push(redirectTo ?? '/dashboard');
-    } catch (error) {
-      throw error;
     }
   };
 
@@ -310,6 +329,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setMyCap(null);
       setIsSessionLocked(false);
+      setRequiresMfa(false);
       clearInactivityTimer();
       router.push(reason ? `/login?reason=${reason}` : '/login');
     }
@@ -376,6 +396,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isSessionLocked,
           unlockSession,
           isAuthenticated: !!user,
+          requiresMfa,
+          setRequiresMfa,
         }}
       >
         {children}
@@ -432,7 +454,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {user && (
         <ForcePasswordChangeModal 
           open={requiresPasswordChange} 
-          onClose={() => setRequiresPasswordChange(false)}
+          onClose={() => {
+            // Re-fetch profile to confirm password was actually changed server-side
+            authApi.getProfile().then((profile) => {
+              if (!profile.requiresPasswordChange) {
+                setRequiresPasswordChange(false);
+              }
+            }).catch(() => setRequiresPasswordChange(false));
+          }}
           userId={user.id}
         />
       )}

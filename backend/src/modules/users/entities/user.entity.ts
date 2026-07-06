@@ -6,7 +6,6 @@ import {
   UpdateDateColumn,
   ManyToMany,
   JoinTable,
-  OneToMany,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { Unit } from '../../units/entities/unit.entity';
@@ -64,6 +63,12 @@ export class User {
   @Column({ name: 'suffix', nullable: true })
   suffix: string;
 
+  @Column({ name: 'phone_number', nullable: true })
+  phoneNumber: string;
+
+  @Column({ name: 'sex', nullable: true })
+  sex: string;
+
   @Column({ name: 'staff_id', nullable: true })
   staffId: string;
 
@@ -108,6 +113,17 @@ export class User {
 
   @Column({ name: 'last_login', type: 'datetime', nullable: true })
   lastLogin: Date | null;
+
+  @Column({ name: 'mfa_code', type: 'varchar', nullable: true })
+  @Exclude()
+  mfaCode: string | null;
+
+  @Column({ name: 'mfa_code_expires_at', type: 'datetime', nullable: true })
+  @Exclude()
+  mfaCodeExpiresAt: Date | null;
+
+  @Column({ name: 'mfa_last_verified_at', type: 'datetime', nullable: true })
+  mfaLastVerifiedAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -7,7 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Ticket } from './ticket.entity';
-import { User } from '../../shared/entities';
+import { UserRef } from '../../../shared/contracts/user-ref';
 
 @Entity('ticket_comments')
 export class TicketComment {
@@ -27,13 +27,14 @@ export class TicketComment {
   @Column({ name: 'user_id', type: 'int' })
   userId: number;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'user_id' })
-  user: User;
+  user?: UserRef;
 
   /** Internal technician note - not visible to requester */
   @Column({ name: 'is_internal', type: 'boolean', default: false })
   isInternal: boolean;
+
+  @Column({ name: 'attachment_path', type: 'varchar', length: 255, nullable: true })
+  attachmentPath: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -10,11 +10,11 @@ async function main() {
   });
 
   const defaultPassword = await bcrypt.hash('password123', 10);
-  const passwordSpecial = await bcrypt.hash('Password12345', 10);
-  const passwordOasswird = await bcrypt.hash('Oasswird12345', 10);
+  const passwordSpecial = await bcrypt.hash('password123', 10);
+  const passwordOasswird = await bcrypt.hash('password123', 10);
 
   const users = [
-    { email: 'admin@rictms.gov.ph', role: 'super_admin', pass: defaultPassword },
+    { email: 'fo2admin@dswd.gov.ph', role: 'super_admin', pass: defaultPassword },
     { email: 'jmmmaguigad@dswd.gov.ph', role: 'cybersec', pass: passwordSpecial },
     { email: 'mpmabazza@dswd.gov.ph', role: 'desktop_sr', pass: defaultPassword },
     { email: 'jrcardona@dswd.gov.ph', role: 'technician', pass: passwordOasswird },

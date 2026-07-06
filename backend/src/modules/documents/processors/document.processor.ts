@@ -32,9 +32,7 @@ export class DocumentProcessor {
   async handleDocumentProcessing(job: Job<ProcessDocumentJob>) {
     const { documentId, versionId } = job.data;
 
-    this.logger.log(
-      `Processing document: ${documentId}, version: ${versionId}`,
-    );
+    this.logger.log(`Processing document: ${documentId}, version: ${versionId}`);
 
     try {
       // Update status to processing
@@ -55,8 +53,7 @@ export class DocumentProcessor {
 
       // Read file from blob first, then fallback to filesystem for backward compatibility
       const fileBuffer =
-        version.file_blob ??
-        (await this.storageService.readFile(version.file_path));
+        version.file_blob ?? (await this.storageService.readFile(version.file_path));
 
       if (!version.file_blob) {
         await this.versionRepo.update(versionId, { file_blob: fileBuffer });
@@ -76,9 +73,7 @@ export class DocumentProcessor {
           extractedText = result.value;
 
           if (result.messages.length > 0) {
-            this.logger.warn(
-              `Mammoth warnings: ${JSON.stringify(result.messages)}`,
-            );
+            this.logger.warn(`Mammoth warnings: ${JSON.stringify(result.messages)}`);
           }
         }
       } catch (error: any) {
@@ -113,10 +108,7 @@ export class DocumentProcessor {
 
       this.logger.log(`Queued metrics computation for version: ${versionId}`);
     } catch (error) {
-      this.logger.error(
-        `Failed to process document: ${documentId}`,
-        error.stack,
-      );
+      this.logger.error(`Failed to process document: ${documentId}`, error.stack);
 
       // Update status to failed
       await this.documentRepo.update(documentId, {

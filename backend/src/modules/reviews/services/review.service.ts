@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ManualReview, ReviewDecision } from '../entities/manual-review.entity';
@@ -39,10 +34,7 @@ export class ReviewService {
   /**
    * Submit a manual review for a document
    */
-  async submitReview(
-    documentId: string,
-    dto: SubmitReviewDto,
-  ): Promise<ManualReview> {
+  async submitReview(documentId: string, dto: SubmitReviewDto): Promise<ManualReview> {
     // Get document with current version
     const document = await this.documentRepo.findOne({
       where: { id: documentId, is_deleted: false },
@@ -67,9 +59,7 @@ export class ReviewService {
         dto.decision === ReviewDecision.NON_COMPLIANT) &&
       document.status !== DocumentStatus.PENDING
     ) {
-      throw new BadRequestException(
-        'Only pending documents can be returned for revision.',
-      );
+      throw new BadRequestException('Only pending documents can be returned for revision.');
     }
 
     // Get the current version
@@ -98,14 +88,10 @@ export class ReviewService {
 
     await this.documentRepo.update(documentId, {
       status:
-        dto.decision === ReviewDecision.COMPLIANT
-          ? DocumentStatus.READY
-          : DocumentStatus.PENDING,
+        dto.decision === ReviewDecision.COMPLIANT ? DocumentStatus.READY : DocumentStatus.PENDING,
     });
 
-    this.logger.log(
-      `Review submitted for document ${documentId}: ${dto.decision}`,
-    );
+    this.logger.log(`Review submitted for document ${documentId}: ${dto.decision}`);
 
     return review;
   }
@@ -116,7 +102,7 @@ export class ReviewService {
   async getLatestReview(documentId: string): Promise<ManualReview | null> {
     const review = await this.reviewRepo.findOne({
       where: { document_id: documentId },
-      relations: ['reviewer', 'version'],
+      relations: ['version'],
       order: { reviewed_at: 'DESC' },
     });
 
@@ -129,7 +115,7 @@ export class ReviewService {
   async getReviewHistory(documentId: string): Promise<ManualReview[]> {
     return this.reviewRepo.find({
       where: { document_id: documentId },
-      relations: ['reviewer', 'version'],
+      relations: ['version'],
       order: { reviewed_at: 'DESC' },
     });
   }
@@ -167,9 +153,7 @@ export class ReviewService {
     }
 
     // Get metrics
-    const metricResults = await this.metricsService.getMetricResults(
-      version.id,
-    );
+    const metricResults = await this.metricsService.getMetricResults(version.id);
     const aggregate = this.metricsService.calculateAggregateScore(metricResults);
 
     // Get latest review

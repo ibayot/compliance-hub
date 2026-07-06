@@ -53,10 +53,7 @@ function ProtectedDashboard({
     return <Navigate to="/login" replace />;
   }
 
-  // Prevent direct URL access / deep linking (except for the root dashboard)
-  if (location.pathname !== '/dashboard' && location.key === 'default') {
-    return <Navigate to="/dashboard" replace />;
-  }
+  // Deep linking allowed
 
   const hasCapability = requiredCapability ? Boolean(myCap?.[requiredCapability]) : true;
   const hasRoleAccess = allowedRoles

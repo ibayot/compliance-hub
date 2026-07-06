@@ -10,8 +10,8 @@
 
   Optional env:
     BASE_URL=http://localhost:4000/api
-    ADMIN_EMAIL=admin@rictms.gov.ph
-    ADMIN_PASSWORD=Admin@123
+    ADMIN_EMAIL=fo2admin@dswd.gov.ph
+    ADMIN_PASSWORD=password123
     DB_HOST=127.0.0.1
     DB_PORT=3306
     DB_USER=root
@@ -22,7 +22,7 @@
 import mysql from '../backend/node_modules/mysql2/promise.js';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:4000/api';
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@rictms.gov.ph';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'fo2admin@dswd.gov.ph';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@123';
 
 const DB = {
@@ -75,8 +75,8 @@ async function login(email, password) {
 }
 
 async function loginAdmin() {
-  const emails = [...new Set([process.env.ADMIN_EMAIL, ADMIN_EMAIL, 'admin@rictms.gov.ph', 'admin@ricms.gov.ph'].filter(Boolean))];
-  const passwords = [...new Set([process.env.ADMIN_PASSWORD, ADMIN_PASSWORD, 'Admin@123', 'Admin123!', 'password123'].filter(Boolean))];
+  const emails = [...new Set([process.env.ADMIN_EMAIL, ADMIN_EMAIL, 'fo2admin@dswd.gov.ph', 'fo2admin@dswd.gov.ph'].filter(Boolean))];
+  const passwords = [...new Set([process.env.ADMIN_PASSWORD, ADMIN_PASSWORD, 'password123', 'password123', 'password123'].filter(Boolean))];
 
   for (const email of emails) {
     for (const password of passwords) {

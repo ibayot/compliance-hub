@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { UsersHttpClient } from './users.http-client';
 import { ComplianceHttpClient } from './compliance.http-client';
+import { UnitsHttpClient } from './units.http-client';
 import { RoleCapabilitiesHttpClient } from './role-capabilities.http-client';
 import { EventBusModule } from '../events/event-bus.module';
 
@@ -23,7 +24,7 @@ import { EventBusModule } from '../events/event-bus.module';
  */
 @Module({
   imports: [EventBusModule],
-  providers: [UsersHttpClient, ComplianceHttpClient, RoleCapabilitiesHttpClient],
-  exports: [UsersHttpClient, ComplianceHttpClient, RoleCapabilitiesHttpClient, EventBusModule],
+  providers: [UsersHttpClient, ComplianceHttpClient, UnitsHttpClient, RoleCapabilitiesHttpClient],
+  exports: [UsersHttpClient, ComplianceHttpClient, UnitsHttpClient, RoleCapabilitiesHttpClient, EventBusModule],
 })
 export class HttpClientsModule {}

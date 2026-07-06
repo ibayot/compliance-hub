@@ -14,7 +14,10 @@ async function bootstrap() {
 
   app.use(helmet());
   app.enableCors({
-    origin: (configService.get<string>('CORS_ORIGIN') || '').split(',').map((o) => o.trim()).filter(Boolean),
+    origin: (configService.get<string>('CORS_ORIGIN') || '')
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean),
     credentials: true,
   });
   app.use(
@@ -27,7 +30,9 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+  app.useGlobalPipes(
+    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+  );
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
   app.setGlobalPrefix('api');
   const http = app.getHttpAdapter().getInstance();
@@ -40,14 +45,19 @@ async function bootstrap() {
   });
 
   const port = Number(process.env.TICKETING_SERVICE_PORT || 4102);
-  http.get('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'ticketing', version: serviceVersion }));
-  http.get('/api/health/live', (_req: any, res: any) => res.json({ status: 'ok', service: 'ticketing', version: serviceVersion }));
+  http.get('/api/health', (_req: any, res: any) =>
+    res.json({ status: 'ok', service: 'ticketing', version: serviceVersion }),
+  );
+  http.get('/api/health/live', (_req: any, res: any) =>
+    res.json({ status: 'ok', service: 'ticketing', version: serviceVersion }),
+  );
   http.get('/api/health/ready', async (_req: any, res: any) => {
     try {
       const ds = app.get(DataSource);
       await ds.query('SELECT 1');
       const dbHost = process.env.DB_HOST || 'localhost';
-      const dbName = process.env.TICKETING_DB_DATABASE || process.env.DB_DATABASE || 'compliance_hub_ticketing';
+      const dbName =
+        process.env.TICKETING_DB_DATABASE || process.env.DB_DATABASE || 'compliance_hub_ticketing';
 
       // Check that cross-DB views are accessible (critical dependency for ticketing queries)
       const checks: Record<string, boolean> = { db: true };

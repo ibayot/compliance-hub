@@ -24,7 +24,9 @@ export class UploadBulkheadInterceptor implements NestInterceptor {
   private static readonly MAX_CONCURRENT_UPLOADS = 5;
 
   intercept(_context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    if (UploadBulkheadInterceptor.activeUploads >= UploadBulkheadInterceptor.MAX_CONCURRENT_UPLOADS) {
+    if (
+      UploadBulkheadInterceptor.activeUploads >= UploadBulkheadInterceptor.MAX_CONCURRENT_UPLOADS
+    ) {
       throw new ServiceUnavailableException(
         `Upload capacity reached (limit: ${UploadBulkheadInterceptor.MAX_CONCURRENT_UPLOADS}). Retry shortly.`,
       );

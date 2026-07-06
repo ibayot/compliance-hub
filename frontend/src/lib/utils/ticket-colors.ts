@@ -26,3 +26,9 @@ export const TICKET_TYPE_LABELS: Record<TicketType, string> = {
   it_support: 'IT Support',
   pantawid_ict_support: 'Pantawid ICT Support',
 };
+
+export function formatTicketStatus(status: string): string {
+  if (!status) return '';
+  if (status.toLowerCase() === 'freeze') return 'ON HOLD';
+  return status.replace(/_/g, ' ').toUpperCase();
+}

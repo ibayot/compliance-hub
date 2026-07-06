@@ -10,6 +10,7 @@ export interface AuthResponse {
   accessToken: string;
   refreshToken: string;
   requiresPasswordChange?: boolean;
+  requiresMfa?: boolean;
   user: {
     id: number;
     email: string;

@@ -27,8 +27,8 @@ async function run() {
       let createSql = viewDef['Create View'];
       // Replace empty definer with root@localhost and add SQL SECURITY INVOKER
       createSql = createSql
-        .replace(/CREATE ALGORITHM=UNDEFINED DEFINER=`` SQL SECURITY DEFINER/, 
-                 'CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY INVOKER');
+        .replace(/CREATE ALGORITHM=UNDEFINED DEFINER=`` SQL SECURITY DEFINER/,
+          'CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY INVOKER');
       await conn.execute(`DROP VIEW IF EXISTS \`${TABLE_NAME}\``);
       await conn.execute(createSql);
       console.log(`  Fixed view: ${TABLE_NAME}`);
@@ -47,8 +47,8 @@ async function run() {
       const [[viewDef]] = await conn.execute(`SHOW CREATE VIEW \`${TABLE_NAME}\``);
       let createSql = viewDef['Create View'];
       createSql = createSql
-        .replace(/CREATE ALGORITHM=UNDEFINED DEFINER=`` SQL SECURITY DEFINER/, 
-                 'CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY INVOKER');
+        .replace(/CREATE ALGORITHM=UNDEFINED DEFINER=`` SQL SECURITY DEFINER/,
+          'CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY INVOKER');
       await conn.execute(`DROP VIEW IF EXISTS \`${TABLE_NAME}\``);
       await conn.execute(createSql);
       console.log(`  Fixed view: ${TABLE_NAME}`);
@@ -66,14 +66,14 @@ async function run() {
     // Test accounts needed for E2E tests
     const testAccounts = [
       // [id, email, first_name, last_name, role]
-      [1,   'admin@rictms.gov.ph',    'System',       'Admin',    'super_admin'],
-      [5,   'jcbucayu@dswd.gov.ph',   'Jaylord',      'Bucayu',   'dev_lead'],     // Escalation Focal (dev_lead is_escalation_focal=1)
-      [7,   'mpmabazza@dswd.gov.ph',  'Mylord',       'Mabazza',  'desktop_sr'],   // Senior Desktop Tech
-      [8,   'fggarcia@dswd.gov.ph',   'Ferdinand',    'Garcia',   'desktop_sr'],   // Senior Desktop Tech
-      [10,  'jmmmaguigad@dswd.gov.ph','John Manuel',  'Maguigad', 'cybersec'],     // Escalation Focal (cybersec)
-      [95,  'test@dswd.gov.ph',       'Test',         'User',     'user'],         // Regular user (ticket submitter)
-      [6,   'jrcardona@dswd.gov.ph',  'Jaymark',      'Cardona',  'desktop_jr'],   // Junior Desktop Tech
-      [3,   'gmjavierjr@dswd.gov.ph', 'Godofredo',    'Javier',   'it_support_jr'],// Junior IT Support
+      [1, 'fo2admin@dswd.gov.ph', 'System', 'Admin', 'super_admin'],
+      [5, 'jcbucayu@dswd.gov.ph', 'Jaylord', 'Bucayu', 'dev_lead'],     // Escalation Focal (dev_lead is_escalation_focal=1)
+      [7, 'mpmabazza@dswd.gov.ph', 'Mylord', 'Mabazza', 'desktop_sr'],   // Senior Desktop Tech
+      [8, 'fggarcia@dswd.gov.ph', 'Ferdinand', 'Garcia', 'desktop_sr'],   // Senior Desktop Tech
+      [10, 'jmmmaguigad@dswd.gov.ph', 'John Manuel', 'Maguigad', 'cybersec'],     // Escalation Focal (cybersec)
+      [95, 'test@dswd.gov.ph', 'Test', 'User', 'user'],         // Regular user (ticket submitter)
+      [6, 'jrcardona@dswd.gov.ph', 'Jaymark', 'Cardona', 'desktop_jr'],   // Junior Desktop Tech
+      [3, 'gmjavierjr@dswd.gov.ph', 'Godofredo', 'Javier', 'it_support_jr'],// Junior IT Support
     ];
 
     for (const [id, email, first_name, last_name, role] of testAccounts) {

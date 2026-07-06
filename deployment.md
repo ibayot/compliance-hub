@@ -254,7 +254,7 @@ Open a browser and go to `http://YOUR_SERVER_IP:3000`
 You should see the Compliance Hub login page.
 
 **Default login credentials (change after first login!):**
-- Email: `admin@rictms.gov.ph`
+- Email: `fo2admin@dswd.gov.ph`
 - Password: `password123`
 
 > ⚠️ Go to Settings immediately after your first login and change the admin password.

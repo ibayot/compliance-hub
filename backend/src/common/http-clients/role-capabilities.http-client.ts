@@ -1,15 +1,41 @@
-import { Injectable, Logger, OnModuleInit, InternalServerErrorException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  InternalServerErrorException,
+  Optional,
+} from '@nestjs/common';
 import { UsersHttpClient, RoleCapabilityStub } from './users.http-client';
-import { EventBusService, CAPABILITIES_UPDATED_EVENT, CapabilitiesUpdatedPayload } from '../events/event-bus.service';
+import {
+  EventBusService,
+  CAPABILITIES_UPDATED_EVENT,
+  CapabilitiesUpdatedPayload,
+} from '../events/event-bus.service';
 
 /** All capability key names — mirrors RoleCapabilitiesService.getRolesWhere parameter type. */
 export type CapabilityKey =
-  | 'isFocal' | 'isIto' | 'isDesktop' | 'isItSupport' | 'isPantawidIct' | 'isEscalationFocal'
-  | 'isTicketSettingsFocal' | 'isSmtpSettingsAccess' | 'isSecuritySettingsAccess' | 'isAllTickets' | 'isTicketFocal'
-  | 'isKpiAccess' | 'isKpiManage'
-  | 'isAttendanceAccess' | 'isAttendanceManage'
-  | 'isReportsAccess' | 'isReviewsAccess'
-  | 'isMovAccess' | 'isDocumentsAccess' | 'isRepositoryAccess' | 'isIssuancesAccess' | 'isMetricsAccess';
+  | 'isFocal'
+  | 'isIto'
+  | 'isDesktop'
+  | 'isItSupport'
+  | 'isPantawidIct'
+  | 'isEscalationFocal'
+  | 'isTicketSettingsFocal'
+  | 'isSmtpSettingsAccess'
+  | 'isSecuritySettingsAccess'
+  | 'isAllTickets'
+  | 'isTicketFocal'
+  | 'isKpiAccess'
+  | 'isKpiManage'
+  | 'isAttendanceAccess'
+  | 'isAttendanceManage'
+  | 'isReportsAccess'
+  | 'isReviewsAccess'
+  | 'isMovAccess'
+  | 'isDocumentsAccess'
+  | 'isRepositoryAccess'
+  | 'isIssuancesAccess'
+  | 'isMetricsAccess';
 
 /**
  * RoleCapabilitiesHttpClient — full drop-in replacement for RoleCapabilitiesService
@@ -43,7 +69,9 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
       await this.eventBus.subscribe<CapabilitiesUpdatedPayload>(
         CAPABILITIES_UPDATED_EVENT,
         (payload) => {
-          this.logger.log(`capabilities.updated received for role "${payload.role}" — reloading cache`);
+          this.logger.log(
+            `capabilities.updated received for role "${payload.role}" — reloading cache`,
+          );
           void this.reload();
         },
       );
@@ -60,9 +88,13 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
           this.cache.set(row.roleValue, row);
         }
         this.lastLoaded = Date.now();
-        this.logger.log(`RoleCapabilities HTTP cache loaded: ${rows.length} role(s) from users-service`);
+        this.logger.log(
+          `RoleCapabilities HTTP cache loaded: ${rows.length} role(s) from users-service`,
+        );
       } else {
-        this.logger.warn('RoleCapabilities HTTP cache: 0 rows from users-service — keeping stale cache');
+        this.logger.warn(
+          'RoleCapabilities HTTP cache: 0 rows from users-service — keeping stale cache',
+        );
       }
     } catch (err: any) {
       this.logger.warn(`RoleCapabilities HTTP cache reload failed (non-fatal): ${err?.message}`);
@@ -79,12 +111,24 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
 
   // ── Boolean helpers (exact parity with RoleCapabilitiesService) ───────────
 
-  isFocal(role: string): boolean { return !!this.get(role)?.isFocal; }
-  isIto(role: string): boolean { return !!this.get(role)?.isIto; }
-  isDesktop(role: string): boolean { return !!this.get(role)?.isDesktop; }
-  isItSupport(role: string): boolean { return !!this.get(role)?.isItSupport; }
-  isPantawidIct(role: string): boolean { return !!this.get(role)?.isPantawidIct; }
-  isEscalationFocal(role: string): boolean { return !!this.get(role)?.isEscalationFocal; }
+  isFocal(role: string): boolean {
+    return !!this.get(role)?.isFocal;
+  }
+  isIto(role: string): boolean {
+    return !!this.get(role)?.isIto;
+  }
+  isDesktop(role: string): boolean {
+    return !!this.get(role)?.isDesktop;
+  }
+  isItSupport(role: string): boolean {
+    return !!this.get(role)?.isItSupport;
+  }
+  isPantawidIct(role: string): boolean {
+    return !!this.get(role)?.isPantawidIct;
+  }
+  isEscalationFocal(role: string): boolean {
+    return !!this.get(role)?.isEscalationFocal;
+  }
 
   isTechnician(role: string): boolean {
     const c = this.get(role);
@@ -209,11 +253,13 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
   }
 
   canEscalateTickets(role: string): boolean {
-    return this.canAssignTickets(role)
-      || this.canSeeAllTickets(role)
-      || this.isDesktop(role)
-      || this.isItSupport(role)
-      || this.isPantawidIct(role);
+    return (
+      this.canAssignTickets(role) ||
+      this.canSeeAllTickets(role) ||
+      this.isDesktop(role) ||
+      this.isItSupport(role) ||
+      this.isPantawidIct(role)
+    );
   }
 
   // ── Bulk query helpers ────────────────────────────────────────────────────
@@ -228,9 +274,7 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
     // If the cache is empty, we must trigger a reload synchronously or return stale data.
     // However, since this method is synchronous, we can't await `reload()`.
     // Wait, getRolesWhere is used synchronously in many places!
-    return [...this.cache.values()]
-      .filter((r) => r[capability])
-      .map((r) => r.roleValue);
+    return [...this.cache.values()].filter((r) => r[capability]).map((r) => r.roleValue);
   }
 
   getSeniorTechRoles(): string[] {

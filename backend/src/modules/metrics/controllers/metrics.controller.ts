@@ -86,7 +86,9 @@ export class MetricsController {
           metric_id: template.id,
           unit_id: app.unit_id ? Number(app.unit_id) : undefined,
           document_type: app.document_type,
-          reportorial_doc_type_id: (app as any).reportorial_doc_type_id ? Number((app as any).reportorial_doc_type_id) : undefined,
+          reportorial_doc_type_id: (app as any).reportorial_doc_type_id
+            ? Number((app as any).reportorial_doc_type_id)
+            : undefined,
         };
         const appEntity = this.applicabilityRepo.create(appData);
         await this.applicabilityRepo.save(appEntity);
@@ -165,7 +167,9 @@ export class MetricsController {
           metric_id: id,
           unit_id: app.unit_id ? Number(app.unit_id) : undefined,
           document_type: app.document_type,
-          reportorial_doc_type_id: (app as any).reportorial_doc_type_id ? Number((app as any).reportorial_doc_type_id) : undefined,
+          reportorial_doc_type_id: (app as any).reportorial_doc_type_id
+            ? Number((app as any).reportorial_doc_type_id)
+            : undefined,
         };
         const appEntity = this.applicabilityRepo.create(appData);
         await this.applicabilityRepo.save(appEntity);
@@ -222,7 +226,9 @@ export class DocumentMetricsController {
    */
   @Get()
   async getDocumentMetrics(@Param('id') documentId: string) {
-    const document = await this.documentRepo.findOne({ where: { id: documentId, is_deleted: false } });
+    const document = await this.documentRepo.findOne({
+      where: { id: documentId, is_deleted: false },
+    });
 
     if (!document) {
       return {

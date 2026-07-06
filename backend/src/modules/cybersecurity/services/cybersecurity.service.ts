@@ -30,12 +30,18 @@ export class CybersecurityService {
     return await this.metricRepository.save(metric);
   }
 
-  async update(id: number, updateDto: Partial<CybersecurityMetric>): Promise<CybersecurityMetric | null> {
+  async update(
+    id: number,
+    updateDto: Partial<CybersecurityMetric>,
+  ): Promise<CybersecurityMetric | null> {
     await this.metricRepository.update(id, updateDto);
     return await this.findOne(id);
   }
 
-  async updateByType(type: MetricType, updateDto: Partial<CybersecurityMetric>): Promise<CybersecurityMetric> {
+  async updateByType(
+    type: MetricType,
+    updateDto: Partial<CybersecurityMetric>,
+  ): Promise<CybersecurityMetric> {
     const metric = await this.findByType(type);
     if (!metric) {
       return await this.create({ ...updateDto, metric_type: type });

@@ -1,10 +1,4 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  ManyToOne,
-  JoinColumn,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { MetricTemplate } from './metric-template.entity';
 import { Unit } from '../../units/entities/unit.entity';
 import { ReportorialDocumentType } from '../../documents/entities/reportorial-document-type.entity';
@@ -24,11 +18,7 @@ export class MetricApplicability {
   metric_template: MetricTemplate;
 
   @Column({ type: 'int', nullable: true })
-  unit_id: number;
-
-  @ManyToOne(() => Unit, { onDelete: 'CASCADE', nullable: true })
-  @JoinColumn({ name: 'unit_id' })
-  unit: Unit;
+  unit_id: number | null;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   document_type: string;

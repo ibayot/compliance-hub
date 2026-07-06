@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DocumentVersion } from '../entities/document-version.entity';
@@ -89,18 +84,14 @@ export class VersionService {
       order: { version_number: 'DESC' },
     });
 
-    const nextVersionNumber = latestVersion
-      ? latestVersion.version_number + 1
-      : 1;
+    const nextVersionNumber = latestVersion ? latestVersion.version_number + 1 : 1;
 
     // Calculate checksum
     const checksum = this.storageService.calculateChecksum(file.buffer);
 
     // Check if file content is different from latest version
     if (latestVersion && latestVersion.checksum === checksum) {
-      throw new BadRequestException(
-        'File content is identical to the latest version',
-      );
+      throw new BadRequestException('File content is identical to the latest version');
     }
 
     // Save file to storage
@@ -147,9 +138,7 @@ export class VersionService {
         );
       });
 
-    this.logger.log(
-      `New version created: ${version.id} (v${nextVersionNumber})`,
-    );
+    this.logger.log(`New version created: ${version.id} (v${nextVersionNumber})`);
 
     return version;
   }
@@ -180,9 +169,7 @@ export class VersionService {
   }> {
     const version = await this.getVersionWithBlobs(id);
 
-    const buffer =
-      version.file_blob ??
-      (await this.storageService.readFile(version.file_path));
+    const buffer = version.file_blob ?? (await this.storageService.readFile(version.file_path));
 
     return {
       buffer,
@@ -209,10 +196,11 @@ export class VersionService {
     }
 
     // Priority 2: raw PDF file as preview (only when no preview blob exists)
-    if (version.mime_type === 'application/pdf' || version.file_name.toLowerCase().endsWith('.pdf')) {
-      const buffer =
-        version.file_blob ??
-        (await this.storageService.readFile(version.file_path));
+    if (
+      version.mime_type === 'application/pdf' ||
+      version.file_name.toLowerCase().endsWith('.pdf')
+    ) {
+      const buffer = version.file_blob ?? (await this.storageService.readFile(version.file_path));
       return {
         buffer,
         mimeType: 'application/pdf',
@@ -221,13 +209,14 @@ export class VersionService {
 
     // Priority 3: on-demand mammoth HTML for DOCX files (queue may not have run yet)
     const ext = path.extname(version.file_name).toLowerCase();
-    const isDocx = ext === '.docx' ||
-      version.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    const isDocx =
+      ext === '.docx' ||
+      version.mime_type ===
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     if (isDocx) {
       try {
         const fileBuffer =
-          version.file_blob ??
-          (await this.storageService.readFile(version.file_path));
+          version.file_blob ?? (await this.storageService.readFile(version.file_path));
 
         const result = await mammoth.convertToHtml({ buffer: fileBuffer });
         const htmlBody = result.value || '<p><em>No content extracted.</em></p>';
@@ -248,15 +237,23 @@ export class VersionService {
         const htmlBuffer = Buffer.from(htmlContent, 'utf-8');
 
         // Cache the preview for future requests (non-blocking)
-        this.versionRepo.update(id, {
-          preview_blob: htmlBuffer,
-          preview_mime_type: 'text/html',
-          preview_path: null,
-        }).catch((err) => this.logger.warn(`Non-critical: failed to cache DOCX preview for ${id}: ${err?.message}`));
+        this.versionRepo
+          .update(id, {
+            preview_blob: htmlBuffer,
+            preview_mime_type: 'text/html',
+            preview_path: null,
+          })
+          .catch((err) =>
+            this.logger.warn(
+              `Non-critical: failed to cache DOCX preview for ${id}: ${err?.message}`,
+            ),
+          );
 
         return { buffer: htmlBuffer, mimeType: 'text/html' };
       } catch (err) {
-        this.logger.warn(`On-demand mammoth conversion failed for ${id}: ${(err as Error)?.message}`);
+        this.logger.warn(
+          `On-demand mammoth conversion failed for ${id}: ${(err as Error)?.message}`,
+        );
         // Fall through to error
       }
     }
@@ -278,11 +275,7 @@ export class VersionService {
   /**
    * Update preview path after generation
    */
-  async updatePreviewPath(
-    id: string,
-    previewPath: string,
-    previewBlob?: Buffer,
-  ): Promise<void> {
+  async updatePreviewPath(id: string, previewPath: string, previewBlob?: Buffer): Promise<void> {
     await this.versionRepo.update(id, {
       preview_path: previewPath,
       preview_blob: previewBlob,

@@ -8,7 +8,7 @@ import {
   UpdateDateColumn,
   OneToMany,
 } from 'typeorm';
-import { Unit } from '../../units/entities/unit.entity';
+import { UnitRef } from '../../../shared/contracts/unit-ref';
 
 export enum SubmissionFrequency {
   MONTHLY = 'monthly',
@@ -24,9 +24,8 @@ export class ReportorialDocumentType {
   @Column({ type: 'int' })
   unit_id: number;
 
-  @ManyToOne(() => Unit, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'unit_id' })
-  unit: Unit;
+  // Virtual field populated via UnitsHttpClient
+  unit?: UnitRef;
 
   /**
    * The base filename prefix, e.g. "Incident_Report".

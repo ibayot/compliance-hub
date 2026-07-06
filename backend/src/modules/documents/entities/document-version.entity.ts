@@ -7,7 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Document } from './document.entity';
-import { User } from '../../shared/entities';
+import { UserRef } from '../../../shared/contracts/user-ref';
 
 @Entity('document_versions')
 export class DocumentVersion {
@@ -62,9 +62,8 @@ export class DocumentVersion {
   @Column({ type: 'int', nullable: true })
   uploaded_by: number;
 
-  @ManyToOne(() => User, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'uploaded_by' })
-  uploader: User;
+  // Virtual field populated via UsersHttpClient
+  uploader?: UserRef;
 
   @CreateDateColumn()
   created_at: Date;

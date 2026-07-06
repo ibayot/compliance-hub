@@ -11,7 +11,9 @@ export class CreateReportorialDocTypeDto {
    */
   @IsString()
   @MinLength(2)
-  @Matches(/^[A-Za-z0-9_]+$/, { message: 'base_name may only contain letters, digits, and underscores' })
+  @Matches(/^[A-Za-z0-9_]+$/, {
+    message: 'base_name may only contain letters, digits, and underscores',
+  })
   base_name: string;
 
   @IsString()

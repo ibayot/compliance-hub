@@ -22,14 +22,13 @@ import { AttendanceController } from './controllers/attendance.controller';
 import { TicketController } from './controllers/ticket.controller';
 import { TicketSettingsController } from './controllers/ticket-settings.controller';
 import { KnowledgeBaseController } from './controllers/knowledge-base.controller';
-import { User } from '../shared/entities';
-import { RoleDefinitionEntity } from '../shared/entities';
+import { User, RoleDefinitionEntity, Unit } from '../shared/entities';
 import { RoleCapabilitiesService } from '../users/role-capabilities.service';
 import { RoleCapabilitiesHttpClient } from '../../common/http-clients/role-capabilities.http-client';
 import { HttpClientsModule } from '../../common/http-clients/http-clients.module';
 import { EventBusModule } from '../../common/events/event-bus.module';
 import { CapabilityGuard } from '../../common/guards/capability.guard';
-import { Unit } from '../shared/entities';
+
 
 @Module({
   imports: [
@@ -54,14 +53,31 @@ import { Unit } from '../shared/entities';
     HttpClientsModule,
     EventBusModule,
   ],
-  controllers: [AttendanceController, TicketController, TicketSettingsController, KnowledgeBaseController],
+  controllers: [
+    AttendanceController,
+    TicketController,
+    TicketSettingsController,
+    KnowledgeBaseController,
+  ],
   providers: [
-    TicketService, TicketSettingsService, AttendanceService, EmailService, TicketCronService, KnowledgeBaseService,
+    TicketService,
+    TicketSettingsService,
+    AttendanceService,
+    EmailService,
+    TicketCronService,
+    KnowledgeBaseService,
     // Phase B: RoleCapabilitiesHttpClient provides all methods of RoleCapabilitiesService
     // without the TypeORM cross-DB View dependency.
     { provide: RoleCapabilitiesService, useClass: RoleCapabilitiesHttpClient },
     CapabilityGuard,
   ],
-  exports: [TicketService, AttendanceService, EmailService, RoleCapabilitiesService, KnowledgeBaseService],
+  exports: [
+    TicketService,
+    TicketSettingsService,
+    AttendanceService,
+    EmailService,
+    RoleCapabilitiesService,
+    KnowledgeBaseService,
+  ],
 })
 export class TicketsModule {}

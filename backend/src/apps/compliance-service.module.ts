@@ -50,11 +50,9 @@ import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.mid
         port: configService.get('DB_PORT'),
         username: configService.get('DB_USERNAME'),
         password: configService.get('DB_PASSWORD'),
-        database:
-          configService.get('COMPLIANCE_DB_DATABASE') ||
-          'compliance_hub',
+        database: configService.get('COMPLIANCE_DB_DATABASE') || 'compliance_hub',
         autoLoadEntities: true,
-        synchronize: false,
+        synchronize: configService.get<boolean>('DB_SYNCHRONIZE'),
         logging: Boolean(configService.get<boolean>('DB_LOGGING')),
       }),
     }),

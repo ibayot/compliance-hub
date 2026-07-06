@@ -13,13 +13,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Ticket, TicketType, TicketStatus, TicketPriority } from '../entities/ticket.entity';
 import { TicketComment } from '../entities/ticket-comment.entity';
-import { TicketCategoryConfig } from '../entities/ticket-category.entity';
 import { TicketIssueType } from '../entities/ticket-issue-type.entity';
 import { TicketEvent } from '../entities/ticket-event.entity';
 import { TicketEscalation, EscalationStatus } from '../entities/ticket-escalation.entity';
 import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
-import { User, UserRole } from '../../shared/entities';
+import { UserRole } from '../../shared/entities';
+import { UsersHttpClient, UserStub } from '../../../common/http-clients/users.http-client';
 import { TicketSettingsService } from './ticket-settings.service';
 import { AttendanceService } from './attendance.service';
 import { EmailService, TicketEmailData } from './email.service';
@@ -85,8 +85,8 @@ export interface CsatFormData {
 }
 
 export interface SubmitSatisfactionDto {
-  rating?: number;   // Legacy 1-5 star (used if formData absent)
-  comment?: string;  // Legacy comment
+  rating?: number; // Legacy 1-5 star (used if formData absent)
+  comment?: string; // Legacy comment
   formData?: CsatFormData; // New full CSAT form
 }
 
@@ -120,8 +120,7 @@ export class TicketService implements OnModuleInit {
     private readonly escalationRepo: Repository<TicketEscalation>,
     @InjectRepository(TicketingConfig)
     private readonly configRepo: Repository<TicketingConfig>,
-    @InjectRepository(User)
-    private readonly userRepo: Repository<User>,
+    private readonly usersHttpClient: UsersHttpClient,
     @InjectRepository(TicketEvent)
     private readonly eventRepo: Repository<TicketEvent>,
     @InjectRepository(EscalationFocalConfig)
@@ -155,7 +154,7 @@ export class TicketService implements OnModuleInit {
           this.reassignUnavailableTechnicianTickets(payload.techId).catch(() => {});
         }
       });
-      this.eventBus.subscribe('user.login', (payload: any) => {
+      this.eventBus.subscribe('attendance.verified', (payload: any) => {
         if (payload?.userId) {
           this.assignPendingTicketsOnLogin(payload.userId).catch(() => {});
         }
@@ -167,16 +166,20 @@ export class TicketService implements OnModuleInit {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     try {
-      const usersDb = process.env.USERS_DB_DATABASE || await this.resolveExistingSchemaName(
-        qr,
-        ['02_db_stg_compliance_hub_users', 'compliance_hub_users', 'ricms_users', 'rictms_users'],
-        'compliance_hub_users',
-      );
-      const complianceDb = process.env.COMPLIANCE_DB_DATABASE || await this.resolveExistingSchemaName(
-        qr,
-        ['compliance_hub', 'ricms_compliance', 'rictms_compliance'],
-        'compliance_hub',
-      );
+      const usersDb =
+        process.env.USERS_DB_DATABASE ||
+        (await this.resolveExistingSchemaName(
+          qr,
+          ['02_db_stg_compliance_hub_users', 'compliance_hub_users', 'ricms_users', 'rictms_users'],
+          'compliance_hub_users',
+        ));
+      const complianceDb =
+        process.env.COMPLIANCE_DB_DATABASE ||
+        (await this.resolveExistingSchemaName(
+          qr,
+          ['compliance_hub', 'ricms_compliance', 'rictms_compliance'],
+          'compliance_hub',
+        ));
 
       // Schema DDL has been extracted to versioned migration files.
       // See backend/database/migrations/v0.0.50-service-ddl-extraction.sql.
@@ -187,22 +190,34 @@ export class TicketService implements OnModuleInit {
 
       await qr.query('DROP VIEW IF EXISTS attendance').catch(() => undefined);
       await qr.query('DROP TABLE IF EXISTS attendance').catch(() => undefined);
-      await qr.query(`CREATE VIEW attendance AS SELECT * FROM \`${usersDb}\`.attendance`).catch(() => undefined);
+      await qr
+        .query(`CREATE VIEW attendance AS SELECT * FROM \`${usersDb}\`.attendance`)
+        .catch(() => undefined);
 
       await qr.query('DROP VIEW IF EXISTS users').catch(() => undefined);
       await qr.query('DROP TABLE IF EXISTS users').catch(() => undefined);
-      await qr.query(`CREATE VIEW users AS SELECT * FROM \`${usersDb}\`.users`).catch(() => undefined);
+      await qr
+        .query(`CREATE VIEW users AS SELECT * FROM \`${usersDb}\`.users`)
+        .catch(() => undefined);
 
       await qr.query('DROP VIEW IF EXISTS units').catch(() => undefined);
       await qr.query('DROP TABLE IF EXISTS units').catch(() => undefined);
-      await qr.query(`CREATE VIEW units AS SELECT * FROM \`${complianceDb}\`.units`).catch(() => undefined);
+      await qr
+        .query(`CREATE VIEW units AS SELECT * FROM \`${complianceDb}\`.units`)
+        .catch(() => undefined);
 
       await qr.query('DROP VIEW IF EXISTS role_definitions').catch(() => undefined);
       await qr.query('DROP TABLE IF EXISTS role_definitions').catch(() => undefined);
-      await qr.query(`CREATE VIEW role_definitions AS SELECT * FROM \`${usersDb}\`.role_definitions`).catch(() => undefined);
+      await qr
+        .query(`CREATE VIEW role_definitions AS SELECT * FROM \`${usersDb}\`.role_definitions`)
+        .catch(() => undefined);
 
       await qr.query('DROP VIEW IF EXISTS role_capabilities').catch(() => undefined);
-      await qr.query(`CREATE OR REPLACE VIEW role_capabilities AS SELECT * FROM \`${usersDb}\`.role_capabilities`).catch(() => undefined);
+      await qr
+        .query(
+          `CREATE OR REPLACE VIEW role_capabilities AS SELECT * FROM \`${usersDb}\`.role_capabilities`,
+        )
+        .catch(() => undefined);
 
       // ── Data seeding (idempotent) ──────────────────────────────────────────
       await this.seedDefaultCategories(qr);
@@ -222,9 +237,9 @@ export class TicketService implements OnModuleInit {
     fallback: string,
   ): Promise<string> {
     const quoted = candidates.map((name) => `'${name}'`).join(',');
-    const rows = await qr.query(
+    const rows = (await qr.query(
       `SELECT schema_name FROM information_schema.schemata WHERE schema_name IN (${quoted}) ORDER BY schema_name ASC LIMIT 1`,
-    ) as Array<{ schema_name?: string }>;
+    )) as Array<{ schema_name?: string }>;
     return rows?.[0]?.schema_name || fallback;
   }
 
@@ -241,28 +256,46 @@ export class TicketService implements OnModuleInit {
       { key: 'software_installation', name: 'Software Installation', type: 'it_support' },
       { key: 'software', name: 'Software', type: 'it_support' },
       // Desktop Support categories
-      { key: 'printer_installation', name: 'Printer Installation/Configuration', type: 'desktop_support' },
+      {
+        key: 'printer_installation',
+        name: 'Printer Installation/Configuration',
+        type: 'desktop_support',
+      },
       { key: 'printer_repair', name: 'Printer Repair', type: 'desktop_support' },
       { key: 'desktop_laptop_repair', name: 'Desktop/Laptop Repair', type: 'desktop_support' },
       // Pantawid ICT Support categories
-      { key: 'pantawid_ict_support_general', name: 'Pantawid ICT Support', type: 'pantawid_ict_support' },
+      {
+        key: 'pantawid_ict_support_general',
+        name: 'Pantawid ICT Support',
+        type: 'pantawid_ict_support',
+      },
       { key: 'pantawid_device_issue', name: 'Pantawid Device Issue', type: 'pantawid_ict_support' },
-      { key: 'pantawid_network_connectivity', name: 'Pantawid Network/Connectivity', type: 'pantawid_ict_support' },
-      { key: 'pantawid_system_access', name: 'Pantawid System Access', type: 'pantawid_ict_support' },
+      {
+        key: 'pantawid_network_connectivity',
+        name: 'Pantawid Network/Connectivity',
+        type: 'pantawid_ict_support',
+      },
+      {
+        key: 'pantawid_system_access',
+        name: 'Pantawid System Access',
+        type: 'pantawid_ict_support',
+      },
     ];
 
     let inserted = 0;
     for (const c of cats) {
       // Only insert if key doesn't already exist (idempotent)
-      const [existing] = await qr.query(
-        'SELECT COUNT(*) AS cnt FROM ticket_categories WHERE `key` = ?', [c.key],
-      ).catch(() => [{ cnt: 1 }]);
+      const [existing] = await qr
+        .query('SELECT COUNT(*) AS cnt FROM ticket_categories WHERE `key` = ?', [c.key])
+        .catch(() => [{ cnt: 1 }]);
       if (Number(existing?.cnt) === 0) {
-        await qr.query(
-          `INSERT INTO ticket_categories (id, \`key\`, name, ticket_type, is_active, is_deleted, created_at, updated_at)
-           VALUES (UUID(), ?, ?, ?, 1, 0, NOW(), NOW())`,
-          [c.key, c.name, c.type],
-        ).catch(() => undefined);
+        await qr
+          .query(
+            `INSERT INTO ticket_categories (id, \`key\`, name, ticket_type, is_active, is_deleted, created_at, updated_at, sla_hours)
+           VALUES (UUID(), ?, ?, ?, 1, 0, NOW(), NOW(), 24)`,
+            [c.key, c.name, c.type],
+          )
+          .catch(() => undefined);
         inserted++;
       }
     }
@@ -277,15 +310,17 @@ export class TicketService implements OnModuleInit {
 
     let inserted = 0;
     for (const r of rules) {
-      const [existing] = await qr.query(
-        'SELECT COUNT(*) AS cnt FROM ticket_keyword_rules WHERE keyword = ?', [r.keyword],
-      ).catch(() => [{ cnt: 1 }]);
+      const [existing] = await qr
+        .query('SELECT COUNT(*) AS cnt FROM ticket_keyword_rules WHERE keyword = ?', [r.keyword])
+        .catch(() => [{ cnt: 1 }]);
       if (Number(existing?.cnt) === 0) {
-        await qr.query(
-          `INSERT INTO ticket_keyword_rules (id, keyword, target_ticket_type, is_active, created_at, updated_at)
+        await qr
+          .query(
+            `INSERT INTO ticket_keyword_rules (id, keyword, target_ticket_type, is_active, created_at, updated_at)
            VALUES (UUID(), ?, ?, 1, NOW(), NOW())`,
-          [r.keyword, r.type],
-        ).catch(() => undefined);
+            [r.keyword, r.type],
+          )
+          .catch(() => undefined);
         inserted++;
       }
     }
@@ -343,18 +378,25 @@ export class TicketService implements OnModuleInit {
 
     const events = await this.eventRepo
       .createQueryBuilder('e')
-      .leftJoinAndSelect('e.actor', 'actor')
+      
       .where('e.ticketId = :id', { id: ticketId })
       .orderBy('e.createdAt', 'DESC')
-      .addOrderBy("CASE WHEN e.eventType = 'created' THEN 0 WHEN e.eventType = 'auto_assigned' THEN 1 ELSE 2 END", 'DESC')
+      .addOrderBy(
+        "CASE WHEN e.eventType = 'created' THEN 0 WHEN e.eventType = 'auto_assigned' THEN 1 ELSE 2 END",
+        'DESC',
+      )
       .getMany();
 
-    return events.map(e => ({
+    await this.enrichEventsWithUsers(events);
+
+    return events.map((e) => ({
       ...e,
       meta: e.meta ? JSON.parse(e.meta) : null,
       actorName: e.actor
-        ? [e.actor.firstName, e.actor.lastName].filter(Boolean).join(' ') || e.actor.email
-        : (e.eventType === 'auto_assigned' ? 'Automatic Ticket Assignment' : undefined),
+        ? [e.actor.first_name, e.actor.last_name].filter(Boolean).join(' ') || e.actor.email
+        : e.eventType === 'auto_assigned'
+          ? 'Automatic Ticket Assignment'
+          : undefined,
     }));
   }
 
@@ -380,7 +422,11 @@ export class TicketService implements OnModuleInit {
     return count > 0;
   }
 
-  private async assertTicketReadAccess(ticket: Ticket, viewerId?: number, viewerRole?: UserRole): Promise<void> {
+  private async assertTicketReadAccess(
+    ticket: Ticket,
+    viewerId?: number,
+    viewerRole?: UserRole,
+  ): Promise<void> {
     if (!viewerRole || !viewerId) return;
     if (this.canViewAllTicketsInTicketing(viewerRole as string)) return;
     const vId = Number(viewerId);
@@ -398,12 +444,13 @@ export class TicketService implements OnModuleInit {
     dto: CreateTicketDto,
     callerId: number,
     callerRole?: UserRole,
-  ): Promise<Ticket & { autoShifted?: boolean; autoAssigned?: boolean; noTechAvailable?: boolean }> {
+  ): Promise<
+    Ticket & { autoShifted?: boolean; autoAssigned?: boolean; noTechAvailable?: boolean }
+  > {
     const isStaff = callerRole && callerRole !== UserRole.USER;
-    const requesterId =
-      isStaff && dto.requesterId ? dto.requesterId : callerId;
+    const requesterId = dto.requesterId ? dto.requesterId : callerId;
 
-    const requester = await this.userRepo.findOne({ where: { id: requesterId } });
+    const requester = await this.usersHttpClient.getUserById(requesterId);
     if (!requester) throw new BadRequestException('Requester not found');
 
     // NOTE: Multiple concurrent tickets per requester are now allowed.
@@ -412,7 +459,7 @@ export class TicketService implements OnModuleInit {
 
     let ticketType = dto.ticketType;
     let categoryId = dto.categoryId || null;
-    let issueTypeId = dto.issueTypeId || null;
+    const issueTypeId = dto.issueTypeId || null;
     let issueTypeKey: string = 'other';
     let autoShifted = false;
 
@@ -437,7 +484,9 @@ export class TicketService implements OnModuleInit {
             categoryId = matchedRule.targetCategoryId;
           }
           autoShifted = true;
-          this.logger.log(`Auto-shift: keyword "${matchedRule.keyword}" → type=${ticketType}, cat=${categoryId}`);
+          this.logger.log(
+            `Auto-shift: keyword "${matchedRule.keyword}" → type=${ticketType}, cat=${categoryId}`,
+          );
         }
       } catch (err: any) {
         this.logger.warn(`Auto-shift failed (non-fatal): ${err?.message}`);
@@ -446,8 +495,9 @@ export class TicketService implements OnModuleInit {
 
     // ── Auto-Assign based on attendance & workload ─────────────────────
     let assignedToId: number | null = null;
-    let assignedTech: User | null = null;
+    let assignedTech: any = null;
     let noTechAvailable = false;
+    let isSlaWaiting = false;
 
     try {
       const today = new Date().toISOString().slice(0, 10);
@@ -456,11 +506,23 @@ export class TicketService implements OnModuleInit {
       // ── Unified Fallback Chain for Auto-Assignment ──
       let fallbackChain: TicketType[] = [];
       if (ticketType === TicketType.IT_SUPPORT) {
-        fallbackChain = [TicketType.IT_SUPPORT, TicketType.DESKTOP_SUPPORT, TicketType.PANTAWID_ICT_SUPPORT];
+        fallbackChain = [
+          TicketType.IT_SUPPORT,
+          TicketType.DESKTOP_SUPPORT,
+          TicketType.PANTAWID_ICT_SUPPORT,
+        ];
       } else if (ticketType === TicketType.DESKTOP_SUPPORT) {
-        fallbackChain = [TicketType.DESKTOP_SUPPORT, TicketType.IT_SUPPORT, TicketType.PANTAWID_ICT_SUPPORT];
+        fallbackChain = [
+          TicketType.DESKTOP_SUPPORT,
+          TicketType.IT_SUPPORT,
+          TicketType.PANTAWID_ICT_SUPPORT,
+        ];
       } else if (ticketType === TicketType.PANTAWID_ICT_SUPPORT) {
-        fallbackChain = [TicketType.PANTAWID_ICT_SUPPORT, TicketType.DESKTOP_SUPPORT, TicketType.IT_SUPPORT];
+        fallbackChain = [
+          TicketType.PANTAWID_ICT_SUPPORT,
+          TicketType.DESKTOP_SUPPORT,
+          TicketType.IT_SUPPORT,
+        ];
       } else {
         fallbackChain = [ticketType];
       }
@@ -471,101 +533,117 @@ export class TicketService implements OnModuleInit {
           continue;
         }
 
-        const availableTechs = await this.attendanceService.getPresentTechnicians(
-          tType,
-          today,
-        );
+        const availableTechs = await this.attendanceService.getPresentTechnicians(tType, today);
 
         if (availableTechs.length > 0) {
           // QA #2: Senior technicians are NOT eligible for auto-assignment
           // Fix: Ensure a ticket is never assigned to its own requester
-          const eligibleTechs = availableTechs.filter(t => !this.roleCapSvc.isSeniorTech(t.role) && t.id !== requesterId);
-          
+          const eligibleTechs = availableTechs.filter(
+            (t) => !this.roleCapSvc.isSeniorTech(t.role) && t.id !== requesterId,
+          );
+
           // Fetch Routing Configuration
           const config = await this.configRepo.findOne({ where: { id: 1 } });
           const assignmentStrategy = config?.assignmentStrategy || 'CURRENT_AUTO';
           const roundRobinCapHours = config?.roundRobinCapHours || 80;
 
-          if (assignmentStrategy === 'CAPPED_ROUND_ROBIN') {
-            // Capped Round-Robin Mode
-            let minLastAssignedTime = Infinity;
+          if (!config?.isFlagCeremonyPaused) {
+            if (assignmentStrategy === 'CAPPED_ROUND_ROBIN') {
+              // Capped Round-Robin Mode
+              let minLastAssignedTime = Infinity;
 
-            for (const tech of eligibleTechs) {
-              // 1. Calculate Active SLA Load
-              const activeTickets = await this.ticketRepo.find({
-                where: [
-                  { assignedToId: tech.id, status: TicketStatus.OPEN },
-                  { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
-                  { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
-                ],
-                relations: ['category'],
-              });
+              for (const tech of eligibleTechs) {
+                // 1. Calculate Active SLA Load
+                const activeTickets = await this.ticketRepo.find({
+                  where: [
 
-              let activeSlaLoad = 0;
-              for (const t of activeTickets) {
-                if (t.category?.slaHours) {
-                  activeSlaLoad += t.category.slaHours;
-                } else {
-                  activeSlaLoad += 24; // Default fallback if no SLA
-                }
-              }
-
-              // 2. Check Capacity Cap
-              if (activeSlaLoad < roundRobinCapHours) {
-                // 3. Find tech with oldest lastAssignedAt
-                const lastTicket = await this.ticketRepo.findOne({
-                  where: { assignedToId: tech.id },
-                  order: { lastAssignedAt: 'DESC' },
+                    { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
+                    { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
+                  ],
+                  relations: ['category'],
                 });
 
-                const techLastAssignedTime = lastTicket?.lastAssignedAt ? lastTicket.lastAssignedAt.getTime() : 0;
+                let activeSlaLoad = 0;
+                for (const t of activeTickets) {
+                  if (t.category?.slaHours) {
+                    activeSlaLoad += t.category.slaHours;
+                  } else {
+                    activeSlaLoad += 24; // Default fallback if no SLA
+                  }
+                }
 
-                if (techLastAssignedTime < minLastAssignedTime) {
-                  minLastAssignedTime = techLastAssignedTime;
-                  assignedTech = tech;
+                // 2. Check Capacity Cap
+                if (activeSlaLoad < roundRobinCapHours) {
+                  // 3. Find tech with oldest lastAssignedTime
+                  const lastTicket = await this.ticketRepo.findOne({
+                    where: { assignedToId: tech.id },
+                    order: { lastAssignedAt: 'DESC' },
+                  });
+
+                  const techLastAssignedTime = lastTicket?.lastAssignedAt
+                    ? lastTicket.lastAssignedAt.getTime()
+                    : 0;
+
+                  if (techLastAssignedTime < minLastAssignedTime) {
+                    minLastAssignedTime = techLastAssignedTime;
+                    assignedTech = tech;
+                  }
                 }
               }
-            }
 
-            // Fallback: If ALL eligible techs are at max capacity, fallback to the one with the lowest load
-            if (!assignedTech && eligibleTechs.length > 0) {
-              let minLoad = Infinity;
+              // Fallback: If ALL eligible techs are at max capacity, fallback to the one with the lowest load
+              if (!assignedTech && eligibleTechs.length > 0) {
+                let minLoad = Infinity;
+                for (const tech of eligibleTechs) {
+                  const openCount = await this.ticketRepo.count({
+                    where: [
+
+                      { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
+                      { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
+                    ],
+                  });
+                  if (openCount < minLoad) {
+                    minLoad = openCount;
+                    assignedTech = tech;
+                  }
+                }
+              }
+            } else {
+              // CURRENT_AUTO Mode (Zero Active Tickets)
+              let minCount = Infinity;
               for (const tech of eligibleTechs) {
                 const openCount = await this.ticketRepo.count({
                   where: [
-                    { assignedToId: tech.id, status: TicketStatus.OPEN },
+
                     { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
                     { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
                   ],
                 });
-                if (openCount < minLoad) {
-                  minLoad = openCount;
+                // Only consider techs with ZERO active tickets
+                if (openCount === 0 && openCount < minCount) {
+                  minCount = openCount;
                   assignedTech = tech;
                 }
-              }
-            }
-          } else {
-            // CURRENT_AUTO Mode (Zero Active Tickets)
-            let minCount = Infinity;
-            for (const tech of eligibleTechs) {
-              const openCount = await this.ticketRepo.count({
-                where: [
-                  { assignedToId: tech.id, status: TicketStatus.OPEN },
-                  { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
-                  { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
-                ],
-              });
-              // Only consider techs with ZERO active tickets
-              if (openCount === 0 && openCount < minCount) {
-                minCount = openCount;
-                assignedTech = tech;
               }
             }
           }
 
           if (assignedTech) {
             assignedToId = assignedTech.id;
-            this.logger.log(`Auto-assign resolved: original=${ticketType} → assigned=${tType} to ${assignedTech.email} using ${assignmentStrategy}`);
+            
+            // Determine if tech is currently busy
+            const activeTicketsCount = await this.ticketRepo.count({
+              where: [
+                { assignedToId: assignedTech.id, status: TicketStatus.ASSIGNED },
+                { assignedToId: assignedTech.id, status: TicketStatus.IN_PROGRESS },
+                { assignedToId: assignedTech.id, status: TicketStatus.PAUSE },
+              ]
+            });
+            isSlaWaiting = activeTicketsCount > 0;
+
+            this.logger.log(
+              `Auto-assign resolved: original=${ticketType} -> assigned=${tType} to ${assignedTech.email} using ${assignmentStrategy} (isSlaWaiting: ${isSlaWaiting})`,
+            );
             break;
           }
         }
@@ -583,11 +661,18 @@ export class TicketService implements OnModuleInit {
     const status = assignedToId ? TicketStatus.ASSIGNED : TicketStatus.OPEN;
 
     let slaDeadline: Date | null = null;
-    if (assignedToId && categoryId) {
+    if (assignedToId && categoryId && !isSlaWaiting) {
       const cat = await this.settingsService.getCategoryById(categoryId).catch(() => null);
       if (cat?.slaHours) {
-        slaDeadline = new Date();
-        slaDeadline.setHours(slaDeadline.getHours() + cat.slaHours);
+        const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch((err) => {
+          this.logger.warn(`[SLA] Failed to load slaConfig: ${err?.message}`);
+          return null;
+        });
+        if (!slaConfig) this.logger.warn('[SLA] slaConfig is null — falling back to naive +hours calc');
+        slaDeadline = slaConfig
+          ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
+          : (() => { const d = new Date(); d.setHours(d.getHours() + cat.slaHours); return d; })();
+        this.logger.log(`[SLA] deadline set: ${slaDeadline?.toISOString()}, slaHours=${cat.slaHours}, mode=${slaConfig?.scheduleMode ?? 'fallback'}`);
       }
     }
 
@@ -600,6 +685,7 @@ export class TicketService implements OnModuleInit {
       status,
       categoryId,
       slaDeadline,
+      isSlaWaiting,
       lastAssignedAt: assignedToId ? new Date() : null,
       issueTypeId,
       issueType: issueTypeKey,
@@ -628,7 +714,9 @@ export class TicketService implements OnModuleInit {
       }
     }
     if (!saved) {
-      throw new BadRequestException('Failed to create ticket due to ticket number allocation conflict.');
+      throw new BadRequestException(
+        'Failed to create ticket due to ticket number allocation conflict.',
+      );
     }
 
     // Log creation event
@@ -641,7 +729,9 @@ export class TicketService implements OnModuleInit {
     if (assignedToId && assignedTech) {
       this.logEvent(saved.id, 'auto_assigned', null, {
         technicianId: assignedTech.id,
-        technicianName: [assignedTech.firstName, assignedTech.lastName].filter(Boolean).join(' ') || assignedTech.email,
+        technicianName:
+          [assignedTech.first_name, assignedTech.lastName].filter(Boolean).join(' ') ||
+          assignedTech.email,
       }).catch(() => {});
     }
 
@@ -659,10 +749,12 @@ export class TicketService implements OnModuleInit {
       categoryName: categoryName ?? undefined,
       priority: saved.priority,
       status: saved.status,
-      requesterName: [requester.firstName, requester.lastName].filter(Boolean).join(' ') || requester.email,
+      requesterName:
+        [requester.first_name, requester.last_name].filter(Boolean).join(' ') || requester.email,
       requesterEmail: requester.email,
       assignedToName: assignedTech
-        ? [assignedTech.firstName, assignedTech.lastName].filter(Boolean).join(' ') || assignedTech.email
+        ? [assignedTech.first_name, assignedTech.lastName].filter(Boolean).join(' ') ||
+          assignedTech.email
         : undefined,
       assignedToEmail: assignedTech?.email,
       createdAt: saved.createdAt?.toISOString?.() ?? new Date().toISOString(),
@@ -687,13 +779,16 @@ export class TicketService implements OnModuleInit {
     limit?: number;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
-  }): Promise<Ticket[] | {
-    data: Ticket[];
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  }> {
+  }): Promise<
+    | Ticket[]
+    | {
+        data: Ticket[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      }
+  > {
     const allowedSortColumns: Record<string, string> = {
       createdAt: 't.createdAt',
       updatedAt: 't.updatedAt',
@@ -701,18 +796,19 @@ export class TicketService implements OnModuleInit {
       status: 't.status',
       slaDeadline: 't.slaDeadline',
     };
-    const sortBy = allowedSortColumns[filters.sortBy || 'createdAt'] || allowedSortColumns.createdAt;
+    const sortBy =
+      allowedSortColumns[filters.sortBy || 'createdAt'] || allowedSortColumns.createdAt;
     const sortOrder = filters.sortOrder?.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
     const qb = this.ticketRepo
       .createQueryBuilder('t')
-      .leftJoinAndSelect('t.requester', 'requester')
-      .leftJoinAndSelect('t.createdBy', 'createdBy')
-      .leftJoinAndSelect('t.assignedTo', 'assignedTo')
+      
+      
+      
       .leftJoinAndSelect('t.category', 'category')
       .leftJoinAndSelect('t.issueTypeConfig', 'issueTypeConfig')
       .leftJoinAndSelect('t.comments', 'comments')
-      .leftJoinAndSelect('comments.user', 'commentUser')
+      
       .orderBy(sortBy, sortOrder as 'ASC' | 'DESC')
       .distinct(true);
 
@@ -734,7 +830,8 @@ export class TicketService implements OnModuleInit {
       ).distinct(true);
 
       if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
-      if (filters.ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+      if (filters.ticketType)
+        qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
       if (filters.requesterId) qb.andWhere('t.requesterId = :rid', { rid: filters.requesterId });
       if (filters.assignedToId) qb.andWhere('t.assignedToId = :aid', { aid: filters.assignedToId });
     } else {
@@ -744,29 +841,41 @@ export class TicketService implements OnModuleInit {
         // Regular users see their own tickets AND tickets filed on their behalf (proxy),
         // plus tickets they created on behalf of others (proxy filer visibility)
         qb.where('(t.requesterId = :uid OR t.createdById = :uid)', { uid: filters.viewerId });
-      } else if (filters.viewerRole && this.canViewAllTicketsInTicketing(filters.viewerRole as string)) {
+      } else if (
+        filters.viewerRole &&
+        this.canViewAllTicketsInTicketing(filters.viewerRole as string)
+      ) {
         // Privileged roles: no WHERE restriction — see all tickets with full filter support
         if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
-        if (filters.ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+        if (filters.ticketType)
+          qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
         if (filters.requesterId) qb.andWhere('t.requesterId = :rid', { rid: filters.requesterId });
-        if (filters.assignedToId) qb.andWhere('t.assignedToId = :aid', { aid: filters.assignedToId });
+        if (filters.assignedToId)
+          qb.andWhere('t.assignedToId = :aid', { aid: filters.assignedToId });
       } else {
         // All other staff: see only tickets assigned to them OR submitted by them
         qb.where('(t.assignedToId = :uid OR t.requesterId = :uid)', { uid: filters.viewerId });
         if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
-        if (filters.ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+        if (filters.ticketType)
+          qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
       }
     }
 
     const page = filters.page && filters.page > 0 ? Math.floor(filters.page) : undefined;
-    const limit = filters.limit && filters.limit > 0 ? Math.min(100, Math.floor(filters.limit)) : undefined;
+    const limit =
+      filters.limit && filters.limit > 0 ? Math.min(100, Math.floor(filters.limit)) : undefined;
     const usePagination = Boolean(page && limit);
 
     let tickets: Ticket[] = [];
     let total = 0;
     if (usePagination) {
       const offset = ((page as number) - 1) * (limit as number);
-      tickets = await qb.clone().skip(offset).take(limit as number).getMany();
+      tickets = await qb
+        .clone()
+        .skip(offset)
+        .take(limit as number)
+        .getMany();
+    await this.enrichTicketsWithUsers(tickets);
       const totalRow = await qb
         .clone()
         .select('COUNT(DISTINCT t.id)', 'count')
@@ -774,6 +883,7 @@ export class TicketService implements OnModuleInit {
       total = Number(totalRow?.count ?? 0);
     } else {
       tickets = await qb.getMany();
+    await this.enrichTicketsWithUsers(tickets);
     }
 
     // Augment with today's absence flag for assigned technicians (used in admin/section-head views)
@@ -785,17 +895,17 @@ export class TicketService implements OnModuleInit {
       .where('ta.date = :today', { today })
       .andWhere("ta.status IN ('absent', 'out_of_office')")
       .getRawMany();
-    const absentIds = new Set<number>(absentRows.map(r => Number(r.userId)));
+    const absentIds = new Set<number>(absentRows.map((r) => Number(r.userId)));
 
     const now = new Date();
-    const withAvailability = tickets.map(t => {
+    const withAvailability = tickets.map((t) => {
       let isOverdue = false;
       let isNearingSLA = false;
       if (t.slaDeadline) {
         const deadline = new Date(t.slaDeadline);
         const createdAt = new Date(t.createdAt);
         const totalSlaMs = deadline.getTime() - createdAt.getTime();
-        const fortyPercentSlaMs = totalSlaMs * 0.40;
+        const fortyPercentSlaMs = totalSlaMs * 0.4;
 
         if (now > deadline) {
           isOverdue = true;
@@ -826,15 +936,16 @@ export class TicketService implements OnModuleInit {
   async getTicketById(id: string, viewerRole?: UserRole, viewerId?: number): Promise<Ticket> {
     const ticket = await this.ticketRepo.findOne({
       where: { id },
-      relations: ['requester', 'createdBy', 'assignedTo', 'category', 'issueTypeConfig', 'comments', 'comments.user'],
+      relations: ['category', 'issueTypeConfig', 'comments'],
     });
     if (!ticket) throw new NotFoundException(`Ticket ${id} not found`);
+    await this.enrichTicketsWithUsers([ticket]);
     await this.assertTicketReadAccess(ticket, viewerId, viewerRole);
     // Strip internal notes for regular users — they should never see staff-only comments
     if (viewerRole === UserRole.USER && ticket.comments) {
       (ticket as any).comments = ticket.comments.filter((c: any) => !c.isInternal);
     }
-    
+
     // Add SLA indicators
     let isOverdue = false;
     let isNearingSLA = false;
@@ -843,7 +954,7 @@ export class TicketService implements OnModuleInit {
       const deadline = new Date(ticket.slaDeadline);
       const createdAt = new Date(ticket.createdAt);
       const totalSlaMs = deadline.getTime() - createdAt.getTime();
-      const fortyPercentSlaMs = totalSlaMs * 0.40;
+      const fortyPercentSlaMs = totalSlaMs * 0.4;
 
       if (now > deadline) {
         isOverdue = true;
@@ -852,6 +963,12 @@ export class TicketService implements OnModuleInit {
       }
     }
     return Object.assign(ticket, { isOverdue, isNearingSLA });
+  }
+
+
+
+  private commentAttachmentStorageRoot(): string {
+    return process.env.COMMENT_ATTACHMENT_STORAGE_ROOT || './uploads/comments';
   }
 
   // --- Update --------------------------------------------------------------
@@ -867,9 +984,19 @@ export class TicketService implements OnModuleInit {
       where: { ticketId: id },
       order: { createdAt: 'DESC' },
     });
-    const acceptedEscalation = latestEscalation?.status === EscalationStatus.ACCEPTED
-      ? latestEscalation
-      : null;
+    const acceptedEscalation =
+      latestEscalation?.status === EscalationStatus.ACCEPTED ? latestEscalation : null;
+
+    // Guard: Only Ticket Settings Focals or Super Admins can revert a ticket back to OPEN status
+    if (dto.status === TicketStatus.OPEN && ticket.status !== TicketStatus.OPEN) {
+      const isAuthorizedToOpen = 
+        actorRole === UserRole.SUPER_ADMIN || 
+        this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
+        
+      if (!isAuthorizedToOpen) {
+        throw new ForbiddenException('Only Ticket Settings Focals or Super Admins can revert a ticket to OPEN status.');
+      }
+    }
 
     // Regular users can only edit their own open tickets (subject/description)
     // OR close their own ticket if it is in a resolvable state
@@ -881,7 +1008,9 @@ export class TicketService implements OnModuleInit {
       if (dto.status === TicketStatus.CLOSED) {
         const closeable = [TicketStatus.RESOLVED];
         if (!closeable.includes(ticket.status as TicketStatus)) {
-          throw new ForbiddenException('Tickets can only be self-closed once they are in Resolved status.');
+          throw new ForbiddenException(
+            'Tickets can only be self-closed once they are in Resolved status.',
+          );
         }
         ticket.status = TicketStatus.CLOSED;
         ticket.userClosed = true;
@@ -889,14 +1018,19 @@ export class TicketService implements OnModuleInit {
         const savedClosed = await this.ticketRepo.save(ticket);
         this.logEvent(savedClosed.id, 'closed', actorId).catch(() => {});
         if (ticket.assignedTo?.email) {
-          this.emailService.sendTicketClosedOrRatedEmailToTechnician({
-            ticketId: savedClosed.id,
-            ticketNumber: savedClosed.ticketNumber,
-            subject: savedClosed.subject,
-            technicianName: [ticket.assignedTo.firstName, ticket.assignedTo.lastName].filter(Boolean).join(' ') || ticket.assignedTo.email,
-            technicianEmail: ticket.assignedTo.email,
-            action: 'closed',
-          }).catch(() => {});
+          this.emailService
+            .sendTicketClosedOrRatedEmailToTechnician({
+              ticketId: savedClosed.id,
+              ticketNumber: savedClosed.ticketNumber,
+              subject: savedClosed.subject,
+              technicianName:
+                [ticket.assignedTo.first_name, ticket.assignedTo.last_name]
+                  .filter(Boolean)
+                  .join(' ') || ticket.assignedTo.email,
+              technicianEmail: ticket.assignedTo.email,
+              action: 'closed',
+            })
+            .catch(() => {});
         }
         return savedClosed;
       }
@@ -910,7 +1044,9 @@ export class TicketService implements OnModuleInit {
 
     // Terminal state: DUPLICATE tickets cannot be modified further
     if (ticket.status === TicketStatus.DUPLICATE) {
-      throw new ForbiddenException('Duplicate tickets are in a terminal state and cannot be updated.');
+      throw new ForbiddenException(
+        'Duplicate tickets are in a terminal state and cannot be updated.',
+      );
     }
 
     // Technicians / admins can update status + resolution
@@ -944,7 +1080,11 @@ export class TicketService implements OnModuleInit {
 
     // Priority changes allowed for all technician-level roles and above
     if (dto.priority !== undefined) {
-      if (!this.roleCapSvc.isFocal(actorRole as string) && !this.roleCapSvc.isIto(actorRole as string) && !this.roleCapSvc.isTechnician(actorRole as string)) {
+      if (
+        !this.roleCapSvc.isFocal(actorRole as string) &&
+        !this.roleCapSvc.isIto(actorRole as string) &&
+        !this.roleCapSvc.isTechnician(actorRole as string)
+      ) {
         throw new ForbiddenException('Only technicians and above can change ticket priority.');
       }
       ticket.priority = dto.priority;
@@ -961,35 +1101,49 @@ export class TicketService implements OnModuleInit {
         }
       } else {
         // Enforce that only admins or the assigned technician can update status
-        const isStatusAdmin = this.roleCapSvc.isTicketSettingsFocal(actorRole as string) || this.roleCapSvc.isTicketFocal(actorRole as string);
+        const isStatusAdmin =
+          this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
+          this.roleCapSvc.isTicketFocal(actorRole as string);
 
         if (!isStatusAdmin && ticket.assignedToId !== actorId) {
-          throw new ForbiddenException('You can only update the status of tickets explicitly assigned to you.');
+          throw new ForbiddenException(
+            'You can only update the status of tickets explicitly assigned to you.',
+          );
         }
       }
 
       // QA #4/#3/#6: Full status transition matrix enforcement
-      const isSeniorAuthority = this.roleCapSvc.isTicketSettingsFocal(actorRole as string) || this.roleCapSvc.isTicketFocal(actorRole as string);
-
       const ALLOWED_TRANSITIONS: Partial<Record<TicketStatus, TicketStatus[]>> = {
-        [TicketStatus.OPEN]:        isSeniorAuthority ? [TicketStatus.FREEZE, TicketStatus.DUPLICATE] : [TicketStatus.DUPLICATE],
-        [TicketStatus.ASSIGNED]:    isSeniorAuthority
-          ? [TicketStatus.IN_PROGRESS, TicketStatus.FREEZE, TicketStatus.DUPLICATE, TicketStatus.OPEN]
+        [TicketStatus.OPEN]: (this.roleCapSvc.isTicketSettingsFocal(actorRole as string) || this.roleCapSvc.isTicketFocal(actorRole as string))
+          ? [TicketStatus.FREEZE, TicketStatus.DUPLICATE]
+          : [TicketStatus.DUPLICATE],
+        [TicketStatus.ASSIGNED]: (this.roleCapSvc.isTicketSettingsFocal(actorRole as string) || this.roleCapSvc.isTicketFocal(actorRole as string))
+          ? [
+              TicketStatus.IN_PROGRESS,
+              TicketStatus.FREEZE,
+              TicketStatus.DUPLICATE,
+              TicketStatus.OPEN,
+            ]
           : [TicketStatus.IN_PROGRESS, TicketStatus.DUPLICATE],
-        [TicketStatus.IN_PROGRESS]: isSeniorAuthority
+        [TicketStatus.IN_PROGRESS]: (this.roleCapSvc.isTicketSettingsFocal(actorRole as string) || this.roleCapSvc.isTicketFocal(actorRole as string))
           ? [TicketStatus.RESOLVED, TicketStatus.PAUSE, TicketStatus.FREEZE]
           : [TicketStatus.RESOLVED, TicketStatus.PAUSE],
-        [TicketStatus.PAUSE]:       [TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED],
-        [TicketStatus.RESOLVED]:    [TicketStatus.CLOSED],
-        [TicketStatus.FREEZE]:      [TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED],
-        [TicketStatus.CLOSED]:      [],
-        [TicketStatus.DUPLICATE]:   [],
+        [TicketStatus.PAUSE]: [TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED],
+        [TicketStatus.RESOLVED]: [TicketStatus.CLOSED],
+        [TicketStatus.FREEZE]: [
+          TicketStatus.OPEN,
+          TicketStatus.ASSIGNED,
+          TicketStatus.IN_PROGRESS,
+          TicketStatus.RESOLVED,
+        ],
+        [TicketStatus.CLOSED]: [],
+        [TicketStatus.DUPLICATE]: [],
       };
       const allowed = ALLOWED_TRANSITIONS[ticket.status as TicketStatus] ?? [];
       if (!allowed.includes(dto.status as TicketStatus)) {
         throw new ForbiddenException(
           `Cannot transition ticket from '${ticket.status}' to '${dto.status}'. ` +
-          (allowed.length > 0 ? `Allowed: ${allowed.join(', ')}.` : 'This status is terminal.'),
+            (allowed.length > 0 ? `Allowed: ${allowed.join(', ')}.` : 'This status is terminal.'),
         );
       }
 
@@ -1005,16 +1159,23 @@ export class TicketService implements OnModuleInit {
 
       if (dto.status === TicketStatus.DUPLICATE) {
         if (!dto.duplicateOfId) {
-          throw new BadRequestException('duplicateOfId is required when marking a ticket as Duplicate.');
+          throw new BadRequestException(
+            'duplicateOfId is required when marking a ticket as Duplicate.',
+          );
         }
         const original = await this.ticketRepo.findOne({ where: { id: dto.duplicateOfId } });
-        if (!original) throw new BadRequestException(`Original ticket ${dto.duplicateOfId} not found.`);
+        if (!original)
+          throw new BadRequestException(`Original ticket ${dto.duplicateOfId} not found.`);
         ticket.duplicateOfId = dto.duplicateOfId;
 
         // --- SLA Freezing Logic for Terminal DUPLICATE State ---
-        if ([TicketStatus.FREEZE, TicketStatus.PAUSE].includes(ticket.status as TicketStatus) && ticket.slaPausedAt) {
+        if (
+          [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(ticket.status as TicketStatus) &&
+          ticket.slaPausedAt
+        ) {
           const pausedTimeMs = new Date().getTime() - ticket.slaPausedAt.getTime();
-          ticket.accumulatedPauseSeconds = (ticket.accumulatedPauseSeconds || 0) + Math.floor(pausedTimeMs / 1000);
+          ticket.accumulatedPauseSeconds =
+            (ticket.accumulatedPauseSeconds || 0) + Math.floor(pausedTimeMs / 1000);
           if (ticket.slaDeadline) {
             ticket.slaDeadline = new Date(ticket.slaDeadline.getTime() + pausedTimeMs);
           }
@@ -1026,28 +1187,64 @@ export class TicketService implements OnModuleInit {
         if (!ticket.resolvedAt) ticket.resolvedAt = new Date();
       } else {
         // Guard: ticket must have a priority before it can be resolved
-        if (dto.status === TicketStatus.RESOLVED && !ticket.priority && dto.priority === undefined) {
+        if (
+          dto.status === TicketStatus.RESOLVED &&
+          !ticket.priority &&
+          dto.priority === undefined
+        ) {
           throw new BadRequestException(
             'A priority must be set on this ticket before it can be marked as Resolved. Please set the priority first.',
           );
         }
 
         // --- SLA Freezing Logic ---
-        const wasPaused = [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(ticket.status as TicketStatus);
-        const willBePaused = [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(dto.status as TicketStatus);
+        const wasPaused = [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(
+          ticket.status as TicketStatus,
+        );
+        const willBePaused = [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(
+          dto.status as TicketStatus,
+        );
 
         if (willBePaused && !wasPaused) {
           ticket.slaPausedAt = new Date();
         } else if (wasPaused && !willBePaused && ticket.slaPausedAt) {
           const pausedTimeMs = new Date().getTime() - ticket.slaPausedAt.getTime();
-          ticket.accumulatedPauseSeconds = (ticket.accumulatedPauseSeconds || 0) + Math.floor(pausedTimeMs / 1000);
+          ticket.accumulatedPauseSeconds =
+            (ticket.accumulatedPauseSeconds || 0) + Math.floor(pausedTimeMs / 1000);
           if (ticket.slaDeadline) {
             ticket.slaDeadline = new Date(ticket.slaDeadline.getTime() + pausedTimeMs);
           }
           ticket.slaPausedAt = null;
         }
 
+        const originalStatus = ticket.status as TicketStatus;
         ticket.status = dto.status;
+        
+        // Preemptive Queue Pushback (Unfreeze/Unpause Priority)
+        if (
+          dto.status === TicketStatus.IN_PROGRESS &&
+          [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(originalStatus) &&
+          ticket.assignedToId
+        ) {
+          const currentActiveTickets = await this.ticketRepo.find({
+            where: {
+              assignedToId: ticket.assignedToId,
+              status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS]),
+              id: Not(ticket.id),
+              isSlaWaiting: false,
+            },
+          });
+          for (const activeT of currentActiveTickets) {
+            activeT.isSlaWaiting = true;
+            if (!activeT.slaPausedAt) {
+              activeT.slaPausedAt = new Date();
+            }
+          }
+          if (currentActiveTickets.length > 0) {
+            await this.ticketRepo.save(currentActiveTickets);
+            this.logger.log(`Pushed back ${currentActiveTickets.length} active ticket(s) to queue for technician #${ticket.assignedToId} due to preemptive resume of ticket ${ticket.ticketNumber}`);
+          }
+        }
         // QA: When transitioning back to OPEN, remove the assigned technician
         if (dto.status === TicketStatus.OPEN) {
           ticket.assignedToId = null;
@@ -1056,24 +1253,28 @@ export class TicketService implements OnModuleInit {
           const today = new Date().toISOString().slice(0, 10);
           const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
           if (ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT || isOfficeDayToday) {
-            const presentTechs = await this.attendanceService.getPresentTechnicians(ticket.ticketType, today);
+            const presentTechs = await this.attendanceService.getPresentTechnicians(
+              ticket.ticketType,
+              today,
+            );
 
-const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
-            ? presentTechs
-            : presentTechs.filter(t => !this.roleCapSvc.isSeniorTech(t.role));
+            const eligibleTechs =
+              ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
+                ? presentTechs
+                : presentTechs.filter((t) => !this.roleCapSvc.isSeniorTech(t.role));
 
             // Fetch Routing Configuration
             const config = await this.configRepo.findOne({ where: { id: 1 } });
             const assignmentStrategy = config?.assignmentStrategy || 'CURRENT_AUTO';
             const roundRobinCapHours = config?.roundRobinCapHours || 80;
-            let assignedTech: User | null = null;
+            let assignedTech: any = null;
 
             if (assignmentStrategy === 'CAPPED_ROUND_ROBIN') {
               let minLastAssignedTime = Infinity;
               for (const tech of eligibleTechs) {
                 const activeTickets = await this.ticketRepo.find({
                   where: [
-                    { assignedToId: tech.id, status: TicketStatus.OPEN },
+
                     { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
                     { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
                   ],
@@ -1088,7 +1289,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
                     where: { assignedToId: tech.id },
                     order: { lastAssignedAt: 'DESC' },
                   });
-                  const techLastAssignedTime = lastTicket?.lastAssignedAt ? lastTicket.lastAssignedAt.getTime() : 0;
+                  const techLastAssignedTime = lastTicket?.lastAssignedAt
+                    ? lastTicket.lastAssignedAt.getTime()
+                    : 0;
                   if (techLastAssignedTime < minLastAssignedTime) {
                     minLastAssignedTime = techLastAssignedTime;
                     assignedTech = tech;
@@ -1100,7 +1303,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
                 for (const tech of eligibleTechs) {
                   const openCount = await this.ticketRepo.count({
                     where: [
-                      { assignedToId: tech.id, status: TicketStatus.OPEN },
+
                       { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
                       { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
                     ],
@@ -1116,7 +1319,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
               for (const tech of eligibleTechs) {
                 const openCount = await this.ticketRepo.count({
                   where: [
-                    { assignedToId: tech.id, status: TicketStatus.OPEN },
+
                     { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
                     { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
                   ],
@@ -1134,7 +1337,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
               ticket.lastAssignedAt = new Date();
               // Break not needed here, no outer loop
             }
-            }
+          }
         }
         if (dto.status === TicketStatus.RESOLVED && !ticket.resolvedAt) {
           ticket.resolvedAt = new Date();
@@ -1142,7 +1345,8 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       }
     }
     if (dto.resolutionNotes !== undefined) ticket.resolutionNotes = dto.resolutionNotes;
-    if (dto.resolutionSteps !== undefined) ticket.resolutionSteps = dto.resolutionSteps?.trim() || null;
+    if (dto.resolutionSteps !== undefined)
+      ticket.resolutionSteps = dto.resolutionSteps?.trim() || null;
     if (dto.resolutionDate !== undefined) {
       if (!dto.resolutionDate) {
         ticket.resolutionDate = null;
@@ -1160,12 +1364,14 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     // AI Knowledge Base Generation
     if (dto.status === TicketStatus.RESOLVED && dto.generateKb && saved.resolutionNotes) {
       // Fire-and-forget generation
-      this.kbService.generateKbFromTicket(
-        saved.subject,
-        saved.description,
-        saved.resolutionNotes,
-        saved.resolutionSteps || ''
-      ).catch(err => this.logger.warn(`Failed to auto-generate KB: ${err.message}`));
+      this.kbService
+        .generateKbFromTicket(
+          saved.subject,
+          saved.description,
+          saved.resolutionNotes,
+          saved.resolutionSteps || '',
+        )
+        .catch((err) => this.logger.warn(`Failed to auto-generate KB: ${err.message}`));
     }
 
     // Log status/priority change event
@@ -1176,36 +1382,48 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       }).catch(() => {});
 
       if (dto.status === TicketStatus.RESOLVED && ticket.requester?.email) {
-        this.emailService.sendTicketResolvedEmailToRequester({
-          ticketId: saved.id,
-          ticketNumber: saved.ticketNumber,
-          subject: saved.subject,
-          requesterName: [ticket.requester.firstName, ticket.requester.lastName].filter(Boolean).join(' ') || ticket.requester.email,
-          requesterEmail: ticket.requester.email,
-          technicianName: ticket.assignedTo
-            ? ([ticket.assignedTo.firstName, ticket.assignedTo.lastName].filter(Boolean).join(' ') || ticket.assignedTo.email)
-            : undefined,
-        }).catch(() => {});
+        this.emailService
+          .sendTicketResolvedEmailToRequester({
+            ticketId: saved.id,
+            ticketNumber: saved.ticketNumber,
+            subject: saved.subject,
+            requesterName:
+              [ticket.requester.first_name, ticket.requester.last_name].filter(Boolean).join(' ') ||
+              ticket.requester.email,
+            requesterEmail: ticket.requester.email,
+            technicianName: ticket.assignedTo
+              ? [ticket.assignedTo.first_name, ticket.assignedTo.last_name]
+                  .filter(Boolean)
+                  .join(' ') || ticket.assignedTo.email
+              : undefined,
+          })
+          .catch(() => {});
       }
 
       if (dto.status === TicketStatus.CLOSED && ticket.assignedTo?.email) {
-        this.emailService.sendTicketClosedOrRatedEmailToTechnician({
-          ticketId: saved.id,
-          ticketNumber: saved.ticketNumber,
-          subject: saved.subject,
-          technicianName: [ticket.assignedTo.firstName, ticket.assignedTo.lastName].filter(Boolean).join(' ') || ticket.assignedTo.email,
-          technicianEmail: ticket.assignedTo.email,
-          action: 'closed',
-        }).catch(() => {});
+        this.emailService
+          .sendTicketClosedOrRatedEmailToTechnician({
+            ticketId: saved.id,
+            ticketNumber: saved.ticketNumber,
+            subject: saved.subject,
+            technicianName:
+              [ticket.assignedTo.first_name, ticket.assignedTo.last_name].filter(Boolean).join(' ') ||
+              ticket.assignedTo.email,
+            technicianEmail: ticket.assignedTo.email,
+            action: 'closed',
+          })
+          .catch(() => {});
       }
     }
 
     // QA #1/#2: On RESOLVED, auto-assign next OPEN ticket — only for non-senior techs
-    // Bug fix: removed ticketType restriction so cross-type tickets are considered;
-    // also verifies technician is available (not absent) before assigning.
-    if (dto.status === TicketStatus.RESOLVED && saved.assignedToId) {
+    // QA #1/#2: On RESOLVED, CLOSED, DUPLICATE, or FREEZE, auto-assign next queued ticket
+    if (
+      [TicketStatus.RESOLVED, TicketStatus.CLOSED, TicketStatus.DUPLICATE, TicketStatus.FREEZE].includes(dto.status as TicketStatus) && 
+      saved.assignedToId
+    ) {
       try {
-        const resolvedByTech = await this.userRepo.findOne({ where: { id: saved.assignedToId } });
+        const resolvedByTech = await this.usersHttpClient.getUserById(saved.assignedToId);
         const isSeniorTech = resolvedByTech && this.roleCapSvc.isSeniorTech(resolvedByTech.role);
 
         if (!isSeniorTech) {
@@ -1221,43 +1439,103 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
             .getRawOne();
 
           if (!absentRow) {
-            // Find next oldest unassigned open ticket — no ticketType restriction (cross-type support)
-            // Fix: ensure the ticket requester is not the technician being assigned
-            const nextTicket = await this.ticketRepo
-              .createQueryBuilder('t')
-              .where('t.status = :status', { status: TicketStatus.OPEN })
-              .andWhere('t.assignedToId IS NULL')
-              .andWhere('t.requesterId != :assignedToId', { assignedToId: saved.assignedToId })
-              .orderBy('t.createdAt', 'ASC')
-              .getOne();
-            if (nextTicket) {
-              nextTicket.assignedToId = saved.assignedToId;
-              nextTicket.status = TicketStatus.ASSIGNED;
+            // 1. Check for Stacked SLA waiting tickets first
+            const waitingTicket = await this.ticketRepo.findOne({
+              where: {
+                assignedToId: saved.assignedToId,
+                isSlaWaiting: true,
+                status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE]),
+              },
+              order: { createdAt: 'ASC' },
+            });
 
-              if (nextTicket.categoryId) {
-                const cat = await this.settingsService.getCategoryById(nextTicket.categoryId).catch(() => null);
-                if (cat?.slaHours) {
-                  const deadline = new Date();
-                  deadline.setHours(deadline.getHours() + cat.slaHours);
-                  nextTicket.slaDeadline = deadline;
+            if (waitingTicket) {
+              waitingTicket.isSlaWaiting = false;
+              waitingTicket.lastAssignedAt = new Date();
+
+              if (!waitingTicket.slaDeadline) {
+                // Brand new ticket from queue
+                if (waitingTicket.categoryId) {
+                  const cat = await this.settingsService
+                    .getCategoryById(waitingTicket.categoryId)
+                    .catch(() => null);
+                  if (cat?.slaHours) {
+                    const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
+                    waitingTicket.slaDeadline = slaConfig
+                      ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
+                      : (() => { const d = new Date(); d.setHours(d.getHours() + cat.slaHours); return d; })();
+                  }
                 }
+              } else if (waitingTicket.slaPausedAt) {
+                // Ticket was pushed back to queue previously, resume its SLA
+                const pausedTimeMs = new Date().getTime() - waitingTicket.slaPausedAt.getTime();
+                waitingTicket.slaDeadline = new Date(waitingTicket.slaDeadline.getTime() + pausedTimeMs);
+                waitingTicket.accumulatedPauseSeconds = (waitingTicket.accumulatedPauseSeconds || 0) + Math.floor(pausedTimeMs / 1000);
+                waitingTicket.slaPausedAt = null;
               }
+              await this.ticketRepo.save(waitingTicket);
 
-              await this.ticketRepo.save(nextTicket);
-
-              this.logEvent(nextTicket.id, 'auto_assigned', null, {
+              this.logEvent(waitingTicket.id, 'auto_assigned', null, {
                 technicianId: resolvedByTech!.id,
-                technicianName: [resolvedByTech!.firstName, resolvedByTech!.lastName].filter(Boolean).join(' ') || resolvedByTech!.email,
+                technicianName:
+                  [resolvedByTech!.first_name, resolvedByTech!.last_name].filter(Boolean).join(' ') ||
+                  resolvedByTech!.email,
+                note: 'Unstacked from waiting list',
               }).catch(() => {});
 
               this.logger.log(
-                `Auto-reassign on resolve: ticket ${nextTicket.ticketNumber} (${nextTicket.ticketType}) → technician #${saved.assignedToId}`,
+                `Auto-reassign on resolve: unstacked waiting ticket ${waitingTicket.ticketNumber} for technician #${saved.assignedToId}`,
               );
             } else {
-              this.logger.log(`Auto-reassign on resolve: no open unassigned tickets available for technician #${saved.assignedToId}`);
+              // 2. Find next oldest unassigned open ticket
+              const nextTicket = await this.ticketRepo
+                .createQueryBuilder('t')
+                .where('t.status = :status', { status: TicketStatus.OPEN })
+                .andWhere('t.assignedToId IS NULL')
+                .andWhere('t.requesterId != :assignedToId', { assignedToId: saved.assignedToId })
+                .orderBy('t.createdAt', 'ASC')
+                .getOne();
+
+              if (nextTicket) {
+                nextTicket.assignedToId = saved.assignedToId;
+                nextTicket.status = TicketStatus.ASSIGNED;
+                nextTicket.lastAssignedAt = new Date();
+
+                if (nextTicket.categoryId) {
+                  const cat = await this.settingsService
+                    .getCategoryById(nextTicket.categoryId)
+                    .catch(() => null);
+                  if (cat?.slaHours) {
+                    const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
+                    nextTicket.slaDeadline = slaConfig
+                      ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
+                      : (() => { const d = new Date(); d.setHours(d.getHours() + cat.slaHours); return d; })();
+                  }
+                }
+
+                await this.ticketRepo.save(nextTicket);
+
+                this.logEvent(nextTicket.id, 'auto_assigned', null, {
+                  technicianId: resolvedByTech!.id,
+                  technicianName:
+                    [resolvedByTech!.first_name, resolvedByTech!.last_name]
+                      .filter(Boolean)
+                      .join(' ') || resolvedByTech!.email,
+                }).catch(() => {});
+
+                this.logger.log(
+                  `Auto-reassign on resolve: ticket ${nextTicket.ticketNumber} (${nextTicket.ticketType}) -> technician #${saved.assignedToId}`,
+                );
+              } else {
+                this.logger.log(
+                  `Auto-reassign on resolve: no open unassigned tickets available for technician #${saved.assignedToId}`,
+                );
+              }
             }
           } else {
-            this.logger.log(`Auto-reassign on resolve: technician #${saved.assignedToId} is absent today — skipping`);
+            this.logger.log(
+              `Auto-reassign on resolve: technician #${saved.assignedToId} is absent today — skipping`,
+            );
           }
         }
       } catch (err: any) {
@@ -1268,12 +1546,21 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     return saved;
   }
 
-  async assignTicket(id: string, dto: AssignTicketDto, actorRole: UserRole, actorId?: number): Promise<Ticket> {
-    if (!this.roleCapSvc.isTicketFocal(actorRole as string) && 
-        !this.roleCapSvc.isTicketSettingsFocal(actorRole as string) && 
-        !this.roleCapSvc.isAllTickets(actorRole as string) && 
-        !this.roleCapSvc.isTechnician(actorRole as string)) {
-      throw new ForbiddenException('Only admins, focal persons, and technicians can assign tickets.');
+  async assignTicket(
+    id: string,
+    dto: AssignTicketDto,
+    actorRole: UserRole,
+    actorId?: number,
+  ): Promise<Ticket> {
+    if (
+      !this.roleCapSvc.isTicketFocal(actorRole as string) &&
+      !this.roleCapSvc.isTicketSettingsFocal(actorRole as string) &&
+      !this.roleCapSvc.isAllTickets(actorRole as string) &&
+      !this.roleCapSvc.isTechnician(actorRole as string)
+    ) {
+      throw new ForbiddenException(
+        'Only admins, focal persons, and technicians can assign tickets.',
+      );
     }
 
     const ticket = await this.getTicketById(id, actorRole, actorId);
@@ -1281,13 +1568,14 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       where: { ticketId: id },
       order: { createdAt: 'DESC' },
     });
-    const acceptedEscalation = latestEscalation?.status === EscalationStatus.ACCEPTED
-      ? latestEscalation
-      : null;
+    const acceptedEscalation =
+      latestEscalation?.status === EscalationStatus.ACCEPTED ? latestEscalation : null;
 
     // Duplicate, Resolved, and Closed tickets are terminal – assignment is not allowed
     if (ticket.status === TicketStatus.DUPLICATE) {
-      throw new ForbiddenException('Cannot assign a technician to a ticket that is marked as Duplicate.');
+      throw new ForbiddenException(
+        'Cannot assign a technician to a ticket that is marked as Duplicate.',
+      );
     }
     if ([TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(ticket.status as TicketStatus)) {
       throw new ForbiddenException('Resolved or closed tickets cannot be reassigned.');
@@ -1295,11 +1583,20 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
 
     // A ticket cannot be assigned to its requester or reporter
     if (dto.assignedToId === ticket.requesterId || dto.assignedToId === ticket.createdById) {
-      throw new ForbiddenException('A ticket cannot be assigned to the person who requested or reported it.');
+      throw new ForbiddenException(
+        'A ticket cannot be assigned to the person who requested or reported it.',
+      );
     }
 
-    const technician = await this.userRepo.findOne({ where: { id: dto.assignedToId } });
+    const technician = await this.usersHttpClient.getUserById(dto.assignedToId);
     if (!technician) throw new NotFoundException('Technician not found');
+
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    const attendanceRecord = await this.attendanceService.getAttendanceForDate(todayStr);
+    const techAttendance = attendanceRecord.find((a) => a.userId === dto.assignedToId);
+    if (techAttendance && ['absent', 'out_of_office', 'half_day'].includes(techAttendance.status)) {
+      throw new BadRequestException(`Cannot assign ticket to a technician who is currently ${techAttendance.status}.`);
+    }
 
     // Once an escalation is accepted, only CO/SH/super_admin may reassign,
     // and only to another configured escalation focal.
@@ -1330,38 +1627,50 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       .where('ta.user_id = :userId', { userId: dto.assignedToId })
       .andWhere('ta.date = :today', { today })
       .getRawOne<{ status?: string }>();
-    if (attendanceRow?.status === 'absent' || attendanceRow?.status === 'out_of_office') {
-      throw new BadRequestException('Selected technician is not available today and cannot be assigned tickets.');
+    if (attendanceRow?.status === 'absent' || attendanceRow?.status === 'out_of_office' || attendanceRow?.status === 'half_day') {
+      throw new BadRequestException(
+        'Selected technician is not available today and cannot be assigned tickets.',
+      );
     }
 
     // If the actor has ticketMainFocal=true they are empowered to re-assign freely (skip busy guard)
     let actorIsMainFocal = false;
     if (actorId) {
-      const actorUser = await this.userRepo.findOne({ where: { id: actorId } });
+      const actorUser = await this.usersHttpClient.getUserById(actorId);
       actorIsMainFocal = actorUser?.ticketMainFocal === true;
     }
-    const bypassBusyGuard = actorIsMainFocal || this.roleCapSvc.isTicketSettingsFocal(actorRole as string) || this.roleCapSvc.isFocal(actorRole as string);
+    const bypassBusyGuard =
+      actorIsMainFocal ||
+      this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
+      this.roleCapSvc.isFocal(actorRole as string);
 
     // Guard: lower-level techs can only escalate to focal-level technicians
     const lowerLevelRoles: UserRole[] = [UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR];
-    if (lowerLevelRoles.includes(actorRole) && !this.roleCapSvc.isFocal(technician.role as string)) {
-      throw new ForbiddenException('Lower-level technicians may only escalate to focal-level technicians.');
+    if (
+      lowerLevelRoles.includes(actorRole) &&
+      !this.roleCapSvc.isFocal(technician.role as string)
+    ) {
+      throw new ForbiddenException(
+        'Lower-level technicians may only escalate to focal-level technicians.',
+      );
     }
+
+    // Check technician active load
+    const busyCount = await this.ticketRepo.count({
+      where: [
+        { assignedToId: dto.assignedToId, status: TicketStatus.ASSIGNED },
+        { assignedToId: dto.assignedToId, status: TicketStatus.IN_PROGRESS },
+        { assignedToId: dto.assignedToId, status: TicketStatus.PAUSE },
+      ]
+    });
 
     // Guard: technician must have no active tickets (unless actor is main focal / admin)
     if (!bypassBusyGuard) {
-    const busyCount = await this.ticketRepo
-      .createQueryBuilder('t')
-      .where('t.assignedToId = :id', { id: dto.assignedToId })
-      .andWhere('t.status NOT IN (:...terminal)', {
-        terminal: [TicketStatus.CLOSED, TicketStatus.DUPLICATE, TicketStatus.RESOLVED],
-      })
-      .getCount();
-    if (busyCount > 0) {
-      throw new BadRequestException(
-        `${technician.firstName} ${technician.lastName} still has ${busyCount} unresolved ticket(s). Resolve them before assigning a new one.`,
-      );
-    }
+      if (busyCount > 0) {
+        throw new BadRequestException(
+          `${technician.first_name} ${technician.last_name} still has ${busyCount} unresolved active ticket(s). Resolve them before assigning a new one.`,
+        );
+      }
     }
     ticket.assignedToId = dto.assignedToId;
     ticket.lastAssignedAt = new Date();
@@ -1371,9 +1680,19 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
 
     // Set SLA deadline if the ticket's category has an SLA configured
     if (ticket.category?.slaHours) {
-      const deadline = new Date();
-      deadline.setHours(deadline.getHours() + ticket.category.slaHours);
-      ticket.slaDeadline = deadline;
+      const isAuthorizedToResetSla = this.roleCapSvc.isTicketSettingsFocal(actorRole as string) || actorRole === UserRole.SUPER_ADMIN;
+      
+      if (busyCount > 0) {
+        ticket.isSlaWaiting = true;
+      } else {
+        ticket.isSlaWaiting = false;
+        if (!ticket.slaDeadline || isAuthorizedToResetSla) {
+          const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
+          ticket.slaDeadline = slaConfig
+            ? await this.calculateSlaDeadline(new Date(), ticket.category.slaHours, slaConfig)
+            : (() => { const d = new Date(); d.setHours(d.getHours() + ticket.category.slaHours); return d; })();
+        }
+      }
     }
 
     const assigned = await this.ticketRepo.save(ticket);
@@ -1381,41 +1700,50 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     // Log assignment event
     this.logEvent(assigned.id, 'manually_assigned', actorId ?? null, {
       technicianId: technician.id,
-      technicianName: [technician.firstName, technician.lastName].filter(Boolean).join(' ') || technician.email,
+      technicianName:
+        [technician.first_name, technician.last_name].filter(Boolean).join(' ') || technician.email,
       previousAssignee: ticket.assignedToId !== dto.assignedToId ? ticket.assignedToId : undefined,
     }).catch(() => {});
 
     // Send assignment notification email (fire-and-forget)
-    this.emailService.sendTicketAssignedEmail({
-      ticketId: assigned.id,
-      ticketNumber: assigned.ticketNumber,
-      subject: assigned.subject,
-      ticketType: assigned.ticketType,
-      priority: assigned.priority,
-      status: assigned.status,
-      technicianName: [technician.firstName, technician.lastName].filter(Boolean).join(' ') || technician.email,
-      technicianEmail: technician.email,
-    }).catch(() => {});
+    this.emailService
+      .sendTicketAssignedEmail({
+        ticketId: assigned.id,
+        ticketNumber: assigned.ticketNumber,
+        subject: assigned.subject,
+        ticketType: assigned.ticketType,
+        priority: assigned.priority,
+        status: assigned.status,
+        technicianName:
+          [technician.first_name, technician.last_name].filter(Boolean).join(' ') || technician.email,
+        technicianEmail: technician.email,
+      })
+      .catch(() => {});
 
     return assigned;
   }
 
   /** Mark ticket as In Progress when the assigned technician opens the detail view */
-  async markTicketViewed(id: string, viewerId: number, viewerRole: UserRole): Promise<Ticket | null> {
+  async markTicketViewed(
+    id: string,
+    viewerId: number,
+    viewerRole: UserRole,
+  ): Promise<Ticket | null> {
     const ticket = await this.getTicketById(id, viewerRole, viewerId);
     // Only auto-transition when the assigned technician views an 'assigned' ticket
     // QA #5: Skip auto-transition if priority has not been set yet
-    if (
-      ticket.status === TicketStatus.ASSIGNED &&
-      ticket.assignedToId === viewerId
-    ) {
+    if (ticket.status === TicketStatus.ASSIGNED && ticket.assignedToId === viewerId) {
       if (!ticket.priority) {
-        this.logger.log(`Auto in_progress skipped: ticket ${ticket.ticketNumber} has no priority set.`);
+        this.logger.log(
+          `Auto in_progress skipped: ticket ${ticket.ticketNumber} has no priority set.`,
+        );
         return null; // Priority must be set first
       }
       ticket.status = TicketStatus.IN_PROGRESS;
       const saved = await this.ticketRepo.save(ticket);
-      this.logger.log(`Auto in_progress: ticket ${ticket.ticketNumber} viewed by technician #${viewerId}`);
+      this.logger.log(
+        `Auto in_progress: ticket ${ticket.ticketNumber} viewed by technician #${viewerId}`,
+      );
       this.logEvent(saved.id, 'in_progress', viewerId, { via: 'view' }).catch(() => {});
       return saved;
     }
@@ -1429,6 +1757,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     dto: AddCommentDto,
     actorId: number,
     actorRole: UserRole,
+    attachment?: Express.Multer.File,
   ): Promise<TicketComment> {
     const ticket = await this.getTicketById(ticketId, actorRole, actorId);
 
@@ -1443,11 +1772,26 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     const commentText = (dto.content ?? dto.comment ?? '').trim();
     if (!commentText) throw new BadRequestException('Comment content cannot be empty.');
 
+    let attachmentPath: string | null = null;
+    if (attachment) {
+      if (!attachment.mimetype.startsWith('image/')) {
+        throw new BadRequestException('Only picture attachments (images) are allowed.');
+      }
+      const dir = path.join(this.commentAttachmentStorageRoot(), ticketId);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      
+      const filename = `${Date.now()}-${attachment.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const fullPath = path.join(dir, filename);
+      fs.writeFileSync(fullPath, attachment.buffer);
+      attachmentPath = `comment-attachments/${ticketId}/${filename}`;
+    }
+
     const comment = this.commentRepo.create({
       ticketId,
       comment: commentText,
       userId: actorId,
       isInternal: isInternal ?? false,
+      attachmentPath,
     });
 
     const savedComment = await this.commentRepo.save(comment);
@@ -1467,7 +1811,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       throw new ForbiddenException('Only the requester can submit satisfaction.');
     }
     if (ticket.status !== TicketStatus.RESOLVED && ticket.status !== TicketStatus.CLOSED) {
-      throw new BadRequestException('Satisfaction can only be submitted for resolved or closed tickets.');
+      throw new BadRequestException(
+        'Satisfaction can only be submitted for resolved or closed tickets.',
+      );
     }
     if (ticket.satisfactionSubmittedAt) {
       throw new BadRequestException('Satisfaction has already been submitted for this ticket.');
@@ -1477,7 +1823,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       // Full CSAT form submission
       const form = dto.formData;
       if (!form.consentGiven) {
-        throw new BadRequestException('Informed consent is required to submit the satisfaction form.');
+        throw new BadRequestException(
+          'Informed consent is required to submit the satisfaction form.',
+        );
       }
       if (!form.unitSection?.trim()) throw new BadRequestException('Unit/Section is required.');
       if (!form.clientFirstName?.trim() || !form.clientLastName?.trim()) {
@@ -1488,9 +1836,17 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
         throw new BadRequestException('All 9 service quality items must be answered.');
       }
 
-      // Compute satisfactionRating from item 0 (overall satisfaction)
-      const item0 = form.likert[0];
-      const derivedRating = (typeof item0 === 'number' && item0 >= 1 && item0 <= 5) ? item0 : null;
+      // Compute satisfactionRating as the average of all answered (numeric) Likert items.
+      // Items with value 'NA' are excluded from the average.
+      const numericLikert = (form.likert as (number | string | 'NA')[]).filter(
+        (v) => typeof v === 'number' && (v as number) >= 1 && (v as number) <= 5,
+      ) as number[];
+      const derivedRating =
+        numericLikert.length > 0
+          ? Math.round(
+              (numericLikert.reduce((acc, v) => acc + v, 0) / numericLikert.length) * 10,
+            ) / 10
+          : null;
 
       ticket.satisfactionRating = derivedRating;
       ticket.satisfactionComment = null;
@@ -1509,18 +1865,24 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     ticket.status = TicketStatus.CLOSED;
     const saved = await this.ticketRepo.save(ticket);
     this.logEvent(saved.id, 'closed', requesterId).catch(() => {});
-    this.logEvent(saved.id, 'rated', requesterId, { rating: saved.satisfactionRating }).catch(() => {});
+    this.logEvent(saved.id, 'rated', requesterId, { rating: saved.satisfactionRating }).catch(
+      () => {},
+    );
 
     if (ticket.assignedTo?.email) {
-      this.emailService.sendTicketClosedOrRatedEmailToTechnician({
-        ticketId: saved.id,
-        ticketNumber: saved.ticketNumber,
-        subject: saved.subject,
-        technicianName: [ticket.assignedTo.firstName, ticket.assignedTo.lastName].filter(Boolean).join(' ') || ticket.assignedTo.email,
-        technicianEmail: ticket.assignedTo.email,
-        action: 'rated',
-        rating: saved.satisfactionRating,
-      }).catch(() => {});
+      this.emailService
+        .sendTicketClosedOrRatedEmailToTechnician({
+          ticketId: saved.id,
+          ticketNumber: saved.ticketNumber,
+          subject: saved.subject,
+          technicianName:
+            [ticket.assignedTo.first_name, ticket.assignedTo.last_name].filter(Boolean).join(' ') ||
+            ticket.assignedTo.email,
+          technicianEmail: ticket.assignedTo.email,
+          action: 'rated',
+          rating: saved.satisfactionRating,
+        })
+        .catch(() => {});
     }
 
     return saved;
@@ -1539,7 +1901,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       try {
         const data = JSON.parse(row.formData ?? '{}');
         if (data.unitSection) units.add(data.unitSection);
-      } catch { /* skip malformed */ }
+      } catch {
+        /* skip malformed */
+      }
     }
     return Array.from(units).sort();
   }
@@ -1605,11 +1969,12 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     byDay: { date: string; avgRating: number }[];
     byWeek: { week: string; avgRating: number }[];
     byTicket: any[];
-    byTechnician: Record<string, { average: number, count: number }>;
-    summary: { average: number, count: number };
+    byTechnician: Record<string, { average: number; count: number }>;
+    summary: { average: number; count: number };
   }> {
-    const qb = this.ticketRepo.createQueryBuilder('t')
-      .leftJoinAndSelect('t.assignedTo', 'assignedTo')
+    const qb = this.ticketRepo
+      .createQueryBuilder('t')
+      
       .where('t.satisfactionRating IS NOT NULL');
 
     if (filters.year) {
@@ -1636,8 +2001,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
 
     const tickets = await qb.orderBy('t.satisfactionSubmittedAt', 'DESC').getMany();
+    await this.enrichTicketsWithUsers(tickets);
 
-    const byTicket = tickets.map(t => ({
+    const byTicket = tickets.map((t) => ({
       ticketId: t.id,
       ticketNumber: t.ticketNumber,
       rating: t.satisfactionRating,
@@ -1645,57 +2011,68 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       formData: t.satisfactionFormData,
       submittedAt: t.satisfactionSubmittedAt,
       technicianId: t.assignedTo?.id,
-      technicianName: t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName}` : 'Unknown'
+      technicianName: t.assignedTo
+        ? `${t.assignedTo.first_name} ${t.assignedTo.last_name}`
+        : 'Unknown',
     }));
 
-    const byTechnician: Record<string, { total: number, count: number }> = {};
+    const byTechnician: Record<string, { total: number; count: number }> = {};
     let totalSum = 0;
-    
+    let validCount = 0;
+
     for (const t of tickets) {
-      const techName = t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName}`.trim() : 'Unknown';
+      if (!t.satisfactionRating || t.satisfactionRating <= 0) continue;
+      const techName = t.assignedTo
+        ? `${t.assignedTo.first_name} ${t.assignedTo.last_name}`.trim()
+        : 'Unknown';
       if (!byTechnician[techName]) {
         byTechnician[techName] = { total: 0, count: 0 };
       }
-      byTechnician[techName].total += t.satisfactionRating!;
+      byTechnician[techName].total += t.satisfactionRating;
       byTechnician[techName].count += 1;
-      totalSum += t.satisfactionRating!;
+      totalSum += t.satisfactionRating;
+      validCount += 1;
     }
 
-    const technicianAverages: Record<string, { average: number, count: number }> = {};
+    const technicianAverages: Record<string, { average: number; count: number }> = {};
     for (const [tech, data] of Object.entries(byTechnician)) {
       technicianAverages[tech] = {
         average: Math.round((data.total / data.count) * 10) / 10,
-        count: data.count
+        count: data.count,
       };
     }
 
-    const byDayMap: Record<string, { total: number, count: number }> = {};
-    const byWeekMap: Record<string, { total: number, count: number }> = {};
+    const byDayMap: Record<string, { total: number; count: number }> = {};
+    const byWeekMap: Record<string, { total: number; count: number }> = {};
     for (const t of tickets) {
-      if (!t.satisfactionSubmittedAt) continue;
+      if (!t.satisfactionSubmittedAt || !t.satisfactionRating || t.satisfactionRating <= 0) continue;
       const dateStr = new Date(t.satisfactionSubmittedAt).toISOString().slice(0, 10);
       if (!byDayMap[dateStr]) byDayMap[dateStr] = { total: 0, count: 0 };
-      byDayMap[dateStr].total += t.satisfactionRating!;
+      byDayMap[dateStr].total += t.satisfactionRating;
       byDayMap[dateStr].count += 1;
 
       // Week calculation
       const d = new Date(t.satisfactionSubmittedAt);
       d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
       const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-      const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+      const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
       const weekStr = `${d.getUTCFullYear()}-W${weekNo.toString().padStart(2, '0')}`;
       if (!byWeekMap[weekStr]) byWeekMap[weekStr] = { total: 0, count: 0 };
-      byWeekMap[weekStr].total += t.satisfactionRating!;
+      byWeekMap[weekStr].total += t.satisfactionRating;
       byWeekMap[weekStr].count += 1;
     }
-    const byDay = Object.keys(byDayMap).sort().map(date => ({
-      date,
-      avgRating: Math.round((byDayMap[date].total / byDayMap[date].count) * 10) / 10
-    }));
-    const byWeek = Object.keys(byWeekMap).sort().map(week => ({
-      week,
-      avgRating: Math.round((byWeekMap[week].total / byWeekMap[week].count) * 10) / 10
-    }));
+    const byDay = Object.keys(byDayMap)
+      .sort()
+      .map((date) => ({
+        date,
+        avgRating: Math.round((byDayMap[date].total / byDayMap[date].count) * 10) / 10,
+      }));
+    const byWeek = Object.keys(byWeekMap)
+      .sort()
+      .map((week) => ({
+        week,
+        avgRating: Math.round((byWeekMap[week].total / byWeekMap[week].count) * 10) / 10,
+      }));
 
     return {
       byDay,
@@ -1703,9 +2080,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       byTicket,
       byTechnician: technicianAverages,
       summary: {
-        average: tickets.length > 0 ? Math.round((totalSum / tickets.length) * 10) / 10 : 0,
-        count: tickets.length
-      }
+        average: validCount > 0 ? Math.round((totalSum / validCount) * 10) / 10 : 0,
+        count: validCount,
+      },
     };
   }
 
@@ -1717,16 +2094,22 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     closed: number;
     satisfactionFillRate: number;
     pendingSatisfactionTickets: Ticket[];
+    myTicketsCount: number;
+    escalatedToMeCount: number;
   }> {
     const tickets = await this.ticketRepo.find({ where: { requesterId } });
 
-    let open = 0, inProgress = 0, resolved = 0, closed = 0;
+    let open = 0,
+      inProgress = 0,
+      resolved = 0,
+      closed = 0;
     let needsSatisfaction = 0;
     const pendingSatisfactionTickets: Ticket[] = [];
 
     for (const t of tickets) {
       if (t.status === TicketStatus.OPEN) open++;
-      else if (t.status === TicketStatus.ASSIGNED || t.status === TicketStatus.IN_PROGRESS) inProgress++;
+      else if (t.status === TicketStatus.ASSIGNED || t.status === TicketStatus.IN_PROGRESS)
+        inProgress++;
       else if (t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) {
         if (t.status === TicketStatus.RESOLVED) resolved++;
         if (t.status === TicketStatus.CLOSED) closed++;
@@ -1736,10 +2119,34 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
 
     const filled = tickets.filter(
-      (t) => (t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) && t.satisfactionSubmittedAt,
+      (t) =>
+        (t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) &&
+        t.satisfactionSubmittedAt,
     ).length;
 
     const fillRate = needsSatisfaction > 0 ? Math.round((filled / needsSatisfaction) * 100) : 0;
+
+    const myTicketsCount = await this.ticketRepo.count({
+      where: {
+        assignedToId: requesterId,
+        status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE]),
+      },
+    });
+
+    const escalatedToMeCount = await this.ticketRepo
+      .createQueryBuilder('t')
+      .innerJoin(
+        TicketEscalation,
+        'e',
+        'e.ticket_id = t.id AND e.escalated_to_id = :requesterId AND e.status IN (:...escStatuses)',
+      )
+      .where('t.status IN (:...ticketStatuses)')
+      .setParameters({
+        requesterId,
+        escStatuses: [EscalationStatus.PENDING, EscalationStatus.ACCEPTED],
+        ticketStatuses: [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE, TicketStatus.PAUSE],
+      })
+      .getCount();
 
     return {
       total: tickets.length,
@@ -1749,10 +2156,15 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       closed,
       satisfactionFillRate: fillRate,
       pendingSatisfactionTickets,
+      myTicketsCount,
+      escalatedToMeCount,
     };
   }
 
-  async getSlaSummary(viewerId?: number, viewerRole?: UserRole): Promise<{
+  async getSlaSummary(
+    viewerId?: number,
+    viewerRole?: UserRole,
+  ): Promise<{
     totalWithSla: number;
     activeWithSla: number;
     overdueActive: number;
@@ -1760,11 +2172,14 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     breachedResolved: number;
     complianceRate: number;
   }> {
-    const activeStatuses = [TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.FREEZE];
+    const activeStatuses = [
+      TicketStatus.OPEN,
+      TicketStatus.ASSIGNED,
+      TicketStatus.IN_PROGRESS,
+      TicketStatus.FREEZE,
+    ];
 
-    const qb = this.ticketRepo
-      .createQueryBuilder('t')
-      .where('t.slaDeadline IS NOT NULL');
+    const qb = this.ticketRepo.createQueryBuilder('t').where('t.slaDeadline IS NOT NULL');
 
     if (viewerRole === UserRole.USER) {
       qb.andWhere('t.requesterId = :viewerId', { viewerId });
@@ -1773,6 +2188,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
 
     const tickets = await qb.getMany();
+    await this.enrichTicketsWithUsers(tickets);
     const now = new Date();
     const startOfDay = new Date(now);
     startOfDay.setHours(0, 0, 0, 0);
@@ -1795,14 +2211,19 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
         if (deadline >= startOfDay && deadline <= endOfDay) dueToday++;
       }
 
-      if ((t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) && t.resolvedAt && deadline < t.resolvedAt) {
+      if (
+        (t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) &&
+        t.resolvedAt &&
+        deadline < t.resolvedAt
+      ) {
         breachedResolved++;
       }
     }
 
-    const complianceRate = activeWithSla > 0
-      ? Math.max(0, Math.round(((activeWithSla - overdueActive) / activeWithSla) * 100))
-      : 100;
+    const complianceRate =
+      activeWithSla > 0
+        ? Math.max(0, Math.round(((activeWithSla - overdueActive) / activeWithSla) * 100))
+        : 100;
 
     return {
       totalWithSla: tickets.length,
@@ -1815,7 +2236,11 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
   }
 
   /** Monthly stats for tickets assigned to a specific technician */
-  async getTechAssignedStats(techId: number, year: number, month: number): Promise<{
+  async getTechAssignedStats(
+    techId: number,
+    year: number,
+    month: number,
+  ): Promise<{
     total: number;
     assigned: number;
     inProgress: number;
@@ -1833,9 +2258,14 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       .andWhere('t.createdAt >= :startDate', { startDate })
       .andWhere('t.createdAt <= :endDate', { endDate })
       .getMany();
+    await this.enrichTicketsWithUsers(tickets);
 
-    let assigned = 0, inProgress = 0, resolved = 0, closed = 0;
-    let totalSat = 0, countSat = 0;
+    let assigned = 0,
+      inProgress = 0,
+      resolved = 0,
+      closed = 0;
+    let totalSat = 0,
+      countSat = 0;
 
     for (const t of tickets) {
       if (t.status === TicketStatus.ASSIGNED) assigned++;
@@ -1859,14 +2289,21 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     };
   }
 
-  async getTechnicianAvailability(): Promise<Array<{ id: number; email: string; firstName: string; lastName: string; role: string; openCount: number; attendanceStatus: string | null; isUnavailable: boolean }>> {
+  async getTechnicianAvailability(): Promise<
+    Array<{
+      id: number;
+      email: string;
+      firstName: string;
+      lastName: string;
+      role: string;
+      openCount: number;
+      attendanceStatus: string | null;
+      isUnavailable: boolean;
+    }>
+  > {
     // Fetch all active users except standard 'USER' role
-    const technicians = await this.userRepo.find({
-      where: {
-        active: true,
-        role: Not(In([UserRole.USER, UserRole.SUPER_ADMIN])),
-      },
-    });
+    const allTechUsers = await this.usersHttpClient.getUsers();
+    const technicians = allTechUsers.filter((u: any) => u.role !== UserRole.USER && u.role !== UserRole.SUPER_ADMIN);
 
     // Read attendance for today so assignment UI can hide unavailable technicians.
     const today = new Date().toISOString().slice(0, 10);
@@ -1877,7 +2314,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       .from('attendance', 'ta')
       .where('ta.date = :today', { today })
       .getRawMany();
-    const attendanceMap = new Map<number, string>(attendanceRows.map((r) => [Number(r.userId), String(r.status)]));
+    const attendanceMap = new Map<number, string>(
+      attendanceRows.map((r) => [Number(r.userId), String(r.status)]),
+    );
     const unavailableStatuses = new Set(['absent', 'out_of_office']);
 
     // Bulk fetch open ticket counts
@@ -1891,7 +2330,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       .andWhere('t.assignedToId IS NOT NULL')
       .groupBy('t.assignedToId')
       .getRawMany();
-    const countMap = new Map<number, number>(openCountsRaw.map(r => [Number(r.techId), Number(r.count)]));
+    const countMap = new Map<number, number>(
+      openCountsRaw.map((r) => [Number(r.techId), Number(r.count)]),
+    );
 
     const results = [];
     for (const tech of technicians) {
@@ -1903,8 +2344,8 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       results.push({
         id: tech.id,
         email: tech.email,
-        firstName: tech.firstName,
-        lastName: tech.lastName,
+        firstName: tech.first_name,
+        lastName: tech.last_name,
         role: tech.role,
         openCount: countMap.get(tech.id) ?? 0,
         attendanceStatus,
@@ -1920,8 +2361,15 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     viewerId?: number,
     viewerRole?: UserRole,
   ): Promise<Ticket[]> {
-    if (viewerRole && viewerId && !this.canViewAllTicketsInTicketing(viewerRole as string) && viewerId !== requesterId) {
-      throw new ForbiddenException('You can only view open tickets for your own requester account.');
+    if (
+      viewerRole &&
+      viewerId &&
+      !this.canViewAllTicketsInTicketing(viewerRole as string) &&
+      viewerId !== requesterId
+    ) {
+      throw new ForbiddenException(
+        'You can only view open tickets for your own requester account.',
+      );
     }
 
     return this.ticketRepo
@@ -1941,11 +2389,14 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
    */
   async assignPendingTicketsOnLogin(techId: number): Promise<void> {
     try {
-      const tech = await this.userRepo.findOne({ where: { id: techId } });
+      const tech = await this.usersHttpClient.getUserById(techId);
       if (!tech) return;
 
       // Determine which ticket types this technician handles
-      const roleDefRows = await this.dataSource.query('SELECT technician_type as technicianType FROM role_definitions WHERE value = ?', [tech.role]);
+      const roleDefRows = await this.dataSource.query(
+        'SELECT technician_type as technicianType FROM role_definitions WHERE value = ?',
+        [tech.role],
+      );
       let ticketType: string | null = roleDefRows[0]?.technicianType || null;
 
       if (!ticketType) {
@@ -1969,7 +2420,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
 
       // Guard: tech must be present (attendance check)
       const available = await this.attendanceService.getPresentTechnicians(ticketType, today);
-      const isPresent = available.some(t => t.id === techId);
+      const isPresent = available.some((t) => t.id === techId);
       if (!isPresent) return;
 
       // Guard: tech must currently have zero active tickets
@@ -2001,19 +2452,21 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
 
       this.logEvent(pending.id, 'auto_assigned', null, {
         technicianId: techId,
-        technicianName: [tech.firstName, tech.lastName].filter(Boolean).join(' ') || tech.email,
+        technicianName: [tech.first_name, tech.last_name].filter(Boolean).join(' ') || tech.email,
         via: 'login_auto_assign',
       }).catch(() => {});
 
-      this.emailService.sendTicketAssignedEmail({
-        ticketId: pending.id,
-        ticketNumber: pending.ticketNumber,
-        subject: pending.subject,
-        ticketType: pending.ticketType,
-        priority: pending.priority,
-        assignedToName: [tech.firstName, tech.lastName].filter(Boolean).join(' ') || tech.email,
-        assignedToEmail: tech.email,
-      } as any).catch(() => {});
+      this.emailService
+        .sendTicketAssignedEmail({
+          ticketId: pending.id,
+          ticketNumber: pending.ticketNumber,
+          subject: pending.subject,
+          ticketType: pending.ticketType,
+          priority: pending.priority,
+          assignedToName: [tech.first_name, tech.last_name].filter(Boolean).join(' ') || tech.email,
+          assignedToEmail: tech.email,
+        } as any)
+        .catch(() => {});
 
       this.logger.log(
         `[Login Auto-Assign] Ticket ${pending.ticketNumber} → ${tech.email} on login`,
@@ -2034,7 +2487,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       });
 
       for (const ticket of tickets) {
-        this.logger.log(`[Absence Reassign] Attempting to reassign ticket ${ticket.ticketNumber} from absent technician #${techId}`);
+        this.logger.log(
+          `[Absence Reassign] Attempting to reassign ticket ${ticket.ticketNumber} from absent technician #${techId}`,
+        );
         // Nullify assignedTo so it acts like an open ticket for the auto assignment logic
         ticket.assignedToId = null as any;
         ticket.status = TicketStatus.OPEN;
@@ -2044,15 +2499,19 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
         const today = new Date().toISOString().slice(0, 10);
         const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
         if (ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT || isOfficeDayToday) {
-          const presentTechs = await this.attendanceService.getPresentTechnicians(ticket.ticketType, today);
-          const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
-            ? presentTechs
-            : presentTechs.filter(t => !this.roleCapSvc.isSeniorTech(t.role));
+          const presentTechs = await this.attendanceService.getPresentTechnicians(
+            ticket.ticketType,
+            today,
+          );
+          const eligibleTechs =
+            ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
+              ? presentTechs
+              : presentTechs.filter((t) => !this.roleCapSvc.isSeniorTech(t.role));
 
           for (const tech of eligibleTechs) {
             const openCount = await this.ticketRepo.count({
               where: [
-                { assignedToId: tech.id, status: TicketStatus.OPEN },
+
                 { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
                 { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
               ],
@@ -2064,7 +2523,7 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
               this.logEvent(ticket.id, 'auto_assigned', null, {
                 technicianId: tech.id,
                 technicianName: `${tech.firstName} ${tech.lastName}`.trim(),
-                via: 'absence_reassign'
+                via: 'absence_reassign',
               }).catch(() => {});
               break;
             }
@@ -2108,9 +2567,12 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
 
     const techRoles = [
-      UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
+      UserRole.DESKTOP_SR,
+      UserRole.IT_SUPPORT_SR,
+      UserRole.DESKTOP_JR,
+      UserRole.IT_SUPPORT_JR,
       UserRole.PANTAWID_ICT,
-      ...this.roleCapSvc.getRolesWhere('isFocal').map(r => r as UserRole),
+      ...this.roleCapSvc.getRolesWhere('isFocal').map((r) => r as UserRole),
     ];
 
     const qb = this.ticketRepo
@@ -2128,16 +2590,13 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     if (!rows.length) return [];
 
     const ids = rows.map((r) => Number(r.id)).filter(Boolean);
-    const users = await this.userRepo
-      .createQueryBuilder('u')
-      .where('u.id IN (:...ids)', { ids })
-      .andWhere('u.role IN (:...roles)', { roles: techRoles })
-      .getMany();
+    const allUserRows = await this.usersHttpClient.getUsers();
+    const users = allUserRows.filter((u: any) => ids.includes(u.id) && techRoles.includes(u.role));
 
     return users.map((u) => ({
       id: u.id,
-      firstName: u.firstName,
-      lastName: u.lastName,
+      firstName: u.first_name,
+      lastName: u.last_name,
       role: u.role,
     }));
   }
@@ -2162,15 +2621,30 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     totalEscalations: number;
     acceptedEscalations: number;
     returnedEscalations: number;
+    slaStats: {
+      met: number;
+      missed: number;
+      avgResolutionTimeHours: number;
+    };
+    slaByType: Array<{ type: string; met: number; missed: number; avgResolutionTimeHours: number; count: number }>;
+    slaByTechnician: Array<{ techId: number; techName: string; met: number; missed: number; avgResolutionTimeHours: number; count: number }>;
   }> {
     const now = new Date();
     const year = filters.year ?? now.getFullYear();
     const isTicketSettingsViewer = this.roleCapSvc.isTicketSettingsFocal(filters.viewerRole || '');
-    
-    const isTechnician = filters.viewerRole && !isTicketSettingsViewer && this.roleCapSvc.isTechnician(filters.viewerRole);
 
-    const requesterIdFilter = (!isTicketSettingsViewer && !isTechnician) ? filters.viewerId : undefined;
-    const techIdFilter = isTechnician ? filters.viewerId : (isTicketSettingsViewer ? filters.technicianId : undefined);
+    const isTechnician =
+      filters.viewerRole &&
+      !isTicketSettingsViewer &&
+      this.roleCapSvc.isTechnician(filters.viewerRole);
+
+    const requesterIdFilter =
+      !isTicketSettingsViewer && !isTechnician ? filters.viewerId : undefined;
+    const techIdFilter = isTechnician
+      ? filters.viewerId
+      : isTicketSettingsViewer
+        ? filters.technicianId
+        : undefined;
 
     // Build date range from filters
     let startDate: Date;
@@ -2194,10 +2668,12 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
 
     let qb = this.ticketRepo
       .createQueryBuilder('t')
-      .leftJoinAndSelect('t.assignedTo', 'assignedTo')
+      
       .where('t.createdAt >= :startDate', { startDate })
       .andWhere('t.createdAt <= :endDate', { endDate })
-      .andWhere('t.status IN (:...statuses)', { statuses: [TicketStatus.CLOSED, TicketStatus.RESOLVED] });
+      .andWhere('t.status IN (:...statuses)', {
+        statuses: [TicketStatus.CLOSED, TicketStatus.RESOLVED],
+      });
 
     if (requesterIdFilter) {
       qb = qb.andWhere('t.requesterId = :requesterId', { requesterId: requesterIdFilter });
@@ -2210,28 +2686,48 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
 
     const tickets = await qb.getMany();
+    await this.enrichTicketsWithUsers(tickets);
 
     // Total tickets (any status) in the date range with optional filters
     let totalQb = this.ticketRepo
       .createQueryBuilder('t')
       .where('t.createdAt >= :startDate', { startDate })
       .andWhere('t.createdAt <= :endDate', { endDate });
-    if (requesterIdFilter) totalQb = totalQb.andWhere('t.requesterId = :requesterId', { requesterId: requesterIdFilter });
-    if (techIdFilter) totalQb = totalQb.andWhere('t.assignedToId = :techId', { techId: techIdFilter });
-    if (filters.ticketType) totalQb = totalQb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+    if (requesterIdFilter)
+      totalQb = totalQb.andWhere('t.requesterId = :requesterId', {
+        requesterId: requesterIdFilter,
+      });
+    if (techIdFilter)
+      totalQb = totalQb.andWhere('t.assignedToId = :techId', { techId: techIdFilter });
+    if (filters.ticketType)
+      totalQb = totalQb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
     const allTickets = await totalQb.getMany();
+    await this.enrichTicketsWithUsers(allTickets);
     const totalTickets = allTickets.length;
 
     if (tickets.length === 0 && allTickets.length === 0) {
-      return { totalTickets, totalWithRating: 0, avgOverallRating: null, avgRatingByType: [], avgRatingByTechnician: [], totalEscalations: 0, acceptedEscalations: 0, returnedEscalations: 0 };
+      return {
+        totalTickets,
+        totalWithRating: 0,
+        avgOverallRating: null,
+        avgRatingByType: [],
+        avgRatingByTechnician: [],
+        totalEscalations: 0,
+        acceptedEscalations: 0,
+        returnedEscalations: 0,
+        slaStats: { met: 0, missed: 0, avgResolutionTimeHours: 0 },
+        slaByType: [],
+        slaByTechnician: [],
+      };
     }
 
-    const ratedTickets = tickets.filter(t => t.satisfactionRating !== null);
+    const ratedTickets = tickets.filter((t) => t.satisfactionRating !== null);
     const totalWithRating = ratedTickets.length;
 
     // Overall average
     const overallSum = ratedTickets.reduce((s, t) => s + (t.satisfactionRating ?? 0), 0);
-    const avgOverallRating = totalWithRating > 0 ? Math.round((overallSum / totalWithRating) * 10) / 10 : null;
+    const avgOverallRating =
+      totalWithRating > 0 ? Math.round((overallSum / totalWithRating) * 10) / 10 : null;
 
     // Per type (count total ALL TICKETS, but avg based on rated)
     const byTypeMap = new Map<string, { sum: number; ratedCount: number; totalCount: number }>();
@@ -2239,38 +2735,135 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       const key = t.ticketType;
       const cur = byTypeMap.get(key) ?? { sum: 0, ratedCount: 0, totalCount: 0 };
       if (t.satisfactionRating !== null) {
-        byTypeMap.set(key, { sum: cur.sum + t.satisfactionRating, ratedCount: cur.ratedCount + 1, totalCount: cur.totalCount + 1 });
+        byTypeMap.set(key, {
+          sum: cur.sum + t.satisfactionRating,
+          ratedCount: cur.ratedCount + 1,
+          totalCount: cur.totalCount + 1,
+        });
       } else {
         byTypeMap.set(key, { ...cur, totalCount: cur.totalCount + 1 });
       }
     }
-    const avgRatingByType = Array.from(byTypeMap.entries()).map(([type, { sum, ratedCount, totalCount }]) => ({
-      type,
-      avg: ratedCount > 0 ? Math.round((sum / ratedCount) * 10) / 10 : 0,
-      count: totalCount,
-      ratedCount,
-    }));
+    const avgRatingByType = Array.from(byTypeMap.entries()).map(
+      ([type, { sum, ratedCount, totalCount }]) => ({
+        type,
+        avg: ratedCount > 0 ? Math.round((sum / ratedCount) * 10) / 10 : 0,
+        count: totalCount,
+        ratedCount,
+      }),
+    );
 
     // Per technician
-    const byTechMap = new Map<number, { name: string; sum: number; ratedCount: number; totalCount: number }>();
+    const byTechMap = new Map<
+      number,
+      { name: string; sum: number; ratedCount: number; totalCount: number }
+    >();
     for (const t of tickets) {
       if (!t.assignedToId) continue;
       const techName = t.assignedTo
-        ? [t.assignedTo.firstName, t.assignedTo.lastName].filter(Boolean).join(' ') || t.assignedTo.email
+        ? [t.assignedTo.first_name, t.assignedTo.last_name].filter(Boolean).join(' ') ||
+          t.assignedTo.email
         : `Tech #${t.assignedToId}`;
-      const cur = byTechMap.get(t.assignedToId) ?? { name: techName, sum: 0, ratedCount: 0, totalCount: 0 };
+      const cur = byTechMap.get(t.assignedToId) ?? {
+        name: techName,
+        sum: 0,
+        ratedCount: 0,
+        totalCount: 0,
+      };
       if (t.satisfactionRating !== null) {
-        byTechMap.set(t.assignedToId, { name: techName, sum: cur.sum + t.satisfactionRating, ratedCount: cur.ratedCount + 1, totalCount: cur.totalCount + 1 });
+        byTechMap.set(t.assignedToId, {
+          name: techName,
+          sum: cur.sum + t.satisfactionRating,
+          ratedCount: cur.ratedCount + 1,
+          totalCount: cur.totalCount + 1,
+        });
       } else {
         byTechMap.set(t.assignedToId, { ...cur, totalCount: cur.totalCount + 1 });
       }
     }
-    const avgRatingByTechnician = Array.from(byTechMap.entries()).map(([techId, { name, sum, ratedCount, totalCount }]) => ({
+    const avgRatingByTechnician = Array.from(byTechMap.entries())
+      .map(([techId, { name, sum, ratedCount, totalCount }]) => ({
+        techId,
+        techName: name,
+        avg: ratedCount > 0 ? Math.round((sum / ratedCount) * 10) / 10 : 0,
+        count: totalCount,
+        ratedCount,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    let slaMet = 0;
+    let slaMissed = 0;
+    let totalResolutionHours = 0;
+    let resolvedSlaTickets = 0;
+
+    const slaByTypeMap = new Map<string, { met: number; missed: number; hours: number; count: number }>();
+    const slaByTechMap = new Map<number, { name: string; met: number; missed: number; hours: number; count: number }>();
+
+    for (const t of tickets) {
+      if (t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) {
+        if (t.resolvedAt) {
+          const resolvedAt = new Date(t.resolvedAt);
+          const createdAt = new Date(t.createdAt);
+          const hours = (resolvedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+          
+          let metSla = false;
+          if (t.slaDeadline) {
+            if (resolvedAt <= new Date(t.slaDeadline)) {
+              metSla = true;
+            }
+          } else {
+            metSla = true; // default to met if no deadline
+          }
+
+          // Global metrics
+          totalResolutionHours += hours;
+          resolvedSlaTickets++;
+          if (metSla) slaMet++;
+          else slaMissed++;
+
+          // Type metrics
+          const typeKey = t.ticketType || 'Unknown';
+          const typeData = slaByTypeMap.get(typeKey) ?? { met: 0, missed: 0, hours: 0, count: 0 };
+          typeData.count++;
+          typeData.hours += hours;
+          if (metSla) typeData.met++;
+          else typeData.missed++;
+          slaByTypeMap.set(typeKey, typeData);
+
+          // Tech metrics
+          if (t.assignedToId) {
+            const techName = t.assignedTo
+              ? [t.assignedTo.first_name, t.assignedTo.last_name].filter(Boolean).join(' ') || t.assignedTo.email
+              : `Tech #${t.assignedToId}`;
+            const techData = slaByTechMap.get(t.assignedToId) ?? { name: techName, met: 0, missed: 0, hours: 0, count: 0 };
+            techData.count++;
+            techData.hours += hours;
+            if (metSla) techData.met++;
+            else techData.missed++;
+            slaByTechMap.set(t.assignedToId, techData);
+          }
+        }
+      }
+    }
+    
+    const avgResolutionTimeHours =
+      resolvedSlaTickets > 0 ? Math.round((totalResolutionHours / resolvedSlaTickets) * 10) / 10 : 0;
+      
+    const slaByType = Array.from(slaByTypeMap.entries()).map(([type, data]) => ({
+      type,
+      met: data.met,
+      missed: data.missed,
+      count: data.count,
+      avgResolutionTimeHours: data.count > 0 ? Math.round((data.hours / data.count) * 10) / 10 : 0,
+    })).sort((a, b) => b.count - a.count);
+
+    const slaByTechnician = Array.from(slaByTechMap.entries()).map(([techId, data]) => ({
       techId,
-      techName: name,
-      avg: ratedCount > 0 ? Math.round((sum / ratedCount) * 10) / 10 : 0,
-      count: totalCount,
-      ratedCount,
+      techName: data.name,
+      met: data.met,
+      missed: data.missed,
+      count: data.count,
+      avgResolutionTimeHours: data.count > 0 ? Math.round((data.hours / data.count) * 10) / 10 : 0,
     })).sort((a, b) => b.count - a.count);
 
     // Escalation counts in the same date range
@@ -2286,10 +2879,32 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
       escQb = escQb.andWhere('t.ticket_type = :ticketType', { ticketType: filters.ticketType });
     }
     const totalEscalations = await escQb.getCount();
-    const acceptedEscalations = await escQb.clone().andWhere('e.status = :s', { s: EscalationStatus.ACCEPTED }).getCount();
-    const returnedEscalations = await escQb.clone().andWhere('e.status = :s', { s: EscalationStatus.RETURNED }).getCount();
+    const acceptedEscalations = await escQb
+      .clone()
+      .andWhere('e.status = :s', { s: EscalationStatus.ACCEPTED })
+      .getCount();
+    const returnedEscalations = await escQb
+      .clone()
+      .andWhere('e.status = :s', { s: EscalationStatus.RETURNED })
+      .getCount();
 
-    return { totalTickets, totalWithRating, avgOverallRating, avgRatingByType, avgRatingByTechnician, totalEscalations, acceptedEscalations, returnedEscalations };
+    return {
+      totalTickets,
+      totalWithRating,
+      avgOverallRating,
+      avgRatingByType,
+      avgRatingByTechnician,
+      totalEscalations,
+      acceptedEscalations,
+      returnedEscalations,
+      slaStats: {
+        met: slaMet,
+        missed: slaMissed,
+        avgResolutionTimeHours,
+      },
+      slaByType,
+      slaByTechnician,
+    };
   }
 
   // --- Escalation ----------------------------------------------------------
@@ -2310,10 +2925,12 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     actorId: number,
     actorRole: UserRole,
   ): Promise<TicketEscalation> {
-    if (!this.roleCapSvc.isTicketFocal(actorRole as string) && 
-        !this.roleCapSvc.isTicketSettingsFocal(actorRole as string) && 
-        !this.roleCapSvc.isAllTickets(actorRole as string) && 
-        !this.roleCapSvc.isTechnician(actorRole as string)) {
+    if (
+      !this.roleCapSvc.isTicketFocal(actorRole as string) &&
+      !this.roleCapSvc.isTicketSettingsFocal(actorRole as string) &&
+      !this.roleCapSvc.isAllTickets(actorRole as string) &&
+      !this.roleCapSvc.isTechnician(actorRole as string)
+    ) {
       throw new ForbiddenException('Your role is not allowed to escalate tickets.');
     }
 
@@ -2330,36 +2947,45 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
 
     // Terminal tickets cannot be escalated
-    if ([TicketStatus.CLOSED, TicketStatus.DUPLICATE, TicketStatus.RESOLVED].includes(ticket.status as TicketStatus)) {
+    if (
+      [TicketStatus.CLOSED, TicketStatus.DUPLICATE, TicketStatus.RESOLVED].includes(
+        ticket.status as TicketStatus,
+      )
+    ) {
       throw new ForbiddenException('Resolved, closed, or duplicate tickets cannot be escalated.');
     }
 
     // Verify target is a valid escalation focal for this ticket type
     const focals = await this.escalationFocalRepo.find();
-    const focal = await this.userRepo.findOne({ where: { id: dto.escalatedToId } });
+    const focal = await this.usersHttpClient.getUserById(dto.escalatedToId);
     if (!focal) throw new NotFoundException('Escalation target user not found.');
 
     const allowedRoles = focals
-      .filter(f => f.ticketType === ticket.ticketType || f.ticketType === 'all')
-      .map(f => f.roleValue);
+      .filter((f) => f.ticketType === ticket.ticketType || f.ticketType === 'all')
+      .map((f) => f.roleValue);
 
     if (allowedRoles.length > 0 && !allowedRoles.includes(String(focal.id))) {
-      throw new ForbiddenException('The selected user is not designated as an escalation focal for this ticket type.');
+      throw new ForbiddenException(
+        'The selected user is not designated as an escalation focal for this ticket type.',
+      );
     }
 
     // QA #9: Verify that the selected focal is actually PRESENT today
     const today = new Date().toISOString().slice(0, 10);
     const presentFocals = await this.attendanceService.getPresentTechnicians('all', today);
-    const isPresent = presentFocals.some(t => t.id === focal.id);
+    const isPresent = presentFocals.some((t) => t.id === focal.id);
     if (!isPresent) {
-      throw new BadRequestException('The selected escalation focal is not currently marked as present or available today.');
+      throw new BadRequestException(
+        'The selected escalation focal is not currently marked as present or available today.',
+      );
     }
 
     // Save proof photos to disk
     const savedPaths: string[] = [];
     if (proofFiles && proofFiles.length > 0) {
       for (const f of proofFiles) {
-        if (!f.mimetype.startsWith('image/')) throw new BadRequestException('Only image files are allowed for proof photos.');
+        if (!f.mimetype.startsWith('image/'))
+          throw new BadRequestException('Only image files are allowed for proof photos.');
       }
       const dir = path.join(this.escalationStorageRoot(), ticketId);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -2381,14 +3007,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     });
     const saved = await this.escalationRepo.save(escalation);
 
-    // Re-assign ticket to the focal technician
-    ticket.assignedToId = dto.escalatedToId;
-    if (ticket.status === TicketStatus.OPEN) ticket.status = TicketStatus.ASSIGNED;
-    await this.ticketRepo.save(ticket);
-
     this.logEvent(ticketId, 'escalated', actorId, {
       escalatedToId: dto.escalatedToId,
-      escalatedToName: [focal.firstName, focal.lastName].filter(Boolean).join(' ') || focal.email,
+      escalatedToName: [focal.first_name, focal.last_name].filter(Boolean).join(' ') || focal.email,
       hasProof: savedPaths.length > 0,
     }).catch(() => {});
 
@@ -2396,11 +3017,17 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
   }
 
   /** PATCH /tickets/:id/escalation/:eid/accept — focal accepts the escalation */
-  async acceptEscalation(ticketId: string, escalationId: string, actorId: number): Promise<TicketEscalation> {
+  async acceptEscalation(
+    ticketId: string,
+    escalationId: string,
+    actorId: number,
+  ): Promise<TicketEscalation> {
     const escalation = await this.escalationRepo.findOne({ where: { id: escalationId, ticketId } });
     if (!escalation) throw new NotFoundException('Escalation record not found.');
     if (escalation.escalatedToId !== actorId) {
-      throw new ForbiddenException('Only the escalation target may accept or return this escalation.');
+      throw new ForbiddenException(
+        'Only the escalation target may accept or return this escalation.',
+      );
     }
     if (escalation.status !== EscalationStatus.PENDING) {
       throw new BadRequestException('This escalation has already been processed.');
@@ -2408,13 +3035,25 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     escalation.status = EscalationStatus.ACCEPTED;
     await this.escalationRepo.save(escalation);
 
-    // Auto-transition ticket to in_progress when escalation is accepted
+    // Auto-transition ticket to in_progress and assign to focal when escalation is accepted
     const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
-    if (ticket && ticket.status !== TicketStatus.RESOLVED && ticket.status !== TicketStatus.CLOSED) {
-      const previousStatus = ticket.status;
-      ticket.status = TicketStatus.IN_PROGRESS;
-      await this.ticketRepo.save(ticket);
-      this.logEvent(ticketId, 'status_changed', actorId, { from: previousStatus, to: TicketStatus.IN_PROGRESS, reason: 'escalation_accepted' }).catch(() => {});
+    if (ticket) {
+      ticket.assignedToId = actorId;
+      if (
+        ticket.status !== TicketStatus.RESOLVED &&
+        ticket.status !== TicketStatus.CLOSED
+      ) {
+        const previousStatus = ticket.status;
+        ticket.status = TicketStatus.IN_PROGRESS;
+        await this.ticketRepo.save(ticket);
+        this.logEvent(ticketId, 'status_changed', actorId, {
+          from: previousStatus,
+          to: TicketStatus.IN_PROGRESS,
+          reason: 'escalation_accepted',
+        }).catch(() => {});
+      } else {
+        await this.ticketRepo.save(ticket);
+      }
     }
     this.logEvent(ticketId, 'escalation_accepted', actorId).catch(() => {});
 
@@ -2431,7 +3070,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     const escalation = await this.escalationRepo.findOne({ where: { id: escalationId, ticketId } });
     if (!escalation) throw new NotFoundException('Escalation record not found.');
     if (escalation.escalatedToId !== actorId) {
-      throw new ForbiddenException('Only the escalation target may accept or return this escalation.');
+      throw new ForbiddenException(
+        'Only the escalation target may accept or return this escalation.',
+      );
     }
     if (escalation.status !== EscalationStatus.PENDING) {
       throw new BadRequestException('This escalation has already been processed.');
@@ -2442,20 +3083,18 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     escalation.status = EscalationStatus.RETURNED;
     escalation.returnReason = dto.returnReason.trim();
 
-    // Re-assign ticket back to the escalating technician
-    const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
-    if (ticket) {
-      ticket.assignedToId = escalation.escalatedById;
-      if (ticket.status === TicketStatus.OPEN) ticket.status = TicketStatus.ASSIGNED;
-      await this.ticketRepo.save(ticket);
-    }
-
-    this.logEvent(ticketId, 'escalation_returned', actorId, { reason: dto.returnReason }).catch(() => {});
+    this.logEvent(ticketId, 'escalation_returned', actorId, { reason: dto.returnReason }).catch(
+      () => {},
+    );
     return this.escalationRepo.save(escalation);
   }
 
   /** GET /tickets/:id/escalations — list all escalations for a ticket */
-  async getEscalations(ticketId: string, viewerId?: number, viewerRole?: UserRole): Promise<TicketEscalation[]> {
+  async getEscalations(
+    ticketId: string,
+    viewerId?: number,
+    viewerRole?: UserRole,
+  ): Promise<TicketEscalation[]> {
     await this.getTicketById(ticketId, viewerRole, viewerId);
     return this.escalationRepo.find({
       where: { ticketId },
@@ -2487,6 +3126,29 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     };
   }
 
+  async ensureCommentAttachmentReadable(
+    ticketId: string,
+    filename: string,
+    viewerId?: number,
+    viewerRole?: UserRole,
+  ): Promise<{ root: string; safeFilename: string }> {
+    // Basic access check
+    await this.getTicketById(ticketId, viewerRole, viewerId);
+
+    const safeFilename = path.basename(filename);
+    const comments = await this.commentRepo.find({ where: { ticketId } });
+    const isReferenced = comments.some((c) => c.attachmentPath && path.basename(String(c.attachmentPath)) === safeFilename);
+    if (!isReferenced) {
+      throw new NotFoundException('Comment attachment not found');
+    }
+
+    const safeTicketId = path.basename(ticketId);
+    return {
+      root: path.resolve(this.commentAttachmentStorageRoot(), safeTicketId),
+      safeFilename,
+    };
+  }
+
   /**
    * PATCH /tickets/:id/escalation/:eid/update-proof
    * Allows the escalating technician to supplement notes and/or proof photos on a
@@ -2505,7 +3167,9 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     });
     if (!escalation) throw new NotFoundException('Escalation record not found.');
     if (escalation.escalatedById !== actorId) {
-      throw new ForbiddenException('Only the technician who initiated the escalation may update it.');
+      throw new ForbiddenException(
+        'Only the technician who initiated the escalation may update it.',
+      );
     }
     if (escalation.status !== EscalationStatus.PENDING) {
       throw new BadRequestException('Only a pending escalation can be updated.');
@@ -2517,7 +3181,8 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
 
     if (proofFiles && proofFiles.length > 0) {
       for (const f of proofFiles) {
-        if (!f.mimetype.startsWith('image/')) throw new BadRequestException('Only image files are allowed for proof photos.');
+        if (!f.mimetype.startsWith('image/'))
+          throw new BadRequestException('Only image files are allowed for proof photos.');
       }
       const dir = path.join(this.escalationStorageRoot(), ticketId);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -2532,5 +3197,261 @@ const eligibleTechs = ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
     }
 
     return this.escalationRepo.save(escalation);
+  }
+
+  // --- SLA Pause / Resume ---
+
+  async pauseAllActiveTickets(technicianId?: number): Promise<number> {
+    const qb = this.ticketRepo
+      .createQueryBuilder('t')
+      .where('t.status IN (:...statuses)', {
+        statuses: [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE],
+      })
+      .andWhere('t.slaPausedAt IS NULL');
+
+    if (technicianId) {
+      qb.andWhere('t.assignedToId = :technicianId', { technicianId });
+    }
+
+    const tickets = await qb.getMany();
+    await this.enrichTicketsWithUsers(tickets);
+    if (tickets.length === 0) return 0;
+
+    const now = new Date();
+    for (const t of tickets) {
+      t.slaPausedAt = now;
+    }
+    await this.ticketRepo.save(tickets);
+    return tickets.length;
+  }
+
+  async resumeAllActiveTickets(technicianId?: number): Promise<number> {
+    const whereClause: any = {
+      status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE]),
+    };
+    if (technicianId) {
+      whereClause.assignedToId = technicianId;
+    }
+
+    const tickets = await this.ticketRepo.find({
+      where: whereClause,
+    });
+
+    let resumedCount = 0;
+    const now = new Date();
+
+    for (const t of tickets) {
+      if (t.slaPausedAt) {
+        const pausedAt = t.slaPausedAt.getTime();
+        const diffSeconds = Math.floor((now.getTime() - pausedAt) / 1000);
+        t.accumulatedPauseSeconds = (t.accumulatedPauseSeconds || 0) + diffSeconds;
+
+        if (t.slaDeadline) {
+          t.slaDeadline = new Date(t.slaDeadline.getTime() + diffSeconds * 1000);
+        }
+        t.slaPausedAt = null;
+        resumedCount++;
+      }
+    }
+
+    if (resumedCount > 0) {
+      await this.ticketRepo.save(tickets);
+    }
+    return resumedCount;
+  }
+
+
+  public async enrichTicketsWithUsers(tickets: Ticket[]): Promise<Ticket[]> {
+    if (!tickets?.length) return tickets;
+
+    // Fix: Re-assign & Escalating Incorrect AssignedTo
+    // Update assignedToId if there's an accepted escalation, so the frontend UI & Rating logic works.
+    const ticketIds = tickets.map((t) => t.id);
+    const acceptedEscalations = await this.escalationRepo.find({
+      where: { ticketId: In(ticketIds), status: EscalationStatus.ACCEPTED },
+      order: { createdAt: 'DESC' },
+    });
+    const escalationMap = new Map<string, TicketEscalation>();
+    for (const esc of acceptedEscalations) {
+      if (!escalationMap.has(esc.ticketId)) escalationMap.set(esc.ticketId, esc);
+    }
+    for (const t of tickets) {
+      const latestEsc = escalationMap.get(t.id);
+      // Only override assignedToId for active tickets — resolved/closed tickets should show
+      // the actual resolver (who resolved the ticket), not the escalation focal.
+      const isTerminal = ['resolved', 'closed', 'duplicate'].includes(t.status);
+      if (latestEsc && !isTerminal) t.assignedToId = latestEsc.escalatedToId;
+    }
+
+    const userIds = new Set<number>();
+    const extract = (id: number | null | undefined) => { if (id) userIds.add(id); };
+
+    for (const t of tickets) {
+      extract(t.requesterId);
+      extract(t.createdById);
+      extract(t.assignedToId);
+      if (t.comments) {
+        for (const c of t.comments) {
+          extract(c.userId);
+        }
+      }
+    }
+
+    if (userIds.size === 0) return tickets;
+
+    const userMap = new Map<number, any>();
+    await Promise.all(
+      Array.from(userIds).map(async (id) => {
+        const user = await this.usersHttpClient.getUserById(id);
+        if (user) {
+          userMap.set(id, {
+            ...user,
+            firstName: user.first_name,
+            lastName: user.last_name,
+          });
+        }
+      })
+    );
+
+    for (const t of tickets) {
+      if (t.requesterId) t.requester = userMap.get(t.requesterId);
+      if (t.createdById) t.createdBy = userMap.get(t.createdById);
+      if (t.assignedToId) t.assignedTo = userMap.get(t.assignedToId);
+      if (t.comments) {
+        for (const c of t.comments) {
+          if (c.userId) c.user = userMap.get(c.userId);
+        }
+      }
+    }
+    return tickets;
+  }
+
+  private async enrichEventsWithUsers(events: TicketEvent[]): Promise<TicketEvent[]> {
+    if (!events?.length) return events;
+    const userIds = new Set<number>();
+    for (const e of events) if (e.actorId) userIds.add(e.actorId);
+    if (userIds.size === 0) return events;
+    const userMap = new Map<number, any>();
+    await Promise.all(
+      Array.from(userIds).map(async (id) => {
+        const user = await this.usersHttpClient.getUserById(id);
+        if (user) {
+          userMap.set(id, {
+            ...user,
+            firstName: user.first_name,
+            lastName: user.last_name,
+          });
+        }
+      })
+    );
+    for (const e of events) {
+      if (e.actorId) e.actor = userMap.get(e.actorId);
+    }
+    return events;
+  }
+
+  // --- SLA Computation Algorithm ---
+  private async calculateSlaDeadline(
+    start: Date,
+    slaHours: number,
+    config: TicketingConfig,
+  ): Promise<Date> {
+    if (slaHours <= 0) return new Date(start);
+
+    const TZ = 'Asia/Manila';
+
+    const parseTime = (timeStr: string, defaultHour: number): number => {
+      if (!timeStr) return defaultHour;
+      const match = timeStr.match(/^(\d{2}):/);
+      return match ? parseInt(match[1], 10) : defaultHour;
+    };
+
+    let shiftStartHour = 8;
+    let shiftEndHour = 17;
+
+    if (config.scheduleMode === 'CWW') {
+      shiftStartHour = parseTime(config.cwwClockinStart, 7);
+      shiftEndHour = parseTime(config.cwwClockoutEnd, 19);
+    } else {
+      shiftStartHour = parseTime(config.officeClockin, 8);
+      shiftEndHour = parseTime(config.officeClockout, 17);
+    }
+
+    // Helper: get Manila local hour + minute from a UTC Date
+    const getManilaHour = (d: Date): number => {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: TZ,
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false,
+      }).formatToParts(d);
+      const hour = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10);
+      const minute = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10);
+      return hour + minute / 60;
+    };
+
+    // Helper: get Manila local YYYY-MM-DD
+    const getManilaDateString = (d: Date): string => {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: TZ,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(d); // returns YYYY-MM-DD
+    };
+
+    // Helper: advance to start of next Manila day at shiftStartHour
+    const advanceToNextDayStart = (d: Date): Date => {
+      // Get the next calendar day in Manila time, set to shiftStartHour:00
+      const manilaDate = getManilaDateString(d);
+      const [y, m, day] = manilaDate.split('-').map(Number);
+      // Build a new UTC date representing Manila midnight of the next day + shiftStartHour
+      const nextDay = new Date(Date.UTC(y, m - 1, day + 1, shiftStartHour - 8, 0, 0, 0));
+      return nextDay;
+    };
+
+    let current = new Date(start);
+    let remainingHours = slaHours;
+    let guard = 0; // safety guard to avoid infinite loops
+
+    while (remainingHours > 0 && guard < 365) {
+      guard++;
+      const dateString = getManilaDateString(current);
+      const isOfficeDay = await this.attendanceService.isOfficeDay(dateString);
+
+      if (!isOfficeDay) {
+        current = advanceToNextDayStart(current);
+        continue;
+      }
+
+      const manilaHour = getManilaHour(current);
+
+      if (manilaHour < shiftStartHour) {
+        // Before shift start — advance to shift start of the same day
+        const manilaDate = getManilaDateString(current);
+        const [y, m, day] = manilaDate.split('-').map(Number);
+        current = new Date(Date.UTC(y, m - 1, day, shiftStartHour - 8, 0, 0, 0));
+        continue;
+      }
+
+      if (manilaHour >= shiftEndHour) {
+        // After shift end — move to next day
+        current = advanceToNextDayStart(current);
+        continue;
+      }
+
+      // We are within the shift. Calculate how many hours remain today.
+      const availableHoursToday = shiftEndHour - manilaHour;
+
+      if (remainingHours <= availableHoursToday) {
+        current = new Date(current.getTime() + remainingHours * 3600 * 1000);
+        remainingHours = 0;
+      } else {
+        remainingHours -= availableHoursToday;
+        current = advanceToNextDayStart(current);
+      }
+    }
+
+    return current;
   }
 }

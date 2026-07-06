@@ -1,11 +1,10 @@
-import {
-  Injectable,
-  NotFoundException,
-  ConflictException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ReportorialDocumentType, SubmissionFrequency } from '../entities/reportorial-document-type.entity';
+import {
+  ReportorialDocumentType,
+  SubmissionFrequency,
+} from '../entities/reportorial-document-type.entity';
 import { CreateReportorialDocTypeDto } from '../dto/create-reportorial-doc-type.dto';
 import { UpdateReportorialDocTypeDto } from '../dto/update-reportorial-doc-type.dto';
 
@@ -17,7 +16,11 @@ export class ReportorialDocTypeService {
   ) {}
 
   async findAll(): Promise<ReportorialDocumentType[]> {
-    return this.repo.find({ where: { active: true }, relations: ['unit'], order: { unit_id: 'ASC', display_name: 'ASC' } });
+    return this.repo.find({
+      where: { active: true },
+      relations: ['unit'],
+      order: { unit_id: 'ASC', display_name: 'ASC' },
+    });
   }
 
   async findByUnit(unitId: number): Promise<ReportorialDocumentType[]> {
@@ -40,7 +43,9 @@ export class ReportorialDocTypeService {
       where: { unit_id: dto.unit_id, base_name: dto.base_name, active: true },
     });
     if (existing) {
-      throw new ConflictException(`A document type with base_name "${dto.base_name}" already exists for this unit`);
+      throw new ConflictException(
+        `A document type with base_name "${dto.base_name}" already exists for this unit`,
+      );
     }
 
     const rec = this.repo.create({
@@ -113,7 +118,9 @@ export class ReportorialDocTypeService {
     const year = yearStr || String(new Date().getFullYear());
 
     if (frequency === SubmissionFrequency.MONTHLY) {
-      const month = periodStr ? String(periodStr).padStart(2, '0') : String(new Date().getMonth() + 1).padStart(2, '0');
+      const month = periodStr
+        ? String(periodStr).padStart(2, '0')
+        : String(new Date().getMonth() + 1).padStart(2, '0');
       return `${year}${month}`;
     }
 

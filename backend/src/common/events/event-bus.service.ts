@@ -36,9 +36,9 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit(): Promise<void> {
     const host = this.configService.get<string>('REDIS_HOST');
     const port = this.configService.get<number>('REDIS_PORT', 6379);
-    const eventBusEnabledRaw = String(
-      this.configService.get<string>('EVENT_BUS_ENABLED', ''),
-    ).trim().toLowerCase();
+    const eventBusEnabledRaw = String(this.configService.get<string>('EVENT_BUS_ENABLED', ''))
+      .trim()
+      .toLowerCase();
     const eventBusEnabled =
       eventBusEnabledRaw.length > 0
         ? !['0', 'false', 'off', 'no'].includes(eventBusEnabledRaw)
@@ -63,8 +63,7 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
       enableOfflineQueue: false,
       lazyConnect: true,
       connectTimeout: 2000,
-      retryStrategy: (attempt: number) =>
-        attempt > 3 ? null : Math.min(250 * attempt, 1000),
+      retryStrategy: (attempt: number) => (attempt > 3 ? null : Math.min(250 * attempt, 1000)),
     };
 
     const pubClient = new (IORedis as any).default(opts) as IORedis.default;
@@ -81,10 +80,7 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(
         `Event bus disabled: Redis connection failed (pub=${pubConnected.status}, sub=${subConnected.status})`,
       );
-      await Promise.allSettled([
-        this.pubClient?.disconnect(),
-        this.subClient?.disconnect(),
-      ]);
+      await Promise.allSettled([this.pubClient?.disconnect(), this.subClient?.disconnect()]);
       this.pubClient = null;
       this.subClient = null;
       this.enabled = false;
@@ -135,10 +131,7 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
-    await Promise.allSettled([
-      this.pubClient?.quit(),
-      this.subClient?.quit(),
-    ]);
+    await Promise.allSettled([this.pubClient?.quit(), this.subClient?.quit()]);
   }
 
   /** Publish a JSON-serialisable payload on a named channel. */
@@ -150,9 +143,7 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.pubClient.publish(channel, JSON.stringify(payload));
     } catch (err: any) {
-      this.logger.warn(
-        `EventBus publish error on "${channel}": ${this.formatError(err)}`,
-      );
+      this.logger.warn(`EventBus publish error on "${channel}": ${this.formatError(err)}`);
     }
   }
 

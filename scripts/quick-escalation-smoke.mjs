@@ -4,12 +4,12 @@
     node scripts/quick-escalation-smoke.mjs
   Optional env:
     BASE_URL=http://localhost:4000/api
-    ADMIN_EMAIL=admin@rictms.gov.ph
-    ADMIN_PASSWORD=Admin@123
+    ADMIN_EMAIL=fo2admin@dswd.gov.ph
+    ADMIN_PASSWORD=password123
 */
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:4000/api';
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@rictms.gov.ph';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'fo2admin@dswd.gov.ph';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@123';
 
 const runId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -72,8 +72,8 @@ async function loginAdminWithFallbacks() {
   const emailCandidates = [
     process.env.ADMIN_EMAIL,
     ADMIN_EMAIL,
-    'admin@rictms.gov.ph',
-    'admin@ricms.gov.ph',
+    'fo2admin@dswd.gov.ph',
+    'fo2admin@dswd.gov.ph',
   ].filter(Boolean);
 
   const passCandidates = [

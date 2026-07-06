@@ -91,11 +91,8 @@ export class PropertyCheckEngine {
         ? ruleConfig.keywords.map((item) => String(item).trim()).filter(Boolean)
         : [];
       const keyword = (ruleConfig.keyword || '').trim();
-      const keywords = configuredKeywords.length > 0
-        ? configuredKeywords
-        : keyword
-          ? [keyword]
-          : [];
+      const keywords =
+        configuredKeywords.length > 0 ? configuredKeywords : keyword ? [keyword] : [];
       const comparison = ruleConfig.comparison || 'gte';
       numberComparison = comparison;
       const comparisons = Array.isArray(ruleConfig.comparisons)
@@ -139,7 +136,10 @@ export class PropertyCheckEngine {
           const context = extractedText.slice(contextStart, contextEnd);
 
           const escapedKeyword = keywordValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const keywordValueMatch = new RegExp(`${escapedKeyword}[^\\d-]{0,24}(-?\\d[\\d,]*(?:\\.\\d+)?)`, 'i').exec(context);
+          const keywordValueMatch = new RegExp(
+            `${escapedKeyword}[^\\d-]{0,24}(-?\\d[\\d,]*(?:\\.\\d+)?)`,
+            'i',
+          ).exec(context);
 
           if (keywordValueMatch?.[1]) {
             extracted = Number(keywordValueMatch[1].replace(/,/g, ''));
@@ -169,11 +169,14 @@ export class PropertyCheckEngine {
         const expectedForKeyword = Number.isFinite(expectedNumbers[index])
           ? expectedNumbers[index]
           : expectedNumber;
-        const comparisonForKeyword =
-          comparisons[index] || comparison;
+        const comparisonForKeyword = comparisons[index] || comparison;
 
         let keywordMatches = false;
-        if (extracted !== null && Number.isFinite(extracted) && Number.isFinite(expectedForKeyword)) {
+        if (
+          extracted !== null &&
+          Number.isFinite(extracted) &&
+          Number.isFinite(expectedForKeyword)
+        ) {
           switch (comparisonForKeyword) {
             case 'gte':
               keywordMatches = extracted >= expectedForKeyword;
@@ -217,10 +220,7 @@ export class PropertyCheckEngine {
     }
 
     // Determine pass/fail
-    const status =
-      matches === passCriteria.matches_pattern
-        ? MetricStatus.PASS
-        : MetricStatus.FAIL;
+    const status = matches === passCriteria.matches_pattern ? MetricStatus.PASS : MetricStatus.FAIL;
 
     // Calculate score
     const score = matches ? 1.0 : 0.0;
@@ -234,7 +234,9 @@ export class PropertyCheckEngine {
         const missingKeywords = keywordExtraction
           .filter((item) => item.extracted === null)
           .map((item) => item.keyword);
-        const failedChecks = keywordExtraction.filter((item) => !item.matches && item.extracted !== null);
+        const failedChecks = keywordExtraction.filter(
+          (item) => !item.matches && item.extracted !== null,
+        );
         const failedSummary = failedChecks
           .map((item) => {
             const operatorLabel = this.toOperatorSymbol(item.comparison);
@@ -275,15 +277,16 @@ export class PropertyCheckEngine {
           ? Number(ruleConfig.expected_number)
           : undefined,
         comparison: numberComparison,
-        checks: mode === 'number_extraction'
-          ? keywordExtraction.map((item) => ({
-            keyword: item.keyword,
-            extracted: item.extracted,
-            expected: item.expected,
-            comparison: item.comparison,
-            matches: item.matches,
-          }))
-          : undefined,
+        checks:
+          mode === 'number_extraction'
+            ? keywordExtraction.map((item) => ({
+                keyword: item.keyword,
+                extracted: item.extracted,
+                expected: item.expected,
+                comparison: item.comparison,
+                matches: item.matches,
+              }))
+            : undefined,
         matches,
       },
       message,

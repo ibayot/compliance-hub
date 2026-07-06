@@ -104,8 +104,7 @@ export class PreviewGenerator {
       }
 
       const sourceBuffer =
-        version.file_blob ??
-        (await this.storageService.readFile(version.file_path));
+        version.file_blob ?? (await this.storageService.readFile(version.file_path));
 
       if (!version.file_blob) {
         await this.versionRepo.update(versionId, { file_blob: sourceBuffer });
@@ -124,10 +123,7 @@ export class PreviewGenerator {
       }
 
       // Create temp directory for conversion
-      tempDir = path.join(
-        this.storageService.getFullPath('temp'),
-        `preview-${Date.now()}`,
-      );
+      tempDir = path.join(this.storageService.getFullPath('temp'), `preview-${Date.now()}`);
       await fs.mkdir(tempDir, { recursive: true });
 
       const extCandidate = (path.extname(version.file_name) || '.docx').toLowerCase();
@@ -177,20 +173,27 @@ export class PreviewGenerator {
       // Clean up temp directory
       this.logger.log(`Preview generation complete: ${versionId}`);
     } catch (error) {
-      this.logger.error(
-        `Failed to generate preview: ${versionId}`,
-        error.stack,
-      );
+      this.logger.error(`Failed to generate preview: ${versionId}`, error.stack);
 
       // Final fallback: generate a plain HTML preview from extracted text
       try {
-        const version = await this.versionRepo.findOne({ where: { id: versionId }, relations: ['document'] });
+        const version = await this.versionRepo.findOne({
+          where: { id: versionId },
+          relations: ['document'],
+        });
         if (version) {
-          const displayTitle = version.document?.title || version.document?.document_type || version.file_name;
-          await this.generateTextFallbackPreview(versionId, displayTitle, version.extracted_text || '');
+          const displayTitle =
+            version.document?.title || version.document?.document_type || version.file_name;
+          await this.generateTextFallbackPreview(
+            versionId,
+            displayTitle,
+            version.extracted_text || '',
+          );
         }
       } catch {
-        this.logger.warn('All preview generation attempts failed, document is still usable without preview.');
+        this.logger.warn(
+          'All preview generation attempts failed, document is still usable without preview.',
+        );
       }
     } finally {
       if (tempDir) {
@@ -210,19 +213,23 @@ export class PreviewGenerator {
 
       const isDocx =
         version.file_name.toLowerCase().endsWith('.docx') ||
-        version.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        version.mime_type ===
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
       if (isDocx) {
         const result = await mammoth.convertToHtml({ buffer: sourceBuffer });
         htmlBody = result.value || '<p><em>No content extracted.</em></p>';
         if (result.messages && result.messages.length > 0) {
-          this.logger.warn(`Mammoth warnings for ${versionId}: ${result.messages.map((m) => m.message).join(', ')}`);
+          this.logger.warn(
+            `Mammoth warnings for ${versionId}: ${result.messages.map((m) => m.message).join(', ')}`,
+          );
         }
       } else {
         htmlBody = `<p><em>Preview not available for file type: ${version.mime_type}.</em></p>`;
       }
 
-      const displayTitle = version.document?.title || version.document?.document_type || version.file_name;
+      const displayTitle =
+        version.document?.title || version.document?.document_type || version.file_name;
       htmlBody = this.normalizeLeadingFilenameHeading(htmlBody, version.file_name, displayTitle);
       const htmlContent = this.buildStyledHtml(displayTitle, htmlBody);
       const htmlBuffer = Buffer.from(htmlContent, 'utf-8');
@@ -235,7 +242,10 @@ export class PreviewGenerator {
 
       this.logger.log(`HTML fallback preview generated for version: ${versionId}`);
     } catch (err) {
-      this.logger.error(`HTML fallback preview generation failed: ${versionId}`, (err as Error)?.stack);
+      this.logger.error(
+        `HTML fallback preview generation failed: ${versionId}`,
+        (err as Error)?.stack,
+      );
       throw err;
     }
   }
@@ -246,10 +256,17 @@ export class PreviewGenerator {
     extractedText: string,
   ): Promise<void> {
     const safeText = extractedText
-      ? extractedText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+      ? extractedText
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\n/g, '<br>')
       : 'No text content available for this document.';
 
-    const htmlContent = this.buildStyledHtml(fileName, `<pre style="white-space: pre-wrap; font-family: inherit;">${safeText}</pre>`);
+    const htmlContent = this.buildStyledHtml(
+      fileName,
+      `<pre style="white-space: pre-wrap; font-family: inherit;">${safeText}</pre>`,
+    );
     const htmlBuffer = Buffer.from(htmlContent, 'utf-8');
 
     await this.versionRepo.update(versionId, {

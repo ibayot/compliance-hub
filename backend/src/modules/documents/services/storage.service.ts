@@ -13,10 +13,7 @@ export class StorageService {
   private readonly storageRootAbs: string;
 
   constructor(private configService: ConfigService) {
-    this.storageRoot = this.configService.get<string>(
-      'STORAGE_PATH',
-      './storage',
-    );
+    this.storageRoot = this.configService.get<string>('STORAGE_PATH', './storage');
     this.storageRootAbs = path.resolve(this.storageRoot);
     this.ensureStorageDirectories();
   }

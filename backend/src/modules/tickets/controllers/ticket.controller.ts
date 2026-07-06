@@ -12,16 +12,21 @@ import {
   HttpStatus,
   Logger,
   UploadedFiles,
+  UploadedFile,
   UseInterceptors,
   Res,
+  BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
+import { CapabilityGuard } from '../../../common/guards/capability.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { UserRole } from '../../users/entities/user.entity';
 import {
   TicketService,
@@ -34,27 +39,48 @@ import {
   ReturnEscalationDto,
 } from '../services/ticket.service';
 import { TicketStatus, TicketType } from '../entities/ticket.entity';
+import { TicketSettingsService } from '../services/ticket-settings.service';
 
 const ALL_ROLES = [
-  UserRole.USER, UserRole.SECTION_HEAD, UserRole.SUPER_ADMIN,
+  UserRole.USER,
+  UserRole.SECTION_HEAD,
+  UserRole.SUPER_ADMIN,
   // Named compliance roles
-  UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
+  UserRole.COMPLIANCE_OFFICER,
+  UserRole.CYBERSEC,
+  UserRole.INFOSEC,
   // Named technician roles
-  UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
-  UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
+  UserRole.PANTAWID_ICT,
+  UserRole.DESKTOP_SR,
+  UserRole.IT_SUPPORT_SR,
+  UserRole.DESKTOP_JR,
+  UserRole.IT_SUPPORT_JR,
   // Named focal-equivalent roles (also matched via roleCode='focal' in RolesGuard)
-  UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
-  UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
-  UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
+  UserRole.LEAD_INFRA,
+  UserRole.SERVER_ADMIN,
+  UserRole.DB_ADMIN,
+  UserRole.NETWORK_ADMIN,
+  UserRole.PROJECT_MGR,
+  UserRole.DEV_LEAD,
+  UserRole.SQA_LEAD,
+  UserRole.RECORDS_OFFICER,
+  UserRole.HR_ID_OFFICER,
   // Generic roleCode aliases for custom role values managed from role definitions.
-  'technician', 'focal', 'ito', 'compliance_officer', 'section_head',
+  'technician',
+  'focal',
+  'ito',
+  'compliance_officer',
+  'section_head',
 ];
 
 @Controller('tickets')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TicketController {
   private readonly logger = new Logger(TicketController.name);
-  constructor(private readonly ticketService: TicketService) {}
+  constructor(
+    private readonly ticketService: TicketService,
+    private readonly settingsService: TicketSettingsService,
+  ) {}
 
   /** POST /tickets - Any authenticated user can submit a ticket */
   @Post()
@@ -64,6 +90,28 @@ export class TicketController {
     const callerId = req.user.id ?? req.user.userId;
     const callerRole = req.user.role as UserRole;
     return this.ticketService.createTicket(dto, callerId, callerRole);
+  }
+
+  @Post('global-pause')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  async globalPauseTickets() {
+    await this.settingsService.updateGlobalConfig({ isFlagCeremonyPaused: true });
+    const count = await this.ticketService.pauseAllActiveTickets();
+    return { success: true, count, message: 'All active tickets have been paused globally.' };
+  }
+
+  @Post('global-resume')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  async globalResumeTickets() {
+    await this.settingsService.updateGlobalConfig({ isFlagCeremonyPaused: false });
+    const count = await this.ticketService.resumeAllActiveTickets();
+    return {
+      success: true,
+      count,
+      message: 'All previously paused active tickets have been resumed globally.',
+    };
   }
 
   /** GET /tickets - Role-scoped listing */
@@ -84,7 +132,8 @@ export class TicketController {
     const viewerId = req?.user?.id ?? req?.user?.userId;
     const showEscalatedToMe = escalatedToMe === 'true' || escalatedToMe === '1';
     return this.ticketService.getTickets({
-      status, ticketType,
+      status,
+      ticketType,
       requesterId: requesterId ? Number(requesterId) : undefined,
       assignedToId: assignedToId ? Number(assignedToId) : undefined,
       escalatedToId: showEscalatedToMe ? viewerId : undefined,
@@ -106,14 +155,24 @@ export class TicketController {
 
   /** GET /tickets/statistics */
   @Get('statistics')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD,
-    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC, 'focal')
-  async getStatistics() { return this.ticketService.getStatistics(); }
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.SECTION_HEAD,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.CYBERSEC,
+    UserRole.INFOSEC,
+    'focal',
+  )
+  async getStatistics() {
+    return this.ticketService.getStatistics();
+  }
 
   /** GET /tickets/technicians */
   @Get('technicians')
   @Roles(...ALL_ROLES)
-  async getTechnicians() { return this.ticketService.getTechnicianAvailability(); }
+  async getTechnicians() {
+    return this.ticketService.getTechnicianAvailability();
+  }
 
   /** GET /tickets/dashboard */
   @Get('dashboard')
@@ -206,7 +265,11 @@ export class TicketController {
   @Get(':id')
   @Roles(...ALL_ROLES)
   async getTicket(@Param('id') id: string, @Request() req: any) {
-    return this.ticketService.getTicketById(id, req.user?.role as UserRole, req.user.id ?? req.user.userId);
+    return this.ticketService.getTicketById(
+      id,
+      req.user?.role as UserRole,
+      req.user.id ?? req.user.userId,
+    );
   }
 
   /** PATCH /tickets/:id */
@@ -251,21 +314,44 @@ export class TicketController {
   /** POST /tickets/:id/comments */
   @Post(':id/comments')
   @Roles(...ALL_ROLES)
-  async addComment(@Param('id') ticketId: string, @Body() dto: AddCommentDto, @Request() req: any) {
-    return this.ticketService.addComment(ticketId, dto, req.user.id ?? req.user.userId, req.user.role);
+  @UseInterceptors(FileInterceptor('attachment', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async addComment(
+    @Param('id') ticketId: string,
+    @Body() dto: AddCommentDto,
+    @Request() req: any,
+    @UploadedFile() attachment?: Express.Multer.File,
+  ) {
+    if (attachment && !attachment.mimetype.startsWith('image/')) {
+      throw new BadRequestException('Only picture attachments (images) are allowed.');
+    }
+    return this.ticketService.addComment(
+      ticketId,
+      dto,
+      req.user.id ?? req.user.userId,
+      req.user.role,
+      attachment,
+    );
   }
 
   /** POST /tickets/:id/satisfaction */
   @Post(':id/satisfaction')
   @Roles(...ALL_ROLES)
-  async submitSatisfaction(@Param('id') id: string, @Body() dto: SubmitSatisfactionDto, @Request() req: any) {
+  async submitSatisfaction(
+    @Param('id') id: string,
+    @Body() dto: SubmitSatisfactionDto,
+    @Request() req: any,
+  ) {
     return this.ticketService.submitSatisfaction(id, dto, req.user.id ?? req.user.userId);
   }
 
   /** POST /tickets/:id/rate — backward-compatible alias for satisfaction submission */
   @Post(':id/rate')
   @Roles(...ALL_ROLES)
-  async submitSatisfactionAlias(@Param('id') id: string, @Body() dto: SubmitSatisfactionDto, @Request() req: any) {
+  async submitSatisfactionAlias(
+    @Param('id') id: string,
+    @Body() dto: SubmitSatisfactionDto,
+    @Request() req: any,
+  ) {
     return this.ticketService.submitSatisfaction(id, dto, req.user.id ?? req.user.userId);
   }
 
@@ -299,7 +385,18 @@ export class TicketController {
       escalatedToId: Number(body.escalatedToId),
       notes: body.notes,
     };
-    try { return await this.ticketService.escalateTicket(id, dto, proofFiles ?? [], req.user.id ?? req.user.userId, req.user.role); } catch(e) { console.error('Escalate error:', e); throw e; }
+    try {
+      return await this.ticketService.escalateTicket(
+        id,
+        dto,
+        proofFiles ?? [],
+        req.user.id ?? req.user.userId,
+        req.user.role,
+      );
+    } catch (e) {
+      console.error('Escalate error:', e);
+      throw e;
+    }
   }
 
   /** PATCH /tickets/:id/escalation/:eid/accept */
@@ -337,7 +434,11 @@ export class TicketController {
     @Request() req: any,
   ) {
     return this.ticketService.updateEscalationProof(
-      id, eid, body, proofFiles ?? [], req.user.id ?? req.user.userId,
+      id,
+      eid,
+      body,
+      proofFiles ?? [],
+      req.user.id ?? req.user.userId,
     );
   }
 
@@ -358,12 +459,39 @@ export class TicketController {
     );
     const filePath = path.join(root, safeFilename);
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ statusCode: 404, message: 'Proof file not found' });
+      throw new NotFoundException('Proof file not found.');
     }
-    res.sendFile(safeFilename, { root }, (err) => {
-      if (err && !res.headersSent) {
-        res.status(500).json({ statusCode: 500, message: 'Error serving file' });
-      }
-    });
+
+    res.sendFile(filePath);
+  }
+
+  /** GET /tickets/comment-attachment/:ticketId/:filename — serve comment attachment */
+  @Get('comment-attachment/:ticketId/:filename')
+  @Roles(...ALL_ROLES)
+  async serveCommentAttachmentFile(
+    @Param('ticketId') ticketId: string,
+    @Param('filename') filename: string,
+    @Request() req: any,
+    @Res() res: Response,
+  ) {
+    const { root, safeFilename } = await this.ticketService.ensureCommentAttachmentReadable(
+      ticketId,
+      filename,
+      req.user.id ?? req.user.userId,
+      req.user.role,
+    );
+    const filePath = path.join(root, safeFilename);
+    if (!fs.existsSync(filePath)) {
+      throw new NotFoundException('Attachment file not found.');
+    }
+
+    res.sendFile(filePath);
+  }
+
+  @Post('technician-pause')
+  async technicianPauseTickets(@Request() req: any) {
+    const technicianId = req.user.id ?? req.user.userId;
+    const count = await this.ticketService.pauseAllActiveTickets(technicianId);
+    return { success: true, count, message: `Paused ${count} active tickets for technician.` };
   }
 }

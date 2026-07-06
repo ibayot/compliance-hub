@@ -3,7 +3,7 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@
 /** Roles that bypass per-unit access scoping and can see all units. */
 const GLOBAL_ACCESS_ROLES = new Set([
   'super_admin',
-  'section_head',        // Section heads oversee all units under their purview
+  'section_head', // Section heads oversee all units under their purview
   'compliance_officer',
   'cybersec',
   'infosec',

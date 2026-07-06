@@ -14,7 +14,10 @@ async function bootstrap() {
 
   app.use(helmet());
   app.enableCors({
-    origin: (configService.get<string>('CORS_ORIGIN') || '').split(',').map((o) => o.trim()).filter(Boolean),
+    origin: (configService.get<string>('CORS_ORIGIN') || '')
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean),
     credentials: true,
   });
   app.use(
@@ -27,7 +30,9 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+  app.useGlobalPipes(
+    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+  );
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
   app.setGlobalPrefix('api');
   const http = app.getHttpAdapter().getInstance();
@@ -40,13 +45,18 @@ async function bootstrap() {
   });
 
   const port = Number(process.env.COMPLIANCE_SERVICE_PORT || 4103);
-  http.get('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'compliance', version: serviceVersion }));
-  http.get('/api/health/live', (_req: any, res: any) => res.json({ status: 'ok', service: 'compliance', version: serviceVersion }));
+  http.get('/api/health', (_req: any, res: any) =>
+    res.json({ status: 'ok', service: 'compliance', version: serviceVersion }),
+  );
+  http.get('/api/health/live', (_req: any, res: any) =>
+    res.json({ status: 'ok', service: 'compliance', version: serviceVersion }),
+  );
   http.get('/api/health/ready', async (_req: any, res: any) => {
     const checks: Record<string, boolean> = {};
     let dbOk = false;
     const dbHost = process.env.DB_HOST || 'localhost';
-    const dbName = process.env.COMPLIANCE_DB_DATABASE || process.env.DB_DATABASE || 'compliance_hub';
+    const dbName =
+      process.env.COMPLIANCE_DB_DATABASE || process.env.DB_DATABASE || 'compliance_hub';
 
     try {
       const ds = app.get(DataSource);
@@ -81,9 +91,15 @@ async function bootstrap() {
       await new Promise<void>((resolve, reject) => {
         const socket = net.createConnection(redisPort, redisHost);
         socket.setTimeout(1000);
-        socket.on('connect', () => { socket.destroy(); resolve(); });
+        socket.on('connect', () => {
+          socket.destroy();
+          resolve();
+        });
         socket.on('error', reject);
-        socket.on('timeout', () => { socket.destroy(); reject(new Error('timeout')); });
+        socket.on('timeout', () => {
+          socket.destroy();
+          reject(new Error('timeout'));
+        });
       });
       checks.redis = true;
     } catch {
@@ -114,18 +130,28 @@ async function bootstrap() {
       const conn = dataSource.createQueryRunner();
       await conn.connect();
       try {
-        await conn.query(`CREATE OR REPLACE VIEW users AS SELECT * FROM \`${usersDb}\`.users`).catch(() => undefined);
-        await conn.query(`CREATE OR REPLACE VIEW role_definitions AS SELECT * FROM \`${usersDb}\`.role_definitions`).catch(() => undefined);
+        await conn
+          .query(`CREATE OR REPLACE VIEW users AS SELECT * FROM \`${usersDb}\`.users`)
+          .catch(() => undefined);
+        await conn
+          .query(
+            `CREATE OR REPLACE VIEW role_definitions AS SELECT * FROM \`${usersDb}\`.role_definitions`,
+          )
+          .catch(() => undefined);
       } finally {
         await conn.release();
       }
-    } catch (_e) { /* non-fatal: service starts regardless of VIEW creation status */ }
+    } catch (_e) {
+      /* non-fatal: service starts regardless of VIEW creation status */
+    }
   }
 
   // OpenAPI/Swagger — accessible at /api/docs (not proxied through gateway)
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Compliance Hub — Compliance Service')
-    .setDescription('Document management, issuances, KPI tracking, MOV, metrics, cybersecurity, and incident reporting')
+    .setDescription(
+      'Document management, issuances, KPI tracking, MOV, metrics, cybersecurity, and incident reporting',
+    )
     .setVersion(serviceVersion)
     .addBearerAuth()
     .addTag('documents', 'Document upload, review, and assignment')

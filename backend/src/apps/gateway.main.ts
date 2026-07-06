@@ -31,8 +31,7 @@ function createServiceProxy(target: string, service: string) {
     on: {
       proxyReq: (proxyReq, req: Request) => {
         // Propagate correlation ID to downstream service
-        const requestId =
-          (req.headers['x-request-id'] as string | undefined) || randomUUID();
+        const requestId = (req.headers['x-request-id'] as string | undefined) || randomUUID();
         proxyReq.setHeader('x-request-id', requestId);
       },
       proxyRes: (proxyRes, _req, res: Response) => {
@@ -49,9 +48,10 @@ function createServiceProxy(target: string, service: string) {
         // Domain-aware error: tell the client which domain is unavailable
         // so the frontend can degrade gracefully (e.g., still show tickets if compliance is down)
         const path = req.url ?? '';
-        const affectedDomain = Object.entries(SERVICE_DOMAINS).find(([, prefixes]) =>
-          prefixes.some((p) => path.startsWith(p.replace('/api', ''))),
-        )?.[0] ?? service;
+        const affectedDomain =
+          Object.entries(SERVICE_DOMAINS).find(([, prefixes]) =>
+            prefixes.some((p) => path.startsWith(p.replace('/api', ''))),
+          )?.[0] ?? service;
         response.status(503).json({
           error: 'service_unavailable',
           service: affectedDomain,
@@ -92,8 +92,7 @@ async function bootstrap() {
   // Attach/preserve correlation ID on every request so all downstream services
   // can trace a single frontend interaction through the logs.
   app.use((_req: Request, res: Response, next: NextFunction) => {
-    const requestId =
-      (_req.headers['x-request-id'] as string | undefined)?.trim() || randomUUID();
+    const requestId = (_req.headers['x-request-id'] as string | undefined)?.trim() || randomUUID();
     _req.headers['x-request-id'] = requestId;
     res.setHeader('x-request-id', requestId);
     next();
@@ -118,7 +117,8 @@ async function bootstrap() {
         console.warn(`[SECURITY] Rate limit exceeded by IP: ${req.ip}. Possible spam/DDoS attack.`);
         res.status(429).json({
           error: 'too_many_requests',
-          message: 'Security Measure Triggered: You have exceeded the maximum number of requests allowed. Please wait a minute before trying again.',
+          message:
+            'Security Measure Triggered: You have exceeded the maximum number of requests allowed. Please wait a minute before trying again.',
         });
       },
     }),
@@ -135,7 +135,8 @@ async function bootstrap() {
         console.warn(`[SECURITY] Rate limit exceeded by IP: ${req.ip}. Possible spam/DDoS attack.`);
         res.status(429).json({
           error: 'too_many_requests',
-          message: 'Security Measure Triggered: You have exceeded the maximum number of requests allowed. Please wait a minute before trying again.',
+          message:
+            'Security Measure Triggered: You have exceeded the maximum number of requests allowed. Please wait a minute before trying again.',
         });
       },
     }),
@@ -145,23 +146,62 @@ async function bootstrap() {
     app.use(`${prefix}/auth`, createServiceProxy(`${usersServiceUrl}/api/auth`, 'users'));
     app.use(`${prefix}/users`, createServiceProxy(`${usersServiceUrl}/api/users`, 'users'));
     app.use(`${prefix}/units`, createServiceProxy(`${usersServiceUrl}/api/units`, 'users'));
-    app.use(`${prefix}/audit-logs`, createServiceProxy(`${usersServiceUrl}/api/audit-logs`, 'users'));
+    app.use(
+      `${prefix}/audit-logs`,
+      createServiceProxy(`${usersServiceUrl}/api/audit-logs`, 'users'),
+    );
 
-    app.use(`${prefix}/tickets`, createServiceProxy(`${ticketingServiceUrl}/api/tickets`, 'ticketing'));
-    app.use(`${prefix}/attendance`, createServiceProxy(`${ticketingServiceUrl}/api/attendance`, 'ticketing'));
-    app.use(`${prefix}/ticket-settings`, createServiceProxy(`${ticketingServiceUrl}/api/ticket-settings`, 'ticketing'));
-    app.use(`${prefix}/knowledge-base`, createServiceProxy(`${ticketingServiceUrl}/api/knowledge-base`, 'ticketing'));
+    app.use(
+      `${prefix}/tickets`,
+      createServiceProxy(`${ticketingServiceUrl}/api/tickets`, 'ticketing'),
+    );
+    app.use(
+      `${prefix}/attendance`,
+      createServiceProxy(`${ticketingServiceUrl}/api/attendance`, 'ticketing'),
+    );
+    app.use(
+      `${prefix}/ticket-settings`,
+      createServiceProxy(`${ticketingServiceUrl}/api/ticket-settings`, 'ticketing'),
+    );
+    app.use(
+      `${prefix}/knowledge-base`,
+      createServiceProxy(`${ticketingServiceUrl}/api/knowledge-base`, 'ticketing'),
+    );
 
-    app.use(`${prefix}/documents`, createServiceProxy(`${complianceServiceUrl}/api/documents`, 'compliance'));
-    app.use(`${prefix}/document-types`, createServiceProxy(`${complianceServiceUrl}/api/document-types`, 'compliance'));
-    app.use(`${prefix}/comparisons`, createServiceProxy(`${complianceServiceUrl}/api/comparisons`, 'compliance'));
-    app.use(`${prefix}/issuances`, createServiceProxy(`${complianceServiceUrl}/api/issuances`, 'compliance'));
-    app.use(`${prefix}/metrics`, createServiceProxy(`${complianceServiceUrl}/api/metrics`, 'compliance'));
-    app.use(`${prefix}/incidents`, createServiceProxy(`${complianceServiceUrl}/api/incidents`, 'compliance'));
-    app.use(`${prefix}/cybersecurity`, createServiceProxy(`${complianceServiceUrl}/api/cybersecurity`, 'compliance'));
+    app.use(
+      `${prefix}/documents`,
+      createServiceProxy(`${complianceServiceUrl}/api/documents`, 'compliance'),
+    );
+    app.use(
+      `${prefix}/document-types`,
+      createServiceProxy(`${complianceServiceUrl}/api/document-types`, 'compliance'),
+    );
+    app.use(
+      `${prefix}/comparisons`,
+      createServiceProxy(`${complianceServiceUrl}/api/comparisons`, 'compliance'),
+    );
+    app.use(
+      `${prefix}/issuances`,
+      createServiceProxy(`${complianceServiceUrl}/api/issuances`, 'compliance'),
+    );
+    app.use(
+      `${prefix}/metrics`,
+      createServiceProxy(`${complianceServiceUrl}/api/metrics`, 'compliance'),
+    );
+    app.use(
+      `${prefix}/incidents`,
+      createServiceProxy(`${complianceServiceUrl}/api/incidents`, 'compliance'),
+    );
+    app.use(
+      `${prefix}/cybersecurity`,
+      createServiceProxy(`${complianceServiceUrl}/api/cybersecurity`, 'compliance'),
+    );
     app.use(`${prefix}/kpi`, createServiceProxy(`${complianceServiceUrl}/api/kpi`, 'compliance'));
     app.use(`${prefix}/mov`, createServiceProxy(`${complianceServiceUrl}/api/mov`, 'compliance'));
-    app.use(`${prefix}/compliance/role-capabilities`, createServiceProxy(`${usersServiceUrl}/api/users/role-capabilities`, 'users'));
+    app.use(
+      `${prefix}/compliance/role-capabilities`,
+      createServiceProxy(`${usersServiceUrl}/api/users/role-capabilities`, 'users'),
+    );
     app.use(`${prefix}/feedback`, createServiceProxy(`${usersServiceUrl}/api/feedback`, 'users'));
 
     app.use(`${prefix}/health`, async (_req: Request, res: Response) => {

@@ -9,8 +9,8 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { KpiMaster } from './kpi-master.entity';
-import { Unit } from '../../units/entities/unit.entity';
-import { User } from '../../shared/entities';
+import { UnitRef } from '../../../shared/contracts/unit-ref';
+import { UserRef } from '../../../shared/contracts/user-ref';
 
 export enum KpiMonitoringStatus {
   DRAFT = 'draft',
@@ -18,7 +18,9 @@ export enum KpiMonitoringStatus {
 }
 
 @Entity('kpi_monitoring')
-@Index('idx_kpi_period_unit', ['kpiMasterCode', 'unitId', 'periodYear', 'periodMonth'], { unique: true })
+@Index('idx_kpi_period_unit', ['kpiMasterCode', 'unitId', 'periodYear', 'periodMonth'], {
+  unique: true,
+})
 export class KpiMonitoring {
   @PrimaryGeneratedColumn()
   id: number;
@@ -33,9 +35,8 @@ export class KpiMonitoring {
   @Column({ name: 'unit_id', type: 'int' })
   unitId: number;
 
-  @ManyToOne(() => Unit, { onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'unit_id' })
-  unit: Unit;
+  // Virtual field populated via UnitsHttpClient
+  unit?: UnitRef;
 
   @Column({ name: 'period_year', type: 'int' })
   periodYear: number;
@@ -52,9 +53,8 @@ export class KpiMonitoring {
   @Column({ name: 'entered_by_user_id', type: 'int', nullable: true })
   enteredByUserId: number | null;
 
-  @ManyToOne(() => User, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'entered_by_user_id' })
-  enteredByUser: User | null;
+  // Virtual field populated via UsersHttpClient
+  enteredByUser?: UserRef | null;
 
   @Column({ name: 'entered_by_staff_id', type: 'varchar', length: 120, nullable: true })
   enteredByStaffId: string | null;

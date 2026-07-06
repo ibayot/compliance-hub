@@ -34,6 +34,7 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
+import { UserRole } from '@/lib/types/auth';
 import {
   ticketsApi,
   ticketSettingsApi,
@@ -70,7 +71,7 @@ const STATUS_OPTS = [
   { value: 'assigned', label: 'Assigned' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'resolved', label: 'Resolved' },
-  { value: 'freeze', label: 'Freeze (on hold)' },
+  { value: 'freeze', label: 'On Hold' },
   { value: 'pause', label: 'Pause' },
   { value: 'duplicate', label: 'Duplicate' },
 ];
@@ -364,18 +365,24 @@ export default function TicketDetailPage() {
   const fetchTechnicians = async () => {
     try {
       const data = await ticketsApi.getTechnicians();
-      setTechnicians(data || []);
+      const available = (data || []).filter(
+        (t: any) => !['absent', 'out_of_office', 'half_day'].includes(t.attendanceStatus ?? ''),
+      );
+      setTechnicians(available);
     } catch {
       /* restricted */
     }
   };
 
+  const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
+
   const handleAddComment = async () => {
-    if (!comment.trim()) return;
+    if (!comment.trim() && !commentAttachment) return;
     try {
       setSubmittingComment(true);
-      await ticketsApi.addComment(ticketId, comment, isInternal && canStaff);
+      await ticketsApi.addComment(ticketId, comment, isInternal && canStaff, commentAttachment);
       setComment('');
+      setCommentAttachment(null);
       setIsInternal(false);
       fetchTicket();
       fetchEvents();
@@ -455,7 +462,8 @@ export default function TicketDetailPage() {
       setEscalating(true);
       const formData = new FormData();
       formData.append('escalatedToId', String(escalateToId));
-      if (escalateNotes) formData.append('notes', escalateNotes);
+      const finalNotes = !escalateNotes.trim() && escalateFiles.length > 0 ? '[Attachment Only]' : escalateNotes;
+      if (finalNotes) formData.append('notes', finalNotes);
       escalateFiles.forEach((f) => formData.append('proofFiles', f));
       await ticketsApi.escalateTicket(ticketId, formData);
       setEscalateDialogOpen(false);
@@ -508,7 +516,8 @@ export default function TicketDetailPage() {
     try {
       setAddingProof(true);
       const formData = new FormData();
-      if (addProofNotes !== undefined) formData.append('notes', addProofNotes);
+      const finalNotes = !addProofNotes.trim() && addProofFiles.length > 0 ? '[Attachment Only]' : addProofNotes;
+      if (finalNotes !== undefined) formData.append('notes', finalNotes);
       addProofFiles.forEach((f) => formData.append('proofFiles', f));
       await ticketsApi.updateEscalationProof(ticketId, addProofEscalationId, formData);
       setAddProofDialogOpen(false);
@@ -575,18 +584,6 @@ export default function TicketDetailPage() {
     }
     if (!csatForm.clientFirstName.trim() || !csatForm.clientLastName.trim()) {
       enqueueSnackbar('Client name is required.', { variant: 'warning' });
-      return;
-    }
-    if (!csatForm.religion.trim()) {
-      enqueueSnackbar('Religion is required.', { variant: 'warning' });
-      return;
-    }
-    if (!csatForm.age) {
-      enqueueSnackbar('Age is required.', { variant: 'warning' });
-      return;
-    }
-    if (csatForm.age < 20 || csatForm.age >= 90) {
-      enqueueSnackbar('Age must be between 20 and 89.', { variant: 'warning' });
       return;
     }
     if (!csatForm.sex) {
@@ -741,6 +738,18 @@ export default function TicketDetailPage() {
                     Update Status
                   </Button>
                 )}
+              {ticket.category?.name?.toLowerCase().includes('disposal') && (
+                <>
+                  <Button variant="contained" size="small" color="secondary" onClick={() => window.print()}>
+                    Print Disposal Form
+                  </Button>
+                  {(isTechnician || !!myCap?.isTicketSettingsFocal) && (
+                    <Button variant="outlined" size="small" color="secondary" onClick={() => window.print()}>
+                      Print Inspection Form
+                    </Button>
+                  )}
+                </>
+              )}
               {!hideTopActionButtons && !acceptedEscalationOnlyStatusAction && isDuplicate && (
                 <Chip label="Duplicate (Terminal)" color="default" size="small" />
               )}
@@ -754,8 +763,9 @@ export default function TicketDetailPage() {
                     size="small"
                     onClick={async () => {
                       setIsEscalateMode(false);
-                      setAssignToId(ticket.assignedToId || '');
+                      setAssignToId('');
                       await fetchTechnicians();
+                      // Pre-select current assignee only if still available
                       setAssignDialogOpen(true);
                     }}
                   >
@@ -832,28 +842,42 @@ export default function TicketDetailPage() {
               </Typography>
               {(() => {
                 // QA #3/#4/#6: Compute allowed next statuses based on current status and actor role
-                const isSeniorAuthority = !!myCap?.isTicketSettingsFocal || !!myCap?.isTicketFocal;
                 let allowedValues: string[] = [];
                 switch (ticket?.status) {
                   case 'open':
-                    allowedValues = isSeniorAuthority ? ['freeze', 'duplicate'] : ['duplicate'];
+                    allowedValues = (!!myCap?.isTicketSettingsFocal || !!myCap?.isTicketFocal) ? ['freeze', 'duplicate'] : ['duplicate'];
                     break;
-                  case 'assigned':
-                    allowedValues = isSeniorAuthority
-                      ? ['in_progress', 'freeze', 'duplicate', 'open']
-                      : ['in_progress', 'duplicate'];
+                  case 'assigned': {
+                    const assignedValues = ['in_progress', 'duplicate'];
+                    if (!!myCap?.isTicketSettingsFocal || !!myCap?.isTicketFocal) {
+                      assignedValues.push('freeze');
+                    }
+                    if (!!myCap?.isTicketSettingsFocal) {
+                      assignedValues.push('open');
+                    }
+                    allowedValues = assignedValues;
                     break;
+                  }
                   case 'in_progress':
-                    allowedValues = isSeniorAuthority
+                    allowedValues = (!!myCap?.isTicketSettingsFocal || !!myCap?.isTicketFocal)
                       ? ['resolved', 'pause', 'freeze']
                       : ['resolved', 'pause'];
                     break;
                   case 'resolved':
                     allowedValues = ['closed'];
                     break;
-                  case 'freeze':
-                    allowedValues = isSeniorAuthority ? ['open', 'assigned', 'in_progress', 'resolved'] : [];
+                  case 'freeze': {
+                    if (!!myCap?.isTicketSettingsFocal || !!myCap?.isTicketFocal) {
+                      const freezeValues = ['assigned', 'in_progress', 'resolved'];
+                      if (!!myCap?.isTicketSettingsFocal) {
+                        freezeValues.push('open');
+                      }
+                      allowedValues = freezeValues;
+                    } else {
+                      allowedValues = [];
+                    }
                     break;
+                  }
                   case 'pause':
                     allowedValues = ['in_progress', 'resolved'];
                     break;
@@ -1089,6 +1113,55 @@ export default function TicketDetailPage() {
                     </Typography>
                   </Box>
                 )}
+                {ticket.slaDeadline && (
+                  <>
+                    <Divider sx={{ my: 1 }} />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        SLA Deadline
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color={
+                          ticket.resolvedAt
+                            ? new Date(ticket.resolvedAt) > new Date(ticket.slaDeadline)
+                              ? 'error.main'
+                              : 'success.main'
+                            : new Date() > new Date(ticket.slaDeadline)
+                              ? 'error.main'
+                              : 'text.primary'
+                        }
+                        fontWeight={600}
+                      >
+                        {new Date(ticket.slaDeadline).toLocaleString()}
+                      </Typography>
+                    </Box>
+                    {ticket.resolvedAt && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Resolution Time vs SLA
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color={
+                            new Date(ticket.resolvedAt) > new Date(ticket.slaDeadline)
+                              ? 'error.main'
+                              : 'success.main'
+                          }
+                          fontWeight={600}
+                        >
+                          {new Date(ticket.resolvedAt) > new Date(ticket.slaDeadline)
+                            ? `Missed SLA by ${Math.round(
+                                (new Date(ticket.resolvedAt).getTime() -
+                                  new Date(ticket.slaDeadline).getTime()) /
+                                  (1000 * 60 * 60)
+                              )} hr(s)`
+                            : 'Met SLA'}
+                        </Typography>
+                      </Box>
+                    )}
+                  </>
+                )}
               </Box>
             </CardContent>
           </Card>
@@ -1216,8 +1289,8 @@ export default function TicketDetailPage() {
                   </Typography>
                 )}
                 {e.status === 'pending' &&
-                  (e.escalatedToId || e.escalatedTo?.id || (e as any).escalated_to_id) ===
-                    (user as any)?.id && (
+                  String(e.escalatedToId || e.escalatedTo?.id || (e as any).escalated_to_id) ===
+                    String((user as any)?.id) && (
                     <Box mt={1} display="flex" gap={1}>
                       <Button
                         size="small"
@@ -1287,6 +1360,19 @@ export default function TicketDetailPage() {
                               ? `${c.user.firstName} ${c.user.lastName}`
                               : `User #${c.userId}`}
                           </Typography>
+                          {(() => {
+                            if (!c.user) return null;
+                            const isAssignedTech = (ticket as any)?.assignedToId === c.user.id;
+                            const isAdminOrFocal = c.user.role === UserRole.SUPER_ADMIN || c.user.ticketMainFocal;
+                            
+                            if (isAdminOrFocal) {
+                              return <Chip label={c.user.role === UserRole.SUPER_ADMIN ? "Admin" : "Focal"} size="small" color="error" />;
+                            }
+                            if (isAssignedTech) {
+                              return <Chip label="Assigned Tech" size="small" color="primary" />;
+                            }
+                            return <Chip label="User" size="small" sx={{ bgcolor: 'grey.300', color: 'grey.800' }} />;
+                          })()}
                           {c.isInternal && (
                             <Chip
                               label="Internal"
@@ -1301,14 +1387,27 @@ export default function TicketDetailPage() {
                         </Box>
                       }
                       secondary={
-                        <Typography
-                          variant="body2"
-                          color="text.primary"
-                          whiteSpace="pre-wrap"
-                          mt={0.5}
-                        >
-                          {c.comment}
-                        </Typography>
+                        <Box>
+                          <Typography
+                            variant="body2"
+                            color="text.primary"
+                            whiteSpace="pre-wrap"
+                            mt={0.5}
+                          >
+                            {c.comment}
+                          </Typography>
+                          {c.attachmentPath && (
+                            <Box mt={1}>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/tickets/comment-attachment/${c.ticketId}/${c.attachmentPath.split('/').pop()}`}
+                                alt="Comment Attachment"
+                                style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '4px', cursor: 'pointer' }}
+                                onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/tickets/comment-attachment/${c.ticketId}/${c.attachmentPath.split('/').pop()}`, '_blank')}
+                              />
+                            </Box>
+                          )}
+                        </Box>
                       }
                     />
                   </ListItem>
@@ -1350,15 +1449,37 @@ export default function TicketDetailPage() {
                   sx={{ mt: 1 }}
                 />
               )}
-              <Box mt={1}>
+              <Box mt={1} display="flex" alignItems="center" gap={2}>
                 <Button
                   variant="contained"
                   size="small"
                   onClick={handleAddComment}
-                  disabled={submittingComment || !comment.trim()}
+                  disabled={submittingComment || (!comment.trim() && !commentAttachment)}
                 >
                   {submittingComment ? 'Submitting…' : 'Add Comment'}
                 </Button>
+                
+                <Button variant="outlined" component="label" size="small">
+                  Attach Picture
+                  <input
+                    type="file"
+                    hidden
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        setCommentAttachment(e.target.files[0]);
+                      }
+                    }}
+                  />
+                </Button>
+
+                {commentAttachment && (
+                  <Chip 
+                    label={commentAttachment.name} 
+                    onDelete={() => setCommentAttachment(null)} 
+                    size="small" 
+                  />
+                )}
               </Box>
             </Box>
           )}
@@ -1554,12 +1675,12 @@ export default function TicketDetailPage() {
                 type="file"
                 hidden
                 multiple
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 onChange={(e) => {
                   const files = Array.from(e.target.files ?? []);
-                  const validFiles = files.filter((f) => f.type.startsWith('image/'));
+                  const validFiles = files.filter((f) => f.type === 'image/jpeg' || f.type === 'image/png' || f.type === 'image/webp');
                   if (validFiles.length !== files.length) {
-                    enqueueSnackbar('Only image files are allowed for proof photos.', {
+                    enqueueSnackbar('Only JPEG, PNG, and WebP image files are allowed.', {
                       variant: 'error',
                     });
                   }
@@ -1652,12 +1773,12 @@ export default function TicketDetailPage() {
                 type="file"
                 hidden
                 multiple
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 onChange={(e) => {
                   const files = Array.from(e.target.files ?? []);
-                  const validFiles = files.filter((f) => f.type.startsWith('image/'));
+                  const validFiles = files.filter((f) => f.type === 'image/jpeg' || f.type === 'image/png' || f.type === 'image/webp');
                   if (validFiles.length !== files.length) {
-                    enqueueSnackbar('Only image files are allowed for proof photos.', {
+                    enqueueSnackbar('Only JPEG, PNG, and WebP image files are allowed.', {
                       variant: 'error',
                     });
                   }
@@ -1832,7 +1953,7 @@ export default function TicketDetailPage() {
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
                 <TextField
-                  label="Age *"
+                  label="Age"
                   type="number"
                   inputProps={{ min: 20, max: 89 }}
                   value={csatForm.age ?? ''}
@@ -1845,7 +1966,7 @@ export default function TicketDetailPage() {
                   sx={{ maxWidth: 100 }}
                 />
                 <TextField
-                  label="Religion *"
+                  label="Religion"
                   value={csatForm.religion}
                   onChange={(e) => setCsatForm((f) => ({ ...f, religion: e.target.value }))}
                   sx={{ flex: 1 }}

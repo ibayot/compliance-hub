@@ -1,14 +1,7 @@
-const mysql = require('mysql2/promise');
-async function run() {
-  const conn = await mysql.createConnection({
-    host: 'localhost',
-    port: 3307,
-    user: 'root',
-    password: 'admin',
-    database: '02_db_stg_compliance_hub_ticketing'
-  });
-  const [rows] = await conn.execute("SELECT COUNT(*) as c FROM tickets WHERE assigned_to_id = 6 AND status IN ('open', 'assigned', 'in_progress')");
+const sqlite3 = require('sqlite3').verbose();
+const db = new sqlite3.Database('compliance_hub.db');
+
+db.all("SELECT id, email, role_code FROM users", [], (err, rows) => {
+  if (err) console.error(err);
   console.log(rows);
-  await conn.end();
-}
-run();
+});

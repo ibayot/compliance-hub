@@ -844,7 +844,7 @@ Expected behavior:
    - Provide detailed information
 
 2. **Contact Administrator**
-   - Email: admin@rictms.gov.ph
+   - Email: fo2admin@dswd.gov.ph
    - Include your username and issue description
 
 3. **Check Documentation**

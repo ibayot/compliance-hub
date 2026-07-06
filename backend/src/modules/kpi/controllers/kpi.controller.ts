@@ -44,7 +44,11 @@ export class KpiController {
   @Patch('master/:code')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isKpiManage')
-  updateKpiMaster(@Request() req: any, @Param('code') code: string, @Body() dto: UpdateKpiMasterDto) {
+  updateKpiMaster(
+    @Request() req: any,
+    @Param('code') code: string,
+    @Body() dto: UpdateKpiMasterDto,
+  ) {
     return this.kpiService.updateKpiMaster(req.user, code, dto);
   }
 
@@ -64,7 +68,12 @@ export class KpiController {
     @Query('unitId') unitId?: number,
     @Query('kpiMasterCode') kpiMasterCode?: string,
   ) {
-    return this.kpiService.listMonitoring(req.user, { periodYear, periodMonth, unitId, kpiMasterCode });
+    return this.kpiService.listMonitoring(req.user, {
+      periodYear,
+      periodMonth,
+      unitId,
+      kpiMasterCode,
+    });
   }
 
   @Post('monitoring')
@@ -77,7 +86,11 @@ export class KpiController {
   @Patch('monitoring/:id')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isKpiManage')
-  updateMonitoring(@Request() req: any, @Param('id', ParseIntPipe) id: number, @Body() dto: UpdateKpiMonitoringDto) {
+  updateMonitoring(
+    @Request() req: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateKpiMonitoringDto,
+  ) {
     return this.kpiService.updateMonitoring(req.user, id, dto);
   }
 
@@ -96,8 +109,10 @@ export class KpiController {
     @Query('periodYear') periodYear?: string,
     @Query('periodMonth') periodMonth?: string,
   ) {
-    const parsedYear = periodYear === undefined || periodYear === '' ? undefined : Number(periodYear);
-    const parsedMonth = periodMonth === undefined || periodMonth === '' ? undefined : Number(periodMonth);
+    const parsedYear =
+      periodYear === undefined || periodYear === '' ? undefined : Number(periodYear);
+    const parsedMonth =
+      periodMonth === undefined || periodMonth === '' ? undefined : Number(periodMonth);
     return this.kpiService.dashboardSummary(req.user, parsedYear, parsedMonth);
   }
 
@@ -110,8 +125,10 @@ export class KpiController {
     @Query('periodYear') periodYear?: string,
     @Query('periodMonth') periodMonth?: string,
   ) {
-    const parsedYear = periodYear === undefined || periodYear === '' ? undefined : Number(periodYear);
-    const parsedMonth = periodMonth === undefined || periodMonth === '' ? undefined : Number(periodMonth);
+    const parsedYear =
+      periodYear === undefined || periodYear === '' ? undefined : Number(periodYear);
+    const parsedMonth =
+      periodMonth === undefined || periodMonth === '' ? undefined : Number(periodMonth);
     return this.kpiService.dashboardUnit(req.user, unitId, parsedYear, parsedMonth);
   }
 
@@ -127,9 +144,12 @@ export class KpiController {
     @Query('toMonth') toMonth?: number,
   ) {
     return this.kpiService.dashboardUnitTimeseries(
-      req.user, unitId,
-      Number(fromYear), Number(fromMonth),
-      Number(toYear), Number(toMonth),
+      req.user,
+      unitId,
+      Number(fromYear),
+      Number(fromMonth),
+      Number(toYear),
+      Number(toMonth),
     );
   }
 
@@ -144,7 +164,8 @@ export class KpiController {
   ) {
     const parsedYear = Number(periodYear);
     const parsedMonth = Number(periodMonth);
-    const parsedUnitId = unitId === undefined || unitId === null || unitId === '' ? undefined : Number(unitId);
+    const parsedUnitId =
+      unitId === undefined || unitId === null || unitId === '' ? undefined : Number(unitId);
 
     return this.kpiService.generateActionPlans(req.user, parsedYear, parsedMonth, parsedUnitId);
   }

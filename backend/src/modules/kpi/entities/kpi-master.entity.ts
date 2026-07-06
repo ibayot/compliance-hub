@@ -8,7 +8,7 @@ import {
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { Unit } from '../../units/entities/unit.entity';
+import { UnitRef } from '../../../shared/contracts/unit-ref';
 import { KpiMonitoring } from './kpi-monitoring.entity';
 
 export enum KpiType {
@@ -42,9 +42,8 @@ export class KpiMaster {
   @Column({ name: 'unit_id', type: 'int' })
   unitId: number;
 
-  @ManyToOne(() => Unit, { onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'unit_id' })
-  unit: Unit;
+  // Virtual field populated via UnitsHttpClient
+  unit?: UnitRef;
 
   @Column({ type: 'enum', enum: KpiType, default: KpiType.MEASUREMENT })
   type: KpiType;

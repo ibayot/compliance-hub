@@ -18,8 +18,7 @@ import { requestContextStorage } from '../context/request-context';
 @Injectable()
 export class CorrelationIdMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction): void {
-    const requestId =
-      (req.headers['x-request-id'] as string | undefined)?.trim() || randomUUID();
+    const requestId = (req.headers['x-request-id'] as string | undefined)?.trim() || randomUUID();
 
     // Normalise — ensure downstream code can always read req.headers['x-request-id']
     req.headers['x-request-id'] = requestId;

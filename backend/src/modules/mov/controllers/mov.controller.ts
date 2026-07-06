@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, Request, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { CapabilityGuard } from '../../../common/guards/capability.guard';
@@ -129,7 +140,8 @@ export class MovController {
   @UseGuards(CapabilityGuard)
   @RequireCapability('isMovAccess')
   buildAssessmentReportPost(
-    @Body() body: {
+    @Body()
+    body: {
       year: number;
       quarter: number;
       unit_id?: number;

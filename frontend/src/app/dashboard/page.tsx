@@ -46,7 +46,7 @@ import {
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { documentsApi } from '@/lib/api/documents';
-import { ticketsApi, TicketDashboardStats, TechAssignedStats } from '@/app/api/references';
+import { ticketsApi, ticketSettingsApi, TicketDashboardStats, TechAssignedStats } from '@/app/api/references';
 import { incidentsApi, TodayStats } from '@/lib/api/incidents';
 import { cybersecurityApi, CybersecurityMetric } from '@/lib/api/cybersecurity';
 import { DashboardSummaryResponse, kpiApi } from '@/lib/api/kpi';
@@ -80,6 +80,8 @@ export default function DashboardPage() {
   const [techStatsMonth, setTechStatsMonth] = useState(() => new Date().getMonth() + 1);
   const [techStatsLoading, setTechStatsLoading] = useState(false);
 
+  const [showDebugClockout, setShowDebugClockout] = useState(false);
+
   // Admin-level full ticket metrics
   const [ticketMetrics, setTicketMetrics] = useState<{
     total: number;
@@ -104,6 +106,26 @@ export default function DashboardPage() {
   // Section Head and Cybersecurity Officer — identified via roleCode
   const isSectionHead = user?.roleCode === 'section_head';
   const isCybersecurityOfficer = user?.roleCode === 'cybersecurity_officer';
+
+  const [globalConfig, setGlobalConfig] = useState<any>(null);
+
+  // Compute clock out logic
+  const isClockOutEnabled = useMemo(() => {
+    if (!globalConfig) return false;
+    const nowTime = new Date();
+    const currentTime = `${String(nowTime.getHours()).padStart(2, '0')}:${String(nowTime.getMinutes()).padStart(2, '0')}:00`;
+
+    if (globalConfig.scheduleMode === 'OFFICE_HOURS') {
+      return currentTime >= globalConfig.officeClockout;
+    } else if (globalConfig.scheduleMode === 'CWW') {
+      return currentTime >= globalConfig.cwwClockoutStart && currentTime <= globalConfig.cwwClockoutEnd;
+    }
+    return false;
+  }, [globalConfig]);
+
+  useEffect(() => {
+    ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchDashboardData();
@@ -1176,9 +1198,9 @@ export default function DashboardPage() {
         </Grid>
       )}
 
-      {/* Quick Actions */}
-      {isFullDashboard && (
-        <Grid container spacing={3}>
+      {/* Staff / Technician Quick Actions */}
+      {!isRegularUser && (
+        <Grid container spacing={3} mb={4}>
           <Grid item xs={12} md={4}>
             <Card>
               <CardContent>
@@ -1186,15 +1208,104 @@ export default function DashboardPage() {
                   Quick Actions
                 </Typography>
                 <Box display="flex" flexDirection="column" gap={2} mt={2}>
-                  <Button variant="contained" href="/dashboard/documents/upload" fullWidth>
-                    Upload Document
-                  </Button>
+                  {isFullDashboard && (
+                    <>
+                      <Button variant="contained" href="/dashboard/documents/upload" fullWidth>
+                        Upload Document
+                      </Button>
+                      <Button variant="outlined" href="/dashboard/issuances" fullWidth>
+                        View Issuances
+                      </Button>
+                    </>
+                  )}
                   <Button variant="outlined" href="/dashboard/tickets" fullWidth>
                     View Issues
                   </Button>
-                  <Button variant="outlined" href="/dashboard/issuances" fullWidth>
-                    View Issuances
-                  </Button>
+                  
+                  {/* Technician Pause / Resume */}
+                  {user?.role !== 'user' && (
+                    <>
+                      <Button 
+                        variant="outlined" 
+                        color="warning" 
+                        disabled={!isClockOutEnabled}
+                        onClick={async () => {
+                          try {
+                            const res = await ticketsApi.technicianPause();
+                            alert(res.message);
+                            window.location.reload();
+                          } catch(e) { alert('Failed to pause'); }
+                        }} 
+                        fullWidth
+                      >
+                        Clock Out (Pause My Tickets)
+                      </Button>
+
+                      {showDebugClockout && (
+                        <Button 
+                          variant="text" 
+                          color="error" 
+                          size="small"
+                          onClick={async () => {
+                            try {
+                              const res = await ticketsApi.technicianPause();
+                              alert(res.message);
+                              window.location.reload();
+                            } catch(e) { alert('Failed to pause'); }
+                          }} 
+                          fullWidth
+                        >
+                          Clock Out (Debug Bypass)
+                        </Button>
+                      )}
+
+                      {user?.role === 'super_admin' && (
+                        <Button
+                          variant="text"
+                          color="secondary"
+                          size="small"
+                          onClick={() => setShowDebugClockout(!showDebugClockout)}
+                          fullWidth
+                        >
+                          {showDebugClockout ? 'Hide Clockout Bypass' : 'Show Clockout Bypass'}
+                        </Button>
+                      )}
+                    </>
+                  )}
+
+                  {/* Global Pause / Resume (Settings Focals only) */}
+                  {(!!myCap?.isTicketSettingsFocal || user?.role === 'super_admin') && (
+                    <>
+                      <Button 
+                        variant="contained" 
+                        color="error" 
+                        onClick={async () => {
+                          try {
+                            const res = await ticketsApi.globalPause();
+                            alert(res.message);
+                            window.location.reload();
+                          } catch(e) { alert('Failed to globally pause'); }
+                        }} 
+                        fullWidth
+                      >
+                        Global Pause (Flag Ceremony)
+                      </Button>
+                      <Button 
+                        variant="contained" 
+                        color="success" 
+                        onClick={async () => {
+                          try {
+                            const res = await ticketsApi.globalResume();
+                            alert(res.message);
+                            window.location.reload();
+                          } catch(e) { alert('Failed to globally resume'); }
+                        }} 
+                        fullWidth
+                      >
+                        Global Resume
+                      </Button>
+                    </>
+                  )}
                 </Box>
               </CardContent>
             </Card>

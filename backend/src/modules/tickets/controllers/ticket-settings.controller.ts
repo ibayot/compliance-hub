@@ -35,13 +35,25 @@ import { TicketPriority, TicketType } from '../entities/ticket.entity';
 
 // All named staff roles — the CapabilityGuard enforces is_ticket_settings_focal at runtime
 const ALL_STAFF_ROLES = [
-  UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD,
-  UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
-  UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
-  UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
-  UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
-  UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
-  UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
+  UserRole.SUPER_ADMIN,
+  UserRole.SECTION_HEAD,
+  UserRole.COMPLIANCE_OFFICER,
+  UserRole.CYBERSEC,
+  UserRole.INFOSEC,
+  UserRole.PANTAWID_ICT,
+  UserRole.DESKTOP_SR,
+  UserRole.IT_SUPPORT_SR,
+  UserRole.DESKTOP_JR,
+  UserRole.IT_SUPPORT_JR,
+  UserRole.LEAD_INFRA,
+  UserRole.SERVER_ADMIN,
+  UserRole.DB_ADMIN,
+  UserRole.NETWORK_ADMIN,
+  UserRole.PROJECT_MGR,
+  UserRole.DEV_LEAD,
+  UserRole.SQA_LEAD,
+  UserRole.RECORDS_OFFICER,
+  UserRole.HR_ID_OFFICER,
 ];
 
 @Controller('ticket-settings')
@@ -59,7 +71,10 @@ export class TicketSettingsController {
   @HttpCode(HttpStatus.OK)
   async testEmail(@Body('to') to: string) {
     if (!to) {
-      return { message: 'Provide a recipient email address in the request body: { "to": "email@example.com" }' };
+      return {
+        message:
+          'Provide a recipient email address in the request body: { "to": "email@example.com" }',
+      };
     }
     return this.emailService.sendTestEmail(to);
   }
@@ -67,13 +82,26 @@ export class TicketSettingsController {
   /** GET /ticket-settings — consolidated reference data for ticket forms/settings screens */
   @Get()
   @Roles(
-    UserRole.USER, UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD,
-    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
-    UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
-    UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
-    UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
-    UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
-    UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
+    UserRole.USER,
+    UserRole.SUPER_ADMIN,
+    UserRole.SECTION_HEAD,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.CYBERSEC,
+    UserRole.INFOSEC,
+    UserRole.PANTAWID_ICT,
+    UserRole.DESKTOP_SR,
+    UserRole.IT_SUPPORT_SR,
+    UserRole.DESKTOP_JR,
+    UserRole.IT_SUPPORT_JR,
+    UserRole.LEAD_INFRA,
+    UserRole.SERVER_ADMIN,
+    UserRole.DB_ADMIN,
+    UserRole.NETWORK_ADMIN,
+    UserRole.PROJECT_MGR,
+    UserRole.DEV_LEAD,
+    UserRole.SQA_LEAD,
+    UserRole.RECORDS_OFFICER,
+    UserRole.HR_ID_OFFICER,
   )
   async getTicketSettingsSnapshot(
     @Query('ticketType') ticketType?: string,
@@ -103,13 +131,26 @@ export class TicketSettingsController {
   /** GET /ticket-settings/categories — active categories by default; pass ?all=true for admin to see all */
   @Get('categories')
   @Roles(
-    UserRole.USER, UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD,
-    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
-    UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
-    UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
-    UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
-    UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
-    UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
+    UserRole.USER,
+    UserRole.SUPER_ADMIN,
+    UserRole.SECTION_HEAD,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.CYBERSEC,
+    UserRole.INFOSEC,
+    UserRole.PANTAWID_ICT,
+    UserRole.DESKTOP_SR,
+    UserRole.IT_SUPPORT_SR,
+    UserRole.DESKTOP_JR,
+    UserRole.IT_SUPPORT_JR,
+    UserRole.LEAD_INFRA,
+    UserRole.SERVER_ADMIN,
+    UserRole.DB_ADMIN,
+    UserRole.NETWORK_ADMIN,
+    UserRole.PROJECT_MGR,
+    UserRole.DEV_LEAD,
+    UserRole.SQA_LEAD,
+    UserRole.RECORDS_OFFICER,
+    UserRole.HR_ID_OFFICER,
   )
   async listCategories(
     @Query('ticketType') ticketType?: string,
@@ -119,7 +160,8 @@ export class TicketSettingsController {
     // ?all=true → return everything (admin settings view)
     // ?activeOnly=false → also return everything
     // default (or ?activeOnly=true) → active only (ticket creation dropdown)
-    if (all === 'true' || activeOnly === 'false') return this.settingsService.listCategories(ticketType);
+    if (all === 'true' || activeOnly === 'false')
+      return this.settingsService.listCategories(ticketType);
     return this.settingsService.listActiveCategories(ticketType);
   }
 
@@ -144,7 +186,11 @@ export class TicketSettingsController {
   @UseGuards(CapabilityGuard)
   @RequireCapability('isTicketSettingsFocal')
   @Roles(...ALL_STAFF_ROLES)
-  async updateCategory(@Param('id') id: string, @Body() dto: UpdateCategoryDto, @Request() req: any) {
+  async updateCategory(
+    @Param('id') id: string,
+    @Body() dto: UpdateCategoryDto,
+    @Request() req: any,
+  ) {
     return this.settingsService.updateCategory(id, dto, req.user.id ?? req.user.userId);
   }
 
@@ -205,13 +251,26 @@ export class TicketSettingsController {
 
   @Get('issue-types')
   @Roles(
-    UserRole.USER, UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD,
-    UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
-    UserRole.PANTAWID_ICT, UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR,
-    UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR,
-    UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
-    UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
-    UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
+    UserRole.USER,
+    UserRole.SUPER_ADMIN,
+    UserRole.SECTION_HEAD,
+    UserRole.COMPLIANCE_OFFICER,
+    UserRole.CYBERSEC,
+    UserRole.INFOSEC,
+    UserRole.PANTAWID_ICT,
+    UserRole.DESKTOP_SR,
+    UserRole.IT_SUPPORT_SR,
+    UserRole.DESKTOP_JR,
+    UserRole.IT_SUPPORT_JR,
+    UserRole.LEAD_INFRA,
+    UserRole.SERVER_ADMIN,
+    UserRole.DB_ADMIN,
+    UserRole.NETWORK_ADMIN,
+    UserRole.PROJECT_MGR,
+    UserRole.DEV_LEAD,
+    UserRole.SQA_LEAD,
+    UserRole.RECORDS_OFFICER,
+    UserRole.HR_ID_OFFICER,
   )
   async listIssueTypes(
     @Query('categoryId') categoryId?: string,
@@ -245,7 +304,11 @@ export class TicketSettingsController {
   @UseGuards(CapabilityGuard)
   @RequireCapability('isTicketSettingsFocal')
   @Roles(...ALL_STAFF_ROLES)
-  async updateIssueType(@Param('id') id: string, @Body() dto: UpdateIssueTypeDto, @Request() req: any) {
+  async updateIssueType(
+    @Param('id') id: string,
+    @Body() dto: UpdateIssueTypeDto,
+    @Request() req: any,
+  ) {
     return this.settingsService.updateIssueType(id, dto, req.user.id ?? req.user.userId);
   }
 
@@ -302,8 +365,6 @@ export class TicketSettingsController {
   // ── Global Config ───────────────────────────────────────────────────────
 
   @Get('global-config')
-  @UseGuards(CapabilityGuard)
-  @RequireCapability('isTicketSettingsFocal')
   @Roles(...ALL_STAFF_ROLES)
   async getGlobalConfig() {
     return this.settingsService.getGlobalConfig();
@@ -315,12 +376,19 @@ export class TicketSettingsController {
   @Roles(...ALL_STAFF_ROLES)
   async updateGlobalConfig(@Body() dto: UpdateGlobalConfigDto) {
     const updated = await this.settingsService.updateGlobalConfig(dto);
-    
+
     // If SMTP fields were touched, immediately trigger the email service to reload its Nodemailer transporter
-    if (dto.smtpHost !== undefined || dto.smtpPort !== undefined || dto.smtpUser !== undefined || dto.smtpPass !== undefined || dto.smtpFrom !== undefined || dto.smtpFromName !== undefined) {
+    if (
+      dto.smtpHost !== undefined ||
+      dto.smtpPort !== undefined ||
+      dto.smtpUser !== undefined ||
+      dto.smtpPass !== undefined ||
+      dto.smtpFrom !== undefined ||
+      dto.smtpFromName !== undefined
+    ) {
       await this.emailService.reloadSmtpConfig();
     }
-    
+
     return updated;
   }
 

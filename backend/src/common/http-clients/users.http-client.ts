@@ -8,6 +8,7 @@ export interface UserStub {
   middle_name?: string | null;
   role: string;
   staff_id?: string | null;
+  ticketMainFocal?: boolean;
 }
 
 export interface RoleCapabilityStub {
@@ -75,7 +76,9 @@ class CircuitBreaker {
     this.consecutiveFailures++;
     if (this.state === 'HALF_OPEN' || this.consecutiveFailures >= this.openThreshold) {
       if (this.state !== 'OPEN') {
-        logger.warn(`[CircuitBreaker:${name}] Opening circuit after ${this.consecutiveFailures} failures`);
+        logger.warn(
+          `[CircuitBreaker:${name}] Opening circuit after ${this.consecutiveFailures} failures`,
+        );
       }
       this.state = 'OPEN';
       this.openedAt = Date.now();
@@ -173,7 +176,9 @@ export class UsersHttpClient {
           await new Promise((r) => setTimeout(r, delayMs));
         } else {
           const reason = isAbort ? `timed out after ${timeoutMs}ms` : err?.message;
-          this.logger.warn(`Inter-service GET ${url} failed after ${maxRetries + 1} attempts: ${reason}`);
+          this.logger.warn(
+            `Inter-service GET ${url} failed after ${maxRetries + 1} attempts: ${reason}`,
+          );
           this.circuit.recordFailure(this.logger, 'users');
         }
       }

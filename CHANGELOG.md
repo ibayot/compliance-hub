@@ -1372,12 +1372,12 @@ Your machine is accessible at:
 - **`MovService.onModuleInit`** — added `private readonly logger = new Logger(MovService.name)` and wrapped `seedDefaultAssessmentArtifacts()` in `try/catch` with non-fatal WARN, matching the `DocumentService` pattern.
 
 #### Database
-- **Password reset** — all user accounts reset to `password123` via bcrypt-10 hash generated in an isolated Node.js script (bypassing PowerShell `$` variable expansion). Applied to: `admin@rictms.gov.ph` (super_admin), `reviewer@rictms.gov.ph` (reviewer), and other seeded accounts. Verified with `bcrypt.compare()` → `true`.
+- **Password reset** — all user accounts reset to `password123` via bcrypt-10 hash generated in an isolated Node.js script (bypassing PowerShell `$` variable expansion). Applied to: `fo2admin@dswd.gov.ph` (super_admin), `reviewer@rictms.gov.ph` (reviewer), and other seeded accounts. Verified with `bcrypt.compare()` → `true`.
 
 #### Validation
 - Backend starts cleanly: `Nest application successfully started` ✅ — no crash, no unhandled `EntityMetadataNotFoundError`
 - Port 4000 listening ✅
-- Login test `POST /api/auth/login` with `admin@rictms.gov.ph` / `password123` → `200 OK` with `accessToken` ✅
+- Login test `POST /api/auth/login` with `fo2admin@dswd.gov.ph` / `password123` → `200 OK` with `accessToken` ✅
 - Smoke suite: ✅ `ALL SMOKE TESTS PASSED`
 
 
@@ -2604,7 +2604,7 @@ pm run build exits 0
 - **Backend `npm run start:dev` exit 1 (spurious)**: `backend/package.json` also contained a UTF-8 BOM from the same editor save event. Removed BOM to ensure clean JSON parse across all tooling.
 
 ### Verified (Smoke Tests Passed)
-- **Login** (`POST /api/auth/login`): Returns valid JWT for `admin@rictms.gov.ph` âœ…
+- **Login** (`POST /api/auth/login`): Returns valid JWT for `fo2admin@dswd.gov.ph` âœ…
 - **Roles** (`GET /api/users/roles`): Returns 5 system role definitions âœ…
 - **Documents list** (`GET /api/documents`): Returns 2 seeded documents âœ…
 - **Document version** (`GET /api/documents/doc-001`): Version `ver-001` present âœ…

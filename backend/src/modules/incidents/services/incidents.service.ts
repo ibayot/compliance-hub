@@ -90,11 +90,13 @@ export class IncidentsService {
       critical: incidents.filter((i) => i.severity === IncidentSeverity.CRITICAL).length,
     };
 
-    const critical = incidents.filter((i) => 
-      i.severity === IncidentSeverity.HIGH || i.severity === IncidentSeverity.CRITICAL
-    ).filter((i) => 
-      i.status === IncidentStatus.OPEN || i.status === IncidentStatus.IN_PROGRESS
-    ).length;
+    const critical = incidents
+      .filter(
+        (i) => i.severity === IncidentSeverity.HIGH || i.severity === IncidentSeverity.CRITICAL,
+      )
+      .filter(
+        (i) => i.status === IncidentStatus.OPEN || i.status === IncidentStatus.IN_PROGRESS,
+      ).length;
 
     return {
       total: incidents.length,
@@ -170,12 +172,14 @@ export class IncidentsService {
         low: inPeriod.filter((incident) => incident.severity === IncidentSeverity.LOW).length,
         medium: inPeriod.filter((incident) => incident.severity === IncidentSeverity.MEDIUM).length,
         high: inPeriod.filter((incident) => incident.severity === IncidentSeverity.HIGH).length,
-        critical: inPeriod.filter((incident) => incident.severity === IncidentSeverity.CRITICAL).length,
+        critical: inPeriod.filter((incident) => incident.severity === IncidentSeverity.CRITICAL)
+          .length,
       };
 
       const byStatus = {
         open: inPeriod.filter((incident) => incident.status === IncidentStatus.OPEN).length,
-        in_progress: inPeriod.filter((incident) => incident.status === IncidentStatus.IN_PROGRESS).length,
+        in_progress: inPeriod.filter((incident) => incident.status === IncidentStatus.IN_PROGRESS)
+          .length,
         resolved: inPeriod.filter((incident) => incident.status === IncidentStatus.RESOLVED).length,
         closed: inPeriod.filter((incident) => incident.status === IncidentStatus.CLOSED).length,
       };
@@ -185,7 +189,10 @@ export class IncidentsService {
           return false;
         }
 
-        if (incident.status !== IncidentStatus.RESOLVED && incident.status !== IncidentStatus.CLOSED) {
+        if (
+          incident.status !== IncidentStatus.RESOLVED &&
+          incident.status !== IncidentStatus.CLOSED
+        ) {
           return false;
         }
 
@@ -195,7 +202,8 @@ export class IncidentsService {
 
       const openCritical = inPeriod.filter((incident) => {
         const isCriticalOrHigh =
-          incident.severity === IncidentSeverity.HIGH || incident.severity === IncidentSeverity.CRITICAL;
+          incident.severity === IncidentSeverity.HIGH ||
+          incident.severity === IncidentSeverity.CRITICAL;
         const isActive =
           incident.status === IncidentStatus.OPEN || incident.status === IncidentStatus.IN_PROGRESS;
 

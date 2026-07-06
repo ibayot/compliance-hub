@@ -15,10 +15,15 @@ async function bootstrap() {
 
   app.use(helmet());
   app.enableCors({
-    origin: (configService.get<string>('CORS_ORIGIN') || '').split(',').map((o) => o.trim()).filter(Boolean),
+    origin: (configService.get<string>('CORS_ORIGIN') || '')
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean),
     credentials: true,
   });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+  app.useGlobalPipes(
+    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+  );
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
   app.setGlobalPrefix('api');
   const http = app.getHttpAdapter().getInstance();
@@ -31,19 +36,24 @@ async function bootstrap() {
   });
 
   const port = Number(process.env.USERS_SERVICE_PORT || 4101);
-  http.get('/api/health', (_req: any, res: any) => res.json({ status: 'ok', service: 'users', version: serviceVersion }));
-  http.get('/api/health/live', (_req: any, res: any) => res.json({ status: 'ok', service: 'users', version: serviceVersion }));
+  http.get('/api/health', (_req: any, res: any) =>
+    res.json({ status: 'ok', service: 'users', version: serviceVersion }),
+  );
+  http.get('/api/health/live', (_req: any, res: any) =>
+    res.json({ status: 'ok', service: 'users', version: serviceVersion }),
+  );
   http.get('/api/health/ready', async (_req: any, res: any) => {
     try {
       const ds = app.get(DataSource);
       await ds.query('SELECT 1');
       const dbHost = process.env.DB_HOST || 'localhost';
-      const dbName = process.env.USERS_DB_DATABASE || process.env.DB_DATABASE || 'compliance_hub_users';
+      const dbName =
+        process.env.USERS_DB_DATABASE || process.env.DB_DATABASE || 'compliance_hub_users';
 
       // Verify role_capabilities table/view has data (cache won't be populated if empty)
-      const [roleCapsCheck] = await ds.query(
-        'SELECT COUNT(*) as cnt FROM role_capabilities',
-      ).catch(() => [{ cnt: 0 }]);
+      const [roleCapsCheck] = await ds
+        .query('SELECT COUNT(*) as cnt FROM role_capabilities')
+        .catch(() => [{ cnt: 0 }]);
       const roleCapsCount = Number(roleCapsCheck?.cnt ?? 0);
 
       res.json({

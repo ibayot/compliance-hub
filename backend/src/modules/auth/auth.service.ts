@@ -7,6 +7,7 @@ import { OAuth2Client, TokenPayload as GoogleTokenPayload } from 'google-auth-li
 import { UsersService } from '../users/users.service';
 import { AttendanceService } from '../tickets/services/attendance.service';
 import { TicketService } from '../tickets/services/ticket.service';
+import { TicketSettingsService } from '../tickets/services/ticket-settings.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload, AuthResponse } from './interfaces/auth.interface';
 import { User, UserRole } from '../users/entities/user.entity';
@@ -25,6 +26,7 @@ export class AuthService {
     private readonly securityConfigService: SecurityConfigService,
     @Optional() private readonly attendanceService?: AttendanceService,
     @Optional() private readonly ticketService?: TicketService,
+    @Optional() private readonly ticketSettingsService?: TicketSettingsService,
   ) {}
 
   private timingSafeStringEquals(a: string, b: string): boolean {
@@ -47,10 +49,17 @@ export class AuthService {
     return this.configService.get<string>('JWT_AUDIENCE') || 'compliance-hub-client';
   }
 
-  private buildAuthResponse(user: User, tokens: { accessToken: string; refreshToken: string }, roleCode?: string | null, requiresPasswordChange?: boolean): AuthResponse {
+  private buildAuthResponse(
+    user: User,
+    tokens: { accessToken: string; refreshToken: string },
+    roleCode?: string | null,
+    requiresPasswordChange?: boolean,
+    requiresMfa?: boolean,
+  ): AuthResponse {
     return {
       ...tokens,
       requiresPasswordChange,
+      requiresMfa,
       user: {
         id: user.id,
         email: user.email,
@@ -98,7 +107,9 @@ export class AuthService {
     // Check deactivated specifically before validating password
     const candidate = await this.usersService.findByEmail(loginDto.email);
     if (candidate && !candidate.active) {
-      throw new UnauthorizedException('This account has been deactivated. Please contact the administrator.');
+      throw new UnauthorizedException(
+        'This account has been deactivated. Please contact the administrator.',
+      );
     }
 
     const user = await this.validateUser(loginDto.email, loginDto.password);
@@ -115,10 +126,31 @@ export class AuthService {
 
     // Check if user is using the default password
     const securityConfig = await this.securityConfigService.getConfig();
-    const isUsingDefaultPassword = await bcrypt.compare(securityConfig.defaultPassword, user.passwordHash);
+    const isUsingDefaultPassword = await bcrypt.compare(
+      securityConfig.defaultPassword,
+      user.passwordHash,
+    );
 
     const tokens = await this.generateTokens(user);
-    return this.buildAuthResponse(user, tokens, tokens.roleCode, isUsingDefaultPassword);
+    const requiresMfa = this.checkRequiresMfa(user);
+    return this.buildAuthResponse(user, tokens, tokens.roleCode, isUsingDefaultPassword, requiresMfa);
+  }
+
+  private checkRequiresMfa(user: User): boolean {
+    if (!user.mfaLastVerifiedAt) return true;
+    
+    // Check if the last verified date matches today in Asia/Manila
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    
+    const todayStr = formatter.format(new Date());
+    const lastVerifiedStr = formatter.format(new Date(user.mfaLastVerifiedAt));
+    
+    return todayStr !== lastVerifiedStr;
   }
 
   async googleLogin(idToken: string): Promise<AuthResponse> {
@@ -129,7 +161,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid Google subject.');
     }
 
-    const normalizedEmail = String(payload.email || '').trim().toLowerCase();
+    const normalizedEmail = String(payload.email || '')
+      .trim()
+      .toLowerCase();
 
     const securityConfig = await this.securityConfigService.getConfig();
 
@@ -161,10 +195,14 @@ export class AuthService {
     // Emit event for ticketing/attendance services
     await this.eventBus.publish('user.login', { userId: user.id });
 
-    const isUsingDefaultPassword = await bcrypt.compare(securityConfig.defaultPassword, user.passwordHash);
+    const isUsingDefaultPassword = await bcrypt.compare(
+      securityConfig.defaultPassword,
+      user.passwordHash,
+    );
 
     const tokens = await this.generateTokens(user);
-    return this.buildAuthResponse(user, tokens, tokens.roleCode, isUsingDefaultPassword);
+    const requiresMfa = this.checkRequiresMfa(user);
+    return this.buildAuthResponse(user, tokens, tokens.roleCode, isUsingDefaultPassword, requiresMfa);
   }
 
   async validateUser(email: string, password: string): Promise<User | null> {
@@ -183,7 +221,83 @@ export class AuthService {
     return user;
   }
 
-  async generateTokens(user: User): Promise<{ accessToken: string; refreshToken: string; roleCode: string | null }> {
+  async sendMfaCode(userId: number): Promise<{ message: string }> {
+    const user = await this.usersService.findOne(userId);
+    if (!user) throw new UnauthorizedException('User not found');
+
+    // Generate 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+
+    await this.usersService.updateMfaCode(userId, code, expiresAt);
+
+    // Send email using EventBus to avoid circular dependency
+    await this.eventBus.publish('email.send', {
+      to: user.email,
+      subject: 'Your Compliance Hub Verification Code',
+      text: `Your verification code is: ${code}. It expires in 15 minutes.`,
+    });
+
+    return { message: 'Verification code sent to your email.' };
+  }
+
+  async verifyMfaCode(userId: number, code: string): Promise<{ success: boolean; message: string }> {
+    const user = await this.usersService.findOne(userId);
+    if (!user) throw new UnauthorizedException('User not found');
+
+    if (!user.mfaCode || !user.mfaCodeExpiresAt) {
+      throw new BadRequestException('No verification code found. Please request a new one.');
+    }
+
+    if (new Date() > user.mfaCodeExpiresAt) {
+      throw new BadRequestException('Verification code has expired. Please request a new one.');
+    }
+
+    if (user.mfaCode !== code) {
+      throw new BadRequestException('Invalid verification code.');
+    }
+
+    await this.usersService.markMfaVerified(userId);
+
+    return { success: true, message: 'Verification successful.' };
+  }
+
+  private async handleAutoResume(user: User) {
+    if (!this.ticketSettingsService || !this.ticketService) return;
+
+    try {
+      const config = await this.ticketSettingsService.getGlobalConfig();
+      if (!config || config.isFlagCeremonyPaused) return;
+
+      const now = new Date();
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`;
+
+      let shouldResume = false;
+      if (config.scheduleMode === 'OFFICE_HOURS') {
+        if (currentTime >= config.officeClockin && currentTime < config.officeClockout) {
+          shouldResume = true;
+        }
+      } else if (config.scheduleMode === 'CWW') {
+        if (currentTime >= config.cwwClockinStart && currentTime < config.cwwClockoutStart) {
+          shouldResume = true;
+        }
+      }
+
+      if (shouldResume) {
+        await this.ticketService.resumeAllActiveTickets(user.id);
+      }
+    } catch (e) {
+      // Ignore errors so login doesn't fail
+    }
+  }
+
+  async generateTokens(
+    user: User,
+  ): Promise<{ accessToken: string; refreshToken: string; roleCode: string | null }> {
+    // Attempt auto-resume
+    this.handleAutoResume(user).catch(() => {});
+
     const roleCode = await this.usersService.getRoleCodeForRole(user.role).catch(() => null);
     const payload: JwtPayload = {
       sub: user.id,
@@ -251,6 +365,11 @@ export class AuthService {
   async getProfile(userId: number): Promise<Record<string, any>> {
     const user = await this.usersService.findOne(userId);
     const roleDef = await this.usersService.findRoleDefinition(user.role);
+    const securityConfig = await this.securityConfigService.getConfig();
+    const requiresPasswordChange = await bcrypt.compare(
+      securityConfig.defaultPassword,
+      user.passwordHash,
+    );
     return {
       id: user.id,
       email: user.email,
@@ -266,6 +385,7 @@ export class AuthService {
       ticketTechnician: user.ticketTechnician,
       authProvider: user.authProvider,
       role: user.role,
+      requiresPasswordChange,
       units: user.units?.map((u) => ({ id: u.id, name: u.name })) || [],
       roleCode: roleDef?.roleCode ?? null,
     };
@@ -300,7 +420,9 @@ export class AuthService {
 
     const user = await this.usersService.findOne(userId);
     if (user.authProvider === 'google') {
-      throw new BadRequestException('Password re-authentication is not available for Google accounts. Please sign in again.');
+      throw new BadRequestException(
+        'Password re-authentication is not available for Google accounts. Please sign in again.',
+      );
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);

@@ -1,11 +1,6 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { TicketCategoryConfig } from '../entities/ticket-category.entity';
 import { TicketKeywordRule } from '../entities/ticket-keyword-rule.entity';
 import { TicketIssueType } from '../entities/ticket-issue-type.entity';
@@ -13,7 +8,7 @@ import { EscalationFocalConfig } from '../entities/escalation-focal-config.entit
 import { RoleDefinitionEntity } from '../../users/entities/role-definition.entity';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
-import { Ticket, TicketStatus } from '../entities/ticket.entity';
+import { Ticket } from '../entities/ticket.entity';
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -35,8 +30,8 @@ export interface UpdateCategoryDto {
 }
 
 export interface CreateKeywordRuleDto {
-  keyword?: string;      // legacy single keyword — kept for compat
-  keywords?: string[];   // preferred: multiple keywords for this rule
+  keyword?: string; // legacy single keyword — kept for compat
+  keywords?: string[]; // preferred: multiple keywords for this rule
   targetTicketType: string;
   targetCategoryId?: string;
 }
@@ -78,6 +73,15 @@ export interface UpdateGlobalConfigDto {
   smtpPass?: string | null;
   smtpFrom?: string | null;
   smtpFromName?: string | null;
+  primarySmtpDailyLimit?: number;
+  scheduleMode?: string;
+  officeClockin?: string;
+  officeClockout?: string;
+  cwwClockinStart?: string;
+  cwwClockinEnd?: string;
+  cwwClockoutStart?: string;
+  cwwClockoutEnd?: string;
+  isFlagCeremonyPaused?: boolean;
 }
 
 // --- Service ----------------------------------------------------------------
@@ -127,10 +131,16 @@ export class TicketSettingsService {
   async createCategory(dto: CreateCategoryDto, actorId: number): Promise<TicketCategoryConfig> {
     if (!dto.name?.trim()) throw new BadRequestException('Category name is required');
     if (!['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.ticketType)) {
-      throw new BadRequestException('ticketType must be desktop_support, it_support, or pantawid_ict_support');
+      throw new BadRequestException(
+        'ticketType must be desktop_support, it_support, or pantawid_ict_support',
+      );
     }
 
-    const key = dto.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+    const key = dto.name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/(^_|_$)/g, '');
 
     const existing = await this.categoryRepo.findOne({ where: { key, isDeleted: false } });
     if (existing) throw new BadRequestException(`Category key "${key}" already exists`);
@@ -146,7 +156,8 @@ export class TicketSettingsService {
       softDeleted.created_by = actorId;
       softDeleted.updated_by = actorId;
       if (dto.slaHours !== undefined) softDeleted.slaHours = dto.slaHours;
-      if (dto.allowablePauseHours !== undefined) softDeleted.allowablePauseHours = dto.allowablePauseHours ?? 48;
+      if (dto.allowablePauseHours !== undefined)
+        softDeleted.allowablePauseHours = dto.allowablePauseHours ?? 48;
       return this.categoryRepo.save(softDeleted);
     }
 
@@ -155,7 +166,7 @@ export class TicketSettingsService {
         throw new BadRequestException('SLA hours must be between 0 and 168');
       }
     }
-    
+
     if (dto.allowablePauseHours !== undefined && dto.allowablePauseHours !== null) {
       if (dto.allowablePauseHours < 0 || dto.allowablePauseHours > 168) {
         throw new BadRequestException('Allowable Pause Hours must be between 0 and 168');
@@ -177,21 +188,31 @@ export class TicketSettingsService {
     return this.categoryRepo.save(cat);
   }
 
-  async updateCategory(id: string, dto: UpdateCategoryDto, actorId: number): Promise<TicketCategoryConfig> {
+  async updateCategory(
+    id: string,
+    dto: UpdateCategoryDto,
+    actorId: number,
+  ): Promise<TicketCategoryConfig> {
     const cat = await this.getCategoryById(id);
 
     if (dto.name !== undefined) {
       cat.name = dto.name.trim();
-      cat.key = dto.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+      cat.key = dto.name
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/(^_|_$)/g, '');
     }
     if (dto.ticketType !== undefined) {
       if (!['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.ticketType)) {
-        throw new BadRequestException('ticketType must be desktop_support, it_support, or pantawid_ict_support');
+        throw new BadRequestException(
+          'ticketType must be desktop_support, it_support, or pantawid_ict_support',
+        );
       }
       cat.ticketType = dto.ticketType;
     }
     if (dto.description !== undefined) cat.description = dto.description?.trim() || null;
-    
+
     if (dto.slaHours !== undefined) {
       if (dto.slaHours !== null && (dto.slaHours < 0 || dto.slaHours > 168)) {
         throw new BadRequestException('SLA hours must be between 0 and 168');
@@ -203,7 +224,10 @@ export class TicketSettingsService {
     }
 
     if (dto.allowablePauseHours !== undefined) {
-      if (dto.allowablePauseHours !== null && (dto.allowablePauseHours < 0 || dto.allowablePauseHours > 168)) {
+      if (
+        dto.allowablePauseHours !== null &&
+        (dto.allowablePauseHours < 0 || dto.allowablePauseHours > 168)
+      ) {
         throw new BadRequestException('Allowable Pause Hours must be between 0 and 168');
       }
       cat.allowablePauseHours = dto.allowablePauseHours ?? 48;
@@ -247,13 +271,18 @@ export class TicketSettingsService {
 
   async createKeywordRule(dto: CreateKeywordRuleDto, actorId: number): Promise<TicketKeywordRule> {
     // Support both multi-keyword and single-keyword creation
-    const kwList: string[] = (dto.keywords && dto.keywords.length > 0)
-      ? dto.keywords.map(k => k.trim().toLowerCase()).filter(Boolean)
-      : (dto.keyword?.trim() ? [dto.keyword.trim().toLowerCase()] : []);
+    const kwList: string[] =
+      dto.keywords && dto.keywords.length > 0
+        ? dto.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean)
+        : dto.keyword?.trim()
+          ? [dto.keyword.trim().toLowerCase()]
+          : [];
 
     if (kwList.length === 0) throw new BadRequestException('At least one keyword is required');
     if (!['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.targetTicketType)) {
-      throw new BadRequestException('targetTicketType must be desktop_support, it_support, or pantawid_ict_support');
+      throw new BadRequestException(
+        'targetTicketType must be desktop_support, it_support, or pantawid_ict_support',
+      );
     }
 
     const rule = this.keywordRepo.create({
@@ -271,7 +300,7 @@ export class TicketSettingsService {
     const rule = await this.getKeywordRuleById(id);
 
     if (dto.keywords !== undefined && dto.keywords.length > 0) {
-      const kwList = dto.keywords.map(k => k.trim().toLowerCase()).filter(Boolean);
+      const kwList = dto.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean);
       rule.keywords = JSON.stringify(kwList);
       rule.keyword = kwList[0]; // keep primary keyword in sync
     } else if (dto.keyword !== undefined) {
@@ -282,8 +311,12 @@ export class TicketSettingsService {
       rule.keywords = JSON.stringify(existing);
     }
     if (dto.targetTicketType !== undefined) {
-      if (!['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.targetTicketType)) {
-        throw new BadRequestException('targetTicketType must be desktop_support, it_support, or pantawid_ict_support');
+      if (
+        !['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.targetTicketType)
+      ) {
+        throw new BadRequestException(
+          'targetTicketType must be desktop_support, it_support, or pantawid_ict_support',
+        );
       }
       rule.targetTicketType = dto.targetTicketType;
     }
@@ -341,7 +374,11 @@ export class TicketSettingsService {
   async createIssueType(dto: CreateIssueTypeDto, actorId: number): Promise<TicketIssueType> {
     if (!dto.name?.trim()) throw new BadRequestException('Issue type name is required');
 
-    const key = dto.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+    const key = dto.name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/(^_|_$)/g, '');
     const existing = await this.issueTypeRepo.findOne({ where: { key, is_deleted: false } });
     if (existing) throw new BadRequestException(`Issue type key "${key}" already exists`);
 
@@ -363,13 +400,21 @@ export class TicketSettingsService {
     return this.issueTypeRepo.save(issueType);
   }
 
-  async updateIssueType(id: string, dto: UpdateIssueTypeDto, actorId: number): Promise<TicketIssueType> {
+  async updateIssueType(
+    id: string,
+    dto: UpdateIssueTypeDto,
+    actorId: number,
+  ): Promise<TicketIssueType> {
     const issueType = await this.getIssueTypeById(id);
 
     if (dto.name !== undefined) {
       if (!dto.name.trim()) throw new BadRequestException('Issue type name is required');
       issueType.name = dto.name.trim();
-      issueType.key = dto.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+      issueType.key = dto.name
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/(^_|_$)/g, '');
     }
     if (dto.description !== undefined) issueType.description = dto.description?.trim() || null;
     if (dto.isActive !== undefined) issueType.is_active = dto.isActive;
@@ -404,9 +449,7 @@ export class TicketSettingsService {
     // Build a flat list of (rule, keyword) pairs sorted by keyword length descending
     const pairs: Array<{ rule: TicketKeywordRule; kw: string }> = [];
     for (const rule of rules) {
-      const kwList: string[] = rule.keywords
-        ? JSON.parse(rule.keywords)
-        : [rule.keyword];
+      const kwList: string[] = rule.keywords ? JSON.parse(rule.keywords) : [rule.keyword];
       for (const kw of kwList) {
         pairs.push({ rule, kw });
       }
@@ -424,18 +467,20 @@ export class TicketSettingsService {
   /** List configured escalation focals  (QA #3, #9) */
   async listEscalationFocals(ticketType?: string): Promise<EscalationFocalConfig[]> {
     const where: any = {};
-    if (ticketType) where.ticketType = ticketType;
+    if (ticketType) {
+      where.ticketType = In([ticketType, 'all']);
+    }
     return this.escalationFocalRepo.find({ where, order: { ticketType: 'ASC', label: 'ASC' } });
   }
 
   async listAvailableEscalationRoles(): Promise<{ value: string; label: string }[]> {
     const rows = await this.roleDefRepo.find();
-    const focalRoles = rows.filter(r => this.roleCapSvc.isEscalationFocal(r.value));
-    const roleMap = new Map(focalRoles.map(r => [r.value, r.label]));
+    const focalRoles = rows.filter((r) => this.roleCapSvc.isEscalationFocal(r.value));
+    const roleMap = new Map(focalRoles.map((r) => [r.value, r.label]));
 
     // Fetch users with focal roles
     const users = await this.categoryRepo.manager.query(
-      `SELECT id, first_name, last_name, email, role FROM users WHERE active = 1`
+      `SELECT id, first_name, last_name, email, role FROM users WHERE active = 1`,
     );
 
     const focalUsers = users.filter((u: any) => roleMap.has(u.role));
@@ -444,25 +489,31 @@ export class TicketSettingsService {
       const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email;
       return {
         value: String(u.id),
-        label: `${name} - ${roleMap.get(u.role)}`
+        label: `${name} - ${roleMap.get(u.role)}`,
       };
     });
   }
 
   /** Add a role as an escalation focal for a ticket type (QA #3, #13) */
-  async addEscalationFocal(dto: CreateEscalationFocalDto, actorId: number): Promise<EscalationFocalConfig> {
+  async addEscalationFocal(
+    dto: CreateEscalationFocalDto,
+    actorId: number,
+  ): Promise<EscalationFocalConfig> {
     const validTypes = ['desktop_support', 'it_support', 'pantawid_ict_support', 'all'];
     if (!validTypes.includes(dto.ticketType)) {
       throw new BadRequestException(`ticketType must be one of: ${validTypes.join(', ')}`);
     }
 
-    // Role validation is bypassed here because the dropdown passes user IDs (String) as the "roleValue" 
+    // Role validation is bypassed here because the dropdown passes user IDs (String) as the "roleValue"
     // instead of actual role identifiers to ensure uniqueness of target individuals.
 
     const existing = await this.escalationFocalRepo.findOne({
       where: { ticketType: dto.ticketType, roleValue: dto.roleValue },
     });
-    if (existing) throw new BadRequestException('This role is already configured as an escalation focal for that ticket type.');
+    if (existing)
+      throw new BadRequestException(
+        'This role is already configured as an escalation focal for that ticket type.',
+      );
 
     const config = this.escalationFocalRepo.create({
       ticketType: dto.ticketType,
@@ -485,7 +536,11 @@ export class TicketSettingsService {
   async getGlobalConfig(): Promise<TicketingConfig> {
     let config = await this.configRepo.findOne({ where: { id: 1 } });
     if (!config) {
-      config = this.configRepo.create({ id: 1, assignmentStrategy: 'CURRENT_AUTO', roundRobinCapHours: 80 });
+      config = this.configRepo.create({
+        id: 1,
+        assignmentStrategy: 'CURRENT_AUTO',
+        roundRobinCapHours: 80,
+      });
       await this.configRepo.save(config);
     }
     return config;
@@ -496,13 +551,25 @@ export class TicketSettingsService {
     if (dto.assignmentStrategy !== undefined) config.assignmentStrategy = dto.assignmentStrategy;
     if (dto.roundRobinCapHours !== undefined) config.roundRobinCapHours = dto.roundRobinCapHours;
     if (dto.autoCloseDays !== undefined) config.autoCloseDays = dto.autoCloseDays;
-    
+
     if (dto.smtpHost !== undefined) config.smtpHost = dto.smtpHost;
     if (dto.smtpPort !== undefined) config.smtpPort = dto.smtpPort;
     if (dto.smtpUser !== undefined) config.smtpUser = dto.smtpUser;
     if (dto.smtpPass !== undefined) config.smtpPass = dto.smtpPass;
     if (dto.smtpFrom !== undefined) config.smtpFrom = dto.smtpFrom;
     if (dto.smtpFromName !== undefined) config.smtpFromName = dto.smtpFromName;
+    if (dto.primarySmtpDailyLimit !== undefined)
+      config.primarySmtpDailyLimit = dto.primarySmtpDailyLimit;
+
+    if (dto.scheduleMode !== undefined) config.scheduleMode = dto.scheduleMode;
+    if (dto.officeClockin !== undefined) config.officeClockin = dto.officeClockin;
+    if (dto.officeClockout !== undefined) config.officeClockout = dto.officeClockout;
+    if (dto.cwwClockinStart !== undefined) config.cwwClockinStart = dto.cwwClockinStart;
+    if (dto.cwwClockinEnd !== undefined) config.cwwClockinEnd = dto.cwwClockinEnd;
+    if (dto.cwwClockoutStart !== undefined) config.cwwClockoutStart = dto.cwwClockoutStart;
+    if (dto.cwwClockoutEnd !== undefined) config.cwwClockoutEnd = dto.cwwClockoutEnd;
+    if (dto.isFlagCeremonyPaused !== undefined)
+      config.isFlagCeremonyPaused = dto.isFlagCeremonyPaused;
 
     return this.configRepo.save(config);
   }
@@ -511,7 +578,8 @@ export class TicketSettingsService {
 
   async getSlaInsights(days: number = 30): Promise<any[]> {
     // Calculates the average resolution time in hours per category over the last X days
-    const insights = await this.ticketRepo.query(`
+    const insights = await this.ticketRepo.query(
+      `
       SELECT 
         tc.name as categoryName,
         tc.sla_hours as configuredSlaHours,
@@ -523,14 +591,16 @@ export class TicketSettingsService {
         AND t.resolved_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
         AND tc.sla_hours IS NOT NULL AND tc.sla_hours > 0
       GROUP BY tc.id
-    `, [days]);
-    
+    `,
+      [days],
+    );
+
     return insights.map((row: any) => ({
       categoryName: row.categoryName,
       configuredSlaHours: Number(row.configuredSlaHours),
       resolvedTicketsCount: Number(row.resolvedTicketsCount),
       avgResolutionHours: Number(row.avgResolutionHours),
-      isFailingSla: Number(row.avgResolutionHours) > Number(row.configuredSlaHours)
+      isFailingSla: Number(row.avgResolutionHours) > Number(row.configuredSlaHours),
     }));
   }
 }

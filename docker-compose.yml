@@ -19,8 +19,8 @@ services:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MARIADB_ROOT_PASSWORD || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 25s
+      retries: 30
+      start_period: 120s
 
   redis:
     image: redis:7-alpine
@@ -102,6 +102,8 @@ services:
       timeout: 5s
       retries: 8
       start_period: 35s
+    volumes:
+      - /opt/ticketing/storage:/app/storage
 
   compliance-service:
     build:

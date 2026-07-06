@@ -34,10 +34,18 @@ const FOCAL_ROLES = [
   UserRole.IT_SUPPORT_SR,
   UserRole.DESKTOP_JR,
   UserRole.IT_SUPPORT_JR,
-  UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
-  UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
-  UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
-  UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
+  UserRole.COMPLIANCE_OFFICER,
+  UserRole.CYBERSEC,
+  UserRole.INFOSEC,
+  UserRole.LEAD_INFRA,
+  UserRole.SERVER_ADMIN,
+  UserRole.DB_ADMIN,
+  UserRole.NETWORK_ADMIN,
+  UserRole.PROJECT_MGR,
+  UserRole.DEV_LEAD,
+  UserRole.SQA_LEAD,
+  UserRole.RECORDS_OFFICER,
+  UserRole.HR_ID_OFFICER,
 ];
 
 /** Strict role-only check (no roleCode fallback) for attendance mutation endpoints. */
@@ -51,12 +59,22 @@ const OFFICE_DAY_ROLES = [
   UserRole.SUPER_ADMIN,
   UserRole.SECTION_HEAD,
   // v0.6.14 ITO focal-equivalent roles
-  UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
-  UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
-  UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
-  UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
+  UserRole.COMPLIANCE_OFFICER,
+  UserRole.CYBERSEC,
+  UserRole.INFOSEC,
+  UserRole.LEAD_INFRA,
+  UserRole.SERVER_ADMIN,
+  UserRole.DB_ADMIN,
+  UserRole.NETWORK_ADMIN,
+  UserRole.PROJECT_MGR,
+  UserRole.DEV_LEAD,
+  UserRole.SQA_LEAD,
+  UserRole.RECORDS_OFFICER,
+  UserRole.HR_ID_OFFICER,
   // Senior tech roles may also need to manage office days for their teams
-  UserRole.DESKTOP_SR, UserRole.IT_SUPPORT_SR, UserRole.PANTAWID_ICT,
+  UserRole.DESKTOP_SR,
+  UserRole.IT_SUPPORT_SR,
+  UserRole.PANTAWID_ICT,
 ];
 
 /** Roles that can read attendance */
@@ -69,10 +87,18 @@ const READ_ROLES = [
   UserRole.IT_SUPPORT_SR,
   UserRole.DESKTOP_JR,
   UserRole.IT_SUPPORT_JR,
-  UserRole.COMPLIANCE_OFFICER, UserRole.CYBERSEC, UserRole.INFOSEC,
-  UserRole.LEAD_INFRA, UserRole.SERVER_ADMIN, UserRole.DB_ADMIN, UserRole.NETWORK_ADMIN,
-  UserRole.PROJECT_MGR, UserRole.DEV_LEAD, UserRole.SQA_LEAD,
-  UserRole.RECORDS_OFFICER, UserRole.HR_ID_OFFICER,
+  UserRole.COMPLIANCE_OFFICER,
+  UserRole.CYBERSEC,
+  UserRole.INFOSEC,
+  UserRole.LEAD_INFRA,
+  UserRole.SERVER_ADMIN,
+  UserRole.DB_ADMIN,
+  UserRole.NETWORK_ADMIN,
+  UserRole.PROJECT_MGR,
+  UserRole.DEV_LEAD,
+  UserRole.SQA_LEAD,
+  UserRole.RECORDS_OFFICER,
+  UserRole.HR_ID_OFFICER,
 ];
 
 @Controller('attendance')
@@ -126,7 +152,11 @@ export class AttendanceController {
   @HttpCode(HttpStatus.OK)
   async bulkSetAttendance(@Body() dto: BulkSetAttendanceDto, @Request() req: any) {
     this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
-    return this.attendanceService.bulkSetAttendance(dto, req.user.id ?? req.user.userId, req.user.role);
+    return this.attendanceService.bulkSetAttendance(
+      dto,
+      req.user.id ?? req.user.userId,
+      req.user.role,
+    );
   }
 
   /** DELETE /attendance/all — super_admin only: clear all attendance records */
@@ -149,10 +179,7 @@ export class AttendanceController {
   /** GET /attendance/office-days?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD */
   @Get('office-days')
   @Roles(...READ_ROLES)
-  async getOfficeDays(
-    @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string,
-  ) {
+  async getOfficeDays(@Query('startDate') startDate: string, @Query('endDate') endDate: string) {
     if (!startDate || !endDate) {
       // Default to current month
       const now = new Date();
@@ -189,8 +216,6 @@ export class AttendanceController {
     return this.attendanceService.getStaffLoginsForDate(target);
   }
 
-
-
   /** GET /attendance/staff-logins-monthly?startDate=&endDate= — all non-tech staff with lastLogin for monthly grid */
   @Get('staff-logins-monthly')
   @Roles(...READ_ROLES)
@@ -198,8 +223,12 @@ export class AttendanceController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
-    const start = startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
-    const end = endDate || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10);
+    const start =
+      startDate ||
+      new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+    const end =
+      endDate ||
+      new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10);
     return this.attendanceService.getStaffLoginsMonthly(start, end);
   }
 }

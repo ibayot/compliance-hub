@@ -6,8 +6,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { Unit } from '../../shared/entities';
-import { User, UserRole } from '../../shared/entities';
+import { UserRole } from '../../shared/entities';
+import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
+import { UnitsHttpClient } from '../../../common/http-clients/units.http-client';
 import { KpiFrequency, KpiMaster, KpiType } from '../entities/kpi-master.entity';
 import { KpiMonitoring, KpiMonitoringStatus } from '../entities/kpi-monitoring.entity';
 import { KpiThreshold } from '../entities/kpi-threshold.entity';
@@ -35,10 +36,8 @@ export class KpiService {
     private readonly kpiThresholdRepo: Repository<KpiThreshold>,
     @InjectRepository(KpiScoringRule)
     private readonly kpiScoringRuleRepo: Repository<KpiScoringRule>,
-    @InjectRepository(Unit)
-    private readonly unitRepo: Repository<Unit>,
-    @InjectRepository(User)
-    private readonly userRepo: Repository<User>,
+    private readonly usersHttpClient: UsersHttpClient,
+    private readonly unitsHttpClient: UnitsHttpClient,
     private readonly roleCapSvc: RoleCapabilitiesService,
   ) {
     this.ensureLookups().catch(() => undefined);
@@ -48,8 +47,18 @@ export class KpiService {
     const thresholds = await this.kpiThresholdRepo.count();
     if (thresholds === 0) {
       await this.kpiThresholdRepo.save([
-        this.kpiThresholdRepo.create({ band: 'green', minScore: 90, maxScore: 100, color: 'success' }),
-        this.kpiThresholdRepo.create({ band: 'amber', minScore: 75, maxScore: 89.99, color: 'warning' }),
+        this.kpiThresholdRepo.create({
+          band: 'green',
+          minScore: 90,
+          maxScore: 100,
+          color: 'success',
+        }),
+        this.kpiThresholdRepo.create({
+          band: 'amber',
+          minScore: 75,
+          maxScore: 89.99,
+          color: 'warning',
+        }),
         this.kpiThresholdRepo.create({ band: 'red', minScore: 0, maxScore: 74.99, color: 'error' }),
       ]);
     }
@@ -79,7 +88,9 @@ export class KpiService {
     return this.roleCapSvc.isKpiManage(user.role);
   }
 
-  private normalizeUnitId(value: number | string | { id?: number | string } | undefined): number | null {
+  private normalizeUnitId(
+    value: number | string | { id?: number | string } | undefined,
+  ): number | null {
     if (value === undefined || value === null) return null;
     if (typeof value === 'object') {
       const nested = Number((value as any).id);
@@ -105,22 +116,11 @@ export class KpiService {
       return [];
     }
 
-    const actor = await this.userRepo.findOne({ where: { id: userId }, relations: ['units'] }).catch(() => null);
-    if (!actor?.units?.length) {
-      return [];
-    }
-
-    return Array.from(
-      new Set(
-        actor.units
-          .map((unit) => Number(unit.id))
-          .filter((unitId) => Number.isFinite(unitId)),
-      ),
-    );
+    return [];
   }
 
   private async ensureUnit(unitId: number) {
-    const unit = await this.unitRepo.findOne({ where: { id: unitId } });
+    const unit = await this.unitsHttpClient.getUnitById(unitId);
     if (!unit) {
       throw new NotFoundException(`Unit ${unitId} not found`);
     }
@@ -204,7 +204,10 @@ export class KpiService {
     return { message: 'KPI master deleted.' };
   }
 
-  async listMonitoring(user: AuthUser, query: { periodYear?: number; periodMonth?: number; unitId?: number; kpiMasterCode?: string }) {
+  async listMonitoring(
+    user: AuthUser,
+    query: { periodYear?: number; periodMonth?: number; unitId?: number; kpiMasterCode?: string },
+  ) {
     const where: any = {};
 
     const yearNum = query.periodYear !== undefined ? Number(query.periodYear) : undefined;
@@ -223,7 +226,8 @@ export class KpiService {
       if (unitIdNum !== undefined && Number.isFinite(unitIdNum) && !allowed.includes(unitIdNum)) {
         throw new ForbiddenException('Unit access denied.');
       }
-      where.unitId = (unitIdNum !== undefined && Number.isFinite(unitIdNum)) ? unitIdNum : In(allowed);
+      where.unitId =
+        unitIdNum !== undefined && Number.isFinite(unitIdNum) ? unitIdNum : In(allowed);
     }
 
     return this.kpiMonitoringRepo.find({
@@ -252,14 +256,13 @@ export class KpiService {
         periodYear: dto.periodYear,
         periodMonth: dto.periodMonth,
       },
-      relations: ['enteredByUser'],
-    });
+          });
 
     if (row && row.status === KpiMonitoringStatus.LOCKED) {
       throw new BadRequestException('This KPI monitoring row is locked.');
     }
 
-    const actor = await this.userRepo.findOne({ where: { id: user.id } });
+    const actor = await this.usersHttpClient.getUserById(user.id).catch(() => null);
 
     if (!row) {
       row = this.kpiMonitoringRepo.create({
@@ -273,8 +276,9 @@ export class KpiService {
     row.actualValue = dto.actualValue;
     row.remarks = dto.remarks ?? null;
     row.enteredByUserId = actor?.id ?? null;
-    row.enteredByStaffId = actor?.staffId ?? null;
-    row.enteredByName = [actor?.firstName, actor?.lastName].filter(Boolean).join(' ') || actor?.email || null;
+    row.enteredByStaffId = actor?.staff_id ?? null;
+    row.enteredByName =
+      [actor?.first_name, actor?.last_name].filter(Boolean).join(' ') || actor?.email || null;
     row.status = dto.status ?? KpiMonitoringStatus.DRAFT;
 
     if (kpiMaster.type === KpiType.YES_NO && ![0, 1].includes(Number(row.actualValue))) {
@@ -303,10 +307,11 @@ export class KpiService {
       throw new BadRequestException('YES/NO KPI type accepts only 0 (No) or 1 (Yes).');
     }
 
-    const actor = await this.userRepo.findOne({ where: { id: user.id } });
+    const actor = await this.usersHttpClient.getUserById(user.id).catch(() => null);
     row.enteredByUserId = actor?.id ?? null;
-    row.enteredByStaffId = actor?.staffId ?? null;
-    row.enteredByName = [actor?.firstName, actor?.lastName].filter(Boolean).join(' ') || actor?.email || null;
+    row.enteredByStaffId = actor?.staff_id ?? null;
+    row.enteredByName =
+      [actor?.first_name, actor?.last_name].filter(Boolean).join(' ') || actor?.email || null;
 
     return this.kpiMonitoringRepo.save(row);
   }
@@ -376,7 +381,7 @@ export class KpiService {
 
     const rows = await this.kpiMonitoringRepo.find({
       where,
-      relations: ['kpiMaster', 'unit'],
+      relations: ['kpiMaster'],
     });
 
     const scoringRule =
@@ -385,14 +390,27 @@ export class KpiService {
 
     const thresholds = await this.kpiThresholdRepo.find({ order: { minScore: 'DESC' } });
 
-    const byUnit = new Map<number, { unitId: number; unitName: string; totalWeight: number; weightedSum: number; kpiCount: number }>();
+    const byUnit = new Map<
+      number,
+      {
+        unitId: number;
+        unitName: string;
+        totalWeight: number;
+        weightedSum: number;
+        kpiCount: number;
+      }
+    >();
 
     for (const row of rows) {
       const kpi = row.kpiMaster;
       if (!kpi || !kpi.active) continue;
 
       const raw = this.computeRaw(kpi, Number(row.actualValue), scoringRule);
-      const normalized = this.clamp(raw, Number(scoringRule.floorScore), Number(scoringRule.capScore));
+      const normalized = this.clamp(
+        raw,
+        Number(scoringRule.floorScore),
+        Number(scoringRule.capScore),
+      );
 
       const current = byUnit.get(row.unitId) || {
         unitId: row.unitId,
@@ -421,9 +439,8 @@ export class KpiService {
       };
     });
 
-    const overallScore = units.length > 0
-      ? units.reduce((sum, unit) => sum + unit.score, 0) / units.length
-      : 0;
+    const overallScore =
+      units.length > 0 ? units.reduce((sum, unit) => sum + unit.score, 0) / units.length : 0;
 
     return {
       summary: {
@@ -460,7 +477,7 @@ export class KpiService {
 
     const rows = await this.kpiMonitoringRepo.find({
       where: { unitId: unitIdNum, periodYear: yearNum, periodMonth: monthNum },
-      relations: ['kpiMaster', 'unit'],
+      relations: ['kpiMaster'],
     });
 
     const scoringRule =
@@ -472,37 +489,44 @@ export class KpiService {
     const details = rows
       .filter((row) => Boolean(row.kpiMaster))
       .map((row) => {
-      const kpi = row.kpiMaster;
-      if (!kpi) return null;
-      const raw = this.computeRaw(kpi, Number(row.actualValue), scoringRule);
-      const normalized = this.clamp(raw, Number(scoringRule.floorScore), Number(scoringRule.capScore));
+        const kpi = row.kpiMaster;
+        if (!kpi) return null;
+        const raw = this.computeRaw(kpi, Number(row.actualValue), scoringRule);
+        const normalized = this.clamp(
+          raw,
+          Number(scoringRule.floorScore),
+          Number(scoringRule.capScore),
+        );
 
-      return {
-        id: row.id,
-        code: row.kpiMasterCode,
-        name: kpi?.name,
-        type: kpi?.type,
-        direction: kpi?.direction,
-        unitOfMeasure: kpi?.unitOfMeasure,
-        targetValue: kpi?.targetValue,
-        actualValue: row.actualValue,
-        weight: kpi?.weight,
-        normalizedScore: Number(normalized.toFixed(2)),
-        status: row.status,
-        band: this.classifyScore(normalized, thresholds),
-        remarks: row.remarks,
-      };
-    })
+        return {
+          id: row.id,
+          code: row.kpiMasterCode,
+          name: kpi?.name,
+          type: kpi?.type,
+          direction: kpi?.direction,
+          unitOfMeasure: kpi?.unitOfMeasure,
+          targetValue: kpi?.targetValue,
+          actualValue: row.actualValue,
+          weight: kpi?.weight,
+          normalizedScore: Number(normalized.toFixed(2)),
+          status: row.status,
+          band: this.classifyScore(normalized, thresholds),
+          remarks: row.remarks,
+        };
+      })
       .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
     const totalWeight = details.reduce((sum, item) => sum + Number(item.weight || 0), 0);
-    const weightedSum = details.reduce((sum, item) => sum + Number(item.normalizedScore) * Number(item.weight || 0), 0);
+    const weightedSum = details.reduce(
+      (sum, item) => sum + Number(item.normalizedScore) * Number(item.weight || 0),
+      0,
+    );
     const score = totalWeight > 0 ? weightedSum / totalWeight : 0;
 
     // Resolve unit name even when there are no monitoring rows for this period (partial period).
     const unitName =
       rows[0]?.unit?.name ??
-      (await this.unitRepo.findOne({ where: { id: unitIdNum } }))?.name ??
+      (await this.unitsHttpClient.getUnitById(unitIdNum).catch(() => null))?.name ??
       `Unit ${unitIdNum}`;
 
     return {
@@ -534,10 +558,14 @@ export class KpiService {
     const ty = Number(toYear);
     const tm = Number(toMonth);
 
-    if (!Number.isFinite(fy) || fy < 2000 || fy > 2100) throw new BadRequestException('fromYear invalid.');
-    if (!Number.isFinite(fm) || fm < 1 || fm > 12) throw new BadRequestException('fromMonth invalid.');
-    if (!Number.isFinite(ty) || ty < 2000 || ty > 2100) throw new BadRequestException('toYear invalid.');
-    if (!Number.isFinite(tm) || tm < 1 || tm > 12) throw new BadRequestException('toMonth invalid.');
+    if (!Number.isFinite(fy) || fy < 2000 || fy > 2100)
+      throw new BadRequestException('fromYear invalid.');
+    if (!Number.isFinite(fm) || fm < 1 || fm > 12)
+      throw new BadRequestException('fromMonth invalid.');
+    if (!Number.isFinite(ty) || ty < 2000 || ty > 2100)
+      throw new BadRequestException('toYear invalid.');
+    if (!Number.isFinite(tm) || tm < 1 || tm > 12)
+      throw new BadRequestException('toMonth invalid.');
 
     if (!this.canViewAll(user)) {
       const allowed = await this.getAllowedUnitIds(user);
@@ -551,7 +579,10 @@ export class KpiService {
     while (y < ty || (y === ty && m <= tm)) {
       periods.push({ year: y, month: m });
       m++;
-      if (m > 12) { m = 1; y++; }
+      if (m > 12) {
+        m = 1;
+        y++;
+      }
       if (periods.length > 60) break; // safety cap
     }
 
@@ -562,14 +593,14 @@ export class KpiService {
       .createQueryBuilder('km')
       .leftJoinAndSelect('km.kpiMaster', 'kpiMaster')
       .where('km.unit_id = :unitId', { unitId: unitIdNum })
-      .andWhere(
-        '(km.period_year > :fy OR (km.period_year = :fy AND km.period_month >= :fm))',
-        { fy, fm },
-      )
-      .andWhere(
-        '(km.period_year < :ty OR (km.period_year = :ty AND km.period_month <= :tm))',
-        { ty, tm },
-      )
+      .andWhere('(km.period_year > :fy OR (km.period_year = :fy AND km.period_month >= :fm))', {
+        fy,
+        fm,
+      })
+      .andWhere('(km.period_year < :ty OR (km.period_year = :ty AND km.period_month <= :tm))', {
+        ty,
+        tm,
+      })
       .getMany();
 
     const scoringRule =
@@ -586,9 +617,10 @@ export class KpiService {
     }
 
     // For each period, compute composite score + per-KPI breakdown
-    const unitName = rows[0]?.unit?.name
-      ?? (await this.unitRepo.findOne({ where: { id: unitIdNum } }))?.name
-      ?? `Unit ${unitIdNum}`;
+    const unitName =
+      rows[0]?.unit?.name ??
+      (await this.unitsHttpClient.getUnitById(unitIdNum).catch(() => null))?.name ??
+      `Unit ${unitIdNum}`;
 
     return periods.map(({ year, month }) => {
       const periodRows = rowsByPeriod.get(`${year}-${month}`) ?? [];
@@ -597,7 +629,11 @@ export class KpiService {
         .map((r) => {
           const kpi = r.kpiMaster!;
           const raw = this.computeRaw(kpi, Number(r.actualValue), scoringRule);
-          const normalized = this.clamp(raw, Number(scoringRule.floorScore), Number(scoringRule.capScore));
+          const normalized = this.clamp(
+            raw,
+            Number(scoringRule.floorScore),
+            Number(scoringRule.capScore),
+          );
           return {
             code: r.kpiMasterCode,
             name: kpi.name,
@@ -612,7 +648,9 @@ export class KpiService {
         .reduce((s, r) => s + Number(r.kpiMaster!.weight || 0), 0);
       const weightedSum = kpiScores.reduce(
         (s, k, i) =>
-          s + k.normalizedScore * Number(periodRows.filter((r) => Boolean(r.kpiMaster))[i]?.kpiMaster!.weight || 0),
+          s +
+          k.normalizedScore *
+            Number(periodRows.filter((r) => Boolean(r.kpiMaster))[i]?.kpiMaster!.weight || 0),
         0,
       );
       const score = totalWeight > 0 ? weightedSum / totalWeight : 0;
@@ -630,7 +668,12 @@ export class KpiService {
     });
   }
 
-  async generateActionPlans(user: AuthUser, periodYear: number, periodMonth: number, unitId?: number) {
+  async generateActionPlans(
+    user: AuthUser,
+    periodYear: number,
+    periodMonth: number,
+    unitId?: number,
+  ) {
     const yearNum = Number(periodYear);
     const monthNum = Number(periodMonth);
 
@@ -699,7 +742,11 @@ export class KpiService {
         if (!kpi) return null;
 
         const raw = this.computeRaw(kpi, Number(row.actualValue), scoringRule);
-        const normalized = this.clamp(raw, Number(scoringRule.floorScore), Number(scoringRule.capScore));
+        const normalized = this.clamp(
+          raw,
+          Number(scoringRule.floorScore),
+          Number(scoringRule.capScore),
+        );
         const band = this.classifyScore(normalized, thresholds);
 
         if (band === 'green') {
@@ -802,5 +849,20 @@ export class KpiService {
     }
 
     return saved;
+  }
+
+  private async hydrateMonitorings(monitorings: KpiMonitoring[]) {
+    if (!monitorings?.length) return;
+    const userIds = new Set<number>();
+    monitorings.forEach(m => {
+      if (m.enteredByUserId) userIds.add(m.enteredByUserId);
+    });
+    const allUsers = await this.usersHttpClient.getUsers().catch(() => []);
+    const userMap = new Map<number, any>(allUsers.map((u: any) => [u.id, u]));
+    monitorings.forEach(m => {
+      if (m.enteredByUserId) {
+        m.enteredByUser = userMap.get(m.enteredByUserId) || undefined;
+      }
+    });
   }
 }

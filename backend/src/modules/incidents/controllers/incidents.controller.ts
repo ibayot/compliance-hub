@@ -32,7 +32,7 @@ export class IncidentsController {
     const now = new Date();
     const startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 0, 0);
     const endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 0, 0);
-    
+
     return await this.incidentsService.getTodayStats(startTime, endTime);
   }
 

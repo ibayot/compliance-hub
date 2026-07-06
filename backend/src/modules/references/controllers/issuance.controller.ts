@@ -108,10 +108,7 @@ export class IssuanceController {
   @Post(':id/documents/:documentId')
   @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   @HttpCode(HttpStatus.OK)
-  async linkDocument(
-    @Param('id') id: string,
-    @Param('documentId') documentId: string,
-  ) {
+  async linkDocument(@Param('id') id: string, @Param('documentId') documentId: string) {
     await this.issuanceService.linkDocument(id, documentId);
     return { message: 'Document linked successfully' };
   }
@@ -123,10 +120,7 @@ export class IssuanceController {
   @Delete(':id/documents/:documentId')
   @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
   @HttpCode(HttpStatus.NO_CONTENT)
-  async unlinkDocument(
-    @Param('id') id: string,
-    @Param('documentId') documentId: string,
-  ) {
+  async unlinkDocument(@Param('id') id: string, @Param('documentId') documentId: string) {
     await this.issuanceService.unlinkDocument(id, documentId);
   }
 
@@ -143,10 +137,7 @@ export class IssuanceController {
       },
     }),
   )
-  async uploadAttachment(
-    @Param('id') id: string,
-    @UploadedFile() file: Express.Multer.File,
-  ) {
+  async uploadAttachment(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
     return this.issuanceService.uploadAttachment(id, file);
   }
 

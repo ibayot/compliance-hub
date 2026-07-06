@@ -43,7 +43,9 @@ export class KeywordCheckEngine {
     passCriteria: { min_matches: number },
   ): KeywordCheckResult {
     const keywords = Array.isArray(ruleConfig?.keywords)
-      ? ruleConfig.keywords.filter((keyword) => typeof keyword === 'string' && keyword.trim().length > 0)
+      ? ruleConfig.keywords.filter(
+          (keyword) => typeof keyword === 'string' && keyword.trim().length > 0,
+        )
       : [];
 
     if (keywords.length === 0) {
@@ -60,12 +62,11 @@ export class KeywordCheckEngine {
 
     const caseSensitive = ruleConfig?.case_sensitive ?? false;
     const useWordBoundary = ruleConfig?.use_word_boundary ?? false;
-    const minMatches =
-      Number.isFinite(passCriteria?.min_matches)
-        ? Number(passCriteria.min_matches)
-        : Number.isFinite(ruleConfig?.min_count)
-          ? Number(ruleConfig.min_count)
-          : 1;
+    const minMatches = Number.isFinite(passCriteria?.min_matches)
+      ? Number(passCriteria.min_matches)
+      : Number.isFinite(ruleConfig?.min_count)
+        ? Number(ruleConfig.min_count)
+        : 1;
 
     const matches: KeywordMatch[] = [];
     let totalMatches = 0;
@@ -74,9 +75,7 @@ export class KeywordCheckEngine {
     for (const keyword of keywords) {
       const flags = caseSensitive ? 'g' : 'gi';
       const escapedKeyword = this.escapeRegex(keyword.trim());
-      const keywordPattern = useWordBoundary
-        ? `\\b${escapedKeyword}\\b`
-        : escapedKeyword;
+      const keywordPattern = useWordBoundary ? `\\b${escapedKeyword}\\b` : escapedKeyword;
       const regex = new RegExp(keywordPattern, flags);
       const keywordMatches = extractedText.match(regex);
       const count = keywordMatches ? keywordMatches.length : 0;
@@ -85,10 +84,7 @@ export class KeywordCheckEngine {
       // Extract snippets (surrounding text)
       const snippets: string[] = [];
       if (count > 0) {
-        const snippetRegex = new RegExp(
-          `.{0,50}${keywordPattern}.{0,50}`,
-          flags,
-        );
+        const snippetRegex = new RegExp(`.{0,50}${keywordPattern}.{0,50}`, flags);
         const snippetMatches = extractedText.match(snippetRegex);
         if (snippetMatches) {
           snippets.push(...snippetMatches.slice(0, 3)); // Limit to 3 snippets per keyword
@@ -111,16 +107,15 @@ export class KeywordCheckEngine {
 
     // Generate message
     let message: string;
-    const summary = matches
-      .map((item) => `${item.keyword}: ${item.count}`)
-      .join(', ');
+    const summary = matches.map((item) => `${item.keyword}: ${item.count}`).join(', ');
     if (meetsMinimum) {
       message = `Found ${totalMatches} keyword matches (required: ${minMatches}). Counts by keyword: ${summary}`;
     } else {
       const missing = matches.filter((item) => item.count === 0).map((item) => item.keyword);
-      message = missing.length > 0
-        ? `Only ${totalMatches} keyword matches found (required: ${minMatches}). Missing keyword(s): ${missing.join(', ')}. Counts: ${summary}`
-        : `Only ${totalMatches} keyword matches found (required: ${minMatches}). Counts by keyword: ${summary}`;
+      message =
+        missing.length > 0
+          ? `Only ${totalMatches} keyword matches found (required: ${minMatches}). Missing keyword(s): ${missing.join(', ')}. Counts: ${summary}`
+          : `Only ${totalMatches} keyword matches found (required: ${minMatches}). Counts by keyword: ${summary}`;
     }
 
     return {

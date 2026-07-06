@@ -1,20 +1,37 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User, UserRole, AuthProvider } from './entities/user.entity';
-import { CreateRoleDefinitionDto, UpdateRoleDefinitionDto, CreateUserDto, UpdateUserDto } from './dto';
+import {
+  CreateRoleDefinitionDto,
+  UpdateRoleDefinitionDto,
+  CreateUserDto,
+  UpdateUserDto,
+} from './dto';
 import { Unit } from '../units/entities/unit.entity';
 import { RoleDefinitionEntity } from './entities/role-definition.entity';
 import { RoleCapability } from './entities/role-capability.entity';
 import { SecurityConfig } from './entities/security-config.entity';
+import { SecurityConfigService } from './security-config.service';
 
-const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'label' | 'description' | 'assignable' | 'isSystem'> & { roleCode?: string | null; technicianType?: string | null }> = [
+const DEFAULT_ROLE_DEFINITIONS: Array<
+  Pick<RoleDefinitionEntity, 'value' | 'label' | 'description' | 'assignable' | 'isSystem'> & {
+    roleCode?: string | null;
+    technicianType?: string | null;
+  }
+> = [
   // ── Core administrative roles ────────────────────────────────────────────
   {
     value: UserRole.SUPER_ADMIN,
     label: 'Super Administrator',
-    description: 'Full system access: manage users, units, issuances, metrics, tickets, documents, and settings.',
+    description:
+      'Full system access: manage users, units, issuances, metrics, tickets, documents, and settings.',
     assignable: false,
     isSystem: true,
     roleCode: null,
@@ -23,7 +40,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.SECTION_HEAD,
     label: 'Section Head',
-    description: 'Unit/section leader. Has access to KPI monitoring, reports, ticket assignment, and incident response statistics across their assigned units.',
+    description:
+      'Unit/section leader. Has access to KPI monitoring, reports, ticket assignment, and incident response statistics across their assigned units.',
     assignable: true,
     isSystem: true,
     roleCode: 'section_head',
@@ -33,7 +51,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.LEAD_INFRA,
     label: 'Lead Network & Infrastructure',
-    description: 'Leads the network and infrastructure team. Responsible for network architecture, server infrastructure, and ICT compliance documentation for their unit.',
+    description:
+      'Leads the network and infrastructure team. Responsible for network architecture, server infrastructure, and ICT compliance documentation for their unit.',
     assignable: true,
     isSystem: true,
     roleCode: 'focal',
@@ -42,7 +61,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.SERVER_ADMIN,
     label: 'Server Administrator',
-    description: 'Manages server infrastructure and operations. Responsible for server compliance documentation and ICT system administration.',
+    description:
+      'Manages server infrastructure and operations. Responsible for server compliance documentation and ICT system administration.',
     assignable: true,
     isSystem: true,
     roleCode: 'focal',
@@ -51,7 +71,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.DB_ADMIN,
     label: 'Database Administrator',
-    description: 'Manages database systems and operations. Responsible for database compliance documentation and data management policies.',
+    description:
+      'Manages database systems and operations. Responsible for database compliance documentation and data management policies.',
     assignable: true,
     isSystem: true,
     roleCode: 'focal',
@@ -60,7 +81,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.NETWORK_ADMIN,
     label: 'Network Administrator',
-    description: 'Manages network systems and connectivity. Responsible for network compliance documentation and infrastructure maintenance.',
+    description:
+      'Manages network systems and connectivity. Responsible for network compliance documentation and infrastructure maintenance.',
     assignable: true,
     isSystem: true,
     roleCode: 'focal',
@@ -69,7 +91,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.PROJECT_MGR,
     label: 'Project Manager',
-    description: 'Manages ICT projects and deliverables. Responsible for project compliance documentation and team coordination.',
+    description:
+      'Manages ICT projects and deliverables. Responsible for project compliance documentation and team coordination.',
     assignable: true,
     isSystem: true,
     roleCode: 'focal',
@@ -78,7 +101,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.DEV_LEAD,
     label: 'Lead Developer',
-    description: 'Leads software development projects. Responsible for development compliance documentation and code quality standards.',
+    description:
+      'Leads software development projects. Responsible for development compliance documentation and code quality standards.',
     assignable: true,
     isSystem: true,
     roleCode: 'focal',
@@ -87,7 +111,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.SQA_LEAD,
     label: 'Lead SQA',
-    description: 'Leads software quality assurance activities. Responsible for QA compliance documentation and testing standards.',
+    description:
+      'Leads software quality assurance activities. Responsible for QA compliance documentation and testing standards.',
     assignable: true,
     isSystem: true,
     roleCode: 'focal',
@@ -96,7 +121,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.RECORDS_OFFICER,
     label: 'Records Officer',
-    description: 'Manages records and documentation. Responsible for records management compliance and document retention policies.',
+    description:
+      'Manages records and documentation. Responsible for records management compliance and document retention policies.',
     assignable: true,
     isSystem: true,
     roleCode: 'focal',
@@ -105,7 +131,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.HR_ID_OFFICER,
     label: 'HRIS & ID Officer',
-    description: 'Manages HR information systems and ID issuance. Responsible for HRIS compliance documentation and personnel data management.',
+    description:
+      'Manages HR information systems and ID issuance. Responsible for HRIS compliance documentation and personnel data management.',
     assignable: true,
     isSystem: true,
     roleCode: 'focal',
@@ -115,7 +142,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.COMPLIANCE_OFFICER,
     label: 'Compliance Officer',
-    description: 'Reviews and tags documents as compliant, non-compliant, or for revision. Manages issuances, KPI monitoring, MoV artifacts, and compliance reports.',
+    description:
+      'Reviews and tags documents as compliant, non-compliant, or for revision. Manages issuances, KPI monitoring, MoV artifacts, and compliance reports.',
     assignable: true,
     isSystem: true,
     roleCode: 'compliance_officer',
@@ -124,7 +152,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.CYBERSEC,
     label: 'Cybersecurity Officer',
-    description: 'Manages cybersecurity operations and incident response. Has compliance officer access plus cybersecurity and incident dashboard.',
+    description:
+      'Manages cybersecurity operations and incident response. Has compliance officer access plus cybersecurity and incident dashboard.',
     assignable: true,
     isSystem: true,
     roleCode: 'cybersecurity_officer',
@@ -133,7 +162,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.INFOSEC,
     label: 'Information Security Officer',
-    description: 'Manages information security policies and incident response. Has compliance officer access plus information security and incident dashboard.',
+    description:
+      'Manages information security policies and incident response. Has compliance officer access plus information security and incident dashboard.',
     assignable: true,
     isSystem: true,
     roleCode: 'cybersecurity_officer',
@@ -143,7 +173,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.DESKTOP_SR,
     label: 'Senior Desktop Engineer',
-    description: 'Handles all desktop/hardware support tickets: workstations, printers, peripherals, and hardware troubleshooting. Sees all desktop support tickets.',
+    description:
+      'Handles all desktop/hardware support tickets: workstations, printers, peripherals, and hardware troubleshooting. Sees all desktop support tickets.',
     assignable: true,
     isSystem: true,
     roleCode: null,
@@ -152,7 +183,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.IT_SUPPORT_SR,
     label: 'Senior IT Support Specialist',
-    description: 'Handles all IT/software support tickets: software, network, internet connectivity, and system-level issues. Sees all IT support tickets.',
+    description:
+      'Handles all IT/software support tickets: software, network, internet connectivity, and system-level issues. Sees all IT support tickets.',
     assignable: true,
     isSystem: true,
     roleCode: null,
@@ -161,7 +193,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.DESKTOP_JR,
     label: 'Junior Desktop Engineer',
-    description: 'Handles desktop/hardware support tickets assigned to them. Escalates complex issues to senior engineers.',
+    description:
+      'Handles desktop/hardware support tickets assigned to them. Escalates complex issues to senior engineers.',
     assignable: true,
     isSystem: true,
     roleCode: null,
@@ -170,7 +203,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.IT_SUPPORT_JR,
     label: 'IT Support Specialist',
-    description: 'Handles IT/software support tickets assigned to them. Escalates complex issues to senior specialists.',
+    description:
+      'Handles IT/software support tickets assigned to them. Escalates complex issues to senior specialists.',
     assignable: true,
     isSystem: true,
     roleCode: null,
@@ -179,7 +213,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.PANTAWID_ICT,
     label: 'Pantawid ICT Support',
-    description: 'Handles Pantawid Pamilyang Pilipino Program (4Ps) ICT support requests exclusively.',
+    description:
+      'Handles Pantawid Pamilyang Pilipino Program (4Ps) ICT support requests exclusively.',
     assignable: true,
     isSystem: true,
     roleCode: null,
@@ -189,7 +224,8 @@ const DEFAULT_ROLE_DEFINITIONS: Array<Pick<RoleDefinitionEntity, 'value' | 'labe
   {
     value: UserRole.USER,
     label: 'Regular User',
-    description: 'External or non-staff user. Can submit help desk tickets and view their own ticket history. No access to compliance modules.',
+    description:
+      'External or non-staff user. Can submit help desk tickets and view their own ticket history. No access to compliance modules.',
     assignable: true,
     isSystem: true,
     roleCode: null,
@@ -214,6 +250,7 @@ export class UsersService {
     private readonly roleCapabilitiesRepository: Repository<RoleCapability>,
     @InjectRepository(SecurityConfig)
     private readonly configRepository: Repository<SecurityConfig>,
+    private readonly securityConfigService: SecurityConfigService,
   ) {
     if (!this.isDbBootstrapEnabled()) {
       return;
@@ -246,13 +283,16 @@ export class UsersService {
       isItSupport,
       isPantawidIct,
       isIto: isCyberRole,
-      isEscalationFocal: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
-      isTicketSettingsFocal: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
+      isEscalationFocal:
+        isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
+      isTicketSettingsFocal:
+        isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
       isAllTickets: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
       isTicketFocal: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
       isKpiAccess: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
       isKpiManage: isSuperAdmin || isSectionHead || isComplianceRole,
-      isAttendanceAccess: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal || isTech,
+      isAttendanceAccess:
+        isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal || isTech,
       isAttendanceManage: isSuperAdmin || isSectionHead || isComplianceRole || isFocal || isTech,
       isReportsAccess: isSuperAdmin || isComplianceRole,
       isReviewsAccess: isSuperAdmin || isComplianceRole || isCyberRole,
@@ -274,7 +314,9 @@ export class UsersService {
     const missing = roleDefs.filter((role) => !existingRoleValues.has(role.value));
 
     if (missing.length > 0) {
-      await this.roleCapabilitiesRepository.save(missing.map((role) => this.buildCapabilitySeed(role)));
+      await this.roleCapabilitiesRepository.save(
+        missing.map((role) => this.buildCapabilitySeed(role)),
+      );
     }
   }
 
@@ -350,7 +392,9 @@ export class UsersService {
       if (role.isSystem) {
         throw new BadRequestException('System role codes cannot be changed.');
       }
-      const codeExists = await this.roleDefinitionsRepository.findOne({ where: { value: dto.value } });
+      const codeExists = await this.roleDefinitionsRepository.findOne({
+        where: { value: dto.value },
+      });
       if (codeExists) {
         throw new ConflictException(`Role code '${dto.value}' is already in use.`);
       }
@@ -384,7 +428,9 @@ export class UsersService {
       throw new NotFoundException(`Role definition '${value}' not found`);
     }
     if (role.isSystem) {
-      throw new BadRequestException(`System role '${value}' cannot be deleted. Only custom roles can be removed.`);
+      throw new BadRequestException(
+        `System role '${value}' cannot be deleted. Only custom roles can be removed.`,
+      );
     }
     await this.roleDefinitionsRepository.remove(role);
     await this.roleCapabilitiesRepository.delete({ roleValue: value });
@@ -411,16 +457,26 @@ export class UsersService {
         existingUser.role = createUserDto.role ?? existingUser.role;
         if (createUserDto.firstName !== undefined) existingUser.firstName = createUserDto.firstName;
         if (createUserDto.lastName !== undefined) existingUser.lastName = createUserDto.lastName;
-        if ((createUserDto as any).middleName !== undefined) existingUser.middleName = (createUserDto as any).middleName;
-        if ((createUserDto as any).suffix !== undefined) existingUser.suffix = (createUserDto as any).suffix;
-        if ((createUserDto as any).staffId !== undefined) existingUser.staffId = (createUserDto as any).staffId;
-        if ((createUserDto as any).position !== undefined) existingUser.position = (createUserDto as any).position;
-        if ((createUserDto as any).positionFull !== undefined) existingUser.positionFull = (createUserDto as any).positionFull;
-        if ((createUserDto as any).designation !== undefined) existingUser.designation = (createUserDto as any).designation;
-        if ((createUserDto as any).ticketMainFocal !== undefined) existingUser.ticketMainFocal = Boolean((createUserDto as any).ticketMainFocal);
-        if ((createUserDto as any).ticketTechnician !== undefined) existingUser.ticketTechnician = Boolean((createUserDto as any).ticketTechnician);
+        if ((createUserDto as any).middleName !== undefined)
+          existingUser.middleName = (createUserDto as any).middleName;
+        if ((createUserDto as any).suffix !== undefined)
+          existingUser.suffix = (createUserDto as any).suffix;
+        if ((createUserDto as any).staffId !== undefined)
+          existingUser.staffId = (createUserDto as any).staffId;
+        if ((createUserDto as any).position !== undefined)
+          existingUser.position = (createUserDto as any).position;
+        if ((createUserDto as any).positionFull !== undefined)
+          existingUser.positionFull = (createUserDto as any).positionFull;
+        if ((createUserDto as any).designation !== undefined)
+          existingUser.designation = (createUserDto as any).designation;
+        if ((createUserDto as any).ticketMainFocal !== undefined)
+          existingUser.ticketMainFocal = Boolean((createUserDto as any).ticketMainFocal);
+        if ((createUserDto as any).ticketTechnician !== undefined)
+          existingUser.ticketTechnician = Boolean((createUserDto as any).ticketTechnician);
         if (createUserDto.unitIds && createUserDto.unitIds.length > 0) {
-          existingUser.units = await this.unitsRepository.find({ where: { id: In(createUserDto.unitIds) } });
+          existingUser.units = await this.unitsRepository.find({
+            where: { id: In(createUserDto.unitIds) },
+          });
         }
         return this.usersRepository.save(existingUser);
       }
@@ -478,7 +534,7 @@ export class UsersService {
       }
 
       const users = await this.usersRepository.find();
-      return users.map((user) => ({ ...user, units: [] } as User));
+      return users.map((user) => ({ ...user, units: [] }) as User);
     }
   }
 
@@ -542,8 +598,28 @@ export class UsersService {
     await this.usersRepository.update(userId, { lastLogin: new Date() } as Partial<User>);
   }
 
+  async updateMfaCode(userId: number, code: string, expiresAt: Date): Promise<void> {
+    await this.usersRepository.update(userId, {
+      mfaCode: code,
+      mfaCodeExpiresAt: expiresAt,
+    });
+  }
+
+  async markMfaVerified(userId: number): Promise<void> {
+    await this.usersRepository.update(userId, {
+      mfaCode: null,
+      mfaCodeExpiresAt: null,
+      mfaLastVerifiedAt: new Date(),
+    });
+  }
+
   /** Autocomplete: find registered emails that start with (or contain) a query string */
-  async searchEmails(query: string, limit = 10): Promise<Array<{ id: number; email: string; firstName: string; lastName: string; role: string }>> {
+  async searchEmails(
+    query: string,
+    limit = 10,
+  ): Promise<
+    Array<{ id: number; email: string; firstName: string; lastName: string; role: string }>
+  > {
     if (!query || query.trim().length < 2) return [];
     const clean = `%${query.trim().toLowerCase()}%`;
     const rows = await this.usersRepository
@@ -566,16 +642,18 @@ export class UsersService {
    * Cross-database compatible user listing.
    * Works with physical tables or passthrough views depending on split-db deployment state.
    */
-  async getFederatedUsers(): Promise<Array<{
-    id: number;
-    email: string;
-    firstName: string;
-    lastName: string;
-    role: string;
-    active: boolean;
-    unitIds: number[];
-    unitNames: string[];
-  }>> {
+  async getFederatedUsers(): Promise<
+    Array<{
+      id: number;
+      email: string;
+      firstName: string;
+      lastName: string;
+      role: string;
+      active: boolean;
+      unitIds: number[];
+      unitNames: string[];
+    }>
+  > {
     const rows = await this.usersRepository.query(`
       SELECT
         u.id,
@@ -649,7 +727,8 @@ export class UsersService {
       throw new ConflictException('User with this email already exists');
     }
 
-    const passwordToHash = payload.defaultPassword || `google-oauth-${payload.googleSub}-${Date.now()}`;
+    const passwordToHash =
+      payload.defaultPassword || `google-oauth-${payload.googleSub}-${Date.now()}`;
     const passwordHash = await bcrypt.hash(passwordToHash, 10);
 
     const user = this.usersRepository.create({
@@ -682,6 +761,8 @@ export class UsersService {
     if (dto.middleName !== undefined) user.middleName = dto.middleName;
     if (dto.lastName) user.lastName = dto.lastName;
     if (dto.suffix !== undefined) user.suffix = dto.suffix;
+    if (dto.phoneNumber !== undefined) user.phoneNumber = dto.phoneNumber;
+    if (dto.sex !== undefined) user.sex = dto.sex;
     if (dto.position !== undefined) user.position = dto.position;
     if (dto.positionFull !== undefined) user.positionFull = dto.positionFull;
     if (dto.designation !== undefined) user.designation = dto.designation;
@@ -689,6 +770,10 @@ export class UsersService {
     if (dto.ticketTechnician !== undefined) user.ticketTechnician = Boolean(dto.ticketTechnician);
     if (dto.role) user.role = dto.role;
     if ((dto as any).active !== undefined) user.active = (dto as any).active;
+    
+    if (dto.password) {
+      user.passwordHash = await bcrypt.hash(dto.password, 10);
+    }
 
     // Update units if provided
     if (dto.unitIds) {
@@ -713,9 +798,10 @@ export class UsersService {
 
   async resetPassword(id: number): Promise<User> {
     const user = await this.findOne(id);
-    let config = await this.configRepository.findOne({ where: { id: 1 } });
-    const defaultPassword = config?.defaultPassword || 'Changeme123!';
+    const securityConfig = await this.securityConfigService.getConfig();
+    const defaultPassword = securityConfig?.defaultPassword || 'Changeme123!@#';
     user.passwordHash = await bcrypt.hash(defaultPassword, 10);
+
     return await this.usersRepository.save(user);
   }
 }

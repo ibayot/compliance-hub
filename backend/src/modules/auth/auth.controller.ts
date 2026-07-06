@@ -41,6 +41,18 @@ export class AuthController {
     return this.authService.getProfile(user.id);
   }
 
+  @Post('mfa/send')
+  @UseGuards(JwtAuthGuard)
+  async sendMfaCode(@CurrentUser() user: User) {
+    return this.authService.sendMfaCode(user.id);
+  }
+
+  @Post('mfa/verify')
+  @UseGuards(JwtAuthGuard)
+  async verifyMfaCode(@CurrentUser() user: User, @Body('code') code: string) {
+    return this.authService.verifyMfaCode(user.id, code);
+  }
+
   @Post('logout')
   @UseGuards(JwtAuthGuard)
   async logout() {
@@ -51,23 +63,13 @@ export class AuthController {
 
   @Post('change-password')
   @UseGuards(JwtAuthGuard)
-  async changePassword(
-    @CurrentUser() user: User,
-    @Body() dto: ChangePasswordDto,
-  ) {
-    return this.authService.changePassword(
-      user.id,
-      dto.currentPassword,
-      dto.newPassword,
-    );
+  async changePassword(@CurrentUser() user: User, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(user.id, dto.currentPassword, dto.newPassword);
   }
 
   @Post('reauthenticate')
   @UseGuards(JwtAuthGuard)
-  async reauthenticate(
-    @CurrentUser() user: User,
-    @Body('password') password: string,
-  ) {
+  async reauthenticate(@CurrentUser() user: User, @Body('password') password: string) {
     return this.authService.reauthenticate(user.id, password);
   }
 }

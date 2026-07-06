@@ -11,12 +11,10 @@ import { DataSource, Repository } from 'typeorm';
 import { Document, DocumentStatus } from '../entities/document.entity';
 import { DocumentVersion } from '../entities/document-version.entity';
 import { StorageService } from './storage.service';
+import { UnitsHttpClient } from '../../../common/http-clients/units.http-client';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
-import {
-  DocumentAssignment,
-  SubmissionFrequency,
-} from '../entities/document-assignment.entity';
+import { DocumentAssignment, SubmissionFrequency } from '../entities/document-assignment.entity';
 import { UserRole } from '../../users/entities/user.entity';
 import { ManualReview, ReviewDecision } from '../../reviews/entities/manual-review.entity';
 import { DocumentReference } from '../entities/document-reference.entity';
@@ -136,6 +134,7 @@ export class DocumentService implements OnModuleInit {
     private dataSource: DataSource,
     private readonly roleCapSvc: RoleCapabilitiesService,
     private readonly usersHttpClient: UsersHttpClient,
+    private readonly unitsHttpClient: UnitsHttpClient,
   ) {}
 
   private async enrichUsersById(userIds: number[]): Promise<Map<number, UserStub | null>> {
@@ -152,7 +151,9 @@ export class DocumentService implements OnModuleInit {
     return map;
   }
 
-  private async enrichAssignmentsUsers(assignments: DocumentAssignment[]): Promise<DocumentAssignment[]> {
+  private async enrichAssignmentsUsers(
+    assignments: DocumentAssignment[],
+  ): Promise<DocumentAssignment[]> {
     const userMap = await this.enrichUsersById(assignments.map((a) => Number(a.user_id)));
     assignments.forEach((assignment) => {
       assignment.user = userMap.get(Number(assignment.user_id)) ?? null;
@@ -160,17 +161,16 @@ export class DocumentService implements OnModuleInit {
     return assignments;
   }
 
-  private async enrichReferenceCreators(references: DocumentReference[]): Promise<DocumentReference[]> {
+  private async enrichReferenceCreators(
+    references: DocumentReference[],
+  ): Promise<DocumentReference[]> {
     const userMap = await this.enrichUsersById(
-      references
-        .map((ref) => Number(ref.created_by))
-        .filter((id) => Number.isFinite(id) && id > 0),
+      references.map((ref) => Number(ref.created_by)).filter((id) => Number.isFinite(id) && id > 0),
     );
     references.forEach((reference) => {
       const creatorId = Number(reference.created_by);
-      reference.creator = Number.isFinite(creatorId) && creatorId > 0
-        ? userMap.get(creatorId) ?? null
-        : null;
+      reference.creator =
+        Number.isFinite(creatorId) && creatorId > 0 ? (userMap.get(creatorId) ?? null) : null;
     });
     return references;
   }
@@ -211,9 +211,7 @@ export class DocumentService implements OnModuleInit {
       throw new NotFoundException('Version not found for inline processing');
     }
 
-    const fileBuffer =
-      version.file_blob ??
-      (await this.storageService.readFile(version.file_path));
+    const fileBuffer = version.file_blob ?? (await this.storageService.readFile(version.file_path));
 
     if (!version.file_blob) {
       await this.versionRepo.update(versionId, { file_blob: fileBuffer });
@@ -283,11 +281,7 @@ export class DocumentService implements OnModuleInit {
     }
   }
 
-  private kickOffProcessOrFallback(
-    documentId: string,
-    versionId: string,
-    source: string,
-  ): void {
+  private kickOffProcessOrFallback(documentId: string, versionId: string, source: string): void {
     void this.enqueueProcessOrFallback(documentId, versionId, source).catch(async (error: any) => {
       this.logger.error(
         `${source}: background processing failed for document ${documentId}: ${error?.message || 'unknown error'}`,
@@ -380,7 +374,9 @@ export class DocumentService implements OnModuleInit {
         .getMany();
 
       if (stuckDocs.length > 0) {
-        this.logger.log(`Startup recovery: found ${stuckDocs.length} stuck document(s) — re-queuing`);
+        this.logger.log(
+          `Startup recovery: found ${stuckDocs.length} stuck document(s) — re-queuing`,
+        );
         for (const doc of stuckDocs) {
           const version = doc.versions?.find((v) => v.version_number === doc.current_version);
           if (!version) {
@@ -394,10 +390,16 @@ export class DocumentService implements OnModuleInit {
               await this.enqueueMetricsOrFallback(version.id, `Startup recovery doc=${doc.id}`);
             } else {
               // No extracted text — full reprocess needed
-              await this.enqueueProcessOrFallback(doc.id, version.id, `Startup recovery doc=${doc.id}`);
+              await this.enqueueProcessOrFallback(
+                doc.id,
+                version.id,
+                `Startup recovery doc=${doc.id}`,
+              );
             }
           } catch (innerErr) {
-            this.logger.warn(`Startup recovery: error processing doc ${doc.id}: ${innerErr?.message}`);
+            this.logger.warn(
+              `Startup recovery: error processing doc ${doc.id}: ${innerErr?.message}`,
+            );
           }
         }
       }
@@ -408,10 +410,14 @@ export class DocumentService implements OnModuleInit {
     // v0.0.31: Ensure role_capabilities VIEW exists in this DB (failsafe for pre-migration deploy)
     try {
       const usersDb = process.env.USERS_DB_DATABASE || 'compliance_hub_users';
-      await this.dataSource.query(`CREATE OR REPLACE VIEW role_capabilities AS SELECT * FROM \`${usersDb}\`.role_capabilities`);
+      await this.dataSource.query(
+        `CREATE OR REPLACE VIEW role_capabilities AS SELECT * FROM \`${usersDb}\`.role_capabilities`,
+      );
       await this.roleCapSvc.reload();
     } catch (err: any) {
-      this.logger.warn(`role_capabilities view setup failed (non-fatal — run v0.0.31 migration): ${err?.message}`);
+      this.logger.warn(
+        `role_capabilities view setup failed (non-fatal — run v0.0.31 migration): ${err?.message}`,
+      );
     }
   }
 
@@ -429,10 +435,16 @@ export class DocumentService implements OnModuleInit {
       .addOrderBy('review.reviewed_at', 'DESC')
       .getMany();
 
-    const latestMap = new Map<string, { decision: ReviewDecision | 'pending'; remarks: string | null }>();
+    const latestMap = new Map<
+      string,
+      { decision: ReviewDecision | 'pending'; remarks: string | null }
+    >();
     for (const review of reviews) {
       if (!latestMap.has(review.document_id)) {
-        latestMap.set(review.document_id, { decision: review.decision, remarks: review.remarks ?? null });
+        latestMap.set(review.document_id, {
+          decision: review.decision,
+          remarks: review.remarks ?? null,
+        });
       }
     }
 
@@ -572,10 +584,7 @@ export class DocumentService implements OnModuleInit {
     }
   }
 
-  private async validateFocalSubmission(
-    dto: UploadDocumentDto,
-    fileName: string,
-  ): Promise<void> {
+  private async validateFocalSubmission(dto: UploadDocumentDto, fileName: string): Promise<void> {
     const normalizedType = this.normalizeDocumentType(dto.document_type);
 
     const assignment = await this.assignmentRepo.findOne({
@@ -624,11 +633,7 @@ export class DocumentService implements OnModuleInit {
       }
     }
 
-    const expectedBase = this.buildExpectedFileBase(
-      assignment,
-      dto.period,
-      dto.year,
-    );
+    const expectedBase = this.buildExpectedFileBase(assignment, dto.period, dto.year);
 
     if (expectedBase) {
       const uploadedBase = fileName.replace(/\.(docx|pdf)$/i, '').toUpperCase();
@@ -679,7 +684,10 @@ export class DocumentService implements OnModuleInit {
 
       // Use client-supplied year/period (late submission support); fall back to current date
       let expectedFilename: string;
-      if (metadata.year && (metadata.period || reportorialDocType.submission_frequency === 'annual')) {
+      if (
+        metadata.year &&
+        (metadata.period || reportorialDocType.submission_frequency === 'annual')
+      ) {
         expectedFilename = ReportorialDocTypeService.computeExpectedFilenameFromParts(
           reportorialDocType,
           metadata.year,
@@ -697,13 +705,14 @@ export class DocumentService implements OnModuleInit {
       }
       finalDocumentType = reportorialDocType.display_name;
       // Compute the canonical period suffix using the same parts
-      const suffix = (metadata.year && (metadata.period || reportorialDocType.submission_frequency === 'annual'))
-        ? ReportorialDocTypeService.computePeriodSuffixFromParts(
-            reportorialDocType.submission_frequency,
-            metadata.year,
-            metadata.period || '',
-          )
-        : ReportorialDocTypeService.computePeriodSuffix(reportorialDocType.submission_frequency);
+      const suffix =
+        metadata.year && (metadata.period || reportorialDocType.submission_frequency === 'annual')
+          ? ReportorialDocTypeService.computePeriodSuffixFromParts(
+              reportorialDocType.submission_frequency,
+              metadata.year,
+              metadata.period || '',
+            )
+          : ReportorialDocTypeService.computePeriodSuffix(reportorialDocType.submission_frequency);
       finalPeriod = suffix;
       finalYear = metadata.year || String(new Date().getFullYear());
     }
@@ -752,9 +761,10 @@ export class DocumentService implements OnModuleInit {
     );
 
     // Create document entity — use the display name as the title for reportorial uploads
-    const finalTitle = metadata.reportorial_doc_type_id && reportorialDocType
-      ? reportorialDocType.display_name
-      : persistedMetadata.title;
+    const finalTitle =
+      metadata.reportorial_doc_type_id && reportorialDocType
+        ? reportorialDocType.display_name
+        : persistedMetadata.title;
 
     const extractedText = await this.extractInitialText(file);
     const document: Document = this.documentRepo.create({
@@ -763,7 +773,9 @@ export class DocumentService implements OnModuleInit {
       document_type: finalDocumentType,
       period: finalPeriod || persistedMetadata.period,
       year: finalYear || persistedMetadata.year,
-      reportorial_doc_type_id: metadata.reportorial_doc_type_id ? Number(metadata.reportorial_doc_type_id) : null,
+      reportorial_doc_type_id: metadata.reportorial_doc_type_id
+        ? Number(metadata.reportorial_doc_type_id)
+        : null,
       status: DocumentStatus.PENDING,
       current_version: 1,
       extracted_text: extractedText,
@@ -793,11 +805,7 @@ export class DocumentService implements OnModuleInit {
       this.kickOffMetricsOrFallback(version.id, `Upload document=${document.id}`);
     } else {
       // Queue document processing job in background so upload response is not blocked
-      this.kickOffProcessOrFallback(
-        document.id,
-        version.id,
-        `Upload document=${document.id}`,
-      );
+      this.kickOffProcessOrFallback(document.id, version.id, `Upload document=${document.id}`);
     }
 
     this.logger.log(`Document uploaded: ${document.id}`);
@@ -813,7 +821,9 @@ export class DocumentService implements OnModuleInit {
   async uploadGoogleDoc(dto: UploadGoogleDocDto): Promise<Document> {
     const documentId = this.extractGoogleDocId(dto.google_doc_url);
     if (!documentId) {
-      throw new BadRequestException('Invalid Google Docs URL. Use a valid docs.google.com/document link.');
+      throw new BadRequestException(
+        'Invalid Google Docs URL. Use a valid docs.google.com/document link.',
+      );
     }
 
     const exportUrl = `https://docs.google.com/document/d/${documentId}/export?format=docx`;
@@ -828,7 +838,9 @@ export class DocumentService implements OnModuleInit {
       });
 
       if (!response.ok) {
-        throw new BadRequestException('Unable to export Google Doc. Ensure the document is accessible for export.');
+        throw new BadRequestException(
+          'Unable to export Google Doc. Ensure the document is accessible for export.',
+        );
       }
 
       const arrayBuffer = await response.arrayBuffer();
@@ -850,7 +862,9 @@ export class DocumentService implements OnModuleInit {
 
     const normalizedName = (dto.file_name || '').trim();
     const fileName = normalizedName
-      ? (normalizedName.toLowerCase().endsWith('.docx') ? normalizedName : `${normalizedName}.docx`)
+      ? normalizedName.toLowerCase().endsWith('.docx')
+        ? normalizedName
+        : `${normalizedName}.docx`
       : `google-doc-${documentId}.docx`;
 
     const file = {
@@ -927,8 +941,8 @@ export class DocumentService implements OnModuleInit {
 
     const query = this.documentRepo
       .createQueryBuilder('doc')
-      .leftJoinAndSelect('doc.unit', 'unit')
-      .leftJoinAndSelect('doc.uploader', 'uploader')
+      
+      
       // archived mode shows soft-deleted docs for the owning focal; normal mode shows active docs
       .where('doc.is_deleted = :isDeleted', { isDeleted: archived ? true : false });
 
@@ -983,7 +997,9 @@ export class DocumentService implements OnModuleInit {
 
     const [data, total] = await query.getManyAndCount();
     if (!canUseIssuanceLinks) {
-      data.forEach((doc) => { (doc as any).issuances = []; });
+      data.forEach((doc) => {
+        (doc as any).issuances = [];
+      });
     }
     const enriched = await this.enrichDocumentsForWorkflow(data);
 
@@ -1070,10 +1086,7 @@ export class DocumentService implements OnModuleInit {
     return this.referenceRepo.save(reference);
   }
 
-  async unlinkDocumentReference(
-    sourceDocumentId: string,
-    targetDocumentId: string,
-  ): Promise<void> {
+  async unlinkDocumentReference(sourceDocumentId: string, targetDocumentId: string): Promise<void> {
     const result = await this.referenceRepo.delete({
       source_document_id: sourceDocumentId,
       target_document_id: targetDocumentId,
@@ -1093,9 +1106,7 @@ export class DocumentService implements OnModuleInit {
       .orderBy('doc.document_type', 'ASC')
       .getRawMany<{ document_type: string }>();
 
-    const discovered = rows
-      .map((row) => row.document_type)
-      .filter(Boolean);
+    const discovered = rows.map((row) => row.document_type).filter(Boolean);
 
     return Array.from(new Set([...defaults, ...discovered]));
   }
@@ -1142,7 +1153,7 @@ export class DocumentService implements OnModuleInit {
   }): Promise<DocumentAssignment[]> {
     const qb = this.assignmentRepo
       .createQueryBuilder('assignment')
-      .leftJoinAndSelect('assignment.unit', 'unit');
+      ;
 
     if (filters?.user_id) {
       qb.andWhere('assignment.user_id = :userId', { userId: filters.user_id });
@@ -1496,12 +1507,20 @@ export class DocumentService implements OnModuleInit {
       // Text already extracted — skip file processing, just re-run metrics
       await this.documentRepo.update(documentId, { status: DocumentStatus.READY });
       await this.enqueueMetricsOrFallback(currentVersion.id, `Reprocess document=${documentId}`);
-      this.logger.log(`Document metrics re-queued (text exists): ${documentId} version=${currentVersion.id}`);
+      this.logger.log(
+        `Document metrics re-queued (text exists): ${documentId} version=${currentVersion.id}`,
+      );
     } else {
       // No extracted text — full reprocess
       await this.documentRepo.update(documentId, { status: DocumentStatus.PENDING });
-      await this.enqueueProcessOrFallback(document.id, currentVersion.id, `Reprocess document=${documentId}`);
-      this.logger.log(`Document full-reprocess enqueued: ${documentId} version=${currentVersion.id}`);
+      await this.enqueueProcessOrFallback(
+        document.id,
+        currentVersion.id,
+        `Reprocess document=${documentId}`,
+      );
+      this.logger.log(
+        `Document full-reprocess enqueued: ${documentId} version=${currentVersion.id}`,
+      );
     }
   }
 
@@ -1516,9 +1535,25 @@ export class DocumentService implements OnModuleInit {
     const monthly = /^(\d{4})(\d{2})$/.exec(p);
     if (monthly) {
       const month = parseInt(monthly[2], 10);
-      const names = ['January', 'February', 'March', 'April', 'May', 'June',
-                     'July', 'August', 'September', 'October', 'November', 'December'];
-      return { key: `month-${monthly[2]}`, label: names[month - 1] || `Month ${month}`, sortOrder: month };
+      const names = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December',
+      ];
+      return {
+        key: `month-${monthly[2]}`,
+        label: names[month - 1] || `Month ${month}`,
+        sortOrder: month,
+      };
     }
 
     // Range: "202601-03" → Q1
@@ -1527,8 +1562,20 @@ export class DocumentService implements OnModuleInit {
       const startM = parseInt(range[2], 10);
       const endM = parseInt(range[3], 10);
       const q = Math.ceil(startM / 3);
-      const startName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const startName = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
       return {
         key: `q${q}`,
         label: `Q${q} (${startName[startM - 1]}–${startName[endM - 1]})`,
@@ -1556,7 +1603,10 @@ export class DocumentService implements OnModuleInit {
    * Return all non-deleted documents grouped by year → period-bucket.
    * FOCAL users see only their own uploads; admins/reviewers see all.
    */
-  async getRepository(actorRole: UserRole, actorId: number): Promise<{
+  async getRepository(
+    actorRole: UserRole,
+    actorId: number,
+  ): Promise<{
     years: Array<{
       year: string;
       buckets: Array<{
@@ -1569,8 +1619,8 @@ export class DocumentService implements OnModuleInit {
   }> {
     const qb = this.documentRepo
       .createQueryBuilder('doc')
-      .leftJoinAndSelect('doc.unit', 'unit')
-      .leftJoinAndSelect('doc.uploader', 'uploader')
+      
+      
       .where('doc.is_deleted = :d', { d: false })
       .andWhere('doc.status = :readyStatus', { readyStatus: DocumentStatus.READY });
 
@@ -1586,7 +1636,10 @@ export class DocumentService implements OnModuleInit {
     );
 
     // Group: year → bucket-key → { label, sortOrder, documents[] }
-    const yearMap = new Map<string, Map<string, { label: string; sortOrder: number; documents: Document[] }>>();
+    const yearMap = new Map<
+      string,
+      Map<string, { label: string; sortOrder: number; documents: Document[] }>
+    >();
 
     for (const doc of enriched) {
       const y = doc.year || String(new Date((doc as any).created_at).getFullYear());
@@ -1602,11 +1655,59 @@ export class DocumentService implements OnModuleInit {
       .map((year) => ({
         year,
         buckets: [...yearMap.get(year)!.entries()]
-          .map(([key, v]) => ({ key, label: v.label, count: v.documents.length, documents: v.documents, sortOrder: v.sortOrder }))
+          .map(([key, v]) => ({
+            key,
+            label: v.label,
+            count: v.documents.length,
+            documents: v.documents,
+            sortOrder: v.sortOrder,
+          }))
           .sort((a, b) => a.sortOrder - b.sortOrder)
           .map(({ sortOrder: _sortOrder, ...rest }) => rest),
       }));
 
     return { years };
+  }
+
+  public async hydrateDocuments(documents: Document[]): Promise<Document[]> {
+    if (!documents?.length) return documents;
+
+    const userIds = new Set<number>();
+    const unitIds = new Set<number>();
+
+    documents.forEach(doc => {
+      if (doc.uploaded_by) userIds.add(doc.uploaded_by);
+      if (doc.unit_id) unitIds.add(doc.unit_id);
+    });
+
+    const [allUsers, allUnits] = await Promise.all([
+      this.usersHttpClient.getUsers().catch(() => []),
+      this.unitsHttpClient.getUnits().catch(() => []),
+    ]);
+
+    const userMap = new Map<number, any>(allUsers.map((u: any) => [u.id, u]));
+    const unitMap = new Map<number, any>(allUnits.map((u: any) => [u.id, u]));
+
+    documents.forEach(doc => {
+      if (doc.uploaded_by) {
+        doc.uploader = userMap.get(doc.uploaded_by) || undefined;
+      }
+      if (doc.unit_id) {
+        doc.unit = unitMap.get(doc.unit_id) || undefined;
+      }
+    });
+
+    return documents;
+  }
+
+  private async hydrateAssignments(assignments: DocumentAssignment[]): Promise<DocumentAssignment[]> {
+    if (!assignments?.length) return assignments;
+    const unitIds = new Set(assignments.map(a => a.unit_id));
+    const allUnits = await this.unitsHttpClient.getUnits().catch(() => []);
+    const unitMap = new Map<number, any>(allUnits.map((u: any) => [u.id, u]));
+    assignments.forEach(a => {
+      a.unit = unitMap.get(a.unit_id) || undefined;
+    });
+    return assignments;
   }
 }

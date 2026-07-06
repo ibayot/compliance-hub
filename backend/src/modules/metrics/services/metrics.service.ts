@@ -39,17 +39,21 @@ export class MetricsService {
       return result.message || 'Automated validation failed.';
     }
 
-    const checks = Array.isArray(result.evidence?.checks)
-      ? result.evidence.checks
-      : [];
+    const checks = Array.isArray(result.evidence?.checks) ? result.evidence.checks : [];
 
-    const failedChecks = checks.filter((check: any) => check?.matches === false && check?.extracted !== null && check?.extracted !== undefined);
+    const failedChecks = checks.filter(
+      (check: any) =>
+        check?.matches === false && check?.extracted !== null && check?.extracted !== undefined,
+    );
     if (failedChecks.length === 0) {
       return result.message || 'Automated validation failed.';
     }
 
     return failedChecks
-      .map((check: any) => `${check.keyword}: ${check.extracted} did not satisfy ${this.toOperatorSymbol(check.comparison)} ${check.expected}`)
+      .map(
+        (check: any) =>
+          `${check.keyword}: ${check.extracted} did not satisfy ${this.toOperatorSymbol(check.comparison)} ${check.expected}`,
+      )
       .join('; ');
   }
 
@@ -80,14 +84,26 @@ export class MetricsService {
     documentType: string,
     reportorialDocTypeId?: number | null,
   ): Promise<MetricTemplate[]> {
-    const qb = this.applicabilityRepo.createQueryBuilder('app')
+    const qb = this.applicabilityRepo
+      .createQueryBuilder('app')
       .leftJoinAndSelect('app.metric_template', 'template')
       // unit+doctype exact match (legacy style)
-      .where('(app.unit_id = :unitId AND app.document_type = :documentType AND app.reportorial_doc_type_id IS NULL)', { unitId, documentType })
-      .orWhere('(app.unit_id = :unitId AND app.document_type IS NULL AND app.reportorial_doc_type_id IS NULL)', { unitId })
-      .orWhere('(app.unit_id IS NULL AND app.document_type = :documentType AND app.reportorial_doc_type_id IS NULL)', { documentType })
+      .where(
+        '(app.unit_id = :unitId AND app.document_type = :documentType AND app.reportorial_doc_type_id IS NULL)',
+        { unitId, documentType },
+      )
+      .orWhere(
+        '(app.unit_id = :unitId AND app.document_type IS NULL AND app.reportorial_doc_type_id IS NULL)',
+        { unitId },
+      )
+      .orWhere(
+        '(app.unit_id IS NULL AND app.document_type = :documentType AND app.reportorial_doc_type_id IS NULL)',
+        { documentType },
+      )
       // truly global (all three keys NULL)
-      .orWhere('(app.unit_id IS NULL AND app.document_type IS NULL AND app.reportorial_doc_type_id IS NULL)');
+      .orWhere(
+        '(app.unit_id IS NULL AND app.document_type IS NULL AND app.reportorial_doc_type_id IS NULL)',
+      );
 
     // Reportorial-doc-type specific: only for documents that declare a reportorial_doc_type_id
     if (reportorialDocTypeId) {
@@ -101,9 +117,7 @@ export class MetricsService {
       .filter((template) => template.is_active);
 
     // Remove duplicates
-    const uniqueTemplates = Array.from(
-      new Map(templates.map((t) => [t.id, t])).values(),
-    );
+    const uniqueTemplates = Array.from(new Map(templates.map((t) => [t.id, t])).values());
 
     return uniqueTemplates;
   }
@@ -144,17 +158,10 @@ export class MetricsService {
     const results: MetricResult[] = [];
     for (const metric of applicableMetrics) {
       try {
-        const result = await this.computeSingleMetric(
-          version,
-          document,
-          metric,
-        );
+        const result = await this.computeSingleMetric(version, document, metric);
         results.push(result);
       } catch (error) {
-        this.logger.error(
-          `Failed to compute metric ${metric.id}: ${error.message}`,
-          error.stack,
-        );
+        this.logger.error(`Failed to compute metric ${metric.id}: ${error.message}`, error.stack);
         // Create error result
         const errorResult = this.metricResultRepo.create({
           version_id: versionId,
@@ -310,11 +317,7 @@ export class MetricsService {
    * Calculate deadline based on period
    * This is a simplified version - in production you'd have a more sophisticated deadline system
    */
-  private calculateDeadline(
-    period: string,
-    year: string,
-    ruleConfig?: Record<string, any>,
-  ): Date {
+  private calculateDeadline(period: string, year: string, ruleConfig?: Record<string, any>): Date {
     const yearNum = Number.parseInt(year, 10);
     const safeYear = Number.isFinite(yearNum) ? yearNum : new Date().getFullYear();
 
@@ -331,9 +334,7 @@ export class MetricsService {
       : 5;
 
     const monthOffsetRaw = Number(ruleConfig?.deadline_month_offset);
-    const monthOffset = Number.isFinite(monthOffsetRaw)
-      ? monthOffsetRaw
-      : 1;
+    const monthOffset = Number.isFinite(monthOffsetRaw) ? monthOffsetRaw : 1;
 
     const submissionFrequency =
       (ruleConfig?.submission_frequency as string | undefined)?.toLowerCase() ||
@@ -341,7 +342,11 @@ export class MetricsService {
 
     const parsedPeriod = this.parsePeriod(period, safeYear, submissionFrequency, ruleConfig);
     if (parsedPeriod) {
-      return new Date(parsedPeriod.baseYear, parsedPeriod.baseMonthIndex + monthOffset, deadlineDay);
+      return new Date(
+        parsedPeriod.baseYear,
+        parsedPeriod.baseMonthIndex + monthOffset,
+        deadlineDay,
+      );
     }
 
     const quarterMatch = /^Q([1-4])$/i.exec(period.trim());
@@ -493,7 +498,8 @@ export class MetricsService {
             const monthGroup = Number.isFinite(monthGroupRaw) ? Math.floor(monthGroupRaw) : 2;
 
             const parsedYear = Number.parseInt(match[yearGroup] || String(fallbackYear), 10);
-            const parsedMonth = Number.parseInt(match[monthGroup] || String(fallbackMonthIndex + 1), 10) - 1;
+            const parsedMonth =
+              Number.parseInt(match[monthGroup] || String(fallbackMonthIndex + 1), 10) - 1;
 
             return {
               baseYear: Number.isFinite(parsedYear) ? parsedYear : fallbackYear,

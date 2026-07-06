@@ -17,7 +17,10 @@ export function resolvePathWithinRoot(rootPath: string, relativePath: string): s
 
 export function parseStringArrayJson(input: unknown): string[] {
   if (Array.isArray(input)) {
-    return input.filter((entry): entry is string => typeof entry === 'string').map((entry) => entry.trim()).filter(Boolean);
+    return input
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
   }
 
   if (typeof input !== 'string') return [];

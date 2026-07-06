@@ -23,7 +23,7 @@ export class TicketKeywordRule {
   keywords: string | null;
 
   /** Target ticket type when keyword matches */
-  
+
   @Column({ name: 'target_ticket_type', type: 'varchar', length: 30 })
   targetTicketType: string;
 

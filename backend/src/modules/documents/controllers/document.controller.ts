@@ -21,7 +21,11 @@ import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { UserRole } from '../../users/entities/user.entity';
-import { DocumentService, UploadDocumentDto, UploadGoogleDocDto } from '../services/document.service';
+import {
+  DocumentService,
+  UploadDocumentDto,
+  UploadGoogleDocDto,
+} from '../services/document.service';
 import { VersionService, CreateVersionDto } from '../services/version.service';
 import { Document, DocumentStatus } from '../entities/document.entity';
 import { SubmissionFrequency } from '../entities/document-assignment.entity';
@@ -40,12 +44,7 @@ export class DocumentController {
    * POST /documents
    */
   @Post()
-  @Roles(
-    UserRole.SUPER_ADMIN,
-    UserRole.COMPLIANCE_OFFICER,
-    'focal',
-    'technician',
-  )
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   @UseInterceptors(
     UploadBulkheadInterceptor,
     FileInterceptor('file', {
@@ -74,15 +73,13 @@ export class DocumentController {
    * POST /documents/google-doc
    */
   @Post('google-doc')
-  @Roles(
-    UserRole.SUPER_ADMIN,
-    UserRole.COMPLIANCE_OFFICER,
-    'focal',
-    'technician',
-  )
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   @UseInterceptors(UploadBulkheadInterceptor)
   async uploadGoogleDoc(
-    @Body() body: Omit<UploadGoogleDocDto, 'uploaded_by' | 'user_role' | 'unit_id'> & { unit_id: number | string },
+    @Body()
+    body: Omit<UploadGoogleDocDto, 'uploaded_by' | 'user_role' | 'unit_id'> & {
+      unit_id: number | string;
+    },
     @CurrentUser() user: any,
   ): Promise<Document> {
     const dto: UploadGoogleDocDto = {
@@ -133,12 +130,7 @@ export class DocumentController {
   }
 
   @Get('upload-options')
-  @Roles(
-    UserRole.SUPER_ADMIN,
-    UserRole.COMPLIANCE_OFFICER,
-    'focal',
-    'technician',
-  )
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   async getUploadOptions(
     @CurrentUser() user: any,
     @Query('period') period: string,
@@ -148,20 +140,17 @@ export class DocumentController {
   }
 
   @Get('assignments')
-  @Roles(
-    UserRole.SUPER_ADMIN,
-    UserRole.COMPLIANCE_OFFICER,
-    'focal',
-    'technician',
-  )
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   async listAssignments(
     @CurrentUser() user: any,
     @Query('user_id') userId?: string,
     @Query('unit_id') unitId?: string,
     @Query('active_only') activeOnly?: string,
   ) {
-    const isPrivileged = user.role === UserRole.SUPER_ADMIN
-      || user.role === UserRole.COMPLIANCE_OFFICER || user?.roleCode === 'compliance_officer';
+    const isPrivileged =
+      user.role === UserRole.SUPER_ADMIN ||
+      user.role === UserRole.COMPLIANCE_OFFICER ||
+      user?.roleCode === 'compliance_officer';
     return this.documentService.listAssignments({
       user_id: isPrivileged && userId ? Number(userId) : user.id,
       unit_id: unitId ? Number(unitId) : undefined,
@@ -240,23 +229,13 @@ export class DocumentController {
   }
 
   @Get(':id/references')
-  @Roles(
-    UserRole.SUPER_ADMIN,
-    UserRole.COMPLIANCE_OFFICER,
-    'focal',
-    'technician',
-  )
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   async getDocumentReferences(@Param('id') id: string) {
     return this.documentService.listDocumentReferences(id);
   }
 
   @Post(':id/references')
-  @Roles(
-    UserRole.SUPER_ADMIN,
-    UserRole.COMPLIANCE_OFFICER,
-    'focal',
-    'technician',
-  )
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   async linkDocumentReference(
     @Param('id') sourceDocumentId: string,
     @Body()
@@ -275,20 +254,12 @@ export class DocumentController {
   }
 
   @Delete(':id/references/:targetId')
-  @Roles(
-    UserRole.SUPER_ADMIN,
-    UserRole.COMPLIANCE_OFFICER,
-    'focal',
-    'technician',
-  )
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   async unlinkDocumentReference(
     @Param('id') sourceDocumentId: string,
     @Param('targetId') targetDocumentId: string,
   ) {
-    await this.documentService.unlinkDocumentReference(
-      sourceDocumentId,
-      targetDocumentId,
-    );
+    await this.documentService.unlinkDocumentReference(sourceDocumentId, targetDocumentId);
     return { message: 'Document reference removed successfully' };
   }
 
@@ -297,12 +268,7 @@ export class DocumentController {
    * POST /documents/:id/versions
    */
   @Post(':id/versions')
-  @Roles(
-    UserRole.SUPER_ADMIN,
-    UserRole.COMPLIANCE_OFFICER,
-    'focal',
-    'technician',
-  )
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
   @UseInterceptors(
     FileInterceptor('file', {
       limits: {
@@ -335,8 +301,7 @@ export class DocumentController {
     @Param('vid') versionId: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    const { buffer, fileName, mimeType } =
-      await this.versionService.downloadVersion(versionId);
+    const { buffer, fileName, mimeType } = await this.versionService.downloadVersion(versionId);
 
     res.set({
       'Content-Type': mimeType,
@@ -356,8 +321,7 @@ export class DocumentController {
     @Param('vid') versionId: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    const { buffer, mimeType } =
-      await this.versionService.getPreview(versionId);
+    const { buffer, mimeType } = await this.versionService.getPreview(versionId);
 
     res.set({
       'Content-Type': mimeType,

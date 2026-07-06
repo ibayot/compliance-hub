@@ -202,7 +202,8 @@ export interface TicketComment {
   userId: number;
   isInternal: boolean;
   createdAt: string;
-  user?: { id: number; email: string; firstName?: string; lastName?: string };
+  attachmentPath?: string | null;
+  user?: { id: number; email: string; firstName?: string; lastName?: string; role?: string; ticketMainFocal?: boolean };
 }
 
 export interface CreateTicketDto {
@@ -247,6 +248,7 @@ export interface CsatFormData {
   technicianName: string;
   /** 9 Likert responses indexed 0–8; items 3,5,8 are pre-set to 'NA' */
   likert: Array<number | 'NA'>;
+  noIssueEncountered?: boolean;
 }
 
 export interface SubmitSatisfactionDto {
@@ -274,6 +276,8 @@ export interface TicketDashboardStats {
   closed: number;
   satisfactionFillRate: number;
   pendingSatisfactionTickets: Ticket[];
+  myTicketsCount?: number;
+  escalatedToMeCount?: number;
 }
 
 export interface TechAssignedStats {
@@ -301,6 +305,11 @@ export interface TicketReportsData {
   totalEscalations: number;
   acceptedEscalations: number;
   returnedEscalations: number;
+  slaStats: {
+    met: number;
+    missed: number;
+    avgResolutionTimeHours: number;
+  };
 }
 
 export interface TicketReportResult {
@@ -318,6 +327,13 @@ export interface TicketReportResult {
   totalEscalations: number;
   acceptedEscalations: number;
   returnedEscalations: number;
+  slaStats: {
+    met: number;
+    missed: number;
+    avgResolutionTimeHours: number;
+  };
+  slaByType: Array<{ type: string; met: number; missed: number; avgResolutionTimeHours: number; count: number }>;
+  slaByTechnician: Array<{ techId: number; techName: string; met: number; missed: number; avgResolutionTimeHours: number; count: number }>;
 }
 
 export interface RatingsReportResult {
@@ -501,6 +517,20 @@ export const issuancesApi = {
 
 // Tickets API (IT Help Desk)
 export const ticketsApi = {
+  // Global/Technician Pause Methods
+  globalPause: async (): Promise<{ success: boolean; count: number; message: string }> => {
+    const res = await apiClient.post('/tickets/global-pause');
+    return res.data;
+  },
+  globalResume: async (): Promise<{ success: boolean; count: number; message: string }> => {
+    const res = await apiClient.post('/tickets/global-resume');
+    return res.data;
+  },
+  technicianPause: async (): Promise<{ success: boolean; count: number; message: string }> => {
+    const res = await apiClient.post('/tickets/technician-pause');
+    return res.data;
+  },
+
   // ... existing methods
 
   getAll: async (filters?: {
@@ -545,9 +575,24 @@ export const ticketsApi = {
     ticketId: string,
     comment: string,
     isInternal = false,
+    attachment?: File | null,
   ): Promise<TicketComment> => {
-    const response = await apiClient.post(`/tickets/${ticketId}/comments`, { comment, isInternal });
-    return response.data;
+    if (attachment) {
+      const formData = new FormData();
+      formData.append('comment', comment);
+      formData.append('isInternal', String(isInternal));
+      formData.append('attachment', attachment);
+
+      const response = await apiClient.post(`/tickets/${ticketId}/comments`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } else {
+      const response = await apiClient.post(`/tickets/${ticketId}/comments`, { comment, isInternal });
+      return response.data;
+    }
   },
 
   submitSatisfaction: async (id: string, data: SubmitSatisfactionDto): Promise<Ticket> => {
@@ -823,6 +868,15 @@ export const ticketSettingsApi = {
     smtpPass?: string | null;
     smtpFrom?: string | null;
     smtpFromName?: string | null;
+    primarySmtpDailyLimit?: number;
+    scheduleMode?: string;
+    officeClockin?: string;
+    officeClockout?: string;
+    cwwClockinStart?: string;
+    cwwClockinEnd?: string;
+    cwwClockoutStart?: string;
+    cwwClockoutEnd?: string;
+    isFlagCeremonyPaused?: boolean;
   }): Promise<void> => {
     const response = await apiClient.patch(`/ticket-settings/global-config`, data);
     return response.data;

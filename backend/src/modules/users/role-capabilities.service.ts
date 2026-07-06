@@ -39,7 +39,9 @@ export class RoleCapabilitiesService implements OnModuleInit {
       }
       this.logger.log(`RoleCapabilities cache loaded: ${rows.length} role(s)`);
     } catch (err: any) {
-      this.logger.warn(`RoleCapabilities cache load failed (non-fatal — run v0.0.31 migration): ${err?.message}`);
+      this.logger.warn(
+        `RoleCapabilities cache load failed (non-fatal — run v0.0.31 migration): ${err?.message}`,
+      );
     }
   }
 
@@ -204,11 +206,33 @@ export class RoleCapabilitiesService implements OnModuleInit {
 
   /** Return all role values that have a given capability set to true. */
   getRolesWhere(
-    capability: 'isFocal' | 'isIto' | 'isDesktop' | 'isItSupport' | 'isPantawidIct' | 'isEscalationFocal' | 'isTicketSettingsFocal' | 'isSmtpSettingsAccess' | 'isSecuritySettingsAccess' | 'isAllTickets' | 'isTicketFocal' | 'isKpiAccess' | 'isKpiManage' | 'isAttendanceAccess' | 'isAttendanceManage' | 'isReportsAccess' | 'isReviewsAccess' | 'isMovAccess' | 'isDocumentsAccess' | 'isRepositoryAccess' | 'isIssuancesAccess' | 'isMetricsAccess' | 'isRoleCapabilitiesAccess' | 'isSystemRolesAccess',
+    capability:
+      | 'isFocal'
+      | 'isIto'
+      | 'isDesktop'
+      | 'isItSupport'
+      | 'isPantawidIct'
+      | 'isEscalationFocal'
+      | 'isTicketSettingsFocal'
+      | 'isSmtpSettingsAccess'
+      | 'isSecuritySettingsAccess'
+      | 'isAllTickets'
+      | 'isTicketFocal'
+      | 'isKpiAccess'
+      | 'isKpiManage'
+      | 'isAttendanceAccess'
+      | 'isAttendanceManage'
+      | 'isReportsAccess'
+      | 'isReviewsAccess'
+      | 'isMovAccess'
+      | 'isDocumentsAccess'
+      | 'isRepositoryAccess'
+      | 'isIssuancesAccess'
+      | 'isMetricsAccess'
+      | 'isRoleCapabilitiesAccess'
+      | 'isSystemRolesAccess',
   ): string[] {
-    return [...this.cache.values()]
-      .filter((r) => r[capability])
-      .map((r) => r.roleValue);
+    return [...this.cache.values()].filter((r) => r[capability]).map((r) => r.roleValue);
   }
 
   /** Return all senior tech role values (isFocal + isDesktop or isItSupport). */
@@ -224,8 +248,6 @@ export class RoleCapabilitiesService implements OnModuleInit {
       .filter((r) => r.isDesktop || r.isItSupport || r.isPantawidIct)
       .map((r) => r.roleValue);
   }
-
-
 
   // ── Admin CRUD ─────────────────────────────────────────────────────────────
 

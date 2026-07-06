@@ -28,10 +28,10 @@ async function run() {
     await connection.query(sql);
 
     const [[metricCountRow]] = await connection.query<any[]>(
-      "SELECT COUNT(*) AS cnt FROM metric_templates WHERE is_active = 1",
+      'SELECT COUNT(*) AS cnt FROM metric_templates WHERE is_active = 1',
     );
     const [[metricMapRow]] = await connection.query<any[]>(
-      "SELECT COUNT(*) AS cnt FROM metric_applicability",
+      'SELECT COUNT(*) AS cnt FROM metric_applicability',
     );
     const [[pendingDocsRow]] = await connection.query<any[]>(
       "SELECT COUNT(*) AS cnt FROM documents WHERE status = 'pending' AND is_deleted = 0",

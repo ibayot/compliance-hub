@@ -175,10 +175,9 @@ export class IssuanceService implements OnModuleInit {
     }
 
     if (filters?.search) {
-      query.andWhere(
-        '(issuance.issuance_number LIKE :search OR issuance.title LIKE :search)',
-        { search: `%${filters.search}%` },
-      );
+      query.andWhere('(issuance.issuance_number LIKE :search OR issuance.title LIKE :search)', {
+        search: `%${filters.search}%`,
+      });
     }
 
     if (filters?.is_active !== undefined) {
@@ -191,7 +190,9 @@ export class IssuanceService implements OnModuleInit {
 
     const results = await query.getMany();
     if (!canUseDocumentLinks) {
-      results.forEach((item) => { (item as any).documents = []; });
+      results.forEach((item) => {
+        (item as any).documents = [];
+      });
     }
     return results;
   }
@@ -221,10 +222,7 @@ export class IssuanceService implements OnModuleInit {
   /**
    * Update an issuance
    */
-  async updateIssuance(
-    id: string,
-    dto: UpdateIssuanceDto,
-  ): Promise<Issuance> {
+  async updateIssuance(id: string, dto: UpdateIssuanceDto): Promise<Issuance> {
     const issuance = await this.issuanceRepo.findOne({ where: { id } });
 
     if (!issuance) {
@@ -257,7 +255,9 @@ export class IssuanceService implements OnModuleInit {
   async linkDocument(issuanceId: string, documentId: string): Promise<void> {
     const canUseDocumentLinks = await this.canUseDocumentLinks();
     if (!canUseDocumentLinks) {
-      throw new BadRequestException('Document-issuance linking is unavailable: document_issuances table does not exist in the current schema.');
+      throw new BadRequestException(
+        'Document-issuance linking is unavailable: document_issuances table does not exist in the current schema.',
+      );
     }
 
     const issuance = await this.issuanceRepo.findOne({
@@ -299,7 +299,9 @@ export class IssuanceService implements OnModuleInit {
   async unlinkDocument(issuanceId: string, documentId: string): Promise<void> {
     const canUseDocumentLinks = await this.canUseDocumentLinks();
     if (!canUseDocumentLinks) {
-      throw new BadRequestException('Document-issuance linking is unavailable: document_issuances table does not exist in the current schema.');
+      throw new BadRequestException(
+        'Document-issuance linking is unavailable: document_issuances table does not exist in the current schema.',
+      );
     }
 
     await this.issuanceRepo
@@ -308,9 +310,7 @@ export class IssuanceService implements OnModuleInit {
       .of(issuanceId)
       .remove(documentId);
 
-    this.logger.log(
-      `Unlinked document ${documentId} from issuance ${issuanceId}`,
-    );
+    this.logger.log(`Unlinked document ${documentId} from issuance ${issuanceId}`);
   }
 
   private ensureAllowedAttachment(file: Express.Multer.File): void {

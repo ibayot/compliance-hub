@@ -16,6 +16,16 @@ export const authApi = {
     await apiClient.post('/auth/logout');
   },
 
+  sendMfaCode: async (): Promise<{ message: string }> => {
+    const response = await apiClient.post('/auth/mfa/send');
+    return response.data;
+  },
+
+  verifyMfaCode: async (code: string): Promise<{ message: string }> => {
+    const response = await apiClient.post('/auth/mfa/verify', { code });
+    return response.data;
+  },
+
   getProfile: async (): Promise<User> => {
     const response = await apiClient.get<User>('/auth/me');
     return response.data;

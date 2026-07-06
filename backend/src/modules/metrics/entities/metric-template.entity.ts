@@ -50,11 +50,9 @@ export class MetricTemplate {
   @Column({ type: 'int', default: 1 })
   weight: number; // For weighted scoring
 
-  @OneToMany(
-    'MetricApplicability',
-    (applicability: any) => applicability.metric_template,
-    { cascade: true },
-  )
+  @OneToMany('MetricApplicability', (applicability: any) => applicability.metric_template, {
+    cascade: true,
+  })
   applicability: any[];
 
   @Column({ type: 'boolean', default: true })

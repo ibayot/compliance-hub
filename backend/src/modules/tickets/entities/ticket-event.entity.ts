@@ -6,7 +6,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { User } from '../../shared/entities';
+import { UserRef } from '../../../shared/contracts/user-ref';
 
 /**
  * Immutable audit log of every significant action taken on a ticket.
@@ -21,7 +21,7 @@ export class TicketEvent {
   ticketId: string;
 
   /** The user who triggered the event (null for system-generated events) */
-  @Column({ name: 'actor_id', nullable: true })
+  @Column({ name: 'actor_id', type: 'int', nullable: true })
   actorId: number | null;
 
   /**
@@ -40,7 +40,5 @@ export class TicketEvent {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @ManyToOne(() => User, { nullable: true, eager: false })
-  @JoinColumn({ name: 'actor_id' })
-  actor: User | null;
+  actor?: UserRef | null;
 }

@@ -53,7 +53,7 @@ export class AuditService {
       params.push(query.action);
       countParams.push(query.action);
     }
-    
+
     if (query.tableName) {
       whereClause += ` AND table_name = ?`;
       params.push(query.tableName);

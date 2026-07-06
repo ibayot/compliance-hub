@@ -1,5 +1,9 @@
 import * as path from 'path';
-import { parseStringArrayJson, resolvePathWithinRoot, sanitizeObjectByAllowlist } from './security-validators';
+import {
+  parseStringArrayJson,
+  resolvePathWithinRoot,
+  sanitizeObjectByAllowlist,
+} from './security-validators';
 
 describe('security-validators', () => {
   describe('resolvePathWithinRoot', () => {
@@ -11,7 +15,9 @@ describe('security-validators', () => {
     });
 
     it('throws for traversal outside root', () => {
-      expect(() => resolvePathWithinRoot('/tmp/storage', '../../etc/passwd')).toThrow('Path escapes storage root');
+      expect(() => resolvePathWithinRoot('/tmp/storage', '../../etc/passwd')).toThrow(
+        'Path escapes storage root',
+      );
     });
   });
 
@@ -37,7 +43,10 @@ describe('security-validators', () => {
         unsafe: 'drop',
       };
 
-      const result = sanitizeObjectByAllowlist<{ safeA: string; safeB: number }>(payload, ['safeA', 'safeB']);
+      const result = sanitizeObjectByAllowlist<{ safeA: string; safeB: number }>(payload, [
+        'safeA',
+        'safeB',
+      ]);
       expect(result).toEqual({ safeA: 'x', safeB: 123 });
     });
   });

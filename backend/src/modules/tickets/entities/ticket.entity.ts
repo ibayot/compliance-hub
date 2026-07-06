@@ -8,7 +8,7 @@ import {
   JoinColumn,
   OneToMany,
 } from 'typeorm';
-import { User } from '../../shared/entities';
+import { UserRef } from '../../../shared/contracts/user-ref';
 import { TicketComment } from './ticket-comment.entity';
 import { TicketCategoryConfig } from './ticket-category.entity';
 import { TicketIssueType } from './ticket-issue-type.entity';
@@ -92,25 +92,19 @@ export class Ticket {
   @Column({ name: 'created_by_id', type: 'int', nullable: true })
   createdById: number | null;
 
-  @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
-  @JoinColumn({ name: 'created_by_id' })
-  createdBy: User | null;
+  createdBy?: UserRef | null;
 
   // --- Requester ---
   @Column({ name: 'requester_id', type: 'int' })
   requesterId: number;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'requester_id' })
-  requester: User;
+  requester?: UserRef;
 
   // --- Assigned Technician ---
   @Column({ name: 'assigned_to_id', type: 'int', nullable: true })
   assignedToId: number | null;
 
-  @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
-  @JoinColumn({ name: 'assigned_to_id' })
-  assignedTo: User | null;
+  assignedTo?: UserRef | null;
 
   // --- Resolution ---
   @Column({ name: 'resolution_notes', type: 'text', nullable: true })
@@ -138,6 +132,9 @@ export class Ticket {
 
   @Column({ name: 'accumulated_pause_seconds', type: 'int', default: 0 })
   accumulatedPauseSeconds: number;
+
+  @Column({ name: 'is_sla_waiting', type: 'boolean', default: false })
+  isSlaWaiting: boolean;
 
   @Column({ name: 'last_assigned_at', type: 'datetime', nullable: true })
   lastAssignedAt: Date | null;

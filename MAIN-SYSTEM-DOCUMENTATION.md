@@ -195,7 +195,7 @@ Self-service ticketing only:
 1. Open a web browser (Chrome, Firefox, Edge, or Safari).
 2. Navigate to the application URL (default local: `http://localhost:3000`).
 3. Enter credentials on the login screen and click Sign In.
-4. Default development seed credentials: username `admin@rictms.gov.ph`, password `password123`. Change immediately on production.
+4. Default development seed credentials: username `fo2admin@dswd.gov.ph`, password `password123`. Change immediately on production.
 
 **Session Behavior:**
 - Sessions are valid for 30 minutes of activity.

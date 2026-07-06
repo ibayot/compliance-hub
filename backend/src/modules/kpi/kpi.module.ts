@@ -6,8 +6,7 @@ import { KpiMaster } from './entities/kpi-master.entity';
 import { KpiMonitoring } from './entities/kpi-monitoring.entity';
 import { KpiThreshold } from './entities/kpi-threshold.entity';
 import { KpiScoringRule } from './entities/kpi-scoring-rule.entity';
-import { Unit } from '../shared/entities';
-import { User } from '../shared/entities';
+
 import { RoleCapabilitiesService } from '../users/role-capabilities.service';
 import { RoleCapabilitiesHttpClient } from '../../common/http-clients/role-capabilities.http-client';
 import { HttpClientsModule } from '../../common/http-clients/http-clients.module';
@@ -20,8 +19,6 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
       KpiMonitoring,
       KpiThreshold,
       KpiScoringRule,
-      Unit,
-      User,
       // RoleCapability removed: now loaded via RoleCapabilitiesHttpClient → users-service HTTP API
     ]),
     HttpClientsModule,

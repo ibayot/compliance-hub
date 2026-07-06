@@ -8,6 +8,8 @@ export interface UserRecord {
   middleName?: string;
   lastName?: string;
   suffix?: string;
+  phoneNumber?: string;
+  sex?: string;
   staffId?: string;
   position?: string;
   positionFull?: string;
@@ -17,6 +19,7 @@ export interface UserRecord {
   role: UserRole;
   roleCode?: string | null;
   active: boolean;
+  units?: any[];
 }
 
 export interface CreateUserPayload {
@@ -54,6 +57,8 @@ export interface UpdateUserPayload {
   middleName?: string;
   lastName?: string;
   suffix?: string;
+  phoneNumber?: string;
+  sex?: string;
   position?: string;
   positionFull?: string;
   designation?: string;
@@ -150,6 +155,11 @@ export const usersApi = {
 
   list: async (): Promise<UserRecord[]> => {
     const response = await apiClient.get('/users');
+    return response.data;
+  },
+
+  getUserById: async (id: number): Promise<UserRecord> => {
+    const response = await apiClient.get(`/users/${id}`);
     return response.data;
   },
 

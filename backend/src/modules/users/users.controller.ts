@@ -12,10 +12,17 @@ import {
   ClassSerializerInterceptor,
   UseInterceptors,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { RoleCapabilitiesService } from './role-capabilities.service';
-import { CreateRoleDefinitionDto, UpdateRoleDefinitionDto, CreateUserDto, UpdateUserDto, UpdateRoleCapabilityDto } from './dto';
+import {
+  CreateRoleDefinitionDto,
+  UpdateRoleDefinitionDto,
+  CreateUserDto,
+  UpdateUserDto,
+  UpdateRoleCapabilityDto,
+} from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -46,7 +53,10 @@ export class UsersController {
 
   @Patch('roles/:value')
   @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
-  updateRole(@Param('value') value: string, @Body() updateRoleDefinitionDto: UpdateRoleDefinitionDto) {
+  updateRole(
+    @Param('value') value: string,
+    @Body() updateRoleDefinitionDto: UpdateRoleDefinitionDto,
+  ) {
     return this.usersService.updateRoleDefinition(value, updateRoleDefinitionDto);
   }
 
@@ -127,9 +137,24 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(+id, updateUserDto);
+  // @Roles removed to allow self-update; authorization is checked inside the method
+  update(@Request() req: any, @Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    const parsedId = parseInt(id, 10);
+    const isAdmin = [UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER].includes(req.user.role);
+    
+    if (!isAdmin && req.user.id !== parsedId) {
+      throw new ForbiddenException('You can only update your own profile');
+    }
+
+    if (!isAdmin) {
+      // Prevent privilege escalation for normal users
+      delete updateUserDto.role;
+      delete updateUserDto.active;
+      delete updateUserDto.ticketMainFocal;
+      delete updateUserDto.ticketTechnician;
+    }
+
+    return this.usersService.update(parsedId, updateUserDto);
   }
 
   @Post(':id/reset-password')

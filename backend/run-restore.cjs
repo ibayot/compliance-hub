@@ -1,11 +1,11 @@
 const mysql = require("mysql2");
 
 function makeConn() {
-  return mysql.createConnection({host:"localhost",user:"root",database:"compliance_hub_users"});
+  return mysql.createConnection({ host: "localhost", user: "root", database: "compliance_hub_users" });
 }
 
 function query(conn, sql) {
-  return new Promise((res,rej) => conn.query(sql, (e,r) => e ? rej(e) : res(r)));
+  return new Promise((res, rej) => conn.query(sql, (e, r) => e ? rej(e) : res(r)));
 }
 
 async function run() {
@@ -86,7 +86,7 @@ async function run() {
 
   // Seed admin user
   await query(c, `INSERT INTO users (id, email, passwordHash, first_name, last_name, role, active)
-    VALUES (1, 'admin@rictms.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'System', 'Admin', 'super_admin', 1)
+    VALUES (1, 'fo2admin@dswd.gov.ph', '$2b$10$wExFeL3AKrVppNFF1AzSPuc6.W3Mu8wBNrYfLIsx7LF.fXgWmNlJ2', 'System', 'Admin', 'super_admin', 1)
     ON DUPLICATE KEY UPDATE email=VALUES(email)`);
   console.log("? admin user seeded (password: Admin@123)");
 
@@ -95,42 +95,42 @@ async function run() {
 
   // Seed role_definitions
   const roles = [
-    ['super_admin','Super Admin','Full system access.',0,1,null,null],
-    ['reviewer','Reviewer (Legacy/Compat)','Legacy compliance oversight. Maps to compliance_officer.',1,1,'compliance_officer',null],
-    ['focal','Focal Person','Unit-level focal. Uploads documents.',1,1,'focal',null],
-    ['section_head','Section Head','Section-level supervisor.',1,1,'section_head',null],
-    ['technician','Technician (General)','General ICT support technician.',1,1,'technician',null],
-    ['auditor','Auditor','Read-only compliance access for audit.',1,1,'auditor',null],
-    ['user','Regular Staff','Standard staff user.',1,1,null,null],
-    ['compliance_officer','Compliance Officer','Primary compliance and quality management role.',1,1,null,null],
-    ['cybersec','Cybersecurity Officer','Cybersecurity-focused compliance officer.',1,1,'compliance_officer',null],
-    ['infosec','Information Security Officer','Information security governance.',1,1,'compliance_officer',null],
-    ['lead_infra','Lead Infrastructure Officer','Leads infrastructure operations.',1,1,'focal',null],
-    ['server_admin','Server Administrator','Manages server infrastructure.',1,1,'focal',null],
-    ['db_admin','Database Administrator','Manages database systems.',1,1,'focal',null],
-    ['network_admin','Network Administrator','Manages network infrastructure.',1,1,'focal',null],
-    ['project_mgr','Project Manager','Manages ICT projects.',1,1,'focal',null],
-    ['dev_lead','Development Lead','Leads software development.',1,1,'focal',null],
-    ['sqa_lead','SQA Lead','Leads software quality assurance.',1,1,'focal',null],
-    ['records_officer','Records Officer','Manages administrative records.',1,1,'focal',null],
-    ['hr_id_officer','HR / ID Officer','HR and identification management.',1,1,'focal',null],
-    ['technician_desktop','Desktop Technician','Desktop support technician.',1,1,'technician','desktop_support'],
-    ['technician_it_support','IT Support Technician','IT support technician.',1,1,'technician','it_support'],
-    ['technician_it_staff','IT Support Staff','IT support staff under supervision.',1,1,'technician','it_support'],
-    ['technician_desktop_staff','Desktop Support Staff','Desktop support staff under supervision.',1,1,'technician','desktop_support'],
-    ['desktop_sr','Desktop Support Senior','Senior desktop technician.',1,1,'focal','desktop_support'],
-    ['it_support_sr','IT Support Senior','Senior IT support technician.',1,1,'focal','it_support'],
-    ['desktop_jr','Desktop Support Junior','Junior desktop technician.',1,1,'technician','desktop_support'],
-    ['it_support_jr','IT Support Junior','Junior IT support.',1,1,'technician','it_support'],
-    ['pantawid_ict','Pantawid ICT Support','ICT support for Pantawid program.',1,1,'focal','pantawid_ict_support'],
+    ['super_admin', 'Super Admin', 'Full system access.', 0, 1, null, null],
+    ['reviewer', 'Reviewer (Legacy/Compat)', 'Legacy compliance oversight. Maps to compliance_officer.', 1, 1, 'compliance_officer', null],
+    ['focal', 'Focal Person', 'Unit-level focal. Uploads documents.', 1, 1, 'focal', null],
+    ['section_head', 'Section Head', 'Section-level supervisor.', 1, 1, 'section_head', null],
+    ['technician', 'Technician (General)', 'General ICT support technician.', 1, 1, 'technician', null],
+    ['auditor', 'Auditor', 'Read-only compliance access for audit.', 1, 1, 'auditor', null],
+    ['user', 'Regular Staff', 'Standard staff user.', 1, 1, null, null],
+    ['compliance_officer', 'Compliance Officer', 'Primary compliance and quality management role.', 1, 1, null, null],
+    ['cybersec', 'Cybersecurity Officer', 'Cybersecurity-focused compliance officer.', 1, 1, 'compliance_officer', null],
+    ['infosec', 'Information Security Officer', 'Information security governance.', 1, 1, 'compliance_officer', null],
+    ['lead_infra', 'Lead Infrastructure Officer', 'Leads infrastructure operations.', 1, 1, 'focal', null],
+    ['server_admin', 'Server Administrator', 'Manages server infrastructure.', 1, 1, 'focal', null],
+    ['db_admin', 'Database Administrator', 'Manages database systems.', 1, 1, 'focal', null],
+    ['network_admin', 'Network Administrator', 'Manages network infrastructure.', 1, 1, 'focal', null],
+    ['project_mgr', 'Project Manager', 'Manages ICT projects.', 1, 1, 'focal', null],
+    ['dev_lead', 'Development Lead', 'Leads software development.', 1, 1, 'focal', null],
+    ['sqa_lead', 'SQA Lead', 'Leads software quality assurance.', 1, 1, 'focal', null],
+    ['records_officer', 'Records Officer', 'Manages administrative records.', 1, 1, 'focal', null],
+    ['hr_id_officer', 'HR / ID Officer', 'HR and identification management.', 1, 1, 'focal', null],
+    ['technician_desktop', 'Desktop Technician', 'Desktop support technician.', 1, 1, 'technician', 'desktop_support'],
+    ['technician_it_support', 'IT Support Technician', 'IT support technician.', 1, 1, 'technician', 'it_support'],
+    ['technician_it_staff', 'IT Support Staff', 'IT support staff under supervision.', 1, 1, 'technician', 'it_support'],
+    ['technician_desktop_staff', 'Desktop Support Staff', 'Desktop support staff under supervision.', 1, 1, 'technician', 'desktop_support'],
+    ['desktop_sr', 'Desktop Support Senior', 'Senior desktop technician.', 1, 1, 'focal', 'desktop_support'],
+    ['it_support_sr', 'IT Support Senior', 'Senior IT support technician.', 1, 1, 'focal', 'it_support'],
+    ['desktop_jr', 'Desktop Support Junior', 'Junior desktop technician.', 1, 1, 'technician', 'desktop_support'],
+    ['it_support_jr', 'IT Support Junior', 'Junior IT support.', 1, 1, 'technician', 'it_support'],
+    ['pantawid_ict', 'Pantawid ICT Support', 'ICT support for Pantawid program.', 1, 1, 'focal', 'pantawid_ict_support'],
   ];
-  for (const [value,label,description,assignable,is_system,role_code,technician_type] of roles) {
+  for (const [value, label, description, assignable, is_system, role_code, technician_type] of roles) {
     await query(c, `INSERT INTO role_definitions (value,label,description,assignable,is_system,role_code,technician_type)
       VALUES (?,?,?,?,?,?,?)
       ON DUPLICATE KEY UPDATE label=VALUES(label),description=VALUES(description),role_code=VALUES(role_code),technician_type=VALUES(technician_type)`,
-      [value,label,description,assignable,is_system,role_code,technician_type]);
+      [value, label, description, assignable, is_system, role_code, technician_type]);
   }
-  console.log("? role_definitions seeded ("+roles.length+" roles)");
+  console.log("? role_definitions seeded (" + roles.length + " roles)");
 
   // Verify
   const [u] = await query(c, "SELECT COUNT(*) as cnt FROM users");
@@ -139,7 +139,7 @@ async function run() {
   console.log("users table rows:", u.cnt);
   console.log("role_definitions rows:", r.cnt);
   console.log("----------------------------------------------");
-  console.log("? RESTORE COMPLETE. Login with admin@rictms.gov.ph / Admin@123");
+  console.log("? RESTORE COMPLETE. Login with fo2admin@dswd.gov.ph / Admin@123");
 
   c.end();
 }

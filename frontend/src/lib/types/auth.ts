@@ -5,6 +5,8 @@ export interface User {
   middleName?: string;
   lastName: string;
   suffix?: string;
+  phoneNumber?: string;
+  sex?: string;
   staffId?: string;
   position?: string;
   positionFull?: string;
@@ -17,6 +19,8 @@ export interface User {
   /** Platform role code from role_definitions — used for feature routing.
    *  Known values: 'compliance_officer', 'section_head' */
   roleCode?: string | null;
+  requiresPasswordChange?: boolean;
+  requiresMfa?: boolean;
 }
 
 export enum UserRole {
@@ -59,6 +63,7 @@ export interface AuthResponse {
   refreshToken: string;
   user: User;
   requiresPasswordChange?: boolean;
+  requiresMfa?: boolean;
 }
 
 export interface ApiError {

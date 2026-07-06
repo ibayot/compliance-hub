@@ -16,9 +16,7 @@ async function bootstrap() {
   // CORS – echo back the request origin so both localhost and LAN IPs work
   const allowedOrigin = configService.get<string>('CORS_ORIGIN');
   app.enableCors({
-    origin: allowedOrigin
-      ? allowedOrigin.split(',').map((o) => o.trim())
-      : true,          // true = mirrors request Origin header (safe for dev/internal)
+    origin: allowedOrigin ? allowedOrigin.split(',').map((o) => o.trim()) : true, // true = mirrors request Origin header (safe for dev/internal)
     credentials: true,
     exposedHeaders: ['Content-Disposition', 'Content-Type', 'Content-Length'],
   });
@@ -59,7 +57,9 @@ async function bootstrap() {
   // Swagger API Documentation
   const config = new DocumentBuilder()
     .setTitle('RICTMS Compliance Hub API')
-    .setDescription('API documentation for the Regional Internal Compliance Tracking and Metrics System')
+    .setDescription(
+      'API documentation for the Regional Internal Compliance Tracking and Metrics System',
+    )
     .setVersion('1.5.0.1')
     .addBearerAuth(
       {

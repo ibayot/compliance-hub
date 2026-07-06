@@ -86,7 +86,7 @@ export class ComparisonService {
   async getComparison(comparisonId: string): Promise<VersionComparison> {
     const comparison = await this.comparisonRepo.findOne({
       where: { id: comparisonId },
-      relations: ['version_a', 'version_b', 'compared_by', 'document'],
+      relations: ['version_a', 'version_b', 'document'],
     });
 
     if (!comparison) {
@@ -102,7 +102,7 @@ export class ComparisonService {
   async getDocumentComparisons(documentId: string): Promise<VersionComparison[]> {
     return this.comparisonRepo.find({
       where: { document_id: documentId },
-      relations: ['version_a', 'version_b', 'compared_by'],
+      relations: ['version_a', 'version_b'],
       order: { compared_at: 'DESC' },
     });
   }
