@@ -77,6 +77,8 @@ import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
 
 import { PRIORITY_COLOR, STATUS_COLOR, TICKET_TYPE_LABELS } from '@/lib/utils/ticket-colors';
 
+import { unitsApi } from '@/lib/api/units';
+
 function ticketTypeIcon(t: TicketType) {
   if (t === 'desktop_support') return <DesktopIcon />;
   if (t === 'pantawid_ict_support') return <PantawidIcon />;
@@ -100,12 +102,12 @@ function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'ove
 }
 
 const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'warning' | 'error' }> =
-  {
-    met: { label: 'Met', color: 'success' },
-    on_track: { label: 'On Track', color: 'info' },
-    nearing_sla: { label: 'Nearing SLA', color: 'warning' },
-    overdue: { label: 'Overdue', color: 'error' },
-  };
+{
+  met: { label: 'Met', color: 'success' },
+  on_track: { label: 'On Track', color: 'info' },
+  nearing_sla: { label: 'Nearing SLA', color: 'warning' },
+  overdue: { label: 'Overdue', color: 'error' },
+};
 
 export default function TicketsPage() {
   const router = useRouter();
@@ -260,8 +262,8 @@ export default function TicketsPage() {
 
   const tabFilteredTickets = canManageAll
     ? ([tickets, activeTickets, doneTickets, frozenTickets, duplicateTickets, proxyCreatedTickets][
-        mgmtTab
-      ] ?? tickets)
+      mgmtTab
+    ] ?? tickets)
     : isTechnician
       ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
       : ([tickets, activeTickets, toRateTickets, doneTickets, proxyCreatedTickets][userTab] ??
@@ -303,10 +305,16 @@ export default function TicketsPage() {
       const data = await ticketsApi.getAll({
         status: (filterStatus as TicketStatus) || undefined,
         ticketType: (filterType as TicketType) || undefined,
-        assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
+        // assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
+        assignedToId: showMyTickets && !showEscalatedToMe ? user?.id : undefined,
         escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
       });
       setTickets(data);
+
+      const stats = await ticketsApi.getDashboardStats();
+      setPendingSatCount(stats.pendingSatisfactionTickets?.length ?? 0);
+      setMyTicketsCount(stats.myTicketsCount ?? 0);
+      setEscalatedToMeCount(stats.escalatedToMeCount ?? 0);
     } catch {
       enqueueSnackbar('Failed to load tickets', { variant: 'error' });
     } finally {
@@ -336,18 +344,18 @@ export default function TicketsPage() {
   }, [tickets, canManageAll, isTechnician, mgmtTab, ticketTab, refreshEscalationStates]);
 
   // For non-super admins: load pending satisfaction count and badge counts
-  useEffect(() => {
-    if (!canManageAll) {
-      ticketsApi
-        .getDashboardStats()
-        .then((stats) => {
-          setPendingSatCount(stats.pendingSatisfactionTickets?.length ?? 0);
-          setMyTicketsCount(stats.myTicketsCount ?? 0);
-          setEscalatedToMeCount(stats.escalatedToMeCount ?? 0);
-        })
-        .catch(() => {});
-    }
-  }, [canManageAll]);
+  // useEffect(() => {
+  //   if (!canManageAll) {
+  //     ticketsApi
+  //       .getDashboardStats()
+  //       .then((stats) => {
+  //         setPendingSatCount(stats.pendingSatisfactionTickets?.length ?? 0);
+  //         setMyTicketsCount(stats.myTicketsCount ?? 0);
+  //         setEscalatedToMeCount(stats.escalatedToMeCount ?? 0);
+  //       })
+  //       .catch(() => { });
+  //   }
+  // }, [canManageAll]);
 
   // Check DB escalation_focal_configs to see if the current user's role is a configured focal
   // NOTE: isEscalationFocal is now read from myCap?.isEscalationFocal (AuthContext)
@@ -359,10 +367,16 @@ export default function TicketsPage() {
       const data = await ticketsApi.getAll({
         status: (filterStatus as TicketStatus) || undefined,
         ticketType: (filterType as TicketType) || undefined,
-        assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
+        // assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
+        assignedToId: showMyTickets && !showEscalatedToMe ? user?.id : undefined,
         escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
       });
       setTickets(data);
+
+      const stats = await ticketsApi.getDashboardStats();
+      setPendingSatCount(stats.pendingSatisfactionTickets?.length ?? 0);
+      setMyTicketsCount(stats.myTicketsCount ?? 0);
+      setEscalatedToMeCount(stats.escalatedToMeCount ?? 0);
     } catch {
       /* silent */
     }
@@ -382,7 +396,7 @@ export default function TicketsPage() {
     usersApi
       .list()
       .then((users) => setAllUsers(users.filter((u) => u.active)))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Fetch categories when the New Ticket dialog opens or support type changes
@@ -404,7 +418,7 @@ export default function TicketsPage() {
       ticketSettingsApi
         .getCategories(form.ticketType, true)
         .then(setCategories)
-        .catch(() => {}); // silent — don't show errors on background polls
+        .catch(() => { }); // silent — don't show errors on background polls
     }, 10_000);
     return () => clearInterval(id);
   }, [newDialogOpen, form.ticketType]);
@@ -456,7 +470,7 @@ export default function TicketsPage() {
       enqueueSnackbar('Subject and description are required.', { variant: 'warning' });
       return;
     }
-    
+
     let finalDescription = form.description;
     const selectedCat = categories.find((c) => c.id === form.categoryId);
     if (selectedCat && selectedCat.name.toLowerCase().includes('disposal')) {
@@ -558,7 +572,7 @@ export default function TicketsPage() {
         ...prev,
         [ticket.id]: latest?.status === 'returned' ? 'returned' : 'none',
       }));
-    } catch {}
+    } catch { }
 
     setAssigningTicket(ticket);
     try {
@@ -571,10 +585,10 @@ export default function TicketsPage() {
         (u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx,
       );
 
-      const allowedValues = new Set(focals.map((f) => String(f.roleValue)));
+      const allowedValues = new Set(focals.map((f) => String(f.userId)));
       setEscalationFocalUsers(
         mergedUsers.filter(
-          (t) => allowedValues.has(String(t.id)) || allowedValues.has(String(t.role)),
+          (t) => allowedValues.has(String(t.id)),
         ),
       );
     } catch {
@@ -625,28 +639,32 @@ export default function TicketsPage() {
     setSatTicket(ticket);
     const assignedName = ticket.assignedTo
       ? `${ticket.assignedTo.firstName ?? ''} ${ticket.assignedTo.lastName ?? ''}`.trim() ||
-        ticket.assignedTo.email
+      ticket.assignedTo.email
       : '';
     setCsatForm({
       consentGiven: false,
-      unitSection: '',
+      unitSection: user?.units?.[0]?.name || '',
       dateOfTransaction: ticket.resolvedAt
         ? new Date(ticket.resolvedAt).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0],
-      clientFirstName: '',
-      clientMiddleInitial: '',
-      clientLastName: '',
-      suffix: '',
+      clientFirstName: user?.firstName || '',
+      clientMiddleInitial: user?.middleName ? user.middleName.charAt(0).toUpperCase() : '',
+      clientLastName: user?.lastName || '',
+      suffix: user?.suffix || '',
       religion: '',
-      sex: '',
-      contactNumber: '',
+      sex: user?.sex || '',
+      contactNumber: user?.phoneNumber || '',
       technicianName: assignedName,
       likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
     });
-    ticketsApi
-      .getUnitSuggestions()
-      .then(setUnitSuggestions)
-      .catch(() => {});
+    // ticketsApi
+    //   .getUnitSuggestions()
+    //   .then(setUnitSuggestions)
+    //   .catch(() => { });
+    unitsApi
+      .listAll()
+      .then((units) => setUnitSuggestions(units.map(u => u.name)))
+      .catch(() => { });
     setSatDialogOpen(true);
   };
 
@@ -755,13 +773,17 @@ export default function TicketsPage() {
               >
                 Reset
               </Button>
-              {isTechnician && !isLowerLevelTech && (
+              {/* {isTechnician && !isLowerLevelTech && ( */}
+              {(isFocalTech || canManageAll) && (
                 <Badge badgeContent={myTicketsCount} color="error" overlap="circular">
                   <Button
                     size="small"
                     variant={showMyTickets ? 'contained' : 'outlined'}
                     color="primary"
-                    onClick={() => setShowMyTickets((v) => !v)}
+                    onClick={() => {
+                      setShowMyTickets((v) => !v);
+                      setShowEscalatedToMe(false);
+                    }}
                   >
                     {showMyTickets ? 'My Tickets ✓' : 'My Tickets'}
                   </Button>
@@ -790,13 +812,16 @@ export default function TicketsPage() {
         <Card sx={{ mb: 2 }}>
           <CardContent>
             <Stack direction="row" spacing={2}>
-              {isFocalTech && (
+              {(isFocalTech || canManageAll) && (
                 <Badge badgeContent={myTicketsCount} color="error" overlap="circular">
                   <Button
                     size="small"
                     variant={showMyTickets ? 'contained' : 'outlined'}
                     color="primary"
-                    onClick={() => setShowMyTickets((v) => !v)}
+                    onClick={() => {
+                      setShowMyTickets((v) => !v);
+                      setShowEscalatedToMe(false);
+                    }}
                   >
                     {showMyTickets ? 'My Assigned Tickets ✓' : 'All Tickets'}
                   </Button>
@@ -1104,9 +1129,9 @@ export default function TicketsPage() {
                       sx={
                         hasPendingSatisfaction
                           ? {
-                              backgroundColor: 'warning.50',
-                              '&:hover': { backgroundColor: 'warning.100' },
-                            }
+                            backgroundColor: 'warning.50',
+                            '&:hover': { backgroundColor: 'warning.100' },
+                          }
                           : undefined
                       }
                     >
@@ -1187,7 +1212,7 @@ export default function TicketsPage() {
                         <TableCell>
                           {ticket.requester
                             ? `${ticket.requester.firstName ?? ''} ${ticket.requester.lastName ?? ''}`.trim() ||
-                              ticket.requester.email
+                            ticket.requester.email
                             : '—'}
                         </TableCell>
                       )}
@@ -1733,6 +1758,7 @@ export default function TicketsPage() {
                   options={unitSuggestions}
                   freeSolo
                   fullWidth
+                  disabled={!!user?.units?.[0]?.name}
                   value={csatForm.unitSection}
                   onInputChange={(_, v) => setCsatForm((f) => ({ ...f, unitSection: v }))}
                   renderInput={(params) => <TextField {...params} label="Unit/Section *" />}
@@ -1751,65 +1777,67 @@ export default function TicketsPage() {
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
                   label="First Name *"
+                  disabled={!!user?.firstName}
                   value={csatForm.clientFirstName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientFirstName: e.target.value }))}
                   fullWidth
                 />
                 <TextField
-                  label="M.I."
-                  value={csatForm.clientMiddleInitial ?? ''}
+                  label="Middle Initial"
+                  disabled={!!user?.middleName}
+                  value={csatForm.clientMiddleInitial}
                   onChange={(e) =>
-                    setCsatForm((f) => ({ ...f, clientMiddleInitial: e.target.value }))
+                    setCsatForm((f) => ({ ...f, clientMiddleInitial: e.target.value.substring(0, 1) }))
                   }
-                  inputProps={{ maxLength: 2 }}
-                  sx={{ maxWidth: 80 }}
+                  sx={{ width: 100 }}
                 />
                 <TextField
                   label="Last Name *"
+                  disabled={!!user?.lastName}
                   value={csatForm.clientLastName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientLastName: e.target.value }))}
                   fullWidth
                 />
                 <TextField
                   label="Suffix"
-                  value={csatForm.suffix ?? ''}
+                  disabled={!!user?.suffix}
+                  value={csatForm.suffix}
                   onChange={(e) => setCsatForm((f) => ({ ...f, suffix: e.target.value }))}
-                  sx={{ maxWidth: { xs: '100%', sm: 100 } }}
+                  sx={{ width: 200 }}
                 />
               </Stack>
 
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
                   label="Age"
                   type="number"
                   inputProps={{ min: 20, max: 89 }}
                   value={csatForm.age ?? ''}
-                  onChange={(e) =>
-                    setCsatForm((f) => ({
-                      ...f,
-                      age: e.target.value ? Number(e.target.value) : undefined,
-                    }))
-                  }
+                  onChange={(e) => setCsatForm((f) => ({ ...f, age: Number(e.target.value) }))}
                   sx={{ maxWidth: 100 }}
                 />
                 <TextField
                   label="Religion"
-                  value={csatForm.religion}
+                  value={csatForm.religion ?? ''}
                   onChange={(e) => setCsatForm((f) => ({ ...f, religion: e.target.value }))}
                   sx={{ flex: 1 }}
                 />
                 <TextField
                   select
                   label="Sex *"
+                  disabled={!!user?.sex}
                   value={csatForm.sex}
                   onChange={(e) => setCsatForm((f) => ({ ...f, sex: e.target.value }))}
                   sx={{ minWidth: 120 }}
                 >
                   <MenuItem value="Male">Male</MenuItem>
                   <MenuItem value="Female">Female</MenuItem>
+                  <MenuItem value="Other">Other</MenuItem>
+                  <MenuItem value="Prefer Not to Say">Prefer Not to Say</MenuItem>
                 </TextField>
                 <TextField
                   label="Contact Number"
+                  disabled={!!user?.phoneNumber}
                   value={csatForm.contactNumber ?? ''}
                   onChange={(e) => {
                     const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
@@ -1828,7 +1856,7 @@ export default function TicketsPage() {
                 value={csatForm.technicianName}
                 InputProps={{ readOnly: true }}
                 disabled
-                fullWidth
+              // fullWidth
               />
 
               <Typography variant="subtitle2" fontWeight={700} mt={1}>

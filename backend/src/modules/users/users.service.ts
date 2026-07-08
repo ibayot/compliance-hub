@@ -26,217 +26,217 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
     technicianType?: string | null;
   }
 > = [
-  // ── Core administrative roles ────────────────────────────────────────────
-  {
-    value: UserRole.SUPER_ADMIN,
-    label: 'Super Administrator',
-    description:
-      'Full system access: manage users, units, issuances, metrics, tickets, documents, and settings.',
-    assignable: false,
-    isSystem: true,
-    roleCode: null,
-    technicianType: null,
-  },
-  {
-    value: UserRole.SECTION_HEAD,
-    label: 'Section Head',
-    description:
-      'Unit/section leader. Has access to KPI monitoring, reports, ticket assignment, and incident response statistics across their assigned units.',
-    assignable: true,
-    isSystem: true,
-    roleCode: 'section_head',
-    technicianType: null,
-  },
-  // ── Staff roles with focal-equivalent access ─────────────────────────────
-  {
-    value: UserRole.LEAD_INFRA,
-    label: 'Lead Network & Infrastructure',
-    description:
-      'Leads the network and infrastructure team. Responsible for network architecture, server infrastructure, and ICT compliance documentation for their unit.',
-    assignable: true,
-    isSystem: true,
-    roleCode: 'focal',
-    technicianType: null,
-  },
-  {
-    value: UserRole.SERVER_ADMIN,
-    label: 'Server Administrator',
-    description:
-      'Manages server infrastructure and operations. Responsible for server compliance documentation and ICT system administration.',
-    assignable: true,
-    isSystem: true,
-    roleCode: 'focal',
-    technicianType: null,
-  },
-  {
-    value: UserRole.DB_ADMIN,
-    label: 'Database Administrator',
-    description:
-      'Manages database systems and operations. Responsible for database compliance documentation and data management policies.',
-    assignable: true,
-    isSystem: true,
-    roleCode: 'focal',
-    technicianType: null,
-  },
-  {
-    value: UserRole.NETWORK_ADMIN,
-    label: 'Network Administrator',
-    description:
-      'Manages network systems and connectivity. Responsible for network compliance documentation and infrastructure maintenance.',
-    assignable: true,
-    isSystem: true,
-    roleCode: 'focal',
-    technicianType: null,
-  },
-  {
-    value: UserRole.PROJECT_MGR,
-    label: 'Project Manager',
-    description:
-      'Manages ICT projects and deliverables. Responsible for project compliance documentation and team coordination.',
-    assignable: true,
-    isSystem: true,
-    roleCode: 'focal',
-    technicianType: null,
-  },
-  {
-    value: UserRole.DEV_LEAD,
-    label: 'Lead Developer',
-    description:
-      'Leads software development projects. Responsible for development compliance documentation and code quality standards.',
-    assignable: true,
-    isSystem: true,
-    roleCode: 'focal',
-    technicianType: null,
-  },
-  {
-    value: UserRole.SQA_LEAD,
-    label: 'Lead SQA',
-    description:
-      'Leads software quality assurance activities. Responsible for QA compliance documentation and testing standards.',
-    assignable: true,
-    isSystem: true,
-    roleCode: 'focal',
-    technicianType: null,
-  },
-  {
-    value: UserRole.RECORDS_OFFICER,
-    label: 'Records Officer',
-    description:
-      'Manages records and documentation. Responsible for records management compliance and document retention policies.',
-    assignable: true,
-    isSystem: true,
-    roleCode: 'focal',
-    technicianType: null,
-  },
-  {
-    value: UserRole.HR_ID_OFFICER,
-    label: 'HRIS & ID Officer',
-    description:
-      'Manages HR information systems and ID issuance. Responsible for HRIS compliance documentation and personnel data management.',
-    assignable: true,
-    isSystem: true,
-    roleCode: 'focal',
-    technicianType: null,
-  },
-  // ── Compliance / review roles ────────────────────────────────────────────
-  {
-    value: UserRole.COMPLIANCE_OFFICER,
-    label: 'Compliance Officer',
-    description:
-      'Reviews and tags documents as compliant, non-compliant, or for revision. Manages issuances, KPI monitoring, MoV artifacts, and compliance reports.',
-    assignable: true,
-    isSystem: true,
-    roleCode: 'compliance_officer',
-    technicianType: null,
-  },
-  {
-    value: UserRole.CYBERSEC,
-    label: 'Cybersecurity Officer',
-    description:
-      'Manages cybersecurity operations and incident response. Has compliance officer access plus cybersecurity and incident dashboard.',
-    assignable: true,
-    isSystem: true,
-    roleCode: 'cybersecurity_officer',
-    technicianType: null,
-  },
-  {
-    value: UserRole.INFOSEC,
-    label: 'Information Security Officer',
-    description:
-      'Manages information security policies and incident response. Has compliance officer access plus information security and incident dashboard.',
-    assignable: true,
-    isSystem: true,
-    roleCode: 'cybersecurity_officer',
-    technicianType: null,
-  },
-  // ── Technician / support roles ───────────────────────────────────────────
-  {
-    value: UserRole.DESKTOP_SR,
-    label: 'Senior Desktop Engineer',
-    description:
-      'Handles all desktop/hardware support tickets: workstations, printers, peripherals, and hardware troubleshooting. Sees all desktop support tickets.',
-    assignable: true,
-    isSystem: true,
-    roleCode: null,
-    technicianType: 'desktop_support',
-  },
-  {
-    value: UserRole.IT_SUPPORT_SR,
-    label: 'Senior IT Support Specialist',
-    description:
-      'Handles all IT/software support tickets: software, network, internet connectivity, and system-level issues. Sees all IT support tickets.',
-    assignable: true,
-    isSystem: true,
-    roleCode: null,
-    technicianType: 'it_support',
-  },
-  {
-    value: UserRole.DESKTOP_JR,
-    label: 'Junior Desktop Engineer',
-    description:
-      'Handles desktop/hardware support tickets assigned to them. Escalates complex issues to senior engineers.',
-    assignable: true,
-    isSystem: true,
-    roleCode: null,
-    technicianType: 'desktop_support',
-  },
-  {
-    value: UserRole.IT_SUPPORT_JR,
-    label: 'IT Support Specialist',
-    description:
-      'Handles IT/software support tickets assigned to them. Escalates complex issues to senior specialists.',
-    assignable: true,
-    isSystem: true,
-    roleCode: null,
-    technicianType: 'it_support',
-  },
-  {
-    value: UserRole.PANTAWID_ICT,
-    label: 'Pantawid ICT Support',
-    description:
-      'Handles Pantawid Pamilyang Pilipino Program (4Ps) ICT support requests exclusively.',
-    assignable: true,
-    isSystem: true,
-    roleCode: null,
-    technicianType: 'pantawid_ict_support',
-  },
-  // ── End-user role ────────────────────────────────────────────────────────
-  {
-    value: UserRole.USER,
-    label: 'Regular User',
-    description:
-      'External or non-staff user. Can submit help desk tickets and view their own ticket history. No access to compliance modules.',
-    assignable: true,
-    isSystem: true,
-    roleCode: null,
-    technicianType: null,
-  },
-];
+    // ── Core administrative roles ────────────────────────────────────────────
+    {
+      value: UserRole.SUPER_ADMIN,
+      label: 'Super Administrator',
+      description:
+        'Full system access: manage users, units, issuances, metrics, tickets, documents, and settings.',
+      assignable: false,
+      isSystem: true,
+      roleCode: null,
+      technicianType: null,
+    },
+    {
+      value: UserRole.SECTION_HEAD,
+      label: 'Section Head',
+      description:
+        'Unit/section leader. Has access to KPI monitoring, reports, ticket assignment, and incident response statistics across their assigned units.',
+      assignable: true,
+      isSystem: true,
+      roleCode: 'section_head',
+      technicianType: null,
+    },
+    // ── Staff roles with focal-equivalent access ─────────────────────────────
+    {
+      value: UserRole.LEAD_INFRA,
+      label: 'Lead Network & Infrastructure',
+      description:
+        'Leads the network and infrastructure team. Responsible for network architecture, server infrastructure, and ICT compliance documentation for their unit.',
+      assignable: true,
+      isSystem: true,
+      roleCode: 'focal',
+      technicianType: null,
+    },
+    {
+      value: UserRole.SERVER_ADMIN,
+      label: 'Server Administrator',
+      description:
+        'Manages server infrastructure and operations. Responsible for server compliance documentation and ICT system administration.',
+      assignable: true,
+      isSystem: true,
+      roleCode: 'focal',
+      technicianType: null,
+    },
+    {
+      value: UserRole.DB_ADMIN,
+      label: 'Database Administrator',
+      description:
+        'Manages database systems and operations. Responsible for database compliance documentation and data management policies.',
+      assignable: true,
+      isSystem: true,
+      roleCode: 'focal',
+      technicianType: null,
+    },
+    {
+      value: UserRole.NETWORK_ADMIN,
+      label: 'Network Administrator',
+      description:
+        'Manages network systems and connectivity. Responsible for network compliance documentation and infrastructure maintenance.',
+      assignable: true,
+      isSystem: true,
+      roleCode: 'focal',
+      technicianType: null,
+    },
+    {
+      value: UserRole.PROJECT_MGR,
+      label: 'Project Manager',
+      description:
+        'Manages ICT projects and deliverables. Responsible for project compliance documentation and team coordination.',
+      assignable: true,
+      isSystem: true,
+      roleCode: 'focal',
+      technicianType: null,
+    },
+    {
+      value: UserRole.DEV_LEAD,
+      label: 'Lead Developer',
+      description:
+        'Leads software development projects. Responsible for development compliance documentation and code quality standards.',
+      assignable: true,
+      isSystem: true,
+      roleCode: 'focal',
+      technicianType: null,
+    },
+    {
+      value: UserRole.SQA_LEAD,
+      label: 'Lead SQA',
+      description:
+        'Leads software quality assurance activities. Responsible for QA compliance documentation and testing standards.',
+      assignable: true,
+      isSystem: true,
+      roleCode: 'focal',
+      technicianType: null,
+    },
+    {
+      value: UserRole.RECORDS_OFFICER,
+      label: 'Records Officer',
+      description:
+        'Manages records and documentation. Responsible for records management compliance and document retention policies.',
+      assignable: true,
+      isSystem: true,
+      roleCode: 'focal',
+      technicianType: null,
+    },
+    {
+      value: UserRole.HR_ID_OFFICER,
+      label: 'HRIS & ID Officer',
+      description:
+        'Manages HR information systems and ID issuance. Responsible for HRIS compliance documentation and personnel data management.',
+      assignable: true,
+      isSystem: true,
+      roleCode: 'focal',
+      technicianType: null,
+    },
+    // ── Compliance / review roles ────────────────────────────────────────────
+    {
+      value: UserRole.COMPLIANCE_OFFICER,
+      label: 'Compliance Officer',
+      description:
+        'Reviews and tags documents as compliant, non-compliant, or for revision. Manages issuances, KPI monitoring, MoV artifacts, and compliance reports.',
+      assignable: true,
+      isSystem: true,
+      roleCode: 'compliance_officer',
+      technicianType: null,
+    },
+    {
+      value: UserRole.CYBERSEC,
+      label: 'Cybersecurity Officer',
+      description:
+        'Manages cybersecurity operations and incident response. Has compliance officer access plus cybersecurity and incident dashboard.',
+      assignable: true,
+      isSystem: true,
+      roleCode: 'cybersecurity_officer',
+      technicianType: null,
+    },
+    {
+      value: UserRole.INFOSEC,
+      label: 'Information Security Officer',
+      description:
+        'Manages information security policies and incident response. Has compliance officer access plus information security and incident dashboard.',
+      assignable: true,
+      isSystem: true,
+      roleCode: 'cybersecurity_officer',
+      technicianType: null,
+    },
+    // ── Technician / support roles ───────────────────────────────────────────
+    {
+      value: UserRole.DESKTOP_SR,
+      label: 'Senior Desktop Engineer',
+      description:
+        'Handles all desktop/hardware support tickets: workstations, printers, peripherals, and hardware troubleshooting. Sees all desktop support tickets.',
+      assignable: true,
+      isSystem: true,
+      roleCode: null,
+      technicianType: 'desktop_support',
+    },
+    {
+      value: UserRole.IT_SUPPORT_SR,
+      label: 'Senior IT Support Specialist',
+      description:
+        'Handles all IT/software support tickets: software, network, internet connectivity, and system-level issues. Sees all IT support tickets.',
+      assignable: true,
+      isSystem: true,
+      roleCode: null,
+      technicianType: 'it_support',
+    },
+    {
+      value: UserRole.DESKTOP_JR,
+      label: 'Junior Desktop Engineer',
+      description:
+        'Handles desktop/hardware support tickets assigned to them. Escalates complex issues to senior engineers.',
+      assignable: true,
+      isSystem: true,
+      roleCode: null,
+      technicianType: 'desktop_support',
+    },
+    {
+      value: UserRole.IT_SUPPORT_JR,
+      label: 'IT Support Specialist',
+      description:
+        'Handles IT/software support tickets assigned to them. Escalates complex issues to senior specialists.',
+      assignable: true,
+      isSystem: true,
+      roleCode: null,
+      technicianType: 'it_support',
+    },
+    {
+      value: UserRole.PANTAWID_ICT,
+      label: 'Pantawid ICT Support',
+      description:
+        'Handles Pantawid Pamilyang Pilipino Program (4Ps) ICT support requests exclusively.',
+      assignable: true,
+      isSystem: true,
+      roleCode: null,
+      technicianType: 'pantawid_ict_support',
+    },
+    // ── End-user role ────────────────────────────────────────────────────────
+    {
+      value: UserRole.USER,
+      label: 'Regular User',
+      description:
+        'External or non-staff user. Can submit help desk tickets and view their own ticket history. No access to compliance modules.',
+      assignable: true,
+      isSystem: true,
+      roleCode: null,
+      technicianType: null,
+    },
+  ];
 
 @Injectable()
 export class UsersService {
   private isDbBootstrapEnabled(): boolean {
-    return String(process.env.DB_BOOTSTRAP ?? 'true').toLowerCase() === 'true';
+    return String(process.env.DB_BOOTSTRAP ?? 'false').toLowerCase() === 'true';
   }
 
   constructor(
@@ -453,8 +453,7 @@ export class UsersService {
     if (existingUser) {
       // If no password supplied, we're adding/updating an existing account (e.g. Google SSO walk-in)
       if (!createUserDto.password) {
-        // Update role and profile fields, leave password unchanged
-        existingUser.role = createUserDto.role ?? existingUser.role;
+        // Update profile fields only; role changes should go through the explicit admin update flow.
         if (createUserDto.firstName !== undefined) existingUser.firstName = createUserDto.firstName;
         if (createUserDto.lastName !== undefined) existingUser.lastName = createUserDto.lastName;
         if ((createUserDto as any).middleName !== undefined)
@@ -473,7 +472,7 @@ export class UsersService {
           existingUser.ticketMainFocal = Boolean((createUserDto as any).ticketMainFocal);
         if ((createUserDto as any).ticketTechnician !== undefined)
           existingUser.ticketTechnician = Boolean((createUserDto as any).ticketTechnician);
-        if (createUserDto.unitIds && createUserDto.unitIds.length > 0) {
+        if (createUserDto.unitIds !== undefined) {
           existingUser.units = await this.unitsRepository.find({
             where: { id: In(createUserDto.unitIds) },
           });
@@ -768,23 +767,17 @@ export class UsersService {
     if (dto.designation !== undefined) user.designation = dto.designation;
     if (dto.ticketMainFocal !== undefined) user.ticketMainFocal = Boolean(dto.ticketMainFocal);
     if (dto.ticketTechnician !== undefined) user.ticketTechnician = Boolean(dto.ticketTechnician);
-    if (dto.role) user.role = dto.role;
+    if (dto.role !== undefined) user.role = dto.role;
     if ((dto as any).active !== undefined) user.active = (dto as any).active;
-    
+
     if (dto.password) {
       user.passwordHash = await bcrypt.hash(dto.password, 10);
     }
 
-    // Update units if provided
     if (dto.unitIds) {
       user.units = await this.unitsRepository.find({
         where: { id: In(dto.unitIds) },
       });
-    }
-
-    // Update password if provided
-    if (dto.password) {
-      user.passwordHash = await bcrypt.hash(dto.password, 10);
     }
 
     return await this.usersRepository.save(user);

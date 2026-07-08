@@ -8,18 +8,26 @@ import { ReviewController } from './controllers/review.controller';
 import { ComparisonController } from './controllers/comparison.controller';
 import { DocumentsModule } from '../documents/documents.module';
 import { MetricsModule } from '../metrics/metrics.module';
-import { RoleCapability } from '../users/entities/role-capability.entity';
+
 import { RoleCapabilitiesService } from '../users/role-capabilities.service';
 import { CapabilityGuard } from '../../common/guards/capability.guard';
+import { HttpClientsModule } from '../../common/http-clients/http-clients.module';
+import { RoleCapabilitiesHttpClient } from '../../common/http-clients/role-capabilities.http-client';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ManualReview, VersionComparison, RoleCapability]),
+    TypeOrmModule.forFeature([ManualReview, VersionComparison]),
     DocumentsModule,
     MetricsModule,
+    HttpClientsModule,
   ],
   controllers: [ReviewController, ComparisonController],
-  providers: [ReviewService, ComparisonService, RoleCapabilitiesService, CapabilityGuard],
+  providers: [
+    ReviewService,
+    ComparisonService,
+    { provide: RoleCapabilitiesService, useClass: RoleCapabilitiesHttpClient },
+    CapabilityGuard,
+  ],
   exports: [ReviewService, ComparisonService],
 })
 export class ReviewsModule {}

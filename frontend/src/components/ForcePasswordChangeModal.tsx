@@ -15,6 +15,7 @@ import {
   InputLabel,
   Select,
   Grid,
+  InputAdornment,
 } from '@mui/material';
 import { usersApi } from '@/lib/api/users';
 import { unitsApi, Unit } from '@/lib/api/units';
@@ -28,11 +29,11 @@ interface Props {
 
 export default function ForcePasswordChangeModal({ open, onClose, userId }: Props) {
   const { enqueueSnackbar } = useSnackbar();
-  
+
   // Password fields
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
+
   // Profile fields
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
@@ -40,7 +41,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
   const [phoneNumber, setPhoneNumber] = useState('');
   const [sex, setSex] = useState('');
   const [unitId, setUnitId] = useState<number | ''>('');
-  
+
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +49,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
   useEffect(() => {
     if (open) {
       unitsApi.listAll().then(setUnits).catch(console.error);
-      
+
       if (userId) {
         usersApi.getUserById(userId).then(user => {
           if (user) {
@@ -69,7 +70,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userId) return;
-    
+
     if (newPassword.length < 8) {
       setError('Password must be at least 8 characters long.');
       return;
@@ -78,7 +79,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
       setError('Passwords do not match.');
       return;
     }
-    
+
     if (!firstName || !lastName || !phoneNumber || !sex || unitId === '') {
       setError('Please fill in all required profile fields.');
       return;
@@ -87,7 +88,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
     setLoading(true);
     setError(null);
     try {
-      await usersApi.updateUser(userId, { 
+      await usersApi.updateUser(userId, {
         password: newPassword,
         firstName,
         middleName,
@@ -113,7 +114,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
           <Typography variant="body2" sx={{ mb: 3 }}>
             You are currently using the default password for your account. For security reasons, please set a new password and complete your profile information before continuing.
           </Typography>
-          
+
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
           <Typography variant="subtitle2" sx={{ mb: 1, mt: 2, fontWeight: 'bold' }}>
@@ -177,7 +178,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
                 onChange={(e) => setLastName(e.target.value)}
               />
             </Grid>
-            
+
             <Grid item xs={12} sm={4}>
               <TextField
                 margin="dense"
@@ -185,7 +186,14 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
                 fullWidth
                 required
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                  setPhoneNumber(digits);
+                }}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">+63</InputAdornment>,
+                }}
+                inputProps={{ inputMode: 'numeric' }}
               />
             </Grid>
             <Grid item xs={12} sm={4}>

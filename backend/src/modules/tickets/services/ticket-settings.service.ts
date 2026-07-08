@@ -46,7 +46,7 @@ export interface UpdateKeywordRuleDto {
 
 export interface CreateEscalationFocalDto {
   ticketType: string;
-  roleValue: string;
+  userId: number;
   label: string;
 }
 
@@ -106,7 +106,7 @@ export class TicketSettingsService {
     @InjectRepository(Ticket)
     private readonly ticketRepo: Repository<Ticket>,
     private readonly roleCapSvc: RoleCapabilitiesService,
-  ) {}
+  ) { }
 
   // ── Categories ──────────────────────────────────────────────────────────
 
@@ -473,7 +473,7 @@ export class TicketSettingsService {
     return this.escalationFocalRepo.find({ where, order: { ticketType: 'ASC', label: 'ASC' } });
   }
 
-  async listAvailableEscalationRoles(): Promise<{ value: string; label: string }[]> {
+  async listAvailableEscalationUsers(): Promise<{ value: string; label: string }[]> {
     const rows = await this.roleDefRepo.find();
     const focalRoles = rows.filter((r) => this.roleCapSvc.isEscalationFocal(r.value));
     const roleMap = new Map(focalRoles.map((r) => [r.value, r.label]));
@@ -507,18 +507,38 @@ export class TicketSettingsService {
     // Role validation is bypassed here because the dropdown passes user IDs (String) as the "roleValue"
     // instead of actual role identifiers to ensure uniqueness of target individuals.
 
+    const userId = Number(dto.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new BadRequestException('userId must be a valid user id');
+    }
+
     const existing = await this.escalationFocalRepo.findOne({
-      where: { ticketType: dto.ticketType, roleValue: dto.roleValue },
+      where: { ticketType: dto.ticketType, userId },
     });
     if (existing)
       throw new BadRequestException(
-        'This role is already configured as an escalation focal for that ticket type.',
+        'This user is already configured as an escalation focal for that ticket type.',
       );
+
+
+    const user = await this.categoryRepo.manager.query(
+      `SELECT id, first_name, last_name, email, role FROM users WHERE id = ? AND active = 1`,
+      [userId],
+    );
+    if (!user || user.length === 0) {
+      throw new BadRequestException('Selected user does not exist or is inactive.');
+    }
+
+    if (!this.roleCapSvc.isEscalationFocal(user[0].role)) {
+      throw new BadRequestException('Selected user is not eligible to be an escalation focal.');
+    }
+
+    const name = [user[0].first_name, user[0].last_name].filter(Boolean).join(' ') || user[0].email;
 
     const config = this.escalationFocalRepo.create({
       ticketType: dto.ticketType,
-      roleValue: dto.roleValue,
-      label: dto.label?.trim() || dto.roleValue,
+      userId,
+      label: dto.label?.trim() || name,
       createdById: actorId,
     });
     return this.escalationFocalRepo.save(config);

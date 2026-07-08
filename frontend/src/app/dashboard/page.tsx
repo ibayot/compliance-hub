@@ -124,7 +124,7 @@ export default function DashboardPage() {
   }, [globalConfig]);
 
   useEffect(() => {
-    ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(() => {});
+    ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -134,10 +134,11 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!isRegularUser) return;
     const pendingCount = userTicketStats?.pendingSatisfactionTickets?.length ?? 0;
-    if (pendingCount > 0) {
+    // Suppress the reminder if the user is forced to change their password
+    if (pendingCount > 0 && !user?.requiresPasswordChange) {
       setPendingSatReminderOpen(true);
     }
-  }, [isRegularUser, userTicketStats]);
+  }, [isRegularUser, userTicketStats, user?.requiresPasswordChange]);
 
   // Fetch monthly assigned-ticket stats for technicians whenever period changes
   useEffect(() => {
@@ -146,7 +147,7 @@ export default function DashboardPage() {
     ticketsApi
       .getAssignedStats(techStatsYear, techStatsMonth)
       .then((data) => setTechAssignedStats(data))
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setTechStatsLoading(false));
   }, [isTechnicianAny, user?.id, techStatsYear, techStatsMonth]);
 
@@ -1221,38 +1222,38 @@ export default function DashboardPage() {
                   <Button variant="outlined" href="/dashboard/tickets" fullWidth>
                     View Issues
                   </Button>
-                  
+
                   {/* Technician Pause / Resume */}
                   {user?.role !== 'user' && (
                     <>
-                      <Button 
-                        variant="outlined" 
-                        color="warning" 
+                      <Button
+                        variant="outlined"
+                        color="warning"
                         disabled={!isClockOutEnabled}
                         onClick={async () => {
                           try {
                             const res = await ticketsApi.technicianPause();
                             alert(res.message);
                             window.location.reload();
-                          } catch(e) { alert('Failed to pause'); }
-                        }} 
+                          } catch (e) { alert('Failed to pause'); }
+                        }}
                         fullWidth
                       >
                         Clock Out (Pause My Tickets)
                       </Button>
 
                       {showDebugClockout && (
-                        <Button 
-                          variant="text" 
-                          color="error" 
+                        <Button
+                          variant="text"
+                          color="error"
                           size="small"
                           onClick={async () => {
                             try {
                               const res = await ticketsApi.technicianPause();
                               alert(res.message);
                               window.location.reload();
-                            } catch(e) { alert('Failed to pause'); }
-                          }} 
+                            } catch (e) { alert('Failed to pause'); }
+                          }}
                           fullWidth
                         >
                           Clock Out (Debug Bypass)
@@ -1276,30 +1277,30 @@ export default function DashboardPage() {
                   {/* Global Pause / Resume (Settings Focals only) */}
                   {(!!myCap?.isTicketSettingsFocal || user?.role === 'super_admin') && (
                     <>
-                      <Button 
-                        variant="contained" 
-                        color="error" 
+                      <Button
+                        variant="contained"
+                        color="error"
                         onClick={async () => {
                           try {
                             const res = await ticketsApi.globalPause();
                             alert(res.message);
                             window.location.reload();
-                          } catch(e) { alert('Failed to globally pause'); }
-                        }} 
+                          } catch (e) { alert('Failed to globally pause'); }
+                        }}
                         fullWidth
                       >
                         Global Pause (Flag Ceremony)
                       </Button>
-                      <Button 
-                        variant="contained" 
-                        color="success" 
+                      <Button
+                        variant="contained"
+                        color="success"
                         onClick={async () => {
                           try {
                             const res = await ticketsApi.globalResume();
                             alert(res.message);
                             window.location.reload();
-                          } catch(e) { alert('Failed to globally resume'); }
-                        }} 
+                          } catch (e) { alert('Failed to globally resume'); }
+                        }}
                         fullWidth
                       >
                         Global Resume

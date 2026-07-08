@@ -63,7 +63,7 @@ export class TicketSettingsController {
     private readonly settingsService: TicketSettingsService,
     private readonly emailService: EmailService,
     private readonly roleCapSvc: RoleCapabilitiesService,
-  ) {}
+  ) { }
 
   /** POST /ticket-settings/email-test — send a test email to verify SMTP (super_admin only) */
   @Post('email-test')
@@ -334,12 +334,12 @@ export class TicketSettingsController {
    * GET /ticket-settings/escalation-available-roles
    * QA #13: Returns roles from DB (role_definitions), excluding non-assignable platform roles.
    */
-  @Get('escalation-available-roles')
+  @Get('escalation-available-users')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isTicketSettingsFocal')
   @Roles(...ALL_STAFF_ROLES)
-  async listAvailableEscalationRoles() {
-    return this.settingsService.listAvailableEscalationRoles();
+  async listAvailableEscalationUsers() {
+    return this.settingsService.listAvailableEscalationUsers();
   }
 
   /** POST /ticket-settings/escalation-focals */

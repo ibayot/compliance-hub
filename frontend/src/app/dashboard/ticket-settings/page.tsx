@@ -89,10 +89,10 @@ export default function TicketSettingsPage() {
   const [focals, setFocals] = useState<EscalationFocalConfig[]>([]);
   const [focalsLoading, setFocalsLoading] = useState(true);
   const [focalDialogOpen, setFocalDialogOpen] = useState(false);
-  const [availableRoles, setAvailableRoles] = useState<{ value: string; label: string }[]>([]);
-  const [focalForm, setFocalForm] = useState<{ ticketType: string; roleValue: string }>({
+  const [availableUsers, setAvailableUsers] = useState<{ value: string; label: string }[]>([]);
+  const [focalForm, setFocalForm] = useState<{ ticketType: string; userId: string }>({
     ticketType: 'all',
-    roleValue: '',
+    userId: '',
   });
   const [focalSubmitting, setFocalSubmitting] = useState(false);
 
@@ -163,7 +163,7 @@ export default function TicketSettingsPage() {
   }, [enqueueSnackbar, slaFilterDays]);
 
   useEffect(() => {
-    ticketSettingsApi.getSlaInsights(slaFilterDays).then(setSlaInsights).catch(() => {});
+    ticketSettingsApi.getSlaInsights(slaFilterDays).then(setSlaInsights).catch(() => { });
   }, [slaFilterDays]);
 
   const handleUpdateGlobalConfig = async () => {
@@ -206,28 +206,28 @@ export default function TicketSettingsPage() {
 
   const openFocalDialog = async () => {
     try {
-      const roles = await ticketSettingsApi.getAvailableEscalationRoles();
-      setAvailableRoles(roles);
+      const users = await ticketSettingsApi.getAvailableEscalationUsers();
+      setAvailableUsers(users);
     } catch {
-      setAvailableRoles([]);
+      setAvailableUsers([]);
     }
-    setFocalForm({ ticketType: 'all', roleValue: '' });
+    setFocalForm({ ticketType: 'all', userId: '' });
     setFocalDialogOpen(true);
   };
 
   const handleSaveFocal = async () => {
-    if (!focalForm.roleValue) {
-      enqueueSnackbar('Select a role', { variant: 'warning' });
+    if (!focalForm.userId) {
+      enqueueSnackbar('Select a user', { variant: 'warning' });
       return;
     }
     try {
       setFocalSubmitting(true);
-      const roleLabel =
-        availableRoles.find((r) => r.value === focalForm.roleValue)?.label ?? focalForm.roleValue;
+      const userLabel =
+        availableUsers.find((r) => r.value === focalForm.userId)?.label ?? focalForm.userId;
       await ticketSettingsApi.addEscalationFocal({
         ticketType: focalForm.ticketType,
-        roleValue: focalForm.roleValue,
-        label: roleLabel,
+        userId: Number(focalForm.userId),
+        label: userLabel,
       });
       enqueueSnackbar('Escalation focal added', { variant: 'success' });
       setFocalDialogOpen(false);
@@ -315,7 +315,7 @@ export default function TicketSettingsPage() {
       }
 
       const parsedFreeze = catForm.allowablePauseHours ? Number(catForm.allowablePauseHours) : 48;
-      
+
       const catPayload = {
         name: catForm.name,
         ticketType: catForm.ticketType,
@@ -839,9 +839,9 @@ export default function TicketSettingsPage() {
                         onChange={(e) => setSmtpTestEmail(e.target.value)}
                         sx={{ flexGrow: 1 }}
                       />
-                      <Button 
-                        variant="outlined" 
-                        onClick={handleTestSmtp} 
+                      <Button
+                        variant="outlined"
+                        onClick={handleTestSmtp}
                         disabled={smtpTestLoading}
                       >
                         {smtpTestLoading ? 'Sending...' : 'Test Connection'}
@@ -1007,7 +1007,7 @@ export default function TicketSettingsPage() {
                         <TableCell>
                           {f.submitter
                             ? `${f.submitter.firstName || ''} ${f.submitter.lastName || ''}`.trim() ||
-                              f.submitter.email
+                            f.submitter.email
                             : 'Anonymous'}
                         </TableCell>
                         <TableCell>
@@ -1026,7 +1026,7 @@ export default function TicketSettingsPage() {
                         <TableCell>
                           {f.actedBy
                             ? `${f.actedBy.firstName || ''} ${f.actedBy.lastName || ''}`.trim() ||
-                              f.actedBy.email
+                            f.actedBy.email
                             : '—'}
                         </TableCell>
                         <TableCell align="right">
@@ -1089,16 +1089,16 @@ export default function TicketSettingsPage() {
             <TextField
               select
               label="Select Focal User *"
-              value={focalForm.roleValue}
-              onChange={(e) => setFocalForm((f) => ({ ...f, roleValue: e.target.value }))}
+              value={focalForm.userId}
+              onChange={(e) => setFocalForm((f) => ({ ...f, userId: e.target.value }))}
               fullWidth
             >
-              {availableRoles.length === 0 ? (
+              {availableUsers.length === 0 ? (
                 <MenuItem disabled value="">
                   No eligible staff available
                 </MenuItem>
               ) : (
-                availableRoles.map((r) => (
+                availableUsers.map((r) => (
                   <MenuItem key={r.value} value={r.value}>
                     {r.label}
                   </MenuItem>
@@ -1112,7 +1112,7 @@ export default function TicketSettingsPage() {
           <Button
             onClick={handleSaveFocal}
             variant="contained"
-            disabled={focalSubmitting || !focalForm.roleValue}
+            disabled={focalSubmitting || !focalForm.userId}
           >
             {focalSubmitting ? 'Saving…' : 'Add'}
           </Button>

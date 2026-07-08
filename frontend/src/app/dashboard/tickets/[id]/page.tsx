@@ -66,6 +66,8 @@ import {
   TICKET_TYPE_LABELS as TYPE_LABELS,
 } from '@/lib/utils/ticket-colors';
 
+import { unitsApi } from '@/lib/api/units';
+
 const STATUS_OPTS = [
   { value: 'open', label: 'Open' },
   { value: 'assigned', label: 'Assigned' },
@@ -208,6 +210,7 @@ export default function TicketDetailPage() {
   // Ticket can be escalated again if there is no pending escalation.
   const canEscalateNow =
     canEscalate && (!latestEscalation || latestEscalation.status !== 'pending');
+  const isTypeLockedByEscalation = (hasPendingEscalation || hasAcceptedEscalation) && !myCap?.isTicketSettingsFocal && !isAcceptedEscalationFocal;
   const isRequester = ticket?.requesterId === (user as any)?.id;
   const canSatisfaction =
     isRequester &&
@@ -351,7 +354,7 @@ export default function TicketDetailPage() {
           .then((updated) => {
             if (updated) setTicket(updated);
           })
-          .catch(() => {});
+          .catch(() => { });
       }
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to fetch ticket', {
@@ -546,10 +549,10 @@ export default function TicketDetailPage() {
         (u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx,
       );
       // From all techs, keep only those whose user ID or role matches the configured escalation focals
-      const allowedValues = new Set(focals.map((f) => String(f.roleValue)));
+      const allowedValues = new Set(focals.map((f) => String(f.userId)));
       setEscalationFocalUsers(
         mergedUsers.filter(
-          (t) => allowedValues.has(String(t.id)) || allowedValues.has(String(t.role)),
+          (t) => allowedValues.has(String(t.id)),
         ),
       );
     } catch {
@@ -666,7 +669,7 @@ export default function TicketDetailPage() {
                     select
                     size="small"
                     value={ticket.ticketType}
-                    disabled={['resolved', 'closed'].includes(ticket.status)}
+                    disabled={['resolved', 'closed'].includes(ticket.status) || isTypeLockedByEscalation}
                     onChange={async (e) => {
                       try {
                         await ticketsApi.update(ticketId, { ticketType: e.target.value as any });
@@ -804,28 +807,32 @@ export default function TicketDetailPage() {
                   onClick={() => {
                     const assignedName = ticket.assignedTo
                       ? `${ticket.assignedTo.firstName ?? ''} ${ticket.assignedTo.lastName ?? ''}`.trim() ||
-                        ticket.assignedTo.email
+                      ticket.assignedTo.email
                       : '';
                     setCsatForm({
                       consentGiven: false,
-                      unitSection: '',
-                      clientFirstName: '',
-                      clientMiddleInitial: '',
-                      clientLastName: '',
-                      suffix: '',
+                      unitSection: user?.units?.[0]?.name || '',
+                      clientFirstName: user?.firstName || '',
+                      clientMiddleInitial: user?.middleName ? user.middleName.charAt(0).toUpperCase() : '',
+                      clientLastName: user?.lastName || '',
+                      suffix: user?.suffix || '',
                       religion: '',
-                      sex: '',
-                      contactNumber: '',
+                      sex: user?.sex || '',
+                      contactNumber: user?.phoneNumber || '',
                       technicianName: assignedName,
                       dateOfTransaction: ticket.resolvedAt
                         ? new Date(ticket.resolvedAt).toISOString().split('T')[0]
                         : new Date().toISOString().split('T')[0],
                       likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
                     });
-                    ticketsApi
-                      .getUnitSuggestions()
-                      .then(setUnitSuggestions)
-                      .catch(() => {});
+                    // ticketsApi
+                    //   .getUnitSuggestions()
+                    //   .then(setUnitSuggestions)
+                    //   .catch(() => { });
+                    unitsApi
+                      .listAll()
+                      .then((units) => setUnitSuggestions(units.map(u => u.name)))
+                      .catch(() => { });
                     setSatDialogOpen(true);
                   }}
                 >
@@ -1060,7 +1067,7 @@ export default function TicketDetailPage() {
                 <Box>
                   <Typography variant="caption" color="text.secondary">
                     {(ticket as any).createdById &&
-                    (ticket as any).createdById !== ticket.requesterId
+                      (ticket as any).createdById !== ticket.requesterId
                       ? 'Requested For'
                       : 'Requested By'}
                   </Typography>
@@ -1152,10 +1159,10 @@ export default function TicketDetailPage() {
                         >
                           {new Date(ticket.resolvedAt) > new Date(ticket.slaDeadline)
                             ? `Missed SLA by ${Math.round(
-                                (new Date(ticket.resolvedAt).getTime() -
-                                  new Date(ticket.slaDeadline).getTime()) /
-                                  (1000 * 60 * 60)
-                              )} hr(s)`
+                              (new Date(ticket.resolvedAt).getTime() -
+                                new Date(ticket.slaDeadline).getTime()) /
+                              (1000 * 60 * 60)
+                            )} hr(s)`
                             : 'Met SLA'}
                         </Typography>
                       </Box>
@@ -1290,7 +1297,7 @@ export default function TicketDetailPage() {
                 )}
                 {e.status === 'pending' &&
                   String(e.escalatedToId || e.escalatedTo?.id || (e as any).escalated_to_id) ===
-                    String((user as any)?.id) && (
+                  String((user as any)?.id) && (
                     <Box mt={1} display="flex" gap={1}>
                       <Button
                         size="small"
@@ -1316,7 +1323,7 @@ export default function TicketDetailPage() {
                   )}
                 {e.status === 'pending' &&
                   (e.escalatedById || e.escalatedBy?.id || (e as any).escalated_by_id) ===
-                    (user as any)?.id && (
+                  (user as any)?.id && (
                     <Box mt={1}>
                       <Button
                         size="small"
@@ -1364,7 +1371,7 @@ export default function TicketDetailPage() {
                             if (!c.user) return null;
                             const isAssignedTech = (ticket as any)?.assignedToId === c.user.id;
                             const isAdminOrFocal = c.user.role === UserRole.SUPER_ADMIN || c.user.ticketMainFocal;
-                            
+
                             if (isAdminOrFocal) {
                               return <Chip label={c.user.role === UserRole.SUPER_ADMIN ? "Admin" : "Focal"} size="small" color="error" />;
                             }
@@ -1458,7 +1465,7 @@ export default function TicketDetailPage() {
                 >
                   {submittingComment ? 'Submitting…' : 'Add Comment'}
                 </Button>
-                
+
                 <Button variant="outlined" component="label" size="small">
                   Attach Picture
                   <input
@@ -1474,10 +1481,10 @@ export default function TicketDetailPage() {
                 </Button>
 
                 {commentAttachment && (
-                  <Chip 
-                    label={commentAttachment.name} 
-                    onDelete={() => setCommentAttachment(null)} 
-                    size="small" 
+                  <Chip
+                    label={commentAttachment.name}
+                    onDelete={() => setCommentAttachment(null)}
+                    size="small"
                   />
                 )}
               </Box>
@@ -1903,11 +1910,12 @@ export default function TicketDetailPage() {
                   </Typography>
                 }
               />
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <Stack direction="row" spacing={2}>
                 <Autocomplete
                   options={unitSuggestions}
                   freeSolo
                   fullWidth
+                  disabled={!!user?.units?.[0]?.name}
                   value={csatForm.unitSection}
                   onInputChange={(_, v) => setCsatForm((f) => ({ ...f, unitSection: v }))}
                   renderInput={(params) => <TextField {...params} label="Unit/Section *" />}
@@ -1925,64 +1933,66 @@ export default function TicketDetailPage() {
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
                   label="First Name *"
+                  disabled={!!user?.firstName}
                   value={csatForm.clientFirstName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientFirstName: e.target.value }))}
                   fullWidth
                 />
                 <TextField
-                  label="M.I."
-                  value={csatForm.clientMiddleInitial ?? ''}
+                  label="Middle Initial"
+                  disabled={!!user?.middleName}
+                  value={csatForm.clientMiddleInitial}
                   onChange={(e) =>
-                    setCsatForm((f) => ({ ...f, clientMiddleInitial: e.target.value }))
+                    setCsatForm((f) => ({ ...f, clientMiddleInitial: e.target.value.substring(0, 1) }))
                   }
-                  inputProps={{ maxLength: 2 }}
-                  sx={{ maxWidth: 80 }}
+                  sx={{ width: 100 }}
                 />
                 <TextField
                   label="Last Name *"
+                  disabled={!!user?.lastName}
                   value={csatForm.clientLastName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientLastName: e.target.value }))}
                   fullWidth
                 />
                 <TextField
                   label="Suffix"
-                  value={csatForm.suffix ?? ''}
+                  disabled={!!user?.suffix}
+                  value={csatForm.suffix}
                   onChange={(e) => setCsatForm((f) => ({ ...f, suffix: e.target.value }))}
-                  sx={{ maxWidth: { xs: '100%', sm: 100 } }}
+                  sx={{ width: 100 }}
                 />
               </Stack>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
                   label="Age"
                   type="number"
                   inputProps={{ min: 20, max: 89 }}
                   value={csatForm.age ?? ''}
-                  onChange={(e) =>
-                    setCsatForm((f) => ({
-                      ...f,
-                      age: e.target.value ? Number(e.target.value) : undefined,
-                    }))
-                  }
-                  sx={{ maxWidth: 100 }}
+                  onChange={(e) => setCsatForm((f) => ({ ...f, age: Number(e.target.value) }))}
+                  sx={{ maxWidth: 200 }}
                 />
                 <TextField
                   label="Religion"
-                  value={csatForm.religion}
+                  value={csatForm.religion ?? ''}
                   onChange={(e) => setCsatForm((f) => ({ ...f, religion: e.target.value }))}
                   sx={{ flex: 1 }}
                 />
                 <TextField
                   select
                   label="Sex *"
+                  disabled={!!user?.sex}
                   value={csatForm.sex}
                   onChange={(e) => setCsatForm((f) => ({ ...f, sex: e.target.value }))}
                   sx={{ minWidth: 120 }}
                 >
                   <MenuItem value="Male">Male</MenuItem>
                   <MenuItem value="Female">Female</MenuItem>
+                  <MenuItem value="Other">Other</MenuItem>
+                  <MenuItem value="Prefer Not to Say">Prefer Not to Say</MenuItem>
                 </TextField>
                 <TextField
                   label="Contact Number"
+                  disabled={!!user?.phoneNumber}
                   value={csatForm.contactNumber ?? ''}
                   onChange={(e) => {
                     const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
@@ -2000,7 +2010,7 @@ export default function TicketDetailPage() {
                 value={csatForm.technicianName}
                 InputProps={{ readOnly: true }}
                 disabled
-                fullWidth
+              // fullWidth
               />
 
               <Typography variant="subtitle2" fontWeight={700} mt={1}>

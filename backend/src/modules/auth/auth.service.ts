@@ -27,7 +27,7 @@ export class AuthService {
     @Optional() private readonly attendanceService?: AttendanceService,
     @Optional() private readonly ticketService?: TicketService,
     @Optional() private readonly ticketSettingsService?: TicketSettingsService,
-  ) {}
+  ) { }
 
   private timingSafeStringEquals(a: string, b: string): boolean {
     const aBuf = Buffer.from(a, 'utf8');
@@ -138,7 +138,7 @@ export class AuthService {
 
   private checkRequiresMfa(user: User): boolean {
     if (!user.mfaLastVerifiedAt) return true;
-    
+
     // Check if the last verified date matches today in Asia/Manila
     const formatter = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Manila',
@@ -146,10 +146,10 @@ export class AuthService {
       month: '2-digit',
       day: '2-digit',
     });
-    
+
     const todayStr = formatter.format(new Date());
     const lastVerifiedStr = formatter.format(new Date(user.mfaLastVerifiedAt));
-    
+
     return todayStr !== lastVerifiedStr;
   }
 
@@ -296,7 +296,7 @@ export class AuthService {
     user: User,
   ): Promise<{ accessToken: string; refreshToken: string; roleCode: string | null }> {
     // Attempt auto-resume
-    this.handleAutoResume(user).catch(() => {});
+    this.handleAutoResume(user).catch(() => { });
 
     const roleCode = await this.usersService.getRoleCodeForRole(user.role).catch(() => null);
     const payload: JwtPayload = {
@@ -377,6 +377,8 @@ export class AuthService {
       middleName: user.middleName,
       lastName: user.lastName,
       suffix: user.suffix,
+      phoneNumber: user.phoneNumber, // <--- ADD THIS
+      sex: user.sex,                 // <--- ADD THIS
       staffId: user.staffId,
       position: user.position,
       positionFull: user.positionFull,

@@ -123,7 +123,7 @@ async function bootstrap() {
   });
 
   // Ensure cross-DB VIEWs so the compliance service can access user/role data from compliance_hub_users
-  if (String(process.env.DB_BOOTSTRAP ?? 'true').toLowerCase() === 'true') {
+  if (String(process.env.DB_BOOTSTRAP ?? 'false').toLowerCase() === 'true') {
     try {
       const dataSource = app.get(DataSource);
       const usersDb = process.env.USERS_DB_DATABASE || 'compliance_hub_users';

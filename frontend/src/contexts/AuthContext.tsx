@@ -159,7 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (profile.requiresPasswordChange) {
             setRequiresPasswordChange(true);
           }
-          
+
           if (profile.requiresMfa) {
             setRequiresMfa(true);
           }
@@ -173,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             usersApi
               .getMyCapabilities()
               .then(setMyCap)
-              .catch(() => {});
+              .catch(() => { });
           }
         } catch (error) {
           tokenStore.remove('accessToken');
@@ -281,8 +281,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     usersApi
       .getMyCapabilities()
       .then(setMyCap)
-      .catch(() => {});
-      
+      .catch(() => { });
+
     if (response.requiresMfa) {
       router.push('/mfa-verify');
     } else {
@@ -308,8 +308,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     usersApi
       .getMyCapabilities()
       .then(setMyCap)
-      .catch(() => {});
-      
+      .catch(() => { });
+
     if (response.requiresMfa) {
       router.push('/mfa-verify');
     } else {
@@ -366,11 +366,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUnlockError(null);
     try {
       const res = await authApi.loginWithGoogle({ idToken });
-      
+
       if (user && res.user && (res.user as any).email !== user.email) {
         throw new Error('You must sign in with the exact same Google account to unlock.');
       }
-      
+
       tokenStore.set('accessToken', res.accessToken);
       tokenStore.set('refreshToken', res.refreshToken);
       sessionStorage.removeItem('isSessionLocked');
@@ -452,11 +452,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       </Dialog>
 
       {user && (
-        <ForcePasswordChangeModal 
-          open={requiresPasswordChange} 
+        <ForcePasswordChangeModal
+          open={requiresPasswordChange}
           onClose={() => {
             // Re-fetch profile to confirm password was actually changed server-side
             authApi.getProfile().then((profile) => {
+              setUser(profile);
               if (!profile.requiresPasswordChange) {
                 setRequiresPasswordChange(false);
               }

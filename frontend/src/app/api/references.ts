@@ -382,7 +382,7 @@ export interface TicketEscalation {
 export interface EscalationFocalConfig {
   id: number;
   ticketType: string;
-  roleValue: string;
+  userId: number;
   label: string;
   createdAt: string;
 }
@@ -827,13 +827,13 @@ export const ticketSettingsApi = {
     const response = await apiClient.get(`/ticket-settings/escalation-focals${params}`);
     return response.data;
   },
-  getAvailableEscalationRoles: async (): Promise<{ value: string; label: string }[]> => {
-    const response = await apiClient.get(`/ticket-settings/escalation-available-roles`);
+  getAvailableEscalationUsers: async (): Promise<{ value: string; label: string }[]> => {
+    const response = await apiClient.get(`/ticket-settings/escalation-available-users`);
     return response.data;
   },
   addEscalationFocal: async (data: {
     ticketType: string;
-    roleValue: string;
+    userId: number;
     label: string;
   }): Promise<EscalationFocalConfig> => {
     const response = await apiClient.post(`/ticket-settings/escalation-focals`, data);
