@@ -5,7 +5,9 @@ export const authApi = {
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     let deviceToken = localStorage.getItem('deviceToken');
     if (!deviceToken) {
-      deviceToken = crypto.randomUUID();
+      deviceToken = window.crypto && window.crypto.randomUUID 
+        ? crypto.randomUUID() 
+        : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       localStorage.setItem('deviceToken', deviceToken);
     }
     const response = await apiClient.post<AuthResponse>('/auth/login', credentials, {
@@ -17,7 +19,9 @@ export const authApi = {
   loginWithGoogle: async (payload: { idToken: string }): Promise<AuthResponse> => {
     let deviceToken = localStorage.getItem('deviceToken');
     if (!deviceToken) {
-      deviceToken = crypto.randomUUID();
+      deviceToken = window.crypto && window.crypto.randomUUID 
+        ? crypto.randomUUID() 
+        : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       localStorage.setItem('deviceToken', deviceToken);
     }
     const response = await apiClient.post<AuthResponse>('/auth/google-login', payload, {
@@ -38,7 +42,9 @@ export const authApi = {
   verifyMfaCode: async (tempToken: string, code: string, rememberDevice: boolean): Promise<any> => {
     let deviceToken = localStorage.getItem('deviceToken');
     if (!deviceToken) {
-      deviceToken = crypto.randomUUID();
+      deviceToken = window.crypto && window.crypto.randomUUID 
+        ? crypto.randomUUID() 
+        : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       localStorage.setItem('deviceToken', deviceToken);
     }
     const response = await apiClient.post('/auth/mfa/verify', { tempToken, code, rememberDevice }, {
