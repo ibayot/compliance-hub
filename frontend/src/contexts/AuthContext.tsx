@@ -264,6 +264,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     if ((response as any).mfaRequired) {
       sessionStorage.setItem('mfaTempToken', (response as any).tempToken);
+      if ((response as any).testModeCode) {
+        sessionStorage.setItem('mfaTestModeCode', (response as any).testModeCode);
+      }
       navigate('/mfa-verify');
       return;
     }

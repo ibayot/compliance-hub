@@ -22,9 +22,10 @@ export class SecurityConfigService {
     return config;
   }
 
-  async updateConfig(defaultPassword: string): Promise<SecurityConfig> {
+  async updateConfig(dto: { defaultPassword?: string; mfaTestMode?: boolean }): Promise<SecurityConfig> {
     const config = await this.getConfig();
-    config.defaultPassword = defaultPassword;
+    if (dto.defaultPassword !== undefined) config.defaultPassword = dto.defaultPassword;
+    if (dto.mfaTestMode !== undefined) config.mfaTestMode = dto.mfaTestMode;
     return this.configRepository.save(config);
   }
 }

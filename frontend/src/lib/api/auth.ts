@@ -3,15 +3,26 @@ import { LoginCredentials, AuthResponse, User } from '../types/auth';
 
 export const authApi = {
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
-    const deviceToken = localStorage.getItem('deviceToken');
+    let deviceToken = localStorage.getItem('deviceToken');
+    if (!deviceToken) {
+      deviceToken = crypto.randomUUID();
+      localStorage.setItem('deviceToken', deviceToken);
+    }
     const response = await apiClient.post<AuthResponse>('/auth/login', credentials, {
-      headers: deviceToken ? { 'x-device-token': deviceToken } : {},
+      headers: { 'x-device-token': deviceToken },
     });
     return response.data;
   },
 
   loginWithGoogle: async (payload: { idToken: string }): Promise<AuthResponse> => {
-    const response = await apiClient.post<AuthResponse>('/auth/google-login', payload);
+    let deviceToken = localStorage.getItem('deviceToken');
+    if (!deviceToken) {
+      deviceToken = crypto.randomUUID();
+      localStorage.setItem('deviceToken', deviceToken);
+    }
+    const response = await apiClient.post<AuthResponse>('/auth/google-login', payload, {
+      headers: { 'x-device-token': deviceToken },
+    });
     return response.data;
   },
 
@@ -25,7 +36,14 @@ export const authApi = {
   },
 
   verifyMfaCode: async (tempToken: string, code: string, rememberDevice: boolean): Promise<any> => {
-    const response = await apiClient.post('/auth/mfa/verify', { tempToken, code, rememberDevice });
+    let deviceToken = localStorage.getItem('deviceToken');
+    if (!deviceToken) {
+      deviceToken = crypto.randomUUID();
+      localStorage.setItem('deviceToken', deviceToken);
+    }
+    const response = await apiClient.post('/auth/mfa/verify', { tempToken, code, rememberDevice }, {
+      headers: { 'x-device-token': deviceToken },
+    });
     return response.data;
   },
 

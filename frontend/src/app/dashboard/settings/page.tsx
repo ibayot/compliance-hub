@@ -187,6 +187,7 @@ function SecuritySettingsCard() {
   const { user, myCap } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const [defaultPassword, setDefaultPassword] = useState('');
+  const [mfaTestMode, setMfaTestMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -196,6 +197,7 @@ function SecuritySettingsCard() {
     if (canManage) {
       usersApi.getSecurityConfig().then(config => {
         setDefaultPassword(config.defaultPassword || '');
+        setMfaTestMode(Boolean((config as any).mfaTestMode));
         setLoading(false);
       }).catch(err => {
         enqueueSnackbar('Failed to load security config', { variant: 'error' });
@@ -211,7 +213,7 @@ function SecuritySettingsCard() {
     }
     setSaving(true);
     try {
-      await usersApi.updateSecurityConfig({ defaultPassword });
+      await usersApi.updateSecurityConfig({ defaultPassword, mfaTestMode } as any);
       enqueueSnackbar('Security settings updated successfully', { variant: 'success' });
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to update security settings', { variant: 'error' });
@@ -244,6 +246,18 @@ function SecuritySettingsCard() {
               />
             </Grid>
             <Grid item xs={12} md={4}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={mfaTestMode}
+                    onChange={(e) => setMfaTestMode(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label="Enable MFA Test Mode"
+              />
+            </Grid>
+            <Grid item xs={12}>
               <Button
                 variant="contained"
                 onClick={handleSave}

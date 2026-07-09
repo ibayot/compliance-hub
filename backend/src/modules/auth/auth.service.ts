@@ -174,6 +174,10 @@ export class AuthService {
         </div>
       `;
 
+      if (securityConfig.mfaTestMode) {
+        return { mfaRequired: true, tempToken, testModeCode: code };
+      }
+
       await this.eventBus.publish('email.send', {
         to: user.email,
         subject: 'Compliance Hub - Your MFA Code',
@@ -309,7 +313,7 @@ export class AuthService {
     return { message: 'Verification code sent to your email.' };
   }
 
-  async verifyMfaCode(tempToken: string, code: string, rememberDevice: boolean): Promise<any> {
+  async verifyMfaCode(tempToken: string, code: string, rememberDevice: boolean, incomingDeviceToken?: string): Promise<any> {
     let payload;
     try {
       payload = this.jwtService.verify(tempToken);
@@ -355,7 +359,7 @@ export class AuthService {
     );
 
     if (rememberDevice) {
-      const deviceToken = crypto.randomUUID();
+      const deviceToken = incomingDeviceToken || crypto.randomUUID();
       await this.usersService.addTrustedDevice(user.id, deviceToken);
       (authResponse as any).deviceToken = deviceToken;
     }

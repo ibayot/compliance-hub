@@ -53,8 +53,9 @@ export class AuthController {
     @Body('tempToken') tempToken: string,
     @Body('code') code: string,
     @Body('rememberDevice') rememberDevice: boolean,
+    @Headers('x-device-token') deviceToken?: string,
   ) {
-    return this.authService.verifyMfaCode(tempToken, code, rememberDevice);
+    return this.authService.verifyMfaCode(tempToken, code, rememberDevice, deviceToken);
   }
 
   @Post('logout')

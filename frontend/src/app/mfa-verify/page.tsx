@@ -32,6 +32,15 @@ export default function MfaVerifyPage() {
       navigate('/login');
     } else {
       setTempToken(token);
+      
+      const testCode = sessionStorage.getItem('mfaTestModeCode');
+      if (testCode) {
+        enqueueSnackbar(`[TEST MODE] Your MFA Code is: ${testCode}`, {
+          variant: 'info',
+          persist: true,
+          anchorOrigin: { vertical: 'top', horizontal: 'center' }
+        });
+      }
     }
   }, [navigate]);
 
@@ -58,6 +67,7 @@ export default function MfaVerifyPage() {
       
       // Clear temp token
       sessionStorage.removeItem('mfaTempToken');
+      sessionStorage.removeItem('mfaTestModeCode');
       
       // Force reload to let AuthContext pick up the tokens
       window.location.href = '/dashboard';

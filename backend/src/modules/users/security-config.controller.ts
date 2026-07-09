@@ -18,7 +18,7 @@ export class SecurityConfigController {
 
   @Put()
   @RequireCapability('isSecuritySettingsAccess')
-  async updateConfig(@Body() body: { defaultPassword: string }): Promise<SecurityConfig> {
-    return this.securityConfigService.updateConfig(body.defaultPassword);
+  async updateConfig(@Body() body: { defaultPassword?: string; mfaTestMode?: boolean }): Promise<SecurityConfig> {
+    return this.securityConfigService.updateConfig(body);
   }
 }

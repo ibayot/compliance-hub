@@ -7,4 +7,7 @@ export class SecurityConfig {
 
   @Column({ name: 'default_password', default: 'Changeme123!@#' })
   defaultPassword: string;
+
+  @Column({ name: 'mfa_test_mode', default: false })
+  mfaTestMode: boolean;
 }
