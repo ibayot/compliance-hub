@@ -87,18 +87,15 @@ function ticketTypeIcon(t: TicketType) {
 
 function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | null {
   if (!ticket.slaDeadline) return null;
-  const deadline = new Date(ticket.slaDeadline).getTime();
-  const now = Date.now();
   const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
   if (isTerminal) {
-    const resolvedTime = ticket.resolvedAt ? new Date(ticket.resolvedAt).getTime() : now;
+    const deadline = new Date(ticket.slaDeadline).getTime();
+    const resolvedTime = ticket.resolvedAt ? new Date(ticket.resolvedAt).getTime() : Date.now();
     return resolvedTime <= deadline ? 'met' : 'overdue';
   }
-  if (now > deadline) return 'overdue';
-  const createdAt = ticket.createdAt ? new Date(ticket.createdAt).getTime() : now;
-  const total = deadline - createdAt;
-  const remaining = deadline - now;
-  return total > 0 && remaining / total < 0.4 ? 'nearing_sla' : 'on_track';
+  if (ticket.isOverdue) return 'overdue';
+  if (ticket.isNearingSLA) return 'nearing_sla';
+  return 'on_track';
 }
 
 const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'warning' | 'error' }> =

@@ -41,6 +41,7 @@ import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.mid
           configService.get('USERS_DB_DATABASE') ||
           configService.get('DB_DATABASE') ||
           'compliance_hub',
+        timezone: '+08:00',
         autoLoadEntities: true,
         synchronize: false,
         logging: Boolean(configService.get<boolean>('DB_LOGGING')),

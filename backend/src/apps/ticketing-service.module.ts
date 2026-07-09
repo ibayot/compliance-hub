@@ -40,6 +40,7 @@ import { AuditVariableSubscriber } from '../shared/audit/audit.subscriber';
         username: configService.get('DB_USERNAME'),
         password: configService.get('DB_PASSWORD'),
         database: configService.get('TICKETING_DB_DATABASE') || 'compliance_hub_ticketing',
+        timezone: '+08:00',
         autoLoadEntities: true,
         synchronize: configService.get<boolean>('DB_SYNCHRONIZE'),
         logging: Boolean(configService.get<boolean>('DB_LOGGING')),

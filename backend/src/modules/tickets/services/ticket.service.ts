@@ -893,10 +893,19 @@ export class TicketService implements OnModuleInit {
       let isOverdue = false;
       let isNearingSLA = false;
       if (t.slaDeadline) {
-        const deadline = new Date(t.slaDeadline);
-        const createdAt = new Date(t.createdAt);
-        const totalSlaMs = deadline.getTime() - createdAt.getTime();
-        const fortyPercentSlaMs = totalSlaMs * 0.4;
+        let deadline = new Date(t.slaDeadline);
+        
+        // Dynamically project deadline if ticket is currently paused in the queue
+        if (t.slaPausedAt) {
+          const pausedTimeMs = now.getTime() - new Date(t.slaPausedAt).getTime();
+          deadline = new Date(deadline.getTime() + pausedTimeMs);
+          t.slaDeadline = deadline; // Output true projected deadline in API
+        }
+
+        const originalSlaMs = t.category?.slaHours
+          ? t.category.slaHours * 3600 * 1000
+          : deadline.getTime() - new Date(t.createdAt).getTime();
+        const fortyPercentSlaMs = originalSlaMs * 0.4;
 
         if (now > deadline) {
           isOverdue = true;
@@ -942,10 +951,19 @@ export class TicketService implements OnModuleInit {
     let isNearingSLA = false;
     if (ticket.slaDeadline) {
       const now = new Date();
-      const deadline = new Date(ticket.slaDeadline);
-      const createdAt = new Date(ticket.createdAt);
-      const totalSlaMs = deadline.getTime() - createdAt.getTime();
-      const fortyPercentSlaMs = totalSlaMs * 0.4;
+      let deadline = new Date(ticket.slaDeadline);
+      
+      // Dynamically project deadline if ticket is currently paused in the queue
+      if (ticket.slaPausedAt) {
+        const pausedTimeMs = now.getTime() - new Date(ticket.slaPausedAt).getTime();
+        deadline = new Date(deadline.getTime() + pausedTimeMs);
+        ticket.slaDeadline = deadline; // Output true projected deadline in API
+      }
+
+      const originalSlaMs = ticket.category?.slaHours
+        ? ticket.category.slaHours * 3600 * 1000
+        : deadline.getTime() - new Date(ticket.createdAt).getTime();
+      const fortyPercentSlaMs = originalSlaMs * 0.4;
 
       if (now > deadline) {
         isOverdue = true;
@@ -1267,6 +1285,9 @@ export class TicketService implements OnModuleInit {
           ticket.assignedToId = null;
           ticket.lastAssignedAt = null;
           ticket.isSlaWaiting = false;
+          ticket.slaDeadline = null;
+          ticket.accumulatedPauseSeconds = 0;
+          ticket.slaPausedAt = null;
 
           // QA: if there is an available PRESENT technician, auto-assign immediately
           const today = new Date().toISOString().slice(0, 10);
@@ -1742,8 +1763,11 @@ export class TicketService implements OnModuleInit {
 
       if (busyCount > 0) {
         ticket.isSlaWaiting = true;
+        if (!ticket.slaPausedAt) ticket.slaPausedAt = new Date();
       } else {
         ticket.isSlaWaiting = false;
+        ticket.slaPausedAt = null;
+        
         if (!ticket.slaDeadline || isAuthorizedToResetSla) {
           const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
           ticket.slaDeadline = slaConfig
