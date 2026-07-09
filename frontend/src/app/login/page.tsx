@@ -35,6 +35,10 @@ export default function LoginPage() {
     try {
       await login(email, password, redirect ?? undefined);
     } catch (err: any) {
+      console.error("LOGIN ERROR:", err);
+      // Temporary alert to help debug staging issues
+      alert("Error Caught: " + err?.toString() + "\nMessage: " + err?.message + "\nStack: " + (err?.stack || ''));
+      
       const msg =
         err?.response?.data?.message ||
         (err?.message === 'Network Error' || !err?.response
