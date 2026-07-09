@@ -1,0 +1,10 @@
+{
+  "test": "DDOS Simulation (Native API)",
+  "endpoint": "/api/health",
+  "totalRequestsAttempted": 4500,
+  "timeToThrottlingMs": 23634,
+  "firstBlockedResponse": {
+    "status": 429,
+    "body": "{\"error\":\"too_many_requests\",\"message\":\"Security Measure Triggered: You have exceeded the maximum number of requests allowed. Please wait a minute before trying again.\"}"
+  }
+}

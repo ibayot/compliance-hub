@@ -1,8 +1,0 @@
-{
-    "chat.tools.terminal.autoApprove": {
-        "/^cd \"c:\\\\Users\\\\mjdibay\\\\source\\\\repos\\\\Compliance Hub\\\\backend\"; Copy-Item \\.env\\.example \\.env -Force; Write-Host \"✅ Backend \\.env file created\"$/": {
-            "approve": true,
-            "matchCommandLine": true
-        }
-    }
-}
