@@ -3042,7 +3042,7 @@ export class TicketService implements OnModuleInit {
    * QA #5/#6: Photos are stored on the existing backend filesystem (not a separate DB/service).
    */
   private escalationStorageRoot(): string {
-    return path.join(process.cwd(), 'storage', 'escalation-proofs');
+    return process.env.ESCALATION_STORAGE_ROOT || './uploads/escalations';
   }
 
   /** POST /tickets/:id/escalate — tech escalates a ticket to a focal/senior */
@@ -3251,7 +3251,7 @@ export class TicketService implements OnModuleInit {
 
     const safeTicketId = path.basename(ticketId);
     return {
-      root: path.resolve(process.cwd(), 'storage', 'escalation-proofs', safeTicketId),
+      root: path.resolve(this.escalationStorageRoot(), safeTicketId),
       safeFilename,
     };
   }

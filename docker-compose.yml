@@ -97,6 +97,8 @@ services:
       - REDIS_HOST=redis
       - USERS_SERVICE_URL=http://users-service:4101
       - GEMINI_API_KEY=AQ.Ab8RN6IeaGiQHevyy0zcQBVRtQYqOwYPeYu90-aX0q3E7dTU2w
+      - COMMENT_ATTACHMENT_STORAGE_ROOT=/app/uploads/comments
+      - ESCALATION_STORAGE_ROOT=/app/uploads/escalations
     ports:
       - "0.0.0.0:4102:4102"
     healthcheck:
@@ -106,7 +108,7 @@ services:
       retries: 8
       start_period: 35s
     volumes:
-      - /opt/ticketing/storage:/app/storage
+      - ticketing_uploads:/app/uploads
 
   compliance-service:
     build:
@@ -204,6 +206,7 @@ services:
 volumes:
   db_data:
   redis_data:
+  ticketing_uploads:
 
 networks:
   app_network:
