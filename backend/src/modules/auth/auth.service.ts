@@ -8,6 +8,7 @@ import { UsersService } from '../users/users.service';
 import { AttendanceService } from '../tickets/services/attendance.service';
 import { TicketService } from '../tickets/services/ticket.service';
 import { TicketSettingsService } from '../tickets/services/ticket-settings.service';
+import { EmailService } from '../tickets/services/email.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload, AuthResponse } from './interfaces/auth.interface';
 import { User, UserRole } from '../users/entities/user.entity';
@@ -27,7 +28,8 @@ export class AuthService {
     @Optional() private readonly attendanceService?: AttendanceService,
     @Optional() private readonly ticketService?: TicketService,
     @Optional() private readonly ticketSettingsService?: TicketSettingsService,
-  ) { }
+    @Optional() private readonly emailService?: EmailService,
+  ) {}
 
   private timingSafeStringEquals(a: string, b: string): boolean {
     const aBuf = Buffer.from(a, 'utf8');
@@ -103,7 +105,7 @@ export class AuthService {
     return payload;
   }
 
-  async login(loginDto: LoginDto): Promise<AuthResponse> {
+  async login(loginDto: LoginDto, deviceToken?: string): Promise<any> {
     // Check deactivated specifically before validating password
     const candidate = await this.usersService.findByEmail(loginDto.email);
     if (candidate && !candidate.active) {
@@ -131,26 +133,65 @@ export class AuthService {
       user.passwordHash,
     );
 
+    let requiresMfa = this.checkRequiresMfa(user);
+
+    // Check trusted device
+    if (requiresMfa && deviceToken) {
+      const trustedDevice = await this.usersService.findTrustedDevice(user.id, deviceToken);
+      if (trustedDevice && trustedDevice.expiresAt > new Date()) {
+        requiresMfa = false;
+      }
+    }
+
+    if (requiresMfa) {
+      // Generate temp token
+      const tempToken = this.jwtService.sign(
+        { sub: user.id, isTemp: true },
+        { expiresIn: '15m', issuer: this.jwtIssuer, audience: this.jwtAudience },
+      );
+
+      // Send MFA Code
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+      await this.usersService.updateMfaCode(user.id, code, expiresAt);
+
+      // Log the MFA code to the console for debugging/local testing without SMTP
+      console.log(`[MFA] Generated verification code for ${user.email}: ${code}`);
+      
+      const htmlTemplate = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <h2 style="color: #1976d2; margin: 0;">Compliance Hub</h2>
+          </div>
+          <div style="background-color: #f5f7fa; padding: 20px; border-radius: 8px; text-align: center;">
+            <p style="margin: 0 0 10px 0; color: #555555; font-size: 16px;">Your verification code is:</p>
+            <h1 style="margin: 0; color: #333333; font-size: 32px; letter-spacing: 4px;">${code}</h1>
+          </div>
+          <p style="color: #777777; font-size: 14px; text-align: center; margin-top: 20px;">
+            This code will expire in 15 minutes. If you did not request this code, please ignore this email.
+          </p>
+        </div>
+      `;
+
+      await this.eventBus.publish('email.send', {
+        to: user.email,
+        subject: 'Compliance Hub - Your MFA Code',
+        text: `Your verification code is: ${code}. It expires in 15 minutes.`,
+        html: htmlTemplate,
+      }).catch((e) => {
+        console.error('Failed to publish email.send event for MFA', e);
+      });
+
+      return { mfaRequired: true, tempToken };
+    }
+
     const tokens = await this.generateTokens(user);
-    const requiresMfa = this.checkRequiresMfa(user);
-    return this.buildAuthResponse(user, tokens, tokens.roleCode, isUsingDefaultPassword, requiresMfa);
+    return this.buildAuthResponse(user, tokens, tokens.roleCode, isUsingDefaultPassword, false);
   }
 
   private checkRequiresMfa(user: User): boolean {
-    if (!user.mfaLastVerifiedAt) return true;
-
-    // Check if the last verified date matches today in Asia/Manila
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Manila',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-
-    const todayStr = formatter.format(new Date());
-    const lastVerifiedStr = formatter.format(new Date(user.mfaLastVerifiedAt));
-
-    return todayStr !== lastVerifiedStr;
+    return true;
   }
 
   async googleLogin(idToken: string): Promise<AuthResponse> {
@@ -202,17 +243,27 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user);
     const requiresMfa = this.checkRequiresMfa(user);
-    return this.buildAuthResponse(user, tokens, tokens.roleCode, isUsingDefaultPassword, requiresMfa);
+    return this.buildAuthResponse(
+      user,
+      tokens,
+      tokens.roleCode,
+      isUsingDefaultPassword,
+      requiresMfa,
+    );
   }
 
   async validateUser(email: string, password: string): Promise<User | null> {
+    console.log('validateUser called for email:', email);
     const user = await this.usersService.findByEmail(email);
+    console.log('findByEmail returned:', user ? user.id : 'null');
 
     if (!user || !user.active) {
+      console.log('user is null or not active. active:', user?.active);
       return null;
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    console.log('isPasswordValid:', isPasswordValid);
 
     if (!isPasswordValid) {
       return null;
@@ -232,25 +283,53 @@ export class AuthService {
 
     await this.usersService.updateMfaCode(userId, code, expiresAt);
 
+    const htmlTemplate = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h2 style="color: #1976d2; margin: 0;">Compliance Hub</h2>
+        </div>
+        <div style="background-color: #f5f7fa; padding: 20px; border-radius: 8px; text-align: center;">
+          <p style="margin: 0 0 10px 0; color: #555555; font-size: 16px;">Your verification code is:</p>
+          <h1 style="margin: 0; color: #333333; font-size: 32px; letter-spacing: 4px;">${code}</h1>
+        </div>
+        <p style="color: #777777; font-size: 14px; text-align: center; margin-top: 20px;">
+          This code will expire in 15 minutes. If you did not request this code, please ignore this email.
+        </p>
+      </div>
+    `;
+
     // Send email using EventBus to avoid circular dependency
     await this.eventBus.publish('email.send', {
       to: user.email,
       subject: 'Your Compliance Hub Verification Code',
       text: `Your verification code is: ${code}. It expires in 15 minutes.`,
+      html: htmlTemplate,
     });
 
     return { message: 'Verification code sent to your email.' };
   }
 
-  async verifyMfaCode(userId: number, code: string): Promise<{ success: boolean; message: string }> {
+  async verifyMfaCode(tempToken: string, code: string, rememberDevice: boolean): Promise<any> {
+    let payload;
+    try {
+      payload = this.jwtService.verify(tempToken);
+    } catch (e) {
+      throw new UnauthorizedException('Invalid or expired temporary token.');
+    }
+
+    if (!payload.isTemp || !payload.sub) {
+      throw new UnauthorizedException('Invalid temporary token payload.');
+    }
+
+    const userId = payload.sub;
     const user = await this.usersService.findOne(userId);
     if (!user) throw new UnauthorizedException('User not found');
 
-    if (!user.mfaCode || !user.mfaCodeExpiresAt) {
+    if (!user.mfaCode || !user.mfaExpiresAt) {
       throw new BadRequestException('No verification code found. Please request a new one.');
     }
 
-    if (new Date() > user.mfaCodeExpiresAt) {
+    if (new Date() > user.mfaExpiresAt) {
       throw new BadRequestException('Verification code has expired. Please request a new one.');
     }
 
@@ -260,7 +339,28 @@ export class AuthService {
 
     await this.usersService.markMfaVerified(userId);
 
-    return { success: true, message: 'Verification successful.' };
+    const securityConfig = await this.securityConfigService.getConfig();
+    const isUsingDefaultPassword = await bcrypt.compare(
+      securityConfig.defaultPassword,
+      user.passwordHash,
+    );
+
+    const tokens = await this.generateTokens(user);
+    const authResponse = this.buildAuthResponse(
+      user,
+      tokens,
+      tokens.roleCode,
+      isUsingDefaultPassword,
+      false,
+    );
+
+    if (rememberDevice) {
+      const deviceToken = crypto.randomUUID();
+      await this.usersService.addTrustedDevice(user.id, deviceToken);
+      (authResponse as any).deviceToken = deviceToken;
+    }
+
+    return authResponse;
   }
 
   private async handleAutoResume(user: User) {
@@ -296,7 +396,7 @@ export class AuthService {
     user: User,
   ): Promise<{ accessToken: string; refreshToken: string; roleCode: string | null }> {
     // Attempt auto-resume
-    this.handleAutoResume(user).catch(() => { });
+    this.handleAutoResume(user).catch(() => {});
 
     const roleCode = await this.usersService.getRoleCodeForRole(user.role).catch(() => null);
     const payload: JwtPayload = {
@@ -378,7 +478,7 @@ export class AuthService {
       lastName: user.lastName,
       suffix: user.suffix,
       phoneNumber: user.phoneNumber, // <--- ADD THIS
-      sex: user.sex,                 // <--- ADD THIS
+      sex: user.sex, // <--- ADD THIS
       staffId: user.staffId,
       position: user.position,
       positionFull: user.positionFull,

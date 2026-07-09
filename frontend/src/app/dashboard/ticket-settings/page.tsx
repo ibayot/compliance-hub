@@ -137,7 +137,26 @@ export default function TicketSettingsPage() {
     smtpPass?: string | null;
     smtpFrom?: string | null;
     smtpFromName?: string | null;
-  }>({ assignmentStrategy: 'CURRENT_AUTO', roundRobinCapHours: 80, autoCloseDays: 3, smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', smtpFrom: '', smtpFromName: '' });
+    primarySmtpDailyLimit?: number;
+    scheduleMode?: string;
+    officeClockin?: string;
+    officeClockout?: string;
+    cwwClockinStart?: string;
+    cwwClockinEnd?: string;
+    cwwClockoutStart?: string;
+    cwwClockoutEnd?: string;
+    isFlagCeremonyPaused?: boolean;
+  }>({
+    assignmentStrategy: 'CURRENT_AUTO', roundRobinCapHours: 80, autoCloseDays: 3, smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', smtpFrom: '', smtpFromName: '', primarySmtpDailyLimit: 2000,
+    scheduleMode: 'OFFICE_HOURS',
+    officeClockin: '08:00:00',
+    officeClockout: '17:00:00',
+    cwwClockinStart: '07:00:00',
+    cwwClockinEnd: '08:00:00',
+    cwwClockoutStart: '18:00:00',
+    cwwClockoutEnd: '19:00:00',
+    isFlagCeremonyPaused: false,
+  });
   const [slaInsights, setSlaInsights] = useState<any[]>([]);
   const [slaFilterDays, setSlaFilterDays] = useState<number>(30);
   const [globalLoading, setGlobalLoading] = useState(true);
@@ -728,10 +747,10 @@ export default function TicketSettingsPage() {
                   }
                 >
                   <MenuItem value="CURRENT_AUTO">
-                    Zero-Active {globalConfig.assignmentStrategy === 'CURRENT_AUTO' ? '(Active)' : ''}
+                    Zero-Active {globalConfig.assignmentStrategy === 'CURRENT_AUTO' ? ' - Active' : ''}
                   </MenuItem>
                   <MenuItem value="CAPPED_ROUND_ROBIN">
-                    Capped Round-Robin {globalConfig.assignmentStrategy === 'CAPPED_ROUND_ROBIN' ? '(Active)' : ''}
+                    Capped Round-Robin {globalConfig.assignmentStrategy === 'CAPPED_ROUND_ROBIN' ? ' - Active' : ''}
                   </MenuItem>
                 </TextField>
 
@@ -773,7 +792,97 @@ export default function TicketSettingsPage() {
               </Stack>
             )}
 
-            {myCap?.isSmtpSettingsAccess && (
+            <Typography variant="h6" fontWeight={600} mb={2} mt={4}>
+              Work Hours & Schedule
+            </Typography>
+            {globalLoading ? (
+              <Box textAlign="center" py={4}>
+                <CircularProgress size={30} />
+              </Box>
+            ) : (
+              <Stack spacing={3} maxWidth={500} mb={4}>
+                <TextField
+                  select
+                  label="Schedule Mode"
+                  value={globalConfig.scheduleMode || 'OFFICE_HOURS'}
+                  onChange={(e) => setGlobalConfig((prev) => ({ ...prev, scheduleMode: e.target.value }))}
+                  fullWidth
+                >
+                  <MenuItem value="OFFICE_HOURS">
+                    Standard Office Hours {globalConfig.scheduleMode === 'OFFICE_HOURS' ? ' - Active' : ''}
+                  </MenuItem>
+                  <MenuItem value="CWW">
+                    Compressed Work Week (CWW) {globalConfig.scheduleMode === 'CWW' ? ' - Active' : ''}
+                  </MenuItem>
+                </TextField>
+
+                {globalConfig.scheduleMode === 'OFFICE_HOURS' && (
+                  <>
+                    <TextField
+                      label="Office Clock-in"
+                      type="time"
+                      value={globalConfig.officeClockin || '08:00:00'}
+                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, officeClockin: e.target.value }))}
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                    />
+                    <TextField
+                      label="Office Clock-out"
+                      type="time"
+                      value={globalConfig.officeClockout || '17:00:00'}
+                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, officeClockout: e.target.value }))}
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </>
+                )}
+
+                {globalConfig.scheduleMode === 'CWW' && (
+                  <>
+                    <TextField
+                      label="CWW Clock-in Start"
+                      type="time"
+                      value={globalConfig.cwwClockinStart || '07:00:00'}
+                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, cwwClockinStart: e.target.value }))}
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                    />
+                    <TextField
+                      label="CWW Clock-in End"
+                      type="time"
+                      value={globalConfig.cwwClockinEnd || '08:00:00'}
+                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, cwwClockinEnd: e.target.value }))}
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                    />
+                    <TextField
+                      label="CWW Clock-out Start"
+                      type="time"
+                      value={globalConfig.cwwClockoutStart || '18:00:00'}
+                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, cwwClockoutStart: e.target.value }))}
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                    />
+                    <TextField
+                      label="CWW Clock-out End"
+                      type="time"
+                      value={globalConfig.cwwClockoutEnd || '19:00:00'}
+                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, cwwClockoutEnd: e.target.value }))}
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </>
+                )}
+
+                <Box>
+                  <Button variant="contained" onClick={handleUpdateGlobalConfig}>
+                    Save Work Hours
+                  </Button>
+                </Box>
+              </Stack>
+            )}
+
+            {!!myCap?.isSmtpSettingsAccess && (
               <>
                 <Typography variant="h6" fontWeight={600} mb={2} mt={4}>
                   SMTP Configuration

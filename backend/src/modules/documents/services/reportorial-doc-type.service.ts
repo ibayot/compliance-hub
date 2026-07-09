@@ -18,7 +18,7 @@ export class ReportorialDocTypeService {
   async findAll(): Promise<ReportorialDocumentType[]> {
     return this.repo.find({
       where: { active: true },
-      relations: ['unit'],
+      relations: [],
       order: { unit_id: 'ASC', display_name: 'ASC' },
     });
   }
@@ -26,13 +26,13 @@ export class ReportorialDocTypeService {
   async findByUnit(unitId: number): Promise<ReportorialDocumentType[]> {
     return this.repo.find({
       where: { unit_id: unitId, active: true },
-      relations: ['unit'],
+      relations: [],
       order: { display_name: 'ASC' },
     });
   }
 
   async findOne(id: number): Promise<ReportorialDocumentType> {
-    const rec = await this.repo.findOne({ where: { id }, relations: ['unit'] });
+    const rec = await this.repo.findOne({ where: { id }, relations: [] });
     if (!rec) throw new NotFoundException(`Reportorial document type ${id} not found`);
     return rec;
   }

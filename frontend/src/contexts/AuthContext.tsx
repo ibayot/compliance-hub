@@ -9,7 +9,7 @@ import React, {
   useState,
   ReactNode,
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -98,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const router = useRouter();
+  const navigate = useNavigate();
 
   const clearInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current) {
@@ -261,15 +261,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string, redirectTo?: string) => {
     const response = await authApi.login({ email, password });
+    
+    if ((response as any).mfaRequired) {
+      sessionStorage.setItem('mfaTempToken', (response as any).tempToken);
+      navigate('/mfa-verify');
+      return;
+    }
+
     tokenStore.set('accessToken', response.accessToken);
     tokenStore.set('refreshToken', response.refreshToken);
     // Set user from login response first (includes units now)
     setUser(response.user as any);
     if (response.requiresPasswordChange) {
       setRequiresPasswordChange(true);
-    }
-    if (response.requiresMfa) {
-      setRequiresMfa(true);
     }
     // Then fetch full profile to guarantee units and all relations are populated
     try {
@@ -283,11 +287,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(setMyCap)
       .catch(() => { });
 
-    if (response.requiresMfa) {
-      router.push('/mfa-verify');
-    } else {
-      router.push(redirectTo ?? '/dashboard');
-    }
+    navigate(redirectTo ?? '/dashboard');
   };
 
   const loginWithGoogle = async (idToken: string, redirectTo?: string) => {
@@ -311,9 +311,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => { });
 
     if (response.requiresMfa) {
-      router.push('/mfa-verify');
+      navigate('/mfa-verify');
     } else {
-      router.push(redirectTo ?? '/dashboard');
+      navigate(redirectTo ?? '/dashboard');
     }
   };
 
@@ -331,7 +331,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsSessionLocked(false);
       setRequiresMfa(false);
       clearInactivityTimer();
-      router.push(reason ? `/login?reason=${reason}` : '/login');
+      navigate(reason ? `/login?reason=${reason}` : '/login');
     }
   };
 

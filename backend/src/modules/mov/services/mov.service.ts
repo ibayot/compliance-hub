@@ -760,7 +760,7 @@ export class MovService implements OnModuleInit {
         periodMonth,
         ...(query.unit_id ? { unitId: query.unit_id } : {}),
       },
-      relations: ['kpiMaster', 'unit'],
+      relations: ['kpiMaster'],
     });
 
     const kpiBelowTarget = kpiRows.filter((row) => {

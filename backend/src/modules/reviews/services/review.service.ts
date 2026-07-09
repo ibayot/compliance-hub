@@ -132,7 +132,7 @@ export class ReviewService {
     // Get document
     const document = await this.documentRepo.findOne({
       where: { id: documentId, is_deleted: false },
-      relations: ['unit', 'uploader'],
+      relations: [],
     });
 
     if (!document) {

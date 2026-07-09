@@ -136,7 +136,7 @@ export class KpiService {
 
   async listKpiMaster(user: AuthUser) {
     if (this.canViewAll(user)) {
-      return this.kpiMasterRepo.find({ relations: ['unit'], order: { code: 'ASC' } });
+      return this.kpiMasterRepo.find({ order: { code: 'ASC' } });
     }
 
     const allowed = await this.getAllowedUnitIds(user);
@@ -144,7 +144,6 @@ export class KpiService {
 
     return this.kpiMasterRepo.find({
       where: { unitId: In(allowed) },
-      relations: ['unit'],
       order: { code: 'ASC' },
     });
   }
@@ -232,7 +231,7 @@ export class KpiService {
 
     return this.kpiMonitoringRepo.find({
       where,
-      relations: ['kpiMaster', 'unit'],
+      relations: ['kpiMaster'],
       order: { periodYear: 'DESC', periodMonth: 'DESC', kpiMasterCode: 'ASC' },
     });
   }
@@ -256,7 +255,7 @@ export class KpiService {
         periodYear: dto.periodYear,
         periodMonth: dto.periodMonth,
       },
-          });
+    });
 
     if (row && row.status === KpiMonitoringStatus.LOCKED) {
       throw new BadRequestException('This KPI monitoring row is locked.');
@@ -710,7 +709,7 @@ export class KpiService {
 
     const rows = await this.kpiMonitoringRepo.find({
       where,
-      relations: ['kpiMaster', 'unit'],
+      relations: ['kpiMaster'],
     });
 
     const scoringRule =
@@ -854,12 +853,12 @@ export class KpiService {
   private async hydrateMonitorings(monitorings: KpiMonitoring[]) {
     if (!monitorings?.length) return;
     const userIds = new Set<number>();
-    monitorings.forEach(m => {
+    monitorings.forEach((m) => {
       if (m.enteredByUserId) userIds.add(m.enteredByUserId);
     });
     const allUsers = await this.usersHttpClient.getUsers().catch(() => []);
     const userMap = new Map<number, any>(allUsers.map((u: any) => [u.id, u]));
-    monitorings.forEach(m => {
+    monitorings.forEach((m) => {
       if (m.enteredByUserId) {
         m.enteredByUser = userMap.get(m.enteredByUserId) || undefined;
       }

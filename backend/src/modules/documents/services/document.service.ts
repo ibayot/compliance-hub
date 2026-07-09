@@ -812,7 +812,7 @@ export class DocumentService implements OnModuleInit {
 
     const responseDocument = await this.documentRepo.findOne({
       where: { id: document.id },
-      relations: ['unit', 'uploader'],
+      relations: [],
     });
 
     return responseDocument || document;
@@ -898,8 +898,8 @@ export class DocumentService implements OnModuleInit {
     const document = await this.documentRepo.findOne({
       where: { id },
       relations: canUseIssuanceLinks
-        ? ['unit', 'uploader', 'versions', 'versions.uploader', 'issuances']
-        : ['unit', 'uploader', 'versions', 'versions.uploader'],
+        ? ['versions', 'issuances']
+        : ['versions'],
     });
 
     if (!document) {
@@ -1204,7 +1204,7 @@ export class DocumentService implements OnModuleInit {
 
     const updated = await this.assignmentRepo.findOne({
       where: { id },
-      relations: ['unit'],
+      relations: [],
     });
 
     if (!updated) {
@@ -1239,7 +1239,7 @@ export class DocumentService implements OnModuleInit {
   > {
     const assignments = await this.assignmentRepo.find({
       where: { user_id: userId, is_active: true },
-      relations: ['unit'],
+      relations: [],
       order: { created_at: 'DESC' },
     });
 
@@ -1302,7 +1302,7 @@ export class DocumentService implements OnModuleInit {
 
     return this.versionRepo.find({
       where: { document_id: documentId },
-      relations: ['uploader'],
+      relations: [],
       order: { version_number: 'DESC' },
     });
   }
@@ -1327,7 +1327,7 @@ export class DocumentService implements OnModuleInit {
   async deleteDocument(id: string): Promise<void> {
     const document = await this.documentRepo.findOne({
       where: { id, is_deleted: false },
-      relations: ['uploader', 'versions', 'issuances'],
+      relations: ['versions', 'issuances'],
     });
 
     if (!document) {
@@ -1378,7 +1378,7 @@ export class DocumentService implements OnModuleInit {
 
     const document = await this.documentRepo.findOne({
       where: { id: payload.document_id, is_deleted: false },
-      relations: ['uploader'],
+      relations: [],
     });
 
     if (!document) {
@@ -1447,7 +1447,7 @@ export class DocumentService implements OnModuleInit {
   async archiveDocument(documentId: string, actorId: number): Promise<void> {
     const document = await this.documentRepo.findOne({
       where: { id: documentId, is_deleted: false },
-      relations: ['uploader'],
+      relations: [],
     });
 
     if (!document) {

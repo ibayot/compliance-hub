@@ -4,7 +4,7 @@ import axios, { AxiosError, AxiosInstance } from 'axios';
 // VITE_API_URL can override for production deployments.
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
-const tokenStore = {
+export const tokenStore = {
   get: (key: 'accessToken' | 'refreshToken'): string | null => {
     if (typeof window === 'undefined') return null;
     return window.sessionStorage.getItem(key);

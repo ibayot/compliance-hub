@@ -29,7 +29,6 @@ import { HttpClientsModule } from '../../common/http-clients/http-clients.module
 import { EventBusModule } from '../../common/events/event-bus.module';
 import { CapabilityGuard } from '../../common/guards/capability.guard';
 
-
 @Module({
   imports: [
     TypeOrmModule.forFeature([

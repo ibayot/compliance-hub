@@ -63,7 +63,7 @@ export class TicketSettingsController {
     private readonly settingsService: TicketSettingsService,
     private readonly emailService: EmailService,
     private readonly roleCapSvc: RoleCapabilitiesService,
-  ) { }
+  ) {}
 
   /** POST /ticket-settings/email-test — send a test email to verify SMTP (super_admin only) */
   @Post('email-test')

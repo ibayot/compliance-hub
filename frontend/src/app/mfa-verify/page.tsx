@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -11,40 +11,29 @@ import {
   Button,
   Alert,
   CircularProgress,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
-import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/lib/api/auth';
 import { enqueueSnackbar } from 'notistack';
+import { tokenStore } from '@/lib/api/client';
 
 export default function MfaVerifyPage() {
-  const router = useRouter();
-  const { user, requiresMfa, setRequiresMfa } = useAuth();
+  const navigate = useNavigate();
   const [code, setCode] = useState('');
+  const [rememberDevice, setRememberDevice] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [tempToken, setTempToken] = useState<string | null>(null);
 
   useEffect(() => {
-    // If not requires MFA, redirect away
-    if (user && requiresMfa === false) {
-      router.push('/dashboard');
+    const token = sessionStorage.getItem('mfaTempToken');
+    if (!token) {
+      navigate('/login');
+    } else {
+      setTempToken(token);
     }
-  }, [user, requiresMfa, router]);
-
-  const handleSendCode = async () => {
-    setSending(true);
-    setError(null);
-    try {
-      await authApi.sendMfaCode();
-      setSent(true);
-      enqueueSnackbar('Verification code sent to your email.', { variant: 'success' });
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to send code.');
-    } finally {
-      setSending(false);
-    }
-  };
+  }, [navigate]);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,13 +41,26 @@ export default function MfaVerifyPage() {
       setError('Please enter a valid 6-digit code.');
       return;
     }
+    if (!tempToken) return;
+
     setLoading(true);
     setError(null);
     try {
-      await authApi.verifyMfaCode(code);
+      const response = await authApi.verifyMfaCode(tempToken, code, rememberDevice);
       enqueueSnackbar('MFA Verification successful.', { variant: 'success' });
-      setRequiresMfa(false);
-      router.push('/dashboard');
+      
+      // Store standard tokens
+      tokenStore.set('accessToken', response.accessToken);
+      tokenStore.set('refreshToken', response.refreshToken);
+      if (response.deviceToken) {
+        localStorage.setItem('deviceToken', response.deviceToken);
+      }
+      
+      // Clear temp token
+      sessionStorage.removeItem('mfaTempToken');
+      
+      // Force reload to let AuthContext pick up the tokens
+      window.location.href = '/dashboard';
     } catch (err: any) {
       setError(err.response?.data?.message || 'Verification failed. Invalid or expired code.');
     } finally {
@@ -66,8 +68,8 @@ export default function MfaVerifyPage() {
     }
   };
 
-  if (!user) {
-    return null; // Not logged in
+  if (!tempToken) {
+    return null;
   }
 
   return (
@@ -87,7 +89,7 @@ export default function MfaVerifyPage() {
             Security Verification
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3, textAlign: 'center' }}>
-            For your security, please verify your identity for the first login of the day.
+            We've sent a 6-digit verification code to your registered email address.
           </Typography>
 
           {error && (
@@ -96,58 +98,44 @@ export default function MfaVerifyPage() {
             </Alert>
           )}
 
-          {!sent ? (
-            <Box textAlign="center">
-              <Typography variant="body2" sx={{ mb: 3 }}>
-                Click below to receive a 6-digit verification code sent to your registered email address (<b>{user.email}</b>).
-              </Typography>
-              <Button
-                variant="contained"
-                fullWidth
-                onClick={handleSendCode}
-                disabled={sending}
-              >
-                {sending ? <CircularProgress size={24} color="inherit" /> : 'Send Code'}
-              </Button>
-            </Box>
-          ) : (
-            <form onSubmit={handleVerify}>
-              <TextField
-                fullWidth
-                label="6-Digit Code"
-                variant="outlined"
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
-                sx={{ mb: 3 }}
-                required
-                autoFocus
-                inputProps={{
-                  maxLength: 6,
-                  style: { textAlign: 'center', letterSpacing: '8px', fontSize: '1.5rem' },
-                }}
-              />
-              <Button
-                type="submit"
-                variant="contained"
-                fullWidth
-                disabled={loading || code.length !== 6}
-                sx={{ mb: 2 }}
-              >
-                {loading ? <CircularProgress size={24} color="inherit" /> : 'Verify Code'}
-              </Button>
-              <Box textAlign="center">
-                <Button
-                  variant="text"
-                  color="secondary"
-                  size="small"
-                  onClick={handleSendCode}
-                  disabled={sending}
-                >
-                  Resend Code
-                </Button>
-              </Box>
-            </form>
-          )}
+          <form onSubmit={handleVerify}>
+            <TextField
+              fullWidth
+              label="6-Digit Code"
+              variant="outlined"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+              sx={{ mb: 3 }}
+              required
+              autoFocus
+              inputProps={{
+                maxLength: 6,
+                style: { textAlign: 'center', letterSpacing: '8px', fontSize: '1.5rem' },
+              }}
+            />
+            
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={rememberDevice}
+                  onChange={(e) => setRememberDevice(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label="Remember this device for 7 days"
+              sx={{ mb: 3, display: 'block' }}
+            />
+
+            <Button
+              type="submit"
+              variant="contained"
+              fullWidth
+              disabled={loading || code.length !== 6}
+              sx={{ mb: 2 }}
+            >
+              {loading ? <CircularProgress size={24} color="inherit" /> : 'Verify Code'}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </Box>

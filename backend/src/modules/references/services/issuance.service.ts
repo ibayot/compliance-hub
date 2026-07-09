@@ -204,7 +204,7 @@ export class IssuanceService implements OnModuleInit {
     const canUseDocumentLinks = await this.canUseDocumentLinks();
     const issuance = await this.issuanceRepo.findOne(
       canUseDocumentLinks
-        ? { where: { id }, relations: ['documents', 'documents.unit'] }
+        ? { where: { id }, relations: ['documents'] }
         : { where: { id } },
     );
 

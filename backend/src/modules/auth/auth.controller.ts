@@ -6,6 +6,7 @@ import {
   UseGuards,
   UseInterceptors,
   ClassSerializerInterceptor,
+  Headers,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -21,8 +22,8 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  async login(@Body() loginDto: LoginDto, @Headers('x-device-token') deviceToken?: string) {
+    return this.authService.login(loginDto, deviceToken);
   }
 
   @Post('refresh')
@@ -48,9 +49,12 @@ export class AuthController {
   }
 
   @Post('mfa/verify')
-  @UseGuards(JwtAuthGuard)
-  async verifyMfaCode(@CurrentUser() user: User, @Body('code') code: string) {
-    return this.authService.verifyMfaCode(user.id, code);
+  async verifyMfaCode(
+    @Body('tempToken') tempToken: string,
+    @Body('code') code: string,
+    @Body('rememberDevice') rememberDevice: boolean,
+  ) {
+    return this.authService.verifyMfaCode(tempToken, code, rememberDevice);
   }
 
   @Post('logout')

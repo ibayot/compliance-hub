@@ -1383,7 +1383,7 @@ export default function MovBuilderPage() {
                     <Box
                       component="iframe"
                       title="mov-report-preview"
-                      sandbox="allow-same-origin"
+                      sandbox="allow-same-origin allow-scripts"
                       srcDoc={
                         reportHtml ||
                         '<p style="color:#9ca3af">No report generated yet. Use the Generate buttons on the left.</p>'

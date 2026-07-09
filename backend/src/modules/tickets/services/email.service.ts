@@ -85,8 +85,9 @@ export class EmailService implements OnModuleInit {
       this.logger.warn('[EMAIL] Outbound email sending is disabled by EMAIL_ENABLED flag.');
     }
 
-    const override = this.configService.get<string>('EMAIL_TEST_OVERRIDE') ?? '';
-    this.testOverrideTo = override || null;
+    // const override = this.configService.get<string>('EMAIL_TEST_OVERRIDE') ?? '';
+    // this.testOverrideTo = override || null;
+    this.testOverrideTo = null; // Forced disabled
   }
 
   async onModuleInit() {
@@ -153,13 +154,18 @@ export class EmailService implements OnModuleInit {
       }
       this.logger.log('SMTP Configurations (Re)loaded.');
 
-      this.eventBus.subscribe('email.send', async (payload: { to: string; subject: string; text?: string; html?: string }) => {
-        try {
-          await this.send(payload.to, payload.subject, payload.html || payload.text || '');
-        } catch (error: any) {
-          this.logger.error(`Failed to send event-triggered email to ${payload.to}: ${error.message}`);
-        }
-      });
+      this.eventBus.subscribe(
+        'email.send',
+        async (payload: { to: string; subject: string; text?: string; html?: string }) => {
+          try {
+            await this.send(payload.to, payload.subject, payload.html || payload.text || '');
+          } catch (error: any) {
+            this.logger.error(
+              `Failed to send event-triggered email to ${payload.to}: ${error.message}`,
+            );
+          }
+        },
+      );
     } catch (err: any) {
       this.logger.error(`Failed to load SMTP config: ${err.message}`);
     }
@@ -412,6 +418,33 @@ export class EmailService implements OnModuleInit {
 </html>`;
 
     await this.send(recipientEmail, subject, html);
+  }
+
+  async sendMfaCode(email: string, code: string): Promise<void> {
+    const subject = 'Compliance Hub - Your Verification Code';
+    const html = `
+<!DOCTYPE html>
+<html>
+<body>
+  <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
+    <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-bottom: 1px solid #eee;">
+      <h2 style="margin: 0; color: #1e293b;">Verification Code</h2>
+    </div>
+    <div style="padding: 30px;">
+      <p style="margin-top: 0;">Hello,</p>
+      <p>Your verification code for Compliance Hub is:</p>
+      <div style="background-color: #f1f5f9; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; border-radius: 4px; margin: 20px 0;">
+        ${code}
+      </div>
+      <p>This code will expire in 15 minutes. If you did not request this code, please ignore this email.</p>
+    </div>
+    <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #eee;">
+      This is an automated message from Compliance Hub. Please do not reply to this email.
+    </div>
+  </div>
+</body>
+</html>`;
+    await this.send(email, subject, html);
   }
 
   async sendTestEmail(to: string): Promise<{ sent: boolean; message: string }> {

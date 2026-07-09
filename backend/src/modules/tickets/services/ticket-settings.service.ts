@@ -106,7 +106,7 @@ export class TicketSettingsService {
     @InjectRepository(Ticket)
     private readonly ticketRepo: Repository<Ticket>,
     private readonly roleCapSvc: RoleCapabilitiesService,
-  ) { }
+  ) {}
 
   // ── Categories ──────────────────────────────────────────────────────────
 
@@ -519,7 +519,6 @@ export class TicketSettingsService {
       throw new BadRequestException(
         'This user is already configured as an escalation focal for that ticket type.',
       );
-
 
     const user = await this.categoryRepo.manager.query(
       `SELECT id, first_name, last_name, email, role FROM users WHERE id = ? AND active = 1`,

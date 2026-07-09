@@ -465,7 +465,7 @@ function RoleCapabilitiesCard() {
                           <TableCell key={col.key} align="center">
                             <Switch
                               size="small"
-                              checked={cap.roleValue === 'super_admin' ? true : val}
+                              checked={cap.roleValue === 'super_admin' ? true : Boolean(val)}
                               disabled={isLocked || saving === cap.roleValue}
                               onChange={(e) =>
                                 handleToggle(cap.roleValue, col.key, e.target.checked)
@@ -803,7 +803,7 @@ function RoleManagementCard() {
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={form.value === 'super_admin' ? false : form.assignable}
+                      checked={form.value === 'super_admin' ? false : Boolean(form.assignable)}
                       disabled={form.value === 'super_admin'}
                       onChange={(e) =>
                         setForm((prev) => ({ ...prev, assignable: e.target.checked }))
@@ -1198,7 +1198,7 @@ function FocalUserManagementCard() {
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={form.ticketTechnician}
+                      checked={Boolean(form.ticketTechnician)}
                       onChange={(e) => setForm({ ...form, ticketTechnician: e.target.checked })}
                     />
                   }

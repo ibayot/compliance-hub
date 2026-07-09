@@ -854,6 +854,15 @@ export const ticketSettingsApi = {
     smtpPass?: string | null;
     smtpFrom?: string | null;
     smtpFromName?: string | null;
+    primarySmtpDailyLimit?: number;
+    scheduleMode?: string;
+    officeClockin?: string;
+    officeClockout?: string;
+    cwwClockinStart?: string;
+    cwwClockinEnd?: string;
+    cwwClockoutStart?: string;
+    cwwClockoutEnd?: string;
+    isFlagCeremonyPaused?: boolean;
   }> => {
     const response = await apiClient.get(`/ticket-settings/global-config`);
     return response.data;

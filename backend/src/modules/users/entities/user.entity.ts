@@ -51,6 +51,16 @@ export class User {
   @Exclude()
   passwordHash: string;
 
+  @Column({ name: 'mfa_code', nullable: true })
+  @Exclude()
+  mfaCode: string;
+
+  @Column({ name: 'mfa_expires_at', type: 'timestamp', nullable: true })
+  mfaExpiresAt: Date;
+
+  @Column({ name: 'mfa_last_verified_at', type: 'timestamp', nullable: true })
+  mfaLastVerifiedAt: Date;
+
   @Column({ name: 'first_name', nullable: true })
   firstName: string;
 
@@ -114,16 +124,6 @@ export class User {
   @Column({ name: 'last_login', type: 'datetime', nullable: true })
   lastLogin: Date | null;
 
-  @Column({ name: 'mfa_code', type: 'varchar', nullable: true })
-  @Exclude()
-  mfaCode: string | null;
-
-  @Column({ name: 'mfa_code_expires_at', type: 'datetime', nullable: true })
-  @Exclude()
-  mfaCodeExpiresAt: Date | null;
-
-  @Column({ name: 'mfa_last_verified_at', type: 'datetime', nullable: true })
-  mfaLastVerifiedAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

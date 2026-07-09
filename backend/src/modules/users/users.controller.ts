@@ -140,8 +140,12 @@ export class UsersController {
   // @Roles removed to allow self-update; authorization is checked inside the method
   update(@Request() req: any, @Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     const parsedId = parseInt(id, 10);
-    const isAdmin = [UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER].includes(req.user.role);
-    
+    const isAdmin = [
+      UserRole.SUPER_ADMIN,
+      UserRole.SECTION_HEAD,
+      UserRole.COMPLIANCE_OFFICER,
+    ].includes(req.user.role);
+
     if (!isAdmin && req.user.id !== parsedId) {
       throw new ForbiddenException('You can only update your own profile');
     }

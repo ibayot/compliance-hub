@@ -133,7 +133,7 @@ export class TicketService implements OnModuleInit {
     private readonly kbService: KnowledgeBaseService,
     @Optional()
     private readonly eventBus?: EventBusService,
-  ) { }
+  ) {}
 
   // --- Schema Migration ----------------------------------------------------
 
@@ -151,12 +151,12 @@ export class TicketService implements OnModuleInit {
     if (this.eventBus) {
       this.eventBus.subscribe('attendance.unavailable', (payload: any) => {
         if (payload?.techId) {
-          this.reassignUnavailableTechnicianTickets(payload.techId).catch(() => { });
+          this.reassignUnavailableTechnicianTickets(payload.techId).catch(() => {});
         }
       });
       this.eventBus.subscribe('attendance.verified', (payload: any) => {
         if (payload?.userId) {
-          this.assignPendingTicketsOnLogin(payload.userId).catch(() => { });
+          this.assignPendingTicketsOnLogin(payload.userId).catch(() => {});
         }
       });
     }
@@ -537,7 +537,6 @@ export class TicketService implements OnModuleInit {
                 // 1. Calculate Active SLA Load
                 const activeTickets = await this.ticketRepo.find({
                   where: [
-
                     { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
                     { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
                   ],
@@ -578,7 +577,6 @@ export class TicketService implements OnModuleInit {
                 for (const tech of eligibleTechs) {
                   const openCount = await this.ticketRepo.count({
                     where: [
-
                       { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
                       { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
                     ],
@@ -595,7 +593,6 @@ export class TicketService implements OnModuleInit {
               for (const tech of eligibleTechs) {
                 const openCount = await this.ticketRepo.count({
                   where: [
-
                     { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
                     { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
                   ],
@@ -618,7 +615,7 @@ export class TicketService implements OnModuleInit {
                 { assignedToId: assignedTech.id, status: TicketStatus.ASSIGNED },
                 { assignedToId: assignedTech.id, status: TicketStatus.IN_PROGRESS },
                 { assignedToId: assignedTech.id, status: TicketStatus.PAUSE },
-              ]
+              ],
             });
             isSlaWaiting = activeTicketsCount > 0;
 
@@ -649,16 +646,23 @@ export class TicketService implements OnModuleInit {
           this.logger.warn(`[SLA] Failed to load slaConfig: ${err?.message}`);
           return null;
         });
-        if (!slaConfig) this.logger.warn('[SLA] slaConfig is null — falling back to naive +hours calc');
+        if (!slaConfig)
+          this.logger.warn('[SLA] slaConfig is null — falling back to naive +hours calc');
         slaDeadline = slaConfig
           ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
-          : (() => { const d = new Date(); d.setHours(d.getHours() + cat.slaHours); return d; })();
-        this.logger.log(`[SLA] deadline set: ${slaDeadline?.toISOString()}, slaHours=${cat.slaHours}, mode=${slaConfig?.scheduleMode ?? 'fallback'}`);
+          : (() => {
+              const d = new Date();
+              d.setHours(d.getHours() + cat.slaHours);
+              return d;
+            })();
+        this.logger.log(
+          `[SLA] deadline set: ${slaDeadline?.toISOString()}, slaHours=${cat.slaHours}, mode=${slaConfig?.scheduleMode ?? 'fallback'}`,
+        );
       }
     }
 
     const ticket = this.ticketRepo.create({
-      ticketNumber: '',//ticketNumber,
+      ticketNumber: '', //ticketNumber,
       subject: dto.subject.trim(),
       description: dto.description.trim(),
       ticketType: ticketType,
@@ -708,7 +712,7 @@ export class TicketService implements OnModuleInit {
       ticketNumber: persisted.ticketNumber,
       ticketType: persisted.ticketType,
       status: persisted.status,
-    }).catch(() => { });
+    }).catch(() => {});
 
     if (assignedToId && assignedTech) {
       this.logEvent(saved.id, 'auto_assigned', null, {
@@ -716,7 +720,7 @@ export class TicketService implements OnModuleInit {
         technicianName:
           [assignedTech.first_name, assignedTech.lastName].filter(Boolean).join(' ') ||
           assignedTech.email,
-      }).catch(() => { });
+      }).catch(() => {});
     }
 
     // ── Send email notification (fire-and-forget) ──────────────────────
@@ -738,7 +742,7 @@ export class TicketService implements OnModuleInit {
       requesterEmail: requester.email,
       assignedToName: assignedTech
         ? [assignedTech.first_name, assignedTech.lastName].filter(Boolean).join(' ') ||
-        assignedTech.email
+          assignedTech.email
         : undefined,
       assignedToEmail: assignedTech?.email,
       createdAt: persisted.createdAt?.toISOString?.() ?? new Date().toISOString(),
@@ -770,12 +774,12 @@ export class TicketService implements OnModuleInit {
   }): Promise<
     | Ticket[]
     | {
-      data: Ticket[];
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-    }
+        data: Ticket[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      }
   > {
     const allowedSortColumns: Record<string, string> = {
       createdAt: 't.createdAt',
@@ -790,8 +794,6 @@ export class TicketService implements OnModuleInit {
 
     const qb = this.ticketRepo
       .createQueryBuilder('t')
-
-
 
       .leftJoinAndSelect('t.category', 'category')
       .leftJoinAndSelect('t.issueTypeConfig', 'issueTypeConfig')
@@ -954,8 +956,6 @@ export class TicketService implements OnModuleInit {
     return Object.assign(ticket, { isOverdue, isNearingSLA });
   }
 
-
-
   private commentAttachmentStorageRoot(): string {
     return process.env.COMMENT_ATTACHMENT_STORAGE_ROOT || './uploads/comments';
   }
@@ -983,7 +983,9 @@ export class TicketService implements OnModuleInit {
         this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
 
       if (!isAuthorizedToOpen) {
-        throw new ForbiddenException('Only Ticket Settings Focals or Super Admins can revert a ticket to OPEN status.');
+        throw new ForbiddenException(
+          'Only Ticket Settings Focals or Super Admins can revert a ticket to OPEN status.',
+        );
       }
     }
 
@@ -1005,7 +1007,7 @@ export class TicketService implements OnModuleInit {
         ticket.userClosed = true;
         if (!ticket.resolvedAt) ticket.resolvedAt = new Date();
         const savedClosed = await this.ticketRepo.save(ticket);
-        this.logEvent(savedClosed.id, 'closed', actorId).catch(() => { });
+        this.logEvent(savedClosed.id, 'closed', actorId).catch(() => {});
         if (ticket.assignedTo?.email) {
           this.emailService
             .sendTicketClosedOrRatedEmailToTechnician({
@@ -1019,7 +1021,7 @@ export class TicketService implements OnModuleInit {
               technicianEmail: ticket.assignedTo.email,
               action: 'closed',
             })
-            .catch(() => { });
+            .catch(() => {});
         }
         return savedClosed;
       }
@@ -1052,9 +1054,12 @@ export class TicketService implements OnModuleInit {
       // If there is an active escalation (Pending or Accepted), restrict ticket type changes
       if (latestEscalation && latestEscalation.status !== 'returned') {
         const isSettingsFocal = this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
-        const isAcceptedFocal = latestEscalation.status === 'accepted' && latestEscalation.escalatedToId === actorId;
+        const isAcceptedFocal =
+          latestEscalation.status === 'accepted' && latestEscalation.escalatedToId === actorId;
         if (!isSettingsFocal && !isAcceptedFocal) {
-          throw new ForbiddenException('You cannot change the ticket type while the ticket is escalated.');
+          throw new ForbiddenException(
+            'You cannot change the ticket type while the ticket is escalated.',
+          );
         }
       } else {
         const isSettingsFocal = this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
@@ -1118,20 +1123,26 @@ export class TicketService implements OnModuleInit {
 
       // QA #4/#3/#6: Full status transition matrix enforcement
       const ALLOWED_TRANSITIONS: Partial<Record<TicketStatus, TicketStatus[]>> = {
-        [TicketStatus.OPEN]: (this.roleCapSvc.isTicketSettingsFocal(actorRole as string) || this.roleCapSvc.isTicketFocal(actorRole as string))
-          ? [TicketStatus.FREEZE, TicketStatus.DUPLICATE]
-          : [TicketStatus.DUPLICATE],
-        [TicketStatus.ASSIGNED]: (this.roleCapSvc.isTicketSettingsFocal(actorRole as string) || this.roleCapSvc.isTicketFocal(actorRole as string))
-          ? [
-            TicketStatus.IN_PROGRESS,
-            TicketStatus.FREEZE,
-            TicketStatus.DUPLICATE,
-            TicketStatus.OPEN,
-          ]
-          : [TicketStatus.IN_PROGRESS, TicketStatus.DUPLICATE],
-        [TicketStatus.IN_PROGRESS]: (this.roleCapSvc.isTicketSettingsFocal(actorRole as string) || this.roleCapSvc.isTicketFocal(actorRole as string))
-          ? [TicketStatus.RESOLVED, TicketStatus.PAUSE, TicketStatus.FREEZE]
-          : [TicketStatus.RESOLVED, TicketStatus.PAUSE],
+        [TicketStatus.OPEN]:
+          this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
+          this.roleCapSvc.isTicketFocal(actorRole as string)
+            ? [TicketStatus.FREEZE, TicketStatus.DUPLICATE]
+            : [TicketStatus.DUPLICATE],
+        [TicketStatus.ASSIGNED]:
+          this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
+          this.roleCapSvc.isTicketFocal(actorRole as string)
+            ? [
+                TicketStatus.IN_PROGRESS,
+                TicketStatus.FREEZE,
+                TicketStatus.DUPLICATE,
+                TicketStatus.OPEN,
+              ]
+            : [TicketStatus.IN_PROGRESS, TicketStatus.DUPLICATE],
+        [TicketStatus.IN_PROGRESS]:
+          this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
+          this.roleCapSvc.isTicketFocal(actorRole as string)
+            ? [TicketStatus.RESOLVED, TicketStatus.PAUSE, TicketStatus.FREEZE]
+            : [TicketStatus.RESOLVED, TicketStatus.PAUSE],
         [TicketStatus.PAUSE]: [TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED],
         [TicketStatus.RESOLVED]: [TicketStatus.CLOSED],
         [TicketStatus.FREEZE]: [
@@ -1147,7 +1158,7 @@ export class TicketService implements OnModuleInit {
       if (!allowed.includes(dto.status as TicketStatus)) {
         throw new ForbiddenException(
           `Cannot transition ticket from '${ticket.status}' to '${dto.status}'. ` +
-          (allowed.length > 0 ? `Allowed: ${allowed.join(', ')}.` : 'This status is terminal.'),
+            (allowed.length > 0 ? `Allowed: ${allowed.join(', ')}.` : 'This status is terminal.'),
         );
       }
 
@@ -1246,7 +1257,9 @@ export class TicketService implements OnModuleInit {
           }
           if (currentActiveTickets.length > 0) {
             await this.ticketRepo.save(currentActiveTickets);
-            this.logger.log(`Pushed back ${currentActiveTickets.length} active ticket(s) to queue for technician #${ticket.assignedToId} due to preemptive resume of ticket ${ticket.ticketNumber}`);
+            this.logger.log(
+              `Pushed back ${currentActiveTickets.length} active ticket(s) to queue for technician #${ticket.assignedToId} due to preemptive resume of ticket ${ticket.ticketNumber}`,
+            );
           }
         }
         // QA: When transitioning back to OPEN, remove the assigned technician
@@ -1280,7 +1293,6 @@ export class TicketService implements OnModuleInit {
               for (const tech of eligibleTechs) {
                 const activeTickets = await this.ticketRepo.find({
                   where: [
-
                     { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
                     { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
                   ],
@@ -1309,7 +1321,6 @@ export class TicketService implements OnModuleInit {
                 for (const tech of eligibleTechs) {
                   const openCount = await this.ticketRepo.count({
                     where: [
-
                       { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
                       { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
                     ],
@@ -1325,7 +1336,6 @@ export class TicketService implements OnModuleInit {
               for (const tech of eligibleTechs) {
                 const openCount = await this.ticketRepo.count({
                   where: [
-
                     { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
                     { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
                   ],
@@ -1385,7 +1395,7 @@ export class TicketService implements OnModuleInit {
       this.logEvent(saved.id, 'status_changed', actorId, {
         to: dto.status,
         resolutionNotes: dto.resolutionNotes ?? undefined,
-      }).catch(() => { });
+      }).catch(() => {});
 
       if (dto.status === TicketStatus.RESOLVED && ticket.requester?.email) {
         this.emailService
@@ -1399,11 +1409,11 @@ export class TicketService implements OnModuleInit {
             requesterEmail: ticket.requester.email,
             technicianName: ticket.assignedTo
               ? [ticket.assignedTo.first_name, ticket.assignedTo.last_name]
-                .filter(Boolean)
-                .join(' ') || ticket.assignedTo.email
+                  .filter(Boolean)
+                  .join(' ') || ticket.assignedTo.email
               : undefined,
           })
-          .catch(() => { });
+          .catch(() => {});
       }
 
       if (dto.status === TicketStatus.CLOSED && ticket.assignedTo?.email) {
@@ -1413,19 +1423,25 @@ export class TicketService implements OnModuleInit {
             ticketNumber: saved.ticketNumber,
             subject: saved.subject,
             technicianName:
-              [ticket.assignedTo.first_name, ticket.assignedTo.last_name].filter(Boolean).join(' ') ||
-              ticket.assignedTo.email,
+              [ticket.assignedTo.first_name, ticket.assignedTo.last_name]
+                .filter(Boolean)
+                .join(' ') || ticket.assignedTo.email,
             technicianEmail: ticket.assignedTo.email,
             action: 'closed',
           })
-          .catch(() => { });
+          .catch(() => {});
       }
     }
 
     // QA #1/#2: On RESOLVED, auto-assign next OPEN ticket — only for non-senior techs
     // QA #1/#2: On RESOLVED, CLOSED, DUPLICATE, or FREEZE, auto-assign next queued ticket
     if (
-      [TicketStatus.RESOLVED, TicketStatus.CLOSED, TicketStatus.DUPLICATE, TicketStatus.FREEZE].includes(dto.status as TicketStatus) &&
+      [
+        TicketStatus.RESOLVED,
+        TicketStatus.CLOSED,
+        TicketStatus.DUPLICATE,
+        TicketStatus.FREEZE,
+      ].includes(dto.status as TicketStatus) &&
       saved.assignedToId
     ) {
       try {
@@ -1466,17 +1482,26 @@ export class TicketService implements OnModuleInit {
                     .getCategoryById(waitingTicket.categoryId)
                     .catch(() => null);
                   if (cat?.slaHours) {
-                    const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
+                    const slaConfig = await this.configRepo
+                      .findOne({ where: { id: 1 } })
+                      .catch(() => null);
                     waitingTicket.slaDeadline = slaConfig
                       ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
-                      : (() => { const d = new Date(); d.setHours(d.getHours() + cat.slaHours); return d; })();
+                      : (() => {
+                          const d = new Date();
+                          d.setHours(d.getHours() + cat.slaHours);
+                          return d;
+                        })();
                   }
                 }
               } else if (waitingTicket.slaPausedAt) {
                 // Ticket was pushed back to queue previously, resume its SLA
                 const pausedTimeMs = new Date().getTime() - waitingTicket.slaPausedAt.getTime();
-                waitingTicket.slaDeadline = new Date(waitingTicket.slaDeadline.getTime() + pausedTimeMs);
-                waitingTicket.accumulatedPauseSeconds = (waitingTicket.accumulatedPauseSeconds || 0) + Math.floor(pausedTimeMs / 1000);
+                waitingTicket.slaDeadline = new Date(
+                  waitingTicket.slaDeadline.getTime() + pausedTimeMs,
+                );
+                waitingTicket.accumulatedPauseSeconds =
+                  (waitingTicket.accumulatedPauseSeconds || 0) + Math.floor(pausedTimeMs / 1000);
                 waitingTicket.slaPausedAt = null;
               }
               await this.ticketRepo.save(waitingTicket);
@@ -1484,10 +1509,11 @@ export class TicketService implements OnModuleInit {
               this.logEvent(waitingTicket.id, 'auto_assigned', null, {
                 technicianId: resolvedByTech!.id,
                 technicianName:
-                  [resolvedByTech!.first_name, resolvedByTech!.last_name].filter(Boolean).join(' ') ||
-                  resolvedByTech!.email,
+                  [resolvedByTech!.first_name, resolvedByTech!.last_name]
+                    .filter(Boolean)
+                    .join(' ') || resolvedByTech!.email,
                 note: 'Unstacked from waiting list',
-              }).catch(() => { });
+              }).catch(() => {});
 
               this.logger.log(
                 `Auto-reassign on resolve: unstacked waiting ticket ${waitingTicket.ticketNumber} for technician #${saved.assignedToId}`,
@@ -1512,10 +1538,16 @@ export class TicketService implements OnModuleInit {
                     .getCategoryById(nextTicket.categoryId)
                     .catch(() => null);
                   if (cat?.slaHours) {
-                    const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
+                    const slaConfig = await this.configRepo
+                      .findOne({ where: { id: 1 } })
+                      .catch(() => null);
                     nextTicket.slaDeadline = slaConfig
                       ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
-                      : (() => { const d = new Date(); d.setHours(d.getHours() + cat.slaHours); return d; })();
+                      : (() => {
+                          const d = new Date();
+                          d.setHours(d.getHours() + cat.slaHours);
+                          return d;
+                        })();
                   }
                 }
 
@@ -1527,7 +1559,7 @@ export class TicketService implements OnModuleInit {
                     [resolvedByTech!.first_name, resolvedByTech!.last_name]
                       .filter(Boolean)
                       .join(' ') || resolvedByTech!.email,
-                }).catch(() => { });
+                }).catch(() => {});
 
                 this.logger.log(
                   `Auto-reassign on resolve: ticket ${nextTicket.ticketNumber} (${nextTicket.ticketType}) -> technician #${saved.assignedToId}`,
@@ -1601,7 +1633,9 @@ export class TicketService implements OnModuleInit {
     const attendanceRecord = await this.attendanceService.getAttendanceForDate(todayStr);
     const techAttendance = attendanceRecord.find((a) => a.userId === dto.assignedToId);
     if (techAttendance && ['absent', 'out_of_office', 'half_day'].includes(techAttendance.status)) {
-      throw new BadRequestException(`Cannot assign ticket to a technician who is currently ${techAttendance.status}.`);
+      throw new BadRequestException(
+        `Cannot assign ticket to a technician who is currently ${techAttendance.status}.`,
+      );
     }
 
     // Once an escalation is accepted, only CO/SH/super_admin may reassign,
@@ -1643,7 +1677,11 @@ export class TicketService implements OnModuleInit {
       .where('ta.user_id = :userId', { userId: dto.assignedToId })
       .andWhere('ta.date = :today', { today })
       .getRawOne<{ status?: string }>();
-    if (attendanceRow?.status === 'absent' || attendanceRow?.status === 'out_of_office' || attendanceRow?.status === 'half_day') {
+    if (
+      attendanceRow?.status === 'absent' ||
+      attendanceRow?.status === 'out_of_office' ||
+      attendanceRow?.status === 'half_day'
+    ) {
       throw new BadRequestException(
         'Selected technician is not available today and cannot be assigned tickets.',
       );
@@ -1677,7 +1715,7 @@ export class TicketService implements OnModuleInit {
         { assignedToId: dto.assignedToId, status: TicketStatus.ASSIGNED },
         { assignedToId: dto.assignedToId, status: TicketStatus.IN_PROGRESS },
         { assignedToId: dto.assignedToId, status: TicketStatus.PAUSE },
-      ]
+      ],
     });
 
     // Guard: technician must have no active tickets (unless actor is main focal / admin)
@@ -1698,7 +1736,9 @@ export class TicketService implements OnModuleInit {
 
     // Set SLA deadline if the ticket's category has an SLA configured
     if (ticket.category?.slaHours) {
-      const isAuthorizedToResetSla = this.roleCapSvc.isTicketSettingsFocal(actorRole as string) || actorRole === UserRole.SUPER_ADMIN;
+      const isAuthorizedToResetSla =
+        this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
+        actorRole === UserRole.SUPER_ADMIN;
 
       if (busyCount > 0) {
         ticket.isSlaWaiting = true;
@@ -1708,7 +1748,11 @@ export class TicketService implements OnModuleInit {
           const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
           ticket.slaDeadline = slaConfig
             ? await this.calculateSlaDeadline(new Date(), ticket.category.slaHours, slaConfig)
-            : (() => { const d = new Date(); d.setHours(d.getHours() + ticket.category.slaHours); return d; })();
+            : (() => {
+                const d = new Date();
+                d.setHours(d.getHours() + ticket.category.slaHours);
+                return d;
+              })();
         }
       }
     }
@@ -1721,7 +1765,7 @@ export class TicketService implements OnModuleInit {
       technicianName:
         [technician.first_name, technician.last_name].filter(Boolean).join(' ') || technician.email,
       previousAssignee: previousAssigneeId !== dto.assignedToId ? previousAssigneeId : undefined,
-    }).catch(() => { });
+    }).catch(() => {});
 
     // Send assignment notification email (fire-and-forget)
     this.emailService
@@ -1733,10 +1777,11 @@ export class TicketService implements OnModuleInit {
         priority: assigned.priority,
         status: assigned.status,
         technicianName:
-          [technician.first_name, technician.last_name].filter(Boolean).join(' ') || technician.email,
+          [technician.first_name, technician.last_name].filter(Boolean).join(' ') ||
+          technician.email,
         technicianEmail: technician.email,
       })
-      .catch(() => { });
+      .catch(() => {});
 
     return assigned;
   }
@@ -1762,7 +1807,7 @@ export class TicketService implements OnModuleInit {
       this.logger.log(
         `Auto in_progress: ticket ${ticket.ticketNumber} viewed by technician #${viewerId}`,
       );
-      this.logEvent(saved.id, 'in_progress', viewerId, { via: 'view' }).catch(() => { });
+      this.logEvent(saved.id, 'in_progress', viewerId, { via: 'view' }).catch(() => {});
       return saved;
     }
     return null; // no change
@@ -1861,9 +1906,8 @@ export class TicketService implements OnModuleInit {
       ) as number[];
       const derivedRating =
         numericLikert.length > 0
-          ? Math.round(
-            (numericLikert.reduce((acc, v) => acc + v, 0) / numericLikert.length) * 10,
-          ) / 10
+          ? Math.round((numericLikert.reduce((acc, v) => acc + v, 0) / numericLikert.length) * 10) /
+            10
           : null;
 
       ticket.satisfactionRating = derivedRating;
@@ -1882,9 +1926,9 @@ export class TicketService implements OnModuleInit {
     ticket.satisfactionSubmittedAt = new Date();
     ticket.status = TicketStatus.CLOSED;
     const saved = await this.ticketRepo.save(ticket);
-    this.logEvent(saved.id, 'closed', requesterId).catch(() => { });
+    this.logEvent(saved.id, 'closed', requesterId).catch(() => {});
     this.logEvent(saved.id, 'rated', requesterId, { rating: saved.satisfactionRating }).catch(
-      () => { },
+      () => {},
     );
 
     if (ticket.assignedTo?.email) {
@@ -1900,7 +1944,7 @@ export class TicketService implements OnModuleInit {
           action: 'rated',
           rating: saved.satisfactionRating,
         })
-        .catch(() => { });
+        .catch(() => {});
     }
 
     return saved;
@@ -2063,7 +2107,8 @@ export class TicketService implements OnModuleInit {
     const byDayMap: Record<string, { total: number; count: number }> = {};
     const byWeekMap: Record<string, { total: number; count: number }> = {};
     for (const t of tickets) {
-      if (!t.satisfactionSubmittedAt || !t.satisfactionRating || t.satisfactionRating <= 0) continue;
+      if (!t.satisfactionSubmittedAt || !t.satisfactionRating || t.satisfactionRating <= 0)
+        continue;
       const dateStr = new Date(t.satisfactionSubmittedAt).toISOString().slice(0, 10);
       if (!byDayMap[dateStr]) byDayMap[dateStr] = { total: 0, count: 0 };
       byDayMap[dateStr].total += t.satisfactionRating;
@@ -2163,7 +2208,12 @@ export class TicketService implements OnModuleInit {
         requesterId,
         escStatuses: [EscalationStatus.PENDING],
         //  EscalationStatus.ACCEPTED],
-        ticketStatuses: [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE, TicketStatus.PAUSE],
+        ticketStatuses: [
+          TicketStatus.ASSIGNED,
+          TicketStatus.IN_PROGRESS,
+          TicketStatus.PAUSE,
+          TicketStatus.PAUSE,
+        ],
       })
       .getCount();
 
@@ -2322,7 +2372,9 @@ export class TicketService implements OnModuleInit {
   > {
     // Fetch all active users except standard 'USER' role
     const allTechUsers = await this.usersHttpClient.getUsers();
-    const technicians = allTechUsers.filter((u: any) => u.role !== UserRole.USER && u.role !== UserRole.SUPER_ADMIN);
+    const technicians = allTechUsers.filter(
+      (u: any) => u.role !== UserRole.USER && u.role !== UserRole.SUPER_ADMIN,
+    );
 
     // Read attendance for today so assignment UI can hide unavailable technicians.
     const today = new Date().toISOString().slice(0, 10);
@@ -2473,7 +2525,7 @@ export class TicketService implements OnModuleInit {
         technicianId: techId,
         technicianName: [tech.first_name, tech.last_name].filter(Boolean).join(' ') || tech.email,
         via: 'login_auto_assign',
-      }).catch(() => { });
+      }).catch(() => {});
 
       this.emailService
         .sendTicketAssignedEmail({
@@ -2485,7 +2537,7 @@ export class TicketService implements OnModuleInit {
           assignedToName: [tech.first_name, tech.last_name].filter(Boolean).join(' ') || tech.email,
           assignedToEmail: tech.email,
         } as any)
-        .catch(() => { });
+        .catch(() => {});
 
       this.logger.log(
         `[Login Auto-Assign] Ticket ${pending.ticketNumber} → ${tech.email} on login`,
@@ -2530,7 +2582,6 @@ export class TicketService implements OnModuleInit {
           for (const tech of eligibleTechs) {
             const openCount = await this.ticketRepo.count({
               where: [
-
                 { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
                 { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
               ],
@@ -2543,7 +2594,7 @@ export class TicketService implements OnModuleInit {
                 technicianId: tech.id,
                 technicianName: `${tech.firstName} ${tech.lastName}`.trim(),
                 via: 'absence_reassign',
-              }).catch(() => { });
+              }).catch(() => {});
               break;
             }
           }
@@ -2645,8 +2696,21 @@ export class TicketService implements OnModuleInit {
       missed: number;
       avgResolutionTimeHours: number;
     };
-    slaByType: Array<{ type: string; met: number; missed: number; avgResolutionTimeHours: number; count: number }>;
-    slaByTechnician: Array<{ techId: number; techName: string; met: number; missed: number; avgResolutionTimeHours: number; count: number }>;
+    slaByType: Array<{
+      type: string;
+      met: number;
+      missed: number;
+      avgResolutionTimeHours: number;
+      count: number;
+    }>;
+    slaByTechnician: Array<{
+      techId: number;
+      techName: string;
+      met: number;
+      missed: number;
+      avgResolutionTimeHours: number;
+      count: number;
+    }>;
   }> {
     const now = new Date();
     const year = filters.year ?? now.getFullYear();
@@ -2781,7 +2845,7 @@ export class TicketService implements OnModuleInit {
       if (!t.assignedToId) continue;
       const techName = t.assignedTo
         ? [t.assignedTo.first_name, t.assignedTo.last_name].filter(Boolean).join(' ') ||
-        t.assignedTo.email
+          t.assignedTo.email
         : `Tech #${t.assignedToId}`;
       const cur = byTechMap.get(t.assignedToId) ?? {
         name: techName,
@@ -2815,8 +2879,14 @@ export class TicketService implements OnModuleInit {
     let totalResolutionHours = 0;
     let resolvedSlaTickets = 0;
 
-    const slaByTypeMap = new Map<string, { met: number; missed: number; hours: number; count: number }>();
-    const slaByTechMap = new Map<number, { name: string; met: number; missed: number; hours: number; count: number }>();
+    const slaByTypeMap = new Map<
+      string,
+      { met: number; missed: number; hours: number; count: number }
+    >();
+    const slaByTechMap = new Map<
+      number,
+      { name: string; met: number; missed: number; hours: number; count: number }
+    >();
 
     for (const t of tickets) {
       if (t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) {
@@ -2852,9 +2922,16 @@ export class TicketService implements OnModuleInit {
           // Tech metrics
           if (t.assignedToId) {
             const techName = t.assignedTo
-              ? [t.assignedTo.first_name, t.assignedTo.last_name].filter(Boolean).join(' ') || t.assignedTo.email
+              ? [t.assignedTo.first_name, t.assignedTo.last_name].filter(Boolean).join(' ') ||
+                t.assignedTo.email
               : `Tech #${t.assignedToId}`;
-            const techData = slaByTechMap.get(t.assignedToId) ?? { name: techName, met: 0, missed: 0, hours: 0, count: 0 };
+            const techData = slaByTechMap.get(t.assignedToId) ?? {
+              name: techName,
+              met: 0,
+              missed: 0,
+              hours: 0,
+              count: 0,
+            };
             techData.count++;
             techData.hours += hours;
             if (metSla) techData.met++;
@@ -2866,24 +2943,32 @@ export class TicketService implements OnModuleInit {
     }
 
     const avgResolutionTimeHours =
-      resolvedSlaTickets > 0 ? Math.round((totalResolutionHours / resolvedSlaTickets) * 10) / 10 : 0;
+      resolvedSlaTickets > 0
+        ? Math.round((totalResolutionHours / resolvedSlaTickets) * 10) / 10
+        : 0;
 
-    const slaByType = Array.from(slaByTypeMap.entries()).map(([type, data]) => ({
-      type,
-      met: data.met,
-      missed: data.missed,
-      count: data.count,
-      avgResolutionTimeHours: data.count > 0 ? Math.round((data.hours / data.count) * 10) / 10 : 0,
-    })).sort((a, b) => b.count - a.count);
+    const slaByType = Array.from(slaByTypeMap.entries())
+      .map(([type, data]) => ({
+        type,
+        met: data.met,
+        missed: data.missed,
+        count: data.count,
+        avgResolutionTimeHours:
+          data.count > 0 ? Math.round((data.hours / data.count) * 10) / 10 : 0,
+      }))
+      .sort((a, b) => b.count - a.count);
 
-    const slaByTechnician = Array.from(slaByTechMap.entries()).map(([techId, data]) => ({
-      techId,
-      techName: data.name,
-      met: data.met,
-      missed: data.missed,
-      count: data.count,
-      avgResolutionTimeHours: data.count > 0 ? Math.round((data.hours / data.count) * 10) / 10 : 0,
-    })).sort((a, b) => b.count - a.count);
+    const slaByTechnician = Array.from(slaByTechMap.entries())
+      .map(([techId, data]) => ({
+        techId,
+        techName: data.name,
+        met: data.met,
+        missed: data.missed,
+        count: data.count,
+        avgResolutionTimeHours:
+          data.count > 0 ? Math.round((data.hours / data.count) * 10) / 10 : 0,
+      }))
+      .sort((a, b) => b.count - a.count);
 
     // Escalation counts in the same date range
     let escQb = this.escalationRepo
@@ -3033,7 +3118,7 @@ export class TicketService implements OnModuleInit {
       escalatedToId: dto.escalatedToId,
       escalatedToName: [focal.first_name, focal.last_name].filter(Boolean).join(' ') || focal.email,
       hasProof: savedPaths.length > 0,
-    }).catch(() => { });
+    }).catch(() => {});
 
     return saved;
   }
@@ -3063,10 +3148,7 @@ export class TicketService implements OnModuleInit {
       ticket.assignedToId = actorId;
       ticket.lastAssignedAt = new Date();
       ticket.isSlaWaiting = false;
-      if (
-        ticket.status !== TicketStatus.RESOLVED &&
-        ticket.status !== TicketStatus.CLOSED
-      ) {
+      if (ticket.status !== TicketStatus.RESOLVED && ticket.status !== TicketStatus.CLOSED) {
         const previousStatus = ticket.status;
         ticket.status = TicketStatus.IN_PROGRESS;
         await this.ticketRepo.save(ticket);
@@ -3074,12 +3156,12 @@ export class TicketService implements OnModuleInit {
           from: previousStatus,
           to: TicketStatus.IN_PROGRESS,
           reason: 'escalation_accepted',
-        }).catch(() => { });
+        }).catch(() => {});
       } else {
         await this.ticketRepo.save(ticket);
       }
     }
-    this.logEvent(ticketId, 'escalation_accepted', actorId).catch(() => { });
+    this.logEvent(ticketId, 'escalation_accepted', actorId).catch(() => {});
 
     return escalation;
   }
@@ -3108,7 +3190,7 @@ export class TicketService implements OnModuleInit {
     escalation.returnReason = dto.returnReason.trim();
 
     this.logEvent(ticketId, 'escalation_returned', actorId, { reason: dto.returnReason }).catch(
-      () => { },
+      () => {},
     );
     return this.escalationRepo.save(escalation);
   }
@@ -3161,7 +3243,9 @@ export class TicketService implements OnModuleInit {
 
     const safeFilename = path.basename(filename);
     const comments = await this.commentRepo.find({ where: { ticketId } });
-    const isReferenced = comments.some((c) => c.attachmentPath && path.basename(String(c.attachmentPath)) === safeFilename);
+    const isReferenced = comments.some(
+      (c) => c.attachmentPath && path.basename(String(c.attachmentPath)) === safeFilename,
+    );
     if (!isReferenced) {
       throw new NotFoundException('Comment attachment not found');
     }
@@ -3284,7 +3368,6 @@ export class TicketService implements OnModuleInit {
     return resumedCount;
   }
 
-
   public async enrichTicketsWithUsers(tickets: Ticket[]): Promise<Ticket[]> {
     if (!tickets?.length) return tickets;
 
@@ -3308,7 +3391,9 @@ export class TicketService implements OnModuleInit {
     }
 
     const userIds = new Set<number>();
-    const extract = (id: number | null | undefined) => { if (id) userIds.add(id); };
+    const extract = (id: number | null | undefined) => {
+      if (id) userIds.add(id);
+    };
 
     for (const t of tickets) {
       extract(t.requesterId);
@@ -3334,7 +3419,7 @@ export class TicketService implements OnModuleInit {
             lastName: user.last_name,
           });
         }
-      })
+      }),
     );
 
     for (const t of tickets) {
@@ -3366,7 +3451,7 @@ export class TicketService implements OnModuleInit {
             lastName: user.last_name,
           });
         }
-      })
+      }),
     );
     for (const e of events) {
       if (e.actorId) e.actor = userMap.get(e.actorId);
@@ -3409,8 +3494,8 @@ export class TicketService implements OnModuleInit {
         minute: 'numeric',
         hour12: false,
       }).formatToParts(d);
-      const hour = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10);
-      const minute = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10);
+      const hour = parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0', 10);
+      const minute = parseInt(parts.find((p) => p.type === 'minute')?.value ?? '0', 10);
       return hour + minute / 60;
     };
 

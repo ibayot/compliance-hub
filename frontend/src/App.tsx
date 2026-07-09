@@ -6,6 +6,7 @@ import type { RoleCapabilityRecord } from '@/lib/api/users';
 
 import HomePage from '@/app/page';
 import LoginPage from '@/app/login/page';
+import MfaVerifyPage from '@/app/mfa-verify/page';
 import DashboardPage from '@/app/dashboard/page';
 import DocumentsPage from '@/app/dashboard/documents/page';
 import DocumentUploadPage from '@/app/dashboard/documents/upload/page';
@@ -79,6 +80,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/mfa-verify" element={<MfaVerifyPage />} />
 
       <Route
         path="/dashboard"

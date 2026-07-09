@@ -14,6 +14,7 @@ import { FeedbackService } from './feedback.service';
 import { SecurityConfig } from './entities/security-config.entity';
 import { SecurityConfigController } from './security-config.controller';
 import { SecurityConfigService } from './security-config.service';
+import { UserTrustedDevice } from './entities/user-trusted-device.entity';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { SecurityConfigService } from './security-config.service';
       RoleCapability,
       Feedback,
       SecurityConfig,
+      UserTrustedDevice,
     ]),
     EventBusModule,
   ],

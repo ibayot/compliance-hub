@@ -3,7 +3,10 @@ import { LoginCredentials, AuthResponse, User } from '../types/auth';
 
 export const authApi = {
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
-    const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
+    const deviceToken = localStorage.getItem('deviceToken');
+    const response = await apiClient.post<AuthResponse>('/auth/login', credentials, {
+      headers: deviceToken ? { 'x-device-token': deviceToken } : {},
+    });
     return response.data;
   },
 
@@ -21,8 +24,8 @@ export const authApi = {
     return response.data;
   },
 
-  verifyMfaCode: async (code: string): Promise<{ message: string }> => {
-    const response = await apiClient.post('/auth/mfa/verify', { code });
+  verifyMfaCode: async (tempToken: string, code: string, rememberDevice: boolean): Promise<any> => {
+    const response = await apiClient.post('/auth/mfa/verify', { tempToken, code, rememberDevice });
     return response.data;
   },
 

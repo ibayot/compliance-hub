@@ -131,7 +131,7 @@ export class MetricsService {
     // Get version with document
     const version = await this.versionRepo.findOne({
       where: { id: versionId },
-      relations: ['document', 'document.unit'],
+      relations: ['document'],
     });
 
     if (!version) {

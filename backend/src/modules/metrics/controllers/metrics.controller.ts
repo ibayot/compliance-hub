@@ -42,7 +42,7 @@ export class MetricsController {
   @Get()
   async listMetricTemplates() {
     return this.metricTemplateRepo.find({
-      relations: ['applicability', 'applicability.unit'],
+      relations: ['applicability'],
       order: { created_at: 'DESC' },
     });
   }
@@ -106,7 +106,7 @@ export class MetricsController {
 
     return this.metricTemplateRepo.findOne({
       where: { id: template.id },
-      relations: ['applicability', 'applicability.unit'],
+      relations: ['applicability'],
     });
   }
 
@@ -118,7 +118,7 @@ export class MetricsController {
   async getMetricTemplate(@Param('id') id: string) {
     return this.metricTemplateRepo.findOne({
       where: { id },
-      relations: ['applicability', 'applicability.unit'],
+      relations: ['applicability'],
     });
   }
 
@@ -186,7 +186,7 @@ export class MetricsController {
 
     return this.metricTemplateRepo.findOne({
       where: { id },
-      relations: ['applicability', 'applicability.unit'],
+      relations: ['applicability'],
     });
   }
 

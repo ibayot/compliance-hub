@@ -25,6 +25,12 @@ import { EventBusModule } from '../events/event-bus.module';
 @Module({
   imports: [EventBusModule],
   providers: [UsersHttpClient, ComplianceHttpClient, UnitsHttpClient, RoleCapabilitiesHttpClient],
-  exports: [UsersHttpClient, ComplianceHttpClient, UnitsHttpClient, RoleCapabilitiesHttpClient, EventBusModule],
+  exports: [
+    UsersHttpClient,
+    ComplianceHttpClient,
+    UnitsHttpClient,
+    RoleCapabilitiesHttpClient,
+    EventBusModule,
+  ],
 })
 export class HttpClientsModule {}

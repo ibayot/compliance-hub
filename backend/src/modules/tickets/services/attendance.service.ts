@@ -64,7 +64,9 @@ export class AttendanceService implements OnModuleInit {
       if (payload && payload.userId) {
         this.autoCorrectAbsentOnLogin(payload.userId)
           .then(() => {
-            this.eventBus.publish('attendance.verified', { userId: payload.userId }).catch(() => {});
+            this.eventBus
+              .publish('attendance.verified', { userId: payload.userId })
+              .catch(() => {});
           })
           .catch((err) => {
             this.logger.warn(
