@@ -1,8 +1,12 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 
 // Use Vite proxy in dev (/api is proxied to localhost:4000/api by vite.config.ts).
-// VITE_API_URL can override for production deployments.
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+// VITE_API_URL can override for production deployments if necessary, but we force '/api' 
+// if it's accidentally set to localhost in a staging build via a lingering .env file.
+const rawApiUrl = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.PROD 
+  ? (rawApiUrl && !rawApiUrl.includes('localhost') ? rawApiUrl : '/api')
+  : (rawApiUrl || '/api');
 
 export const tokenStore = {
   get: (key: 'accessToken' | 'refreshToken'): string | null => {
