@@ -488,9 +488,7 @@ export const issuancesApi = {
   uploadAttachment: async (issuanceId: string, file: File): Promise<Issuance> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await apiClient.post(`/issuances/${issuanceId}/attachment`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const response = await apiClient.post(`/issuances/${issuanceId}/attachment`, formData);
     return response.data;
   },
 
@@ -583,11 +581,7 @@ export const ticketsApi = {
       formData.append('isInternal', String(isInternal));
       formData.append('attachment', attachment);
 
-      const response = await apiClient.post(`/tickets/${ticketId}/comments`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const response = await apiClient.post(`/tickets/${ticketId}/comments`, formData);
       return response.data;
     } else {
       const response = await apiClient.post(`/tickets/${ticketId}/comments`, { comment, isInternal });
@@ -709,9 +703,7 @@ export const ticketsApi = {
   },
 
   escalateTicket: async (ticketId: string, data: FormData): Promise<TicketEscalation> => {
-    const response = await apiClient.post(`/tickets/${ticketId}/escalate`, data, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const response = await apiClient.post(`/tickets/${ticketId}/escalate`, data);
     return response.data;
   },
 
@@ -741,10 +733,7 @@ export const ticketsApi = {
   ): Promise<TicketEscalation> => {
     const response = await apiClient.patch(
       `/tickets/${ticketId}/escalation/${escalationId}/update-proof`,
-      data,
-      {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      },
+      data
     );
     return response.data;
   },
