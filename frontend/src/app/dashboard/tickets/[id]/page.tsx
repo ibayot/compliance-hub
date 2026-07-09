@@ -47,6 +47,7 @@ import {
   TicketEscalation,
   EscalationFocalConfig,
 } from '@/app/api/references';
+import { AuthImage } from '@/components/AuthImage';
 import {
   ArrowBack as BackIcon,
   Star as StarIcon,
@@ -1405,12 +1406,10 @@ export default function TicketDetailPage() {
                           </Typography>
                           {c.attachmentPath && (
                             <Box mt={1}>
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/tickets/comment-attachment/${c.ticketId}/${c.attachmentPath.split('/').pop()}`}
+                              <AuthImage
+                                url={`/tickets/comment-attachment/${c.ticketId}/${c.attachmentPath.split('/').pop()}`}
                                 alt="Comment Attachment"
-                                style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '4px', cursor: 'pointer' }}
-                                onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/tickets/comment-attachment/${c.ticketId}/${c.attachmentPath.split('/').pop()}`, '_blank')}
+                                style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '4px' }}
                               />
                             </Box>
                           )}
