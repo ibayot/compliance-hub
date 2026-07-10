@@ -21,14 +21,11 @@ export function AuthImage({ url, alt = 'Image', style }: AuthImageProps) {
       try {
         const response = await apiClient.get(url, { responseType: 'blob' });
         if (active) {
-          const blob = response.data;
-          console.log(`AuthImage downloaded Blob - Size: ${blob.size}, Type: ${blob.type}`);
-          const blobUrl = URL.createObjectURL(blob);
+          const blobUrl = URL.createObjectURL(response.data);
           setObjectUrl(blobUrl);
           setLoading(false);
         }
-      } catch (err) {
-        console.error('AuthImage load error for URL:', url, err);
+      } catch {
         if (active) {
           setError(true);
           setLoading(false);
