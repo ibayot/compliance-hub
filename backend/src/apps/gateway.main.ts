@@ -80,7 +80,11 @@ async function checkServiceHealth(baseUrl: string): Promise<boolean> {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(GatewayAppModule);
+  // IMPORTANT: bodyParser must be disabled on the gateway.
+  // NestJS enables it by default, which consumes the raw request body stream before
+  // http-proxy-middleware can forward it. This breaks multipart/form-data uploads
+  // because Multer on the downstream service receives an empty buffer.
+  const app = await NestFactory.create(GatewayAppModule, { bodyParser: false });
 
   const usersServiceUrl = process.env.USERS_SERVICE_URL || 'http://localhost:4101';
   const ticketingServiceUrl = process.env.TICKETING_SERVICE_URL || 'http://localhost:4102';
