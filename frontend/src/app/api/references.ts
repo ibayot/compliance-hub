@@ -580,8 +580,12 @@ export const ticketsApi = {
       formData.append('comment', comment);
       formData.append('isInternal', String(isInternal));
       formData.append('attachment', attachment);
-
-      const response = await apiClient.post(`/tickets/${ticketId}/comments`, formData);
+      // ADD THE HEADERS OVERRIDE HERE
+      const response = await apiClient.post(`/tickets/${ticketId}/comments`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       return response.data;
     } else {
       const response = await apiClient.post(`/tickets/${ticketId}/comments`, { comment, isInternal });
@@ -703,7 +707,12 @@ export const ticketsApi = {
   },
 
   escalateTicket: async (ticketId: string, data: FormData): Promise<TicketEscalation> => {
-    const response = await apiClient.post(`/tickets/${ticketId}/escalate`, data);
+    // ADD THE HEADERS OVERRIDE HERE
+    const response = await apiClient.post(`/tickets/${ticketId}/escalate`, data, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 

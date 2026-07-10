@@ -938,7 +938,7 @@ export class TicketService implements OnModuleInit {
       where: { id },
       relations: ['category', 'issueTypeConfig', 'comments'],
     });
-    if (!ticket) throw new NotFoundException(`Ticket ${id} not found`);
+    if (!ticket) throw new NotFoundException('Ticket not found');
     await this.enrichTicketsWithUsers([ticket]);
     await this.assertTicketReadAccess(ticket, viewerId, viewerRole);
     // Strip internal notes for regular users — they should never see staff-only comments
@@ -1198,7 +1198,7 @@ export class TicketService implements OnModuleInit {
         }
         const original = await this.ticketRepo.findOne({ where: { id: dto.duplicateOfId } });
         if (!original)
-          throw new BadRequestException(`Original ticket ${dto.duplicateOfId} not found.`);
+          throw new BadRequestException('Original ticket not found.');
         ticket.duplicateOfId = dto.duplicateOfId;
 
         // --- SLA Freezing Logic for Terminal DUPLICATE State ---
