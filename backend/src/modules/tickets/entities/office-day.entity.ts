@@ -7,6 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from '../../shared/entities';
+import { dateTransformer } from './date.transformer';
 
 @Entity('office_days')
 export class OfficeDay {
@@ -14,7 +15,7 @@ export class OfficeDay {
   id: string;
 
   /** YYYY-MM-DD */
-  @Column({ type: 'date', unique: true })
+  @Column({ type: 'date', unique: true, transformer: dateTransformer })
   date: string;
 
   @Column({ name: 'is_office_day', type: 'boolean', default: true })

@@ -550,6 +550,7 @@ export default function AttendancePage() {
                       </TableCell>
                       {weekdays.map((d) => {
                         const isOffice = isOfficeDayForDate(d);
+                        const isToday = formatDate(d) === new Date().toISOString().slice(0, 10);
                         return (
                           <TableCell
                             key={formatDate(d)}
@@ -558,11 +559,13 @@ export default function AttendancePage() {
                               minWidth: 36,
                               px: 0.5,
                               ...(isOffice ? {} : { bgcolor: 'action.disabledBackground' }),
+                              ...(isToday ? { bgcolor: 'primary.main', border: '2px solid', borderColor: 'primary.dark' } : {}),
                             }}
                           >
                             <Typography
                               variant="caption"
-                              color={isOffice ? 'text.primary' : 'text.disabled'}
+                              color={isToday ? 'primary.contrastText' : isOffice ? 'text.primary' : 'text.disabled'}
+                              fontWeight={isToday ? 700 : 400}
                             >
                               {d.getDate()}
                             </Typography>
@@ -599,16 +602,22 @@ export default function AttendancePage() {
                             const rec = records.get(dateStr);
                             const status = rec?.status;
                             const cfg = status ? STATUS_CONFIG[status] : null;
+                            const todayStr = new Date().toISOString().slice(0, 10);
+                            const isPastDate = dateStr < todayStr;
+                            const isFutureDate = dateStr > todayStr;
+                            const isToday = dateStr === todayStr;
 
                             return (
-                              <TableCell key={dateStr} align="center" sx={{ px: 0.5 }}>
+                              <TableCell key={dateStr} align="center" sx={{ px: 0.5, ...(isToday ? { bgcolor: 'primary.50' } : {}) }}>
                                 {canManage ? (
                                   <Tooltip
-                                    title={`Click to cycle: ${!status ? 'Set present' : status}`}
+                                    title={isPastDate ? 'Cannot change past dates' : isFutureDate ? 'Cannot change future dates' : `Click to cycle: ${!status ? 'Set present' : status}`}
                                   >
-                                    <IconButton
-                                      size="small"
-                                      onClick={() => {
+                                    <span>
+                                      <IconButton
+                                        size="small"
+                                        disabled={isPastDate || isFutureDate}
+                                        onClick={() => {
                                         const cycle: AttendanceStatus[] = [
                                           'present',
                                           'absent',
@@ -642,7 +651,8 @@ export default function AttendancePage() {
                                           •
                                         </Typography>
                                       )}
-                                    </IconButton>
+                                      </IconButton>
+                                    </span>
                                   </Tooltip>
                                 ) : cfg ? (
                                   <Chip

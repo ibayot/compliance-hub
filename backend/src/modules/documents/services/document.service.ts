@@ -897,9 +897,7 @@ export class DocumentService implements OnModuleInit {
     // Allow fetching archived (is_deleted=true) docs so focal can view detail on archived page
     const document = await this.documentRepo.findOne({
       where: { id },
-      relations: canUseIssuanceLinks
-        ? ['versions', 'issuances']
-        : ['versions'],
+      relations: canUseIssuanceLinks ? ['versions', 'issuances'] : ['versions'],
     });
 
     if (!document) {
@@ -941,8 +939,7 @@ export class DocumentService implements OnModuleInit {
 
     const query = this.documentRepo
       .createQueryBuilder('doc')
-      
-      
+
       // archived mode shows soft-deleted docs for the owning focal; normal mode shows active docs
       .where('doc.is_deleted = :isDeleted', { isDeleted: archived ? true : false });
 
@@ -1151,10 +1148,7 @@ export class DocumentService implements OnModuleInit {
     unit_id?: number;
     active_only?: boolean;
   }): Promise<DocumentAssignment[]> {
-    const qb = this.assignmentRepo
-      .createQueryBuilder('assignment')
-      ;
-
+    const qb = this.assignmentRepo.createQueryBuilder('assignment');
     if (filters?.user_id) {
       qb.andWhere('assignment.user_id = :userId', { userId: filters.user_id });
     }
@@ -1619,8 +1613,7 @@ export class DocumentService implements OnModuleInit {
   }> {
     const qb = this.documentRepo
       .createQueryBuilder('doc')
-      
-      
+
       .where('doc.is_deleted = :d', { d: false })
       .andWhere('doc.status = :readyStatus', { readyStatus: DocumentStatus.READY });
 
@@ -1675,7 +1668,7 @@ export class DocumentService implements OnModuleInit {
     const userIds = new Set<number>();
     const unitIds = new Set<number>();
 
-    documents.forEach(doc => {
+    documents.forEach((doc) => {
       if (doc.uploaded_by) userIds.add(doc.uploaded_by);
       if (doc.unit_id) unitIds.add(doc.unit_id);
     });
@@ -1688,7 +1681,7 @@ export class DocumentService implements OnModuleInit {
     const userMap = new Map<number, any>(allUsers.map((u: any) => [u.id, u]));
     const unitMap = new Map<number, any>(allUnits.map((u: any) => [u.id, u]));
 
-    documents.forEach(doc => {
+    documents.forEach((doc) => {
       if (doc.uploaded_by) {
         doc.uploader = userMap.get(doc.uploaded_by) || undefined;
       }
@@ -1700,12 +1693,14 @@ export class DocumentService implements OnModuleInit {
     return documents;
   }
 
-  private async hydrateAssignments(assignments: DocumentAssignment[]): Promise<DocumentAssignment[]> {
+  private async hydrateAssignments(
+    assignments: DocumentAssignment[],
+  ): Promise<DocumentAssignment[]> {
     if (!assignments?.length) return assignments;
-    const unitIds = new Set(assignments.map(a => a.unit_id));
+    const unitIds = new Set(assignments.map((a) => a.unit_id));
     const allUnits = await this.unitsHttpClient.getUnits().catch(() => []);
     const unitMap = new Map<number, any>(allUnits.map((u: any) => [u.id, u]));
-    assignments.forEach(a => {
+    assignments.forEach((a) => {
       a.unit = unitMap.get(a.unit_id) || undefined;
     });
     return assignments;

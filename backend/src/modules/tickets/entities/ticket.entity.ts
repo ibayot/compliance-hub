@@ -161,6 +161,10 @@ export class Ticket {
   @Column({ name: 'user_closed', type: 'tinyint', default: 0 })
   userClosed: boolean;
 
+  /** Indicates if this ticket is waiting for KB generation (used for background retries) */
+  @Column({ name: 'is_kb_generation_pending', type: 'tinyint', default: 0 })
+  isKbGenerationPending: boolean;
+
   // --- Relations ---
   @OneToMany(() => TicketComment, (c) => c.ticket, { cascade: true })
   comments: TicketComment[];

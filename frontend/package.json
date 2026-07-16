@@ -1,6 +1,6 @@
 {
   "name": "rictms-frontend",
-  "version": "0.0.115",
+  "version": "0.0.116",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -27,6 +27,7 @@
     "react-dom": "^18.2.0",
     "react-dropzone": "^14.2.3",
     "react-hook-form": "^7.49.3",
+    "react-markdown": "^10.1.0",
     "react-pdf": "^7.7.0",
     "react-router-dom": "^6.30.1",
     "recharts": "^2.10.3",

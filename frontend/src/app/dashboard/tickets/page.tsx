@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
 import {
   Box,
   Button,
@@ -71,6 +72,7 @@ import {
   attendanceApi,
   knowledgeBaseApi,
   CsatFormData,
+  TicketEscalation,
 } from '@/app/api/references';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
@@ -86,7 +88,7 @@ function ticketTypeIcon(t: TicketType) {
 }
 
 function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | null {
-  if (!ticket.slaDeadline) return null;
+  if (!ticket.slaDeadline || ticket.isSlaWaiting) return null;
   const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
   if (isTerminal) {
     const deadline = new Date(ticket.slaDeadline).getTime();
@@ -138,6 +140,7 @@ export default function TicketsPage() {
     reason: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [allUsers, setAllUsers] = useState<UserRecord[]>([]);
   const [categories, setCategories] = useState<TicketCategory[]>([]);
   const [kbSuggestions, setKbSuggestions] = useState<any[]>([]);
@@ -160,6 +163,7 @@ export default function TicketsPage() {
   const [escalateNotes, setEscalateNotes] = useState('');
   const [escalateFiles, setEscalateFiles] = useState<File[]>([]);
   const [escalating, setEscalating] = useState(false);
+  const [allEscalations, setAllEscalations] = useState<TicketEscalation[]>([]);
 
   // Satisfaction dialog
   const [satDialogOpen, setSatDialogOpen] = useState(false);
@@ -312,6 +316,11 @@ export default function TicketsPage() {
       setPendingSatCount(stats.pendingSatisfactionTickets?.length ?? 0);
       setMyTicketsCount(stats.myTicketsCount ?? 0);
       setEscalatedToMeCount(stats.escalatedToMeCount ?? 0);
+
+      if (canManageAll) {
+        const escalations = await ticketsApi.getAllEscalations();
+        setAllEscalations(escalations);
+      }
     } catch {
       enqueueSnackbar('Failed to load tickets', { variant: 'error' });
     } finally {
@@ -325,6 +334,7 @@ export default function TicketsPage() {
     canViewEscalatedQueue,
     isFocalTech,
     user?.id,
+    canManageAll,
   ]);
 
   useEffect(() => {
@@ -476,7 +486,25 @@ export default function TicketsPage() {
 
     try {
       setSubmitting(true);
-      await ticketsApi.create({ ...form, description: finalDescription });
+      
+      let payload: CreateTicketDto | FormData;
+      if (selectedImage) {
+        const formData = new FormData();
+        formData.append('subject', form.subject);
+        formData.append('description', finalDescription);
+        formData.append('ticketType', form.ticketType);
+        if (form.priority) formData.append('priority', form.priority);
+        if (form.categoryId) formData.append('categoryId', form.categoryId);
+        if (form.issueType) formData.append('issueType', form.issueType);
+        if (form.issueTypeId) formData.append('issueTypeId', form.issueTypeId);
+        if (form.requesterId) formData.append('requesterId', form.requesterId.toString());
+        formData.append('image', selectedImage);
+        payload = formData;
+      } else {
+        payload = { ...form, description: finalDescription };
+      }
+
+      await ticketsApi.create(payload);
       enqueueSnackbar('Ticket submitted successfully!', { variant: 'success' });
       setNewDialogOpen(false);
       setForm({
@@ -486,6 +514,7 @@ export default function TicketsPage() {
         priority: undefined,
         categoryId: undefined,
       });
+      setSelectedImage(null);
       setDisposalDetails({
         equipmentType: '',
         serialNumber: '',
@@ -569,7 +598,9 @@ export default function TicketsPage() {
         ...prev,
         [ticket.id]: latest?.status === 'returned' ? 'returned' : 'none',
       }));
-    } catch { }
+    } catch {
+      // ignore
+    }
 
     setAssigningTicket(ticket);
     try {
@@ -874,6 +905,7 @@ export default function TicketsPage() {
                   </Badge>
                 }
               />
+              <Tab label={`Escalations (${allEscalations.length})`} />
             </Tabs>
           </CardContent>
         </Card>
@@ -927,7 +959,58 @@ export default function TicketsPage() {
         </Card>
       )}
 
-      {isMobile ? (
+      {canManageAll && mgmtTab === 6 ? (
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            {loading ? (
+              <Box display="flex" justifyContent="center" p={3}>
+                <CircularProgress size={28} />
+              </Box>
+            ) : allEscalations.length === 0 ? (
+              <Box display="flex" justifyContent="center" p={3}>
+                <Typography color="text.secondary">No escalations found.</Typography>
+              </Box>
+            ) : (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Date</TableCell>
+                      <TableCell>Ticket ID</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Escalated By</TableCell>
+                      <TableCell>Escalated To</TableCell>
+                      <TableCell>Notes</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {allEscalations.map((e) => (
+                      <TableRow key={e.id} hover onClick={() => router.push(`/dashboard/tickets/${e.ticketId}`)} sx={{ cursor: 'pointer' }}>
+                        <TableCell>{new Date(e.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600} color="primary.main">
+                            {e.ticket?.ticketNumber || e.ticketId}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            size="small" 
+                            label={e.status.toUpperCase()} 
+                            color={e.status === 'pending' ? 'warning' : e.status === 'accepted' ? 'success' : 'default'} 
+                          />
+                        </TableCell>
+                        <TableCell>{e.escalatedBy?.firstName} {e.escalatedBy?.lastName}</TableCell>
+                        <TableCell>{e.escalatedTo?.firstName} {e.escalatedTo?.lastName}</TableCell>
+                        <TableCell>{e.notes?.substring(0, 50)}{(e.notes?.length ?? 0) > 50 ? '...' : ''}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </CardContent>
+        </Card>
+      ) : isMobile ? (
         <Stack spacing={2}>
           {loading ? (
             <Box display="flex" justifyContent="center" p={3}>
@@ -1470,9 +1553,9 @@ export default function TicketsPage() {
                         </Typography>
                         {expandedKbId === kb.id && (
                           <Box mt={1}>
-                            <Typography variant="body2" color="text.secondary" whiteSpace="pre-wrap" sx={{ maxHeight: 200, overflowY: 'auto', p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
-                              {kb.content}
-                            </Typography>
+                            <Box sx={{ maxHeight: 200, overflowY: 'auto', p: 1, bgcolor: 'action.hover', borderRadius: 1, typography: 'body2', color: 'text.secondary', '& p': { m: 0, mb: 1 }, '& ul, & ol': { m: 0, pl: 2 } }}>
+                              <ReactMarkdown>{kb.content}</ReactMarkdown>
+                            </Box>
                             <Box display="flex" alignItems="center" gap={2} mt={1.5} pt={1} borderTop="1px solid" borderColor="divider">
                               <Typography variant="caption" fontWeight={600}>Did this solve your issue?</Typography>
                               <Button size="small" color="success" variant="outlined" startIcon={<SatisfactionIcon />} onClick={() => handleRateKb(kb.id, true)}>
@@ -1499,6 +1582,35 @@ export default function TicketsPage() {
               rows={4}
               placeholder="Provide details: what happened, when, steps tried..."
             />
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+                Attach Image (Optional)
+              </Typography>
+              <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />}>
+                {selectedImage ? 'Change Image' : 'Select Image'}
+                <input
+                  type="file"
+                  hidden
+                  accept="image/*"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    const validFiles = files.filter((f) => f.type.startsWith('image/'));
+                    if (validFiles.length > 0) {
+                      setSelectedImage(validFiles[0]);
+                    }
+                    e.target.value = '';
+                  }}
+                />
+              </Button>
+              {selectedImage && (
+                <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                  {selectedImage.name} ({(selectedImage.size / 1024 / 1024).toFixed(2)} MB)
+                  <Button size="small" color="error" onClick={() => setSelectedImage(null)} sx={{ ml: 1, minWidth: 'auto', p: 0 }}>
+                    Remove
+                  </Button>
+                </Typography>
+              )}
+            </Box>
             <Autocomplete
               options={allUsers.filter((u) => u.role !== 'super_admin')}
               getOptionLabel={(u) =>

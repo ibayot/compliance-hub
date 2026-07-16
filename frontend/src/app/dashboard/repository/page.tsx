@@ -172,7 +172,9 @@ export default function RepositoryPage() {
       a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {}
+    } catch {
+      // ignore download error
+    }
   };
 
   const { data, isLoading, isError } = useQuery({

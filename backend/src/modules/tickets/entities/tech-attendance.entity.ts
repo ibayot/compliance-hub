@@ -8,6 +8,7 @@ import {
   Unique,
 } from 'typeorm';
 import { User } from '../../shared/entities';
+import { dateTransformer } from './date.transformer';
 
 export enum AttendanceStatus {
   PRESENT = 'present',
@@ -30,7 +31,7 @@ export class TechAttendance {
   user: User;
 
   /** YYYY-MM-DD */
-  @Column({ type: 'date' })
+  @Column({ type: 'date', transformer: dateTransformer })
   date: string;
 
   @Column({ type: 'varchar', length: 20, default: AttendanceStatus.PRESENT })

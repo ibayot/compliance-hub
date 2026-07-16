@@ -358,7 +358,7 @@ function ReportView({ params }: { params: ReportParams }) {
   const allUnits = useMemo(() => unitsQuery.data?.data ?? [], [unitsQuery.data]);
 
   const allUnitsTsQuery = useQuery({
-    // eslint-disable-next-line @tanstack/query/exhaustive-deps
+
     queryKey: ['report-all-units-ts', allUnits.map((u) => u.id), year, effectiveMonth, frequency],
     queryFn: async () => {
       if (allUnits.length === 0) return {} as UnitTimeseriesMap;
@@ -1413,13 +1413,7 @@ export default function ReportsPage() {
   const { user, myCap } = useAuth();
   const canAccessReports = user?.role === UserRole.SUPER_ADMIN || !!myCap?.isReportsAccess;
 
-  if (!canAccessReports) {
-    return (
-      <Box p={4}>
-        <Typography color="error">You do not have access to this feature.</Typography>
-      </Box>
-    );
-  }
+
 
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedFrequency, setSelectedFrequency] = useState<Frequency>('monthly');
@@ -1451,6 +1445,14 @@ export default function ReportsPage() {
       unitName: selectedUnitName,
     });
   };
+
+  if (!canAccessReports) {
+    return (
+      <Box p={4}>
+        <Typography color="error">You do not have access to this feature.</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box p={3}>

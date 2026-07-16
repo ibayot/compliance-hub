@@ -191,6 +191,7 @@ export interface Ticket {
   comments?: TicketComment[];
   isOverdue?: boolean;
   isNearingSLA?: boolean;
+  isSlaWaiting?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -212,6 +213,8 @@ export interface CreateTicketDto {
   ticketType: TicketType;
   priority?: TicketPriority;
   categoryId?: string;
+  issueTypeId?: string;
+  issueType?: string;
   /** Staff only: override the requester (for walk-ins / phone calls) */
   requesterId?: number;
 }
@@ -226,6 +229,7 @@ export interface UpdateTicketDto {
   issueTypeId?: string | null;
   duplicateOfId?: string;
   ticketType?: TicketType;
+  categoryId?: string;
   generateKb?: boolean;
 }
 
@@ -371,6 +375,7 @@ export interface TicketEscalation {
   escalatedToId: number;
   escalatedBy?: { id: number; firstName?: string; lastName?: string; email: string };
   escalatedTo?: { id: number; firstName?: string; lastName?: string; email: string };
+  ticket?: Ticket;
   status: EscalationStatus;
   notes?: string | null;
   returnReason?: string | null;
@@ -554,8 +559,11 @@ export const ticketsApi = {
     return response.data;
   },
 
-  create: async (data: CreateTicketDto): Promise<Ticket> => {
-    const response = await apiClient.post(`/tickets`, data);
+  create: async (data: CreateTicketDto | FormData): Promise<Ticket> => {
+    const isFormData = data instanceof FormData;
+    const response = await apiClient.post(`/tickets`, data, {
+      headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+    });
     return response.data;
   },
 
@@ -596,6 +604,16 @@ export const ticketsApi = {
   submitSatisfaction: async (id: string, data: SubmitSatisfactionDto): Promise<Ticket> => {
     const response = await apiClient.post(`/tickets/${id}/satisfaction`, data);
     return response.data;
+  },
+
+  getSlaSummary: async (): Promise<{ breached: number; nearing: number; onTrack: number }> => {
+    const response = await apiClient.get(`/tickets/sla/summary`);
+    const data = response.data;
+    return {
+      breached: data.overdueActive || 0,
+      nearing: data.dueToday || 0,
+      onTrack: Math.max(0, (data.activeWithSla || 0) - (data.overdueActive || 0) - (data.dueToday || 0))
+    };
   },
 
   getStatistics: async (): Promise<Record<string, unknown>> => {
@@ -701,6 +719,11 @@ export const ticketsApi = {
   },
 
   // --- Escalation ---
+  getAllEscalations: async (): Promise<TicketEscalation[]> => {
+    const response = await apiClient.get(`/tickets/escalations/all`);
+    return response.data;
+  },
+
   getEscalations: async (ticketId: string): Promise<TicketEscalation[]> => {
     const response = await apiClient.get(`/tickets/${ticketId}/escalations`);
     return response.data;

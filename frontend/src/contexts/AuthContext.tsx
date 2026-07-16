@@ -134,6 +134,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [scheduleInactivityLock, user],
   );
+  const logout = useCallback(async (reason?: string) => {
+    try {
+      await authApi.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      tokenStore.remove('accessToken');
+      tokenStore.remove('refreshToken');
+      sessionStorage.removeItem('isSessionLocked');
+      setUser(null);
+      setMyCap(null);
+      setIsSessionLocked(false);
+      setRequiresMfa(false);
+      clearInactivityTimer();
+      navigate(reason ? `/login?reason=${reason}` : '/login');
+    }
+  }, [clearInactivityTimer, navigate]);
 
   useEffect(() => {
     // Check for existing token and fetch user profile
@@ -184,7 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     initAuth();
-  }, [enqueueSnackbar]);
+  }, [enqueueSnackbar, logout]);
 
   useEffect(() => {
     if (!user || loading) {
@@ -257,7 +274,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 60_000); // 60 s
 
     return () => clearInterval(id);
-  }, [!!user, enqueueSnackbar]);
+  }, [user, enqueueSnackbar, logout]);
 
   const login = async (email: string, password: string, redirectTo?: string) => {
     const response = await authApi.login({ email, password });
@@ -317,24 +334,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       navigate('/mfa-verify');
     } else {
       navigate(redirectTo ?? '/dashboard');
-    }
-  };
-
-  const logout = async (reason?: string) => {
-    try {
-      await authApi.logout();
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      tokenStore.remove('accessToken');
-      tokenStore.remove('refreshToken');
-      sessionStorage.removeItem('isSessionLocked');
-      setUser(null);
-      setMyCap(null);
-      setIsSessionLocked(false);
-      setRequiresMfa(false);
-      clearInactivityTimer();
-      navigate(reason ? `/login?reason=${reason}` : '/login');
     }
   };
 

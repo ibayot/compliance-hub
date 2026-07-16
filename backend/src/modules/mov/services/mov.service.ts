@@ -27,7 +27,7 @@ export class MovService implements OnModuleInit {
     @InjectRepository(KpiMaster)
     private readonly kpiMasterRepo: Repository<KpiMaster>,
     private readonly dataSource: DataSource,
-  ) { }
+  ) {}
 
   async onModuleInit(): Promise<void> {
     if (!this.isDbBootstrapEnabled()) {
@@ -513,8 +513,8 @@ export class MovService implements OnModuleInit {
         scopeFilter && scopeFilter !== 'all' ? scopeValue.includes(scopeFilter) : true;
       const unitMatch = unitFilter
         ? [scopeValue, ownerValue, titleValue, authorityValue].some((value) =>
-          value.includes(unitFilter),
-        )
+            value.includes(unitFilter),
+          )
         : true;
 
       return scopeMatch && unitMatch;
@@ -842,34 +842,36 @@ export class MovService implements OnModuleInit {
         <h3>Assessment Schedule</h3>
         <table>
           <thead><tr><th>Activity</th><th>Owner</th><th>Due Date</th><th>Status</th><th>Remarks</th></tr></thead>
-          <tbody>${scheduleRows.length
-        ? scheduleRows
-          .map((row) => {
-            const cells = row
-              .split('|')
-              .map((cell) => cell.trim())
-              .filter(Boolean);
-            return `<tr><td>${this.escapeHtml(cells[0] || '-')}</td><td>${this.escapeHtml(cells[1] || '-')}</td><td>${this.escapeHtml(cells[2] || '-')}</td><td>${this.escapeHtml(cells[3] || '-')}</td><td>${this.escapeHtml(cells[4] || '-')}</td></tr>`;
-          })
-          .join('')
-        : '<tr><td>No schedule entries found</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>'
-      }</tbody>
+          <tbody>${
+            scheduleRows.length
+              ? scheduleRows
+                  .map((row) => {
+                    const cells = row
+                      .split('|')
+                      .map((cell) => cell.trim())
+                      .filter(Boolean);
+                    return `<tr><td>${this.escapeHtml(cells[0] || '-')}</td><td>${this.escapeHtml(cells[1] || '-')}</td><td>${this.escapeHtml(cells[2] || '-')}</td><td>${this.escapeHtml(cells[3] || '-')}</td><td>${this.escapeHtml(cells[4] || '-')}</td></tr>`;
+                  })
+                  .join('')
+              : '<tr><td>No schedule entries found</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>'
+          }</tbody>
         </table>
         <h3>KPI Gaps vs Plan</h3>
         <table>
           <thead><tr><th>Unit</th><th>KPI Code</th><th>KPI Name</th><th>Actual</th><th>Target</th><th>Remarks</th></tr></thead>
-          <tbody>${kpiRowsText.length
-        ? kpiRowsText
-          .map((row) => {
-            const cells = row
-              .split('|')
-              .map((cell) => cell.trim())
-              .filter(Boolean);
-            return `<tr><td>${this.escapeHtml(cells[0] || '-')}</td><td>${this.escapeHtml(cells[1] || '-')}</td><td>${this.escapeHtml(cells[2] || '-')}</td><td>${this.escapeHtml(cells[3] || '-')}</td><td>${this.escapeHtml(cells[4] || '-')}</td><td>${this.escapeHtml(cells[5] || '-')}</td></tr>`;
-          })
-          .join('')
-        : '<tr><td>No KPI gaps detected in this period</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>'
-      }</tbody>
+          <tbody>${
+            kpiRowsText.length
+              ? kpiRowsText
+                  .map((row) => {
+                    const cells = row
+                      .split('|')
+                      .map((cell) => cell.trim())
+                      .filter(Boolean);
+                    return `<tr><td>${this.escapeHtml(cells[0] || '-')}</td><td>${this.escapeHtml(cells[1] || '-')}</td><td>${this.escapeHtml(cells[2] || '-')}</td><td>${this.escapeHtml(cells[3] || '-')}</td><td>${this.escapeHtml(cells[4] || '-')}</td><td>${this.escapeHtml(cells[5] || '-')}</td></tr>`;
+                  })
+                  .join('')
+              : '<tr><td>No KPI gaps detected in this period</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>'
+          }</tbody>
         </table>
       </body>
       </html>

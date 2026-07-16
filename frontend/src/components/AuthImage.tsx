@@ -17,12 +17,13 @@ export function AuthImage({ url, alt = 'Image', style }: AuthImageProps) {
 
   useEffect(() => {
     let active = true;
+    let localBlobUrl: string | null = null;
     const fetchImage = async () => {
       try {
         const response = await apiClient.get(url, { responseType: 'blob' });
         if (active) {
-          const blobUrl = URL.createObjectURL(response.data);
-          setObjectUrl(blobUrl);
+          localBlobUrl = URL.createObjectURL(response.data);
+          setObjectUrl(localBlobUrl);
           setLoading(false);
         }
       } catch {
@@ -38,8 +39,8 @@ export function AuthImage({ url, alt = 'Image', style }: AuthImageProps) {
       // Object URL cleanup is handled carefully here, but because StrictMode runs this twice, 
       // we only revoke on unmount to prevent accidentally destroying a valid blob URL.
       // A more robust app might keep a global cache of blob URLs per endpoint.
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
+      if (localBlobUrl) {
+        URL.revokeObjectURL(localBlobUrl);
       }
     };
   }, [url]);

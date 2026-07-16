@@ -166,6 +166,14 @@ export class AttendanceService implements OnModuleInit {
       throw new BadRequestException(`Invalid status: ${dto.status}`);
     }
 
+    const today = new Date().toISOString().slice(0, 10);
+    if (dto.date < today) {
+      throw new BadRequestException('Cannot modify attendance for past dates');
+    }
+    if (dto.date > today) {
+      throw new BadRequestException('Cannot modify attendance for future dates');
+    }
+
     // Scope restriction: strict matrix capability check
     if (actorRole && !this.roleCapSvc.isAttendanceManage(actorRole)) {
       throw new ForbiddenException('You do not have permission to manage attendance.');
@@ -199,6 +207,11 @@ export class AttendanceService implements OnModuleInit {
       // Background execution: reassignment via event
       this.eventBus.publish('attendance.unavailable', { techId: dto.userId }).catch((err: any) => {
         this.logger.error(`Failed to publish attendance unavailable event: ${err.message}`);
+      });
+    } else if (dto.status === AttendanceStatus.PRESENT) {
+      // Force trigger ticket assignment logic when a technician is manually set to PRESENT
+      this.eventBus.publish('attendance.verified', { userId: dto.userId }).catch((err: any) => {
+        this.logger.error(`Failed to publish attendance verified event: ${err.message}`);
       });
     }
 

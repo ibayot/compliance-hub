@@ -32,8 +32,9 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  Grid,
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, ExpandMore as ExpandMoreIcon, WarningAmber as WarningIcon, ErrorOutline as ErrorIcon, CheckCircleOutline as CheckIcon } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -42,6 +43,7 @@ import {
   TicketCategory,
   TicketKeywordRule,
   EscalationFocalConfig,
+  ticketsApi,
 } from '@/app/api/references';
 import { feedbackApi, Feedback } from '@/lib/api/feedback';
 
@@ -158,6 +160,7 @@ export default function TicketSettingsPage() {
     isFlagCeremonyPaused: false,
   });
   const [slaInsights, setSlaInsights] = useState<any[]>([]);
+  const [slaSummary, setSlaSummary] = useState<{ breached: number; nearing: number; onTrack: number } | null>(null);
   const [slaFilterDays, setSlaFilterDays] = useState<number>(30);
   const [globalLoading, setGlobalLoading] = useState(true);
   const [smtpTestLoading, setSmtpTestLoading] = useState(false);
@@ -168,12 +171,14 @@ export default function TicketSettingsPage() {
   const fetchGlobalData = useCallback(async () => {
     try {
       setGlobalLoading(true);
-      const [config, insights] = await Promise.all([
+      const [config, insights, summary] = await Promise.all([
         ticketSettingsApi.getGlobalConfig(),
         ticketSettingsApi.getSlaInsights(slaFilterDays),
+        ticketsApi.getSlaSummary(),
       ]);
       setGlobalConfig(config);
       setSlaInsights(insights);
+      setSlaSummary(summary);
     } catch {
       enqueueSnackbar('Failed to load global config and insights', { variant: 'error' });
     } finally {
@@ -959,6 +964,96 @@ export default function TicketSettingsPage() {
                   </Stack>
                 )}
               </>
+            )}
+
+            {slaSummary && (
+              <Box mb={4} mt={4}>
+                <Typography variant="h6" fontWeight={600} mb={2}>
+                  Active Tickets SLA Dashboard
+                </Typography>
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={4}>
+                    <Card
+                      sx={{
+                        borderRadius: 3,
+                        boxShadow: '0 4px 20px rgba(211, 47, 47, 0.15)',
+                        background: 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.2 }}>
+                        <ErrorIcon sx={{ fontSize: 120, color: 'error.main' }} />
+                      </Box>
+                      <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                        <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                          <ErrorIcon color="error" />
+                          <Typography color="error.dark" variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
+                            Breached / Overdue
+                          </Typography>
+                        </Stack>
+                        <Typography variant="h2" color="error.dark" fontWeight={800}>
+                          {slaSummary.breached}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <Card
+                      sx={{
+                        borderRadius: 3,
+                        boxShadow: '0 4px 20px rgba(237, 108, 2, 0.15)',
+                        background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.2 }}>
+                        <WarningIcon sx={{ fontSize: 120, color: 'warning.main' }} />
+                      </Box>
+                      <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                        <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                          <WarningIcon color="warning" />
+                          <Typography color="warning.dark" variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
+                            Nearing Breach
+                          </Typography>
+                        </Stack>
+                        <Typography variant="h2" color="warning.dark" fontWeight={800}>
+                          {slaSummary.nearing}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <Card
+                      sx={{
+                        borderRadius: 3,
+                        boxShadow: '0 4px 20px rgba(46, 125, 50, 0.15)',
+                        background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.2 }}>
+                        <CheckIcon sx={{ fontSize: 120, color: 'success.main' }} />
+                      </Box>
+                      <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                        <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                          <CheckIcon color="success" />
+                          <Typography color="success.dark" variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
+                            On Track
+                          </Typography>
+                        </Stack>
+                        <Typography variant="h2" color="success.dark" fontWeight={800}>
+                          {slaSummary.onTrack}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+              </Box>
             )}
 
             <Typography variant="h6" fontWeight={600} mb={2} mt={4}>

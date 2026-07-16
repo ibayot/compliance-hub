@@ -158,7 +158,7 @@ export class AuthService {
 
       // Log the MFA code to the console for debugging/local testing without SMTP
       console.log(`[MFA] Generated verification code for ${user.email}: ${code}`);
-      
+
       const htmlTemplate = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
           <div style="text-align: center; margin-bottom: 20px;">
@@ -178,14 +178,16 @@ export class AuthService {
         return { mfaRequired: true, tempToken, testModeCode: code };
       }
 
-      await this.eventBus.publish('email.send', {
-        to: user.email,
-        subject: 'Compliance Hub - Your MFA Code',
-        text: `Your verification code is: ${code}. It expires in 15 minutes.`,
-        html: htmlTemplate,
-      }).catch((e) => {
-        console.error('Failed to publish email.send event for MFA', e);
-      });
+      await this.eventBus
+        .publish('email.send', {
+          to: user.email,
+          subject: 'Compliance Hub - Your MFA Code',
+          text: `Your verification code is: ${code}. It expires in 15 minutes.`,
+          html: htmlTemplate,
+        })
+        .catch((e) => {
+          console.error('Failed to publish email.send event for MFA', e);
+        });
 
       return { mfaRequired: true, tempToken };
     }
@@ -313,7 +315,12 @@ export class AuthService {
     return { message: 'Verification code sent to your email.' };
   }
 
-  async verifyMfaCode(tempToken: string, code: string, rememberDevice: boolean, incomingDeviceToken?: string): Promise<any> {
+  async verifyMfaCode(
+    tempToken: string,
+    code: string,
+    rememberDevice: boolean,
+    incomingDeviceToken?: string,
+  ): Promise<any> {
     let payload;
     try {
       payload = this.jwtService.verify(tempToken);

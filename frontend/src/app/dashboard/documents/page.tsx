@@ -46,19 +46,6 @@ export default function DocumentsPage() {
   const isFocal = user?.roleCode === 'focal';
   const canAccessDocuments = user?.role === 'super_admin' || !!myCap?.isDocumentsAccess;
 
-  if (!canAccessDocuments) {
-    return (
-      <Container maxWidth="xl">
-        <Box sx={{ py: 4 }}>
-          <Typography variant="h4" gutterBottom>
-            Documents
-          </Typography>
-          <Typography color="error">You do not have access to this feature.</Typography>
-        </Box>
-      </Container>
-    );
-  }
-
   const [filters, setFilters] = useState<ListDocumentsParams>({
     page: 1,
     limit: 20,
@@ -299,6 +286,19 @@ export default function DocumentsPage() {
       status: undefined,
     });
   };
+
+  if (!canAccessDocuments) {
+    return (
+      <Container maxWidth="xl">
+        <Box sx={{ py: 4 }}>
+          <Typography variant="h4" gutterBottom>
+            Documents
+          </Typography>
+          <Typography color="error">You do not have access to this feature.</Typography>
+        </Box>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="xl">

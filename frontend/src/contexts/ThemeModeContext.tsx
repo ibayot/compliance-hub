@@ -22,16 +22,16 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
     return stored === 'dark' ? 'dark' : 'light';
   });
 
-  const setMode = (nextMode: ThemeMode) => {
+  const setMode = React.useCallback((nextMode: ThemeMode) => {
     setModeState(nextMode);
     localStorage.setItem('app-theme-mode', nextMode);
-  };
+  }, []);
 
-  const toggleMode = () => {
+  const toggleMode = React.useCallback(() => {
     setMode(mode === 'light' ? 'dark' : 'light');
-  };
+  }, [mode, setMode]);
 
-  const value = useMemo(() => ({ mode, setMode, toggleMode }), [mode]);
+  const value = useMemo(() => ({ mode, setMode, toggleMode }), [mode, setMode, toggleMode]);
 
   const theme = useMemo(() => getAppTheme(mode), [mode]);
 

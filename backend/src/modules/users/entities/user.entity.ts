@@ -124,7 +124,6 @@ export class User {
   @Column({ name: 'last_login', type: 'datetime', nullable: true })
   lastLogin: Date | null;
 
-
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

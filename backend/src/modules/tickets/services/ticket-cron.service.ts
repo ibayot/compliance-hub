@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, In } from 'typeorm';
+import { Repository, LessThan, In, Raw } from 'typeorm';
 import { Ticket, TicketStatus } from '../entities/ticket.entity';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { TicketService } from './ticket.service';
@@ -9,8 +9,12 @@ import { EmailService } from './email.service';
 import { UserRole } from '../../shared/entities';
 
 @Injectable()
-export class TicketCronService {
+export class TicketCronService implements OnModuleInit {
   private readonly logger = new Logger(TicketCronService.name);
+
+  onModuleInit() {
+    this.logger.log('TicketCronService initialized and ready for cron jobs.');
+  }
 
   constructor(
     @InjectRepository(Ticket)
@@ -23,7 +27,9 @@ export class TicketCronService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async handleScheduleTasks() {
+    this.logger.log('Running minute cron tasks...');
     await this.processSlaSchedules();
+    await this.processOverdueTicketsUnpauseNext();
   }
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -33,6 +39,11 @@ export class TicketCronService {
     await this.processAutoUnpause();
     await this.processFrozenTicketsReminders();
     await this.processPercentageAlerts();
+  }
+
+  @Cron('*/15 * * * *')
+  async handle15MinuteTasks() {
+    await this.ticketService.retryBenchedKbs();
   }
 
   private async processSlaSchedules() {
@@ -54,6 +65,50 @@ export class TicketCronService {
         await this.ticketService.resumeAllActiveTickets();
       } else if (currentTime === config.cwwClockoutEnd) {
         await this.ticketService.pauseAllActiveTickets();
+      }
+    }
+  }
+
+  private async processOverdueTicketsUnpauseNext() {
+    const overdueActiveTickets = await this.ticketRepo.find({
+      where: {
+        isSlaWaiting: false,
+        slaDeadline: Raw((alias) => `${alias} < UTC_TIMESTAMP()`),
+        status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS]),
+      },
+    });
+
+    if (overdueActiveTickets.length > 0) {
+      this.logger.log(`Cron check: found ${overdueActiveTickets.length} overdue active tickets.`);
+    }
+
+    const overdueTechIds = new Set(overdueActiveTickets.map((t) => t.assignedToId));
+
+    for (const techId of overdueTechIds) {
+      if (!techId) continue;
+
+      // Check if there is no IN_PROGRESS ticket for this technician
+      const inProgressCount = await this.ticketRepo.count({
+        where: {
+          assignedToId: techId,
+          status: TicketStatus.IN_PROGRESS,
+          isSlaWaiting: false,
+        },
+      });
+
+      if (inProgressCount > 0) {
+        continue; // They already have an IN_PROGRESS ticket, skip
+      }
+
+      // If no IN_PROGRESS ticket, unpause the next queued ticket and change its status to IN_PROGRESS
+      const unpausedTicketId = await this.ticketService.unpauseNextWaitingTicketAndSetInProgress(
+        techId,
+        'cron_overdue_unstack',
+      );
+      if (unpausedTicketId) {
+        this.logger.log(
+          `Cron: Technician #${techId} has an overdue active ticket but no IN_PROGRESS ticket. Unpaused their next queued ticket and set to IN_PROGRESS.`,
+        );
       }
     }
   }

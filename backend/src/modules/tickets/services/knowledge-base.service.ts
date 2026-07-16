@@ -3,23 +3,39 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { KnowledgeArticle } from '../entities/knowledge-article.entity';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 
 @Injectable()
 export class KnowledgeBaseService {
   private readonly logger = new Logger(KnowledgeBaseService.name);
-  private genAI: GoogleGenerativeAI | null = null;
+  private groqClient: OpenAI | null = null;
+  private cerebrasClient: OpenAI | null = null;
 
   constructor(
     @InjectRepository(KnowledgeArticle)
     private readonly kbRepo: Repository<KnowledgeArticle>,
     private readonly configService: ConfigService,
   ) {
-    const apiKey = this.configService.get<string>('GEMINI_API_KEY');
-    if (apiKey) {
-      this.genAI = new GoogleGenerativeAI(apiKey);
+    const groqKey = this.configService.get<string>('GROQ_API_KEY');
+    if (groqKey) {
+      this.groqClient = new OpenAI({
+        apiKey: groqKey,
+        baseURL: 'https://api.groq.com/openai/v1',
+      });
+      this.logger.log('Groq Client initialized for KB Suggestions.');
     } else {
-      this.logger.warn('GEMINI_API_KEY is not set. KB generation will be disabled.');
+      this.logger.warn('GROQ_API_KEY is not set. Real-time KB suggestions will be disabled.');
+    }
+
+    const cerebrasKey = this.configService.get<string>('CEREBRAS_API_KEY');
+    if (cerebrasKey) {
+      this.cerebrasClient = new OpenAI({
+        apiKey: cerebrasKey,
+        baseURL: 'https://api.cerebras.ai/v1',
+      });
+      this.logger.log('Cerebras Client initialized for KB Generation.');
+    } else {
+      this.logger.warn('CEREBRAS_API_KEY is not set. KB generation will be disabled.');
     }
   }
 
@@ -66,15 +82,16 @@ export class KnowledgeBaseService {
     subject: string,
     description: string,
     resolutionNotes: string,
-    resolutionSteps: string,
   ): Promise<KnowledgeArticle | null> {
-    if (!this.genAI) return null;
+    if (!this.cerebrasClient) {
+      this.logger.warn('Cannot generate KB because Cerebras client is not configured.');
+      return null;
+    }
 
     try {
       const cleanSubject = await this.stripSensitiveData(subject);
       const cleanDesc = await this.stripSensitiveData(description);
       const cleanNotes = await this.stripSensitiveData(resolutionNotes);
-      const cleanSteps = await this.stripSensitiveData(resolutionSteps);
 
       // Fetch all existing KBs to pass to the prompt for duplicate checking
       // (If the KB grows huge, we'd need vector search, but for now we just fetch titles and IDs)
@@ -89,7 +106,6 @@ We have a resolved ticket with the following details:
 Subject: ${cleanSubject}
 Description: ${cleanDesc}
 Resolution Notes: ${cleanNotes}
-Resolution Steps: ${cleanSteps}
 
 We want to add this to our Knowledge Base.
 However, we want to keep our KB clean and avoid duplicates.
@@ -97,36 +113,44 @@ Here are the existing KB articles:
 ${kbListText}
 
 Task:
-1. Determine if this new ticket resolution is a duplicate of an existing KB article based on the problem (Subject/Description).
-2. If it IS a duplicate problem but the resolution steps are different, output a JSON indicating we should UPDATE the existing KB by merging the new solution as an alternative.
-3. If it is NOT a duplicate, output a JSON indicating we should CREATE a new KB article.
+1. Determine if this new ticket addresses the exact same specific root problem/error as an existing KB article. (e.g., "Printer Paper Jam" and "Printer Ink Pad Error" are completely DIFFERENT problems and must NOT be merged. However, two different ways to solve a "Paper Jam" ARE the same problem and should be merged).
+2. If it IS the exact same problem AND the resolution steps are fundamentally the same (or very closely similar in nature), set action to "IGNORE".
+3. If it IS the exact same problem BUT the resolution steps offer a new or different alternative solution, set action to "UPDATE" and provide the existing ID and the new appended content.
+4. If it is NOT the exact same problem, set action to "CREATE" and provide a highly specific title, detailed content, and tags.
 
-Output ONLY valid JSON with no markdown wrapping, in one of these two formats:
-Format for CREATE:
-{
-  "action": "CREATE",
-  "title": "A concise, general title for the problem",
-  "content": "A clear, step-by-step guide on how to resolve the issue, written for an IT technician. Include alternative solutions if applicable.",
-  "tags": "comma,separated,tags"
-}
-
-Format for UPDATE:
-{
-  "action": "UPDATE",
-  "existing_id": <number>,
-  "merged_content": "The original content of the existing KB, updated nicely to include this new alternative resolution method."
-}
+CRITICAL INSTRUCTION FOR CONTENT GENERATION:
+- For CREATE: Make the title highly specific to the actual root cause or error (e.g., "Resolving Printer Paper Jams" instead of just "Printer Issue"). Rewrite the resolution into a clear, easy-to-follow, step-by-step guide that ANY general user can understand. Explain the concepts simply, BUT you MUST retain any exact technical commands, file paths, or specific values (e.g., "ipconfig /flushdns", "8.8.8.8") that the user actually needs to type, click, or search for. Do not oversimplify essential actionable instructions.
+- For UPDATE: You MUST rewrite the NEW alternative solution into a clear, easy-to-follow format, retaining exact technical commands. The appended alternative solution MUST be formatted as a numbered list (1., 2., 3...) under a clear heading (e.g., "### Alternative Solution"). Do NOT output the original content. ONLY output the new formatted alternative solution.
+- GENERALIZATION: You MUST strip out any specific locations (e.g., "Floor 2", "HR Office", "Conference Room"), usernames, or specific machine names. A KB article must be universally applicable. A title should be "Resolving a Paper Jam in Tray 2", NOT "Resolving a Paper Jam on Floor 2". The content should never mention where the printer is located.
 `;
 
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      const result = await model.generateContent(prompt);
-      const responseText = result.response
-        .text()
-        .trim()
-        .replace(/^```json/i, '')
-        .replace(/^```/i, '')
-        .replace(/```$/i, '');
+      const response = await this.cerebrasClient.chat.completions.create({
+        model: 'gpt-oss-120b',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'kb_decision',
+            schema: {
+              type: 'object',
+              properties: {
+                action: {
+                  type: 'string',
+                  enum: ['CREATE', 'UPDATE', 'IGNORE']
+                },
+                title: { type: 'string', description: "Title for CREATE action, otherwise empty string" },
+                content: { type: 'string', description: "Content for CREATE action, otherwise empty string" },
+                tags: { type: 'string', description: "Tags for CREATE action, otherwise empty string" },
+                existing_id: { type: 'integer', description: "ID for UPDATE action, otherwise 0" },
+                appended_content: { type: 'string', description: "The new alternative solution for UPDATE action, otherwise empty string" }
+              },
+              required: ['action', 'title', 'content', 'tags', 'existing_id', 'appended_content']
+            }
+          }
+        }
+      });
 
+      const responseText = response.choices[0]?.message?.content || '{}';
       const parsed = JSON.parse(responseText);
 
       if (parsed.action === 'CREATE') {
@@ -139,14 +163,18 @@ Format for UPDATE:
       } else if (parsed.action === 'UPDATE' && parsed.existing_id) {
         const existing = await this.kbRepo.findOne({ where: { id: parsed.existing_id } });
         if (existing) {
-          existing.content = parsed.merged_content;
+          existing.content = existing.content + '\n\n---\n\n' + parsed.appended_content;
           return this.kbRepo.save(existing);
         }
+      } else if (parsed.action === 'IGNORE') {
+        this.logger.log('KB Generation ignored - exact duplicate found.');
+        return null;
       }
       return null;
     } catch (err: any) {
-      this.logger.error('Failed to generate KB article using Gemini', err);
-      return null;
+      this.logger.error('Failed to generate KB article using Cerebras', err);
+      // Re-throw so the ticket service catches it and benches the KB
+      throw err;
     }
   }
 
@@ -155,15 +183,15 @@ Format for UPDATE:
   }
 
   async searchKnowledgeBase(query: string): Promise<KnowledgeArticle[]> {
-    if (!this.genAI) {
-      // fallback to simple DB search if no Gemini
+    if (!this.groqClient) {
+      // fallback to simple DB search if no Groq
       return this.kbRepo
         .createQueryBuilder('kb')
         .where('kb.title LIKE :q OR kb.content LIKE :q', { q: `%${query}%` })
         .getMany();
     }
 
-    // Semantic search using Gemini
+    // Semantic search using Groq
     try {
       const allKbs = await this.getKnowledgeBaseArticles();
       const kbListText = allKbs
@@ -172,29 +200,41 @@ Format for UPDATE:
 
       const prompt = `
 Given the user's issue description: "${query}"
-Which of the following Knowledge Base articles might be helpful?
-List the IDs of the top 3 most relevant articles as a JSON array of numbers. Output ONLY the JSON array.
-If none are relevant, output an empty array [].
+Which of the following Knowledge Base articles are HIGHLY relevant and helpful to solve this exact issue?
+List the IDs of the top 3 most relevant articles as a JSON object containing an array of numbers under the key "ids".
+CRITICAL: Do NOT guess. If the issue description is vague (e.g., "Test 2"), or if there are no articles that directly and explicitly address the problem, you MUST output an empty array for "ids".
 
 Articles:
 ${kbListText}
-`;
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      const result = await model.generateContent(prompt);
-      const responseText = result.response
-        .text()
-        .trim()
-        .replace(/^```json/i, '')
-        .replace(/^```/i, '')
-        .replace(/```$/i, '');
 
-      const parsedIds = JSON.parse(responseText);
-      if (Array.isArray(parsedIds) && parsedIds.length > 0) {
-        return allKbs.filter((kb) => parsedIds.includes(kb.id));
+Output strictly JSON:
+{ "ids": [1, 2, 3] }
+`;
+
+      const response = await this.groqClient.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' }
+      });
+
+      const responseText = response.choices[0]?.message?.content || '{"ids": []}';
+      const parsed = JSON.parse(responseText);
+      const topIds = parsed.ids || [];
+
+      if (!Array.isArray(topIds) || topIds.length === 0) {
+        return [];
       }
-      return [];
+
+      // Fetch the actual articles
+      const results = [];
+      for (const id of topIds) {
+        const kb = await this.kbRepo.findOne({ where: { id } });
+        if (kb) results.push(kb);
+      }
+      return results;
     } catch (err) {
-      this.logger.error('Failed to search KB using Gemini', err);
+      this.logger.error('Failed to semantic search KB using Groq', err);
+      // fallback to DB search
       return this.kbRepo
         .createQueryBuilder('kb')
         .where('kb.title LIKE :q OR kb.content LIKE :q', { q: `%${query}%` })

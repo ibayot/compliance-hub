@@ -59,6 +59,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      - TZ=Asia/Manila
       - DB_HOST=db
       - DB_PASSWORD=admin
       - DB_BOOTSTRAP=false
@@ -91,12 +92,14 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      - TZ=Asia/Manila
       - DB_HOST=db
       - DB_PASSWORD=admin
       - DB_BOOTSTRAP=false
       - REDIS_HOST=redis
       - USERS_SERVICE_URL=http://users-service:4101
-      - GEMINI_API_KEY=AQ.Ab8RN6IeaGiQHevyy0zcQBVRtQYqOwYPeYu90-aX0q3E7dTU2w
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
       - COMMENT_ATTACHMENT_STORAGE_ROOT=/app/uploads/comments
       - ESCALATION_STORAGE_ROOT=/app/uploads/escalations
     ports:
@@ -129,6 +132,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      - TZ=Asia/Manila
       - DB_HOST=db
       - DB_PASSWORD=admin
       - DB_BOOTSTRAP=false

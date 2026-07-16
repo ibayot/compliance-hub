@@ -284,6 +284,9 @@ export class TicketSettingsService {
         'targetTicketType must be desktop_support, it_support, or pantawid_ict_support',
       );
     }
+    if (!dto.targetCategoryId) {
+      throw new BadRequestException('targetCategoryId is required when creating a keyword rule');
+    }
 
     const rule = this.keywordRepo.create({
       keyword: kwList[0],
@@ -320,7 +323,12 @@ export class TicketSettingsService {
       }
       rule.targetTicketType = dto.targetTicketType;
     }
-    if (dto.targetCategoryId !== undefined) rule.targetCategoryId = dto.targetCategoryId || null;
+    if (dto.targetCategoryId !== undefined) {
+      if (!dto.targetCategoryId) {
+        throw new BadRequestException('targetCategoryId cannot be empty when updating a keyword rule');
+      }
+      rule.targetCategoryId = dto.targetCategoryId;
+    }
     if (dto.isActive !== undefined) rule.isActive = dto.isActive;
 
     return this.keywordRepo.save(rule);
@@ -607,7 +615,7 @@ export class TicketSettingsService {
       FROM tickets t
       JOIN ticket_categories tc ON t.category_id = tc.id
       WHERE t.status IN ('RESOLVED', 'CLOSED')
-        AND t.resolved_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+        AND t.resolved_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? DAY)
         AND tc.sla_hours IS NOT NULL AND tc.sla_hours > 0
       GROUP BY tc.id
     `,

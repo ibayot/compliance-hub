@@ -19,7 +19,7 @@ import { TicketEscalation, EscalationStatus } from '../entities/ticket-escalatio
 import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { UserRole } from '../../shared/entities';
-import { UsersHttpClient, UserStub } from '../../../common/http-clients/users.http-client';
+import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
 import { TicketSettingsService } from './ticket-settings.service';
 import { AttendanceService } from './attendance.service';
 import { EmailService, TicketEmailData } from './email.service';
@@ -55,6 +55,7 @@ export interface UpdateTicketDto {
   duplicateOfId?: string;
   ticketType?: TicketType;
   generateKb?: boolean;
+  categoryId?: string;
 }
 
 export interface AssignTicketDto {
@@ -425,10 +426,10 @@ export class TicketService implements OnModuleInit {
     dto: CreateTicketDto,
     callerId: number,
     callerRole?: UserRole,
+    image?: Express.Multer.File,
   ): Promise<
     Ticket & { autoShifted?: boolean; autoAssigned?: boolean; noTechAvailable?: boolean }
   > {
-    const isStaff = callerRole && callerRole !== UserRole.USER;
     const requesterId = dto.requesterId ? dto.requesterId : callerId;
 
     const requester = await this.usersHttpClient.getUserById(requesterId);
@@ -472,6 +473,10 @@ export class TicketService implements OnModuleInit {
       } catch (err: any) {
         this.logger.warn(`Auto-shift failed (non-fatal): ${err?.message}`);
       }
+    }
+
+    if (!categoryId) {
+      throw new BadRequestException('No matching category found. Please select an appropriate category');
     }
 
     // ── Auto-Assign based on attendance & workload ─────────────────────
@@ -638,8 +643,20 @@ export class TicketService implements OnModuleInit {
     // const ticketNumber = await this.generateTicketNumber();
     const status = assignedToId ? TicketStatus.ASSIGNED : TicketStatus.OPEN;
 
+    // Evaluate isSlaWaiting for manually assigned tickets (if not already done by auto-assign)
+    if (assignedToId && !isSlaWaiting) {
+      const activeTicketsCount = await this.ticketRepo.count({
+        where: [
+          { assignedToId: assignedToId, status: TicketStatus.ASSIGNED },
+          { assignedToId: assignedToId, status: TicketStatus.IN_PROGRESS },
+          { assignedToId: assignedToId, status: TicketStatus.PAUSE },
+        ],
+      });
+      isSlaWaiting = activeTicketsCount > 0;
+    }
+
     let slaDeadline: Date | null = null;
-    if (assignedToId && categoryId && !isSlaWaiting) {
+    if (assignedToId && categoryId) {
       const cat = await this.settingsService.getCategoryById(categoryId).catch(() => null);
       if (cat?.slaHours) {
         const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch((err) => {
@@ -671,6 +688,7 @@ export class TicketService implements OnModuleInit {
       categoryId,
       slaDeadline,
       isSlaWaiting,
+      slaPausedAt: isSlaWaiting ? new Date() : null,
       lastAssignedAt: assignedToId ? new Date() : null,
       issueTypeId,
       issueType: issueTypeKey,
@@ -723,31 +741,17 @@ export class TicketService implements OnModuleInit {
       }).catch(() => {});
     }
 
-    // ── Send email notification (fire-and-forget) ──────────────────────
-    const categoryName = categoryId
-      ? (await this.settingsService.getCategoryById(categoryId).catch(() => null))?.name
-      : undefined;
-
-    const emailData: TicketEmailData = {
-      ticketId: persisted.id,
-      ticketNumber: persisted.ticketNumber,
-      subject: persisted.subject,
-      description: persisted.description,
-      ticketType: persisted.ticketType,
-      categoryName: categoryName ?? undefined,
-      priority: persisted.priority,
-      status: persisted.status,
-      requesterName:
-        [requester.first_name, requester.last_name].filter(Boolean).join(' ') || requester.email,
-      requesterEmail: requester.email,
-      assignedToName: assignedTech
-        ? [assignedTech.first_name, assignedTech.lastName].filter(Boolean).join(' ') ||
-          assignedTech.email
-        : undefined,
-      assignedToEmail: assignedTech?.email,
-      createdAt: persisted.createdAt?.toISOString?.() ?? new Date().toISOString(),
-      noTechAvailable,
-    };
+    if (image) {
+      await this.addComment(
+        saved.id,
+        { content: '[Initial Ticket Attachment]', isInternal: false },
+        callerId,
+        callerRole || UserRole.USER,
+        image
+      ).catch((err) => {
+        this.logger.error(`Failed to attach initial image for ticket ${saved.id}:`, err);
+      });
+    }
 
     // return Object.assign(saved, { autoShifted, autoAssigned: !!assignedToId, noTechAvailable });
     return Object.assign(persisted, {
@@ -889,36 +893,56 @@ export class TicketService implements OnModuleInit {
     const absentIds = new Set<number>(absentRows.map((r) => Number(r.userId)));
 
     const now = new Date();
-    const withAvailability = tickets.map((t) => {
-      let isOverdue = false;
-      let isNearingSLA = false;
-      if (t.slaDeadline) {
-        let deadline = new Date(t.slaDeadline);
-        
-        // Dynamically project deadline if ticket is currently paused in the queue
-        if (t.slaPausedAt) {
-          const pausedTimeMs = now.getTime() - new Date(t.slaPausedAt).getTime();
-          deadline = new Date(deadline.getTime() + pausedTimeMs);
-          t.slaDeadline = deadline; // Output true projected deadline in API
-        }
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    const withAvailability = await Promise.all(
+      tickets.map(async (t) => {
+        let isOverdue = false;
+        let isNearingSLA = false;
+        if (t.slaDeadline) {
+          let deadline = new Date(t.slaDeadline);
 
-        const originalSlaMs = t.category?.slaHours
-          ? t.category.slaHours * 3600 * 1000
-          : deadline.getTime() - new Date(t.createdAt).getTime();
-        const fortyPercentSlaMs = originalSlaMs * 0.4;
+          // Dynamically project deadline if ticket is currently paused in the queue
+          if (t.isSlaWaiting && t.slaPausedAt && t.category?.slaHours && config) {
+            const businessSecondsElapsed = await this.calculateBusinessSeconds(
+              new Date(t.slaPausedAt),
+              now,
+              config as TicketingConfig
+            );
+            const accumulatedPauseSeconds = (t.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
+            const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
+              new Date(t.createdAt),
+              now,
+              config as TicketingConfig
+            );
+            const activeBusinessSeconds = Math.max(0, totalBusinessSecondsSinceCreation - accumulatedPauseSeconds);
+            const consumedSlaHours = activeBusinessSeconds / 3600;
+            const remainingHours = Math.max(0, t.category.slaHours - consumedSlaHours);
+            deadline = await this.calculateSlaDeadline(
+              now,
+              remainingHours,
+              config as TicketingConfig
+            );
+            t.slaDeadline = deadline; // Output true projected deadline in API
+          }
 
-        if (now > deadline) {
-          isOverdue = true;
-        } else if (deadline.getTime() - now.getTime() <= fortyPercentSlaMs) {
-          isNearingSLA = true;
+          const originalSlaMs = t.category?.slaHours
+            ? t.category.slaHours * 3600 * 1000
+            : deadline.getTime() - new Date(t.createdAt).getTime();
+          const fortyPercentSlaMs = originalSlaMs * 0.4;
+
+          if (now > deadline) {
+            isOverdue = true;
+          } else if (deadline.getTime() - now.getTime() <= fortyPercentSlaMs) {
+            isNearingSLA = true;
+          }
         }
-      }
-      return Object.assign(t, {
-        assignedTechAbsent: t.assignedToId ? absentIds.has(t.assignedToId) : false,
-        isOverdue,
-        isNearingSLA,
-      });
-    }) as any;
+        return Object.assign(t, {
+          assignedTechAbsent: t.assignedToId ? absentIds.has(t.assignedToId) : false,
+          isOverdue,
+          isNearingSLA,
+        });
+      })
+    );
 
     if (!usePagination) {
       return withAvailability;
@@ -952,12 +976,32 @@ export class TicketService implements OnModuleInit {
     if (ticket.slaDeadline) {
       const now = new Date();
       let deadline = new Date(ticket.slaDeadline);
-      
+
       // Dynamically project deadline if ticket is currently paused in the queue
-      if (ticket.slaPausedAt) {
-        const pausedTimeMs = now.getTime() - new Date(ticket.slaPausedAt).getTime();
-        deadline = new Date(deadline.getTime() + pausedTimeMs);
-        ticket.slaDeadline = deadline; // Output true projected deadline in API
+      if (ticket.isSlaWaiting && ticket.slaPausedAt && ticket.category?.slaHours) {
+        const config = await this.configRepo.findOne({ where: { id: 1 } });
+        if (config) {
+          const businessSecondsElapsed = await this.calculateBusinessSeconds(
+            new Date(ticket.slaPausedAt),
+            now,
+            config as TicketingConfig
+          );
+          const accumulatedPauseSeconds = (ticket.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
+            const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
+              new Date(ticket.createdAt),
+              now,
+              config as TicketingConfig
+            );
+            const activeBusinessSeconds = Math.max(0, totalBusinessSecondsSinceCreation - accumulatedPauseSeconds);
+            const consumedSlaHours = activeBusinessSeconds / 3600;
+            const remainingHours = Math.max(0, ticket.category.slaHours - consumedSlaHours);
+          deadline = await this.calculateSlaDeadline(
+            now,
+            remainingHours,
+            config as TicketingConfig
+          );
+          ticket.slaDeadline = deadline; // Output true projected deadline in API
+        }
       }
 
       const originalSlaMs = ticket.category?.slaHours
@@ -1086,7 +1130,14 @@ export class TicketService implements OnModuleInit {
           throw new ForbiddenException('You do not have permission to change the ticket type.');
         }
       }
-      ticket.ticketType = dto.ticketType;
+      if (ticket.ticketType !== dto.ticketType) {
+        ticket.ticketType = dto.ticketType;
+        if (dto.categoryId === undefined) {
+          // Clear category if not explicitly provided in the same request
+          ticket.categoryId = null;
+          ticket.category = null;
+        }
+      }
     }
 
     if (dto.issueTypeId !== undefined) {
@@ -1105,6 +1156,39 @@ export class TicketService implements OnModuleInit {
       }
     }
 
+    if (dto.categoryId !== undefined) {
+      if (!dto.categoryId) {
+        throw new BadRequestException('Category is required.');
+      }
+      const cat = await this.settingsService.getCategoryById(dto.categoryId).catch(() => null);
+      if (!cat) {
+        throw new BadRequestException('Selected category is invalid.');
+      }
+      ticket.categoryId = cat.id;
+      ticket.category = cat;
+
+      // Recalculate SLA if ticket has an SLA deadline and is in an active state
+      if (ticket.slaDeadline && cat.slaHours) {
+        const config = await this.configRepo.findOne({ where: { id: 1 } });
+        if (config) {
+          const startTime = new Date(ticket.createdAt);
+          const now = new Date();
+          const activeBusinessSeconds = await this.calculateBusinessSeconds(
+            startTime,
+            now,
+            config as TicketingConfig
+          );
+          const totalConsumedSeconds = activeBusinessSeconds - (ticket.accumulatedPauseSeconds || 0);
+          const remainingHours = Math.max(0, cat.slaHours - (totalConsumedSeconds / 3600));
+          ticket.slaDeadline = await this.calculateSlaDeadline(
+            now,
+            remainingHours,
+            config as TicketingConfig
+          );
+        }
+      }
+    }
+
     // Priority changes allowed for all technician-level roles and above
     if (dto.priority !== undefined) {
       if (
@@ -1118,6 +1202,10 @@ export class TicketService implements OnModuleInit {
     }
 
     if (dto.status) {
+      if (latestEscalation && latestEscalation.status === 'pending') {
+        throw new ForbiddenException('Cannot change ticket status while an escalation is pending.');
+      }
+
       if (acceptedEscalation) {
         const isEscalationAdmin = this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
         const isAcceptedFocal = acceptedEscalation.escalatedToId === actorId;
@@ -1197,8 +1285,7 @@ export class TicketService implements OnModuleInit {
           );
         }
         const original = await this.ticketRepo.findOne({ where: { id: dto.duplicateOfId } });
-        if (!original)
-          throw new BadRequestException('Original ticket not found.');
+        if (!original) throw new BadRequestException('Original ticket not found.');
         ticket.duplicateOfId = dto.duplicateOfId;
 
         // --- SLA Freezing Logic for Terminal DUPLICATE State ---
@@ -1206,11 +1293,33 @@ export class TicketService implements OnModuleInit {
           [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(ticket.status as TicketStatus) &&
           ticket.slaPausedAt
         ) {
-          const pausedTimeMs = new Date().getTime() - ticket.slaPausedAt.getTime();
+          const now = new Date();
+          const config = await this.configRepo.findOne({ where: { id: 1 } });
+          const businessSecondsElapsed = await this.calculateBusinessSeconds(
+            ticket.slaPausedAt,
+            now,
+            config as TicketingConfig,
+          );
           ticket.accumulatedPauseSeconds =
-            (ticket.accumulatedPauseSeconds || 0) + Math.floor(pausedTimeMs / 1000);
-          if (ticket.slaDeadline) {
-            ticket.slaDeadline = new Date(ticket.slaDeadline.getTime() + pausedTimeMs);
+            (ticket.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
+
+          if (ticket.slaDeadline && ticket.category?.slaHours) {
+            const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
+              new Date(ticket.createdAt),
+              now,
+              config as TicketingConfig,
+            );
+            const activeBusinessSeconds = Math.max(
+              0,
+              totalBusinessSecondsSinceCreation - ticket.accumulatedPauseSeconds,
+            );
+            const consumedSlaHours = activeBusinessSeconds / 3600;
+            const remainingHours = Math.max(0, ticket.category.slaHours - consumedSlaHours);
+            ticket.slaDeadline = await this.calculateSlaDeadline(
+              now,
+              remainingHours,
+              config as TicketingConfig,
+            );
           }
           ticket.slaPausedAt = null;
         }
@@ -1231,9 +1340,9 @@ export class TicketService implements OnModuleInit {
         }
 
         // --- SLA Freezing Logic ---
-        const wasPaused = [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(
-          ticket.status as TicketStatus,
-        );
+        const wasPaused =
+          [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(ticket.status as TicketStatus) ||
+          ticket.isSlaWaiting;
         const willBePaused = [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(
           dto.status as TicketStatus,
         );
@@ -1241,19 +1350,48 @@ export class TicketService implements OnModuleInit {
         if (willBePaused && !wasPaused) {
           ticket.slaPausedAt = new Date();
         } else if (wasPaused && !willBePaused && ticket.slaPausedAt) {
-          const pausedTimeMs = new Date().getTime() - ticket.slaPausedAt.getTime();
+          const now = new Date();
+          const config = await this.configRepo.findOne({ where: { id: 1 } });
+          const businessSecondsElapsed = await this.calculateBusinessSeconds(
+            ticket.slaPausedAt,
+            now,
+            config as TicketingConfig,
+          );
           ticket.accumulatedPauseSeconds =
-            (ticket.accumulatedPauseSeconds || 0) + Math.floor(pausedTimeMs / 1000);
-          if (ticket.slaDeadline) {
-            ticket.slaDeadline = new Date(ticket.slaDeadline.getTime() + pausedTimeMs);
+            (ticket.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
+
+          if (ticket.slaDeadline && ticket.category?.slaHours) {
+            const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
+              new Date(ticket.createdAt),
+              now,
+              config as TicketingConfig,
+            );
+            const activeBusinessSeconds = Math.max(
+              0,
+              totalBusinessSecondsSinceCreation - ticket.accumulatedPauseSeconds,
+            );
+            const consumedSlaHours = activeBusinessSeconds / 3600;
+            const remainingHours = Math.max(0, ticket.category.slaHours - consumedSlaHours);
+            ticket.slaDeadline = await this.calculateSlaDeadline(
+              now,
+              remainingHours,
+              config as TicketingConfig,
+            );
           }
           ticket.slaPausedAt = null;
+          ticket.isSlaWaiting = false;
         }
 
         const originalStatus = ticket.status as TicketStatus;
         ticket.status = dto.status;
 
+        if (dto.status === TicketStatus.IN_PROGRESS) {
+          ticket.isSlaWaiting = false;
+          ticket.slaPausedAt = null;
+        }
+
         // Preemptive Queue Pushback (Unfreeze/Unpause Priority)
+        // We only push back ASSIGNED tickets so that multiple IN_PROGRESS tickets can run concurrently.
         if (
           dto.status === TicketStatus.IN_PROGRESS &&
           [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(originalStatus) &&
@@ -1262,7 +1400,7 @@ export class TicketService implements OnModuleInit {
           const currentActiveTickets = await this.ticketRepo.find({
             where: {
               assignedToId: ticket.assignedToId,
-              status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS]),
+              status: TicketStatus.ASSIGNED,
               id: Not(ticket.id),
               isSlaWaiting: false,
             },
@@ -1379,6 +1517,45 @@ export class TicketService implements OnModuleInit {
         if (dto.status === TicketStatus.RESOLVED && !ticket.resolvedAt) {
           ticket.resolvedAt = new Date();
         }
+
+        // Unpause SLA timer if moving to a terminal state
+        if (
+          [TicketStatus.RESOLVED, TicketStatus.CLOSED, TicketStatus.DUPLICATE].includes(
+            dto.status as TicketStatus,
+          )
+        ) {
+          if (ticket.slaPausedAt) {
+            const now = new Date();
+            const config = await this.configRepo.findOne({ where: { id: 1 } });
+            const pausedTimeSeconds = await this.calculateBusinessSeconds(
+              ticket.slaPausedAt,
+              now,
+              config as TicketingConfig,
+            );
+
+            ticket.accumulatedPauseSeconds += pausedTimeSeconds;
+            if (ticket.slaDeadline && ticket.category?.slaHours) {
+              const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
+              new Date(ticket.createdAt),
+              now,
+              config as TicketingConfig,
+            );
+            const activeBusinessSeconds = Math.max(
+              0,
+              totalBusinessSecondsSinceCreation - ticket.accumulatedPauseSeconds,
+            );
+            const consumedSlaHours = activeBusinessSeconds / 3600;
+            const remainingHours = Math.max(0, ticket.category.slaHours - consumedSlaHours);
+              ticket.slaDeadline = await this.calculateSlaDeadline(
+                now,
+                remainingHours,
+                config as TicketingConfig,
+              );
+            }
+          }
+          ticket.slaPausedAt = null;
+          ticket.isSlaWaiting = false;
+        }
       }
     }
     if (dto.resolutionNotes !== undefined) ticket.resolutionNotes = dto.resolutionNotes;
@@ -1396,19 +1573,36 @@ export class TicketService implements OnModuleInit {
       }
     }
 
+    // Mark for KB generation if requested
+    if (dto.status === TicketStatus.RESOLVED && dto.generateKb && ticket.resolutionNotes) {
+      ticket.isKbGenerationPending = true;
+    }
+
     const saved = await this.ticketRepo.save(ticket);
 
-    // AI Knowledge Base Generation
-    if (dto.status === TicketStatus.RESOLVED && dto.generateKb && saved.resolutionNotes) {
-      // Fire-and-forget generation
+    // AI Knowledge Base Generation (Fire-and-forget)
+    if (saved.isKbGenerationPending) {
       this.kbService
         .generateKbFromTicket(
           saved.subject,
           saved.description,
-          saved.resolutionNotes,
-          saved.resolutionSteps || '',
+          saved.resolutionNotes!,
         )
-        .catch((err) => this.logger.warn(`Failed to auto-generate KB: ${err.message}`));
+        .then(async () => {
+          // Successfully generated, clear the pending flag
+          await this.ticketRepo.update(saved.id, { isKbGenerationPending: false });
+        })
+        .catch(async (err) => {
+          this.logger.warn(`Failed to auto-generate KB, benched for retry: ${err.message}`);
+          await this.commentRepo.save(
+            this.commentRepo.create({
+              ticketId: saved.id,
+              userId: saved.assignedToId || 1, // System generated fallback
+              comment: `⚠️ **System Info:** The AI Knowledge Base generation encountered an API limit or error and has been queued for automatic retry in the background.\n\n**Reason:** ${err.message}`,
+              isInternal: true,
+            }),
+          );
+        });
     }
 
     // Log status/priority change event
@@ -1482,114 +1676,81 @@ export class TicketService implements OnModuleInit {
             .getRawOne();
 
           if (!absentRow) {
-            // 1. Check for Stacked SLA waiting tickets first
-            const waitingTicket = await this.ticketRepo.findOne({
-              where: {
-                assignedToId: saved.assignedToId,
-                isSlaWaiting: true,
-                status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE]),
-              },
-              order: { createdAt: 'ASC' },
+            // Check if the technician is still busy with other tickets
+            const busyCount = await this.ticketRepo.count({
+              where: [
+                {
+                  assignedToId: saved.assignedToId,
+                  status: TicketStatus.ASSIGNED,
+                  isSlaWaiting: false,
+                },
+                { assignedToId: saved.assignedToId, status: TicketStatus.IN_PROGRESS },
+              ],
             });
 
-            if (waitingTicket) {
-              waitingTicket.isSlaWaiting = false;
-              waitingTicket.lastAssignedAt = new Date();
-
-              if (!waitingTicket.slaDeadline) {
-                // Brand new ticket from queue
-                if (waitingTicket.categoryId) {
-                  const cat = await this.settingsService
-                    .getCategoryById(waitingTicket.categoryId)
-                    .catch(() => null);
-                  if (cat?.slaHours) {
-                    const slaConfig = await this.configRepo
-                      .findOne({ where: { id: 1 } })
-                      .catch(() => null);
-                    waitingTicket.slaDeadline = slaConfig
-                      ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
-                      : (() => {
-                          const d = new Date();
-                          d.setHours(d.getHours() + cat.slaHours);
-                          return d;
-                        })();
-                  }
-                }
-              } else if (waitingTicket.slaPausedAt) {
-                // Ticket was pushed back to queue previously, resume its SLA
-                const pausedTimeMs = new Date().getTime() - waitingTicket.slaPausedAt.getTime();
-                waitingTicket.slaDeadline = new Date(
-                  waitingTicket.slaDeadline.getTime() + pausedTimeMs,
-                );
-                waitingTicket.accumulatedPauseSeconds =
-                  (waitingTicket.accumulatedPauseSeconds || 0) + Math.floor(pausedTimeMs / 1000);
-                waitingTicket.slaPausedAt = null;
-              }
-              await this.ticketRepo.save(waitingTicket);
-
-              this.logEvent(waitingTicket.id, 'auto_assigned', null, {
-                technicianId: resolvedByTech!.id,
-                technicianName:
-                  [resolvedByTech!.first_name, resolvedByTech!.last_name]
-                    .filter(Boolean)
-                    .join(' ') || resolvedByTech!.email,
-                note: 'Unstacked from waiting list',
-              }).catch(() => {});
-
-              this.logger.log(
-                `Auto-reassign on resolve: unstacked waiting ticket ${waitingTicket.ticketNumber} for technician #${saved.assignedToId}`,
+            if (busyCount === 0) {
+              const unpaused = await this.unpauseNextWaitingTicket(
+                saved.assignedToId,
+                'auto_assigned',
               );
-            } else {
-              // 2. Find next oldest unassigned open ticket
-              const nextTicket = await this.ticketRepo
-                .createQueryBuilder('t')
-                .where('t.status = :status', { status: TicketStatus.OPEN })
-                .andWhere('t.assignedToId IS NULL')
-                .andWhere('t.requesterId != :assignedToId', { assignedToId: saved.assignedToId })
-                .orderBy('t.createdAt', 'ASC')
-                .getOne();
-
-              if (nextTicket) {
-                nextTicket.assignedToId = saved.assignedToId;
-                nextTicket.status = TicketStatus.ASSIGNED;
-                nextTicket.lastAssignedAt = new Date();
-
-                if (nextTicket.categoryId) {
-                  const cat = await this.settingsService
-                    .getCategoryById(nextTicket.categoryId)
-                    .catch(() => null);
-                  if (cat?.slaHours) {
-                    const slaConfig = await this.configRepo
-                      .findOne({ where: { id: 1 } })
-                      .catch(() => null);
-                    nextTicket.slaDeadline = slaConfig
-                      ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
-                      : (() => {
-                          const d = new Date();
-                          d.setHours(d.getHours() + cat.slaHours);
-                          return d;
-                        })();
-                  }
-                }
-
-                await this.ticketRepo.save(nextTicket);
-
-                this.logEvent(nextTicket.id, 'auto_assigned', null, {
-                  technicianId: resolvedByTech!.id,
-                  technicianName:
-                    [resolvedByTech!.first_name, resolvedByTech!.last_name]
-                      .filter(Boolean)
-                      .join(' ') || resolvedByTech!.email,
-                }).catch(() => {});
-
-                this.logger.log(
-                  `Auto-reassign on resolve: ticket ${nextTicket.ticketNumber} (${nextTicket.ticketType}) -> technician #${saved.assignedToId}`,
-                );
+              if (unpaused) {
+                // Done unpausing
               } else {
-                this.logger.log(
-                  `Auto-reassign on resolve: no open unassigned tickets available for technician #${saved.assignedToId}`,
-                );
+                // 2. Find next oldest unassigned open ticket
+                const nextTicket = await this.ticketRepo
+                  .createQueryBuilder('t')
+                  .where('t.status = :status', { status: TicketStatus.OPEN })
+                  .andWhere('t.assignedToId IS NULL')
+                  .andWhere('t.requesterId != :assignedToId', { assignedToId: saved.assignedToId })
+                  .orderBy('t.createdAt', 'ASC')
+                  .getOne();
+
+                if (nextTicket) {
+                  nextTicket.assignedToId = saved.assignedToId;
+                  nextTicket.status = TicketStatus.ASSIGNED;
+                  nextTicket.lastAssignedAt = new Date();
+
+                  if (nextTicket.categoryId) {
+                    const cat = await this.settingsService
+                      .getCategoryById(nextTicket.categoryId)
+                      .catch(() => null);
+                    if (cat?.slaHours) {
+                      const slaConfig = await this.configRepo
+                        .findOne({ where: { id: 1 } })
+                        .catch(() => null);
+                      nextTicket.slaDeadline = slaConfig
+                        ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
+                        : (() => {
+                            const d = new Date();
+                            d.setHours(d.getHours() + cat.slaHours);
+                            return d;
+                          })();
+                    }
+                  }
+
+                  await this.ticketRepo.save(nextTicket);
+
+                  this.logEvent(nextTicket.id, 'auto_assigned', null, {
+                    technicianId: resolvedByTech!.id,
+                    technicianName:
+                      [resolvedByTech!.first_name, resolvedByTech!.last_name]
+                        .filter(Boolean)
+                        .join(' ') || resolvedByTech!.email,
+                  }).catch(() => {});
+
+                  this.logger.log(
+                    `Auto-reassign on resolve: ticket ${nextTicket.ticketNumber} (${nextTicket.ticketType}) -> technician #${saved.assignedToId}`,
+                  );
+                } else {
+                  this.logger.log(
+                    `Auto-reassign on resolve: no open unassigned tickets available for technician #${saved.assignedToId}`,
+                  );
+                }
               }
+            } else {
+              this.logger.log(
+                `Auto-reassign on resolve: technician #${saved.assignedToId} is still busy (has active tickets) — skipping unstacking/assigning`,
+              );
             }
           } else {
             this.logger.log(
@@ -1761,23 +1922,23 @@ export class TicketService implements OnModuleInit {
         this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
         actorRole === UserRole.SUPER_ADMIN;
 
+      if (!ticket.slaDeadline || isAuthorizedToResetSla) {
+        const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
+        ticket.slaDeadline = slaConfig
+          ? await this.calculateSlaDeadline(new Date(), ticket.category.slaHours, slaConfig)
+          : (() => {
+              const d = new Date();
+              d.setHours(d.getHours() + ticket.category.slaHours);
+              return d;
+            })();
+      }
+
       if (busyCount > 0) {
         ticket.isSlaWaiting = true;
         if (!ticket.slaPausedAt) ticket.slaPausedAt = new Date();
       } else {
         ticket.isSlaWaiting = false;
         ticket.slaPausedAt = null;
-        
-        if (!ticket.slaDeadline || isAuthorizedToResetSla) {
-          const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
-          ticket.slaDeadline = slaConfig
-            ? await this.calculateSlaDeadline(new Date(), ticket.category.slaHours, slaConfig)
-            : (() => {
-                const d = new Date();
-                d.setHours(d.getHours() + ticket.category.slaHours);
-                return d;
-              })();
-        }
       }
     }
 
@@ -2541,8 +2702,33 @@ export class TicketService implements OnModuleInit {
 
       if (!pending) return;
 
+      // Compute SLA deadline now that we're assigning
+      let slaDeadlineOnAssign: Date | null = null;
+      if (pending.categoryId) {
+        const cat = await this.settingsService
+          .getCategoryById(pending.categoryId)
+          .catch(() => null);
+        if (cat?.slaHours) {
+          const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
+          slaDeadlineOnAssign = slaConfig
+            ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
+            : (() => {
+                const d = new Date();
+                d.setHours(d.getHours() + cat.slaHours);
+                return d;
+              })();
+          this.logger.log(
+            `[Login Auto-Assign] SLA deadline set to ${slaDeadlineOnAssign?.toISOString()} for ticket ${pending.ticketNumber}`,
+          );
+        }
+      }
+
       pending.assignedToId = techId;
       pending.status = TicketStatus.ASSIGNED;
+      pending.lastAssignedAt = new Date();
+      pending.isSlaWaiting = false;
+      pending.slaPausedAt = null;
+      if (slaDeadlineOnAssign) pending.slaDeadline = slaDeadlineOnAssign;
       await this.ticketRepo.save(pending);
 
       this.logEvent(pending.id, 'auto_assigned', null, {
@@ -3233,6 +3419,13 @@ export class TicketService implements OnModuleInit {
     });
   }
 
+  async getAllEscalations(): Promise<TicketEscalation[]> {
+    return this.escalationRepo.find({
+      relations: ['ticket', 'escalatedBy', 'escalatedTo'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
   async ensureProofFileReadable(
     ticketId: string,
     filename: string,
@@ -3367,6 +3560,7 @@ export class TicketService implements OnModuleInit {
 
     const tickets = await this.ticketRepo.find({
       where: whereClause,
+      relations: ['category'],
     });
 
     let resumedCount = 0;
@@ -3374,12 +3568,31 @@ export class TicketService implements OnModuleInit {
 
     for (const t of tickets) {
       if (t.slaPausedAt) {
-        const pausedAt = t.slaPausedAt.getTime();
-        const diffSeconds = Math.floor((now.getTime() - pausedAt) / 1000);
-        t.accumulatedPauseSeconds = (t.accumulatedPauseSeconds || 0) + diffSeconds;
+        const config = await this.configRepo.findOne({ where: { id: 1 } });
+        const businessSecondsElapsed = await this.calculateBusinessSeconds(
+          t.slaPausedAt,
+          now,
+          config as TicketingConfig,
+        );
+        t.accumulatedPauseSeconds = (t.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
 
-        if (t.slaDeadline) {
-          t.slaDeadline = new Date(t.slaDeadline.getTime() + diffSeconds * 1000);
+        if (t.slaDeadline && t.category?.slaHours) {
+          const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
+              new Date(t.createdAt),
+              now,
+              config as TicketingConfig,
+            );
+            const activeBusinessSeconds = Math.max(
+              0,
+              totalBusinessSecondsSinceCreation - t.accumulatedPauseSeconds,
+            );
+            const consumedSlaHours = activeBusinessSeconds / 3600;
+            const remainingHours = Math.max(0, t.category.slaHours - consumedSlaHours);
+          t.slaDeadline = await this.calculateSlaDeadline(
+            now,
+            remainingHours,
+            config as TicketingConfig,
+          );
         }
         t.slaPausedAt = null;
         resumedCount++;
@@ -3489,7 +3702,9 @@ export class TicketService implements OnModuleInit {
     slaHours: number,
     config: TicketingConfig,
   ): Promise<Date> {
-    if (slaHours <= 0) return new Date(start);
+    start = new Date(start);
+    start.setMilliseconds(0);
+    if (slaHours <= 0) return start;
 
     const TZ = 'Asia/Manila';
 
@@ -3510,17 +3725,19 @@ export class TicketService implements OnModuleInit {
       shiftEndHour = parseTime(config.officeClockout, 17);
     }
 
-    // Helper: get Manila local hour + minute from a UTC Date
+    // Helper: get Manila local hour + minute + second from a UTC Date
     const getManilaHour = (d: Date): number => {
       const parts = new Intl.DateTimeFormat('en-US', {
         timeZone: TZ,
         hour: 'numeric',
         minute: 'numeric',
+        second: 'numeric',
         hour12: false,
       }).formatToParts(d);
       const hour = parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0', 10);
       const minute = parseInt(parts.find((p) => p.type === 'minute')?.value ?? '0', 10);
-      return hour + minute / 60;
+      const second = parseInt(parts.find((p) => p.type === 'second')?.value ?? '0', 10);
+      return hour + minute / 60 + second / 3600;
     };
 
     // Helper: get Manila local YYYY-MM-DD
@@ -3559,32 +3776,393 @@ export class TicketService implements OnModuleInit {
 
       const manilaHour = getManilaHour(current);
 
-      if (manilaHour < shiftStartHour) {
-        // Before shift start — advance to shift start of the same day
+      const blocks = [];
+      if (shiftStartHour < 12) blocks.push({ start: shiftStartHour, end: Math.min(shiftEndHour, 12) });
+      if (shiftEndHour > 13) blocks.push({ start: Math.max(shiftStartHour, 13), end: shiftEndHour });
+
+      const currentBlockIndex = blocks.findIndex((b) => manilaHour < b.end);
+
+      if (currentBlockIndex === -1) {
+        current = advanceToNextDayStart(current);
+        continue;
+      }
+
+      const block = blocks[currentBlockIndex];
+
+      if (manilaHour < block.start) {
         const manilaDate = getManilaDateString(current);
         const [y, m, day] = manilaDate.split('-').map(Number);
-        current = new Date(Date.UTC(y, m - 1, day, shiftStartHour - 8, 0, 0, 0));
+        current = new Date(Date.UTC(y, m - 1, day, block.start - 8, 0, 0, 0));
         continue;
       }
 
-      if (manilaHour >= shiftEndHour) {
-        // After shift end — move to next day
-        current = advanceToNextDayStart(current);
-        continue;
-      }
+      const availableHoursInBlock = block.end - manilaHour;
 
-      // We are within the shift. Calculate how many hours remain today.
-      const availableHoursToday = shiftEndHour - manilaHour;
-
-      if (remainingHours <= availableHoursToday) {
-        current = new Date(current.getTime() + remainingHours * 3600 * 1000);
+      if (remainingHours <= availableHoursInBlock) {
+        current = new Date(current.getTime() + Math.round(remainingHours * 3600 * 1000));
         remainingHours = 0;
       } else {
-        remainingHours -= availableHoursToday;
-        current = advanceToNextDayStart(current);
+        remainingHours -= availableHoursInBlock;
+        const manilaDate = getManilaDateString(current);
+        const [y, m, day] = manilaDate.split('-').map(Number);
+        current = new Date(Date.UTC(y, m - 1, day, block.end - 8, 0, 0, 0));
       }
     }
 
     return current;
+  }
+
+  private async calculateBusinessSeconds(
+    start: Date,
+    end: Date,
+    config: TicketingConfig,
+  ): Promise<number> {
+    start = new Date(start);
+    start.setMilliseconds(0);
+    end = new Date(end);
+    end.setMilliseconds(0);
+    if (end <= start) return 0;
+    const TZ = 'Asia/Manila';
+
+    const parseTime = (timeStr: string, defaultHour: number): number => {
+      if (!timeStr) return defaultHour;
+      const match = timeStr.match(/^(\d{2}):/);
+      return match ? parseInt(match[1], 10) : defaultHour;
+    };
+
+    let shiftStartHour = 8;
+    let shiftEndHour = 17;
+
+    if (config.scheduleMode === 'CWW') {
+      shiftStartHour = parseTime(config.cwwClockinStart, 7);
+      shiftEndHour = parseTime(config.cwwClockoutEnd, 19);
+    } else {
+      shiftStartHour = parseTime(config.officeClockin, 8);
+      shiftEndHour = parseTime(config.officeClockout, 17);
+    }
+
+    const getManilaHour = (d: Date): number => {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: TZ,
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
+        hour12: false,
+      }).formatToParts(d);
+      const hour = parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0', 10);
+      const minute = parseInt(parts.find((p) => p.type === 'minute')?.value ?? '0', 10);
+      const second = parseInt(parts.find((p) => p.type === 'second')?.value ?? '0', 10);
+      return hour + minute / 60 + second / 3600;
+    };
+
+    const getManilaDateString = (d: Date): string => {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: TZ,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(d);
+    };
+
+    const advanceToNextDayStart = (d: Date): Date => {
+      const manilaDate = getManilaDateString(d);
+      const [y, m, day] = manilaDate.split('-').map(Number);
+      return new Date(Date.UTC(y, m - 1, day + 1, shiftStartHour - 8, 0, 0, 0));
+    };
+
+    let current = new Date(start);
+    let seconds = 0;
+    let guard = 0;
+
+    while (current < end && guard < 365) {
+      guard++;
+      const dateString = getManilaDateString(current);
+      const isOfficeDay = await this.attendanceService.isOfficeDay(dateString);
+
+      if (!isOfficeDay) {
+        current = advanceToNextDayStart(current);
+        continue;
+      }
+
+      const manilaHour = getManilaHour(current);
+
+      const blocks = [];
+      if (shiftStartHour < 12) blocks.push({ start: shiftStartHour, end: Math.min(shiftEndHour, 12) });
+      if (shiftEndHour > 13) blocks.push({ start: Math.max(shiftStartHour, 13), end: shiftEndHour });
+
+      const currentBlockIndex = blocks.findIndex((b) => manilaHour < b.end);
+
+      if (currentBlockIndex === -1) {
+        current = advanceToNextDayStart(current);
+        continue;
+      }
+
+      const block = blocks[currentBlockIndex];
+
+      if (manilaHour < block.start) {
+        const manilaDate = getManilaDateString(current);
+        const [y, m, day] = manilaDate.split('-').map(Number);
+        current = new Date(Date.UTC(y, m - 1, day, block.start - 8, 0, 0, 0));
+        if (current >= end) break;
+        continue;
+      }
+
+      const endManilaHour = getManilaHour(end);
+      const endsToday = getManilaDateString(current) === getManilaDateString(end);
+
+      let effectiveEndHour = block.end;
+      if (endsToday && endManilaHour < block.end) {
+        effectiveEndHour = endManilaHour;
+      }
+
+      const hoursThisBlock = effectiveEndHour - manilaHour;
+      if (hoursThisBlock > 0) {
+        seconds += hoursThisBlock * 3600;
+      }
+
+      if (endsToday && endManilaHour <= block.end) {
+        break;
+      }
+
+      const manilaDate = getManilaDateString(current);
+      const [y, m, day] = manilaDate.split('-').map(Number);
+      current = new Date(Date.UTC(y, m - 1, day, block.end - 8, 0, 0, 0));
+    }
+
+    return Math.round(seconds);
+  }
+
+  async unpauseNextWaitingTicket(
+    techId: number,
+    trigger: string = 'auto_assigned',
+  ): Promise<boolean> {
+    const waitingTicket = await this.ticketRepo.findOne({
+      where: {
+        assignedToId: techId,
+        isSlaWaiting: true,
+        status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE]),
+      },
+      order: { createdAt: 'ASC' },
+    });
+
+    if (!waitingTicket) return false;
+
+    waitingTicket.isSlaWaiting = false;
+    waitingTicket.lastAssignedAt = new Date();
+
+    if (!waitingTicket.slaDeadline) {
+      if (waitingTicket.categoryId) {
+        const cat = await this.settingsService
+          .getCategoryById(waitingTicket.categoryId)
+          .catch(() => null);
+        if (cat?.slaHours) {
+          const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
+          waitingTicket.slaDeadline = slaConfig
+            ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
+            : (() => {
+                const d = new Date();
+                d.setHours(d.getHours() + cat.slaHours);
+                return d;
+              })();
+        }
+      }
+    } else if (waitingTicket.slaPausedAt) {
+      const now = new Date();
+      const config = await this.configRepo.findOne({ where: { id: 1 } });
+      const businessSecondsElapsed = await this.calculateBusinessSeconds(
+        waitingTicket.slaPausedAt,
+        now,
+        config as TicketingConfig,
+      );
+      waitingTicket.accumulatedPauseSeconds =
+        (waitingTicket.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
+
+      if (waitingTicket.categoryId) {
+        const cat = await this.settingsService
+          .getCategoryById(waitingTicket.categoryId)
+          .catch(() => null);
+        if (cat?.slaHours) {
+          const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
+            new Date(waitingTicket.createdAt),
+            now,
+            config as TicketingConfig,
+          );
+          const activeBusinessSeconds = Math.max(0, totalBusinessSecondsSinceCreation - waitingTicket.accumulatedPauseSeconds);
+          const consumedSlaHours = activeBusinessSeconds / 3600;
+          const remainingHours = Math.max(0, cat.slaHours - consumedSlaHours);
+          waitingTicket.slaDeadline = await this.calculateSlaDeadline(
+            now,
+            remainingHours,
+            config as TicketingConfig,
+          );
+        }
+      }
+      waitingTicket.slaPausedAt = null;
+    }
+
+    await this.ticketRepo.save(waitingTicket);
+
+    let technicianName = 'System';
+    try {
+      const resolvedByTech = await this.usersHttpClient.getUserById(techId);
+      if (resolvedByTech) {
+        technicianName =
+          [resolvedByTech.first_name, resolvedByTech.last_name].filter(Boolean).join(' ') ||
+          resolvedByTech.email;
+      }
+    } catch {}
+
+    this.logEvent(waitingTicket.id, trigger, null, {
+      technicianId: techId,
+      technicianName,
+      note: 'Unstacked from waiting list',
+    }).catch(() => {});
+
+    this.logger.log(
+      `Unstacked waiting ticket ${waitingTicket.ticketNumber} for technician #${techId}`,
+    );
+    return true;
+  }
+
+  async unpauseNextWaitingTicketAndSetInProgress(
+    techId: number,
+    trigger: string = 'auto_assigned',
+  ): Promise<boolean> {
+    const waitingTicket = await this.ticketRepo.findOne({
+      where: {
+        assignedToId: techId,
+        isSlaWaiting: true,
+        status: In([TicketStatus.ASSIGNED, TicketStatus.PAUSE]),
+      },
+      order: { createdAt: 'ASC' },
+    });
+
+    if (!waitingTicket) return false;
+
+    waitingTicket.isSlaWaiting = false;
+    waitingTicket.status = TicketStatus.IN_PROGRESS;
+    waitingTicket.lastAssignedAt = new Date();
+
+    if (!waitingTicket.slaDeadline) {
+      if (waitingTicket.categoryId) {
+        const cat = await this.settingsService
+          .getCategoryById(waitingTicket.categoryId)
+          .catch(() => null);
+        if (cat?.slaHours) {
+          const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
+          waitingTicket.slaDeadline = slaConfig
+            ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
+            : (() => {
+                const d = new Date();
+                d.setHours(d.getHours() + cat.slaHours);
+                return d;
+              })();
+        }
+      }
+    } else if (waitingTicket.slaPausedAt) {
+      const now = new Date();
+      const config = await this.configRepo.findOne({ where: { id: 1 } });
+      const businessSecondsElapsed = await this.calculateBusinessSeconds(
+        waitingTicket.slaPausedAt,
+        now,
+        config as TicketingConfig,
+      );
+      waitingTicket.accumulatedPauseSeconds =
+        (waitingTicket.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
+
+      if (waitingTicket.categoryId) {
+        const cat = await this.settingsService
+          .getCategoryById(waitingTicket.categoryId)
+          .catch(() => null);
+        if (cat?.slaHours) {
+          const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
+            new Date(waitingTicket.createdAt),
+            now,
+            config as TicketingConfig,
+          );
+          const activeBusinessSeconds = Math.max(0, totalBusinessSecondsSinceCreation - waitingTicket.accumulatedPauseSeconds);
+          const consumedSlaHours = activeBusinessSeconds / 3600;
+          const remainingHours = Math.max(0, cat.slaHours - consumedSlaHours);
+          waitingTicket.slaDeadline = await this.calculateSlaDeadline(
+            now,
+            remainingHours,
+            config as TicketingConfig,
+          );
+        }
+      }
+      waitingTicket.slaPausedAt = null;
+    }
+
+    await this.ticketRepo.save(waitingTicket);
+
+    let technicianName = 'System';
+    try {
+      const resolvedByTech = await this.usersHttpClient.getUserById(techId);
+      if (resolvedByTech) {
+        technicianName =
+          [resolvedByTech.first_name, resolvedByTech.last_name].filter(Boolean).join(' ') ||
+          resolvedByTech.email;
+      }
+    } catch {}
+
+    this.logEvent(waitingTicket.id, trigger, null, {
+      technicianId: techId,
+      technicianName,
+      note: 'Unstacked from waiting list and set to IN_PROGRESS',
+    }).catch(() => {});
+    
+    this.logEvent(waitingTicket.id, 'status_changed', null, {
+      to: 'in_progress'
+    }).catch(() => {});
+
+    this.logger.log(
+      `Unstacked waiting ticket ${waitingTicket.ticketNumber} and set to IN_PROGRESS for technician #${techId}`,
+    );
+    return true;
+  }
+
+  /**
+   * Called by TicketCronService to retry generating KBs that failed due to API limits.
+   */
+  async retryBenchedKbs() {
+    const pendingTickets = await this.ticketRepo.find({
+      where: {
+        status: TicketStatus.RESOLVED,
+        isKbGenerationPending: true,
+      },
+    });
+
+    if (pendingTickets.length === 0) {
+      return;
+    }
+
+    this.logger.log(`Found ${pendingTickets.length} benched KB generations. Retrying...`);
+
+    for (const ticket of pendingTickets) {
+      if (!ticket.resolutionNotes) continue;
+
+      try {
+        await this.kbService.generateKbFromTicket(
+          ticket.subject,
+          ticket.description,
+          ticket.resolutionNotes,
+        );
+
+        await this.ticketRepo.update(ticket.id, { isKbGenerationPending: false });
+        this.logger.log(`Successfully recovered and generated KB for ticket ${ticket.ticketNumber}`);
+
+        // Wait 15 seconds between requests to avoid rate limits again
+        await new Promise((resolve) => setTimeout(resolve, 15000));
+      } catch (err) {
+        this.logger.warn(
+          `Retry failed for ticket ${ticket.ticketNumber}, keeping benched: ${err.message}`,
+        );
+        // If it fails again (e.g. rate limit still active), just break out of the loop and try again next hour
+        if (err.message.includes('429') || err.message.includes('503')) {
+           this.logger.warn('API limit encountered during retry. Aborting current retry queue.');
+           break;
+        }
+      }
+    }
   }
 }

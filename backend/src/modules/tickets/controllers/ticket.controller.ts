@@ -86,10 +86,18 @@ export class TicketController {
   @Post()
   @Roles(...ALL_ROLES)
   @HttpCode(HttpStatus.CREATED)
-  async createTicket(@Body() dto: CreateTicketDto, @Request() req: any) {
+  @UseInterceptors(FileInterceptor('image', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async createTicket(
+    @Body() dto: CreateTicketDto,
+    @Request() req: any,
+    @UploadedFile() image?: Express.Multer.File,
+  ) {
+    if (image && !image.mimetype.startsWith('image/')) {
+      throw new BadRequestException('Only picture attachments (images) are allowed.');
+    }
     const callerId = req.user.id ?? req.user.userId;
     const callerRole = req.user.role as UserRole;
-    return this.ticketService.createTicket(dto, callerId, callerRole);
+    return this.ticketService.createTicket(dto, callerId, callerRole, image);
   }
 
   @Post('global-pause')
@@ -363,6 +371,19 @@ export class TicketController {
   }
 
   // ── Escalation ────────────────────────────────────────────────────────────
+
+  /** GET /tickets/escalations/all */
+  @Get('escalations/all')
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.SECTION_HEAD,
+    UserRole.DEV_LEAD,
+    UserRole.SQA_LEAD,
+    UserRole.LEAD_INFRA,
+  )
+  async getAllEscalations() {
+    return this.ticketService.getAllEscalations();
+  }
 
   /** GET /tickets/:id/escalations */
   @Get(':id/escalations')

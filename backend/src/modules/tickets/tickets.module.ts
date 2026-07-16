@@ -79,4 +79,6 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
     KnowledgeBaseService,
   ],
 })
-export class TicketsModule {}
+export class TicketsModule {
+  constructor(private readonly ticketCronService: TicketCronService) {}
+}
