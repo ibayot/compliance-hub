@@ -64,4 +64,10 @@ export class TicketingConfig {
 
   @Column({ name: 'is_flag_ceremony_paused', type: 'boolean', default: false })
   isFlagCeremonyPaused: boolean;
+
+  @Column({ name: 'is_email_notifications_enabled', type: 'boolean', default: true })
+  isEmailNotificationsEnabled: boolean;
+
+  @Column({ name: 'email_test_override', type: 'varchar', length: 255, nullable: true })
+  emailTestOverride: string | null;
 }

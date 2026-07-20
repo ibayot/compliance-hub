@@ -42,6 +42,7 @@ import {
   PlayCircle as InProgressIcon,
   Computer as DesktopIcon,
   Wifi as ItSupportIcon,
+  Error as ErrorIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -108,6 +109,13 @@ export default function DashboardPage() {
   const isCybersecurityOfficer = user?.roleCode === 'cybersecurity_officer';
 
   const [globalConfig, setGlobalConfig] = useState<any>(null);
+  const [slaSummary, setSlaSummary] = useState<{ breached: number; nearing: number; onTrack: number } | null>(null);
+
+  useEffect(() => {
+    if (myCap?.isTicketSettingsFocal) {
+      ticketsApi.getSlaSummary().then(setSlaSummary).catch(console.error);
+    }
+  }, [myCap?.isTicketSettingsFocal]);
 
   // Compute clock out logic
   const isClockOutEnabled = useMemo(() => {
@@ -973,6 +981,98 @@ export default function DashboardPage() {
                 />
               </Box>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {myCap?.isTicketSettingsFocal && slaSummary && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent>
+            <Typography variant="h6" fontWeight={600} mb={2}>
+              Active Tickets SLA Dashboard
+            </Typography>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={4}>
+                <Card
+                  sx={{
+                    borderRadius: 3,
+                    boxShadow: '0 4px 20px rgba(211, 47, 47, 0.15)',
+                    background: 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.2 }}>
+                    <ErrorIcon sx={{ fontSize: 120, color: 'error.main' }} />
+                  </Box>
+                  <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                    <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                      <ErrorIcon color="error" />
+                      <Typography color="error.dark" variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
+                        Breached / Overdue
+                      </Typography>
+                    </Stack>
+                    <Typography variant="h2" color="error.dark" fontWeight={800}>
+                      {slaSummary.breached}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <Card
+                  sx={{
+                    borderRadius: 3,
+                    boxShadow: '0 4px 20px rgba(237, 108, 2, 0.15)',
+                    background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.2 }}>
+                    <WarningIcon sx={{ fontSize: 120, color: 'warning.main' }} />
+                  </Box>
+                  <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                    <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                      <WarningIcon color="warning" />
+                      <Typography color="warning.dark" variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
+                        Nearing Breach
+                      </Typography>
+                    </Stack>
+                    <Typography variant="h2" color="warning.dark" fontWeight={800}>
+                      {slaSummary.nearing}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <Card
+                  sx={{
+                    borderRadius: 3,
+                    boxShadow: '0 4px 20px rgba(46, 125, 50, 0.15)',
+                    background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.2 }}>
+                    <CompliantIcon sx={{ fontSize: 120, color: 'success.main' }} />
+                  </Box>
+                  <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                    <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                      <CompliantIcon color="success" />
+                      <Typography color="success.dark" variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
+                        On Track
+                      </Typography>
+                    </Stack>
+                    <Typography variant="h2" color="success.dark" fontWeight={800}>
+                      {slaSummary.onTrack}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
           </CardContent>
         </Card>
       )}

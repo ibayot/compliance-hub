@@ -87,7 +87,7 @@ export class EmailService implements OnModuleInit {
 
     // const override = this.configService.get<string>('EMAIL_TEST_OVERRIDE') ?? '';
     // this.testOverrideTo = override || null;
-    this.testOverrideTo = null; // Forced disabled
+    this.testOverrideTo = null; // Used as fallback if not in DB
   }
 
   async onModuleInit() {
@@ -448,6 +448,9 @@ export class EmailService implements OnModuleInit {
   }
 
   async sendTestEmail(to: string): Promise<{ sent: boolean; message: string }> {
+    const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });
+    const isDbEnabled = dbConfig?.isEmailNotificationsEnabled ?? true;
+
     const subject = 'RICTMS Compliance Hub — SMTP Test Email';
     const html = `
 <!DOCTYPE html>
@@ -489,7 +492,15 @@ export class EmailService implements OnModuleInit {
       this.logger.warn('[EMAIL-TEST] Outbound email is disabled by EMAIL_ENABLED flag.');
       return {
         sent: false,
-        message: 'Email sending is currently disabled by EMAIL_ENABLED=false.',
+        message: 'Email sending is currently disabled by system EMAIL_ENABLED flag.',
+      };
+    }
+
+    if (!isDbEnabled) {
+      this.logger.warn('[EMAIL-TEST] Outbound email is disabled by Ticket Settings DB flag.');
+      return {
+        sent: false,
+        message: 'Email sending is disabled in Ticket Settings.',
       };
     }
 
@@ -512,13 +523,20 @@ export class EmailService implements OnModuleInit {
 
   private async send(to: string, subject: string, html: string): Promise<void> {
     if (!this.emailEnabled) {
-      this.logger.log(`[EMAIL-DISABLED] Suppressed email to ${to}: ${subject}`);
+      this.logger.log(`[EMAIL-DISABLED] Suppressed email to ${to}: ${subject} (.env flag)`);
       return;
     }
 
-    const effectiveTo = this.testOverrideTo ?? to;
-    if (this.testOverrideTo && this.testOverrideTo !== to) {
-      this.logger.log(`[EMAIL-OVERRIDE] Redirecting from ${to} to ${this.testOverrideTo}`);
+    const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });
+    if (dbConfig && dbConfig.isEmailNotificationsEnabled === false) {
+      this.logger.log(`[EMAIL-DISABLED] Suppressed email to ${to}: ${subject} (DB flag)`);
+      return;
+    }
+
+    const override = dbConfig?.emailTestOverride || this.testOverrideTo;
+    const effectiveTo = override ?? to;
+    if (override && override !== to) {
+      this.logger.log(`[EMAIL-OVERRIDE] Redirecting from ${to} to ${override}`);
     }
 
     if (!this.primaryTransporter && !this.fallbackTransporter) {

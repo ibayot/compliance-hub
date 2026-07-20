@@ -123,6 +123,11 @@ export default function TicketsPage() {
   const [showEscalatedToMe, setShowEscalatedToMe] = useState(false);
   const [myTicketsCount, setMyTicketsCount] = useState(0);
   const [escalatedToMeCount, setEscalatedToMeCount] = useState(0);
+  const [globalConfig, setGlobalConfig] = useState<any>(null);
+
+  useEffect(() => {
+    ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(console.error);
+  }, []);
 
   // Pagination for non-admin active tabs
   const [page, setPage] = useState(1);
@@ -1648,8 +1653,18 @@ export default function TicketsPage() {
             )}
 
             <Alert severity="info" sx={{ fontSize: '0.82rem' }}>
-              Tickets are auto-assigned to available technicians. Email notifications are currently
-              paused.
+              Tickets are auto-assigned to available technicians.
+              {globalConfig && (
+                globalConfig.isEmailNotificationsEnabled === false ? (
+                  <strong style={{ display: 'block', marginTop: '4px', color: '#d32f2f' }}>
+                    Email notifications are currently completely disabled globally.
+                  </strong>
+                ) : globalConfig.emailTestOverride ? (
+                  <strong style={{ display: 'block', marginTop: '4px', color: '#ed6c02' }}>
+                    Warning: All system emails are being rerouted to {globalConfig.emailTestOverride} for testing.
+                  </strong>
+                ) : null
+              )}
             </Alert>
           </Stack>
         </DialogContent>

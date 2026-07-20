@@ -82,6 +82,8 @@ export interface UpdateGlobalConfigDto {
   cwwClockoutStart?: string;
   cwwClockoutEnd?: string;
   isFlagCeremonyPaused?: boolean;
+  isEmailNotificationsEnabled?: boolean;
+  emailTestOverride?: string | null;
 }
 
 // --- Service ----------------------------------------------------------------
@@ -597,6 +599,10 @@ export class TicketSettingsService {
     if (dto.cwwClockoutEnd !== undefined) config.cwwClockoutEnd = dto.cwwClockoutEnd;
     if (dto.isFlagCeremonyPaused !== undefined)
       config.isFlagCeremonyPaused = dto.isFlagCeremonyPaused;
+
+    if (dto.isEmailNotificationsEnabled !== undefined)
+      config.isEmailNotificationsEnabled = dto.isEmailNotificationsEnabled;
+    if (dto.emailTestOverride !== undefined) config.emailTestOverride = dto.emailTestOverride;
 
     return this.configRepo.save(config);
   }

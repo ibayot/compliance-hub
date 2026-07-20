@@ -166,7 +166,8 @@ export class AttendanceService implements OnModuleInit {
       throw new BadRequestException(`Invalid status: ${dto.status}`);
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const _d = new Date();
+    const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
     if (dto.date < today) {
       throw new BadRequestException('Cannot modify attendance for past dates');
     }
@@ -398,7 +399,8 @@ export class AttendanceService implements OnModuleInit {
 
     if (EXCLUDED_FROM_ATTENDANCE.has(user.role as UserRole)) return;
 
-    const today = new Date().toISOString().slice(0, 10);
+    const _d = new Date();
+    const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
     const record = await this.attendanceRepo.findOne({ where: { userId, date: today } });
 
     await auditContext.run(
@@ -460,7 +462,8 @@ export class AttendanceService implements OnModuleInit {
     if (!dto.date) throw new BadRequestException('date is required');
 
     // Only allow setting current date onwards
-    const today = new Date().toISOString().slice(0, 10);
+    const _d = new Date();
+    const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
     if (dto.date < today) {
       throw new BadRequestException('Cannot modify office days in the past');
     }

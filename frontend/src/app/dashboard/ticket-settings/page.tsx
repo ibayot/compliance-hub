@@ -23,6 +23,7 @@ import {
   DialogContent,
   DialogActions,
   Stack,
+  Divider,
   CircularProgress,
   Tabs,
   Tab,
@@ -148,6 +149,8 @@ export default function TicketSettingsPage() {
     cwwClockoutStart?: string;
     cwwClockoutEnd?: string;
     isFlagCeremonyPaused?: boolean;
+    isEmailNotificationsEnabled?: boolean;
+    emailTestOverride?: string | null;
   }>({
     assignmentStrategy: 'CURRENT_AUTO', roundRobinCapHours: 80, autoCloseDays: 3, smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', smtpFrom: '', smtpFromName: '', primarySmtpDailyLimit: 2000,
     scheduleMode: 'OFFICE_HOURS',
@@ -158,33 +161,28 @@ export default function TicketSettingsPage() {
     cwwClockoutStart: '18:00:00',
     cwwClockoutEnd: '19:00:00',
     isFlagCeremonyPaused: false,
+    isEmailNotificationsEnabled: true,
+    emailTestOverride: '',
   });
   const [slaInsights, setSlaInsights] = useState<any[]>([]);
-  const [slaSummary, setSlaSummary] = useState<{ breached: number; nearing: number; onTrack: number } | null>(null);
   const [slaFilterDays, setSlaFilterDays] = useState<number>(30);
   const [globalLoading, setGlobalLoading] = useState(true);
   const [smtpTestLoading, setSmtpTestLoading] = useState(false);
   const [smtpTestEmail, setSmtpTestEmail] = useState('');
 
-
-
   const fetchGlobalData = useCallback(async () => {
     try {
       setGlobalLoading(true);
-      const [config, insights, summary] = await Promise.all([
+      const [config] = await Promise.all([
         ticketSettingsApi.getGlobalConfig(),
-        ticketSettingsApi.getSlaInsights(slaFilterDays),
-        ticketsApi.getSlaSummary(),
       ]);
       setGlobalConfig(config);
-      setSlaInsights(insights);
-      setSlaSummary(summary);
     } catch {
-      enqueueSnackbar('Failed to load global config and insights', { variant: 'error' });
+      enqueueSnackbar('Failed to load global config', { variant: 'error' });
     } finally {
       setGlobalLoading(false);
     }
-  }, [enqueueSnackbar, slaFilterDays]);
+  }, [enqueueSnackbar]);
 
   useEffect(() => {
     ticketSettingsApi.getSlaInsights(slaFilterDays).then(setSlaInsights).catch(() => { });
@@ -901,6 +899,27 @@ export default function TicketSettingsPage() {
                   </Box>
                 ) : (
                   <Stack spacing={3} maxWidth={500} mb={4}>
+                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                      <Typography variant="subtitle1" fontWeight={600}>Enable Outbound Emails</Typography>
+                      <Switch
+                        checked={globalConfig.isEmailNotificationsEnabled ?? true}
+                        onChange={(e) => setGlobalConfig((prev) => ({ ...prev, isEmailNotificationsEnabled: e.target.checked }))}
+                        color="primary"
+                      />
+                    </Box>
+
+                    {globalConfig.isEmailNotificationsEnabled && (
+                      <TextField
+                        label="Test Override Email"
+                        value={globalConfig.emailTestOverride || ''}
+                        onChange={(e) => setGlobalConfig((prev) => ({ ...prev, emailTestOverride: e.target.value }))}
+                        fullWidth
+                        helperText="If set, all system emails will be rerouted to this address. Leave blank for normal behavior."
+                      />
+                    )}
+
+                    <Divider sx={{ my: 2 }} />
+
                     <TextField
                       label="SMTP Host"
                       value={globalConfig.smtpHost || ''}
@@ -964,96 +983,6 @@ export default function TicketSettingsPage() {
                   </Stack>
                 )}
               </>
-            )}
-
-            {slaSummary && (
-              <Box mb={4} mt={4}>
-                <Typography variant="h6" fontWeight={600} mb={2}>
-                  Active Tickets SLA Dashboard
-                </Typography>
-                <Grid container spacing={3}>
-                  <Grid item xs={12} md={4}>
-                    <Card
-                      sx={{
-                        borderRadius: 3,
-                        boxShadow: '0 4px 20px rgba(211, 47, 47, 0.15)',
-                        background: 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)',
-                        position: 'relative',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.2 }}>
-                        <ErrorIcon sx={{ fontSize: 120, color: 'error.main' }} />
-                      </Box>
-                      <CardContent sx={{ position: 'relative', zIndex: 1 }}>
-                        <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-                          <ErrorIcon color="error" />
-                          <Typography color="error.dark" variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
-                            Breached / Overdue
-                          </Typography>
-                        </Stack>
-                        <Typography variant="h2" color="error.dark" fontWeight={800}>
-                          {slaSummary.breached}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-
-                  <Grid item xs={12} md={4}>
-                    <Card
-                      sx={{
-                        borderRadius: 3,
-                        boxShadow: '0 4px 20px rgba(237, 108, 2, 0.15)',
-                        background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)',
-                        position: 'relative',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.2 }}>
-                        <WarningIcon sx={{ fontSize: 120, color: 'warning.main' }} />
-                      </Box>
-                      <CardContent sx={{ position: 'relative', zIndex: 1 }}>
-                        <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-                          <WarningIcon color="warning" />
-                          <Typography color="warning.dark" variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
-                            Nearing Breach
-                          </Typography>
-                        </Stack>
-                        <Typography variant="h2" color="warning.dark" fontWeight={800}>
-                          {slaSummary.nearing}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-
-                  <Grid item xs={12} md={4}>
-                    <Card
-                      sx={{
-                        borderRadius: 3,
-                        boxShadow: '0 4px 20px rgba(46, 125, 50, 0.15)',
-                        background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)',
-                        position: 'relative',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.2 }}>
-                        <CheckIcon sx={{ fontSize: 120, color: 'success.main' }} />
-                      </Box>
-                      <CardContent sx={{ position: 'relative', zIndex: 1 }}>
-                        <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-                          <CheckIcon color="success" />
-                          <Typography color="success.dark" variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
-                            On Track
-                          </Typography>
-                        </Stack>
-                        <Typography variant="h2" color="success.dark" fontWeight={800}>
-                          {slaSummary.onTrack}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                </Grid>
-              </Box>
             )}
 
             <Typography variant="h6" fontWeight={600} mb={2} mt={4}>
