@@ -1622,7 +1622,7 @@ export default function TicketReportsPage() {
                             margin={{ top: 20, right: 30, left: 20, bottom: issueBottomMargin }}
                           >
                             <XAxis
-                              dataKey="issueName"
+                              dataKey="name"
                               interval={0}
                               angle={-45}
                               textAnchor="end"
@@ -1653,18 +1653,18 @@ export default function TicketReportsPage() {
                   <Typography variant="h6" fontWeight={600} gutterBottom>
                     All Issues
                   </Typography>
-                  {issueCountsData.length === 0 ? (
+                  {allIssuesAggregated.length === 0 ? (
                     <Box display="flex" justifyContent="center" alignItems="center" minHeight={300}>
                       <Typography color="text.secondary">No specific issues reported in this timeframe.</Typography>
                     </Box>
                   ) : (
-                    <ResponsiveContainer width="100%" height={Math.max(400, issueCountsData.length * 40)}>
+                    <ResponsiveContainer width="100%" height={Math.max(400, allIssuesAggregated.length * 40)}>
                       <BarChart
-                        data={[...issueCountsData].sort((a, b) => b.count - a.count)}
+                        data={allIssuesAggregated}
                         layout="vertical"
                         margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                       >
-                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                        <XAxis type="number" allowDecimals={false} tickCount={5} tick={{ fontSize: 11 }} />
                         <YAxis
                           type="category"
                           dataKey="issueName"
