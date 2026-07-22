@@ -22,6 +22,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Duplicate Ticket Bleed**: Added a hard query builder constraint (`ticket.status != 'duplicate'`) to the `/tickets/reports/issue-counts` endpoint to prevent duplicate tickets from skewing the specific issue occurrence statistics.
 - **JSX Compilation Structure**: Resolved critical missing JSX brace balancing that temporarily corrupted the Ticket Reports layout structure and caused build failures.
 
+### SQA Test Cases (v0.0.122)
+*The following test cases must be executed to verify the structural UI and backend enhancements made in this version:*
+
+#### 1. Ticket Reports - Tabs & Layout Validation
+- **Action**: Navigate to Dashboard > Ticket Reports.
+- **Expected**: Verify the presence of exactly three main tabs: `Overview`, `Issues`, and `SLA Insights`.
+- **Action**: Click the `Issues` tab.
+- **Expected**: Verify the presence of two sub-tabs: `Categories & Issues` and `All Issues`. The `Categories & Issues` sub-tab should be the default active view.
+
+#### 2. Category Overview - Full Width & Filtering
+- **Action**: In the `Categories & Issues` view, observe the "Issue Categories Overview" chart.
+- **Expected**: 
+  - The chart should span the full width of the container (not side-by-side).
+  - The Y-axis should render exactly 5 distinct numerical tick marks.
+  - Categories that currently have **0** associated tickets should **NOT** appear on the X-axis.
+  - The graph bars should maintain a fixed height (approx 300px) regardless of how long the X-axis category labels are (labels should angle and drop down instead of squishing the chart upwards).
+
+#### 3. Drill-Down Interaction & Visibility
+- **Action**: With the `Categories & Issues` view open, do NOT click anything.
+- **Expected**: The "Drill-Down" chart section should be completely hidden (no empty boxes, no placeholder text).
+- **Action**: Click a specific category bar (e.g., "Hardware") in the Overview chart.
+- **Expected**: 
+  - The "Drill-Down" chart should smoothly appear directly beneath the Overview chart.
+  - The Drill-Down chart should exclusively show specific issues belonging to the clicked category.
+  - Click the same category bar again; the Drill-Down chart should hide.
+
+#### 4. Status-Based Colored Drill-Down Verification
+- **Action**: Expand a Drill-Down chart by clicking a category in the Overview.
+- **Expected**: The bars in the Drill-Down chart must be **Stacked Bar Charts**, heavily segmented by color based on the tickets' internal statuses.
+- **Action**: Hover over the segmented colors in the Drill-Down bars.
+- **Expected**: The tooltip and legend should confirm the following data groups:
+  - **Open/Assigned** (Blue)
+  - **In Progress** (Orange)
+  - **Resolved** (Green)
+  - **Closed** (Gray)
+  - **Frozen/Paused** (Purple)
+
+#### 5. Duplicate Ticket Exclusion
+- **Action**: Find a specific issue that has tickets explicitly marked as `DUPLICATE` in the system. Check its count in the Drill-Down chart.
+- **Expected**: The total count for that issue must **EXCLUDE** the duplicate tickets (the duplicate status should never render in the colored stacks, nor should it inflate the count).
+
+#### 6. SLA Insights Restoration
+- **Action**: Click the `SLA Insights` main tab.
+- **Expected**: The tab should successfully render without white-screening. It must query the `/ticket-settings/sla-insights` endpoint and properly load historical SLA compliance charts and metrics.
+
 ---
 
 ## [0.0.114] (Backend) / [0.0.108] (Frontend) - 2026-06-24 - Audit Logs Refinement and Infrastructure IPv4 Hardening
