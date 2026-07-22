@@ -330,7 +330,7 @@ export default function TicketReportsPage() {
   const slaBottomMargin = React.useMemo(() => {
     if (!slaInsights || !slaInsights.length) return 80;
     const maxLen = Math.max(...slaInsights.map(i => (i.issueName || '').length));
-    return Math.max(80, maxLen * 3.5);
+    return Math.max(60, maxLen * 3.5);
   }, [slaInsights]);
   useAutoRefresh(fetchReports);
 
@@ -1672,12 +1672,12 @@ export default function TicketReportsPage() {
                       >
                         <XAxis type="number" allowDecimals={false} tickCount={5} tick={{ fontSize: 11 }} />
                         <YAxis
-                            type="category"
-                            dataKey="name"
-                            width={250}
-                            interval={0}
-                            tick={{ fontSize: 11 }}
-                          />
+                          type="category"
+                          dataKey="name"
+                          width={250}
+                          interval={0}
+                          tick={{ fontSize: 11 }}
+                        />
                         <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
                         <Legend verticalAlign="top" />
                         <Bar
@@ -1732,9 +1732,9 @@ export default function TicketReportsPage() {
               ) : (
                 <ResponsiveContainer width="100%" height={300 + slaBottomMargin}>
                   <BarChart
-                      data={slaInsights}
-                      margin={{ top: 20, right: 30, left: 20, bottom: slaBottomMargin }}
-                    >
+                    data={slaInsights}
+                    margin={{ top: 20, right: 30, left: 20, bottom: slaBottomMargin }}
+                  >
                     <XAxis
                       dataKey="issueName"
                       tick={{ fontSize: 11 }}
