@@ -965,7 +965,7 @@ export default function TicketReportsPage() {
                                   data={barData}
                                   margin={{ top: 4, right: 8, left: -20, bottom: 4 }}
                                 >
-                                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                                  <XAxis dataKey="issueName" tick={{ fontSize: 11 }} />
                                   <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
                                   <Tooltip formatter={(v: number) => v.toFixed(2)} />
                                   <Legend />
@@ -1622,7 +1622,7 @@ export default function TicketReportsPage() {
                             margin={{ top: 20, right: 30, left: 20, bottom: issueBottomMargin }}
                           >
                             <XAxis
-                              dataKey="name"
+                              dataKey="issueName"
                               interval={0}
                               angle={-45}
                               textAnchor="end"
@@ -1669,6 +1669,7 @@ export default function TicketReportsPage() {
                           type="category"
                           dataKey="issueName"
                           width={250}
+                          interval={0}
                           tick={{ fontSize: 11 }}
                         />
                         <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
