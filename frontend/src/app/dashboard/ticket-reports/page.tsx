@@ -326,6 +326,12 @@ export default function TicketReportsPage() {
     const maxLen = Math.max(...drillDownData.map(i => i.issueName.length));
     return Math.max(60, maxLen * 3.5);
   }, [drillDownData]);
+
+  const slaBottomMargin = React.useMemo(() => {
+    if (!slaInsights || !slaInsights.length) return 80;
+    const maxLen = Math.max(...slaInsights.map(i => (i.issueName || '').length));
+    return Math.max(80, maxLen * 3.5);
+  }, [slaInsights]);
   useAutoRefresh(fetchReports);
 
   const periodLabel = (() => {
