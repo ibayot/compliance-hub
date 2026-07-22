@@ -1666,12 +1666,12 @@ export default function TicketReportsPage() {
                       >
                         <XAxis type="number" allowDecimals={false} tickCount={5} tick={{ fontSize: 11 }} />
                         <YAxis
-                          type="category"
-                          dataKey="issueName"
-                          width={250}
-                          interval={0}
-                          tick={{ fontSize: 11 }}
-                        />
+                            type="category"
+                            dataKey="name"
+                            width={250}
+                            interval={0}
+                            tick={{ fontSize: 11 }}
+                          />
                         <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
                         <Legend verticalAlign="top" />
                         <Bar
@@ -1724,11 +1724,11 @@ export default function TicketReportsPage() {
                   <Typography color="text.secondary">No resolution data available for the selected period.</Typography>
                 </Box>
               ) : (
-                <ResponsiveContainer width="100%" height={350}>
+                <ResponsiveContainer width="100%" height={300 + slaBottomMargin}>
                   <BarChart
-                    data={slaInsights}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
-                  >
+                      data={slaInsights}
+                      margin={{ top: 20, right: 30, left: 20, bottom: slaBottomMargin }}
+                    >
                     <XAxis
                       dataKey="issueName"
                       tick={{ fontSize: 11 }}
