@@ -301,6 +301,20 @@ export default function TicketReportsPage() {
     return Object.values(issueMap).filter(d => (d.open + d.in_progress + d.resolved + d.closed + d.freeze_pause) > 0);
   }, [issueCountsData, selectedCategoryName]);
 
+
+  const allIssuesAggregated = React.useMemo(() => {
+    if (!issueCountsData) return [];
+    const map = {};
+    issueCountsData.forEach((item) => {
+      const name = `${item.categoryName || 'Unknown'} - ${item.issueName || 'Unknown'}`;
+      map[name] = (map[name] || 0) + Number(item.count);
+    });
+    return Object.keys(map)
+      .map(name => ({ name, count: map[name] }))
+      .filter(d => d.count > 0)
+      .sort((a, b) => b.count - a.count);
+  }, [issueCountsData]);
+
   const catBottomMargin = React.useMemo(() => {
     if (!categoryData.length) return 60;
     const maxLen = Math.max(...categoryData.map(c => c.categoryName.length));
