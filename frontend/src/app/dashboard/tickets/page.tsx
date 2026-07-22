@@ -68,6 +68,7 @@ import {
   TicketPriority,
   TechnicianOption,
   TicketCategory,
+  TicketIssueType,
   ticketSettingsApi,
   attendanceApi,
   knowledgeBaseApi,
@@ -148,6 +149,7 @@ export default function TicketsPage() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [allUsers, setAllUsers] = useState<UserRecord[]>([]);
   const [categories, setCategories] = useState<TicketCategory[]>([]);
+  const [issues, setIssues] = useState<TicketIssueType[]>([]);
   const [kbSuggestions, setKbSuggestions] = useState<any[]>([]);
   const [loadingKb, setLoadingKb] = useState(false);
   const [expandedKbId, setExpandedKbId] = useState<number | null>(null);
@@ -421,6 +423,17 @@ export default function TicketsPage() {
         .catch(() => setCategories([]));
     }
   }, [newDialogOpen, form.ticketType]);
+
+  useEffect(() => {
+    if (newDialogOpen && form.categoryId) {
+      ticketSettingsApi
+        .getIssueTypes(form.categoryId)
+        .then((data) => setIssues(data.filter((iss) => iss.isActive && !iss.isDeleted)))
+        .catch(() => setIssues([]));
+    } else {
+      setIssues([]);
+    }
+  }, [newDialogOpen, form.categoryId]);
 
   // Poll categories every 10s while dialog is open so admin changes (activate/deactivate)
   // are reflected without requiring the user to close and re-open the dialog.
@@ -1433,7 +1446,7 @@ export default function TicketsPage() {
               ].map((opt) => (
                 <Card
                   key={opt.value}
-                  onClick={() => setForm({ ...form, ticketType: opt.value, categoryId: undefined })}
+                  onClick={() => setForm({ ...form, ticketType: opt.value, categoryId: undefined, issueTypeId: undefined })}
                   sx={{
                     flex: 1,
                     cursor: 'pointer',
@@ -1463,23 +1476,59 @@ export default function TicketsPage() {
               ))}
             </Stack>
 
-            {categories.length > 0 && (
-              <TextField
-                select
-                label="Category"
-                value={form.categoryId ?? ''}
-                fullWidth
-                onChange={(e) => setForm({ ...form, categoryId: e.target.value || undefined })}
-                helperText="Select a specific category for faster routing"
-              >
-                <MenuItem value="">— No specific category —</MenuItem>
-                {categories.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.name}
-                  </MenuItem>
-                ))}
-              </TextField>
-            )}
+            {categories.length > 0 && (() => {
+              const filteredCategories = categories.filter((c) => {
+                if (c.isDeleted) return false;
+                if (form.ticketType === 'it_support') return c.isIt;
+                if (form.ticketType === 'desktop_support') return c.isDesktop;
+                if (form.ticketType === 'pantawid_ict_support') return c.isPantawid;
+                return false;
+              });
+              
+              if (filteredCategories.length === 0) return null;
+              
+              return (
+                <TextField
+                  select
+                  label="Category"
+                  value={form.categoryId ?? ''}
+                  fullWidth
+                  onChange={(e) => setForm({ ...form, categoryId: e.target.value || undefined, issueTypeId: undefined })}
+                  helperText="Select a specific category for faster routing"
+                >
+                  <MenuItem value="">— No specific category —</MenuItem>
+                  {filteredCategories.map((c) => (
+                    <MenuItem key={c.id} value={c.id}>
+                      {c.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              );
+            })()}
+
+            {user?.role !== 'user' && categories.length > 0 && issues.length > 0 && form.categoryId && (() => {
+              const filteredIssues = issues.filter((iss) => !iss.isDeleted && iss.categoryId === form.categoryId);
+              
+              if (filteredIssues.length === 0) return null;
+              
+              return (
+                <TextField
+                  select
+                  label="Issue"
+                  value={form.issueTypeId ?? ''}
+                  fullWidth
+                  onChange={(e) => setForm({ ...form, issueTypeId: e.target.value || undefined })}
+                  helperText="Select a specific issue for routing and SLA tracking"
+                >
+                  <MenuItem value="">— No specific issue —</MenuItem>
+                  {filteredIssues.map((iss) => (
+                    <MenuItem key={iss.id} value={iss.id}>
+                      {iss.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              );
+            })()}
 
             <TextField
               label="Subject *"
@@ -1551,11 +1600,18 @@ export default function TicketsPage() {
                         <Typography
                           variant="body2"
                           fontWeight={600}
-                          sx={{ cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
+                          sx={{ cursor: 'pointer', '&:hover': { color: 'primary.main' }, mb: 0.5 }}
                           onClick={() => setExpandedKbId(expandedKbId === kb.id ? null : kb.id)}
                         >
                           {kb.title} {expandedKbId === kb.id ? '▲' : '▼'}
                         </Typography>
+                        {kb.tags && (
+                          <Box display="flex" gap={0.5} flexWrap="wrap" mb={1}>
+                            {kb.tags.split(',').map((tag: string) => (
+                              <Chip key={tag} label={tag.trim()} size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
+                            ))}
+                          </Box>
+                        )}
                         {expandedKbId === kb.id && (
                           <Box mt={1}>
                             <Box sx={{ maxHeight: 200, overflowY: 'auto', p: 1, bgcolor: 'action.hover', borderRadius: 1, typography: 'body2', color: 'text.secondary', '& p': { m: 0, mb: 1 }, '& ul, & ol': { m: 0, pl: 2 } }}>

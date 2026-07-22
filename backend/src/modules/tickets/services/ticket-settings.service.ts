@@ -14,19 +14,19 @@ import { Ticket } from '../entities/ticket.entity';
 
 export interface CreateCategoryDto {
   name: string;
-  ticketType: string; // 'desktop_support' | 'it_support' | 'pantawid_ict_support'
+  isIt?: boolean;
+  isDesktop?: boolean;
+  isPantawid?: boolean;
   description?: string;
-  slaHours?: number | null;
-  allowablePauseHours?: number | null;
 }
 
 export interface UpdateCategoryDto {
   name?: string;
-  ticketType?: string;
+  isIt?: boolean;
+  isDesktop?: boolean;
+  isPantawid?: boolean;
   description?: string;
   isActive?: boolean;
-  slaHours?: number | null;
-  allowablePauseHours?: number | null;
 }
 
 export interface CreateKeywordRuleDto {
@@ -34,13 +34,15 @@ export interface CreateKeywordRuleDto {
   keywords?: string[]; // preferred: multiple keywords for this rule
   targetTicketType: string;
   targetCategoryId?: string;
+  targetIssueTypeId?: string;
 }
 
 export interface UpdateKeywordRuleDto {
   keyword?: string;
   keywords?: string[];
   targetTicketType?: string;
-  targetCategoryId?: string | null;
+  targetCategoryId?: string;
+  targetIssueTypeId?: string;
   isActive?: boolean;
 }
 
@@ -54,6 +56,8 @@ export interface CreateIssueTypeDto {
   name: string;
   description?: string;
   categoryId?: string | null;
+  slaHours?: number | null;
+  allowablePauseHours?: number | null;
 }
 
 export interface UpdateIssueTypeDto {
@@ -61,6 +65,8 @@ export interface UpdateIssueTypeDto {
   description?: string;
   isActive?: boolean;
   categoryId?: string | null;
+  slaHours?: number | null;
+  allowablePauseHours?: number | null;
 }
 
 export interface UpdateGlobalConfigDto {
@@ -113,15 +119,19 @@ export class TicketSettingsService {
   // ── Categories ──────────────────────────────────────────────────────────
 
   async listCategories(ticketType?: string): Promise<TicketCategoryConfig[]> {
-    const where: any = { isDeleted: false };
-    if (ticketType) where.ticketType = ticketType;
-    return this.categoryRepo.find({ where, order: { name: 'ASC' } });
+    const qb = this.categoryRepo.createQueryBuilder('c').where('c.isDeleted = false');
+    if (ticketType === 'it_support') qb.andWhere('c.isIt = true');
+    else if (ticketType === 'desktop_support') qb.andWhere('c.isDesktop = true');
+    else if (ticketType === 'pantawid_ict_support') qb.andWhere('c.isPantawid = true');
+    return qb.orderBy('c.name', 'ASC').getMany();
   }
 
   async listActiveCategories(ticketType?: string): Promise<TicketCategoryConfig[]> {
-    const where: any = { isActive: true, isDeleted: false };
-    if (ticketType) where.ticketType = ticketType;
-    return this.categoryRepo.find({ where, order: { name: 'ASC' } });
+    const qb = this.categoryRepo.createQueryBuilder('c').where('c.isDeleted = false').andWhere('c.isActive = true');
+    if (ticketType === 'it_support') qb.andWhere('c.isIt = true');
+    else if (ticketType === 'desktop_support') qb.andWhere('c.isDesktop = true');
+    else if (ticketType === 'pantawid_ict_support') qb.andWhere('c.isPantawid = true');
+    return qb.orderBy('c.name', 'ASC').getMany();
   }
 
   async getCategoryById(id: string): Promise<TicketCategoryConfig> {
@@ -132,10 +142,8 @@ export class TicketSettingsService {
 
   async createCategory(dto: CreateCategoryDto, actorId: number): Promise<TicketCategoryConfig> {
     if (!dto.name?.trim()) throw new BadRequestException('Category name is required');
-    if (!['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.ticketType)) {
-      throw new BadRequestException(
-        'ticketType must be desktop_support, it_support, or pantawid_ict_support',
-      );
+    if (!dto.isIt && !dto.isDesktop && !dto.isPantawid) {
+      throw new BadRequestException('At least one support type must be selected');
     }
 
     const key = dto.name
@@ -151,38 +159,25 @@ export class TicketSettingsService {
     const softDeleted = await this.categoryRepo.findOne({ where: { key, isDeleted: true } });
     if (softDeleted) {
       softDeleted.name = dto.name.trim();
-      softDeleted.ticketType = dto.ticketType;
+      softDeleted.isIt = !!dto.isIt;
+      softDeleted.isDesktop = !!dto.isDesktop;
+      softDeleted.isPantawid = !!dto.isPantawid;
       softDeleted.description = dto.description?.trim() || null;
       softDeleted.isActive = true;
       softDeleted.isDeleted = false;
       softDeleted.created_by = actorId;
       softDeleted.updated_by = actorId;
-      if (dto.slaHours !== undefined) softDeleted.slaHours = dto.slaHours;
-      if (dto.allowablePauseHours !== undefined)
-        softDeleted.allowablePauseHours = dto.allowablePauseHours ?? 48;
       return this.categoryRepo.save(softDeleted);
-    }
-
-    if (dto.slaHours !== undefined && dto.slaHours !== null) {
-      if (dto.slaHours < 0 || dto.slaHours > 168) {
-        throw new BadRequestException('SLA hours must be between 0 and 168');
-      }
-    }
-
-    if (dto.allowablePauseHours !== undefined && dto.allowablePauseHours !== null) {
-      if (dto.allowablePauseHours < 0 || dto.allowablePauseHours > 168) {
-        throw new BadRequestException('Allowable Pause Hours must be between 0 and 168');
-      }
     }
 
     const cat = this.categoryRepo.create({
       key,
       name: dto.name.trim(),
-      ticketType: dto.ticketType,
+      isIt: !!dto.isIt,
+      isDesktop: !!dto.isDesktop,
+      isPantawid: !!dto.isPantawid,
       description: dto.description?.trim() || null,
-      slaHours: dto.slaHours ?? null,
-      allowablePauseHours: dto.allowablePauseHours ?? 48,
-      isActive: (dto.slaHours ?? null) !== null,
+      isActive: true,
       isDeleted: false,
       created_by: actorId,
       updated_by: actorId,
@@ -205,41 +200,20 @@ export class TicketSettingsService {
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/(^_|_$)/g, '');
     }
-    if (dto.ticketType !== undefined) {
-      if (!['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.ticketType)) {
-        throw new BadRequestException(
-          'ticketType must be desktop_support, it_support, or pantawid_ict_support',
-        );
+    if (dto.isIt !== undefined || dto.isDesktop !== undefined || dto.isPantawid !== undefined) {
+      const isIt = dto.isIt !== undefined ? dto.isIt : cat.isIt;
+      const isDesktop = dto.isDesktop !== undefined ? dto.isDesktop : cat.isDesktop;
+      const isPantawid = dto.isPantawid !== undefined ? dto.isPantawid : cat.isPantawid;
+      if (!isIt && !isDesktop && !isPantawid) {
+        throw new BadRequestException('At least one support type must be selected');
       }
-      cat.ticketType = dto.ticketType;
+      if (dto.isIt !== undefined) cat.isIt = dto.isIt;
+      if (dto.isDesktop !== undefined) cat.isDesktop = dto.isDesktop;
+      if (dto.isPantawid !== undefined) cat.isPantawid = dto.isPantawid;
     }
     if (dto.description !== undefined) cat.description = dto.description?.trim() || null;
 
-    if (dto.slaHours !== undefined) {
-      if (dto.slaHours !== null && (dto.slaHours < 0 || dto.slaHours > 168)) {
-        throw new BadRequestException('SLA hours must be between 0 and 168');
-      }
-      cat.slaHours = dto.slaHours ?? null;
-      if (cat.slaHours === null) {
-        cat.isActive = false; // Force inactive if SLA is blank
-      }
-    }
-
-    if (dto.allowablePauseHours !== undefined) {
-      if (
-        dto.allowablePauseHours !== null &&
-        (dto.allowablePauseHours < 0 || dto.allowablePauseHours > 168)
-      ) {
-        throw new BadRequestException('Allowable Pause Hours must be between 0 and 168');
-      }
-      cat.allowablePauseHours = dto.allowablePauseHours ?? 48;
-    }
-
     if (dto.isActive !== undefined) {
-      // Don't allow activating if SLA is blank
-      if (dto.isActive && cat.slaHours === null) {
-        throw new BadRequestException('Cannot activate category with blank SLA');
-      }
       cat.isActive = dto.isActive;
     }
 
@@ -295,6 +269,7 @@ export class TicketSettingsService {
       keywords: JSON.stringify(kwList),
       targetTicketType: dto.targetTicketType,
       targetCategoryId: dto.targetCategoryId || null,
+      targetIssueTypeId: dto.targetIssueTypeId || null,
       isActive: true,
       createdBy: actorId,
     });
@@ -331,6 +306,9 @@ export class TicketSettingsService {
       }
       rule.targetCategoryId = dto.targetCategoryId;
     }
+    if (dto.targetIssueTypeId !== undefined) {
+      rule.targetIssueTypeId = dto.targetIssueTypeId;
+    }
     if (dto.isActive !== undefined) rule.isActive = dto.isActive;
 
     return this.keywordRepo.save(rule);
@@ -347,7 +325,7 @@ export class TicketSettingsService {
     const qb = this.issueTypeRepo
       .createQueryBuilder('it')
       .leftJoinAndSelect('it.category', 'category')
-      .where('it.is_deleted = :deleted', { deleted: false })
+      .where('it.isDeleted = :deleted', { deleted: false })
       .orderBy('it.name', 'ASC');
 
     if (categoryId) {
@@ -361,8 +339,8 @@ export class TicketSettingsService {
     const qb = this.issueTypeRepo
       .createQueryBuilder('it')
       .leftJoinAndSelect('it.category', 'category')
-      .where('it.is_deleted = :deleted', { deleted: false })
-      .andWhere('it.is_active = :active', { active: true })
+      .where('it.isDeleted = :deleted', { deleted: false })
+      .andWhere('it.isActive = :active', { active: true })
       .orderBy('it.name', 'ASC');
 
     if (categoryId) {
@@ -374,7 +352,7 @@ export class TicketSettingsService {
 
   async getIssueTypeById(id: string): Promise<TicketIssueType> {
     const issueType = await this.issueTypeRepo.findOne({
-      where: { id, is_deleted: false },
+      where: { id, isDeleted: false },
       relations: ['category'],
     });
     if (!issueType) throw new NotFoundException(`Issue type ${id} not found`);
@@ -389,8 +367,14 @@ export class TicketSettingsService {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '_')
       .replace(/(^_|_$)/g, '');
-    const existing = await this.issueTypeRepo.findOne({ where: { key, is_deleted: false } });
+    const existing = await this.issueTypeRepo.findOne({ where: { key, isDeleted: false } });
     if (existing) throw new BadRequestException(`Issue type key "${key}" already exists`);
+
+    if (dto.slaHours !== undefined && dto.slaHours !== null) {
+      if (dto.slaHours < 0 || dto.slaHours > 168) {
+        throw new BadRequestException('SLA hours must be between 0 and 168');
+      }
+    }
 
     if (dto.categoryId) {
       await this.getCategoryById(dto.categoryId);
@@ -400,9 +384,10 @@ export class TicketSettingsService {
       key,
       name: dto.name.trim(),
       description: dto.description?.trim() || null,
-      is_active: true,
-      is_deleted: false,
+      isActive: (dto.slaHours ?? null) !== null,
+      isDeleted: false,
       category_id: dto.categoryId || null,
+      slaHours: dto.slaHours ?? null,
       created_by: actorId,
       updated_by: actorId,
     });
@@ -427,7 +412,22 @@ export class TicketSettingsService {
         .replace(/(^_|_$)/g, '');
     }
     if (dto.description !== undefined) issueType.description = dto.description?.trim() || null;
-    if (dto.isActive !== undefined) issueType.is_active = dto.isActive;
+    if (dto.slaHours !== undefined) {
+      if (dto.slaHours !== null && (dto.slaHours < 0 || dto.slaHours > 168)) {
+        throw new BadRequestException('SLA hours must be between 0 and 168');
+      }
+      issueType.slaHours = dto.slaHours ?? null;
+      if (issueType.slaHours === null) {
+        issueType.isActive = false;
+      }
+    }
+
+    if (dto.isActive !== undefined) {
+      if (dto.isActive && issueType.slaHours === null) {
+        throw new BadRequestException('Cannot activate issue with blank SLA');
+      }
+      issueType.isActive = dto.isActive;
+    }
     if (dto.categoryId !== undefined) {
       if (dto.categoryId) {
         await this.getCategoryById(dto.categoryId);
@@ -441,22 +441,22 @@ export class TicketSettingsService {
 
   async deleteIssueType(id: string, actorId: number): Promise<void> {
     const issueType = await this.getIssueTypeById(id);
-    issueType.is_deleted = true;
-    issueType.is_active = false;
+    issueType.isDeleted = true;
+    issueType.isActive = false;
     issueType.updated_by = actorId;
     await this.issueTypeRepo.save(issueType);
   }
 
   /** Find the first matching keyword rule for a given text (subject + description) */
-  async matchKeywordRules(text: string): Promise<TicketKeywordRule | null> {
+  async matchKeywordRules(text: string, currentTicketType?: string): Promise<TicketKeywordRule | null> {
     const rules = await this.keywordRepo.find({
       where: { isActive: true },
-      relations: ['targetCategory'],
+      relations: ['targetCategory', 'targetIssueType'],
     });
 
     const lower = text.toLowerCase();
 
-    // Build a flat list of (rule, keyword) pairs sorted by keyword length descending
+    // Build a flat list of (rule, keyword) pairs
     const pairs: Array<{ rule: TicketKeywordRule; kw: string }> = [];
     for (const rule of rules) {
       const kwList: string[] = rule.keywords ? JSON.parse(rule.keywords) : [rule.keyword];
@@ -464,11 +464,43 @@ export class TicketSettingsService {
         pairs.push({ rule, kw });
       }
     }
+    
+    // Sort so longer keywords are matched first
     pairs.sort((a, b) => b.kw.length - a.kw.length);
 
+    let matchedKw: string | null = null;
+    const matchedRules: TicketKeywordRule[] = [];
+    
     for (const { rule, kw } of pairs) {
-      if (lower.includes(kw)) return rule;
+      if (matchedKw && kw.length < matchedKw.length) {
+        break; // Exhausted all keywords of the same length
+      }
+      if (matchedKw && kw !== matchedKw) {
+        continue; // Skip other keywords of the same length that don't match
+      }
+      if (lower.includes(kw)) {
+        matchedKw = kw;
+        matchedRules.push(rule);
+      }
     }
+    
+    if (matchedRules.length === 0) return null;
+
+    // 1. Direct Match: Keyword rule exists for the user's selected Support Type
+    if (currentTicketType) {
+      const directMatch = matchedRules.find(r => r.targetTicketType === currentTicketType);
+      if (directMatch) return directMatch;
+    }
+    
+    // 2. Unambiguous Mistake: Keyword only exists in exactly ONE other Support Type
+    const uniqueTypes = new Set(matchedRules.map(r => r.targetTicketType));
+    if (uniqueTypes.size === 1) {
+      return matchedRules[0];
+    }
+    
+    // 3. Ambiguous Mistake (uniqueTypes.size > 1):
+    // The keyword belongs to multiple support types, and none of them is the user's selected type.
+    // We cannot reliably guess which one they meant, so we do nothing.
     return null;
   }
 
@@ -610,25 +642,28 @@ export class TicketSettingsService {
   // ── SLA Insights ───────────────────────────────────────────────────────
 
   async getSlaInsights(days: number = 30): Promise<any[]> {
-    // Calculates the average resolution time in hours per category over the last X days
+    // Calculates the average resolution time in hours per issue over the last X days
     const insights = await this.ticketRepo.query(
       `
       SELECT 
+        ti.name as issueName,
         tc.name as categoryName,
-        tc.sla_hours as configuredSlaHours,
+        ti.sla_hours as configuredSlaHours,
         COUNT(t.id) as resolvedTicketsCount,
         AVG(TIMESTAMPDIFF(SECOND, t.created_at, t.resolved_at)) / 3600 as avgResolutionHours
       FROM tickets t
-      JOIN ticket_categories tc ON t.category_id = tc.id
+      JOIN ticket_issue_types ti ON t.issue_type_id = ti.id
+      JOIN ticket_categories tc ON ti.category_id = tc.id
       WHERE t.status IN ('RESOLVED', 'CLOSED')
         AND t.resolved_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? DAY)
-        AND tc.sla_hours IS NOT NULL AND tc.sla_hours > 0
-      GROUP BY tc.id
+        AND ti.sla_hours IS NOT NULL AND ti.sla_hours > 0
+      GROUP BY ti.id
     `,
       [days],
     );
 
     return insights.map((row: any) => ({
+      issueName: row.issueName,
       categoryName: row.categoryName,
       configuredSlaHours: Number(row.configuredSlaHours),
       resolvedTicketsCount: Number(row.resolvedTicketsCount),

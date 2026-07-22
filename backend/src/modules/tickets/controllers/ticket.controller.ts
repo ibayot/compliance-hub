@@ -515,4 +515,13 @@ export class TicketController {
     const count = await this.ticketService.pauseAllActiveTickets(technicianId);
     return { success: true, count, message: `Paused ${count} active tickets for technician.` };
   }
+
+  @Get('reports/issue-counts')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD)
+  async getIssueCountsReport(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.ticketService.getIssueCountsReport(startDate, endDate);
+  }
 }

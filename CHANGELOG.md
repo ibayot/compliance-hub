@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.122] Comprehensive - 2026-07-22 - Ticket Reports and SLA Insights Enhancements
+
+### Added
+- **SLA Insights Dashboard**: Restored and corrected the SLA Insights tab under Ticket Reports. It now accurately queries the `/ticket-settings/sla-insights` endpoint.
+- **Divided Issues Tab Structure**: The Issues tab is now separated into two sub-tabs: 'Categories & Issues' (which contains the Category Overview and drill-down) and 'All Issues' (a vertical bar chart listing all specific issues).
+- **Status-Based Colored Drill-Down**: The drill-down chart in Ticket Reports now separates ticket counts by status using a stacked bar chart (Open/Assigned, In Progress, Resolved, Closed, Frozen/Paused).
+
+### Changed
+- **Dynamic X-Axis Margins**: Replaced static chart heights with dynamic calculations. Chart containers now adjust their height dynamically (`300 + dynamicBottomMargin`) to ensure the inner plot area always remains exactly 300px, preventing X-axis labels from squishing the chart height.
+- **Empty Category Filtering**: Categories and specific issues with 0 occurrences are now aggressively filtered out of the datasets to preserve screen real-estate.
+- **Full-Width Category Overview**: Upgraded the Category Overview grid layout from side-by-side to full width (`xs={12}`). The drill-down only appears directly below it when a category is actively clicked.
+- **Y-Axis Tick Count Enforcement**: Forced all report bar charts to render exactly 5 points along the Y-axis (`tickCount={5}`) for better readability.
+
+### Fixed
+- **Duplicate Ticket Bleed**: Added a hard query builder constraint (`ticket.status != 'duplicate'`) to the `/tickets/reports/issue-counts` endpoint to prevent duplicate tickets from skewing the specific issue occurrence statistics.
+- **JSX Compilation Structure**: Resolved critical missing JSX brace balancing that temporarily corrupted the Ticket Reports layout structure and caused build failures.
+
+---
+
 ## [0.0.114] (Backend) / [0.0.108] (Frontend) - 2026-06-24 - Audit Logs Refinement and Infrastructure IPv4 Hardening
 
 ### Added

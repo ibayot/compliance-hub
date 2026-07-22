@@ -28,7 +28,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:create": "node -e \"require('child_process').exec('mysql -u root -p < src/database/init.sql', (err, stdout, stderr) => { if (err) console.error(err); else console.log('Database created'); })\"",
     "db:schema": "node -e \"require('child_process').exec('mysql -u root -p compliance_hub < src/database/schema.sql', (err, stdout, stderr) => { if (err) console.error(err); else console.log('Schema applied'); })\"",
-    "db:seed": "ts-node src/database/seed.ts"
+    "db:seed": "ts-node src/database/seed.ts",
+    "db:seed-keywords": "ts-node src/database/seed-keyword-rules.ts"
   },
   "dependencies": {
     "@nestjs/bull": "^10.0.1",

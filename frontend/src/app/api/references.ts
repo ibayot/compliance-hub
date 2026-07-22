@@ -172,6 +172,8 @@ export interface Ticket {
   priority: TicketPriority | null;
   categoryId?: string | null;
   category?: TicketCategory | null;
+  issueTypeId?: string | null;
+  issueType?: TicketIssueType | null;
   requesterId: number;
   requester?: { id: number; email: string; firstName?: string; lastName?: string };
   createdById?: number | null;
@@ -327,7 +329,18 @@ export interface TicketReportResult {
     avg: number;
     count: number;
     ratedCount?: number;
+    met?: number;
+    missed?: number;
+    avgResolutionTimeHours?: number;
   }>;
+  issueCounts?: Array<{
+    issueId: string;
+    issueName: string;
+    count: number;
+    categoryId: string;
+    categoryName: string;
+  }>;
+
   totalEscalations: number;
   acceptedEscalations: number;
   returnedEscalations: number;
@@ -398,11 +411,28 @@ export interface TicketCategory {
   id: string;
   key: string;
   name: string;
-  ticketType: string;
+  isIt: boolean;
+  isDesktop: boolean;
+  isPantawid: boolean;
+  slaHours?: number | null;
+  isActive: boolean;
+  isDeleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TicketIssueType {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
   slaHours?: number | null;
   allowablePauseHours: number;
   isActive: boolean;
   isDeleted: boolean;
+  categoryId: string | null;
+  category_id?: string | null;
+  category?: TicketCategory | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -414,8 +444,9 @@ export interface TicketKeywordRule {
   keywords?: string[];
   targetTicketType: string;
   targetCategoryId?: string | null;
-  /** Populated relation — backend serialises as targetCategory */
   targetCategory?: TicketCategory | null;
+  targetIssueTypeId?: string | null;
+  targetIssueType?: TicketIssueType | null;
   /** Legacy alias kept for compatibility */
   category?: TicketCategory | null;
   isActive: boolean;
@@ -660,6 +691,12 @@ export const ticketsApi = {
     return response.data;
   },
 
+  /** Get SLA calibration insights (QA #11 extension) */
+  getSlaInsights: async (days: number = 30): Promise<any[]> => {
+    const response = await apiClient.get(`/ticket-settings/sla-insights?days=${days}`);
+    return response.data;
+  },
+
   /** Get ticket satisfaction reports with optional filters (QA #11) */
   getReports: async (filters?: {
     year?: number;
@@ -700,7 +737,6 @@ export const ticketsApi = {
     return response.data;
   },
 
-  /** Get technicians who had tickets in a given period (for reports dropdown) */
   getReportTechnicians: async (filters?: {
     year?: number;
     month?: number;
@@ -717,6 +753,27 @@ export const ticketsApi = {
     const response = await apiClient.get(`/tickets/report-technicians?${params}`);
     return response.data;
   },
+
+  /** Get specific issues breakdown */
+  getIssueCountsReport: async (filters?: {
+    year?: number;
+    month?: number;
+    quarter?: number;
+    semester?: number;
+    technicianId?: number;
+    ticketType?: string;
+  }): Promise<Array<{ categoryName: string; issueName: string; count: number; status: string }>> => {
+    const params = new URLSearchParams();
+    if (filters?.year) params.append('year', String(filters.year));
+    if (filters?.month) params.append('month', String(filters.month));
+    if (filters?.quarter) params.append('quarter', String(filters.quarter));
+    if (filters?.semester) params.append('semester', String(filters.semester));
+    if (filters?.technicianId) params.append('technicianId', String(filters.technicianId));
+    if (filters?.ticketType) params.append('ticketType', filters.ticketType);
+    const response = await apiClient.get(`/tickets/reports/issue-counts?${params}`);
+    return response.data;
+  },
+
 
   // --- Escalation ---
   getAllEscalations: async (): Promise<TicketEscalation[]> => {
@@ -789,9 +846,10 @@ export const ticketSettingsApi = {
   },
   createCategory: async (data: {
     name: string;
-    ticketType: string;
+    isIt?: boolean;
+    isDesktop?: boolean;
+    isPantawid?: boolean;
     slaHours?: number | null;
-    allowablePauseHours?: number;
     isActive?: boolean;
   }): Promise<TicketCategory> => {
     const response = await apiClient.post(`/ticket-settings/categories`, data);
@@ -799,7 +857,7 @@ export const ticketSettingsApi = {
   },
   updateCategory: async (
     id: string,
-    data: Partial<{ name: string; ticketType: string; slaHours: number | null; allowablePauseHours: number; isActive: boolean }>,
+    data: Partial<{ name: string; isIt: boolean; isDesktop: boolean; isPantawid: boolean; slaHours: number | null; isActive: boolean }>,
   ): Promise<TicketCategory> => {
     const response = await apiClient.patch(`/ticket-settings/categories/${id}`, data);
     return response.data;
@@ -820,7 +878,8 @@ export const ticketSettingsApi = {
   createKeywordRule: async (data: {
     keywords: string[];
     targetTicketType: string;
-    targetCategoryId?: string;
+    targetCategoryId?: string | null;
+    targetIssueTypeId?: string | null;
     isActive?: boolean;
   }): Promise<TicketKeywordRule> => {
     const response = await apiClient.post(`/ticket-settings/keyword-rules`, data);
@@ -831,7 +890,8 @@ export const ticketSettingsApi = {
     data: Partial<{
       keywords: string[];
       targetTicketType: string;
-      targetCategoryId?: string;
+      targetCategoryId?: string | null;
+      targetIssueTypeId?: string | null;
       isActive: boolean;
     }>,
   ): Promise<TicketKeywordRule> => {
@@ -840,6 +900,41 @@ export const ticketSettingsApi = {
   },
   deleteKeywordRule: async (id: string): Promise<void> => {
     await apiClient.delete(`/ticket-settings/keyword-rules/${id}`);
+  },
+
+  // Issue Types
+  getIssueTypes: async (categoryId?: string): Promise<TicketIssueType[]> => {
+    const params = categoryId ? `?categoryId=${categoryId}` : '';
+    const response = await apiClient.get(`/ticket-settings/issue-types${params}`);
+    return response.data;
+  },
+  createIssueType: async (data: {
+    name: string;
+    description?: string;
+    categoryId?: string;
+    slaHours?: number | null;
+    allowablePauseHours?: number;
+    isActive?: boolean;
+  }): Promise<TicketIssueType> => {
+    const response = await apiClient.post(`/ticket-settings/issue-types`, data);
+    return response.data;
+  },
+  updateIssueType: async (
+    id: string,
+    data: Partial<{
+      name: string;
+      description: string;
+      categoryId: string;
+      slaHours: number | null;
+      allowablePauseHours: number;
+      isActive: boolean;
+    }>,
+  ): Promise<TicketIssueType> => {
+    const response = await apiClient.patch(`/ticket-settings/issue-types/${id}`, data);
+    return response.data;
+  },
+  deleteIssueType: async (id: string): Promise<void> => {
+    await apiClient.delete(`/ticket-settings/issue-types/${id}`);
   },
 
   // Escalation Focals (QA #3, #13)

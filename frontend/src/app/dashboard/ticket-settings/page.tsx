@@ -34,6 +34,8 @@ import {
   AccordionSummary,
   AccordionDetails,
   Grid,
+  Checkbox,
+  FormGroup,
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, ExpandMore as ExpandMoreIcon, WarningAmber as WarningIcon, ErrorOutline as ErrorIcon, CheckCircleOutline as CheckIcon } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
@@ -43,6 +45,7 @@ import {
   knowledgeBaseApi,
   TicketCategory,
   TicketKeywordRule,
+  TicketIssueType,
   EscalationFocalConfig,
   ticketsApi,
 } from '@/app/api/references';
@@ -67,15 +70,18 @@ export default function TicketSettingsPage() {
   const [editCat, setEditCat] = useState<TicketCategory | null>(null);
   const [catForm, setCatForm] = useState<{
     name: string;
-    ticketType: string;
-    slaHours: string;
-    allowablePauseHours: string;
+    isIt: boolean;
+    isDesktop: boolean;
+    isPantawid: boolean;
     isActive: boolean;
-  }>({ name: '', ticketType: 'it_support', slaHours: '24', allowablePauseHours: '48', isActive: true });
+  }>({ name: '', isIt: false, isDesktop: false, isPantawid: false, isActive: true });
+  const [categorySearch, setCategorySearch] = useState('');
   const [catSubmitting, setCatSubmitting] = useState(false);
+  const [deleteCatId, setDeleteCatId] = useState<string | null>(null);
 
   // — Keyword Rules —
   const [rules, setRules] = useState<TicketKeywordRule[]>([]);
+  const [deleteRuleId, setDeleteRuleId] = useState<string | null>(null);
   const [rulesLoading, setRulesLoading] = useState(true);
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
   const [editRule, setEditRule] = useState<TicketKeywordRule | null>(null);
@@ -83,15 +89,41 @@ export default function TicketSettingsPage() {
     keywords: string[];
     targetTicketType: string;
     targetCategoryId: string;
+    targetIssueTypeId: string;
     isActive: boolean;
-  }>({ keywords: [], targetTicketType: 'it_support', targetCategoryId: '', isActive: true });
+  }>({ keywords: [], targetTicketType: 'it_support', targetCategoryId: '', targetIssueTypeId: '', isActive: true });
   const [keywordInput, setKeywordInput] = useState('');
   const [ruleSubmitting, setRuleSubmitting] = useState(false);
+
+  // — Specific Issues —
+  const [issues, setIssues] = useState<TicketIssueType[]>([]);
+  const [issuesLoading, setIssuesLoading] = useState(true);
+  const [issueDialogOpen, setIssueDialogOpen] = useState(false);
+  const [deleteIssueId, setDeleteIssueId] = useState<string | null>(null);
+  const [editIssue, setEditIssue] = useState<TicketIssueType | null>(null);
+  const [issueForm, setIssueForm] = useState<{
+    name: string;
+    description: string;
+    categoryId: string;
+    slaHours: string;
+    allowablePauseHours: string;
+    isActive: boolean;
+  }>({
+    name: '',
+    description: '',
+    categoryId: '',
+    slaHours: '24',
+    allowablePauseHours: '48',
+    isActive: true,
+  });
+  const [issueSearch, setIssueSearch] = useState('');
+  const [issueSubmitting, setIssueSubmitting] = useState(false);
 
   // — Escalation Focals —
   const [focals, setFocals] = useState<EscalationFocalConfig[]>([]);
   const [focalsLoading, setFocalsLoading] = useState(true);
   const [focalDialogOpen, setFocalDialogOpen] = useState(false);
+  const [deleteFocalId, setDeleteFocalId] = useState<number | null>(null);
   const [availableUsers, setAvailableUsers] = useState<{ value: string; label: string }[]>([]);
   const [focalForm, setFocalForm] = useState<{ ticketType: string; userId: string }>({
     ticketType: 'all',
@@ -164,8 +196,7 @@ export default function TicketSettingsPage() {
     isEmailNotificationsEnabled: true,
     emailTestOverride: '',
   });
-  const [slaInsights, setSlaInsights] = useState<any[]>([]);
-  const [slaFilterDays, setSlaFilterDays] = useState<number>(30);
+
   const [globalLoading, setGlobalLoading] = useState(true);
   const [smtpTestLoading, setSmtpTestLoading] = useState(false);
   const [smtpTestEmail, setSmtpTestEmail] = useState('');
@@ -184,9 +215,7 @@ export default function TicketSettingsPage() {
     }
   }, [enqueueSnackbar]);
 
-  useEffect(() => {
-    ticketSettingsApi.getSlaInsights(slaFilterDays).then(setSlaInsights).catch(() => { });
-  }, [slaFilterDays]);
+
 
   const handleUpdateGlobalConfig = async () => {
     try {
@@ -261,11 +290,12 @@ export default function TicketSettingsPage() {
     }
   };
 
-  const handleDeleteFocal = async (id: number) => {
-    if (!confirm('Remove this escalation focal configuration?')) return;
+  const confirmDeleteFocal = async () => {
+    if (!deleteFocalId) return;
     try {
-      await ticketSettingsApi.removeEscalationFocal(id);
+      await ticketSettingsApi.removeEscalationFocal(deleteFocalId);
       enqueueSnackbar('Escalation focal removed', { variant: 'success' });
+      setDeleteFocalId(null);
       fetchFocals();
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed', { variant: 'error' });
@@ -293,11 +323,23 @@ export default function TicketSettingsPage() {
     } finally {
       setRulesLoading(false);
     }
-  }, []);
+  }, [enqueueSnackbar]);
+
+  const fetchIssues = useCallback(async () => {
+    try {
+      setIssuesLoading(true);
+      setIssues(await ticketSettingsApi.getIssueTypes());
+    } catch {
+      enqueueSnackbar('Failed to load issue types', { variant: 'error' });
+    } finally {
+      setIssuesLoading(false);
+    }
+  }, [enqueueSnackbar]);
 
   useEffect(() => {
     fetchCategories();
     fetchRules();
+    fetchIssues();
     fetchFocals();
     fetchFeedbacks();
     fetchGlobalData();
@@ -310,14 +352,14 @@ export default function TicketSettingsPage() {
       setEditCat(cat);
       setCatForm({
         name: cat.name,
-        ticketType: cat.ticketType,
-        slaHours: cat.slaHours != null ? String(cat.slaHours) : '',
-        allowablePauseHours: String(cat.allowablePauseHours ?? 48),
+        isIt: cat.isIt,
+        isDesktop: cat.isDesktop,
+        isPantawid: cat.isPantawid,
         isActive: cat.isActive,
       });
     } else {
       setEditCat(null);
-      setCatForm({ name: '', ticketType: 'it_support', slaHours: '24', allowablePauseHours: '48', isActive: true });
+      setCatForm({ name: '', isIt: false, isDesktop: false, isPantawid: false, isActive: true });
     }
     setCatDialogOpen(true);
   };
@@ -329,20 +371,11 @@ export default function TicketSettingsPage() {
     }
     try {
       setCatSubmitting(true);
-      const parsedSla = catForm.slaHours ? Number(catForm.slaHours) : null;
-      if (parsedSla === null || parsedSla <= 0 || parsedSla > 168) {
-        enqueueSnackbar('SLA must be between 1 and 168 hours', { variant: 'warning' });
-        setCatSubmitting(false);
-        return;
-      }
-
-      const parsedFreeze = catForm.allowablePauseHours ? Number(catForm.allowablePauseHours) : 48;
-
       const catPayload = {
         name: catForm.name,
-        ticketType: catForm.ticketType,
-        slaHours: parsedSla,
-        allowablePauseHours: parsedFreeze,
+        isIt: catForm.isIt,
+        isDesktop: catForm.isDesktop,
+        isPantawid: catForm.isPantawid,
         isActive: catForm.isActive,
       };
 
@@ -364,12 +397,13 @@ export default function TicketSettingsPage() {
     }
   };
 
-  const handleDeleteCat = async (id: string) => {
-    if (!confirm('Soft-delete this category?')) return;
+  const confirmDeleteCat = async () => {
+    if (!deleteCatId) return;
     try {
-      await ticketSettingsApi.deleteCategory(id);
-      enqueueSnackbar('Category deleted', { variant: 'success' });
+      await ticketSettingsApi.deleteCategory(deleteCatId);
+      enqueueSnackbar('Category removed', { variant: 'success' });
       fetchCategories();
+      setDeleteCatId(null);
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed', { variant: 'error' });
     }
@@ -385,6 +419,7 @@ export default function TicketSettingsPage() {
         keywords: kws,
         targetTicketType: rule.targetTicketType,
         targetCategoryId: rule.targetCategoryId ?? '',
+        targetIssueTypeId: rule.targetIssueTypeId ?? '',
         isActive: rule.isActive,
       });
     } else {
@@ -393,6 +428,7 @@ export default function TicketSettingsPage() {
         keywords: [],
         targetTicketType: 'it_support',
         targetCategoryId: '',
+        targetIssueTypeId: '',
         isActive: true,
       });
     }
@@ -405,12 +441,21 @@ export default function TicketSettingsPage() {
       enqueueSnackbar('At least one keyword is required', { variant: 'warning' });
       return;
     }
+    if (!ruleForm.targetCategoryId) {
+      enqueueSnackbar('Target Category is required', { variant: 'warning' });
+      return;
+    }
+    if (!ruleForm.targetIssueTypeId) {
+      enqueueSnackbar('Target Issue is required', { variant: 'warning' });
+      return;
+    }
     try {
       setRuleSubmitting(true);
       const payload = {
         keywords: ruleForm.keywords,
         targetTicketType: ruleForm.targetTicketType,
-        targetCategoryId: ruleForm.targetCategoryId || undefined,
+        targetCategoryId: ruleForm.targetCategoryId || null,
+        targetIssueTypeId: ruleForm.targetIssueTypeId || null,
         isActive: ruleForm.isActive,
       };
       if (editRule) {
@@ -429,19 +474,107 @@ export default function TicketSettingsPage() {
     }
   };
 
-  const handleDeleteRule = async (id: string) => {
-    if (!confirm('Delete this keyword rule?')) return;
+  const confirmDeleteRule = async () => {
+    if (!deleteRuleId) return;
     try {
-      await ticketSettingsApi.deleteKeywordRule(id);
+      await ticketSettingsApi.deleteKeywordRule(deleteRuleId);
       enqueueSnackbar('Rule deleted', { variant: 'success' });
+      setDeleteRuleId(null);
       fetchRules();
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed', { variant: 'error' });
     }
   };
 
+  // Issue CRUD
+  const openIssueDialog = (issue?: TicketIssueType) => {
+    if (issue) {
+      setEditIssue(issue);
+      setIssueForm({
+        name: issue.name,
+        description: issue.description || '',
+        categoryId: issue.categoryId || '',
+        slaHours: issue.slaHours != null ? String(issue.slaHours) : '',
+        allowablePauseHours: String(issue.allowablePauseHours ?? 48),
+        isActive: issue.isActive,
+      });
+    } else {
+      setEditIssue(null);
+      setIssueForm({
+        name: '',
+        description: '',
+        categoryId: '',
+        slaHours: '24',
+        allowablePauseHours: '48',
+        isActive: true,
+      });
+    }
+    setIssueDialogOpen(true);
+  };
+
+  const handleSaveIssue = async () => {
+    if (!issueForm.name.trim()) return enqueueSnackbar('Name required', { variant: 'error' });
+    if (!issueForm.categoryId) return enqueueSnackbar('Category required', { variant: 'error' });
+    
+    const parsedSla = issueForm.slaHours ? Number(issueForm.slaHours) : null;
+    if (parsedSla === null || parsedSla <= 0 || parsedSla > 168) {
+      enqueueSnackbar('SLA must be between 1 and 168 hours', { variant: 'warning' });
+      return;
+    }
+
+    const parsedPause = issueForm.allowablePauseHours ? Number(issueForm.allowablePauseHours) : 48;
+    if (parsedPause < 0 || parsedPause > 168) {
+      enqueueSnackbar('Allowable Pause Hours must be between 0 and 168', { variant: 'warning' });
+      return;
+    }
+
+    setIssueSubmitting(true);
+    try {
+      const payload = {
+        ...issueForm,
+        slaHours: parsedSla,
+        allowablePauseHours: parsedPause
+      };
+      if (editIssue) {
+        await ticketSettingsApi.updateIssueType(editIssue.id, payload);
+        enqueueSnackbar('Issue updated', { variant: 'success' });
+      } else {
+        await ticketSettingsApi.createIssueType(payload);
+        enqueueSnackbar('Issue created', { variant: 'success' });
+      }
+      setIssueDialogOpen(false);
+      fetchIssues();
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to save issue', { variant: 'error' });
+    } finally {
+      setIssueSubmitting(false);
+    }
+  };
+
+  const confirmDeleteIssue = async () => {
+    if (!deleteIssueId) return;
+    try {
+      await ticketSettingsApi.deleteIssueType(deleteIssueId);
+      enqueueSnackbar('Issue deleted', { variant: 'success' });
+      setDeleteIssueId(null);
+      fetchIssues();
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed', { variant: 'error' });
+    }
+  };
+
   const filteredCategoriesForRule = categories.filter(
-    (c) => c.ticketType === ruleForm.targetTicketType && !c.isDeleted,
+    (c) => {
+      if (c.isDeleted) return false;
+      if (ruleForm.targetTicketType === 'it_support') return c.isIt;
+      if (ruleForm.targetTicketType === 'desktop_support') return c.isDesktop;
+      if (ruleForm.targetTicketType === 'pantawid_ict_support') return c.isPantawid;
+      return false;
+    }
+  );
+
+  const filteredIssuesForRule = issues.filter(
+    (iss) => ruleForm.targetCategoryId && (iss.categoryId || iss.category_id) === ruleForm.targetCategoryId && !iss.isDeleted,
   );
 
   return (
@@ -460,16 +593,24 @@ export default function TicketSettingsPage() {
           sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab label={`Categories (${categories.filter((c) => !c.isDeleted).length})`} />
+          <Tab label={`Issues (${issues.length})`} />
           <Tab label={`Keyword Rules (${rules.length})`} />
           <Tab label={`Escalation Focals (${focals.length})`} />
-          <Tab label={`Global Settings & SLA Insights`} />
+          <Tab label={`Global Settings`} />
           <Tab label={`User Feedback (${feedbacks.length})`} />
         </Tabs>
 
         {/* ── Categories Tab ── */}
         {tab === 0 && (
           <CardContent>
-            <Box display="flex" justifyContent="flex-end" mb={2}>
+            <Box display="flex" justifyContent="space-between" mb={2}>
+              <TextField
+                placeholder="Search categories..."
+                size="small"
+                value={categorySearch}
+                onChange={(e) => setCategorySearch(e.target.value)}
+                sx={{ minWidth: 300 }}
+              />
               <Button
                 startIcon={<AddIcon />}
                 variant="contained"
@@ -484,13 +625,7 @@ export default function TicketSettingsPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Name</TableCell>
-                    <TableCell>Support Type</TableCell>
-                    <TableCell>
-                      <Tooltip title="Set per category via the Edit button">
-                        <span>SLA Time Limit</span>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>Allowable Pause Hours</TableCell>
+                    <TableCell>Support Types</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
@@ -512,21 +647,19 @@ export default function TicketSettingsPage() {
                     </TableRow>
                   ) : (
                     categories
-                      .filter((c) => !c.isDeleted)
+                      .filter((c) => !c.isDeleted && (categorySearch.trim() === '' || c.name.toLowerCase().includes(categorySearch.toLowerCase())))
                       .map((cat) => (
                         <TableRow key={cat.id} hover>
                           <TableCell>
                             <Typography fontWeight={600}>{cat.name}</Typography>
                           </TableCell>
                           <TableCell>
-                            <Chip
-                              size="small"
-                              label={TYPE_LABELS[cat.ticketType] ?? cat.ticketType}
-                              variant="outlined"
-                            />
+                            <Box display="flex" gap={0.5} flexWrap="wrap">
+                              {cat.isIt && <Chip size="small" label="IT Support" variant="outlined" />}
+                              {cat.isDesktop && <Chip size="small" label="Desktop Support" variant="outlined" />}
+                              {cat.isPantawid && <Chip size="small" label="Pantawid ICT Support" variant="outlined" />}
+                            </Box>
                           </TableCell>
-                          <TableCell>{cat.slaHours != null ? `${cat.slaHours}h` : '—'}</TableCell>
-                          <TableCell>{cat.allowablePauseHours ?? 48}h</TableCell>
                           <TableCell>
                             <Chip
                               size="small"
@@ -544,7 +677,7 @@ export default function TicketSettingsPage() {
                               <IconButton
                                 size="small"
                                 color="error"
-                                onClick={() => handleDeleteCat(cat.id)}
+                                onClick={() => setDeleteCatId(cat.id)}
                               >
                                 <DeleteIcon fontSize="small" />
                               </IconButton>
@@ -559,8 +692,97 @@ export default function TicketSettingsPage() {
           </CardContent>
         )}
 
-        {/* ── Keyword Rules Tab ── */}
+        {/* —— Issues Tab —— */}
         {tab === 1 && (
+          <CardContent>
+            <Box display="flex" justifyContent="space-between" mb={2}>
+              <TextField
+                placeholder="Search issues..."
+                size="small"
+                value={issueSearch}
+                onChange={(e) => setIssueSearch(e.target.value)}
+                sx={{ minWidth: 300 }}
+              />
+              <Button
+                startIcon={<AddIcon />}
+                variant="contained"
+                size="small"
+                onClick={() => openIssueDialog()}
+              >
+                Add Issue
+              </Button>
+            </Box>
+
+            {issuesLoading ? (
+              <Box display="flex" justifyContent="center" p={4}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: 'action.hover' }}>
+                      <TableCell><strong>Category</strong></TableCell>
+                      <TableCell><strong>Name</strong></TableCell>
+                      <TableCell>
+                        <Tooltip title="Set per issue via the Edit button">
+                          <strong>SLA Time Limit</strong>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell><strong>Allowable Pause Hours</strong></TableCell>
+                      <TableCell><strong>Status</strong></TableCell>
+                      <TableCell align="right"><strong>Actions</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {issues
+                        .filter((iss) => (issueSearch.trim() === '' || iss.name.toLowerCase().includes(issueSearch.toLowerCase())))
+                        .map((iss) => (
+                      <TableRow key={iss.id} hover>
+                        <TableCell>{iss.category?.name || <Typography variant="caption" color="error">Unlinked</Typography>}</TableCell>
+                        <TableCell>
+                          <Typography variant="body2">{iss.name}</Typography>
+                          {iss.description && (
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              {iss.description}
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>{iss.slaHours != null ? `${iss.slaHours}h` : '—'}</TableCell>
+                        <TableCell>{iss.allowablePauseHours ?? 48}h</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={iss.isActive ? 'Active' : 'Inactive'}
+                            color={iss.isActive ? 'success' : 'default'}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" color="primary" onClick={() => openIssueDialog(iss)}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" color="error" onClick={() => setDeleteIssueId(iss.id)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {issues.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                          No issues found.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </CardContent>
+        )}
+
+        {/* ── Keyword Rules Tab ── */}
+        {tab === 2 && (
           <CardContent>
             <Box display="flex" justifyContent="flex-end" mb={2}>
               <Button
@@ -577,7 +799,7 @@ export default function TicketSettingsPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Keyword</TableCell>
-                    <TableCell>Target Type</TableCell>
+                    <TableCell>Support Type</TableCell>
                     <TableCell>Target Category</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell align="right">Actions</TableCell>
@@ -600,7 +822,7 @@ export default function TicketSettingsPage() {
                     </TableRow>
                   ) : (
                     rules.map((rule) => (
-                      <TableRow key={rule.id} hover>
+                      <TableRow key={rule.id} hover sx={{ '& td, & th': { height: 'auto', py: 1, verticalAlign: 'middle' } }}>
                         <TableCell>
                           <Box display="flex" gap={0.5} flexWrap="wrap">
                             {(rule.keywords && rule.keywords.length > 0
@@ -626,21 +848,23 @@ export default function TicketSettingsPage() {
                             color={rule.isActive ? 'success' : 'default'}
                           />
                         </TableCell>
-                        <TableCell align="right">
-                          <Tooltip title="Edit">
-                            <IconButton size="small" onClick={() => openRuleDialog(rule)}>
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Delete">
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => handleDeleteRule(rule.id)}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                          <Box display="flex" justifyContent="flex-end" flexWrap="nowrap">
+                            <Tooltip title="Edit">
+                              <IconButton size="small" onClick={() => openRuleDialog(rule)}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => setDeleteRuleId(rule.id)}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
                         </TableCell>
                       </TableRow>
                     ))
@@ -651,7 +875,7 @@ export default function TicketSettingsPage() {
           </CardContent>
         )}
         {/* ── Escalation Focals Tab ── */}
-        {tab === 2 && (
+        {tab === 3 && (
           <CardContent>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
               <Typography variant="body2" color="text.secondary">
@@ -708,7 +932,7 @@ export default function TicketSettingsPage() {
                             <IconButton
                               size="small"
                               color="error"
-                              onClick={() => handleDeleteFocal(f.id)}
+                              onClick={() => setDeleteFocalId(f.id)}
                             >
                               <DeleteIcon fontSize="small" />
                             </IconButton>
@@ -724,7 +948,7 @@ export default function TicketSettingsPage() {
         )}
 
         {/* ── Global Settings & SLA Insights Tab ── */}
-        {tab === 3 && (
+        {tab === 4 && (
           <CardContent>
             <Typography variant="h6" fontWeight={600} mb={2}>
               Routing Configuration
@@ -985,104 +1209,12 @@ export default function TicketSettingsPage() {
               </>
             )}
 
-            <Typography variant="h6" fontWeight={600} mb={2} mt={4}>
-              SLA Recalibration Insights
-            </Typography>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-              <Typography variant="body2" color="text.secondary">
-                Compare configured SLA hours against the actual average resolution time for each
-                category.
-              </Typography>
-              <TextField
-                select
-                size="small"
-                value={slaFilterDays}
-                onChange={(e) => setSlaFilterDays(Number(e.target.value))}
-                sx={{ width: 150 }}
-              >
-                <MenuItem value={30}>Last 30 Days</MenuItem>
-                <MenuItem value={90}>Last 90 Days</MenuItem>
-                <MenuItem value={365}>Last 365 Days</MenuItem>
-              </TextField>
-            </Box>
 
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Category</TableCell>
-                    <TableCell align="right">Resolved Tickets</TableCell>
-                    <TableCell align="right">Configured SLA</TableCell>
-                    <TableCell align="right">Avg Actual Resolution</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Interpretation</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {globalLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={5} align="center">
-                        <CircularProgress size={24} />
-                      </TableCell>
-                    </TableRow>
-                  ) : slaInsights.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} align="center">
-                        <Typography color="text.secondary" py={2}>
-                          No resolution data available.
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    slaInsights.map((insight, i) => (
-                      <TableRow key={i} hover>
-                        <TableCell>
-                          <Typography fontWeight={600}>{insight.categoryName}</Typography>
-                        </TableCell>
-                        <TableCell align="right">{insight.resolvedTicketsCount}</TableCell>
-                        <TableCell align="right">
-                          {insight.configuredSlaHours > 0
-                            ? `${insight.configuredSlaHours.toFixed(1)}h`
-                            : 'None'}
-                        </TableCell>
-                        <TableCell align="right">
-                          {insight.avgResolutionHours
-                            ? `${insight.avgResolutionHours.toFixed(1)}h`
-                            : '—'}
-                        </TableCell>
-                        <TableCell>
-                          {insight.configuredSlaHours > 0 ? (
-                            <Chip
-                              size="small"
-                              label={insight.isFailingSla ? 'Failing' : 'Healthy'}
-                              color={insight.isFailingSla ? 'error' : 'success'}
-                            />
-                          ) : (
-                            <Chip size="small" label="Unmonitored" color="default" />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {insight.configuredSlaHours > 0 ? (
-                            insight.isFailingSla ? (
-                              <Typography variant="caption" color="error">Consider extending SLA</Typography>
-                            ) : (insight.avgResolutionHours < insight.configuredSlaHours * 0.5) ? (
-                              <Typography variant="caption" color="success.main">SLA is very generous, consider tightening</Typography>
-                            ) : (
-                              <Typography variant="caption" color="text.secondary">SLA is balanced</Typography>
-                            )
-                          ) : '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
           </CardContent>
         )}
 
         {/* ── User Feedback Tab ── */}
-        {tab === 4 && (
+        {tab === 5 && (
           <CardContent>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
               <Typography variant="body2" color="text.secondary">
@@ -1197,6 +1329,85 @@ export default function TicketSettingsPage() {
 
       </Card>
 
+      {/* Issue Dialog */}
+      <Dialog
+        open={issueDialogOpen}
+        onClose={() => setIssueDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{editIssue ? 'Edit Issue' : 'Add Issue'}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} mt={1}>
+            <TextField
+              select
+              label="Category *"
+              fullWidth
+              size="small"
+              value={issueForm.categoryId}
+              onChange={(e) => setIssueForm({ ...issueForm, categoryId: e.target.value })}
+            >
+              {categories.filter(c => !c.isDeleted).map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              label="Issue Name"
+              fullWidth
+              size="small"
+              value={issueForm.name}
+              onChange={(e) => setIssueForm({ ...issueForm, name: e.target.value })}
+            />
+            <TextField
+              label="Description (Optional)"
+              fullWidth
+              size="small"
+              multiline
+              rows={2}
+              value={issueForm.description}
+              onChange={(e) => setIssueForm({ ...issueForm, description: e.target.value })}
+            />
+            <TextField
+              label="SLA Time Limit (hours)"
+              type="number"
+              inputProps={{ min: 1, max: 168 }}
+              fullWidth
+              size="small"
+              value={issueForm.slaHours}
+              onChange={(e) => setIssueForm({ ...issueForm, slaHours: e.target.value })}
+              helperText="Optional. Enter hours > 0."
+            />
+            <TextField
+              label="Allowable Pause Hours *"
+              type="number"
+              inputProps={{ min: 0, max: 168 }}
+              fullWidth
+              size="small"
+              value={issueForm.allowablePauseHours}
+              onChange={(e) => setIssueForm({ ...issueForm, allowablePauseHours: e.target.value })}
+              helperText="Maximum allowed cumulative pause hours before SLA freeze is rejected."
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={issueForm.isActive}
+                  onChange={(e) => setIssueForm({ ...issueForm, isActive: e.target.checked })}
+                />
+              }
+              label="Active"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIssueDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleSaveIssue} variant="contained" disabled={issueSubmitting}>
+            {issueSubmitting ? 'Saving…' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Escalation Focal Dialog */}
       <Dialog
         open={focalDialogOpen}
@@ -1261,35 +1472,38 @@ export default function TicketSettingsPage() {
               onChange={(e) => setCatForm({ ...catForm, name: e.target.value })}
               fullWidth
             />
-            <TextField
-              select
-              label="Support Type *"
-              value={catForm.ticketType}
-              onChange={(e) => setCatForm({ ...catForm, ticketType: e.target.value })}
-              fullWidth
-            >
-              <MenuItem value="it_support">IT Support</MenuItem>
-              <MenuItem value="desktop_support">Desktop Support</MenuItem>
-              <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
-            </TextField>
-            <TextField
-              label="SLA Time Limit (hours) *"
-              type="number"
-              inputProps={{ min: 1, max: 168 }}
-              value={catForm.slaHours}
-              onChange={(e) => setCatForm({ ...catForm, slaHours: e.target.value })}
-              fullWidth
-              helperText="Required. Enter hours > 0."
-            />
-            <TextField
-              label="Allowable Pause Hours *"
-              type="number"
-              inputProps={{ min: 0, max: 168 }}
-              value={catForm.allowablePauseHours}
-              onChange={(e) => setCatForm({ ...catForm, allowablePauseHours: e.target.value })}
-              fullWidth
-              helperText="Maximum allowed cumulative pause hours before SLA freeze is rejected."
-            />
+            <Typography variant="subtitle2" color="text.secondary">
+              Support Types
+            </Typography>
+            <FormGroup>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={catForm.isIt}
+                    onChange={(e) => setCatForm({ ...catForm, isIt: e.target.checked })}
+                  />
+                }
+                label="IT Support"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={catForm.isDesktop}
+                    onChange={(e) => setCatForm({ ...catForm, isDesktop: e.target.checked })}
+                  />
+                }
+                label="Desktop Support"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={catForm.isPantawid}
+                    onChange={(e) => setCatForm({ ...catForm, isPantawid: e.target.checked })}
+                  />
+                }
+                label="Pantawid ICT Support"
+              />
+            </FormGroup>
             <FormControlLabel
               control={
                 <Switch
@@ -1358,7 +1572,7 @@ export default function TicketSettingsPage() {
             </Box>
             <TextField
               select
-              label="Target Support Type *"
+              label="Support Type *"
               value={ruleForm.targetTicketType}
               onChange={(e) =>
                 setRuleForm({ ...ruleForm, targetTicketType: e.target.value, targetCategoryId: '' })
@@ -1371,15 +1585,28 @@ export default function TicketSettingsPage() {
             </TextField>
             <TextField
               select
-              label="Target Category (optional)"
+              label="Target Category *"
               value={ruleForm.targetCategoryId}
               onChange={(e) => setRuleForm({ ...ruleForm, targetCategoryId: e.target.value })}
               fullWidth
             >
-              <MenuItem value="">— None —</MenuItem>
               {filteredCategoriesForRule.map((c) => (
                 <MenuItem key={c.id} value={c.id}>
                   {c.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              label="Target Issue *"
+              value={ruleForm.targetIssueTypeId}
+              onChange={(e) => setRuleForm({ ...ruleForm, targetIssueTypeId: e.target.value })}
+              fullWidth
+              disabled={!ruleForm.targetCategoryId}
+            >
+              {filteredIssuesForRule.map((iss) => (
+                <MenuItem key={iss.id} value={iss.id}>
+                  {iss.name}
                 </MenuItem>
               ))}
             </TextField>
@@ -1398,6 +1625,62 @@ export default function TicketSettingsPage() {
           <Button onClick={() => setRuleDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleSaveRule} variant="contained" disabled={ruleSubmitting}>
             {ruleSubmitting ? 'Saving…' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Remove Category Dialog */}
+      <Dialog open={!!deleteCatId} onClose={() => setDeleteCatId(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Remove Category</DialogTitle>
+        <DialogContent>
+          Are you sure you want to remove this category?
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteCatId(null)}>Cancel</Button>
+          <Button onClick={confirmDeleteCat} variant="contained" color="error">
+            Remove
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Remove Issue Dialog */}
+      <Dialog open={!!deleteIssueId} onClose={() => setDeleteIssueId(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Remove Issue</DialogTitle>
+        <DialogContent>
+          Are you sure you want to remove this issue type?
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteIssueId(null)}>Cancel</Button>
+          <Button onClick={confirmDeleteIssue} variant="contained" color="error">
+            Remove
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Remove Rule Dialog */}
+      <Dialog open={!!deleteRuleId} onClose={() => setDeleteRuleId(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Remove Keyword Rule</DialogTitle>
+        <DialogContent>
+          Are you sure you want to delete this keyword rule?
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteRuleId(null)}>Cancel</Button>
+          <Button onClick={confirmDeleteRule} variant="contained" color="error">
+            Remove
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Remove Focal Dialog */}
+      <Dialog open={!!deleteFocalId} onClose={() => setDeleteFocalId(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Remove Escalation Focal</DialogTitle>
+        <DialogContent>
+          Are you sure you want to remove this escalation focal configuration?
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteFocalId(null)}>Cancel</Button>
+          <Button onClick={confirmDeleteFocal} variant="contained" color="error">
+            Remove
           </Button>
         </DialogActions>
       </Dialog>

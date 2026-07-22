@@ -17,9 +17,14 @@ export class TicketCategoryConfig {
   @Column({ type: 'varchar', length: 150 })
   name: string;
 
-  /** Which support type this category belongs to: desktop_support | it_support */
-  @Column({ name: 'ticket_type', type: 'varchar', length: 30, default: 'it_support' })
-  ticketType: string;
+  @Column({ name: 'is_it', type: 'boolean', default: false })
+  isIt: boolean;
+
+  @Column({ name: 'is_desktop', type: 'boolean', default: false })
+  isDesktop: boolean;
+
+  @Column({ name: 'is_pantawid', type: 'boolean', default: false })
+  isPantawid: boolean;
 
   @Column({ type: 'text', nullable: true })
   description: string | null;
@@ -29,13 +34,6 @@ export class TicketCategoryConfig {
 
   @Column({ name: 'is_deleted', type: 'boolean', default: false })
   isDeleted: boolean;
-
-  /** SLA time limit in hours from assignment to resolved — null = no SLA */
-  @Column({ name: 'sla_hours', type: 'int', nullable: true })
-  slaHours: number | null;
-
-  @Column({ name: 'allowable_pause_hours', type: 'int', default: 48 })
-  allowablePauseHours: number;
 
   @Column({ type: 'int', nullable: true })
   created_by: number | null;

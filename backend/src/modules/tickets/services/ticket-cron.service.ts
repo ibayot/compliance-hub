@@ -144,7 +144,7 @@ export class TicketCronService implements OnModuleInit {
   private async processAutoUnpause() {
     const pausedTickets = await this.ticketRepo.find({
       where: { status: TicketStatus.PAUSE },
-      relations: ['category'],
+      relations: ['category', 'issueTypeConfig'],
     });
 
     const now = new Date().getTime();
@@ -152,7 +152,7 @@ export class TicketCronService implements OnModuleInit {
     for (const ticket of pausedTickets) {
       if (!ticket.slaPausedAt || !ticket.category) continue;
 
-      const allowableMs = (ticket.category.allowablePauseHours || 48) * 60 * 60 * 1000;
+      const allowableMs = (ticket.issueTypeConfig?.allowablePauseHours ?? 48) * 60 * 60 * 1000;
       const pausedMs = now - ticket.slaPausedAt.getTime();
 
       if (pausedMs >= allowableMs) {
@@ -167,7 +167,7 @@ export class TicketCronService implements OnModuleInit {
           await this.ticketService.addComment(
             ticket.id,
             {
-              content: `System Note: Ticket has reached its maximum allowable pause time (${ticket.category.allowablePauseHours}h) and has been automatically unpaused. The SLA clock has resumed.`,
+              content: `System Note: Ticket has reached its maximum allowable pause time (${ticket.issueTypeConfig?.allowablePauseHours ?? 48}h) and has been automatically unpaused. The SLA clock has resumed.`,
               isInternal: true,
             },
             1, // System User
@@ -179,7 +179,7 @@ export class TicketCronService implements OnModuleInit {
             .sendGenericEmail(
               'mjdibay@dswd.gov.ph',
               `Ticket Auto-Unpaused: ${ticket.ticketNumber}`,
-              `The ticket ${ticket.ticketNumber} has reached its maximum pause limit of ${ticket.category.allowablePauseHours} hours and has been automatically reopened. The SLA clock has resumed.`,
+              `The ticket ${ticket.ticketNumber} has reached its maximum pause limit of ${ticket.issueTypeConfig?.allowablePauseHours ?? 48} hours and has been automatically reopened. The SLA clock has resumed.`,
             )
             .catch(() => {});
 
@@ -227,10 +227,10 @@ export class TicketCronService implements OnModuleInit {
     const now = new Date().getTime();
 
     for (const ticket of activeTickets) {
-      if (!ticket.slaDeadline || !ticket.category || !ticket.createdAt || !ticket.category.slaHours)
+      if (!ticket.slaDeadline || !ticket.issueTypeConfig || !ticket.createdAt || !ticket.issueTypeConfig.slaHours)
         continue;
 
-      const totalSlaMs = ticket.category.slaHours * 60 * 60 * 1000;
+      const totalSlaMs = ticket.issueTypeConfig.slaHours * 60 * 60 * 1000;
       const elapsedMs =
         now - ticket.createdAt.getTime() - (ticket.accumulatedPauseSeconds || 0) * 1000;
       const percentage = (elapsedMs / totalSlaMs) * 100;

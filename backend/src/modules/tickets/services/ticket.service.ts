@@ -441,13 +441,13 @@ export class TicketService implements OnModuleInit {
 
     let ticketType = dto.ticketType;
     let categoryId = dto.categoryId || null;
-    const issueTypeId = dto.issueTypeId || null;
+    let issueTypeId = dto.issueTypeId || null;
     let issueTypeKey: string = 'other';
     let autoShifted = false;
 
     if (issueTypeId) {
       const issueType = await this.issueTypeRepo.findOne({
-        where: { id: issueTypeId, is_deleted: false, is_active: true },
+        where: { id: issueTypeId, isDeleted: false, isActive: true },
       });
       if (!issueType) {
         throw new BadRequestException('Selected issue type is invalid or inactive.');
@@ -459,15 +459,21 @@ export class TicketService implements OnModuleInit {
     if (dto.ticketType !== TicketType.PANTAWID_ICT_SUPPORT) {
       try {
         const combinedText = `${dto.subject} ${dto.description}`;
-        const matchedRule = await this.settingsService.matchKeywordRules(combinedText);
+        const matchedRule = await this.settingsService.matchKeywordRules(combinedText, dto.ticketType);
         if (matchedRule) {
           ticketType = matchedRule.targetTicketType as TicketType;
           if (matchedRule.targetCategoryId) {
             categoryId = matchedRule.targetCategoryId;
           }
+          if (matchedRule.targetIssueTypeId) {
+            issueTypeId = matchedRule.targetIssueTypeId;
+            if (matchedRule.targetIssueType) {
+              issueTypeKey = matchedRule.targetIssueType.key;
+            }
+          }
           autoShifted = true;
           this.logger.log(
-            `Auto-shift: keyword "${matchedRule.keyword}" → type=${ticketType}, cat=${categoryId}`,
+            `Auto-shift: keyword "${matchedRule.keyword}" → type=${ticketType}, cat=${categoryId}, issueTypeId=${issueTypeId}`,
           );
         }
       } catch (err: any) {
@@ -545,13 +551,13 @@ export class TicketService implements OnModuleInit {
                     { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
                     { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
                   ],
-                  relations: ['category'],
+                  relations: ['category', 'issueTypeConfig'],
                 });
 
                 let activeSlaLoad = 0;
                 for (const t of activeTickets) {
-                  if (t.category?.slaHours) {
-                    activeSlaLoad += t.category.slaHours;
+                  if (t.issueTypeConfig?.slaHours) {
+                    activeSlaLoad += t.issueTypeConfig.slaHours;
                   } else {
                     activeSlaLoad += 24; // Default fallback if no SLA
                   }
@@ -656,9 +662,9 @@ export class TicketService implements OnModuleInit {
     }
 
     let slaDeadline: Date | null = null;
-    if (assignedToId && categoryId) {
-      const cat = await this.settingsService.getCategoryById(categoryId).catch(() => null);
-      if (cat?.slaHours) {
+    if (assignedToId && issueTypeId) {
+      const issueType = await this.settingsService.getIssueTypeById(issueTypeId).catch(() => null);
+      if (issueType?.slaHours) {
         const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch((err) => {
           this.logger.warn(`[SLA] Failed to load slaConfig: ${err?.message}`);
           return null;
@@ -666,14 +672,14 @@ export class TicketService implements OnModuleInit {
         if (!slaConfig)
           this.logger.warn('[SLA] slaConfig is null — falling back to naive +hours calc');
         slaDeadline = slaConfig
-          ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
+          ? await this.calculateSlaDeadline(new Date(), issueType.slaHours, slaConfig)
           : (() => {
               const d = new Date();
-              d.setHours(d.getHours() + cat.slaHours);
+              d.setHours(d.getHours() + issueType.slaHours);
               return d;
             })();
         this.logger.log(
-          `[SLA] deadline set: ${slaDeadline?.toISOString()}, slaHours=${cat.slaHours}, mode=${slaConfig?.scheduleMode ?? 'fallback'}`,
+          `[SLA] deadline set: ${slaDeadline?.toISOString()}, slaHours=${issueType.slaHours}, mode=${slaConfig?.scheduleMode ?? 'fallback'}`,
         );
       }
     }
@@ -902,7 +908,7 @@ export class TicketService implements OnModuleInit {
           let deadline = new Date(t.slaDeadline);
 
           // Dynamically project deadline if ticket is currently paused in the queue
-          if (t.isSlaWaiting && t.slaPausedAt && t.category?.slaHours && config) {
+          if (t.isSlaWaiting && t.slaPausedAt && t.issueTypeConfig?.slaHours && config) {
             const businessSecondsElapsed = await this.calculateBusinessSeconds(
               new Date(t.slaPausedAt),
               now,
@@ -916,7 +922,7 @@ export class TicketService implements OnModuleInit {
             );
             const activeBusinessSeconds = Math.max(0, totalBusinessSecondsSinceCreation - accumulatedPauseSeconds);
             const consumedSlaHours = activeBusinessSeconds / 3600;
-            const remainingHours = Math.max(0, t.category.slaHours - consumedSlaHours);
+            const remainingHours = Math.max(0, t.issueTypeConfig.slaHours - consumedSlaHours);
             deadline = await this.calculateSlaDeadline(
               now,
               remainingHours,
@@ -925,8 +931,8 @@ export class TicketService implements OnModuleInit {
             t.slaDeadline = deadline; // Output true projected deadline in API
           }
 
-          const originalSlaMs = t.category?.slaHours
-            ? t.category.slaHours * 3600 * 1000
+          const originalSlaMs = t.issueTypeConfig?.slaHours
+            ? t.issueTypeConfig.slaHours * 3600 * 1000
             : deadline.getTime() - new Date(t.createdAt).getTime();
           const fortyPercentSlaMs = originalSlaMs * 0.4;
 
@@ -978,7 +984,7 @@ export class TicketService implements OnModuleInit {
       let deadline = new Date(ticket.slaDeadline);
 
       // Dynamically project deadline if ticket is currently paused in the queue
-      if (ticket.isSlaWaiting && ticket.slaPausedAt && ticket.category?.slaHours) {
+      if (ticket.isSlaWaiting && ticket.slaPausedAt && ticket.issueTypeConfig?.slaHours) {
         const config = await this.configRepo.findOne({ where: { id: 1 } });
         if (config) {
           const businessSecondsElapsed = await this.calculateBusinessSeconds(
@@ -994,7 +1000,7 @@ export class TicketService implements OnModuleInit {
             );
             const activeBusinessSeconds = Math.max(0, totalBusinessSecondsSinceCreation - accumulatedPauseSeconds);
             const consumedSlaHours = activeBusinessSeconds / 3600;
-            const remainingHours = Math.max(0, ticket.category.slaHours - consumedSlaHours);
+            const remainingHours = Math.max(0, ticket.issueTypeConfig.slaHours - consumedSlaHours);
           deadline = await this.calculateSlaDeadline(
             now,
             remainingHours,
@@ -1004,8 +1010,8 @@ export class TicketService implements OnModuleInit {
         }
       }
 
-      const originalSlaMs = ticket.category?.slaHours
-        ? ticket.category.slaHours * 3600 * 1000
+      const originalSlaMs = ticket.issueTypeConfig?.slaHours
+        ? ticket.issueTypeConfig.slaHours * 3600 * 1000
         : deadline.getTime() - new Date(ticket.createdAt).getTime();
       const fortyPercentSlaMs = originalSlaMs * 0.4;
 
@@ -1141,18 +1147,41 @@ export class TicketService implements OnModuleInit {
     }
 
     if (dto.issueTypeId !== undefined) {
+      let currentIssueType = null;
       if (!dto.issueTypeId) {
         ticket.issueTypeId = null;
         ticket.issueType = 'other';
       } else {
         const issueType = await this.issueTypeRepo.findOne({
-          where: { id: dto.issueTypeId, is_deleted: false, is_active: true },
+          where: { id: dto.issueTypeId, isDeleted: false, isActive: true },
         });
         if (!issueType) {
           throw new BadRequestException('Selected issue type is invalid or inactive.');
         }
         ticket.issueTypeId = issueType.id;
         ticket.issueType = issueType.key;
+        currentIssueType = issueType;
+      }
+
+      // Recalculate SLA if ticket has an SLA deadline and is in an active state
+      if (ticket.slaDeadline && currentIssueType?.slaHours) {
+        const config = await this.configRepo.findOne({ where: { id: 1 } });
+        if (config) {
+          const startTime = new Date(ticket.createdAt);
+          const now = new Date();
+          const activeBusinessSeconds = await this.calculateBusinessSeconds(
+            startTime,
+            now,
+            config as TicketingConfig
+          );
+          const totalConsumedSeconds = activeBusinessSeconds - (ticket.accumulatedPauseSeconds || 0);
+          const remainingHours = Math.max(0, currentIssueType.slaHours - (totalConsumedSeconds / 3600));
+          ticket.slaDeadline = await this.calculateSlaDeadline(
+            now,
+            remainingHours,
+            config as TicketingConfig
+          );
+        }
       }
     }
 
@@ -1166,27 +1195,6 @@ export class TicketService implements OnModuleInit {
       }
       ticket.categoryId = cat.id;
       ticket.category = cat;
-
-      // Recalculate SLA if ticket has an SLA deadline and is in an active state
-      if (ticket.slaDeadline && cat.slaHours) {
-        const config = await this.configRepo.findOne({ where: { id: 1 } });
-        if (config) {
-          const startTime = new Date(ticket.createdAt);
-          const now = new Date();
-          const activeBusinessSeconds = await this.calculateBusinessSeconds(
-            startTime,
-            now,
-            config as TicketingConfig
-          );
-          const totalConsumedSeconds = activeBusinessSeconds - (ticket.accumulatedPauseSeconds || 0);
-          const remainingHours = Math.max(0, cat.slaHours - (totalConsumedSeconds / 3600));
-          ticket.slaDeadline = await this.calculateSlaDeadline(
-            now,
-            remainingHours,
-            config as TicketingConfig
-          );
-        }
-      }
     }
 
     // Priority changes allowed for all technician-level roles and above
@@ -1303,7 +1311,7 @@ export class TicketService implements OnModuleInit {
           ticket.accumulatedPauseSeconds =
             (ticket.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
 
-          if (ticket.slaDeadline && ticket.category?.slaHours) {
+          if (ticket.slaDeadline && ticket.issueTypeConfig?.slaHours) {
             const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
               new Date(ticket.createdAt),
               now,
@@ -1314,7 +1322,7 @@ export class TicketService implements OnModuleInit {
               totalBusinessSecondsSinceCreation - ticket.accumulatedPauseSeconds,
             );
             const consumedSlaHours = activeBusinessSeconds / 3600;
-            const remainingHours = Math.max(0, ticket.category.slaHours - consumedSlaHours);
+            const remainingHours = Math.max(0, ticket.issueTypeConfig.slaHours - consumedSlaHours);
             ticket.slaDeadline = await this.calculateSlaDeadline(
               now,
               remainingHours,
@@ -1360,7 +1368,7 @@ export class TicketService implements OnModuleInit {
           ticket.accumulatedPauseSeconds =
             (ticket.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
 
-          if (ticket.slaDeadline && ticket.category?.slaHours) {
+          if (ticket.slaDeadline && ticket.issueTypeConfig?.slaHours) {
             const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
               new Date(ticket.createdAt),
               now,
@@ -1371,7 +1379,7 @@ export class TicketService implements OnModuleInit {
               totalBusinessSecondsSinceCreation - ticket.accumulatedPauseSeconds,
             );
             const consumedSlaHours = activeBusinessSeconds / 3600;
-            const remainingHours = Math.max(0, ticket.category.slaHours - consumedSlaHours);
+            const remainingHours = Math.max(0, ticket.issueTypeConfig.slaHours - consumedSlaHours);
             ticket.slaDeadline = await this.calculateSlaDeadline(
               now,
               remainingHours,
@@ -1455,11 +1463,11 @@ export class TicketService implements OnModuleInit {
                     { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
                     { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
                   ],
-                  relations: ['category'],
+                  relations: ['category', 'issueTypeConfig'],
                 });
                 let activeSlaLoad = 0;
                 for (const t of activeTickets) {
-                  activeSlaLoad += t.category?.slaHours || 24;
+                  activeSlaLoad += t.issueTypeConfig?.slaHours || 24;
                 }
                 if (activeSlaLoad < roundRobinCapHours) {
                   const lastTicket = await this.ticketRepo.findOne({
@@ -1534,7 +1542,7 @@ export class TicketService implements OnModuleInit {
             );
 
             ticket.accumulatedPauseSeconds += pausedTimeSeconds;
-            if (ticket.slaDeadline && ticket.category?.slaHours) {
+            if (ticket.slaDeadline && ticket.issueTypeConfig?.slaHours) {
               const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
               new Date(ticket.createdAt),
               now,
@@ -1545,7 +1553,7 @@ export class TicketService implements OnModuleInit {
               totalBusinessSecondsSinceCreation - ticket.accumulatedPauseSeconds,
             );
             const consumedSlaHours = activeBusinessSeconds / 3600;
-            const remainingHours = Math.max(0, ticket.category.slaHours - consumedSlaHours);
+            const remainingHours = Math.max(0, ticket.issueTypeConfig.slaHours - consumedSlaHours);
               ticket.slaDeadline = await this.calculateSlaDeadline(
                 now,
                 remainingHours,
@@ -1710,19 +1718,19 @@ export class TicketService implements OnModuleInit {
                   nextTicket.status = TicketStatus.ASSIGNED;
                   nextTicket.lastAssignedAt = new Date();
 
-                  if (nextTicket.categoryId) {
-                    const cat = await this.settingsService
-                      .getCategoryById(nextTicket.categoryId)
+                  if (nextTicket.issueTypeId) {
+                    const issueType = await this.settingsService
+                      .getIssueTypeById(nextTicket.issueTypeId)
                       .catch(() => null);
-                    if (cat?.slaHours) {
+                    if (issueType?.slaHours) {
                       const slaConfig = await this.configRepo
                         .findOne({ where: { id: 1 } })
                         .catch(() => null);
                       nextTicket.slaDeadline = slaConfig
-                        ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
+                        ? await this.calculateSlaDeadline(new Date(), issueType.slaHours, slaConfig)
                         : (() => {
                             const d = new Date();
-                            d.setHours(d.getHours() + cat.slaHours);
+                            d.setHours(d.getHours() + issueType.slaHours);
                             return d;
                           })();
                     }
@@ -1917,7 +1925,7 @@ export class TicketService implements OnModuleInit {
     }
 
     // Set SLA deadline if the ticket's category has an SLA configured
-    if (ticket.category?.slaHours) {
+    if (ticket.issueTypeConfig?.slaHours) {
       const isAuthorizedToResetSla =
         this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
         actorRole === UserRole.SUPER_ADMIN;
@@ -1925,10 +1933,10 @@ export class TicketService implements OnModuleInit {
       if (!ticket.slaDeadline || isAuthorizedToResetSla) {
         const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
         ticket.slaDeadline = slaConfig
-          ? await this.calculateSlaDeadline(new Date(), ticket.category.slaHours, slaConfig)
+          ? await this.calculateSlaDeadline(new Date(), ticket.issueTypeConfig.slaHours, slaConfig)
           : (() => {
               const d = new Date();
-              d.setHours(d.getHours() + ticket.category.slaHours);
+              d.setHours(d.getHours() + ticket.issueTypeConfig.slaHours);
               return d;
             })();
       }
@@ -2704,17 +2712,17 @@ export class TicketService implements OnModuleInit {
 
       // Compute SLA deadline now that we're assigning
       let slaDeadlineOnAssign: Date | null = null;
-      if (pending.categoryId) {
-        const cat = await this.settingsService
-          .getCategoryById(pending.categoryId)
+      if (pending.issueTypeId) {
+        const issueType = await this.settingsService
+          .getIssueTypeById(pending.issueTypeId)
           .catch(() => null);
-        if (cat?.slaHours) {
+        if (issueType?.slaHours) {
           const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
           slaDeadlineOnAssign = slaConfig
-            ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
+            ? await this.calculateSlaDeadline(new Date(), issueType.slaHours, slaConfig)
             : (() => {
                 const d = new Date();
-                d.setHours(d.getHours() + cat.slaHours);
+                d.setHours(d.getHours() + issueType.slaHours);
                 return d;
               })();
           this.logger.log(
@@ -3560,7 +3568,7 @@ export class TicketService implements OnModuleInit {
 
     const tickets = await this.ticketRepo.find({
       where: whereClause,
-      relations: ['category'],
+      relations: ['category', 'issueTypeConfig'],
     });
 
     let resumedCount = 0;
@@ -3576,7 +3584,7 @@ export class TicketService implements OnModuleInit {
         );
         t.accumulatedPauseSeconds = (t.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
 
-        if (t.slaDeadline && t.category?.slaHours) {
+        if (t.slaDeadline && t.issueTypeConfig?.slaHours) {
           const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
               new Date(t.createdAt),
               now,
@@ -3587,7 +3595,7 @@ export class TicketService implements OnModuleInit {
               totalBusinessSecondsSinceCreation - t.accumulatedPauseSeconds,
             );
             const consumedSlaHours = activeBusinessSeconds / 3600;
-            const remainingHours = Math.max(0, t.category.slaHours - consumedSlaHours);
+            const remainingHours = Math.max(0, t.issueTypeConfig.slaHours - consumedSlaHours);
           t.slaDeadline = await this.calculateSlaDeadline(
             now,
             remainingHours,
@@ -3951,17 +3959,17 @@ export class TicketService implements OnModuleInit {
     waitingTicket.lastAssignedAt = new Date();
 
     if (!waitingTicket.slaDeadline) {
-      if (waitingTicket.categoryId) {
-        const cat = await this.settingsService
-          .getCategoryById(waitingTicket.categoryId)
+      if (waitingTicket.issueTypeId) {
+        const issueType = await this.settingsService
+          .getIssueTypeById(waitingTicket.issueTypeId)
           .catch(() => null);
-        if (cat?.slaHours) {
+        if (issueType?.slaHours) {
           const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
           waitingTicket.slaDeadline = slaConfig
-            ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
+            ? await this.calculateSlaDeadline(new Date(), issueType.slaHours, slaConfig)
             : (() => {
                 const d = new Date();
-                d.setHours(d.getHours() + cat.slaHours);
+                d.setHours(d.getHours() + issueType.slaHours);
                 return d;
               })();
         }
@@ -3977,11 +3985,11 @@ export class TicketService implements OnModuleInit {
       waitingTicket.accumulatedPauseSeconds =
         (waitingTicket.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
 
-      if (waitingTicket.categoryId) {
-        const cat = await this.settingsService
-          .getCategoryById(waitingTicket.categoryId)
+      if (waitingTicket.issueTypeId) {
+        const issueType = await this.settingsService
+          .getIssueTypeById(waitingTicket.issueTypeId)
           .catch(() => null);
-        if (cat?.slaHours) {
+        if (issueType?.slaHours) {
           const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
             new Date(waitingTicket.createdAt),
             now,
@@ -3989,7 +3997,7 @@ export class TicketService implements OnModuleInit {
           );
           const activeBusinessSeconds = Math.max(0, totalBusinessSecondsSinceCreation - waitingTicket.accumulatedPauseSeconds);
           const consumedSlaHours = activeBusinessSeconds / 3600;
-          const remainingHours = Math.max(0, cat.slaHours - consumedSlaHours);
+          const remainingHours = Math.max(0, issueType.slaHours - consumedSlaHours);
           waitingTicket.slaDeadline = await this.calculateSlaDeadline(
             now,
             remainingHours,
@@ -4044,17 +4052,17 @@ export class TicketService implements OnModuleInit {
     waitingTicket.lastAssignedAt = new Date();
 
     if (!waitingTicket.slaDeadline) {
-      if (waitingTicket.categoryId) {
-        const cat = await this.settingsService
-          .getCategoryById(waitingTicket.categoryId)
+      if (waitingTicket.issueTypeId) {
+        const issueType = await this.settingsService
+          .getIssueTypeById(waitingTicket.issueTypeId)
           .catch(() => null);
-        if (cat?.slaHours) {
+        if (issueType?.slaHours) {
           const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
           waitingTicket.slaDeadline = slaConfig
-            ? await this.calculateSlaDeadline(new Date(), cat.slaHours, slaConfig)
+            ? await this.calculateSlaDeadline(new Date(), issueType.slaHours, slaConfig)
             : (() => {
                 const d = new Date();
-                d.setHours(d.getHours() + cat.slaHours);
+                d.setHours(d.getHours() + issueType.slaHours);
                 return d;
               })();
         }
@@ -4070,11 +4078,11 @@ export class TicketService implements OnModuleInit {
       waitingTicket.accumulatedPauseSeconds =
         (waitingTicket.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
 
-      if (waitingTicket.categoryId) {
-        const cat = await this.settingsService
-          .getCategoryById(waitingTicket.categoryId)
+      if (waitingTicket.issueTypeId) {
+        const issueType = await this.settingsService
+          .getIssueTypeById(waitingTicket.issueTypeId)
           .catch(() => null);
-        if (cat?.slaHours) {
+        if (issueType?.slaHours) {
           const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
             new Date(waitingTicket.createdAt),
             now,
@@ -4082,7 +4090,7 @@ export class TicketService implements OnModuleInit {
           );
           const activeBusinessSeconds = Math.max(0, totalBusinessSecondsSinceCreation - waitingTicket.accumulatedPauseSeconds);
           const consumedSlaHours = activeBusinessSeconds / 3600;
-          const remainingHours = Math.max(0, cat.slaHours - consumedSlaHours);
+          const remainingHours = Math.max(0, issueType.slaHours - consumedSlaHours);
           waitingTicket.slaDeadline = await this.calculateSlaDeadline(
             now,
             remainingHours,
@@ -4164,5 +4172,36 @@ export class TicketService implements OnModuleInit {
         }
       }
     }
+  }
+
+  async getIssueCountsReport(startDate?: any, endDate?: any): Promise<{ issueName: string; count: number; categoryName: string; status: string }[]> {
+    const qb = this.ticketRepo.createQueryBuilder('ticket')
+      .leftJoin('ticket.issueTypeConfig', 'issueType')
+      .leftJoin('issueType.category', 'category')
+      .select('issueType.name', 'issueName')
+      .addSelect('category.name', 'categoryName')
+      .addSelect('ticket.status', 'status')
+      .addSelect('COUNT(ticket.id)', 'count')
+      .where('ticket.issueTypeId IS NOT NULL')
+      .groupBy('issueType.name')
+      .addGroupBy('category.name')
+      .addGroupBy('ticket.status');
+
+    qb.andWhere("ticket.status != 'duplicate'");
+
+    if (startDate) {
+      qb.andWhere('ticket.createdAt >= :startDate', { startDate: new Date(startDate) });
+    }
+    if (endDate) {
+      qb.andWhere('ticket.createdAt <= :endDate', { endDate: new Date(endDate) });
+    }
+
+    const raw = await qb.getRawMany();
+    return raw.map(r => ({
+      issueName: r.issueName,
+      categoryName: r.categoryName,
+      status: r.status,
+      count: Number(r.count),
+    }));
   }
 }

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import {
@@ -60,6 +60,7 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
   const [editing, setEditing] = useState<ReportorialDocType | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [deleteConfirmDt, setDeleteConfirmDt] = useState<ReportorialDocType | null>(null);
   const [form, setForm] = useState({
     base_name: '',
     display_name: '',
@@ -127,8 +128,13 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
   };
 
   const handleDelete = async (dt: ReportorialDocType) => {
-    if (!confirm(`Delete "${dt.display_name}"?`)) return;
-    await docTypesApi.remove(dt.id);
+    setDeleteConfirmDt(dt);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmDt) return;
+    await docTypesApi.remove(deleteConfirmDt.id);
+    setDeleteConfirmDt(null);
     await load();
   };
 
@@ -285,6 +291,21 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
             disabled={saving || !form.base_name.trim() || !form.display_name.trim()}
           >
             {saving ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      <Dialog open={!!deleteConfirmDt} onClose={() => setDeleteConfirmDt(null)}>
+        <DialogTitle>Confirm Deletion</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete "{deleteConfirmDt?.display_name}"?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmDt(null)}>Cancel</Button>
+          <Button onClick={confirmDelete} color="error" variant="contained">
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

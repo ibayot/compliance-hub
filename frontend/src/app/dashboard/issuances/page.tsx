@@ -167,6 +167,7 @@ export default function IssuancesPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
+  const [deleteConfirmIssuance, setDeleteConfirmIssuance] = useState<string | null>(null);
   const [actionsIssuance, setActionsIssuance] = useState<Issuance | null>(null);
   const canManageIssuances =
     user?.role === 'super_admin' ||
@@ -373,15 +374,19 @@ export default function IssuancesPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!canManageIssuances) {
       return;
     }
+    setDeleteConfirmIssuance(id);
+  };
 
-    if (!confirm('Are you sure you want to delete this issuance?')) return;
+  const confirmDelete = async () => {
+    if (!deleteConfirmIssuance) return;
     try {
-      await issuancesApi.delete(id);
+      await issuancesApi.delete(deleteConfirmIssuance);
       fetchIssuances();
+      setDeleteConfirmIssuance(null);
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to delete issuance', {
         variant: 'error',
@@ -1536,6 +1541,21 @@ export default function IssuancesPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={closeRelevanceDialog}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!deleteConfirmIssuance} onClose={() => setDeleteConfirmIssuance(null)}>
+        <DialogTitle>Confirm Deletion</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this issuance? This cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmIssuance(null)}>Cancel</Button>
+          <Button onClick={confirmDelete} color="error" variant="contained">
+            Delete
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

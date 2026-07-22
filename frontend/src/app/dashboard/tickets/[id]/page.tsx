@@ -47,6 +47,7 @@ import {
   CsatFormData,
   TicketEscalation,
   EscalationFocalConfig,
+  TicketIssueType,
 } from '@/app/api/references';
 import { AuthImage } from '@/components/AuthImage';
 import {
@@ -138,6 +139,7 @@ export default function TicketDetailPage() {
   const [loading, setLoading] = useState(true);
   const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [issues, setIssues] = useState<TicketIssueType[]>([]);
 
   // Guard: auto-view mark fires only once per ticket load
   const viewedRef = useRef(false);
@@ -340,6 +342,16 @@ export default function TicketDetailPage() {
         .catch(() => setCategories([]));
     }
   }, [ticket?.ticketType]);
+
+  useEffect(() => {
+    if (ticket?.categoryId) {
+      ticketSettingsApi.getIssueTypes(ticket.categoryId)
+        .then((data) => setIssues(data.filter((iss) => iss.isActive && !iss.isDeleted)))
+        .catch(() => setIssues([]));
+    } else {
+      setIssues([]);
+    }
+  }, [ticket?.categoryId]);
 
   // Load proof photos as authenticated blob URLs
   useEffect(() => {
@@ -823,6 +835,56 @@ export default function TicketDetailPage() {
                       variant="outlined"
                     />
                   ) : null
+                )}
+
+                {/* Issue Dropdown */}
+                {user?.role !== 'user' && issues.length > 0 && (
+                  (!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id) ? (
+                    <TextField
+                      select
+                      size="small"
+                      value={ticket.issueTypeId || ''}
+                      disabled={['resolved', 'closed'].includes(ticket.status) || isTypeLockedByEscalation}
+                      onChange={async (e) => {
+                        try {
+                          await ticketsApi.update(ticketId, { issueTypeId: e.target.value as string });
+                          fetchTicket();
+                          enqueueSnackbar('Ticket issue updated.', { variant: 'success' });
+                        } catch (err: any) {
+                          enqueueSnackbar(
+                            err.response?.data?.message || 'Failed to update ticket issue',
+                            { variant: 'error' },
+                          );
+                        }
+                      }}
+                      sx={{
+                        minWidth: 160,
+                        '& .MuiInputBase-root': {
+                          height: 26,
+                          fontSize: '0.8125rem',
+                          borderRadius: '16px',
+                        },
+                      }}
+                    >
+                      <MenuItem value="" disabled sx={{ fontSize: '0.8125rem', fontStyle: 'italic' }}>
+                        Select Issue
+                      </MenuItem>
+                      {issues.map((iss) => (
+                        <MenuItem key={iss.id} value={iss.id} sx={{ fontSize: '0.8125rem' }}>
+                          {iss.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  ) : (
+                    ticket.issueTypeId ? (
+                      <Chip
+                        label={issues.find((i) => i.id === ticket.issueTypeId)?.name || 'Unknown Issue'}
+                        color="secondary"
+                        size="small"
+                        variant="outlined"
+                      />
+                    ) : null
+                  )
                 )}
                 <Chip
                   label={

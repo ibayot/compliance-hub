@@ -507,6 +507,7 @@ function RoleManagementCard() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<RoleDefinition | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [deleteConfirmRole, setDeleteConfirmRole] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
   const [form, setForm] = useState({
@@ -585,11 +586,16 @@ function RoleManagementCard() {
     }
   };
 
-  const handleDelete = async (roleValue: string) => {
-    if (!window.confirm(`Delete custom role "${roleValue}"? This cannot be undone.`)) return;
+  const handleDelete = (roleValue: string) => {
+    setDeleteConfirmRole(roleValue);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmRole) return;
     try {
-      await usersApi.deleteRoleDefinition(roleValue);
-      enqueueSnackbar(`Role "${roleValue}" deleted.`, { variant: 'success' });
+      await usersApi.deleteRoleDefinition(deleteConfirmRole);
+      enqueueSnackbar(`Role "${deleteConfirmRole}" deleted.`, { variant: 'success' });
+      setDeleteConfirmRole(null);
       await loadRoles();
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to delete role.', {
@@ -851,6 +857,21 @@ function RoleManagementCard() {
                   disabled={saving || !form.value || !form.label || !form.description}
                 >
                   {saving ? 'Saving...' : 'Create'}
+                </Button>
+              </DialogActions>
+            </Dialog>
+
+            <Dialog open={!!deleteConfirmRole} onClose={() => setDeleteConfirmRole(null)}>
+              <DialogTitle>Confirm Deletion</DialogTitle>
+              <DialogContent>
+                <Typography>
+                  Are you sure you want to delete custom role "{deleteConfirmRole}"? This cannot be undone.
+                </Typography>
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={() => setDeleteConfirmRole(null)}>Cancel</Button>
+                <Button onClick={confirmDelete} color="error" variant="contained">
+                  Delete
                 </Button>
               </DialogActions>
             </Dialog>

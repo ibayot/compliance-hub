@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { TicketCategoryConfig } from './ticket-category.entity';
+import { TicketIssueType } from './ticket-issue-type.entity';
 
 @Entity('ticket_keyword_rules')
 export class TicketKeywordRule {
@@ -34,6 +35,14 @@ export class TicketKeywordRule {
   @ManyToOne(() => TicketCategoryConfig, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'target_category_id' })
   targetCategory: TicketCategoryConfig | null;
+
+  /** Target issue type when keyword matches (optional) */
+  @Column({ name: 'target_issue_type_id', type: 'varchar', length: 36, nullable: true })
+  targetIssueTypeId: string | null;
+
+  @ManyToOne(() => TicketIssueType, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'target_issue_type_id' })
+  targetIssueType: TicketIssueType | null;
 
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;

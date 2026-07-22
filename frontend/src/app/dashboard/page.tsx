@@ -25,6 +25,7 @@ import {
   DialogActions,
   Alert,
 } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import {
   Description as DocumentIcon,
   CheckCircle as CompliantIcon,
@@ -55,6 +56,7 @@ import { DashboardSummaryResponse, kpiApi } from '@/lib/api/kpi';
 export default function DashboardPage() {
   const { user, myCap } = useAuth();
   const router = useRouter();
+  const { enqueueSnackbar } = useSnackbar();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalDocuments: 0,
@@ -1333,9 +1335,9 @@ export default function DashboardPage() {
                         onClick={async () => {
                           try {
                             const res = await ticketsApi.technicianPause();
-                            alert(res.message);
+                            enqueueSnackbar(res.message, { variant: 'success' });
                             window.location.reload();
-                          } catch (e) { alert('Failed to pause'); }
+                          } catch (e) { enqueueSnackbar('Failed to pause', { variant: 'error' }); }
                         }}
                         fullWidth
                       >
@@ -1350,9 +1352,9 @@ export default function DashboardPage() {
                           onClick={async () => {
                             try {
                               const res = await ticketsApi.technicianPause();
-                              alert(res.message);
+                              enqueueSnackbar(res.message, { variant: 'success' });
                               window.location.reload();
-                            } catch (e) { alert('Failed to pause'); }
+                            } catch (e) { enqueueSnackbar('Failed to pause', { variant: 'error' }); }
                           }}
                           fullWidth
                         >
@@ -1383,9 +1385,9 @@ export default function DashboardPage() {
                         onClick={async () => {
                           try {
                             const res = await ticketsApi.globalPause();
-                            alert(res.message);
+                            enqueueSnackbar(res.message, { variant: 'success' });
                             window.location.reload();
-                          } catch (e) { alert('Failed to globally pause'); }
+                          } catch (e) { enqueueSnackbar('Failed to globally pause', { variant: 'error' }); }
                         }}
                         fullWidth
                       >
@@ -1397,9 +1399,9 @@ export default function DashboardPage() {
                         onClick={async () => {
                           try {
                             const res = await ticketsApi.globalResume();
-                            alert(res.message);
+                            enqueueSnackbar(res.message, { variant: 'success' });
                             window.location.reload();
-                          } catch (e) { alert('Failed to globally resume'); }
+                          } catch (e) { enqueueSnackbar('Failed to globally resume', { variant: 'error' }); }
                         }}
                         fullWidth
                       >
