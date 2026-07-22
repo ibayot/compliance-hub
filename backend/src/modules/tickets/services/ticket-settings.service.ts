@@ -654,8 +654,8 @@ export class TicketSettingsService {
       FROM tickets t
       JOIN ticket_issue_types ti ON t.issue_type_id = ti.id
       JOIN ticket_categories tc ON ti.category_id = tc.id
-      WHERE t.status IN ('RESOLVED', 'CLOSED')
-        AND t.resolved_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? DAY)
+      WHERE LOWER(t.status) IN ('resolved', 'closed')
+        AND t.resolved_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
         AND ti.sla_hours IS NOT NULL AND ti.sla_hours > 0
       GROUP BY ti.id
     `,
