@@ -304,8 +304,8 @@ export default function TicketReportsPage() {
 
   const allIssuesAggregated = React.useMemo(() => {
     if (!issueCountsData) return [];
-    const map = {};
-    issueCountsData.forEach((item) => {
+    const map: Record<string, number> = {};
+    issueCountsData.forEach((item: any) => {
       const name = `${item.categoryName || 'Unknown'} - ${item.issueName || 'Unknown'}`;
       map[name] = (map[name] || 0) + Number(item.count);
     });
