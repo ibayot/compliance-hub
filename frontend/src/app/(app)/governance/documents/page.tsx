@@ -324,7 +324,7 @@ export default function DocumentsPage() {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              onClick={() => router.push('/dashboard/documents/upload')}
+              onClick={() => router.push('/governance/documents/upload')}
             >
               Upload Document
             </Button>

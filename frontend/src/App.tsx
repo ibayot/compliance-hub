@@ -7,28 +7,28 @@ import type { RoleCapabilityRecord } from '@/lib/api/users';
 import HomePage from '@/app/page';
 import LoginPage from '@/app/login/page';
 import MfaVerifyPage from '@/app/mfa-verify/page';
-import DashboardPage from '@/app/dashboard/page';
-import DocumentsPage from '@/app/dashboard/documents/page';
-import DocumentUploadPage from '@/app/dashboard/documents/upload/page';
-import DocumentDetailPage from '@/app/dashboard/documents/[id]/page';
-import IncidentsPage from '@/app/dashboard/incidents/page';
-import IssuancesPage from '@/app/dashboard/issuances/page';
-import TicketsPage from '@/app/dashboard/tickets/page';
-import TicketDetailPage from '@/app/dashboard/tickets/[id]/page';
-import UnitsPage from '@/app/dashboard/units/page';
-import MetricsPage from '@/app/dashboard/metrics/page';
-import ReviewsPage from '@/app/dashboard/reviews/page';
-import KpiPage from '@/app/dashboard/kpi/page';
-import SettingsPage from '@/app/dashboard/settings/page';
-import UserManualPage from '@/app/dashboard/user-manual/page';
-import RepositoryPage from '@/app/dashboard/repository/page';
-import ReportsPage from '@/app/dashboard/reports/page';
-import MovPlannerPage from '@/app/dashboard/mov/page';
-import TicketSettingsPage from '@/app/dashboard/ticket-settings/page';
-import AttendancePage from '@/app/dashboard/attendance/page';
-import TicketReportsPage from '@/app/dashboard/ticket-reports/page';
-import KnowledgeBasePage from '@/app/dashboard/knowledge-base/page';
-import AuditLogsPage from '@/app/dashboard/audit-logs/page';
+import DashboardPage from '@/app/(app)/dashboard/page';
+import DocumentsPage from '@/app/(app)/governance/documents/page';
+import DocumentUploadPage from '@/app/(app)/governance/documents/upload/page';
+import DocumentDetailPage from '@/app/(app)/governance/documents/[id]/page';
+import IncidentsPage from '@/app/(app)/governance/incidents/page';
+import IssuancesPage from '@/app/(app)/governance/issuances/page';
+import TicketsPage from '@/app/(app)/operations/tickets/page';
+import TicketDetailPage from '@/app/(app)/operations/tickets/[id]/page';
+import UnitsPage from '@/app/(app)/admin/units/page';
+import MetricsPage from '@/app/(app)/governance/metrics/page';
+import ReviewsPage from '@/app/(app)/governance/reviews/page';
+import KpiPage from '@/app/(app)/governance/kpi/page';
+import SettingsPage from '@/app/(app)/admin/settings/page';
+import UserManualPage from '@/app/(app)/admin/user-manual/page';
+import RepositoryPage from '@/app/(app)/governance/repository/page';
+import ReportsPage from '@/app/(app)/governance/reports/page';
+import MovPlannerPage from '@/app/(app)/governance/mov/page';
+import TicketSettingsPage from '@/app/(app)/operations/settings/page';
+import AttendancePage from '@/app/(app)/admin/attendance/page';
+import TicketReportsPage from '@/app/(app)/operations/reports/page';
+import KnowledgeBasePage from '@/app/(app)/operations/knowledge-base/page';
+import AuditLogsPage from '@/app/(app)/admin/audit-logs/page';
 
 function ProtectedDashboard({
   children,
@@ -91,7 +91,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/documents"
+        path="/governance/documents"
         element={
           <ProtectedDashboard requiredCapability="isDocumentsAccess">
             <DocumentsPage />
@@ -99,7 +99,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/documents/upload"
+        path="/governance/documents/upload"
         element={
           <ProtectedDashboard requiredCapability="isDocumentsAccess">
             <DocumentUploadPage />
@@ -107,7 +107,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/documents/:id"
+        path="/governance/documents/:id"
         element={
           <ProtectedDashboard requiredCapability="isDocumentsAccess">
             <DocumentDetailPage />
@@ -115,7 +115,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/incidents"
+        path="/governance/incidents"
         element={
           <ProtectedDashboard>
             <IncidentsPage />
@@ -123,7 +123,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/issuances"
+        path="/governance/issuances"
         element={
           <ProtectedDashboard requiredCapability="isIssuancesAccess">
             <IssuancesPage />
@@ -131,7 +131,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/tickets"
+        path="/operations/tickets"
         element={
           <ProtectedDashboard>
             <TicketsPage />
@@ -139,7 +139,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/tickets/:id"
+        path="/operations/tickets/:id"
         element={
           <ProtectedDashboard>
             <TicketDetailPage />
@@ -147,7 +147,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/units"
+        path="/admin/units"
         element={
           <ProtectedDashboard allowedRoles={['super_admin', 'section_head']}>
             <UnitsPage />
@@ -155,7 +155,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/metrics"
+        path="/governance/metrics"
         element={
           <ProtectedDashboard requiredCapability="isMetricsAccess">
             <MetricsPage />
@@ -163,7 +163,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/reviews"
+        path="/governance/reviews"
         element={
           <ProtectedDashboard requiredCapability="isReviewsAccess">
             <ReviewsPage />
@@ -171,7 +171,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/kpi"
+        path="/governance/kpi"
         element={
           <ProtectedDashboard requiredCapability="isKpiAccess">
             <KpiPage />
@@ -179,7 +179,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/user-manual"
+        path="/admin/user-manual"
         element={
           <ProtectedDashboard>
             <UserManualPage />
@@ -187,7 +187,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/settings"
+        path="/admin/settings"
         element={
           <ProtectedDashboard>
             <SettingsPage />
@@ -195,7 +195,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/repository"
+        path="/governance/repository"
         element={
           <ProtectedDashboard requiredCapability="isRepositoryAccess">
             <RepositoryPage />
@@ -203,7 +203,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/reports"
+        path="/governance/reports"
         element={
           <ProtectedDashboard requiredCapability="isReportsAccess">
             <ReportsPage />
@@ -211,7 +211,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/mov"
+        path="/governance/mov"
         element={
           <ProtectedDashboard requiredCapability="isMovAccess">
             <MovPlannerPage />
@@ -219,7 +219,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/ticket-settings"
+        path="/operations/settings"
         element={
           <ProtectedDashboard requiredCapability="isTicketSettingsFocal">
             <TicketSettingsPage />
@@ -227,7 +227,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/attendance"
+        path="/admin/attendance"
         element={
           <ProtectedDashboard requiredCapability="isAttendanceAccess">
             <AttendancePage />
@@ -235,7 +235,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/ticket-reports"
+        path="/operations/reports"
         element={
           <ProtectedDashboard>
             <TicketReportsPage />
@@ -243,7 +243,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/knowledge-base"
+        path="/operations/knowledge-base"
         element={
           <ProtectedDashboard>
             <KnowledgeBasePage />
@@ -251,7 +251,7 @@ export default function App() {
         }
       />
       <Route
-        path="/dashboard/audit-logs"
+        path="/admin/audit-logs"
         element={
           <ProtectedDashboard allowedRoles={['super_admin', 'compliance_officer']}>
             <AuditLogsPage />
@@ -263,3 +263,4 @@ export default function App() {
     </Routes>
   );
 }
+

@@ -10,7 +10,7 @@ export default function UploadPage() {
   const handleUploadSuccess = () => {
     // Redirect to documents list after successful upload
     setTimeout(() => {
-      router.push('/dashboard/documents');
+      router.push('/governance/documents');
     }, 2000);
   };
 

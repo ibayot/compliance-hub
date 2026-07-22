@@ -1003,7 +1003,7 @@ export default function TicketsPage() {
                   </TableHead>
                   <TableBody>
                     {allEscalations.map((e) => (
-                      <TableRow key={e.id} hover onClick={() => router.push(`/dashboard/tickets/${e.ticketId}`)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={e.id} hover onClick={() => router.push(`/operations/tickets/${e.ticketId}`)} sx={{ cursor: 'pointer' }}>
                         <TableCell>{new Date(e.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell>
                           <Typography variant="body2" fontWeight={600} color="primary.main">
@@ -1123,7 +1123,7 @@ export default function TicketsPage() {
                         <Tooltip title="View Details">
                           <IconButton
                             size="small"
-                            onClick={() => router.push(`/dashboard/tickets/${ticket.id}`)}
+                            onClick={() => router.push(`/operations/tickets/${ticket.id}`)}
                           >
                             <ViewIcon fontSize="small" />
                           </IconButton>
@@ -1344,7 +1344,7 @@ export default function TicketsPage() {
                           <Tooltip title="View Details">
                             <IconButton
                               size="small"
-                              onClick={() => router.push(`/dashboard/tickets/${ticket.id}`)}
+                              onClick={() => router.push(`/operations/tickets/${ticket.id}`)}
                             >
                               <ViewIcon fontSize="small" />
                             </IconButton>
@@ -1754,7 +1754,7 @@ export default function TicketsPage() {
             color="warning"
             onClick={() => {
               setReminderOpen(false);
-              router.push('/dashboard/tickets?filter=pending_satisfaction');
+              router.push('/operations/tickets?filter=pending_satisfaction');
             }}
           >
             Go To Tickets

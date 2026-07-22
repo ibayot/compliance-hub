@@ -31,14 +31,14 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
   const { services, loaded } = useServiceAvailability();
 
   const compliancePaths = [
-    '/dashboard/documents',
-    '/dashboard/repository',
-    '/dashboard/issuances',
-    '/dashboard/metrics',
-    '/dashboard/kpi',
-    '/dashboard/reviews',
-    '/dashboard/reports',
-    '/dashboard/mov',
+    '/governance/documents',
+    '/governance/repository',
+    '/governance/issuances',
+    '/governance/metrics',
+    '/governance/kpi',
+    '/governance/reviews',
+    '/governance/reports',
+    '/governance/mov',
   ];
   const isComplianceRoute = compliancePaths.some(
     (p) => location.pathname === p || location.pathname.startsWith(`${p}/`),

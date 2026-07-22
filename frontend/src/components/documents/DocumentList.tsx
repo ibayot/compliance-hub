@@ -98,7 +98,7 @@ export default function DocumentList({
   };
 
   const handleViewDocument = (id: string) => {
-    router.push(`/dashboard/documents/${id}`);
+    router.push(`/governance/documents/${id}`);
   };
 
   if (loading) {
