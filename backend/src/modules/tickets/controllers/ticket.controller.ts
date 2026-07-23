@@ -182,6 +182,20 @@ export class TicketController {
     return this.ticketService.getTechnicianAvailability();
   }
 
+  /** GET /tickets/general-overview-stats?year=&month= */
+  @Get('general-overview-stats')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD)
+  async getGeneralOverviewStats(
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+  ) {
+    const now = new Date();
+    return this.ticketService.getGeneralOverviewStats(
+      year ? Number(year) : now.getFullYear(),
+      month ? Number(month) : now.getMonth() + 1,
+    );
+  }
+
   /** GET /tickets/dashboard */
   @Get('dashboard')
   @Roles(...ALL_ROLES)

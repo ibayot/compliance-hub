@@ -69,7 +69,7 @@ export class AuthController {
   @Post('change-password')
   @UseGuards(JwtAuthGuard)
   async changePassword(@CurrentUser() user: User, @Body() dto: ChangePasswordDto) {
-    return this.authService.changePassword(user.id, dto.currentPassword, dto.newPassword);
+    return this.authService.changePassword(user.id, dto.currentPassword, dto.newPassword, dto.staffId);
   }
 
   @Post('reauthenticate')

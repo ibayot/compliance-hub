@@ -100,6 +100,19 @@ function formatJsonValue(val: any): React.ReactNode {
   return String(val);
 }
 
+
+function humanizeTableName(table: string): string {
+  if (!table) return 'System';
+  return table.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function humanizeKey(key: string): string {
+  if (key === 'id') return 'ID';
+  if (key.endsWith('Id')) key = key.slice(0, -2);
+  if (key.endsWith('_id')) key = key.slice(0, -3);
+  return key.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
+}
+
 function JsonDiffViewer({ oldValues, newValues }: { oldValues: any; newValues: any }) {
   let parsedOld = oldValues;
   let parsedNew = newValues;
@@ -114,8 +127,10 @@ function JsonDiffViewer({ oldValues, newValues }: { oldValues: any; newValues: a
 
   const allKeys = new Set([...Object.keys(parsedOld || {}), ...Object.keys(parsedNew || {})]);
   const rows: React.ReactNode[] = [];
+  const hiddenKeys = ['id', 'password', 'token', 'refreshToken', 'createdAt', 'updatedAt', 'deletedAt'];
 
   allKeys.forEach((key) => {
+    if (hiddenKeys.includes(key)) return;
     const oldVal = parsedOld?.[key];
     const newVal = parsedNew?.[key];
     
@@ -277,7 +292,7 @@ export default function AuditLogsPage() {
                     } 
                   />
                 </TableCell>
-                <TableCell>{log.tableName}</TableCell>
+                <TableCell>{humanizeTableName(log.tableName)}</TableCell>
                 <TableCell>{log.userEmail || 'System'}</TableCell>
                 <TableCell>{log.ipAddress}</TableCell>
                 <TableCell align="center">
@@ -315,11 +330,11 @@ export default function AuditLogsPage() {
           {selectedLog && (
             <Stack spacing={2}>
               <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2}>
-                <Typography variant="body2"><strong>ID:</strong> {selectedLog.id}</Typography>
+                
                 <Typography variant="body2"><strong>Timestamp:</strong> {new Date(selectedLog.createdAt).toLocaleString()}</Typography>
                 <Typography variant="body2"><strong>Action:</strong> {selectedLog.action}</Typography>
-                <Typography variant="body2"><strong>Table:</strong> {selectedLog.tableName}</Typography>
-                <Typography variant="body2"><strong>Row ID:</strong> {selectedLog.rowId}</Typography>
+                <Typography variant="body2"><strong>Table:</strong> {humanizeTableName(selectedLog.tableName)}</Typography>
+                
                 <Typography variant="body2"><strong>User:</strong> {selectedLog.userEmail || 'System'}</Typography>
                 <Typography variant="body2"><strong>IP Address:</strong> {selectedLog.ipAddress}</Typography>
                 <Typography variant="body2"><strong>Session ID:</strong> {selectedLog.sessionId}</Typography>

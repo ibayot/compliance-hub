@@ -40,6 +40,8 @@ import type { ElementType } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSidebar } from '@/contexts/SidebarContext';
 import type { RoleCapabilityRecord } from '@/lib/api/users';
+import { usersApi } from '@/lib/api/users';
+import { useState, useEffect } from 'react';
 
 interface SidebarProps {
   mobileOpen: boolean;
@@ -65,6 +67,13 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user, myCap } = useAuth();
   const { isCollapsed, drawerWidth } = useSidebar();
+  const [appMode, setAppMode] = useState<string>('full');
+
+  useEffect(() => {
+    usersApi.getSecurityConfig().then((config: any) => {
+      setAppMode(config?.appMode || 'full');
+    }).catch(() => {/* non-blocking */});
+  }, []);
 
   const mainNavItems: NavItem[] = [
     {
@@ -120,7 +129,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       icon: UnitsIcon,
       path: '/dashboard/units',
       roles: ['super_admin', 'section_head'],
-      service: 'users',
+      service: 'compliance',
     },
     {
       label: 'Metrics',
@@ -204,8 +213,13 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     roles: string[],
     roleCodes?: string[],
     capabilityKeys?: (keyof RoleCapabilityRecord)[],
-    _service?: NavItem['service'],
+    service?: NavItem['service'],
   ) => {
+    // Application Mode filter: hide strictly unrelated services
+    // Shared services (users, core) are always visible
+    if (service === 'ticketing' && appMode === 'compliance_only') return false;
+    if (service === 'compliance' && appMode === 'ticketing_only') return false;
+
     if (roles.includes('all')) return true;
     if (!user) return false;
     if (capabilityKeys && myCap && capabilityKeys.some((k) => !!myCap[k])) return true;

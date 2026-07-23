@@ -134,7 +134,7 @@ export class TicketService implements OnModuleInit {
     private readonly kbService: KnowledgeBaseService,
     @Optional()
     private readonly eventBus?: EventBusService,
-  ) {}
+  ) { }
 
   // --- Schema Migration ----------------------------------------------------
 
@@ -152,12 +152,12 @@ export class TicketService implements OnModuleInit {
     if (this.eventBus) {
       this.eventBus.subscribe('attendance.unavailable', (payload: any) => {
         if (payload?.techId) {
-          this.reassignUnavailableTechnicianTickets(payload.techId).catch(() => {});
+          this.reassignUnavailableTechnicianTickets(payload.techId).catch(() => { });
         }
       });
       this.eventBus.subscribe('attendance.verified', (payload: any) => {
         if (payload?.userId) {
-          this.assignPendingTicketsOnLogin(payload.userId).catch(() => {});
+          this.assignPendingTicketsOnLogin(payload.userId).catch(() => { });
         }
       });
     }
@@ -674,10 +674,10 @@ export class TicketService implements OnModuleInit {
         slaDeadline = slaConfig
           ? await this.calculateSlaDeadline(new Date(), issueType.slaHours, slaConfig)
           : (() => {
-              const d = new Date();
-              d.setHours(d.getHours() + issueType.slaHours);
-              return d;
-            })();
+            const d = new Date();
+            d.setHours(d.getHours() + issueType.slaHours);
+            return d;
+          })();
         this.logger.log(
           `[SLA] deadline set: ${slaDeadline?.toISOString()}, slaHours=${issueType.slaHours}, mode=${slaConfig?.scheduleMode ?? 'fallback'}`,
         );
@@ -736,7 +736,7 @@ export class TicketService implements OnModuleInit {
       ticketNumber: persisted.ticketNumber,
       ticketType: persisted.ticketType,
       status: persisted.status,
-    }).catch(() => {});
+    }).catch(() => { });
 
     if (assignedToId && assignedTech) {
       this.logEvent(saved.id, 'auto_assigned', null, {
@@ -744,7 +744,7 @@ export class TicketService implements OnModuleInit {
         technicianName:
           [assignedTech.first_name, assignedTech.lastName].filter(Boolean).join(' ') ||
           assignedTech.email,
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     if (image) {
@@ -784,12 +784,12 @@ export class TicketService implements OnModuleInit {
   }): Promise<
     | Ticket[]
     | {
-        data: Ticket[];
-        total: number;
-        page: number;
-        limit: number;
-        totalPages: number;
-      }
+      data: Ticket[];
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }
   > {
     const allowedSortColumns: Record<string, string> = {
       createdAt: 't.createdAt',
@@ -993,14 +993,14 @@ export class TicketService implements OnModuleInit {
             config as TicketingConfig
           );
           const accumulatedPauseSeconds = (ticket.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
-            const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
-              new Date(ticket.createdAt),
-              now,
-              config as TicketingConfig
-            );
-            const activeBusinessSeconds = Math.max(0, totalBusinessSecondsSinceCreation - accumulatedPauseSeconds);
-            const consumedSlaHours = activeBusinessSeconds / 3600;
-            const remainingHours = Math.max(0, ticket.issueTypeConfig.slaHours - consumedSlaHours);
+          const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
+            new Date(ticket.createdAt),
+            now,
+            config as TicketingConfig
+          );
+          const activeBusinessSeconds = Math.max(0, totalBusinessSecondsSinceCreation - accumulatedPauseSeconds);
+          const consumedSlaHours = activeBusinessSeconds / 3600;
+          const remainingHours = Math.max(0, ticket.issueTypeConfig.slaHours - consumedSlaHours);
           deadline = await this.calculateSlaDeadline(
             now,
             remainingHours,
@@ -1075,7 +1075,7 @@ export class TicketService implements OnModuleInit {
         ticket.userClosed = true;
         if (!ticket.resolvedAt) ticket.resolvedAt = new Date();
         const savedClosed = await this.ticketRepo.save(ticket);
-        this.logEvent(savedClosed.id, 'closed', actorId).catch(() => {});
+        this.logEvent(savedClosed.id, 'closed', actorId).catch(() => { });
         if (ticket.assignedTo?.email) {
           this.emailService
             .sendTicketClosedOrRatedEmailToTechnician({
@@ -1089,7 +1089,7 @@ export class TicketService implements OnModuleInit {
               technicianEmail: ticket.assignedTo.email,
               action: 'closed',
             })
-            .catch(() => {});
+            .catch(() => { });
         }
         return savedClosed;
       }
@@ -1239,22 +1239,22 @@ export class TicketService implements OnModuleInit {
       const ALLOWED_TRANSITIONS: Partial<Record<TicketStatus, TicketStatus[]>> = {
         [TicketStatus.OPEN]:
           this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
-          this.roleCapSvc.isTicketFocal(actorRole as string)
+            this.roleCapSvc.isTicketFocal(actorRole as string)
             ? [TicketStatus.FREEZE, TicketStatus.DUPLICATE]
             : [TicketStatus.DUPLICATE],
         [TicketStatus.ASSIGNED]:
           this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
-          this.roleCapSvc.isTicketFocal(actorRole as string)
+            this.roleCapSvc.isTicketFocal(actorRole as string)
             ? [
-                TicketStatus.IN_PROGRESS,
-                TicketStatus.FREEZE,
-                TicketStatus.DUPLICATE,
-                TicketStatus.OPEN,
-              ]
+              TicketStatus.IN_PROGRESS,
+              TicketStatus.FREEZE,
+              TicketStatus.DUPLICATE,
+              TicketStatus.OPEN,
+            ]
             : [TicketStatus.IN_PROGRESS, TicketStatus.DUPLICATE],
         [TicketStatus.IN_PROGRESS]:
           this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
-          this.roleCapSvc.isTicketFocal(actorRole as string)
+            this.roleCapSvc.isTicketFocal(actorRole as string)
             ? [TicketStatus.RESOLVED, TicketStatus.PAUSE, TicketStatus.FREEZE]
             : [TicketStatus.RESOLVED, TicketStatus.PAUSE],
         [TicketStatus.PAUSE]: [TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED],
@@ -1272,7 +1272,7 @@ export class TicketService implements OnModuleInit {
       if (!allowed.includes(dto.status as TicketStatus)) {
         throw new ForbiddenException(
           `Cannot transition ticket from '${ticket.status}' to '${dto.status}'. ` +
-            (allowed.length > 0 ? `Allowed: ${allowed.join(', ')}.` : 'This status is terminal.'),
+          (allowed.length > 0 ? `Allowed: ${allowed.join(', ')}.` : 'This status is terminal.'),
         );
       }
 
@@ -1544,16 +1544,16 @@ export class TicketService implements OnModuleInit {
             ticket.accumulatedPauseSeconds += pausedTimeSeconds;
             if (ticket.slaDeadline && ticket.issueTypeConfig?.slaHours) {
               const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
-              new Date(ticket.createdAt),
-              now,
-              config as TicketingConfig,
-            );
-            const activeBusinessSeconds = Math.max(
-              0,
-              totalBusinessSecondsSinceCreation - ticket.accumulatedPauseSeconds,
-            );
-            const consumedSlaHours = activeBusinessSeconds / 3600;
-            const remainingHours = Math.max(0, ticket.issueTypeConfig.slaHours - consumedSlaHours);
+                new Date(ticket.createdAt),
+                now,
+                config as TicketingConfig,
+              );
+              const activeBusinessSeconds = Math.max(
+                0,
+                totalBusinessSecondsSinceCreation - ticket.accumulatedPauseSeconds,
+              );
+              const consumedSlaHours = activeBusinessSeconds / 3600;
+              const remainingHours = Math.max(0, ticket.issueTypeConfig.slaHours - consumedSlaHours);
               ticket.slaDeadline = await this.calculateSlaDeadline(
                 now,
                 remainingHours,
@@ -1618,7 +1618,7 @@ export class TicketService implements OnModuleInit {
       this.logEvent(saved.id, 'status_changed', actorId, {
         to: dto.status,
         resolutionNotes: dto.resolutionNotes ?? undefined,
-      }).catch(() => {});
+      }).catch(() => { });
 
       if (dto.status === TicketStatus.RESOLVED && ticket.requester?.email) {
         this.emailService
@@ -1632,11 +1632,11 @@ export class TicketService implements OnModuleInit {
             requesterEmail: ticket.requester.email,
             technicianName: ticket.assignedTo
               ? [ticket.assignedTo.first_name, ticket.assignedTo.last_name]
-                  .filter(Boolean)
-                  .join(' ') || ticket.assignedTo.email
+                .filter(Boolean)
+                .join(' ') || ticket.assignedTo.email
               : undefined,
           })
-          .catch(() => {});
+          .catch(() => { });
       }
 
       if (dto.status === TicketStatus.CLOSED && ticket.assignedTo?.email) {
@@ -1652,7 +1652,7 @@ export class TicketService implements OnModuleInit {
             technicianEmail: ticket.assignedTo.email,
             action: 'closed',
           })
-          .catch(() => {});
+          .catch(() => { });
       }
     }
 
@@ -1729,10 +1729,10 @@ export class TicketService implements OnModuleInit {
                       nextTicket.slaDeadline = slaConfig
                         ? await this.calculateSlaDeadline(new Date(), issueType.slaHours, slaConfig)
                         : (() => {
-                            const d = new Date();
-                            d.setHours(d.getHours() + issueType.slaHours);
-                            return d;
-                          })();
+                          const d = new Date();
+                          d.setHours(d.getHours() + issueType.slaHours);
+                          return d;
+                        })();
                     }
                   }
 
@@ -1744,7 +1744,7 @@ export class TicketService implements OnModuleInit {
                       [resolvedByTech!.first_name, resolvedByTech!.last_name]
                         .filter(Boolean)
                         .join(' ') || resolvedByTech!.email,
-                  }).catch(() => {});
+                  }).catch(() => { });
 
                   this.logger.log(
                     `Auto-reassign on resolve: ticket ${nextTicket.ticketNumber} (${nextTicket.ticketType}) -> technician #${saved.assignedToId}`,
@@ -1935,10 +1935,10 @@ export class TicketService implements OnModuleInit {
         ticket.slaDeadline = slaConfig
           ? await this.calculateSlaDeadline(new Date(), ticket.issueTypeConfig.slaHours, slaConfig)
           : (() => {
-              const d = new Date();
-              d.setHours(d.getHours() + ticket.issueTypeConfig.slaHours);
-              return d;
-            })();
+            const d = new Date();
+            d.setHours(d.getHours() + ticket.issueTypeConfig.slaHours);
+            return d;
+          })();
       }
 
       if (busyCount > 0) {
@@ -1958,7 +1958,7 @@ export class TicketService implements OnModuleInit {
       technicianName:
         [technician.first_name, technician.last_name].filter(Boolean).join(' ') || technician.email,
       previousAssignee: previousAssigneeId !== dto.assignedToId ? previousAssigneeId : undefined,
-    }).catch(() => {});
+    }).catch(() => { });
 
     // Send assignment notification email (fire-and-forget)
     this.emailService
@@ -1974,7 +1974,7 @@ export class TicketService implements OnModuleInit {
           technician.email,
         technicianEmail: technician.email,
       })
-      .catch(() => {});
+      .catch(() => { });
 
     return assigned;
   }
@@ -2000,7 +2000,7 @@ export class TicketService implements OnModuleInit {
       this.logger.log(
         `Auto in_progress: ticket ${ticket.ticketNumber} viewed by technician #${viewerId}`,
       );
-      this.logEvent(saved.id, 'in_progress', viewerId, { via: 'view' }).catch(() => {});
+      this.logEvent(saved.id, 'in_progress', viewerId, { via: 'view' }).catch(() => { });
       return saved;
     }
     return null; // no change
@@ -2100,7 +2100,7 @@ export class TicketService implements OnModuleInit {
       const derivedRating =
         numericLikert.length > 0
           ? Math.round((numericLikert.reduce((acc, v) => acc + v, 0) / numericLikert.length) * 10) /
-            10
+          10
           : null;
 
       ticket.satisfactionRating = derivedRating;
@@ -2119,9 +2119,9 @@ export class TicketService implements OnModuleInit {
     ticket.satisfactionSubmittedAt = new Date();
     ticket.status = TicketStatus.CLOSED;
     const saved = await this.ticketRepo.save(ticket);
-    this.logEvent(saved.id, 'closed', requesterId).catch(() => {});
+    this.logEvent(saved.id, 'closed', requesterId).catch(() => { });
     this.logEvent(saved.id, 'rated', requesterId, { rating: saved.satisfactionRating }).catch(
-      () => {},
+      () => { },
     );
 
     if (ticket.assignedTo?.email) {
@@ -2137,7 +2137,7 @@ export class TicketService implements OnModuleInit {
           action: 'rated',
           rating: saved.satisfactionRating,
         })
-        .catch(() => {});
+        .catch(() => { });
     }
 
     return saved;
@@ -2358,7 +2358,9 @@ export class TicketService implements OnModuleInit {
     let open = 0,
       inProgress = 0,
       resolved = 0,
-      closed = 0;
+      closed = 0,
+      frozen = 0,
+      duplicate = 0;
     let needsSatisfaction = 0;
     const pendingSatisfactionTickets: Ticket[] = [];
 
@@ -2441,7 +2443,9 @@ export class TicketService implements OnModuleInit {
       TicketStatus.FREEZE,
     ];
 
-    const qb = this.ticketRepo.createQueryBuilder('t').where('t.slaDeadline IS NOT NULL');
+    const qb = this.ticketRepo.createQueryBuilder('t')
+      .where('t.slaDeadline IS NOT NULL')
+      .leftJoinAndSelect('t.issueTypeConfig', 'issueTypeConfig');
 
     if (viewerRole === UserRole.USER) {
       qb.andWhere('t.requesterId = :viewerId', { viewerId });
@@ -2494,6 +2498,71 @@ export class TicketService implements OnModuleInit {
       dueToday,
       breachedResolved,
       complianceRate,
+    };
+  }
+
+  /** General overview of all tickets for a specific month */
+  async getGeneralOverviewStats(
+    year: number,
+    month: number,
+  ): Promise<{
+    total: number;
+    open: number;
+    assigned: number;
+    inProgress: number;
+    resolved: number;
+    closed: number;
+    frozen: number;
+    duplicate: number;
+    ratedCount: number;
+    satisfactionAvg: number | null;
+  }> {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const tickets = await this.ticketRepo
+      .createQueryBuilder('t')
+      .where('t.createdAt >= :startDate', { startDate })
+      .andWhere('t.createdAt <= :endDate', { endDate })
+      .getMany();
+    await this.enrichTicketsWithUsers(tickets);
+
+    let open = 0,
+      assigned = 0,
+      inProgress = 0,
+      resolved = 0,
+      closed = 0,
+      frozen = 0,
+      duplicate = 0;
+    let totalSat = 0,
+      countSat = 0;
+
+    for (const t of tickets) {
+      if (t.status === TicketStatus.OPEN) open++;
+      else if (t.status === TicketStatus.ASSIGNED) assigned++;
+      else if (t.status === TicketStatus.IN_PROGRESS) inProgress++;
+      else if (t.status === TicketStatus.RESOLVED) resolved++;
+      else if (t.status === TicketStatus.CLOSED) closed++;
+      else if (t.status === TicketStatus.FREEZE) frozen++;
+      else if (t.status === TicketStatus.DUPLICATE) duplicate++;
+
+      if (t.satisfactionRating) {
+        totalSat += t.satisfactionRating;
+        countSat++;
+      }
+    }
+
+    return {
+      total: tickets.length,
+      open,
+      assigned,
+      inProgress,
+      resolved,
+      closed,
+      frozen,
+      duplicate,
+      ratedCount: countSat,
+      satisfactionAvg: countSat > 0 ? Number((totalSat / countSat).toFixed(1)) : null,
     };
   }
 
@@ -2721,10 +2790,10 @@ export class TicketService implements OnModuleInit {
           slaDeadlineOnAssign = slaConfig
             ? await this.calculateSlaDeadline(new Date(), issueType.slaHours, slaConfig)
             : (() => {
-                const d = new Date();
-                d.setHours(d.getHours() + issueType.slaHours);
-                return d;
-              })();
+              const d = new Date();
+              d.setHours(d.getHours() + issueType.slaHours);
+              return d;
+            })();
           this.logger.log(
             `[Login Auto-Assign] SLA deadline set to ${slaDeadlineOnAssign?.toISOString()} for ticket ${pending.ticketNumber}`,
           );
@@ -2743,7 +2812,7 @@ export class TicketService implements OnModuleInit {
         technicianId: techId,
         technicianName: [tech.first_name, tech.last_name].filter(Boolean).join(' ') || tech.email,
         via: 'login_auto_assign',
-      }).catch(() => {});
+      }).catch(() => { });
 
       this.emailService
         .sendTicketAssignedEmail({
@@ -2755,7 +2824,7 @@ export class TicketService implements OnModuleInit {
           assignedToName: [tech.first_name, tech.last_name].filter(Boolean).join(' ') || tech.email,
           assignedToEmail: tech.email,
         } as any)
-        .catch(() => {});
+        .catch(() => { });
 
       this.logger.log(
         `[Login Auto-Assign] Ticket ${pending.ticketNumber} → ${tech.email} on login`,
@@ -2812,7 +2881,7 @@ export class TicketService implements OnModuleInit {
                 technicianId: tech.id,
                 technicianName: `${tech.firstName} ${tech.lastName}`.trim(),
                 via: 'absence_reassign',
-              }).catch(() => {});
+              }).catch(() => { });
               break;
             }
           }
@@ -3063,7 +3132,7 @@ export class TicketService implements OnModuleInit {
       if (!t.assignedToId) continue;
       const techName = t.assignedTo
         ? [t.assignedTo.first_name, t.assignedTo.last_name].filter(Boolean).join(' ') ||
-          t.assignedTo.email
+        t.assignedTo.email
         : `Tech #${t.assignedToId}`;
       const cur = byTechMap.get(t.assignedToId) ?? {
         name: techName,
@@ -3141,7 +3210,7 @@ export class TicketService implements OnModuleInit {
           if (t.assignedToId) {
             const techName = t.assignedTo
               ? [t.assignedTo.first_name, t.assignedTo.last_name].filter(Boolean).join(' ') ||
-                t.assignedTo.email
+              t.assignedTo.email
               : `Tech #${t.assignedToId}`;
             const techData = slaByTechMap.get(t.assignedToId) ?? {
               name: techName,
@@ -3336,7 +3405,7 @@ export class TicketService implements OnModuleInit {
       escalatedToId: dto.escalatedToId,
       escalatedToName: [focal.first_name, focal.last_name].filter(Boolean).join(' ') || focal.email,
       hasProof: savedPaths.length > 0,
-    }).catch(() => {});
+    }).catch(() => { });
 
     return saved;
   }
@@ -3374,12 +3443,12 @@ export class TicketService implements OnModuleInit {
           from: previousStatus,
           to: TicketStatus.IN_PROGRESS,
           reason: 'escalation_accepted',
-        }).catch(() => {});
+        }).catch(() => { });
       } else {
         await this.ticketRepo.save(ticket);
       }
     }
-    this.logEvent(ticketId, 'escalation_accepted', actorId).catch(() => {});
+    this.logEvent(ticketId, 'escalation_accepted', actorId).catch(() => { });
 
     return escalation;
   }
@@ -3408,7 +3477,7 @@ export class TicketService implements OnModuleInit {
     escalation.returnReason = dto.returnReason.trim();
 
     this.logEvent(ticketId, 'escalation_returned', actorId, { reason: dto.returnReason }).catch(
-      () => {},
+      () => { },
     );
     return this.escalationRepo.save(escalation);
   }
@@ -3586,16 +3655,16 @@ export class TicketService implements OnModuleInit {
 
         if (t.slaDeadline && t.issueTypeConfig?.slaHours) {
           const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
-              new Date(t.createdAt),
-              now,
-              config as TicketingConfig,
-            );
-            const activeBusinessSeconds = Math.max(
-              0,
-              totalBusinessSecondsSinceCreation - t.accumulatedPauseSeconds,
-            );
-            const consumedSlaHours = activeBusinessSeconds / 3600;
-            const remainingHours = Math.max(0, t.issueTypeConfig.slaHours - consumedSlaHours);
+            new Date(t.createdAt),
+            now,
+            config as TicketingConfig,
+          );
+          const activeBusinessSeconds = Math.max(
+            0,
+            totalBusinessSecondsSinceCreation - t.accumulatedPauseSeconds,
+          );
+          const consumedSlaHours = activeBusinessSeconds / 3600;
+          const remainingHours = Math.max(0, t.issueTypeConfig.slaHours - consumedSlaHours);
           t.slaDeadline = await this.calculateSlaDeadline(
             now,
             remainingHours,
@@ -3968,10 +4037,10 @@ export class TicketService implements OnModuleInit {
           waitingTicket.slaDeadline = slaConfig
             ? await this.calculateSlaDeadline(new Date(), issueType.slaHours, slaConfig)
             : (() => {
-                const d = new Date();
-                d.setHours(d.getHours() + issueType.slaHours);
-                return d;
-              })();
+              const d = new Date();
+              d.setHours(d.getHours() + issueType.slaHours);
+              return d;
+            })();
         }
       }
     } else if (waitingTicket.slaPausedAt) {
@@ -4018,13 +4087,13 @@ export class TicketService implements OnModuleInit {
           [resolvedByTech.first_name, resolvedByTech.last_name].filter(Boolean).join(' ') ||
           resolvedByTech.email;
       }
-    } catch {}
+    } catch { }
 
     this.logEvent(waitingTicket.id, trigger, null, {
       technicianId: techId,
       technicianName,
       note: 'Unstacked from waiting list',
-    }).catch(() => {});
+    }).catch(() => { });
 
     this.logger.log(
       `Unstacked waiting ticket ${waitingTicket.ticketNumber} for technician #${techId}`,
@@ -4061,10 +4130,10 @@ export class TicketService implements OnModuleInit {
           waitingTicket.slaDeadline = slaConfig
             ? await this.calculateSlaDeadline(new Date(), issueType.slaHours, slaConfig)
             : (() => {
-                const d = new Date();
-                d.setHours(d.getHours() + issueType.slaHours);
-                return d;
-              })();
+              const d = new Date();
+              d.setHours(d.getHours() + issueType.slaHours);
+              return d;
+            })();
         }
       }
     } else if (waitingTicket.slaPausedAt) {
@@ -4111,17 +4180,17 @@ export class TicketService implements OnModuleInit {
           [resolvedByTech.first_name, resolvedByTech.last_name].filter(Boolean).join(' ') ||
           resolvedByTech.email;
       }
-    } catch {}
+    } catch { }
 
     this.logEvent(waitingTicket.id, trigger, null, {
       technicianId: techId,
       technicianName,
       note: 'Unstacked from waiting list and set to IN_PROGRESS',
-    }).catch(() => {});
-    
+    }).catch(() => { });
+
     this.logEvent(waitingTicket.id, 'status_changed', null, {
       to: 'in_progress'
-    }).catch(() => {});
+    }).catch(() => { });
 
     this.logger.log(
       `Unstacked waiting ticket ${waitingTicket.ticketNumber} and set to IN_PROGRESS for technician #${techId}`,
@@ -4167,8 +4236,8 @@ export class TicketService implements OnModuleInit {
         );
         // If it fails again (e.g. rate limit still active), just break out of the loop and try again next hour
         if (err.message.includes('429') || err.message.includes('503')) {
-           this.logger.warn('API limit encountered during retry. Aborting current retry queue.');
-           break;
+          this.logger.warn('API limit encountered during retry. Aborting current retry queue.');
+          break;
         }
       }
     }

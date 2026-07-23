@@ -92,6 +92,8 @@ export default function AttendancePage() {
   const { enqueueSnackbar } = useSnackbar();
 
   const [tab, setTab] = useState(0);
+  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
+  const [hoveredCol, setHoveredCol] = useState<string | null>(null);
   const now = new Date();
   const todayStr = formatDate(now);
   const [year, setYear] = useState(now.getFullYear());
@@ -550,7 +552,7 @@ export default function AttendancePage() {
                       </TableCell>
                       {weekdays.map((d) => {
                         const isOffice = isOfficeDayForDate(d);
-                        const isToday = formatDate(d) === new Date().toISOString().slice(0, 10);
+                        const isToday = formatDate(d) === formatDate(new Date());
                         return (
                           <TableCell
                             key={formatDate(d)}
@@ -580,7 +582,7 @@ export default function AttendancePage() {
                       const records =
                         attRecordsMap.get(userId) ?? new Map<string, TechAttendance>();
                       return (
-                        <TableRow key={userId}>
+                        <TableRow key={userId} onMouseEnter={() => setHoveredRow(userId)} onMouseLeave={() => setHoveredRow(null)}>
                           <TableCell
                             sx={{
                               position: 'sticky',
@@ -602,7 +604,7 @@ export default function AttendancePage() {
                             const rec = records.get(dateStr);
                             const status = rec?.status;
                             const cfg = status ? STATUS_CONFIG[status] : null;
-                            const todayStr = new Date().toISOString().slice(0, 10);
+                            const todayStr = formatDate(new Date());
                             const isPastDate = dateStr < todayStr;
                             const isFutureDate = dateStr > todayStr;
                             const isToday = dateStr === todayStr;
@@ -618,16 +620,26 @@ export default function AttendancePage() {
                                         size="small"
                                         disabled={isPastDate || isFutureDate}
                                         onClick={() => {
+                                        
                                         const cycle: AttendanceStatus[] = [
                                           'present',
                                           'absent',
                                           'half_day',
                                           'out_of_office',
                                         ];
-                                        const nextIdx = status
-                                          ? (cycle.indexOf(status) + 1) % cycle.length
-                                          : 0;
-                                        handleSetAttendance(userId, dateStr, cycle[nextIdx]);
+                                        if (!status) {
+                                          handleSetAttendance(userId, dateStr, cycle[0]);
+                                        } else {
+                                          const currentIdx = cycle.indexOf(status);
+                                          if (currentIdx === cycle.length - 1) {
+                                            // 5th click (or after OOO), delete it
+                                            setAttendance((prev) => prev.filter((r) => !(r.userId === userId && r.date.slice(0, 10) === dateStr)));
+                                            attendanceApi.deleteAttendance(userId, dateStr).catch(() => fetchAttendance());
+                                          } else {
+                                            handleSetAttendance(userId, dateStr, cycle[currentIdx + 1]);
+                                          }
+                                        }
+
                                       }}
                                       sx={{
                                         color: cfg ? `${cfg.color}.main` : 'action.active',

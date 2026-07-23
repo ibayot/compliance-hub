@@ -197,6 +197,7 @@ export class AuthService {
   }
 
   private checkRequiresMfa(user: User): boolean {
+    if (process.env.VAPT_MODE === 'true') return false;
     return true;
   }
 
@@ -418,16 +419,20 @@ export class AuthService {
       units: user.units?.map((unit) => unit.id) || [],
     };
 
+    const isVaptMode = process.env.VAPT_MODE === 'true';
+    const jwtExp = isVaptMode ? '6h' : this.configService.get('JWT_EXPIRATION');
+    const refreshExp = isVaptMode ? '12h' : this.configService.get('JWT_REFRESH_EXPIRATION');
+
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.configService.get('JWT_SECRET'),
-        expiresIn: this.configService.get('JWT_EXPIRATION'),
+        expiresIn: jwtExp,
         issuer: this.jwtIssuer,
         audience: this.jwtAudience,
       }),
       this.jwtService.signAsync(payload, {
         secret: this.configService.get('JWT_REFRESH_SECRET'),
-        expiresIn: this.configService.get('JWT_REFRESH_EXPIRATION'),
+        expiresIn: refreshExp,
         issuer: this.jwtIssuer,
         audience: this.jwtAudience,
       }),
@@ -461,7 +466,7 @@ export class AuthService {
         },
         {
           secret: this.configService.get('JWT_SECRET'),
-          expiresIn: this.configService.get('JWT_EXPIRATION'),
+          expiresIn: process.env.VAPT_MODE === 'true' ? '6h' : this.configService.get('JWT_EXPIRATION'),
           issuer: this.jwtIssuer,
           audience: this.jwtAudience,
         },
@@ -508,6 +513,7 @@ export class AuthService {
     userId: number,
     currentPassword: string,
     newPassword: string,
+    staffId?: string,
   ): Promise<{ message: string }> {
     if (this.timingSafeStringEquals(currentPassword, newPassword)) {
       throw new BadRequestException('New password must be different from current password');
@@ -522,6 +528,10 @@ export class AuthService {
 
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     await this.usersService.updatePasswordHash(user.id, user.passwordHash);
+
+    if (staffId && staffId.trim().length > 0) {
+      await this.usersService.update(user.id, { staffId: staffId.trim() } as any);
+    }
 
     return { message: 'Password updated successfully' };
   }

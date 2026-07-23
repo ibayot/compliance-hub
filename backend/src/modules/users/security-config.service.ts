@@ -25,10 +25,18 @@ export class SecurityConfigService {
   async updateConfig(dto: {
     defaultPassword?: string;
     mfaTestMode?: boolean;
+    vaptMode?: boolean;
+    appMode?: string;
   }): Promise<SecurityConfig> {
     const config = await this.getConfig();
     if (dto.defaultPassword !== undefined) config.defaultPassword = dto.defaultPassword;
     if (dto.mfaTestMode !== undefined) config.mfaTestMode = dto.mfaTestMode;
+    if (dto.vaptMode !== undefined) {
+      config.vaptMode = dto.vaptMode;
+      // Propagate to runtime env so gateway DDoS middleware can check it
+      process.env.VAPT_MODE = dto.vaptMode ? 'true' : 'false';
+    }
+    if (dto.appMode !== undefined) config.appMode = dto.appMode;
     return this.configRepository.save(config);
   }
 }

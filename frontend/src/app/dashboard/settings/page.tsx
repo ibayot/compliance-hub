@@ -188,16 +188,20 @@ function SecuritySettingsCard() {
   const { enqueueSnackbar } = useSnackbar();
   const [defaultPassword, setDefaultPassword] = useState('');
   const [mfaTestMode, setMfaTestMode] = useState(false);
+  const [vaptMode, setVaptMode] = useState(false);
+  const [appMode, setAppMode] = useState('full');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const canManage = user?.role === UserRole.SUPER_ADMIN || Boolean(myCap?.isSecuritySettingsAccess);
+  const canManage = user?.role === UserRole.SUPER_ADMIN || Boolean(myCap?.isSecuritySettingsAccess) || Boolean(myCap?.isTicketSettingsFocal);
 
   useEffect(() => {
     if (canManage) {
       usersApi.getSecurityConfig().then(config => {
         setDefaultPassword(config.defaultPassword || '');
         setMfaTestMode(Boolean((config as any).mfaTestMode));
+        setVaptMode(Boolean((config as any).vaptMode));
+        setAppMode((config as any).appMode || 'full');
         setLoading(false);
       }).catch(err => {
         enqueueSnackbar('Failed to load security config', { variant: 'error' });
@@ -213,8 +217,9 @@ function SecuritySettingsCard() {
     }
     setSaving(true);
     try {
-      await usersApi.updateSecurityConfig({ defaultPassword, mfaTestMode } as any);
+      await usersApi.updateSecurityConfig({ defaultPassword, mfaTestMode, vaptMode, appMode } as any);
       enqueueSnackbar('Security settings updated successfully', { variant: 'success' });
+      setTimeout(() => window.location.reload(), 1000);
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to update security settings', { variant: 'error' });
     } finally {
@@ -236,7 +241,7 @@ function SecuritySettingsCard() {
           <Typography>Loading...</Typography>
         ) : (
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={8}>
+            <Grid item xs={12}>
               <TextField
                 fullWidth
                 label="System Default Password"
@@ -256,6 +261,32 @@ function SecuritySettingsCard() {
                 }
                 label="Enable MFA Test Mode"
               />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={vaptMode}
+                    onChange={(e) => setVaptMode(e.target.checked)}
+                    color="secondary"
+                  />
+                }
+                label="Enable VAPT Mode (Skip DDoS & shorter JWT)"
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>App Mode</InputLabel>
+                <Select
+                  value={appMode}
+                  label="App Mode"
+                  onChange={(e) => setAppMode(e.target.value)}
+                >
+                  <MenuItem value="full">Full (Ticketing + Compliance)</MenuItem>
+                  <MenuItem value="ticketing_only">Ticketing Only</MenuItem>
+                  <MenuItem value="compliance_only">Compliance Only</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12}>
               <Button
@@ -1117,7 +1148,7 @@ function FocalUserManagementCard() {
               </Typography>
             )}
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={6}>
                 <TextField
                   label="Email Address"
                   required
@@ -1127,18 +1158,7 @@ function FocalUserManagementCard() {
                   autoComplete="off"
                 />
               </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  required
-                  label="Temporary Password"
-                  type="password"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  fullWidth
-                  autoComplete="new-password"
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={6}>
                 <TextField
                   select
                   required
@@ -1191,78 +1211,6 @@ function FocalUserManagementCard() {
                   fullWidth
                   autoComplete="off"
                 />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  label="Staff ID"
-                  value={form.staffId}
-                  onChange={(e) => setForm({ ...form, staffId: e.target.value })}
-                  fullWidth
-                  disabled={form.role === UserRole.USER}
-                  autoComplete="off"
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  label="Position (Abbreviated)"
-                  value={form.position}
-                  onChange={(e) => setForm({ ...form, position: e.target.value })}
-                  fullWidth
-                  autoComplete="off"
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  label="Full Position Title"
-                  value={form.positionFull}
-                  onChange={(e) => setForm({ ...form, positionFull: e.target.value })}
-                  fullWidth
-                  autoComplete="off"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Designation / Title"
-                  value={form.designation}
-                  onChange={(e) => setForm({ ...form, designation: e.target.value })}
-                  fullWidth
-                  autoComplete="off"
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={Boolean(form.ticketTechnician)}
-                      onChange={(e) => setForm({ ...form, ticketTechnician: e.target.checked })}
-                    />
-                  }
-                  label="Lower-level Ticket Technician"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Assigned Units</InputLabel>
-                  <Select
-                    multiple
-                    value={form.unitIds}
-                    label="Assigned Units"
-                    onChange={(e) => setForm({ ...form, unitIds: e.target.value as number[] })}
-                    renderValue={(selected) =>
-                      (selected as number[])
-                        .map((id) => units.find((u) => u.id === id)?.name ?? id)
-                        .join(', ')
-                    }
-                    MenuProps={{ disableAutoFocusItem: true }}
-                  >
-                    {units.map((u) => (
-                      <MenuItem key={u.id} value={u.id}>
-                        <Checkbox checked={form.unitIds.includes(u.id)} />
-                        <ListItemText primary={u.name} />
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
               </Grid>
             </Grid>
           </DialogContent>
@@ -1522,12 +1470,7 @@ function FocalUserManagementCard() {
                     setEditUser((prev: any) => ({ ...prev, staffId: e.target.value }))
                   }
                   fullWidth
-                  disabled={editUser?.role === UserRole.USER}
-                  helperText={
-                    editUser?.role === UserRole.USER
-                      ? 'Not applicable for Regular Staff'
-                      : 'Optional employee identifier'
-                  }
+                  helperText="Optional employee identifier"
                 />
               </Grid>
               <Grid item xs={12} md={3}>
@@ -1581,7 +1524,7 @@ function FocalUserManagementCard() {
                   helperText="e.g. ITO I"
                 />
               </Grid>
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={8}>
                 <TextField
                   label="Full Position Title"
                   value={editUser?.positionFull || ''}
@@ -1592,60 +1535,37 @@ function FocalUserManagementCard() {
                   helperText="e.g. Information Technology Officer I"
                 />
               </Grid>
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={6}>
                 <TextField
-                  label="Designation"
+                  label="Designation / Title"
                   value={editUser?.designation || ''}
                   onChange={(e) =>
                     setEditUser((prev: any) => ({ ...prev, designation: e.target.value }))
                   }
                   fullWidth
+                  helperText="e.g. Head, Software Dev"
                 />
               </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  select
-                  label="Role"
-                  value={editUser?.role || ''}
-                  onChange={(e) => setEditUser((prev: any) => ({ ...prev, role: e.target.value }))}
-                  fullWidth
-                >
-                  {assignableRoles.map((r) => (
-                    <MenuItem key={r.value} value={r.value}>
-                      {r.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Role</InputLabel>
+                  <Select
+                    value={editUser?.role || ''}
+                    label="Role"
+                    onChange={(e) =>
+                      setEditUser((prev: any) => ({ ...prev, role: e.target.value as UserRole }))
+                    }
+                  >
+                    {assignableRoles.map((r) => (
+                      <MenuItem key={r.value} value={r.value}>
+                        {r.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
-              <Grid item xs={12} md={4}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={Boolean(editUser?.ticketMainFocal)}
-                      onChange={(e) =>
-                        setEditUser((prev: any) => ({ ...prev, ticketMainFocal: e.target.checked }))
-                      }
-                    />
-                  }
-                  label="Ticket Main Focal"
-                />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={Boolean(editUser?.ticketTechnician)}
-                      onChange={(e) =>
-                        setEditUser((prev: any) => ({
-                          ...prev,
-                          ticketTechnician: e.target.checked,
-                        }))
-                      }
-                    />
-                  }
-                  label="Lower-level Ticket Technician"
-                />
-              </Grid>
+              
+              {editUser?.role !== UserRole.USER && (
               <Grid item xs={12}>
                 <FormControl fullWidth>
                   <InputLabel>Assigned Units</InputLabel>
@@ -1672,6 +1592,7 @@ function FocalUserManagementCard() {
                   </Select>
                 </FormControl>
               </Grid>
+            )}
             </Grid>
           </DialogContent>
           <DialogActions>

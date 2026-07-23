@@ -49,6 +49,7 @@ import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { documentsApi } from '@/lib/api/documents';
 import { ticketsApi, ticketSettingsApi, TicketDashboardStats, TechAssignedStats } from '@/app/api/references';
+import GeneralOverview from '@/components/dashboard/GeneralOverview';
 import { incidentsApi, TodayStats } from '@/lib/api/incidents';
 import { cybersecurityApi, CybersecurityMetric } from '@/lib/api/cybersecurity';
 import { DashboardSummaryResponse, kpiApi } from '@/lib/api/kpi';
@@ -79,6 +80,7 @@ export default function DashboardPage() {
 
   // Tech monthly assigned-ticket stats with selectable period
   const [techAssignedStats, setTechAssignedStats] = useState<TechAssignedStats | null>(null);
+  const [generalStats, setGeneralStats] = useState<any>(null);
   const [techStatsYear, setTechStatsYear] = useState(() => new Date().getFullYear());
   const [techStatsMonth, setTechStatsMonth] = useState(() => new Date().getMonth() + 1);
   const [techStatsLoading, setTechStatsLoading] = useState(false);
@@ -116,8 +118,9 @@ export default function DashboardPage() {
   useEffect(() => {
     if (myCap?.isTicketSettingsFocal) {
       ticketsApi.getSlaSummary().then(setSlaSummary).catch(console.error);
+        ticketsApi.getGeneralOverviewStats(techStatsYear, techStatsMonth).then(setGeneralStats).catch(console.error);
     }
-  }, [myCap?.isTicketSettingsFocal]);
+  }, [myCap?.isTicketSettingsFocal, techStatsYear, techStatsMonth]);
 
   // Compute clock out logic
   const isClockOutEnabled = useMemo(() => {
@@ -630,6 +633,12 @@ export default function DashboardPage() {
               <Typography variant="body2" color="text.secondary" py={2} textAlign="center">
                 No assigned tickets for this period.
               </Typography>
+            )}
+
+            {myCap?.isTicketSettingsFocal && (
+              <Box mt={4}>
+                <GeneralOverview stats={generalStats} />
+              </Box>
             )}
           </CardContent>
         </Card>

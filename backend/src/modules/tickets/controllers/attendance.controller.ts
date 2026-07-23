@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Query,
+  Param,
   UseGuards,
   Request,
   HttpCode,
@@ -144,6 +145,15 @@ export class AttendanceController {
   async setAttendance(@Body() dto: SetAttendanceDto, @Request() req: any) {
     this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
     return this.attendanceService.setAttendance(dto, req.user.id ?? req.user.userId, req.user.role);
+  }
+
+  /** DELETE /attendance/:userId/:date */
+  @Delete(':userId/:date')
+  @Roles(...FOCAL_ROLES)
+  @HttpCode(HttpStatus.OK)
+  async deleteAttendance(@Param('userId') userId: string, @Param('date') date: string, @Request() req: any) {
+    this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
+    return this.attendanceService.deleteAttendance(Number(userId), date);
   }
 
   /** POST /attendance/bulk — set multiple attendance records */

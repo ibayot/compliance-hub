@@ -748,7 +748,7 @@ export default function TicketDetailPage() {
               </Typography>
               <Box display="flex" flexWrap="wrap" gap={1}>
                 {!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id ? (
-                  <TextField
+                  <TextField inputProps={{ maxLength: 255 }}
                     select
                     size="small"
                     value={ticket.ticketType}
@@ -791,7 +791,7 @@ export default function TicketDetailPage() {
                 
                 {/* Category Dropdown */}
                 {!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id ? (
-                  <TextField
+                  <TextField inputProps={{ maxLength: 255 }}
                     select
                     size="small"
                     value={ticket.categoryId || ''}
@@ -840,7 +840,7 @@ export default function TicketDetailPage() {
                 {/* Issue Dropdown */}
                 {user?.role !== 'user' && issues.length > 0 && (
                   (!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id) ? (
-                    <TextField
+                    <TextField inputProps={{ maxLength: 255 }}
                       select
                       size="small"
                       value={ticket.issueTypeId || ''}
@@ -1085,13 +1085,14 @@ export default function TicketDetailPage() {
                     allowedValues = [];
                 }
                 const allowedOpts = STATUS_OPTS.filter((s) => allowedValues.includes(s.value));
-                // QA #5: Disable Save when transitioning to in_progress without a priority
+                // QA #5: Disable Save when transitioning to in_progress without a priority or issue type
                 const effectivePriority = newPriority || ticket?.priority;
-                const needsPriority = newStatus === 'in_progress' && !effectivePriority;
+                const needsPriority = newStatus === 'in_progress' && (!effectivePriority || !ticket?.issueTypeId);
+                const isStatusUnchanged = newStatus === ticket?.status && newPriority === ticket?.priority;
                 return (
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
-                      <TextField
+                      <TextField inputProps={{ maxLength: 255 }}
                         select
                         fullWidth
                         label="Status"
@@ -1107,7 +1108,7 @@ export default function TicketDetailPage() {
                       </TextField>
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <TextField
+                      <TextField inputProps={{ maxLength: 255 }}
                         select
                         fullWidth
                         label={newStatus === 'in_progress' ? 'Priority *' : 'Priority'}
@@ -1151,7 +1152,7 @@ export default function TicketDetailPage() {
                           Load from KB
                         </Button>
                       </Box>
-                      <TextField
+                      <TextField inputProps={{ maxLength: 255 }}
                         fullWidth
                         multiline
                         rows={6}
@@ -1191,7 +1192,7 @@ export default function TicketDetailPage() {
                           variant="contained"
                           size="small"
                           onClick={() => handleUpdateStatus()}
-                          disabled={needsPriority}
+                          disabled={needsPriority || isStatusUnchanged}
                         >
                           Save
                         </Button>
@@ -1684,7 +1685,7 @@ export default function TicketDetailPage() {
           {ticket.status !== 'closed' && ticket.status !== 'duplicate' && (
             <Box mt={3}>
               <Divider sx={{ mb: 2 }} />
-              <TextField
+              <TextField inputProps={{ maxLength: 255 }}
                 fullWidth
                 multiline
                 rows={3}
@@ -1850,8 +1851,7 @@ export default function TicketDetailPage() {
             onChange={(_, newValue) => setAssignToId(newValue ? Number(newValue.id) : '')}
             isOptionEqualToValue={(option, value) => option.id === value.id}
             renderInput={(params) => (
-              <TextField
-                {...params}
+              <TextField {...params}
                 label="Assign Technician"
                 fullWidth
                 size="small"
@@ -1897,8 +1897,7 @@ export default function TicketDetailPage() {
             onChange={(_, newValue) => setEscalateToId(newValue ? Number(newValue.id) : '')}
             isOptionEqualToValue={(option, value) => option.id === value.id}
             renderInput={(params) => (
-              <TextField
-                {...params}
+              <TextField {...params}
                 label="Escalate To"
                 fullWidth
                 size="small"
@@ -1914,7 +1913,7 @@ export default function TicketDetailPage() {
             clearOnEscape
             fullWidth
           />
-          <TextField
+          <TextField inputProps={{ maxLength: 255 }}
             fullWidth
             multiline
             rows={3}
@@ -1976,7 +1975,7 @@ export default function TicketDetailPage() {
       >
         <DialogTitle>Return Ticket</DialogTitle>
         <DialogContent>
-          <TextField
+          <TextField inputProps={{ maxLength: 255 }}
             fullWidth
             multiline
             rows={3}
@@ -2012,7 +2011,7 @@ export default function TicketDetailPage() {
           <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
             You can update the reason and attach additional proof photos to your pending escalation.
           </Alert>
-          <TextField
+          <TextField inputProps={{ maxLength: 255 }}
             fullWidth
             multiline
             rows={3}
@@ -2100,7 +2099,7 @@ export default function TicketDetailPage() {
               No other open tickets found for this requester.
             </Alert>
           ) : (
-            <TextField
+            <TextField inputProps={{ maxLength: 255 }}
               select
               fullWidth
               label="Original Ticket"
@@ -2172,8 +2171,7 @@ export default function TicketDetailPage() {
                   onInputChange={(_, v) => setCsatForm((f) => ({ ...f, unitSection: v }))}
                   renderInput={(params) => <TextField {...params} label="Unit/Section *" />}
                 />
-                <TextField
-                  label="Date of Transaction *"
+                <TextField label="Date of Transaction *"
                   type="date"
                   value={csatForm.dateOfTransaction}
                   InputProps={{ readOnly: true }}
@@ -2183,15 +2181,13 @@ export default function TicketDetailPage() {
                 />
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  label="First Name *"
+                <TextField label="First Name *"
                   disabled={!!user?.firstName}
                   value={csatForm.clientFirstName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientFirstName: e.target.value }))}
                   fullWidth
                 />
-                <TextField
-                  label="Middle Initial"
+                <TextField label="Middle Initial"
                   disabled={!!user?.middleName}
                   value={csatForm.clientMiddleInitial}
                   onChange={(e) =>
@@ -2199,15 +2195,13 @@ export default function TicketDetailPage() {
                   }
                   sx={{ width: 100 }}
                 />
-                <TextField
-                  label="Last Name *"
+                <TextField label="Last Name *"
                   disabled={!!user?.lastName}
                   value={csatForm.clientLastName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientLastName: e.target.value }))}
                   fullWidth
                 />
-                <TextField
-                  label="Suffix"
+                <TextField label="Suffix"
                   disabled={!!user?.suffix}
                   value={csatForm.suffix}
                   onChange={(e) => setCsatForm((f) => ({ ...f, suffix: e.target.value }))}
@@ -2215,21 +2209,19 @@ export default function TicketDetailPage() {
                 />
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  label="Age"
+                <TextField label="Age"
                   type="number"
                   inputProps={{ min: 20, max: 89 }}
                   value={csatForm.age ?? ''}
                   onChange={(e) => setCsatForm((f) => ({ ...f, age: Number(e.target.value) }))}
                   sx={{ maxWidth: 200 }}
                 />
-                <TextField
-                  label="Religion"
+                <TextField label="Religion"
                   value={csatForm.religion ?? ''}
                   onChange={(e) => setCsatForm((f) => ({ ...f, religion: e.target.value }))}
                   sx={{ flex: 1 }}
                 />
-                <TextField
+                <TextField inputProps={{ maxLength: 255 }}
                   select
                   label="Sex *"
                   disabled={!!user?.sex}
@@ -2242,8 +2234,7 @@ export default function TicketDetailPage() {
                   <MenuItem value="Other">Other</MenuItem>
                   <MenuItem value="Prefer Not to Say">Prefer Not to Say</MenuItem>
                 </TextField>
-                <TextField
-                  label="Contact Number"
+                <TextField label="Contact Number"
                   disabled={!!user?.phoneNumber}
                   value={csatForm.contactNumber ?? ''}
                   onChange={(e) => {
@@ -2257,8 +2248,7 @@ export default function TicketDetailPage() {
                   sx={{ flex: 1 }}
                 />
               </Stack>
-              <TextField
-                label="Technician Name"
+              <TextField label="Technician Name"
                 value={csatForm.technicianName}
                 InputProps={{ readOnly: true }}
                 disabled
@@ -2490,7 +2480,7 @@ export default function TicketDetailPage() {
       <Dialog open={kbPickerOpen} onClose={() => setKbPickerOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Load from Knowledge Base</DialogTitle>
         <DialogContent dividers>
-          <TextField
+          <TextField inputProps={{ maxLength: 255 }}
             fullWidth
             size="small"
             placeholder="Search articles by title or content..."
