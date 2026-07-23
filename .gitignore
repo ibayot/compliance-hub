@@ -49,3 +49,5 @@ backend/test/
 # EXCEPTION: Do not ignore anything from scripts folder
 !scripts/
 !scripts/**/*
+
+Compliance_Hub_Postman_Collection.json
