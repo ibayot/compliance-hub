@@ -166,8 +166,10 @@ export class AttendanceService implements OnModuleInit {
       throw new BadRequestException(`Invalid status: ${dto.status}`);
     }
 
+    // Use UTC+8 explicitly for day boundary comparisons
     const _d = new Date();
-    const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
+    _d.setHours(_d.getHours() + 8);
+    const today = `${_d.getUTCFullYear()}-${String(_d.getUTCMonth() + 1).padStart(2, '0')}-${String(_d.getUTCDate()).padStart(2, '0')}`;
     if (dto.date < today) {
       throw new BadRequestException('Cannot modify attendance for past dates');
     }
@@ -217,6 +219,20 @@ export class AttendanceService implements OnModuleInit {
     }
 
     return savedRecord;
+  }
+
+
+  async deleteAttendance(userId: number, date: string): Promise<{ message: string }> {
+    const existing = await this.attendanceRepo.findOne({
+      where: {
+        userId,
+        date: date,
+      }
+    });
+    if (existing) {
+      await this.attendanceRepo.remove(existing);
+    }
+    return { message: 'Attendance deleted' };
   }
 
   /** Bulk set attendance for multiple users */
@@ -399,8 +415,10 @@ export class AttendanceService implements OnModuleInit {
 
     if (EXCLUDED_FROM_ATTENDANCE.has(user.role as UserRole)) return;
 
+    // Use UTC+8 explicitly for day boundary comparisons
     const _d = new Date();
-    const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
+    _d.setHours(_d.getHours() + 8);
+    const today = `${_d.getUTCFullYear()}-${String(_d.getUTCMonth() + 1).padStart(2, '0')}-${String(_d.getUTCDate()).padStart(2, '0')}`;
     const record = await this.attendanceRepo.findOne({ where: { userId, date: today } });
 
     await auditContext.run(
@@ -462,8 +480,10 @@ export class AttendanceService implements OnModuleInit {
     if (!dto.date) throw new BadRequestException('date is required');
 
     // Only allow setting current date onwards
+    // Use UTC+8 explicitly for day boundary comparisons
     const _d = new Date();
-    const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
+    _d.setHours(_d.getHours() + 8);
+    const today = `${_d.getUTCFullYear()}-${String(_d.getUTCMonth() + 1).padStart(2, '0')}-${String(_d.getUTCDate()).padStart(2, '0')}`;
     if (dto.date < today) {
       throw new BadRequestException('Cannot modify office days in the past');
     }

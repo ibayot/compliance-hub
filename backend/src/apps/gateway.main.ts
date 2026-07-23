@@ -79,6 +79,71 @@ async function checkServiceHealth(baseUrl: string): Promise<boolean> {
   }
 }
 
+// --- DDoS IP Blocking Store ---
+// In-memory store: ip -> { count, windowStart, blockedUntil }
+const ipStore = new Map<string, { count: number; windowStart: number; blockedUntil: number }>();
+const DDOS_WINDOW_MS = 10_000;       // 10-second detection window
+const DDOS_MAX_IN_WINDOW = 200;       // >200 requests in 10s = DDoS
+const DDOS_BLOCK_DURATION_MS = 15 * 60 * 1000; // 15-minute block
+
+function createDdosMiddleware() {
+  return (req: Request, res: Response, next: NextFunction) => {
+    // Skip DDoS blocking when VAPT mode is enabled (allow security scanners through)
+    if (process.env.VAPT_MODE === 'true') return next();
+
+    const ip = (req.headers['x-forwarded-for'] as string || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+    const now = Date.now();
+    let entry = ipStore.get(ip);
+
+    if (!entry) {
+      entry = { count: 0, windowStart: now, blockedUntil: 0 };
+      ipStore.set(ip, entry);
+    }
+
+    // Check if currently blocked
+    if (now < entry.blockedUntil) {
+      const remainingSecs = Math.ceil((entry.blockedUntil - now) / 1000);
+      console.warn(`[DDOS] Blocked IP ${ip} attempted request. ${remainingSecs}s remaining.`);
+      return res.status(429).json({
+        error: 'ip_blocked',
+        message: `Your IP has been temporarily blocked due to suspicious activity. Please try again in ${remainingSecs} seconds.`,
+        retryAfter: remainingSecs,
+      });
+    }
+
+    // Reset window if expired
+    if (now - entry.windowStart > DDOS_WINDOW_MS) {
+      entry.count = 0;
+      entry.windowStart = now;
+    }
+
+    entry.count++;
+
+    // Block if threshold exceeded
+    if (entry.count > DDOS_MAX_IN_WINDOW) {
+      entry.blockedUntil = now + DDOS_BLOCK_DURATION_MS;
+      console.warn(`[DDOS] IP ${ip} blocked for 15 minutes after ${entry.count} requests in ${DDOS_WINDOW_MS / 1000}s.`);
+      return res.status(429).json({
+        error: 'ip_blocked',
+        message: 'Your IP has been temporarily blocked due to excessive requests (DDoS protection). Try again in 15 minutes.',
+        retryAfter: DDOS_BLOCK_DURATION_MS / 1000,
+      });
+    }
+
+    next();
+  };
+}
+
+// Periodically clean up expired block entries to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of ipStore.entries()) {
+    if (now >= entry.blockedUntil && now - entry.windowStart > DDOS_WINDOW_MS * 2) {
+      ipStore.delete(ip);
+    }
+  }
+}, 5 * 60 * 1000); // cleanup every 5 minutes
+
 async function bootstrap() {
   // IMPORTANT: bodyParser must be disabled on the gateway.
   // NestJS enables it by default, which consumes the raw request body stream before
@@ -92,6 +157,9 @@ async function bootstrap() {
   const strictMode = (process.env.MICROSERVICES_STRICT || 'true').toLowerCase() !== 'false';
 
   app.use(helmet());
+
+  // DDoS IP blocking (applied before rate limiting)
+  app.use(createDdosMiddleware());
 
   // Attach/preserve correlation ID on every request so all downstream services
   // can trace a single frontend interaction through the logs.

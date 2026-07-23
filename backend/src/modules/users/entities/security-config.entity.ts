@@ -10,4 +10,10 @@ export class SecurityConfig {
 
   @Column({ name: 'mfa_test_mode', default: false })
   mfaTestMode: boolean;
+
+  @Column({ name: 'vapt_mode', default: false })
+  vaptMode: boolean;
+
+  @Column({ name: 'app_mode', default: 'full' })
+  appMode: string;
 }

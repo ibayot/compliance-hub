@@ -65,7 +65,7 @@ export class TicketEscalation {
    * backend/storage/escalation-proofs/{ticketId}/).
    * JSON-serialised array, e.g. ["escalation-proofs/abc123/photo1.jpg"]
    */
-  @Column({ name: 'proof_files', type: 'json', nullable: true })
+  @Column({ name: 'proof_files', type: 'simple-json', nullable: true })
   proofFiles: string[] | null;
 
   @CreateDateColumn({ name: 'created_at' })

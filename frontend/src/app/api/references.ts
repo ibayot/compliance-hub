@@ -662,6 +662,11 @@ export const ticketsApi = {
     return response.data;
   },
 
+  getGeneralOverviewStats: async (year: number, month: number): Promise<TechAssignedStats & { open: number }> => {
+    const response = await apiClient.get(`/tickets/general-overview-stats?year=${year}&month=${month}`);
+    return response.data;
+  },
+
   getTechnicians: async (): Promise<TechnicianOption[]> => {
     const response = await apiClient.get(`/tickets/technicians`);
     return response.data;
@@ -1072,6 +1077,10 @@ export const attendanceApi = {
     const response = await apiClient.get(`/attendance?${params}`);
     return response.data;
   },
+    deleteAttendance: async (userId: number, date: string): Promise<any> => {
+      const response = await apiClient.delete(`/attendance/${userId}/${date}`);
+      return response.data;
+    },
   setAttendance: async (data: {
     userId: number;
     date: string;

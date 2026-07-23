@@ -35,6 +35,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
   const [confirmPassword, setConfirmPassword] = useState('');
 
   // Profile fields
+  const [staffId, setStaffId] = useState('');
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -53,6 +54,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
       if (userId) {
         usersApi.getUserById(userId).then(user => {
           if (user) {
+            setStaffId(user.staffId || '');
             setFirstName(user.firstName || '');
             setMiddleName(user.middleName || '');
             setLastName(user.lastName || '');
@@ -80,7 +82,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
       return;
     }
 
-    if (!firstName || !lastName || !phoneNumber || !sex || unitId === '') {
+    if (!staffId || !firstName || !lastName || !phoneNumber || !sex || unitId === '') {
       setError('Please fill in all required profile fields.');
       return;
     }

@@ -779,7 +779,7 @@ export default function TicketsPage() {
         <Card sx={{ mb: 2 }}>
           <CardContent>
             <Stack direction="row" spacing={2} flexWrap="wrap">
-              <TextField
+              <TextField inputProps={{ maxLength: 255 }}
                 select
                 label="Status"
                 value={filterStatus}
@@ -796,7 +796,7 @@ export default function TicketsPage() {
                 <MenuItem value="freeze">On Hold</MenuItem>
                 <MenuItem value="duplicate">Duplicate</MenuItem>
               </TextField>
-              <TextField
+              <TextField inputProps={{ maxLength: 255 }}
                 select
                 label="Type"
                 value={filterType}
@@ -1488,7 +1488,7 @@ export default function TicketsPage() {
               if (filteredCategories.length === 0) return null;
               
               return (
-                <TextField
+                <TextField inputProps={{ maxLength: 255 }}
                   select
                   label="Category"
                   value={form.categoryId ?? ''}
@@ -1512,7 +1512,7 @@ export default function TicketsPage() {
               if (filteredIssues.length === 0) return null;
               
               return (
-                <TextField
+                <TextField inputProps={{ maxLength: 255 }}
                   select
                   label="Issue"
                   value={form.issueTypeId ?? ''}
@@ -1530,8 +1530,7 @@ export default function TicketsPage() {
               );
             })()}
 
-            <TextField
-              label="Subject *"
+            <TextField label="Subject *"
               value={form.subject}
               onChange={(e) => setForm({ ...form, subject: e.target.value })}
               fullWidth
@@ -1544,8 +1543,7 @@ export default function TicketsPage() {
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
-                    <TextField
-                      label="Equipment Type *"
+                    <TextField label="Equipment Type *"
                       size="small"
                       fullWidth
                       value={disposalDetails.equipmentType}
@@ -1553,8 +1551,7 @@ export default function TicketsPage() {
                     />
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <TextField
-                      label="Serial Number *"
+                    <TextField label="Serial Number *"
                       size="small"
                       fullWidth
                       value={disposalDetails.serialNumber}
@@ -1562,8 +1559,7 @@ export default function TicketsPage() {
                     />
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <TextField
-                      label="Property Number *"
+                    <TextField label="Property Number *"
                       size="small"
                       fullWidth
                       value={disposalDetails.propertyNumber}
@@ -1571,8 +1567,7 @@ export default function TicketsPage() {
                     />
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <TextField
-                      label="Reason for Disposal *"
+                    <TextField label="Reason for Disposal *"
                       size="small"
                       fullWidth
                       value={disposalDetails.reason}
@@ -1634,8 +1629,7 @@ export default function TicketsPage() {
                 </CardContent>
               </Card>
             )}
-            <TextField
-              label="Description *"
+            <TextField label="Description *"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               fullWidth
@@ -1683,8 +1677,7 @@ export default function TicketsPage() {
               }
               isOptionEqualToValue={(option, value) => option.id === value.id}
               renderInput={(params) => (
-                <TextField
-                  {...params}
+                <TextField {...params}
                   label="Requested For (Optional)"
                   helperText="Leave blank if you are requesting for yourself. Select a user to request on their behalf."
                   fullWidth
@@ -1694,7 +1687,7 @@ export default function TicketsPage() {
               fullWidth
             />
             {(canManageAll || isTechnician) && (
-              <TextField
+              <TextField inputProps={{ maxLength: 255 }}
                 select
                 label="Priority"
                 value={form.priority}
@@ -1785,8 +1778,7 @@ export default function TicketsPage() {
               onChange={(_, newValue) => setSelectedTechId(newValue ? String(newValue.id) : '')}
               isOptionEqualToValue={(option, value) => option.id === value.id}
               renderInput={(params) => (
-                <TextField
-                  {...params}
+                <TextField {...params}
                   label="Select Technician"
                   fullWidth
                   error={technicians.length === 0}
@@ -1831,8 +1823,7 @@ export default function TicketsPage() {
             onChange={(_, newValue) => setEscalateToId(newValue ? String(newValue.id) : '')}
             isOptionEqualToValue={(option, value) => option.id === value.id}
             renderInput={(params) => (
-              <TextField
-                {...params}
+              <TextField {...params}
                 label="Escalate To"
                 fullWidth
                 size="small"
@@ -1848,7 +1839,7 @@ export default function TicketsPage() {
             clearOnEscape
             fullWidth
           />
-          <TextField
+          <TextField inputProps={{ maxLength: 255 }}
             fullWidth
             multiline
             rows={3}
@@ -1943,8 +1934,7 @@ export default function TicketsPage() {
                   onInputChange={(_, v) => setCsatForm((f) => ({ ...f, unitSection: v }))}
                   renderInput={(params) => <TextField {...params} label="Unit/Section *" />}
                 />
-                <TextField
-                  label="Date of Transaction *"
+                <TextField label="Date of Transaction *"
                   type="date"
                   value={csatForm.dateOfTransaction}
                   InputProps={{ readOnly: true }}
@@ -1955,15 +1945,13 @@ export default function TicketsPage() {
               </Stack>
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  label="First Name *"
+                <TextField label="First Name *"
                   disabled={!!user?.firstName}
                   value={csatForm.clientFirstName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientFirstName: e.target.value }))}
                   fullWidth
                 />
-                <TextField
-                  label="Middle Initial"
+                <TextField label="Middle Initial"
                   disabled={!!user?.middleName}
                   value={csatForm.clientMiddleInitial}
                   onChange={(e) =>
@@ -1971,15 +1959,13 @@ export default function TicketsPage() {
                   }
                   sx={{ width: 100 }}
                 />
-                <TextField
-                  label="Last Name *"
+                <TextField label="Last Name *"
                   disabled={!!user?.lastName}
                   value={csatForm.clientLastName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientLastName: e.target.value }))}
                   fullWidth
                 />
-                <TextField
-                  label="Suffix"
+                <TextField label="Suffix"
                   disabled={!!user?.suffix}
                   value={csatForm.suffix}
                   onChange={(e) => setCsatForm((f) => ({ ...f, suffix: e.target.value }))}
@@ -1988,21 +1974,19 @@ export default function TicketsPage() {
               </Stack>
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  label="Age"
+                <TextField label="Age"
                   type="number"
                   inputProps={{ min: 20, max: 89 }}
                   value={csatForm.age ?? ''}
                   onChange={(e) => setCsatForm((f) => ({ ...f, age: Number(e.target.value) }))}
                   sx={{ maxWidth: 100 }}
                 />
-                <TextField
-                  label="Religion"
+                <TextField label="Religion"
                   value={csatForm.religion ?? ''}
                   onChange={(e) => setCsatForm((f) => ({ ...f, religion: e.target.value }))}
                   sx={{ flex: 1 }}
                 />
-                <TextField
+                <TextField inputProps={{ maxLength: 255 }}
                   select
                   label="Sex *"
                   disabled={!!user?.sex}
@@ -2015,8 +1999,7 @@ export default function TicketsPage() {
                   <MenuItem value="Other">Other</MenuItem>
                   <MenuItem value="Prefer Not to Say">Prefer Not to Say</MenuItem>
                 </TextField>
-                <TextField
-                  label="Contact Number"
+                <TextField label="Contact Number"
                   disabled={!!user?.phoneNumber}
                   value={csatForm.contactNumber ?? ''}
                   onChange={(e) => {
@@ -2031,8 +2014,7 @@ export default function TicketsPage() {
                 />
               </Stack>
 
-              <TextField
-                label="Technician Name"
+              <TextField label="Technician Name"
                 value={csatForm.technicianName}
                 InputProps={{ readOnly: true }}
                 disabled
