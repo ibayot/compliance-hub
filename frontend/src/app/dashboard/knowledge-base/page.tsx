@@ -145,6 +145,7 @@ export default function KnowledgeBasePage() {
             placeholder="Type keywords, tags, or topics (e.g. Internet, Printer, Email...)"
             value={searchQuery}
             onChange={handleSearchChange}
+            inputProps={{ maxLength: 1000 }}
             InputProps={{
               startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
             }}
@@ -244,6 +245,7 @@ export default function KnowledgeBasePage() {
               multiline
               rows={8}
               fullWidth
+              inputProps={{ maxLength: 1000 }}
             />
             <TextField
               label="Tags (comma separated)"
@@ -251,6 +253,7 @@ export default function KnowledgeBasePage() {
               onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })}
               placeholder="e.g. internet, connectivity, proxy"
               fullWidth
+              inputProps={{ maxLength: 255 }}
               helperText="Separate tags with commas."
             />
           </Stack>

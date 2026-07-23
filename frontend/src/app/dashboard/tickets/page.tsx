@@ -1533,6 +1533,7 @@ export default function TicketsPage() {
             <TextField label="Subject *"
               value={form.subject}
               onChange={(e) => setForm({ ...form, subject: e.target.value })}
+              inputProps={{ maxLength: 255 }}
               fullWidth
               placeholder="Brief description of your issue"
             />
@@ -1632,6 +1633,7 @@ export default function TicketsPage() {
             <TextField label="Description *"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
+              inputProps={{ maxLength: 1000 }}
               fullWidth
               multiline
               rows={4}

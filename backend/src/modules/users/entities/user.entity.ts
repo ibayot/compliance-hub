@@ -61,16 +61,16 @@ export class User {
   @Column({ name: 'mfa_last_verified_at', type: 'timestamp', nullable: true })
   mfaLastVerifiedAt: Date;
 
-  @Column({ name: 'first_name', nullable: true })
+  @Column({ name: 'first_name', nullable: true, length: 100 })
   firstName: string;
 
-  @Column({ name: 'middle_name', nullable: true })
+  @Column({ name: 'middle_name', nullable: true, length: 100 })
   middleName: string;
 
-  @Column({ name: 'last_name', nullable: true })
+  @Column({ name: 'last_name', nullable: true, length: 100 })
   lastName: string;
 
-  @Column({ name: 'suffix', nullable: true })
+  @Column({ name: 'suffix', nullable: true, length: 5 })
   suffix: string;
 
   @Column({ name: 'phone_number', nullable: true })
@@ -79,16 +79,16 @@ export class User {
   @Column({ name: 'sex', nullable: true })
   sex: string;
 
-  @Column({ name: 'staff_id', nullable: true })
+  @Column({ name: 'staff_id', nullable: true, length: 6 })
   staffId: string;
 
-  @Column({ name: 'position', nullable: true })
+  @Column({ name: 'position', nullable: true, length: 12 })
   position: string;
 
-  @Column({ name: 'position_full', nullable: true })
+  @Column({ name: 'position_full', nullable: true, length: 100 })
   positionFull: string;
 
-  @Column({ name: 'designation', nullable: true })
+  @Column({ name: 'designation', nullable: true, length: 100 })
   designation: string;
 
   @Column({ name: 'ticket_main_focal', default: false })

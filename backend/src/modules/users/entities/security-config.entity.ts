@@ -5,7 +5,7 @@ export class SecurityConfig {
   @PrimaryColumn()
   id: number;
 
-  @Column({ name: 'default_password', default: 'Changeme123!@#' })
+  @Column({ name: 'default_password', default: 'Changeme123!@#', length: 100 })
   defaultPassword: string;
 
   @Column({ name: 'mfa_test_mode', default: false })

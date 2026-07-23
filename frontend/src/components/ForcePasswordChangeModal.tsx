@@ -83,7 +83,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
     }
 
     if (!staffId || !firstName || !lastName || !phoneNumber || !sex || unitId === '') {
-      setError('Please fill in all required profile fields.');
+      setError('Please fill in all required profile fields, including Staff ID.');
       return;
     }
 
@@ -154,11 +154,27 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
             <Grid item xs={12} sm={4}>
               <TextField
                 margin="dense"
+                label="Staff ID"
+                fullWidth
+                required
+                value={staffId}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setStaffId(digits);
+                }}
+                inputProps={{ inputMode: 'numeric', maxLength: 6 }}
+                placeholder="6 digits"
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                margin="dense"
                 label="First Name"
                 fullWidth
                 required
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
+                inputProps={{ maxLength: 100 }}
               />
             </Grid>
             <Grid item xs={12} sm={4}>
@@ -168,6 +184,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
                 fullWidth
                 value={middleName}
                 onChange={(e) => setMiddleName(e.target.value)}
+                inputProps={{ maxLength: 100 }}
               />
             </Grid>
             <Grid item xs={12} sm={4}>
@@ -178,6 +195,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
                 required
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
+                inputProps={{ maxLength: 100 }}
               />
             </Grid>
 
@@ -237,7 +255,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
             variant="contained"
             color="primary"
             fullWidth
-            disabled={loading || !newPassword || !confirmPassword || !firstName || !lastName || !phoneNumber || !sex || unitId === ''}
+            disabled={loading || !newPassword || !confirmPassword || !staffId || !firstName || !lastName || !phoneNumber || !sex || unitId === ''}
           >
             {loading ? 'Saving Profile...' : 'Save Profile & Password'}
           </Button>

@@ -247,6 +247,7 @@ function SecuritySettingsCard() {
                 label="System Default Password"
                 value={defaultPassword}
                 onChange={(e) => setDefaultPassword(e.target.value)}
+                  inputProps={{ maxLength: 100 }}
                 helperText="This password is used as the initial password for new users and when resetting passwords."
               />
             </Grid>
@@ -1154,6 +1155,7 @@ function FocalUserManagementCard() {
                   required
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    inputProps={{ maxLength: 100 }}
                   fullWidth
                   autoComplete="off"
                 />
@@ -1180,6 +1182,7 @@ function FocalUserManagementCard() {
                   label="First Name"
                   value={form.firstName}
                   onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                    inputProps={{ maxLength: 100 }}
                   fullWidth
                   autoComplete="off"
                 />
@@ -1189,6 +1192,7 @@ function FocalUserManagementCard() {
                   label="Middle Name"
                   value={form.middleName}
                   onChange={(e) => setForm({ ...form, middleName: e.target.value })}
+                    inputProps={{ maxLength: 100 }}
                   fullWidth
                   autoComplete="off"
                 />
@@ -1199,6 +1203,7 @@ function FocalUserManagementCard() {
                   label="Last Name"
                   value={form.lastName}
                   onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                    inputProps={{ maxLength: 100 }}
                   fullWidth
                   autoComplete="off"
                 />
@@ -1208,6 +1213,7 @@ function FocalUserManagementCard() {
                   label="Suffix (Jr./Sr.)"
                   value={form.suffix}
                   onChange={(e) => setForm({ ...form, suffix: e.target.value })}
+                    inputProps={{ maxLength: 5 }}
                   fullWidth
                   autoComplete="off"
                 />
@@ -1459,6 +1465,7 @@ function FocalUserManagementCard() {
                   label="Email"
                   value={editUser?.email || ''}
                   onChange={(e) => setEditUser((prev: any) => ({ ...prev, email: e.target.value }))}
+                    inputProps={{ maxLength: 100 }}
                   fullWidth
                 />
               </Grid>
@@ -1466,9 +1473,12 @@ function FocalUserManagementCard() {
                 <TextField
                   label="Staff ID"
                   value={editUser?.staffId || ''}
-                  onChange={(e) =>
-                    setEditUser((prev: any) => ({ ...prev, staffId: e.target.value }))
-                  }
+                  onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "").slice(0, 6);
+                      setEditUser((prev: any) => ({ ...prev, staffId: digits }));
+                    }}
+                    inputProps={{ inputMode: "numeric", maxLength: 6 }}
+                    placeholder="6 digits"
                   fullWidth
                   helperText="Optional employee identifier"
                 />
@@ -1480,6 +1490,7 @@ function FocalUserManagementCard() {
                   onChange={(e) =>
                     setEditUser((prev: any) => ({ ...prev, firstName: e.target.value }))
                   }
+                    inputProps={{ maxLength: 100 }}
                   fullWidth
                 />
               </Grid>
@@ -1490,6 +1501,7 @@ function FocalUserManagementCard() {
                   onChange={(e) =>
                     setEditUser((prev: any) => ({ ...prev, middleName: e.target.value }))
                   }
+                    inputProps={{ maxLength: 100 }}
                   fullWidth
                 />
               </Grid>
@@ -1500,6 +1512,7 @@ function FocalUserManagementCard() {
                   onChange={(e) =>
                     setEditUser((prev: any) => ({ ...prev, lastName: e.target.value }))
                   }
+                    inputProps={{ maxLength: 100 }}
                   fullWidth
                 />
               </Grid>
@@ -1510,6 +1523,7 @@ function FocalUserManagementCard() {
                   onChange={(e) =>
                     setEditUser((prev: any) => ({ ...prev, suffix: e.target.value }))
                   }
+                    inputProps={{ maxLength: 5 }}
                   fullWidth
                 />
               </Grid>
@@ -1520,6 +1534,7 @@ function FocalUserManagementCard() {
                   onChange={(e) =>
                     setEditUser((prev: any) => ({ ...prev, position: e.target.value }))
                   }
+                    inputProps={{ maxLength: 12 }}
                   fullWidth
                   helperText="e.g. ITO I"
                 />
@@ -1531,6 +1546,7 @@ function FocalUserManagementCard() {
                   onChange={(e) =>
                     setEditUser((prev: any) => ({ ...prev, positionFull: e.target.value }))
                   }
+                    inputProps={{ maxLength: 100 }}
                   fullWidth
                   helperText="e.g. Information Technology Officer I"
                 />
@@ -1542,6 +1558,7 @@ function FocalUserManagementCard() {
                   onChange={(e) =>
                     setEditUser((prev: any) => ({ ...prev, designation: e.target.value }))
                   }
+                    inputProps={{ maxLength: 100 }}
                   fullWidth
                   helperText="e.g. Head, Software Dev"
                 />

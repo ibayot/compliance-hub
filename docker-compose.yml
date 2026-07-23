@@ -12,7 +12,7 @@ services:
       MARIADB_ROOT_PASSWORD: admin
       TZ: Asia/Manila
     ports:
-      - "0.0.0.0:3307:3306"
+      - "3307:3306"
     volumes:
       - ./db-init:/docker-entrypoint-initdb.d
       - db_data:/var/lib/mysql
@@ -30,7 +30,7 @@ services:
       - app_network
     restart: always
     ports:
-      - "0.0.0.0:6379:6379"
+      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -65,7 +65,7 @@ services:
       - DB_BOOTSTRAP=false
       - REDIS_HOST=redis
     ports:
-      - "0.0.0.0:4101:4101"
+      - "4101:4101"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4101/api/docs').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
@@ -103,7 +103,7 @@ services:
       - COMMENT_ATTACHMENT_STORAGE_ROOT=/app/uploads/comments
       - ESCALATION_STORAGE_ROOT=/app/uploads/escalations
     ports:
-      - "0.0.0.0:4102:4102"
+      - "4102:4102"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4102/api/docs').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
@@ -139,7 +139,7 @@ services:
       - REDIS_HOST=redis
       - USERS_SERVICE_URL=http://users-service:4101
     ports:
-      - "0.0.0.0:4103:4103"
+      - "4103:4103"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4103/api/docs').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
@@ -175,7 +175,7 @@ services:
       - RATE_LIMIT_WINDOW_MS=60000
       - RATE_LIMIT_MAX_REQUESTS=4000
     ports:
-      - "0.0.0.0:4000:4000"
+      - "4000:4000"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
@@ -200,7 +200,7 @@ services:
       gateway:
         condition: service_healthy
     ports:
-      - "0.0.0.0:3000:80"
+      - "3000:80"
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
       interval: 15s

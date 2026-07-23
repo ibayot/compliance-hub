@@ -14,22 +14,22 @@ export class TicketingConfig {
   @Column({ name: 'auto_close_days', type: 'int', default: 3 })
   autoCloseDays: number;
 
-  @Column({ name: 'smtp_host', type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'smtp_host', type: 'varchar', length: 100, nullable: true })
   smtpHost: string | null;
 
   @Column({ name: 'smtp_port', type: 'int', nullable: true })
   smtpPort: number | null;
 
-  @Column({ name: 'smtp_user', type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'smtp_user', type: 'varchar', length: 100, nullable: true })
   smtpUser: string | null;
 
-  @Column({ name: 'smtp_pass', type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'smtp_pass', type: 'varchar', length: 100, nullable: true })
   smtpPass: string | null;
 
-  @Column({ name: 'smtp_from', type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'smtp_from', type: 'varchar', length: 100, nullable: true })
   smtpFrom: string | null;
 
-  @Column({ name: 'smtp_from_name', type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'smtp_from_name', type: 'varchar', length: 100, nullable: true })
   smtpFromName: string | null;
 
   @Column({ name: 'primary_smtp_sent_today', type: 'int', default: 0 })
@@ -68,6 +68,6 @@ export class TicketingConfig {
   @Column({ name: 'is_email_notifications_enabled', type: 'boolean', default: true })
   isEmailNotificationsEnabled: boolean;
 
-  @Column({ name: 'email_test_override', type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'email_test_override', type: 'varchar', length: 100, nullable: true })
   emailTestOverride: string | null;
 }

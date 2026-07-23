@@ -94,6 +94,7 @@ export default function TicketSettingsPage() {
   }>({ keywords: [], targetTicketType: 'it_support', targetCategoryId: '', targetIssueTypeId: '', isActive: true });
   const [keywordInput, setKeywordInput] = useState('');
   const [ruleSubmitting, setRuleSubmitting] = useState(false);
+  const [ruleSearch, setRuleSearch] = useState("");
 
   // — Specific Issues —
   const [issues, setIssues] = useState<TicketIssueType[]>([]);
@@ -609,6 +610,7 @@ export default function TicketSettingsPage() {
                 size="small"
                 value={categorySearch}
                 onChange={(e) => setCategorySearch(e.target.value)}
+                  inputProps={{ maxLength: 100 }}
                 sx={{ minWidth: 300 }}
               />
               <Button
@@ -647,7 +649,16 @@ export default function TicketSettingsPage() {
                     </TableRow>
                   ) : (
                     categories
-                      .filter((c) => !c.isDeleted && (categorySearch.trim() === '' || c.name.toLowerCase().includes(categorySearch.toLowerCase())))
+                      .filter((c) => {
+                      if (c.isDeleted) return false;
+                      const s = categorySearch.trim().toLowerCase();
+                      if (!s) return true;
+                      if (c.name.toLowerCase().includes(s)) return true;
+                      if (c.isIt && "it support".includes(s)) return true;
+                      if (c.isDesktop && "desktop support".includes(s)) return true;
+                      if (c.isPantawid && "pantawid".includes(s)) return true;
+                      return false;
+                    })
                       .map((cat) => (
                         <TableRow key={cat.id} hover>
                           <TableCell>
@@ -701,6 +712,7 @@ export default function TicketSettingsPage() {
                 size="small"
                 value={issueSearch}
                 onChange={(e) => setIssueSearch(e.target.value)}
+                  inputProps={{ maxLength: 100 }}
                 sx={{ minWidth: 300 }}
               />
               <Button
@@ -736,7 +748,7 @@ export default function TicketSettingsPage() {
                   </TableHead>
                   <TableBody>
                     {issues
-                        .filter((iss) => (issueSearch.trim() === '' || iss.name.toLowerCase().includes(issueSearch.toLowerCase())))
+                        .filter((iss) => (issueSearch.trim() === "" || iss.name.toLowerCase().includes(issueSearch.toLowerCase()) || (iss.category && iss.category.name && iss.category.name.toLowerCase().includes(issueSearch.toLowerCase()))))
                         .map((iss) => (
                       <TableRow key={iss.id} hover>
                         <TableCell>{iss.category?.name || <Typography variant="caption" color="error">Unlinked</Typography>}</TableCell>
@@ -785,6 +797,14 @@ export default function TicketSettingsPage() {
         {tab === 2 && (
           <CardContent>
             <Box display="flex" justifyContent="flex-end" mb={2}>
+              <TextField
+                placeholder="Search rules..."
+                size="small"
+                value={ruleSearch}
+                onChange={(e) => setRuleSearch(e.target.value)}
+                sx={{ minWidth: 300, mr: 2 }}
+                inputProps={{ maxLength: 100 }}
+              />
               <Button
                 startIcon={<AddIcon />}
                 variant="contained"
@@ -801,6 +821,7 @@ export default function TicketSettingsPage() {
                     <TableCell>Keyword</TableCell>
                     <TableCell>Support Type</TableCell>
                     <TableCell>Target Category</TableCell>
+                    <TableCell>Target Issue</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
@@ -821,7 +842,16 @@ export default function TicketSettingsPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    rules.map((rule) => (
+                    rules.filter(rule => {
+                      const s = ruleSearch.trim().toLowerCase();
+                      if (!s) return true;
+                      const kws = rule.keywords || [rule.keyword];
+                      const kwMatch = kws.some(k => k.toLowerCase().includes(s));
+                      const typeMatch = rule.targetTicketType && TYPE_LABELS[rule.targetTicketType] && TYPE_LABELS[rule.targetTicketType].toLowerCase().includes(s);
+                      const catMatch = (rule.targetCategory ?? rule.category)?.name?.toLowerCase().includes(s);
+                      const issueMatch = rule.targetIssueType?.name?.toLowerCase().includes(s);
+                      return kwMatch || typeMatch || catMatch || issueMatch;
+                    }).map((rule) => (
                       <TableRow key={rule.id} hover sx={{ '& td, & th': { height: 'auto', py: 1, verticalAlign: 'middle' } }}>
                         <TableCell>
                           <Box display="flex" gap={0.5} flexWrap="wrap">
@@ -841,6 +871,7 @@ export default function TicketSettingsPage() {
                           />
                         </TableCell>
                         <TableCell>{(rule.targetCategory ?? rule.category)?.name ?? '—'}</TableCell>
+                        <TableCell>{rule.targetIssueType?.name ?? "—"}</TableCell>
                         <TableCell>
                           <Chip
                             size="small"
@@ -1137,6 +1168,7 @@ export default function TicketSettingsPage() {
                         label="Test Override Email"
                         value={globalConfig.emailTestOverride || ''}
                         onChange={(e) => setGlobalConfig((prev) => ({ ...prev, emailTestOverride: e.target.value }))}
+                          inputProps={{ maxLength: 100 }}
                         fullWidth
                         helperText="If set, all system emails will be rerouted to this address. Leave blank for normal behavior."
                       />
@@ -1148,6 +1180,7 @@ export default function TicketSettingsPage() {
                       label="SMTP Host"
                       value={globalConfig.smtpHost || ''}
                       onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpHost: e.target.value }))}
+                        inputProps={{ maxLength: 100 }}
                       fullWidth
                     />
                     <TextField
@@ -1161,6 +1194,7 @@ export default function TicketSettingsPage() {
                       label="SMTP Username"
                       value={globalConfig.smtpUser || ''}
                       onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpUser: e.target.value }))}
+                        inputProps={{ maxLength: 100 }}
                       fullWidth
                     />
                     <TextField
@@ -1168,6 +1202,7 @@ export default function TicketSettingsPage() {
                       type="password"
                       value={globalConfig.smtpPass || ''}
                       onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpPass: e.target.value }))}
+                        inputProps={{ maxLength: 100 }}
                       fullWidth
                       helperText="Leave blank to keep existing password"
                     />
@@ -1175,12 +1210,14 @@ export default function TicketSettingsPage() {
                       label="From Email Address"
                       value={globalConfig.smtpFrom || ''}
                       onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpFrom: e.target.value }))}
+                        inputProps={{ maxLength: 100 }}
                       fullWidth
                     />
                     <TextField
                       label="From Name"
                       value={globalConfig.smtpFromName || ''}
                       onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpFromName: e.target.value }))}
+                        inputProps={{ maxLength: 100 }}
                       fullWidth
                     />
                     <Box display="flex" gap={2} alignItems="flex-start">
@@ -1359,6 +1396,7 @@ export default function TicketSettingsPage() {
               size="small"
               value={issueForm.name}
               onChange={(e) => setIssueForm({ ...issueForm, name: e.target.value })}
+                inputProps={{ maxLength: 150 }}
             />
             <TextField
               label="Description (Optional)"
@@ -1371,8 +1409,8 @@ export default function TicketSettingsPage() {
             />
             <TextField
               label="SLA Time Limit (hours)"
-              type="number"
-              inputProps={{ min: 1, max: 168 }}
+                type="number"
+                inputProps={{ min: 1, max: 99, maxLength: 2 }}
               fullWidth
               size="small"
               value={issueForm.slaHours}
@@ -1381,8 +1419,8 @@ export default function TicketSettingsPage() {
             />
             <TextField
               label="Allowable Pause Hours *"
-              type="number"
-              inputProps={{ min: 0, max: 168 }}
+                type="number"
+                inputProps={{ min: 0, max: 120, maxLength: 3 }}
               fullWidth
               size="small"
               value={issueForm.allowablePauseHours}
@@ -1470,6 +1508,7 @@ export default function TicketSettingsPage() {
               label="Category Name *"
               value={catForm.name}
               onChange={(e) => setCatForm({ ...catForm, name: e.target.value })}
+                inputProps={{ maxLength: 150 }}
               fullWidth
             />
             <Typography variant="subtitle2" color="text.secondary">
@@ -1538,6 +1577,8 @@ export default function TicketSettingsPage() {
                 label="Keywords *"
                 value={keywordInput}
                 onChange={(e) => setKeywordInput(e.target.value)}
+                  inputProps={{ maxLength: 50 }}
+                  error={keywordInput.length > 50}
                 onKeyDown={(e) => {
                   if ((e.key === 'Enter' || e.key === ',') && keywordInput.trim()) {
                     e.preventDefault();

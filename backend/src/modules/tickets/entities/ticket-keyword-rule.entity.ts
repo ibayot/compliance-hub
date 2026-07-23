@@ -16,7 +16,7 @@ export class TicketKeywordRule {
   id: string;
 
   /** Primary keyword (first of the group, kept for display/legacy) */
-  @Column({ type: 'varchar', length: 100 })
+  @Column({ type: 'varchar', length: 50 })
   keyword: string;
 
   /** JSON array of all keywords/phrases in this rule (case-insensitive) */
