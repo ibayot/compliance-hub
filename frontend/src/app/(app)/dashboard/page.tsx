@@ -304,7 +304,7 @@ export default function DashboardPage() {
               color="warning"
               onClick={() => {
                 setPendingSatReminderOpen(false);
-                router.push('/dashboard/tickets?filter=pending_satisfaction');
+                router.push('/operations/tickets?filter=pending_satisfaction');
               }}
             >
               Rate Now
@@ -412,7 +412,7 @@ export default function DashboardPage() {
                   size="small"
                   color="warning"
                   startIcon={<StarIcon />}
-                  onClick={() => router.push('/dashboard/tickets?filter=pending_satisfaction')}
+                  onClick={() => router.push('/operations/tickets?filter=pending_satisfaction')}
                 >
                   Rate Now
                 </Button>
@@ -432,7 +432,7 @@ export default function DashboardPage() {
                 variant="contained"
                 fullWidth
                 startIcon={<TicketIcon />}
-                onClick={() => router.push('/dashboard/tickets')}
+                onClick={() => router.push('/operations/tickets')}
               >
                 My Tickets
               </Button>
@@ -442,7 +442,7 @@ export default function DashboardPage() {
                   fullWidth
                   color="warning"
                   startIcon={<StarIcon />}
-                  onClick={() => router.push('/dashboard/tickets?filter=pending_satisfaction')}
+                  onClick={() => router.push('/operations/tickets?filter=pending_satisfaction')}
                 >
                   Fill Client Satisfaction ({pendingCount})
                 </Button>
@@ -708,7 +708,7 @@ export default function DashboardPage() {
                   cursor: 'pointer',
                   '&:hover': { boxShadow: 4 },
                 }}
-                onClick={() => (window.location.href = '/dashboard/incidents')}
+                onClick={() => (window.location.href = '/governance/incidents')}
               >
                 <CardContent>
                   <Box display="flex" alignItems="center" gap={2}>
@@ -836,7 +836,7 @@ export default function DashboardPage() {
                   </Typography>
                 </Box>
               </Box>
-              <Button variant="outlined" size="small" href="/dashboard/tickets">
+              <Button variant="outlined" size="small" href="/operations/tickets">
                 View All Tickets
               </Button>
             </Box>
@@ -1174,7 +1174,7 @@ export default function DashboardPage() {
                     : 'KPI visibility scoped to your assigned unit(s).'}
                 </Typography>
               </Box>
-              <Button variant="outlined" href="/dashboard/kpi">
+              <Button variant="outlined" href="/governance/kpi">
                 Open KPI Workspace
               </Button>
             </Box>
@@ -1322,15 +1322,15 @@ export default function DashboardPage() {
                 <Box display="flex" flexDirection="column" gap={2} mt={2}>
                   {isFullDashboard && (
                     <>
-                      <Button variant="contained" href="/dashboard/documents/upload" fullWidth>
+                      <Button variant="contained" href="/governance/documents/upload" fullWidth>
                         Upload Document
                       </Button>
-                      <Button variant="outlined" href="/dashboard/issuances" fullWidth>
+                      <Button variant="outlined" href="/governance/issuances" fullWidth>
                         View Issuances
                       </Button>
                     </>
                   )}
-                  <Button variant="outlined" href="/dashboard/tickets" fullWidth>
+                  <Button variant="outlined" href="/operations/tickets" fullWidth>
                     View Issues
                   </Button>
 

@@ -77,7 +77,7 @@ export default function DocumentDetailsPage() {
       return;
     }
 
-    router.push('/dashboard/documents');
+    router.push('/governance/documents');
   };
 
   const handleViewVersion = (versionId: string) => {

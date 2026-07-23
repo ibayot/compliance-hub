@@ -86,21 +86,21 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     {
       label: 'Tickets',
       icon: TicketsIcon,
-      path: '/dashboard/tickets',
+      path: '/operations/tickets',
       roles: ['all'],
       service: 'ticketing',
     },
     {
       label: 'Knowledge Base',
       icon: KBIcon,
-      path: '/dashboard/knowledge-base',
+      path: '/operations/knowledge-base',
       roles: ['all'],
       service: 'ticketing',
     },
     {
       label: 'Documents',
       icon: DocumentsIcon,
-      path: '/dashboard/documents',
+      path: '/governance/documents',
       roles: ['super_admin'],
       service: 'compliance',
       capabilityKeys: ['isDocumentsAccess'],
@@ -108,7 +108,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     {
       label: 'Repository',
       icon: RepositoryIcon,
-      path: '/dashboard/repository',
+      path: '/governance/repository',
       roles: ['super_admin'],
       service: 'compliance',
       capabilityKeys: ['isRepositoryAccess'],
@@ -116,7 +116,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     {
       label: 'Issuances',
       icon: IssuancesIcon,
-      path: '/dashboard/issuances',
+      path: '/governance/issuances',
       roles: ['super_admin'],
       service: 'compliance',
       capabilityKeys: ['isIssuancesAccess'],
@@ -127,14 +127,14 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     {
       label: 'Units',
       icon: UnitsIcon,
-      path: '/dashboard/units',
+      path: '/admin/units',
       roles: ['super_admin', 'section_head'],
       service: 'compliance',
     },
     {
       label: 'Metrics',
       icon: MetricsIcon,
-      path: '/dashboard/metrics',
+      path: '/governance/metrics',
       roles: ['super_admin'],
       service: 'compliance',
       capabilityKeys: ['isMetricsAccess'],
@@ -142,7 +142,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     {
       label: 'KPI',
       icon: KpiIcon,
-      path: '/dashboard/kpi',
+      path: '/governance/kpi',
       roles: ['super_admin'],
       service: 'compliance',
       capabilityKeys: ['isKpiAccess'],
@@ -150,7 +150,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     {
       label: 'Ticket Settings',
       icon: TicketSettingsIcon,
-      path: '/dashboard/ticket-settings',
+      path: '/operations/settings',
       roles: ['super_admin'],
       service: 'ticketing',
       capabilityKeys: ['isTicketSettingsFocal'],
@@ -158,7 +158,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     {
       label: 'Ticket Reports',
       icon: TicketReportsIcon,
-      path: '/dashboard/ticket-reports',
+      path: '/operations/reports',
       roles: ['super_admin', 'section_head'],
       service: 'ticketing',
       capabilityKeys: ['isTicketSettingsFocal', 'isDesktop', 'isItSupport', 'isPantawidIct'],
@@ -166,7 +166,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     {
       label: 'Attendance',
       icon: AttendanceIcon,
-      path: '/dashboard/attendance',
+      path: '/admin/attendance',
       roles: ['super_admin'],
       service: 'ticketing',
       capabilityKeys: ['isAttendanceAccess'],
@@ -174,7 +174,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     {
       label: 'Reviews',
       icon: SecurityIcon,
-      path: '/dashboard/reviews',
+      path: '/governance/reviews',
       roles: ['super_admin'],
       service: 'compliance',
       capabilityKeys: ['isReviewsAccess'],
@@ -182,7 +182,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     {
       label: 'Reports',
       icon: ReportsIcon,
-      path: '/dashboard/reports',
+      path: '/governance/reports',
       roles: ['super_admin'],
       service: 'compliance',
       capabilityKeys: ['isReportsAccess'],
@@ -190,7 +190,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     {
       label: 'MoV Builder',
       icon: MovIcon,
-      path: '/dashboard/mov',
+      path: '/governance/mov',
       roles: ['super_admin'],
       service: 'compliance',
       capabilityKeys: ['isMovAccess'],
@@ -198,15 +198,15 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     {
       label: 'Audit Logs',
       icon: HistoryIcon,
-      path: '/dashboard/audit-logs',
+      path: '/admin/audit-logs',
       roles: ['super_admin', 'compliance_officer'],
       service: 'users',
     },
   ];
 
   const settingsNavItems: NavItem[] = [
-    { label: 'User Manual', icon: ManualIcon, path: '/dashboard/user-manual', roles: ['all'] },
-    { label: 'Settings', icon: SettingsIcon, path: '/dashboard/settings', roles: ['all'] },
+    { label: 'User Manual', icon: ManualIcon, path: '/admin/user-manual', roles: ['all'] },
+    { label: 'Settings', icon: SettingsIcon, path: '/admin/settings', roles: ['all'] },
   ];
 
   const hasAccess = (
@@ -237,7 +237,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
   const renderNavItem = (item: NavItem) => {
     const Icon = item.icon;
-    // Dashboard: exact match only — sub-routes like /dashboard/documents should NOT highlight it
+    // Dashboard: exact match only — sub-routes like /governance/documents should NOT highlight it
     const isActive =
       item.path === '/dashboard'
         ? location.pathname === '/dashboard'

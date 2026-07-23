@@ -590,7 +590,7 @@ export default function TicketDetailPage() {
       setReturnReason('');
       enqueueSnackbar('Ticket returned to escalating technician.', { variant: 'success' });
       // UX rule: after returning escalation, only the returner view should refresh and go back to list.
-      router.push('/dashboard/tickets');
+      router.push('/operations/tickets');
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to return escalation', {
         variant: 'error',
@@ -710,7 +710,7 @@ export default function TicketDetailPage() {
         <Typography color="error">Ticket not found</Typography>
         <Button
           startIcon={<BackIcon />}
-          onClick={() => router.push('/dashboard/tickets')}
+          onClick={() => router.push('/operations/tickets')}
           sx={{ mt: 2 }}
         >
           Back to Tickets
@@ -723,7 +723,7 @@ export default function TicketDetailPage() {
     <Box>
       <Button
         startIcon={<BackIcon />}
-        onClick={() => router.push('/dashboard/tickets')}
+        onClick={() => router.push('/operations/tickets')}
         sx={{ mb: 2 }}
       >
         Back to Tickets

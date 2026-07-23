@@ -60,7 +60,7 @@ export default function ArchivedDocumentsPage() {
       <Box sx={{ py: 4 }}>
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-          <IconButton onClick={() => router.push('/dashboard/documents')}>
+          <IconButton onClick={() => router.push('/governance/documents')}>
             <BackIcon />
           </IconButton>
           <Typography variant="h4">Archived Documents</Typography>
@@ -104,7 +104,7 @@ export default function ArchivedDocumentsPage() {
                         key={doc.id}
                         hover
                         sx={{ cursor: 'pointer' }}
-                        onClick={() => router.push(`/dashboard/documents/${doc.id}`)}
+                        onClick={() => router.push(`/governance/documents/${doc.id}`)}
                       >
                         <TableCell>
                           <Typography variant="body2" fontWeight={500}>
@@ -147,7 +147,7 @@ export default function ArchivedDocumentsPage() {
           <Button
             variant="outlined"
             startIcon={<BackIcon />}
-            onClick={() => router.push('/dashboard/documents')}
+            onClick={() => router.push('/governance/documents')}
           >
             Back to Documents
           </Button>

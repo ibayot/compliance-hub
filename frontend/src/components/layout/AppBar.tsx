@@ -114,7 +114,7 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
 
   const handleSettings = () => {
     handleProfileMenuClose();
-    router.push('/dashboard/settings');
+    router.push('/admin/settings');
   };
 
   return (
