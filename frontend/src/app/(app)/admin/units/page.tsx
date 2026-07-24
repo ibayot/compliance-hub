@@ -451,6 +451,7 @@ export default function UnitsPage() {
             fullWidth
             value={name}
             onChange={(e) => setName(e.target.value)}
+            inputProps={{ maxLength: 100 }}
           />
           <TextField
             margin="dense"
@@ -460,6 +461,7 @@ export default function UnitsPage() {
             minRows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            inputProps={{ maxLength: 255 }}
           />
         </DialogContent>
         <DialogActions>
