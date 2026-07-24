@@ -1336,7 +1336,17 @@ export default function TicketDetailPage() {
                       </Typography>
                     </Box>
                   )}
-                {ticket.assignedToId && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Requester Unit
+                    </Typography>
+                    <Typography variant="body2">
+                      {((ticket as any).createdById && (ticket as any).createdById !== ticket.requesterId)
+                        ? (ticket as any).createdBy?.units?.[0]?.name || '—'
+                        : (ticket as any).requester?.units?.[0]?.name || '—'}
+                    </Typography>
+                  </Box>
+                  {ticket.assignedToId && (
                   <Box>
                     <Typography variant="caption" color="text.secondary">
                       Assigned To

@@ -129,7 +129,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       icon: UnitsIcon,
       path: '/admin/units',
       roles: ['super_admin', 'section_head'],
-      service: 'compliance',
+      service: 'core',
     },
     {
       label: 'Metrics',

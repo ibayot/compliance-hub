@@ -1586,7 +1586,6 @@ function FocalUserManagementCard() {
                 </FormControl>
               </Grid>
               
-              {editUser?.role !== UserRole.USER && (
               <Grid item xs={12}>
                 <FormControl fullWidth>
                   <InputLabel>Assigned Units</InputLabel>
@@ -1613,7 +1612,6 @@ function FocalUserManagementCard() {
                   </Select>
                 </FormControl>
               </Grid>
-            )}
             </Grid>
           </DialogContent>
           <DialogActions>
