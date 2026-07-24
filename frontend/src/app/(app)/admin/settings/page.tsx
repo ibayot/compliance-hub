@@ -103,14 +103,15 @@ function ChangePasswordCard() {
       <CardContent>
         <Grid container spacing={2}>
           <Grid item xs={12} md={4}>
-            <TextField
-              label="Current Password"
-              type="password"
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-              fullWidth
-              autoComplete="current-password"
-            />
+              <TextField
+                label="Current Password"
+                type="password"
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+                fullWidth
+                autoComplete="current-password"
+                inputProps={{ maxLength: 100 }}
+              />
           </Grid>
           <Grid item xs={12} md={4}>
             <TextField
@@ -120,6 +121,7 @@ function ChangePasswordCard() {
               onChange={(e) => setNext(e.target.value)}
               fullWidth
               autoComplete="new-password"
+              inputProps={{ maxLength: 100 }}
               helperText="Minimum 8 characters"
             />
           </Grid>
@@ -131,6 +133,7 @@ function ChangePasswordCard() {
               onChange={(e) => setConfirm(e.target.value)}
               fullWidth
               autoComplete="new-password"
+              inputProps={{ maxLength: 100 }}
             />
           </Grid>
           <Grid item xs={12}>
@@ -1276,6 +1279,7 @@ function FocalUserManagementCard() {
                 </InputAdornment>
               ),
             }}
+            inputProps={{ maxLength: 100 }}
             sx={{ width: { xs: '100%', sm: 300 } }}
           />
         </Box>

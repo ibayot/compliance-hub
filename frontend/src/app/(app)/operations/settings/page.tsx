@@ -796,7 +796,7 @@ export default function TicketSettingsPage() {
         {/* ── Keyword Rules Tab ── */}
         {tab === 2 && (
           <CardContent>
-            <Box display="flex" justifyContent="flex-end" mb={2}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
               <TextField
                 placeholder="Search rules..."
                 size="small"

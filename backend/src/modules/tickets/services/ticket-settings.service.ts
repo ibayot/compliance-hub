@@ -234,13 +234,13 @@ export class TicketSettingsService {
 
   async listKeywordRules(): Promise<TicketKeywordRule[]> {
     return this.keywordRepo.find({
-      relations: ['targetCategory'],
+      relations: ['targetCategory', 'targetIssueType'],
       order: { keyword: 'ASC' },
     });
   }
 
   async getKeywordRuleById(id: string): Promise<TicketKeywordRule> {
-    const rule = await this.keywordRepo.findOne({ where: { id }, relations: ['targetCategory'] });
+    const rule = await this.keywordRepo.findOne({ where: { id }, relations: ['targetCategory', 'targetIssueType'] });
     if (!rule) throw new NotFoundException(`Keyword rule ${id} not found`);
     return rule;
   }

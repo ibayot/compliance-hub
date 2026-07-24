@@ -1149,10 +1149,10 @@ export default function TicketDetailPage() {
                           }}
                           sx={{ fontSize: 11, py: 0.25, px: 1 }}
                         >
-                          Load from KB
+                  Load from KB
                         </Button>
                       </Box>
-                      <TextField inputProps={{ maxLength: 255 }}
+                      <TextField
                         fullWidth
                         multiline
                         rows={6}
@@ -1161,6 +1161,7 @@ export default function TicketDetailPage() {
                         onChange={(e) => setResolutionNotes(e.target.value)}
                         size="small"
                         placeholder="Describe what was done to resolve this ticket..."
+                        inputProps={{ maxLength: 1000 }}
                       />
                     </Grid>
                     {newStatus === 'resolved' && (
@@ -1685,7 +1686,7 @@ export default function TicketDetailPage() {
           {ticket.status !== 'closed' && ticket.status !== 'duplicate' && (
             <Box mt={3}>
               <Divider sx={{ mb: 2 }} />
-              <TextField inputProps={{ maxLength: 255 }}
+              <TextField
                 fullWidth
                 multiline
                 rows={3}
@@ -1693,6 +1694,7 @@ export default function TicketDetailPage() {
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 size="small"
+                inputProps={{ maxLength: 1000 }}
               />
               {canStaff && (
                 <FormControlLabel
@@ -1913,15 +1915,16 @@ export default function TicketDetailPage() {
             clearOnEscape
             fullWidth
           />
-          <TextField inputProps={{ maxLength: 255 }}
+          <TextField
             fullWidth
             multiline
-            rows={3}
+            rows={6}
             label="Reason for escalation (optional)"
             value={escalateNotes}
             onChange={(e) => setEscalateNotes(e.target.value)}
             size="small"
             sx={{ mb: 2 }}
+            inputProps={{ maxLength: 1000 }}
           />
           <Box>
             <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
