@@ -1588,25 +1588,24 @@ function FocalUserManagementCard() {
               
               <Grid item xs={12}>
                 <FormControl fullWidth>
-                  <InputLabel>Assigned Units</InputLabel>
+                  <InputLabel>Assigned Unit</InputLabel>
                   <Select
-                    multiple
-                    value={editUser?.unitIds || []}
-                    label="Assigned Units"
+                    value={editUser?.unitIds?.[0] || ''}
+                    label="Assigned Unit"
                     onChange={(e) =>
-                      setEditUser((prev: any) => ({ ...prev, unitIds: e.target.value as number[] }))
+                      setEditUser((prev: any) => ({ ...prev, unitIds: e.target.value ? [e.target.value as number] : [] }))
                     }
                     renderValue={(selected) =>
-                      (selected as number[])
-                        .map((id) => units.find((u) => u.id === id)?.name ?? id)
-                        .join(', ')
+                      units.find((u) => u.id === selected)?.name ?? selected
                     }
                     MenuProps={{ disableAutoFocusItem: true }}
                   >
-                    {units.map((u) => (
-                      <MenuItem key={u.id} value={u.id}>
-                        <Checkbox checked={Boolean(editUser?.unitIds?.includes(u.id))} />
-                        <ListItemText primary={u.name} />
+                    <MenuItem value="">
+                      <em>None</em>
+                    </MenuItem>
+                    {units.map((unit) => (
+                      <MenuItem key={unit.id} value={unit.id}>
+                        {unit.name}
                       </MenuItem>
                     ))}
                   </Select>

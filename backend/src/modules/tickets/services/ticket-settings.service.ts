@@ -468,6 +468,53 @@ export class TicketSettingsService {
     // Sort so longer keywords are matched first
     pairs.sort((a, b) => b.kw.length - a.kw.length);
 
+    // Helper function for fuzzy word matching
+    const levenshtein = (a: string, b: string) => {
+      if (a.length === 0) return b.length;
+      if (b.length === 0) return a.length;
+      const matrix = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+      for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+      for (let i = 1; i <= a.length; i++) {
+        for (let j = 1; j <= b.length; j++) {
+          const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j - 1] + cost
+          );
+        }
+      }
+      return matrix[a.length][b.length];
+    };
+
+    const fuzzyMatch = (kw: string, lowerText: string): boolean => {
+      if (lowerText.includes(kw)) return true; // Exact match is fastest
+      const kwWords = kw.split(/\s+/).filter(Boolean);
+      const textWords = lowerText.split(/\s+/).filter(Boolean);
+      if (kwWords.length === 0) return false;
+
+      let matchedWords = 0;
+      for (const kwWord of kwWords) {
+        let bestMatch = false;
+        for (const tWord of textWords) {
+          if (tWord === kwWord) {
+            bestMatch = true;
+            break;
+          }
+          const dist = levenshtein(kwWord, tWord);
+          // Allow up to 1 typo for short words (>=4 chars), 2 for longer ones
+          const allowedTypos = kwWord.length >= 6 ? 2 : (kwWord.length >= 4 ? 1 : 0);
+          if (dist <= allowedTypos) {
+            bestMatch = true;
+            break;
+          }
+        }
+        if (bestMatch) matchedWords++;
+      }
+      // Require 100% of keywords to be found in the text, allowing typos and disregarding order.
+      return matchedWords === kwWords.length;
+    };
+
     let matchedKw: string | null = null;
     const matchedRules: TicketKeywordRule[] = [];
     
@@ -478,7 +525,7 @@ export class TicketSettingsService {
       if (matchedKw && kw !== matchedKw) {
         continue; // Skip other keywords of the same length that don't match
       }
-      if (lower.includes(kw)) {
+      if (fuzzyMatch(kw, lower)) {
         matchedKw = kw;
         matchedRules.push(rule);
       }

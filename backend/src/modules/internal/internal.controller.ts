@@ -42,12 +42,14 @@ export class InternalController {
       role: u.role,
       staff_id: (u as any).staff_id ?? null,
       ticketMainFocal: u.ticketMainFocal,
+      units: u.units || [],
     }));
   }
 
   @Get('users/:id')
   async getUserById(@Param('id', ParseIntPipe) id: number) {
-    const user = await this.usersService.findByIdSafe(id);
+    // using findOne instead of findByIdSafe because findOne explicitly loads the units relation
+    const user = await this.usersService.findOne(id).catch(() => null);
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
     }
@@ -60,6 +62,7 @@ export class InternalController {
       role: user.role,
       staff_id: (user as any).staff_id ?? null,
       ticketMainFocal: user.ticketMainFocal,
+      units: user.units || [],
     };
   }
 

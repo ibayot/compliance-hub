@@ -9,6 +9,7 @@ export interface UserStub {
   role: string;
   staff_id?: string | null;
   ticketMainFocal?: boolean;
+  units?: any[];
 }
 
 export interface RoleCapabilityStub {
