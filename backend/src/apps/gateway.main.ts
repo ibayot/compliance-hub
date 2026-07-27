@@ -4,7 +4,38 @@ import { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
+import { Client } from 'pg';
 import { GatewayAppModule } from './gateway.module';
+
+let vaptModeCache = process.env.VAPT_MODE === 'true';
+
+async function pollVaptMode() {
+  const client = new Client({
+    host: process.env.DB_HOST || 'db',
+    port: Number(process.env.DB_PORT) || 5432,
+    user: process.env.DB_USERNAME || 'postgres',
+    password: process.env.DB_PASSWORD || 'postgres',
+    database: process.env.DB_DATABASE || 'compliance_hub',
+  });
+  try {
+    await client.connect();
+    const res = await client.query('SELECT vapt_mode FROM security_config WHERE id = 1 LIMIT 1');
+    if (res.rows.length > 0) {
+      const newVapt = res.rows[0].vapt_mode === true;
+      if (newVapt && !vaptModeCache) {
+        console.log('[GATEWAY] VAPT_MODE dynamically enabled. Clearing DDoS and Rate Limits.');
+        ipStore.clear(); // instantly unblock any blocked IPs
+      }
+      vaptModeCache = newVapt;
+    }
+  } catch (err) {
+    // ignore
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
+setInterval(pollVaptMode, 5000);
 
 const SERVICE_DOMAINS: Record<string, string[]> = {
   users: ['/api/auth', '/api/users', '/api/units', '/api/audit-logs'],
@@ -89,7 +120,7 @@ const DDOS_BLOCK_DURATION_MS = 15 * 60 * 1000; // 15-minute block
 function createDdosMiddleware() {
   return (req: Request, res: Response, next: NextFunction) => {
     // Skip DDoS blocking when VAPT mode is enabled (allow security scanners through)
-    if (process.env.VAPT_MODE === 'true') return next();
+    if (vaptModeCache) return next();
 
     const ip = (req.headers['x-forwarded-for'] as string || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
     const now = Date.now();
@@ -183,7 +214,7 @@ async function bootstrap() {
     rateLimit({
       windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 1 * 60 * 1000),
       max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 4000),
-      skip: () => process.env.VAPT_MODE === 'true',
+      skip: () => vaptModeCache,
       standardHeaders: true,
       legacyHeaders: false,
       handler: (req, res) => {
@@ -202,7 +233,7 @@ async function bootstrap() {
     rateLimit({
       windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 1 * 60 * 1000),
       max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 4000),
-      skip: () => process.env.VAPT_MODE === 'true',
+      skip: () => vaptModeCache,
       standardHeaders: true,
       legacyHeaders: false,
       handler: (req, res) => {

@@ -494,7 +494,7 @@ export default function TicketSettingsPage() {
       setIssueForm({
         name: issue.name,
         description: issue.description || '',
-        categoryId: issue.categoryId || '',
+        categoryId: String(issue.categoryId || issue.category?.id || issue.category_id || ''),
         slaHours: issue.slaHours != null ? String(issue.slaHours) : '',
         allowablePauseHours: String(issue.allowablePauseHours ?? 48),
         isActive: issue.isActive,
