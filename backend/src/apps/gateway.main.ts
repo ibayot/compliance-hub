@@ -17,7 +17,7 @@ async function pollVaptMode() {
       port: Number(process.env.DB_PORT) || 3306,
       user: process.env.DB_USERNAME || 'root',
       password: process.env.DB_PASSWORD || 'root',
-      database: process.env.DB_DATABASE || 'compliance_hub',
+      database: process.env.USERS_DB_DATABASE || process.env.DB_DATABASE || 'compliance_hub',
     });
     
     const [rows]: any = await connection.execute('SELECT vapt_mode FROM security_config WHERE id = 1 LIMIT 1');
@@ -30,7 +30,7 @@ async function pollVaptMode() {
       vaptModeCache = newVapt;
     }
   } catch (err) {
-    // ignore
+    console.error('[GATEWAY] VAPT DB Poll Error:', err);
   } finally {
     if (connection) {
       await connection.end().catch(() => {});
