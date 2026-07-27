@@ -183,6 +183,7 @@ async function bootstrap() {
     rateLimit({
       windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 1 * 60 * 1000),
       max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 4000),
+      skip: () => process.env.VAPT_MODE === 'true',
       standardHeaders: true,
       legacyHeaders: false,
       handler: (req, res) => {
@@ -201,6 +202,7 @@ async function bootstrap() {
     rateLimit({
       windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 1 * 60 * 1000),
       max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 4000),
+      skip: () => process.env.VAPT_MODE === 'true',
       standardHeaders: true,
       legacyHeaders: false,
       handler: (req, res) => {

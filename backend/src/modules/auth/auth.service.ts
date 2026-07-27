@@ -466,7 +466,7 @@ export class AuthService {
         },
         {
           secret: this.configService.get('JWT_SECRET'),
-          expiresIn: process.env.VAPT_MODE === 'true' ? '6h' : this.configService.get('JWT_EXPIRATION'),
+          expiresIn: process.env.VAPT_MODE === 'true' ? '12h' : this.configService.get('JWT_EXPIRATION'),
           issuer: this.jwtIssuer,
           audience: this.jwtAudience,
         },
