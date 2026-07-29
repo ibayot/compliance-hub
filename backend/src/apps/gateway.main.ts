@@ -6,6 +6,9 @@ import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import * as mysql from 'mysql2/promise';
 import { GatewayAppModule } from './gateway.module';
+import { GlobalExceptionFilter } from '../shared/filters/global-exception.filter';
+import * as swaggerUi from 'swagger-ui-express';
+import axios from 'axios';
 
 let vaptModeCache = process.env.VAPT_MODE === 'true';
 
@@ -69,12 +72,6 @@ function createServiceProxy(target: string, service: string) {
         proxyReq.setHeader('x-request-id', requestId);
       },
       proxyRes: (proxyRes, _req, res: Response) => {
-        // Propagate X-Service-Version from downstream to the client so callers
-        // can detect version mismatches without inspecting the body.
-        const svcVersion = proxyRes.headers['x-service-version'];
-        if (svcVersion) {
-          res.setHeader('x-service-version', svcVersion);
-        }
         res.setHeader('x-served-by', service);
       },
       error: (_err, req, res) => {
@@ -184,6 +181,7 @@ async function bootstrap() {
   // http-proxy-middleware can forward it. This breaks multipart/form-data uploads
   // because Multer on the downstream service receives an empty buffer.
   const app = await NestFactory.create(GatewayAppModule, { bodyParser: false });
+  app.useGlobalFilters(new GlobalExceptionFilter());
 
   const usersServiceUrl = process.env.USERS_SERVICE_URL || 'http://localhost:4101';
   const ticketingServiceUrl = process.env.TICKETING_SERVICE_URL || 'http://localhost:4102';
@@ -246,6 +244,36 @@ async function bootstrap() {
           message:
             'Security Measure Triggered: You have exceeded the maximum number of requests allowed. Please wait a minute before trying again.',
         });
+      },
+    }),
+  );
+
+  // ── Unified Swagger UI at /api/docs ──────────────────────────────
+  // Fetch each service's OpenAPI spec and serve as a multi-URL Swagger UI
+  app.use('/api/docs/openapi-users.json', async (_req: any, res: any) => {
+    const spec = await axios.get(`${usersServiceUrl}/api/openapi.json`).then((r) => r.data).catch(() => ({}));
+    res.json(spec);
+  });
+  app.use('/api/docs/openapi-ticketing.json', async (_req: any, res: any) => {
+    const spec = await axios.get(`${ticketingServiceUrl}/api/openapi.json`).then((r) => r.data).catch(() => ({}));
+    res.json(spec);
+  });
+  app.use('/api/docs/openapi-compliance.json', async (_req: any, res: any) => {
+    const spec = await axios.get(`${complianceServiceUrl}/api/openapi.json`).then((r) => r.data).catch(() => ({}));
+    res.json(spec);
+  });
+
+  app.use('/api/docs', swaggerUi.serve);
+  app.use(
+    '/api/docs',
+    swaggerUi.setup(undefined, {
+      explorer: true,
+      swaggerOptions: {
+        urls: [
+          { url: '/api/docs/openapi-users.json', name: 'Users Service' },
+          { url: '/api/docs/openapi-ticketing.json', name: 'Ticketing Service' },
+          { url: '/api/docs/openapi-compliance.json', name: 'Compliance Service' },
+        ],
       },
     }),
   );

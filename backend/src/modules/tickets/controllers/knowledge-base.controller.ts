@@ -1,9 +1,11 @@
 import { Controller, Get, Post, Put, Param, Body, UseGuards, Query } from '@nestjs/common';
+import { ApiTags, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CapabilityGuard } from '../../../common/guards/capability.guard';
 import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { KnowledgeBaseService } from '../services/knowledge-base.service';
 
+@ApiTags('knowledge-base')
 @Controller('knowledge-base')
 @UseGuards(JwtAuthGuard)
 export class KnowledgeBaseController {
@@ -18,6 +20,7 @@ export class KnowledgeBaseController {
   }
 
   @Post(':id/rate')
+  @ApiBody({ schema: { type: 'object', properties: { isHelpful: { type: 'boolean' } }, required: ['isHelpful'] } })
   async rateArticle(@Param('id') id: string, @Body('isHelpful') isHelpful: boolean) {
     return this.kbService.rateArticle(Number(id), isHelpful);
   }
@@ -25,6 +28,7 @@ export class KnowledgeBaseController {
   @Put(':id')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isTicketSettingsFocal')
+  @ApiBody({ schema: { type: 'object', properties: { title: { type: 'string' }, tags: { type: 'string' }, content: { type: 'string' } }, required: ['title', 'tags', 'content'] } })
   async updateArticle(
     @Param('id') id: string,
     @Body() dto: { title: string; tags: string; content: string },

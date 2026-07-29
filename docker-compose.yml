@@ -169,6 +169,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      - TZ=Asia/Manila
       - DB_HOST=db
       - DB_PASSWORD=admin
       - USERS_SERVICE_URL=http://users-service:4101
@@ -198,13 +199,16 @@ services:
     networks:
       - app_network
     restart: on-failure
+    environment:
+      - TZ=Asia/Manila
     depends_on:
       gateway:
         condition: service_healthy
     ports:
       - "80:80"
+      - "443:443"
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      test: ["CMD-SHELL", "wget --no-check-certificate -q --spider https://127.0.0.1/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 8

@@ -259,7 +259,7 @@ export class MovService implements OnModuleInit {
     const scope = query.scope || 'regional';
     const unitName = query.unitName || 'ICT Unit';
 
-    const baseHeader = `# ${query.type.replace(/_/g, ' ').toUpperCase()}\n\nYear: ${year}\nQuarter: Q${quarter}\nScope: ${scope}\nUnit: ${unitName}\nGenerated: ${new Date().toISOString().slice(0, 10)}\n`;
+    const baseHeader = `# ${query.type.replace(/_/g, ' ').toUpperCase()}\n\nYear: ${year}\nQuarter: Q${quarter}\nScope: ${scope}\nUnit: ${unitName}\nGenerated: ${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })}\n`;
 
     switch (query.type) {
       case 'assessment_plan':
@@ -306,7 +306,7 @@ export class MovService implements OnModuleInit {
     if (!value) return '-';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '-';
-    return date.toISOString().slice(0, 10);
+    return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
   }
 
   private formatDateMmm(value?: Date | string | null): string {

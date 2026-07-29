@@ -14,12 +14,17 @@ import { JwtPayload, AuthResponse } from './interfaces/auth.interface';
 import { User, UserRole } from '../users/entities/user.entity';
 import { EventBusService } from '../../common/events/event-bus.service';
 import { SecurityConfigService } from '../users/security-config.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { TokenBlacklist } from './entities/token-blacklist.entity';
 
 @Injectable()
 export class AuthService {
   private readonly googleClient = new OAuth2Client();
 
   constructor(
+    @InjectRepository(TokenBlacklist)
+    private readonly tokenBlacklistRepo: Repository<TokenBlacklist>,
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -133,7 +138,7 @@ export class AuthService {
       user.passwordHash,
     );
 
-    let requiresMfa = this.checkRequiresMfa(user);
+    let requiresMfa = this.checkRequiresMfa(user, securityConfig.mfaTestMode);
 
     // Check trusted device
     if (requiresMfa && deviceToken) {
@@ -196,9 +201,9 @@ export class AuthService {
     return this.buildAuthResponse(user, tokens, tokens.roleCode, isUsingDefaultPassword, false);
   }
 
-  private checkRequiresMfa(user: User): boolean {
+  private checkRequiresMfa(user: User, globalMfaEnabled: boolean): boolean {
     if (process.env.VAPT_MODE === 'true') return false;
-    return true;
+    return globalMfaEnabled;
   }
 
   async googleLogin(idToken: string): Promise<AuthResponse> {
@@ -249,7 +254,7 @@ export class AuthService {
     );
 
     const tokens = await this.generateTokens(user);
-    const requiresMfa = this.checkRequiresMfa(user);
+    const requiresMfa = this.checkRequiresMfa(user, securityConfig.mfaTestMode);
     return this.buildAuthResponse(
       user,
       tokens,
@@ -417,6 +422,7 @@ export class AuthService {
       role: user.role,
       roleCode: roleCode ?? null,
       units: user.units?.map((unit) => unit.id) || [],
+      jti: crypto.randomUUID(),
     };
 
     const isVaptMode = process.env.VAPT_MODE === 'true';
@@ -463,6 +469,7 @@ export class AuthService {
           role: user.role,
           roleCode: await this.usersService.getRoleCodeForRole(user.role).catch(() => null),
           units: user.units?.map((unit) => unit.id) || [],
+          jti: crypto.randomUUID(),
         },
         {
           secret: this.configService.get('JWT_SECRET'),
@@ -554,5 +561,22 @@ export class AuthService {
     }
 
     return { message: 'Re-authentication successful' };
+  }
+
+  async logout(token: string): Promise<{ message: string }> {
+    try {
+      const decoded = this.jwtService.decode(token) as any;
+      if (decoded && decoded.jti && decoded.exp) {
+        const blacklistEntry = this.tokenBlacklistRepo.create({
+          tokenJti: decoded.jti,
+          expiresAt: new Date(decoded.exp * 1000),
+        });
+        // We catch errors to prevent throwing on duplicate jti
+        await this.tokenBlacklistRepo.save(blacklistEntry).catch(() => {});
+      }
+    } catch (e) {
+      // If token decoding fails, do nothing
+    }
+    return { message: 'Logged out successfully' };
   }
 }

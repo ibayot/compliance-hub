@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   Injectable,
   Logger,
@@ -17,25 +18,47 @@ import { auditContext } from '../../../shared/audit/audit.context';
 
 // --- DTOs ------------------------------------------------------------------
 
-export interface SetAttendanceDto {
+export class SetAttendanceDto {
+  @ApiProperty()
   userId: number;
+  @ApiProperty()
   date: string; // YYYY-MM-DD
+  @ApiProperty()
   status: AttendanceStatus;
+  @ApiPropertyOptional()
   notes?: string;
 }
 
-export interface BulkSetAttendanceDto {
+export class BulkSetAttendanceDto {
+  @ApiProperty()
   entries: SetAttendanceDto[];
 }
 
-export interface SetOfficeDayDto {
+export class SetOfficeDayDto {
+  @ApiProperty()
   date: string; // YYYY-MM-DD
+  @ApiProperty()
   isOfficeDay: boolean;
+  @ApiPropertyOptional()
   notes?: string;
 }
 
-export interface BulkSetOfficeDaysDto {
+export class BulkSetOfficeDaysDto {
+  @ApiProperty()
   entries: SetOfficeDayDto[];
+}
+
+export class TechnicianListItemDto {
+  @ApiProperty()
+  id: number;
+  @ApiProperty()
+  email: string;
+  @ApiProperty()
+  firstName: string;
+  @ApiProperty()
+  lastName: string;
+  @ApiProperty()
+  role: string;
 }
 
 // --- Service ----------------------------------------------------------------
@@ -316,7 +339,7 @@ export class AttendanceService implements OnModuleInit {
   }
 
   /** Get technicians filtered for the current session (all staff or filtered by type) */
-  async listTechnicians(ticketType?: string, actorRole?: string): Promise<User[]> {
+  async listTechnicians(ticketType?: string, actorRole?: string): Promise<TechnicianListItemDto[]> {
     // Focal technicians see only their own staff tier when no explicit filter is set,
     // EXCEPT if they have the Attendance View Role Capability (isAttendanceAccess)
     const canViewAll = actorRole ? this.roleCapSvc.isAttendanceAccess(actorRole) : false;
@@ -354,7 +377,13 @@ export class AttendanceService implements OnModuleInit {
       }
     }
 
-    return merged;
+    return merged.map(u => ({
+      id: u.id,
+      email: u.email,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      role: u.role,
+    }));
   }
 
   /** Get all staff who logged in on a specific date (for staff activity tab) */

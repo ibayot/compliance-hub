@@ -1,4 +1,5 @@
 import { Controller, Get, Param, NotFoundException, UseGuards, ParseIntPipe } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { UsersService } from '../users/users.service';
 import { UnitsService } from '../units/units.service';
 import { RoleCapabilitiesService } from '../users/role-capabilities.service';
@@ -21,6 +22,7 @@ import { InternalServiceGuard } from '../../common/guards/internal-service.guard
  * These endpoints are called by compliance-service and ticketing-service
  * via UsersHttpClient as an HTTP-first alternative to cross-DB SQL views.
  */
+@ApiTags('_internal')
 @Controller('internal')
 @UseGuards(InternalServiceGuard)
 export class InternalController {

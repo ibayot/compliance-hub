@@ -179,11 +179,7 @@ export const documentsApi = {
     }
     formData.append('file', data.file);
 
-    const response = await apiClient.post('/documents', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await apiClient.post('/documents', formData);
 
     return response.data;
   },
@@ -231,11 +227,7 @@ export const documentsApi = {
       formData.append('change_notes', changeNotes);
     }
 
-    const response = await apiClient.post(`/documents/${documentId}/versions`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await apiClient.post(`/documents/${documentId}/versions`, formData);
 
     return response.data;
   },

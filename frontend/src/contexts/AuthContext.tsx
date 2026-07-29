@@ -26,6 +26,8 @@ import { CredentialResponse, GoogleLogin } from '@react-oauth/google';
 import { useSnackbar } from 'notistack';
 import { User } from '@/lib/types/auth';
 import { authApi } from '@/lib/api/auth';
+import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 import { usersApi, RoleCapabilityRecord } from '@/lib/api/users';
 import ForcePasswordChangeModal from '@/components/ForcePasswordChangeModal';
 
@@ -99,6 +101,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [unlocking, setUnlocking] = useState(false);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
+
+  
+  const saveTokensToPreferences = async (accessToken: string, refreshToken: string) => {
+    if (Capacitor.isNativePlatform()) {
+      await Preferences.set({ key: 'accessToken', value: accessToken });
+      await Preferences.set({ key: 'refreshToken', value: refreshToken });
+    }
+  };
 
   const clearInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current) {
@@ -290,6 +300,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     tokenStore.set('accessToken', response.accessToken);
     tokenStore.set('refreshToken', response.refreshToken);
+    saveTokensToPreferences(response.accessToken, response.refreshToken);
     // Set user from login response first (includes units now)
     setUser(response.user as any);
     if (response.requiresPasswordChange) {
@@ -314,6 +325,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await authApi.loginWithGoogle({ idToken });
     tokenStore.set('accessToken', response.accessToken);
     tokenStore.set('refreshToken', response.refreshToken);
+    saveTokensToPreferences(response.accessToken, response.refreshToken);
     setUser(response.user as any);
     if (response.requiresPasswordChange) {
       setRequiresPasswordChange(true);

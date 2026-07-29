@@ -119,14 +119,14 @@ export default function AttendancePage() {
   const fetchOfficeDays = useCallback(async () => {
     try {
       setOdLoading(true);
-      const data = await attendanceApi.getOfficeDays(String(month + 1), String(year));
+      const data = await attendanceApi.getOfficeDays(startDate, endDate);
       setOfficeDays(data);
     } catch {
       enqueueSnackbar('Failed to load office days', { variant: 'error' });
     } finally {
       setOdLoading(false);
     }
-  }, [year, month]);
+  }, [startDate, endDate]);
 
   const fetchAttendance = useCallback(async () => {
     try {
@@ -168,12 +168,12 @@ export default function AttendancePage() {
   // ── Silent auto-refresh: update data every 30s without showing loading spinners (avoids flicker) ──
   const silentRefreshOfficeDays = useCallback(async () => {
     try {
-      const data = await attendanceApi.getOfficeDays(String(month + 1), String(year));
+      const data = await attendanceApi.getOfficeDays(startDate, endDate);
       setOfficeDays(data);
     } catch {
       /* silent — do not show error on background poll */
     }
-  }, [year, month]);
+  }, [startDate, endDate]);
 
   const silentRefreshTab1 = useCallback(async () => {
     if (tab !== 1) return;

@@ -15,6 +15,7 @@ import {
   Res,
   StreamableFile,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -29,6 +30,7 @@ import {
   UpdateIssuanceDto,
 } from '../services/issuance.service';
 
+@ApiTags('issuances')
 @Controller('issuances')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class IssuanceController {

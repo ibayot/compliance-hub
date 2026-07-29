@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -12,83 +13,139 @@ import { Ticket } from '../entities/ticket.entity';
 
 // --- DTOs ------------------------------------------------------------------
 
-export interface CreateCategoryDto {
+export class CreateCategoryDto {
+  @ApiProperty()
   name: string;
+  @ApiPropertyOptional()
   isIt?: boolean;
+  @ApiPropertyOptional()
   isDesktop?: boolean;
+  @ApiPropertyOptional()
   isPantawid?: boolean;
+  @ApiPropertyOptional()
   description?: string;
 }
 
-export interface UpdateCategoryDto {
+export class UpdateCategoryDto {
+  @ApiPropertyOptional()
   name?: string;
+  @ApiPropertyOptional()
   isIt?: boolean;
+  @ApiPropertyOptional()
   isDesktop?: boolean;
+  @ApiPropertyOptional()
   isPantawid?: boolean;
+  @ApiPropertyOptional()
   description?: string;
+  @ApiPropertyOptional()
   isActive?: boolean;
 }
 
-export interface CreateKeywordRuleDto {
+export class CreateKeywordRuleDto {
+  @ApiPropertyOptional()
   keyword?: string; // legacy single keyword — kept for compat
+  @ApiPropertyOptional()
   keywords?: string[]; // preferred: multiple keywords for this rule
+  @ApiProperty()
   targetTicketType: string;
+  @ApiPropertyOptional()
   targetCategoryId?: string;
+  @ApiPropertyOptional()
   targetIssueTypeId?: string;
 }
 
-export interface UpdateKeywordRuleDto {
+export class UpdateKeywordRuleDto {
+  @ApiPropertyOptional()
   keyword?: string;
+  @ApiPropertyOptional()
   keywords?: string[];
+  @ApiPropertyOptional()
   targetTicketType?: string;
+  @ApiPropertyOptional()
   targetCategoryId?: string;
+  @ApiPropertyOptional()
   targetIssueTypeId?: string;
+  @ApiPropertyOptional()
   isActive?: boolean;
 }
 
-export interface CreateEscalationFocalDto {
+export class CreateEscalationFocalDto {
+  @ApiProperty()
   ticketType: string;
+  @ApiProperty()
   userId: number;
+  @ApiProperty()
   label: string;
 }
 
-export interface CreateIssueTypeDto {
+export class CreateIssueTypeDto {
+  @ApiProperty()
   name: string;
+  @ApiPropertyOptional()
   description?: string;
+  @ApiPropertyOptional()
   categoryId?: string | null;
+  @ApiPropertyOptional()
   slaHours?: number | null;
+  @ApiPropertyOptional()
   allowablePauseHours?: number | null;
 }
 
-export interface UpdateIssueTypeDto {
+export class UpdateIssueTypeDto {
+  @ApiPropertyOptional()
   name?: string;
+  @ApiPropertyOptional()
   description?: string;
+  @ApiPropertyOptional()
   isActive?: boolean;
+  @ApiPropertyOptional()
   categoryId?: string | null;
+  @ApiPropertyOptional()
   slaHours?: number | null;
+  @ApiPropertyOptional()
   allowablePauseHours?: number | null;
 }
 
-export interface UpdateGlobalConfigDto {
+export class UpdateGlobalConfigDto {
+  @ApiPropertyOptional()
   assignmentStrategy?: string;
+  @ApiPropertyOptional()
   roundRobinCapHours?: number;
+  @ApiPropertyOptional()
   autoCloseDays?: number;
+  @ApiPropertyOptional()
   smtpHost?: string | null;
+  @ApiPropertyOptional()
   smtpPort?: number | null;
+  @ApiPropertyOptional()
   smtpUser?: string | null;
+  @ApiPropertyOptional()
   smtpPass?: string | null;
+  @ApiPropertyOptional()
   smtpFrom?: string | null;
+  @ApiPropertyOptional()
   smtpFromName?: string | null;
+  @ApiPropertyOptional()
   primarySmtpDailyLimit?: number;
+  @ApiPropertyOptional()
   scheduleMode?: string;
+  @ApiPropertyOptional()
   officeClockin?: string;
+  @ApiPropertyOptional()
   officeClockout?: string;
+  @ApiPropertyOptional()
   cwwClockinStart?: string;
+  @ApiPropertyOptional()
   cwwClockinEnd?: string;
+  @ApiPropertyOptional()
   cwwClockoutStart?: string;
+  @ApiPropertyOptional()
   cwwClockoutEnd?: string;
+  @ApiPropertyOptional()
   isFlagCeremonyPaused?: boolean;
+  @ApiPropertyOptional()
   isEmailNotificationsEnabled?: boolean;
+  @ApiPropertyOptional()
   emailTestOverride?: string | null;
 }
 

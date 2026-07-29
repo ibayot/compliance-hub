@@ -10,6 +10,7 @@ import {
   Request,
   Logger,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -22,6 +23,7 @@ import { MetricApplicability } from '../entities/metric-applicability.entity';
 import { Document } from '../../documents/entities/document.entity';
 import { DocumentVersion } from '../../documents/entities/document-version.entity';
 
+@ApiTags('metrics')
 @Controller('metrics')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class MetricsController {

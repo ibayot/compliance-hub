@@ -1,9 +1,11 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { AuditService, AuditLogQueryDto } from '../services/audit.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 
+@ApiTags('audit-logs')
 @Controller('audit-logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AuditController {

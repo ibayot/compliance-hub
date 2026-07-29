@@ -1,10 +1,12 @@
 import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { SecurityConfigService } from './security-config.service';
 import { SecurityConfig } from './entities/security-config.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CapabilityGuard } from '../../common/guards/capability.guard';
 import { RequireCapability } from '../../common/decorators/require-capability.decorator';
 
+@ApiTags('users')
 @Controller('users/security-config')
 @UseGuards(JwtAuthGuard, CapabilityGuard)
 export class SecurityConfigController {

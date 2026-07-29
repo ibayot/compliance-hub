@@ -12,6 +12,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { CapabilityGuard } from '../../../common/guards/capability.guard';
@@ -56,6 +57,7 @@ const ALL_STAFF_ROLES = [
   UserRole.HR_ID_OFFICER,
 ];
 
+@ApiTags('ticket-settings')
 @Controller('ticket-settings')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TicketSettingsController {
@@ -66,6 +68,7 @@ export class TicketSettingsController {
   ) {}
 
   /** POST /ticket-settings/email-test — send a test email to verify SMTP (super_admin only) */
+  @ApiTags('_test-only')
   @Post('email-test')
   @Roles(UserRole.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
@@ -206,9 +209,10 @@ export class TicketSettingsController {
   // ── Keyword Rules ──────────────────────────────────────────────────────
 
   @Get('keyword-rules')
-  @UseGuards(CapabilityGuard)
-  @RequireCapability('isTicketSettingsFocal')
-  @Roles(...ALL_STAFF_ROLES)
+  @Roles(
+    UserRole.USER,
+    ...ALL_STAFF_ROLES,
+  )
   async listKeywordRules() {
     return this.settingsService.listKeywordRules();
   }
@@ -325,6 +329,8 @@ export class TicketSettingsController {
 
   /** GET /ticket-settings/escalation-focals */
   @Get('escalation-focals')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isEscalationFocal')
   @Roles(...ALL_STAFF_ROLES)
   async listEscalationFocals(@Query('ticketType') ticketType?: string) {
     return this.settingsService.listEscalationFocals(ticketType);
@@ -365,6 +371,8 @@ export class TicketSettingsController {
   // ── Global Config ───────────────────────────────────────────────────────
 
   @Get('global-config')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
   @Roles(...ALL_STAFF_ROLES)
   async getGlobalConfig() {
     return this.settingsService.getGlobalConfig();

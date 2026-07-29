@@ -10,6 +10,7 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { CapabilityGuard } from '../../../common/guards/capability.guard';
@@ -19,6 +20,7 @@ import { CreateMovArtifactDto } from '../dto/create-mov-artifact.dto';
 import { UpdateMovArtifactDto } from '../dto/update-mov-artifact.dto';
 import { TemplateQueryDto } from '../dto/template-query.dto';
 
+@ApiTags('mov')
 @Controller('mov')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class MovController {

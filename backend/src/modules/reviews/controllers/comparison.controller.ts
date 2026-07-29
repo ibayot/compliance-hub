@@ -9,12 +9,14 @@ import {
   HttpStatus,
   HttpCode,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { CapabilityGuard } from '../../../common/guards/capability.guard';
 import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { ComparisonService, CompareVersionsDto } from '../services/comparison.service';
 
+@ApiTags('reviews')
 @Controller('comparisons')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ComparisonController {

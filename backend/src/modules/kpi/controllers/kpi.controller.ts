@@ -11,6 +11,7 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -22,6 +23,7 @@ import { CreateKpiMasterDto, UpdateKpiMasterDto } from '../dto/kpi-master.dto';
 import { UpdateKpiMonitoringDto, UpsertKpiMonitoringDto } from '../dto/kpi-monitoring.dto';
 import { UpsertKpiScoringRuleDto, UpsertKpiThresholdDto } from '../dto/kpi-lookups.dto';
 
+@ApiTags('kpi')
 @Controller('kpi')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class KpiController {

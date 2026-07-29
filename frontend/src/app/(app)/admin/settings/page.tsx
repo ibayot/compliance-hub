@@ -58,6 +58,9 @@ import { usersApi, RoleDefinition, RoleCapabilityRecord } from '@/lib/api/users'
 import { unitsApi, Unit } from '@/lib/api/units';
 import { UserRole } from '@/lib/types/auth';
 import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
+import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
+import { NativeBiometric } from '@capgo/capacitor-native-biometric';
 
 // --- Change Password Card ---------------------------------------------------
 
@@ -1649,6 +1652,84 @@ function FocalUserManagementCard() {
 
 // --- Main Settings Page -----------------------------------------
 
+
+// --- Mobile Settings Card (Biometrics) --------------------------------------
+
+function MobileSettingsCard() {
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const { enqueueSnackbar } = useSnackbar();
+
+  useEffect(() => {
+    const checkBio = async () => {
+      if (!Capacitor.isNativePlatform()) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const { value } = await Preferences.get({ key: 'biometricEnabled' });
+        setEnabled(value === 'true');
+      } catch (e) {
+        console.error('Failed to get biometric pref', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkBio();
+  }, []);
+
+  const handleToggle = async (e: any) => {
+    const newValue = e.target.checked;
+    setEnabled(newValue);
+    try {
+      if (newValue) {
+        const { isAvailable } = await NativeBiometric.isAvailable();
+        if (!isAvailable) {
+          enqueueSnackbar('Biometric authentication is not available on this device.', { variant: 'error' });
+          setEnabled(false);
+          return;
+        }
+        await Preferences.set({ key: 'biometricEnabled', value: 'true' });
+        enqueueSnackbar('Biometric login enabled. You can now use your fingerprint to log in.', { variant: 'success' });
+      } else {
+        await Preferences.set({ key: 'biometricEnabled', value: 'false' });
+        enqueueSnackbar('Biometric login disabled.', { variant: 'info' });
+      }
+    } catch (err: any) {
+      console.error(err);
+      enqueueSnackbar('Failed to set biometric preferences.', { variant: 'error' });
+      setEnabled(!newValue);
+    }
+  };
+
+  if (!Capacitor.isNativePlatform() || loading) return null;
+
+  return (
+    <Card elevation={2} sx={{ mb: 3 }}>
+      <CardHeader
+        title="Mobile Settings"
+        subheader="Manage settings specific to the mobile app."
+      />
+      <CardContent>
+        <FormControlLabel
+          control={<Switch checked={enabled} onChange={handleToggle} color="primary" />}
+          label={
+            <Box>
+              <Typography variant="body1" component="span">
+                Biometric Login
+              </Typography>
+              <Typography variant="body2" color="text.secondary" display="block">
+                Use your fingerprint or Face ID to sign in automatically.
+              </Typography>
+            </Box>
+          }
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+
 export default function SettingsPage() {
   const { user, myCap } = useAuth();
 
@@ -1739,6 +1820,9 @@ export default function SettingsPage() {
         </Grid>
         <Grid item xs={12} md={6}>
           <ChangePasswordCard />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <MobileSettingsCard />
         </Grid>
 
         {canManageSystemRoles && (

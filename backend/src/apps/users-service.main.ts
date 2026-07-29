@@ -5,6 +5,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { DataSource } from 'typeorm';
 import { UsersServiceAppModule } from './users-service.module';
+import { GlobalExceptionFilter } from '../shared/filters/global-exception.filter';
 
 async function bootstrap() {
   process.env.AUTH_ENABLE_TICKET_HOOKS = 'false';
@@ -25,16 +26,9 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+  app.useGlobalFilters(new GlobalExceptionFilter());
   app.setGlobalPrefix('api');
   const http = app.getHttpAdapter().getInstance();
-
-  // Attach X-Service-Version to every response so callers can detect version mismatches.
-  app.use((_req: any, res: any, next: any) => {
-    res.setHeader('X-Service-Version', serviceVersion);
-    res.setHeader('X-Service-Name', 'users');
-    next();
-  });
-
   const port = Number(process.env.USERS_SERVICE_PORT || 4101);
   http.get('/api/health', (_req: any, res: any) =>
     res.json({ status: 'ok', service: 'users', version: serviceVersion }),
@@ -85,10 +79,13 @@ async function bootstrap() {
     .setDescription('User management, authentication, role definitions, and role capability matrix')
     .setVersion(serviceVersion)
     .addBearerAuth()
+    .addSecurityRequirements('bearer')
     .addTag('auth', 'Authentication endpoints')
     .addTag('users', 'User CRUD and profile management')
     .addTag('units', 'Organisational unit management')
     .addTag('role-capabilities', 'Role capability matrix administration')
+    .addTag('audit-logs', 'System-wide audit logging and tracking')
+    .addTag('_internal', 'Internal service-to-service communication')
     .build();
   const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, swaggerDoc, {

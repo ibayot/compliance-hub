@@ -1,8 +1,10 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CybersecurityService } from '../services/cybersecurity.service';
 import { CybersecurityMetric } from '../entities/cybersecurity-metric.entity';
 
+@ApiTags('cybersecurity')
 @Controller('cybersecurity')
 @UseGuards(JwtAuthGuard)
 export class CybersecurityController {

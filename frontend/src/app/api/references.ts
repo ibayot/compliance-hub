@@ -592,9 +592,7 @@ export const ticketsApi = {
 
   create: async (data: CreateTicketDto | FormData): Promise<Ticket> => {
     const isFormData = data instanceof FormData;
-    const response = await apiClient.post(`/tickets`, data, {
-      headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
-    });
+    const response = await apiClient.post('/tickets', isFormData ? data : (data as any));
     return response.data;
   },
 
@@ -620,11 +618,7 @@ export const ticketsApi = {
       formData.append('isInternal', String(isInternal));
       formData.append('attachment', attachment);
       // ADD THE HEADERS OVERRIDE HERE
-      const response = await apiClient.post(`/tickets/${ticketId}/comments`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const response = await apiClient.post(`/tickets/${ticketId}/comments`, formData);
       return response.data;
     } else {
       const response = await apiClient.post(`/tickets/${ticketId}/comments`, { comment, isInternal });
@@ -793,11 +787,7 @@ export const ticketsApi = {
 
   escalateTicket: async (ticketId: string, data: FormData): Promise<TicketEscalation> => {
     // ADD THE HEADERS OVERRIDE HERE
-    const response = await apiClient.post(`/tickets/${ticketId}/escalate`, data, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await apiClient.post(`/tickets/${ticketId}/escalate`, data);
     return response.data;
   },
 
@@ -1126,10 +1116,10 @@ export const attendanceApi = {
   },
 
   // Office days
-  getOfficeDays: async (month?: string, year?: string): Promise<OfficeDay[]> => {
+  getOfficeDays: async (startDate: string, endDate: string): Promise<OfficeDay[]> => {
     const params = new URLSearchParams();
-    if (month) params.append('month', month);
-    if (year) params.append('year', year);
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
     const response = await apiClient.get(`/attendance/office-days?${params}`);
     return response.data;
   },

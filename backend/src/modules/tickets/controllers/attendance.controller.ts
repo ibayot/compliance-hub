@@ -12,9 +12,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
+import { CapabilityGuard } from '../../../common/guards/capability.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { UserRole } from '../../users/entities/user.entity';
 import {
   AttendanceService,
@@ -102,6 +105,33 @@ const READ_ROLES = [
   UserRole.HR_ID_OFFICER,
 ];
 
+function mapUser(u: any) {
+  if (!u) return u;
+  return {
+    id: u.id,
+    firstName: u.firstName,
+    middleName: u.middleName,
+    lastName: u.lastName,
+    suffix: u.suffix,
+    role: u.role,
+    active: u.active,
+  };
+}
+
+function mapAttendance(a: any) {
+  if (!a) return a;
+  return {
+    id: a.id,
+    userId: a.userId,
+    date: a.date,
+    status: a.status,
+    setById: a.setById,
+    user: mapUser(a.user),
+    setBy: mapUser(a.setBy),
+  };
+}
+
+@ApiTags('attendance')
 @Controller('attendance')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AttendanceController {
@@ -125,6 +155,8 @@ export class AttendanceController {
 
   /** GET /attendance?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&ticketType= */
   @Get()
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isAttendanceAccess')
   @Roles(...READ_ROLES)
   async getAttendance(
     @Query('startDate') startDate: string,
@@ -132,10 +164,12 @@ export class AttendanceController {
     @Query('ticketType') ticketType?: string,
   ) {
     if (!startDate || !endDate) {
-      const today = new Date().toISOString().slice(0, 10);
-      return this.attendanceService.getAttendanceForDate(today);
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+      const records = await this.attendanceService.getAttendanceForDate(today);
+      return records.map(mapAttendance);
     }
-    return this.attendanceService.getAttendance(startDate, endDate, ticketType);
+    const records = await this.attendanceService.getAttendance(startDate, endDate, ticketType);
+    return records.map(mapAttendance);
   }
 
   /** POST /attendance — set a single attendance record */
@@ -144,11 +178,13 @@ export class AttendanceController {
   @HttpCode(HttpStatus.OK)
   async setAttendance(@Body() dto: SetAttendanceDto, @Request() req: any) {
     this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
-    return this.attendanceService.setAttendance(dto, req.user.id ?? req.user.userId, req.user.role);
+    const record = await this.attendanceService.setAttendance(dto, req.user.id ?? req.user.userId, req.user.role);
+    return mapAttendance(record);
   }
 
   /** DELETE /attendance/:userId/:date */
   @Delete(':userId/:date')
+  @ApiTags('_test-only')
   @Roles(...FOCAL_ROLES)
   @HttpCode(HttpStatus.OK)
   async deleteAttendance(@Param('userId') userId: string, @Param('date') date: string, @Request() req: any) {
@@ -162,14 +198,16 @@ export class AttendanceController {
   @HttpCode(HttpStatus.OK)
   async bulkSetAttendance(@Body() dto: BulkSetAttendanceDto, @Request() req: any) {
     this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
-    return this.attendanceService.bulkSetAttendance(
+    const records = await this.attendanceService.bulkSetAttendance(
       dto,
       req.user.id ?? req.user.userId,
       req.user.role,
     );
+    return records.map(mapAttendance);
   }
 
   /** DELETE /attendance/all — super_admin only: clear all attendance records */
+  @ApiTags('_test-only')
   @Delete('all')
   @Roles(UserRole.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
@@ -179,6 +217,8 @@ export class AttendanceController {
 
   /** GET /attendance/technicians?ticketType= — list technicians (for attendance management) */
   @Get('technicians')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isAttendanceAccess')
   @Roles(...READ_ROLES)
   async listTechnicians(@Query('ticketType') ticketType?: string, @Request() req?: any) {
     return this.attendanceService.listTechnicians(ticketType, req?.user?.role);
@@ -188,13 +228,15 @@ export class AttendanceController {
 
   /** GET /attendance/office-days?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD */
   @Get('office-days')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isAttendanceAccess')
   @Roles(...READ_ROLES)
   async getOfficeDays(@Query('startDate') startDate: string, @Query('endDate') endDate: string) {
     if (!startDate || !endDate) {
       // Default to current month
       const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+      const start = new Date(now.getFullYear(), now.getMonth(), 1).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
       return this.attendanceService.getOfficeDays(start, end);
     }
     return this.attendanceService.getOfficeDays(startDate, endDate);
@@ -220,14 +262,18 @@ export class AttendanceController {
 
   /** GET /attendance/staff-logins?date=YYYY-MM-DD — staff login activity for a date */
   @Get('staff-logins')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isAttendanceAccess')
   @Roles(...READ_ROLES)
   async getStaffLogins(@Query('date') date?: string) {
-    const target = date || new Date().toISOString().slice(0, 10);
+    const target = date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     return this.attendanceService.getStaffLoginsForDate(target);
   }
 
   /** GET /attendance/staff-logins-monthly?startDate=&endDate= — all non-tech staff with lastLogin for monthly grid */
   @Get('staff-logins-monthly')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isAttendanceAccess')
   @Roles(...READ_ROLES)
   async getStaffLoginsMonthly(
     @Query('startDate') startDate: string,
@@ -235,10 +281,10 @@ export class AttendanceController {
   ) {
     const start =
       startDate ||
-      new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+      new Date(new Date().getFullYear(), new Date().getMonth(), 1).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     const end =
       endDate ||
-      new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10);
+      new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     return this.attendanceService.getStaffLoginsMonthly(start, end);
   }
 }

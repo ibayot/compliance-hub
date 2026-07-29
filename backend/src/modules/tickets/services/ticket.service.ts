@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   Injectable,
   NotFoundException,
@@ -29,74 +30,116 @@ import { KnowledgeBaseService } from './knowledge-base.service';
 
 // --- DTOs --------------------------------------------------------------------
 
-export interface CreateTicketDto {
+export class CreateTicketDto {
+  @ApiProperty()
   subject: string;
+  @ApiProperty()
   description: string;
+  @ApiProperty()
   ticketType: TicketType;
+  @ApiPropertyOptional()
   priority?: TicketPriority;
   /** Category UUID from ticket_categories */
+  @ApiPropertyOptional()
   categoryId?: string;
   /** Staff only: override the requester (for walk-ins / phone calls) */
+  @ApiPropertyOptional()
   requesterId?: number;
   /** Optional issue type reference from ticket_issue_types */
+  @ApiPropertyOptional()
   issueTypeId?: string;
 }
 
-export interface UpdateTicketDto {
+export class UpdateTicketDto {
+  @ApiPropertyOptional()
   subject?: string;
+  @ApiPropertyOptional()
   description?: string;
+  @ApiPropertyOptional()
   status?: TicketStatus;
+  @ApiPropertyOptional()
   priority?: TicketPriority;
+  @ApiPropertyOptional()
   resolutionNotes?: string;
+  @ApiPropertyOptional()
   resolutionSteps?: string;
+  @ApiPropertyOptional()
   resolutionDate?: string;
+  @ApiPropertyOptional()
   issueTypeId?: string | null;
   /** Required when status = DUPLICATE: UUID of the original ticket */
+  @ApiPropertyOptional()
   duplicateOfId?: string;
+  @ApiPropertyOptional()
   ticketType?: TicketType;
+  @ApiPropertyOptional()
   generateKb?: boolean;
+  @ApiPropertyOptional()
   categoryId?: string;
 }
 
-export interface AssignTicketDto {
+export class AssignTicketDto {
+  @ApiProperty()
   assignedToId: number;
 }
 
-export interface AddCommentDto {
+export class AddCommentDto {
   /** Alias accepted from frontend (content or comment) */
+  @ApiPropertyOptional()
   content?: string;
+  @ApiPropertyOptional()
   comment?: string;
+  @ApiPropertyOptional()
   isInternal?: boolean;
 }
 
-export interface CsatFormData {
+export class CsatFormData {
+  @ApiProperty()
   consentGiven: boolean;
+  @ApiProperty()
   unitSection: string;
+  @ApiProperty()
   dateOfTransaction: string;
+  @ApiProperty()
   clientFirstName: string;
+  @ApiPropertyOptional()
   clientMiddleInitial?: string;
+  @ApiProperty()
   clientLastName: string;
+  @ApiPropertyOptional()
   suffix?: string;
+  @ApiProperty()
   religion: string;
+  @ApiPropertyOptional()
   age?: number;
+  @ApiProperty()
   sex: string;
+  @ApiPropertyOptional()
   contactNumber?: string;
+  @ApiProperty()
   technicianName: string;
+  @ApiProperty()
   likert: Array<number | 'NA'>; // 9 items index 0-8
 }
 
-export interface SubmitSatisfactionDto {
+export class SubmitSatisfactionDto {
+  @ApiPropertyOptional()
   rating?: number; // Legacy 1-5 star (used if formData absent)
+  @ApiPropertyOptional()
   comment?: string; // Legacy comment
+  @ApiPropertyOptional()
   formData?: CsatFormData; // New full CSAT form
 }
 
-export interface EscalateTicketDto {
+export class EscalateTicketDto {
+  @ApiProperty()
   escalatedToId: number;
+  @ApiPropertyOptional()
   notes?: string;
 }
 
-export interface ReturnEscalationDto {
+export class ReturnEscalationDto {
+  @ApiProperty()
   returnReason: string;
 }
 
@@ -492,7 +535,7 @@ export class TicketService implements OnModuleInit {
     let isSlaWaiting = false;
 
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
       const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
 
       // ── Unified Fallback Chain for Auto-Assignment ──
@@ -888,7 +931,7 @@ export class TicketService implements OnModuleInit {
     }
 
     // Augment with today's absence flag for assigned technicians (used in admin/section-head views)
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     const absentRows = await this.dataSource
       .createQueryBuilder()
       .select('ta.user_id', 'userId')
@@ -1436,7 +1479,7 @@ export class TicketService implements OnModuleInit {
           ticket.slaPausedAt = null;
 
           // QA: if there is an available PRESENT technician, auto-assign immediately
-          const today = new Date().toISOString().slice(0, 10);
+          const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
           const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
           if (ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT || isOfficeDayToday) {
             const presentTechs = await this.attendanceService.getPresentTechnicians(
@@ -1673,7 +1716,7 @@ export class TicketService implements OnModuleInit {
 
         if (!isSeniorTech) {
           // Check technician is available today before assigning
-          const today = new Date().toISOString().slice(0, 10);
+          const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
           const absentRow = await this.dataSource
             .createQueryBuilder()
             .select('ta.user_id', 'userId')
@@ -1859,7 +1902,7 @@ export class TicketService implements OnModuleInit {
       }
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     const attendanceRow = await this.dataSource
       .createQueryBuilder()
       .select('ta.status', 'status')
@@ -2302,7 +2345,7 @@ export class TicketService implements OnModuleInit {
     for (const t of tickets) {
       if (!t.satisfactionSubmittedAt || !t.satisfactionRating || t.satisfactionRating <= 0)
         continue;
-      const dateStr = new Date(t.satisfactionSubmittedAt).toISOString().slice(0, 10);
+      const dateStr = new Date(t.satisfactionSubmittedAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
       if (!byDayMap[dateStr]) byDayMap[dateStr] = { total: 0, count: 0 };
       byDayMap[dateStr].total += t.satisfactionRating;
       byDayMap[dateStr].count += 1;
@@ -2639,7 +2682,7 @@ export class TicketService implements OnModuleInit {
     );
 
     // Read attendance for today so assignment UI can hide unavailable technicians.
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     const attendanceRows = await this.dataSource
       .createQueryBuilder()
       .select('ta.user_id', 'userId')
@@ -2747,7 +2790,7 @@ export class TicketService implements OnModuleInit {
 
       if (!ticketType) return;
 
-      const today = new Date().toISOString().slice(0, 10);
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
       const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
       if (ticketType !== TicketType.PANTAWID_ICT_SUPPORT && !isOfficeDayToday) return;
 
@@ -2854,7 +2897,7 @@ export class TicketService implements OnModuleInit {
         await this.ticketRepo.save(ticket);
 
         // Auto assign right away
-        const today = new Date().toISOString().slice(0, 10);
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
         const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
         if (ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT || isOfficeDayToday) {
           const presentTechs = await this.attendanceService.getPresentTechnicians(
@@ -3365,7 +3408,7 @@ export class TicketService implements OnModuleInit {
     }
 
     // QA #9: Verify that the selected focal is actually PRESENT today
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     const presentFocals = await this.attendanceService.getPresentTechnicians('all', today);
     const isPresent = presentFocals.some((t) => t.id === focal.id);
     if (!isPresent) {
@@ -3787,8 +3830,8 @@ export class TicketService implements OnModuleInit {
 
     const parseTime = (timeStr: string, defaultHour: number): number => {
       if (!timeStr) return defaultHour;
-      const match = timeStr.match(/^(\d{2}):/);
-      return match ? parseInt(match[1], 10) : defaultHour;
+      const match = timeStr.match(/^(\d{2}):(\d{2})/);
+      return match ? parseInt(match[1], 10) + parseInt(match[2], 10) / 60 : defaultHour;
     };
 
     let shiftStartHour = 8;
@@ -3829,12 +3872,12 @@ export class TicketService implements OnModuleInit {
 
     // Helper: advance to start of next Manila day at shiftStartHour
     const advanceToNextDayStart = (d: Date): Date => {
-      // Get the next calendar day in Manila time, set to shiftStartHour:00
       const manilaDate = getManilaDateString(d);
       const [y, m, day] = manilaDate.split('-').map(Number);
-      // Build a new UTC date representing Manila midnight of the next day + shiftStartHour
-      const nextDay = new Date(Date.UTC(y, m - 1, day + 1, shiftStartHour - 8, 0, 0, 0));
-      return nextDay;
+      const local = new Date(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
+      local.setDate(local.getDate() + 1);
+      local.setHours(Math.floor(shiftStartHour), Math.round((shiftStartHour % 1) * 60), 0, 0);
+      return local;
     };
 
     let current = new Date(start);
@@ -3869,7 +3912,9 @@ export class TicketService implements OnModuleInit {
       if (manilaHour < block.start) {
         const manilaDate = getManilaDateString(current);
         const [y, m, day] = manilaDate.split('-').map(Number);
-        current = new Date(Date.UTC(y, m - 1, day, block.start - 8, 0, 0, 0));
+        const local = new Date(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
+        local.setHours(Math.floor(block.start), Math.round((block.start % 1) * 60), 0, 0);
+        current = local;
         continue;
       }
 
@@ -3882,7 +3927,9 @@ export class TicketService implements OnModuleInit {
         remainingHours -= availableHoursInBlock;
         const manilaDate = getManilaDateString(current);
         const [y, m, day] = manilaDate.split('-').map(Number);
-        current = new Date(Date.UTC(y, m - 1, day, block.end - 8, 0, 0, 0));
+        const local = new Date(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
+        local.setHours(Math.floor(block.end), Math.round((block.end % 1) * 60), 0, 0);
+        current = local;
       }
     }
 
@@ -3903,8 +3950,8 @@ export class TicketService implements OnModuleInit {
 
     const parseTime = (timeStr: string, defaultHour: number): number => {
       if (!timeStr) return defaultHour;
-      const match = timeStr.match(/^(\d{2}):/);
-      return match ? parseInt(match[1], 10) : defaultHour;
+      const match = timeStr.match(/^(\d{2}):(\d{2})/);
+      return match ? parseInt(match[1], 10) + parseInt(match[2], 10) / 60 : defaultHour;
     };
 
     let shiftStartHour = 8;
@@ -3944,7 +3991,10 @@ export class TicketService implements OnModuleInit {
     const advanceToNextDayStart = (d: Date): Date => {
       const manilaDate = getManilaDateString(d);
       const [y, m, day] = manilaDate.split('-').map(Number);
-      return new Date(Date.UTC(y, m - 1, day + 1, shiftStartHour - 8, 0, 0, 0));
+      const local = new Date(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
+      local.setDate(local.getDate() + 1);
+      local.setHours(Math.floor(shiftStartHour), Math.round((shiftStartHour % 1) * 60), 0, 0);
+      return local;
     };
 
     let current = new Date(start);
@@ -3979,7 +4029,9 @@ export class TicketService implements OnModuleInit {
       if (manilaHour < block.start) {
         const manilaDate = getManilaDateString(current);
         const [y, m, day] = manilaDate.split('-').map(Number);
-        current = new Date(Date.UTC(y, m - 1, day, block.start - 8, 0, 0, 0));
+        const local = new Date(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
+        local.setHours(Math.floor(block.start), Math.round((block.start % 1) * 60), 0, 0);
+        current = local;
         if (current >= end) break;
         continue;
       }
@@ -4003,7 +4055,9 @@ export class TicketService implements OnModuleInit {
 
       const manilaDate = getManilaDateString(current);
       const [y, m, day] = manilaDate.split('-').map(Number);
-      current = new Date(Date.UTC(y, m - 1, day, block.end - 8, 0, 0, 0));
+      const local = new Date(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
+      local.setHours(Math.floor(block.end), Math.round((block.end % 1) * 60), 0, 0);
+      current = local;
     }
 
     return Math.round(seconds);

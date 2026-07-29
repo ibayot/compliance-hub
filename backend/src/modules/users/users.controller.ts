@@ -14,6 +14,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { RoleCapabilitiesService } from './role-capabilities.service';
 import {
@@ -29,6 +30,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from './entities/user.entity';
 import { EventBusService, CAPABILITIES_UPDATED_EVENT } from '../../common/events/event-bus.service';
 
+@ApiTags('users')
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @UseInterceptors(ClassSerializerInterceptor)

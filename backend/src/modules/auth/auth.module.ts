@@ -8,9 +8,12 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { AttendanceModule } from '../users/attendance.module';
 import { EventBusModule } from '../../common/events/event-bus.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { TokenBlacklist } from './entities/token-blacklist.entity';
 
 @Module({
   imports: [
+    TypeOrmModule.forFeature([TokenBlacklist]),
     UsersModule,
     AttendanceModule,
     EventBusModule,

@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { DataSource } from 'typeorm';
 import { TicketingServiceAppModule } from './ticketing-service.module';
+import { GlobalExceptionFilter } from '../shared/filters/global-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(TicketingServiceAppModule);
@@ -34,16 +35,9 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+  app.useGlobalFilters(new GlobalExceptionFilter());
   app.setGlobalPrefix('api');
   const http = app.getHttpAdapter().getInstance();
-
-  // Attach X-Service-Version to every response so callers can detect version mismatches.
-  app.use((_req: any, res: any, next: any) => {
-    res.setHeader('X-Service-Version', serviceVersion);
-    res.setHeader('X-Service-Name', 'ticketing');
-    next();
-  });
-
   const port = Number(process.env.TICKETING_SERVICE_PORT || 4102);
   http.get('/api/health', (_req: any, res: any) =>
     res.json({ status: 'ok', service: 'ticketing', version: serviceVersion }),
@@ -102,9 +96,11 @@ async function bootstrap() {
     .setDescription('IT helpdesk ticket management, attendance tracking, and SLA monitoring')
     .setVersion(serviceVersion)
     .addBearerAuth()
+    .addSecurityRequirements('bearer')
     .addTag('tickets', 'Ticket creation, updates, and resolution')
     .addTag('attendance', 'Staff attendance and ITO logs')
     .addTag('ticket-settings', 'Ticket routing rules and category management')
+    .addTag('knowledge-base', 'Knowledge base and FAQs')
     .build();
   const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, swaggerDoc, {

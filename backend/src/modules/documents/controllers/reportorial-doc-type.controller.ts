@@ -10,6 +10,7 @@ import {
   UseGuards,
   ParseIntPipe,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { ReportorialDocTypeService } from '../services/reportorial-doc-type.service';
 import { CreateReportorialDocTypeDto } from '../dto/create-reportorial-doc-type.dto';
 import { UpdateReportorialDocTypeDto } from '../dto/update-reportorial-doc-type.dto';
@@ -17,6 +18,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 
+@ApiTags('document-types')
 @Controller('document-types')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ReportorialDocTypeController {

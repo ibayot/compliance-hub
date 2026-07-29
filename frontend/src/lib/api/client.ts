@@ -1,12 +1,23 @@
+import { Capacitor } from '@capacitor/core';
 import axios, { AxiosError, AxiosInstance } from 'axios';
 
 // Use Vite proxy in dev (/api is proxied to localhost:4000/api by vite.config.ts).
 // VITE_API_URL can override for production deployments if necessary, but we force '/api' 
 // if it's accidentally set to localhost in a staging build via a lingering .env file.
 const rawApiUrl = import.meta.env.VITE_API_URL;
-const API_URL = import.meta.env.PROD 
+let API_URL = import.meta.env.PROD 
   ? (rawApiUrl && !rawApiUrl.includes('localhost') ? rawApiUrl : '/api')
   : (rawApiUrl || '/api');
+
+// If running natively on a Mobile App, relative paths (e.g. '/api') or 'localhost' will break
+// because 'localhost' resolves to the phone itself, and relative paths resolve to `http://localhost`.
+if (Capacitor.isNativePlatform()) {
+  if (API_URL.startsWith('/') || API_URL.includes('localhost')) {
+    // 10.0.2.2 is the special alias for your host machine's loopback interface in Android emulators.
+    // We route through Nginx (port 80) instead of Gateway directly (4000) to bypass potential Windows Firewall blocks.
+    API_URL = 'http://10.0.2.2/api';
+  }
+}
 
 export const tokenStore = {
   get: (key: 'accessToken' | 'refreshToken'): string | null => {

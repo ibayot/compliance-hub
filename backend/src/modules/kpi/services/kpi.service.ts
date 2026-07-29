@@ -770,7 +770,7 @@ export class KpiService {
           priority: band === 'red' ? 'high' : 'medium',
           owner: row.unit?.name ? `${row.unit.name} Process Owner` : 'Process Owner',
           recommendation,
-          suggestedDueDate: dueDate.toISOString().slice(0, 10),
+          suggestedDueDate: dueDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }),
           sourceRemarks: row.remarks || null,
         };
       })

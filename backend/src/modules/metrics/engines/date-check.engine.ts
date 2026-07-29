@@ -64,8 +64,8 @@ export class DateCheckEngine {
 
     // Generate message
     let message: string;
-    const submittedLabel = submittedDate.toISOString().slice(0, 10);
-    const deadlineLabel = deadline.toISOString().slice(0, 10);
+    const submittedLabel = submittedDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    const deadlineLabel = deadline.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     if (daysLate <= 0) {
       message = `Submitted on time (${Math.abs(daysLate)} days early). Submitted: ${submittedLabel}, deadline: ${deadlineLabel}.`;
     } else if (daysLate <= maxDaysLate) {

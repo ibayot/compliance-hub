@@ -1,9 +1,11 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { IncidentsService } from '../services/incidents.service';
 import { SnapshotService } from '../services/snapshot.service';
 import { Incident } from '../entities/incident.entity';
 
+@ApiTags('incidents')
 @Controller('incidents')
 @UseGuards(JwtAuthGuard)
 export class IncidentsController {

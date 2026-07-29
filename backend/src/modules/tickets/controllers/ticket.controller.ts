@@ -18,6 +18,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -73,6 +74,7 @@ const ALL_ROLES = [
   'section_head',
 ];
 
+@ApiTags('tickets')
 @Controller('tickets')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TicketController {

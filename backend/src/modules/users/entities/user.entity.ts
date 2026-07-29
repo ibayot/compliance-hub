@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { Unit } from '../../units/entities/unit.entity';
+import { ApiHideProperty } from '@nestjs/swagger';
 
 export enum UserRole {
   SUPER_ADMIN = 'super_admin',
@@ -49,16 +50,22 @@ export class User {
 
   @Column()
   @Exclude()
+  @ApiHideProperty()
   passwordHash: string;
 
   @Column({ name: 'mfa_code', nullable: true })
   @Exclude()
+  @ApiHideProperty()
   mfaCode: string;
 
   @Column({ name: 'mfa_expires_at', type: 'timestamp', nullable: true })
+  @Exclude()
+  @ApiHideProperty()
   mfaExpiresAt: Date;
 
   @Column({ name: 'mfa_last_verified_at', type: 'timestamp', nullable: true })
+  @Exclude()
+  @ApiHideProperty()
   mfaLastVerifiedAt: Date;
 
   @Column({ name: 'first_name', nullable: true, length: 100 })
@@ -98,9 +105,13 @@ export class User {
   ticketTechnician: boolean;
 
   @Column({ name: 'auth_provider', type: 'enum', enum: AuthProvider, default: AuthProvider.LOCAL })
+  @Exclude()
+  @ApiHideProperty()
   authProvider: AuthProvider;
 
   @Column({ name: 'google_sub', type: 'varchar', nullable: true, unique: true })
+  @Exclude()
+  @ApiHideProperty()
   googleSub: string | null;
 
   @Column({
@@ -122,11 +133,14 @@ export class User {
   units: Unit[];
 
   @Column({ name: 'last_login', type: 'datetime', nullable: true })
+  @Exclude()
   lastLogin: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
+  @Exclude()
   createdAt: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
+  @Exclude()
   updatedAt: Date;
 }

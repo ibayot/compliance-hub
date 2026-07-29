@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { FeedbackService } from './feedback.service';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
 import { UpdateFeedbackStatusDto } from './dto/update-feedback-status.dto';
@@ -17,6 +18,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CapabilityGuard } from '../../common/guards/capability.guard';
 import { RequireCapability } from '../../common/decorators/require-capability.decorator';
 
+@ApiTags('users')
 @Controller('feedback')
 export class FeedbackController {
   constructor(private readonly feedbackService: FeedbackService) {}

@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { ComplianceServiceAppModule } from './compliance-service.module';
 import { DataSource } from 'typeorm';
+import { GlobalExceptionFilter } from '../shared/filters/global-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(ComplianceServiceAppModule);
@@ -34,16 +35,9 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+  app.useGlobalFilters(new GlobalExceptionFilter());
   app.setGlobalPrefix('api');
   const http = app.getHttpAdapter().getInstance();
-
-  // Attach X-Service-Version to every response so callers can detect version mismatches.
-  app.use((_req: any, res: any, next: any) => {
-    res.setHeader('X-Service-Version', serviceVersion);
-    res.setHeader('X-Service-Name', 'compliance');
-    next();
-  });
-
   const port = Number(process.env.COMPLIANCE_SERVICE_PORT || 4103);
   http.get('/api/health', (_req: any, res: any) =>
     res.json({ status: 'ok', service: 'compliance', version: serviceVersion }),
@@ -154,6 +148,7 @@ async function bootstrap() {
     )
     .setVersion(serviceVersion)
     .addBearerAuth()
+    .addSecurityRequirements('bearer')
     .addTag('documents', 'Document upload, review, and assignment')
     .addTag('document-types', 'Document type definitions')
     .addTag('issuances', 'ICT issuance reference management')
@@ -162,6 +157,7 @@ async function bootstrap() {
     .addTag('metrics', 'Compliance metrics and reporting')
     .addTag('incidents', 'IT incident management')
     .addTag('cybersecurity', 'Cybersecurity compliance records')
+    .addTag('reviews', 'Document reviews and comparisons')
     .build();
   const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, swaggerDoc, {

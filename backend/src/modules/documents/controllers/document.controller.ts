@@ -14,6 +14,7 @@ import {
   HttpStatus,
   StreamableFile,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -31,6 +32,7 @@ import { Document, DocumentStatus } from '../entities/document.entity';
 import { SubmissionFrequency } from '../entities/document-assignment.entity';
 import { UploadBulkheadInterceptor } from '../../../common/interceptors/upload-bulkhead.interceptor';
 
+@ApiTags('documents')
 @Controller('documents')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class DocumentController {
