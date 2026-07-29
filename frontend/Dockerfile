@@ -53,29 +53,7 @@ RUN echo 'server { \
     listen 80; \
     server_name _; \
     server_tokens off; \
-    client_max_body_size 10M; \
-    root /usr/share/nginx/html; \
-    index index.html; \
-    location / { \
-        include /etc/nginx/security-headers.conf; \
-        try_files $uri $uri/ /index.html; \
-    } \
-    location = /index.html { \
-        include /etc/nginx/security-headers.conf; \
-        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
-        add_header Pragma "no-cache"; \
-        add_header Expires "0"; \
-    } \
-    location = /api/docs { \
-        return 301 /api/docs/; \
-    } \
-    location /api/ { \
-        proxy_pass http://gateway:4000/api/; \
-        proxy_set_header Host $host; \
-        proxy_set_header X-Real-IP $remote_addr; \
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
-        proxy_set_header X-Forwarded-Proto $scheme; \
-    } \
+    return 301 https://$host$request_uri; \
 } \
 \
 server { \
