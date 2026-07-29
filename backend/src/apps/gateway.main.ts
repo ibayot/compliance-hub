@@ -188,7 +188,7 @@ async function bootstrap() {
   const complianceServiceUrl = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:4103';
   const strictMode = (process.env.MICROSERVICES_STRICT || 'true').toLowerCase() !== 'false';
 
-  app.use(helmet());
+  app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 
   // DDoS IP blocking (applied before rate limiting)
   app.use(createDdosMiddleware());

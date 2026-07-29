@@ -13,7 +13,7 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const serviceVersion = process.env.npm_package_version || '0.0.0';
 
-  app.use(helmet());
+  app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
   app.enableCors({
     origin: (configService.get<string>('CORS_ORIGIN') || '')
       .split(',')
