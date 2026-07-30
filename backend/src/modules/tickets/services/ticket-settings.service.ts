@@ -1,4 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsString, IsNumber, IsBoolean, IsEnum, IsOptional, IsNotEmpty, IsArray, ValidateNested } from 'class-validator';
+
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -14,137 +16,251 @@ import { Ticket } from '../entities/ticket.entity';
 // --- DTOs ------------------------------------------------------------------
 
 export class CreateCategoryDto {
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   name: string;
+  @IsOptional()
+  @IsBoolean()
   @ApiPropertyOptional()
   isIt?: boolean;
+  @IsOptional()
+  @IsBoolean()
   @ApiPropertyOptional()
   isDesktop?: boolean;
+  @IsOptional()
+  @IsBoolean()
   @ApiPropertyOptional()
   isPantawid?: boolean;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   description?: string;
 }
 
 export class UpdateCategoryDto {
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   name?: string;
+  @IsOptional()
+  @IsBoolean()
   @ApiPropertyOptional()
   isIt?: boolean;
+  @IsOptional()
+  @IsBoolean()
   @ApiPropertyOptional()
   isDesktop?: boolean;
+  @IsOptional()
+  @IsBoolean()
   @ApiPropertyOptional()
   isPantawid?: boolean;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   description?: string;
+  @IsOptional()
+  @IsBoolean()
   @ApiPropertyOptional()
   isActive?: boolean;
 }
 
 export class CreateKeywordRuleDto {
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   keyword?: string; // legacy single keyword — kept for compat
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   @ApiPropertyOptional()
   keywords?: string[]; // preferred: multiple keywords for this rule
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   targetTicketType: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   targetCategoryId?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   targetIssueTypeId?: string;
 }
 
 export class UpdateKeywordRuleDto {
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   keyword?: string;
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   @ApiPropertyOptional()
   keywords?: string[];
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   targetTicketType?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   targetCategoryId?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   targetIssueTypeId?: string;
+  @IsOptional()
+  @IsBoolean()
   @ApiPropertyOptional()
   isActive?: boolean;
 }
 
 export class CreateEscalationFocalDto {
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   ticketType: string;
+  @IsNotEmpty()
+  @IsNumber()
   @ApiProperty()
   userId: number;
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   label: string;
 }
 
 export class CreateIssueTypeDto {
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   name: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   description?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   categoryId?: string | null;
+  @IsOptional()
+  @IsNumber()
   @ApiPropertyOptional()
   slaHours?: number | null;
+  @IsOptional()
+  @IsNumber()
   @ApiPropertyOptional()
   allowablePauseHours?: number | null;
 }
 
 export class UpdateIssueTypeDto {
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   name?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   description?: string;
+  @IsOptional()
+  @IsBoolean()
   @ApiPropertyOptional()
   isActive?: boolean;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   categoryId?: string | null;
+  @IsOptional()
+  @IsNumber()
   @ApiPropertyOptional()
   slaHours?: number | null;
+  @IsOptional()
+  @IsNumber()
   @ApiPropertyOptional()
   allowablePauseHours?: number | null;
 }
 
 export class UpdateGlobalConfigDto {
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   assignmentStrategy?: string;
+  @IsOptional()
+  @IsNumber()
   @ApiPropertyOptional()
   roundRobinCapHours?: number;
+  @IsOptional()
+  @IsNumber()
   @ApiPropertyOptional()
   autoCloseDays?: number;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   smtpHost?: string | null;
+  @IsOptional()
+  @IsNumber()
   @ApiPropertyOptional()
   smtpPort?: number | null;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   smtpUser?: string | null;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   smtpPass?: string | null;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   smtpFrom?: string | null;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   smtpFromName?: string | null;
+  @IsOptional()
+  @IsNumber()
   @ApiPropertyOptional()
   primarySmtpDailyLimit?: number;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   scheduleMode?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   officeClockin?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   officeClockout?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   cwwClockinStart?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   cwwClockinEnd?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   cwwClockoutStart?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   cwwClockoutEnd?: string;
+  @IsOptional()
+  @IsBoolean()
   @ApiPropertyOptional()
   isFlagCeremonyPaused?: boolean;
+  @IsOptional()
+  @IsBoolean()
   @ApiPropertyOptional()
   isEmailNotificationsEnabled?: boolean;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   emailTestOverride?: string | null;
 }

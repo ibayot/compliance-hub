@@ -1,4 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsString, IsNumber, IsBoolean, IsEnum, IsOptional, IsNotEmpty, IsArray, ValidateNested } from 'class-validator';
+
 import {
   Injectable,
   NotFoundException,
@@ -31,114 +33,197 @@ import { KnowledgeBaseService } from './knowledge-base.service';
 // --- DTOs --------------------------------------------------------------------
 
 export class CreateTicketDto {
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   subject: string;
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   description: string;
+  @IsNotEmpty()
+  @IsEnum(TicketType)
   @ApiProperty()
   ticketType: TicketType;
+  @IsOptional()
+  @IsEnum(TicketPriority)
   @ApiPropertyOptional()
   priority?: TicketPriority;
   /** Category UUID from ticket_categories */
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   categoryId?: string;
   /** Staff only: override the requester (for walk-ins / phone calls) */
+  @IsOptional()
+  @IsNumber()
   @ApiPropertyOptional()
   requesterId?: number;
   /** Optional issue type reference from ticket_issue_types */
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   issueTypeId?: string;
 }
 
 export class UpdateTicketDto {
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   subject?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   description?: string;
+  @IsOptional()
+  @IsEnum(TicketStatus)
   @ApiPropertyOptional()
   status?: TicketStatus;
+  @IsOptional()
+  @IsEnum(TicketPriority)
   @ApiPropertyOptional()
   priority?: TicketPriority;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   resolutionNotes?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   resolutionSteps?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   resolutionDate?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   issueTypeId?: string | null;
   /** Required when status = DUPLICATE: UUID of the original ticket */
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   duplicateOfId?: string;
+  @IsOptional()
+  @IsEnum(TicketType)
   @ApiPropertyOptional()
   ticketType?: TicketType;
+  @IsOptional()
+  @IsBoolean()
   @ApiPropertyOptional()
   generateKb?: boolean;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   categoryId?: string;
 }
 
 export class AssignTicketDto {
+  @IsNotEmpty()
+  @IsNumber()
   @ApiProperty()
   assignedToId: number;
 }
 
 export class AddCommentDto {
   /** Alias accepted from frontend (content or comment) */
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   content?: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   comment?: string;
+  @IsOptional()
+  @IsBoolean()
   @ApiPropertyOptional()
   isInternal?: boolean;
 }
 
 export class CsatFormData {
+  @IsNotEmpty()
+  @IsBoolean()
   @ApiProperty()
   consentGiven: boolean;
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   unitSection: string;
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   dateOfTransaction: string;
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   clientFirstName: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   clientMiddleInitial?: string;
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   clientLastName: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   suffix?: string;
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   religion: string;
+  @IsOptional()
+  @IsNumber()
   @ApiPropertyOptional()
   age?: number;
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   sex: string;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   contactNumber?: string;
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   technicianName: string;
+  @IsNotEmpty()
+  @IsNumber()
   @ApiProperty()
   likert: Array<number | 'NA'>; // 9 items index 0-8
 }
 
 export class SubmitSatisfactionDto {
+  @IsOptional()
+  @IsNumber()
   @ApiPropertyOptional()
   rating?: number; // Legacy 1-5 star (used if formData absent)
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   comment?: string; // Legacy comment
+  @IsOptional()
   @ApiPropertyOptional()
   formData?: CsatFormData; // New full CSAT form
 }
 
 export class EscalateTicketDto {
+  @IsNotEmpty()
+  @IsNumber()
   @ApiProperty()
   escalatedToId: number;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   notes?: string;
 }
 
 export class ReturnEscalationDto {
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   returnReason: string;
 }
@@ -1203,6 +1288,7 @@ export class TicketService implements OnModuleInit {
         }
         ticket.issueTypeId = issueType.id;
         ticket.issueType = issueType.key;
+        ticket.issueTypeConfig = issueType;
         currentIssueType = issueType;
       }
 

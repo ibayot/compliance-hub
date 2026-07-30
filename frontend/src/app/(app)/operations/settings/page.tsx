@@ -220,7 +220,8 @@ export default function TicketSettingsPage() {
 
   const handleUpdateGlobalConfig = async () => {
     try {
-      await ticketSettingsApi.updateGlobalConfig(globalConfig);
+      const { id, createdAt, updatedAt, primarySmtpSentToday, primarySmtpLastSentDate, ...payload } = globalConfig as any;
+      await ticketSettingsApi.updateGlobalConfig(payload);
       enqueueSnackbar('Global settings updated', { variant: 'success' });
       fetchGlobalData();
     } catch (err: any) {

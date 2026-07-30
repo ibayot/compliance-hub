@@ -843,11 +843,18 @@ export default function TicketDetailPage() {
                     <TextField inputProps={{ maxLength: 255 }}
                       select
                       size="small"
-                      value={ticket.issueTypeId || ''}
+                      value={ticket.issueTypeId || (ticket as any).issueTypeConfig?.id || ''}
                       disabled={['resolved', 'closed'].includes(ticket.status) || isTypeLockedByEscalation}
                       onChange={async (e) => {
+                        const newIssueTypeId = e.target.value as string;
+                        setTicket((prev: any) => prev ? { 
+                          ...prev, 
+                          issueTypeId: newIssueTypeId,
+                          issueTypeConfig: prev.issueTypeConfig ? { ...prev.issueTypeConfig, id: newIssueTypeId } : { id: newIssueTypeId }
+                        } : prev);
+                        
                         try {
-                          await ticketsApi.update(ticketId, { issueTypeId: e.target.value as string });
+                          await ticketsApi.update(ticketId, { issueTypeId: newIssueTypeId });
                           fetchTicket();
                           enqueueSnackbar('Ticket issue updated.', { variant: 'success' });
                         } catch (err: any) {
@@ -855,6 +862,7 @@ export default function TicketDetailPage() {
                             err.response?.data?.message || 'Failed to update ticket issue',
                             { variant: 'error' },
                           );
+                          fetchTicket(); // Revert on failure
                         }
                       }}
                       sx={{
@@ -876,9 +884,9 @@ export default function TicketDetailPage() {
                       ))}
                     </TextField>
                   ) : (
-                    ticket.issueTypeId ? (
+                    ticket.issueTypeId || (ticket as any).issueTypeConfig?.id ? (
                       <Chip
-                        label={issues.find((i) => i.id === ticket.issueTypeId)?.name || 'Unknown Issue'}
+                        label={issues.find((i) => i.id === (ticket.issueTypeId || (ticket as any).issueTypeConfig?.id))?.name || 'Unknown Issue'}
                         color="secondary"
                         size="small"
                         variant="outlined"
@@ -1087,7 +1095,8 @@ export default function TicketDetailPage() {
                 const allowedOpts = STATUS_OPTS.filter((s) => allowedValues.includes(s.value));
                 // QA #5: Disable Save when transitioning to in_progress without a priority or issue type
                 const effectivePriority = newPriority || ticket?.priority;
-                const needsPriority = newStatus === 'in_progress' && (!effectivePriority || !ticket?.issueTypeId);
+                const activeIssueTypeId = ticket?.issueTypeId || (ticket as any)?.issueTypeConfig?.id;
+                const needsPriority = newStatus === 'in_progress' && (!effectivePriority || !activeIssueTypeId);
                 const isStatusUnchanged = newStatus === ticket?.status && newPriority === ticket?.priority;
                 return (
                   <Grid container spacing={2}>

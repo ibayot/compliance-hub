@@ -1181,8 +1181,8 @@ export default function TicketsPage() {
           )}
         </Stack>
       ) : (
-        <TableContainer component={Card}>
-          <Table>
+        <TableContainer component={Card} sx={{ overflowX: 'auto' }}>
+          <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell>Ticket #</TableCell>

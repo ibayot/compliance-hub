@@ -1,4 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsString, IsNumber, IsBoolean, IsEnum, IsOptional, IsNotEmpty, IsArray, ValidateNested } from 'class-validator';
+
 import {
   Injectable,
   Logger,
@@ -19,44 +21,72 @@ import { auditContext } from '../../../shared/audit/audit.context';
 // --- DTOs ------------------------------------------------------------------
 
 export class SetAttendanceDto {
+  @IsNotEmpty()
+  @IsNumber()
   @ApiProperty()
   userId: number;
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   date: string; // YYYY-MM-DD
+  @IsNotEmpty()
+  @IsEnum(AttendanceStatus)
   @ApiProperty()
   status: AttendanceStatus;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   notes?: string;
 }
 
 export class BulkSetAttendanceDto {
+  @IsNotEmpty()
+  @IsArray()
   @ApiProperty()
   entries: SetAttendanceDto[];
 }
 
 export class SetOfficeDayDto {
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   date: string; // YYYY-MM-DD
+  @IsNotEmpty()
+  @IsBoolean()
   @ApiProperty()
   isOfficeDay: boolean;
+  @IsOptional()
+  @IsString()
   @ApiPropertyOptional()
   notes?: string;
 }
 
 export class BulkSetOfficeDaysDto {
+  @IsNotEmpty()
+  @IsArray()
   @ApiProperty()
   entries: SetOfficeDayDto[];
 }
 
 export class TechnicianListItemDto {
+  @IsNotEmpty()
+  @IsNumber()
   @ApiProperty()
   id: number;
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   email: string;
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   firstName: string;
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   lastName: string;
+  @IsNotEmpty()
+  @IsString()
   @ApiProperty()
   role: string;
 }

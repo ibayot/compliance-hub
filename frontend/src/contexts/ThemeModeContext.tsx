@@ -1,10 +1,25 @@
 'use client';
 
 import React, { createContext, useContext, useMemo, useState } from 'react';
-import { ThemeProvider } from '@mui/material/styles';
+import { ThemeProvider, styled } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { SnackbarProvider } from 'notistack';
+import { SnackbarProvider, MaterialDesignContent } from 'notistack';
 import { getAppTheme } from '@/lib/theme';
+
+const StyledMaterialDesignContent = styled(MaterialDesignContent)(({ theme }) => ({
+  '&.notistack-MuiContent-success': {
+    backgroundColor: theme.palette.success.main,
+  },
+  '&.notistack-MuiContent-error': {
+    backgroundColor: theme.palette.error.main,
+  },
+  '&.notistack-MuiContent-warning': {
+    backgroundColor: theme.palette.warning.main,
+  },
+  '&.notistack-MuiContent-info': {
+    backgroundColor: theme.palette.info.main,
+  },
+}));
 
 type ThemeMode = 'light' | 'dark';
 
@@ -44,6 +59,12 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
           anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
           autoHideDuration={4000}
           style={{ marginTop: 8 }}
+          Components={{
+            success: StyledMaterialDesignContent,
+            error: StyledMaterialDesignContent,
+            warning: StyledMaterialDesignContent,
+            info: StyledMaterialDesignContent,
+          }}
         >
           {children}
         </SnackbarProvider>

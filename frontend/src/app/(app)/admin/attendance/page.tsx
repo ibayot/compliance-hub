@@ -92,8 +92,6 @@ export default function AttendancePage() {
   const { enqueueSnackbar } = useSnackbar();
 
   const [tab, setTab] = useState(0);
-  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
-  const [hoveredCol, setHoveredCol] = useState<string | null>(null);
   const now = new Date();
   const todayStr = formatDate(now);
   const [year, setYear] = useState(now.getFullYear());
@@ -512,7 +510,12 @@ export default function AttendancePage() {
                   <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
                 </Select>
               </FormControl>
-              <Box display="flex" gap={1} flexWrap="wrap">
+              <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+                {canManage && (
+                  <Typography variant="body2" color="text.secondary" mr={1}>
+                    Click a cell to cycle:
+                  </Typography>
+                )}
                 {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                   <Chip
                     key={key}
@@ -582,22 +585,38 @@ export default function AttendancePage() {
                       const records =
                         attRecordsMap.get(userId) ?? new Map<string, TechAttendance>();
                       return (
-                        <TableRow key={userId} onMouseEnter={() => setHoveredRow(userId)} onMouseLeave={() => setHoveredRow(null)}>
+                        <TableRow 
+                          key={userId}
+                          sx={{ '&:hover .name-cell::after': { opacity: 1 } }}
+                        >
                           <TableCell
+                            className="name-cell"
                             sx={{
                               position: 'sticky',
                               left: 0,
                               zIndex: 2,
                               bgcolor: 'background.paper',
+                              '&::after': {
+                                content: '""',
+                                position: 'absolute',
+                                top: 0, left: 0, right: 0, bottom: 0,
+                                bgcolor: 'rgba(0, 0, 0, 0.08)',
+                                opacity: 0,
+                                transition: 'opacity 0.2s',
+                                pointerEvents: 'none',
+                                zIndex: 0,
+                              }
                             }}
                           >
-                            <Typography variant="body2" noWrap>
-                              {[tech.firstName, tech.lastName].filter(Boolean).join(' ') ||
-                                tech.email}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" noWrap>
-                              {(tech.role ?? '').replace(/_/g, ' ')}
-                            </Typography>
+                            <Box sx={{ position: 'relative', zIndex: 1 }}>
+                              <Typography variant="body2" noWrap>
+                                {[tech.firstName, tech.lastName].filter(Boolean).join(' ') ||
+                                  tech.email}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" noWrap>
+                                {(tech.role ?? '').replace(/_/g, ' ')}
+                              </Typography>
+                            </Box>
                           </TableCell>
                           {weekdays.map((d) => {
                             const dateStr = formatDate(d);
@@ -609,64 +628,63 @@ export default function AttendancePage() {
                             const isFutureDate = dateStr > todayStr;
                             const isToday = dateStr === todayStr;
 
-                            return (
-                              <TableCell key={dateStr} align="center" sx={{ px: 0.5, ...(isToday ? { bgcolor: 'primary.50' } : {}) }}>
-                                {canManage ? (
-                                  <Tooltip
-                                    title={isPastDate ? 'Cannot change past dates' : isFutureDate ? 'Cannot change future dates' : `Click to cycle: ${!status ? 'Set present' : status}`}
-                                  >
-                                    <span>
-                                      <IconButton
-                                        size="small"
-                                        disabled={isPastDate || isFutureDate}
-                                        onClick={() => {
-                                        
-                                        const cycle: AttendanceStatus[] = [
-                                          'present',
-                                          'absent',
-                                          'half_day',
-                                          'out_of_office',
-                                        ];
-                                        if (!status) {
-                                          handleSetAttendance(userId, dateStr, cycle[0]);
-                                        } else {
-                                          const currentIdx = cycle.indexOf(status);
-                                          if (currentIdx === cycle.length - 1) {
-                                            // 5th click (or after OOO), delete it
-                                            setAttendance((prev) => prev.filter((r) => !(r.userId === userId && r.date.slice(0, 10) === dateStr)));
-                                            attendanceApi.deleteAttendance(userId, dateStr).catch(() => fetchAttendance());
-                                          } else {
-                                            handleSetAttendance(userId, dateStr, cycle[currentIdx + 1]);
-                                          }
-                                        }
+                              const cellClickHandler = () => {
+                                if (!canManage || isPastDate || isFutureDate) return;
+                                const cycle: AttendanceStatus[] = [
+                                  'present',
+                                  'absent',
+                                  'half_day',
+                                  'out_of_office',
+                                ];
+                                if (!status) {
+                                  handleSetAttendance(userId, dateStr, cycle[0]);
+                                } else {
+                                  const currentIdx = cycle.indexOf(status);
+                                  if (currentIdx === cycle.length - 1) {
+                                    setAttendance((prev) => prev.filter((r) => !(r.userId === userId && r.date.slice(0, 10) === dateStr)));
+                                    attendanceApi.deleteAttendance(userId, dateStr).catch(() => fetchAttendance());
+                                  } else {
+                                    handleSetAttendance(userId, dateStr, cycle[currentIdx + 1]);
+                                  }
+                                }
+                              };
 
-                                      }}
-                                      sx={{
-                                        color: cfg ? `${cfg.color}.main` : 'action.active',
-                                        '&:hover': {
-                                          bgcolor: cfg ? `${cfg.color}.light` : 'action.hover',
-                                          opacity: 0.85,
-                                        },
-                                      }}
-                                    >
-                                      {cfg ? (
-                                        cfg.icon
-                                      ) : (
-                                        <Typography
-                                          variant="body1"
-                                          sx={{
-                                            fontSize: '1.1rem',
-                                            lineHeight: 1,
-                                            color: 'text.secondary',
-                                          }}
-                                        >
-                                          •
-                                        </Typography>
-                                      )}
-                                      </IconButton>
-                                    </span>
-                                  </Tooltip>
-                                ) : cfg ? (
+                              return (
+                                <TableCell 
+                                  key={dateStr} 
+                                  align="center" 
+                                  onClick={cellClickHandler}
+                                  sx={{ 
+                                    p: 0, 
+                                    height: '40px',
+                                    bgcolor: isToday ? 'primary.50' : 'inherit',
+                                    cursor: (canManage && !isPastDate && !isFutureDate) ? 'pointer' : 'default',
+                                    '&:hover': (canManage && !isPastDate && !isFutureDate) 
+                                      ? { bgcolor: 'rgba(0, 0, 0, 0.08)' } 
+                                      : (!isToday ? { bgcolor: 'rgba(0, 0, 0, 0.02)' } : {})
+                                  }}
+                                >
+                                  {canManage ? (
+                                    <Box display="flex" width="100%" height="100%" justifyContent="center" alignItems="center">
+                                      <Box
+                                        sx={{
+                                          color: cfg ? `${cfg.color}.main` : 'action.active',
+                                          display: 'flex'
+                                        }}
+                                      >
+                                        {cfg ? (
+                                          cfg.icon
+                                        ) : (
+                                          <Typography
+                                            variant="body1"
+                                            sx={{ fontSize: '1.1rem', lineHeight: 1, color: 'text.secondary' }}
+                                          >
+                                            •
+                                          </Typography>
+                                        )}
+                                      </Box>
+                                    </Box>
+                                  ) : cfg ? (
                                   <Chip
                                     size="small"
                                     icon={cfg.icon as any}
