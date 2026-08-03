@@ -148,6 +148,11 @@ export const usersApi = {
     return response.data;
   },
 
+  getAppMode: async () => {
+    const response = await apiClient.get('/users/security-config/app-mode');
+    return response.data;
+  },
+
   updateSecurityConfig: async (payload: { defaultPassword?: string }) => {
     const response = await apiClient.put('/users/security-config', payload);
     return response.data;

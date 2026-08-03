@@ -70,8 +70,8 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const [appMode, setAppMode] = useState<string>('full');
 
   useEffect(() => {
-    usersApi.getSecurityConfig().then((config: any) => {
-      setAppMode(config?.appMode || 'full');
+    usersApi.getAppMode().then((res: any) => {
+      setAppMode(res.appMode || 'full');
     }).catch(() => {/* non-blocking */});
   }, []);
 

@@ -18,6 +18,12 @@ export class SecurityConfigController {
     return this.securityConfigService.getConfig();
   }
 
+  @Get('app-mode')
+  async getAppMode(): Promise<{ appMode: string }> {
+    const config = await this.securityConfigService.getConfig();
+    return { appMode: config.appMode || 'full' };
+  }
+
   @Put()
   @RequireCapability('isSecuritySettingsAccess')
   async updateConfig(

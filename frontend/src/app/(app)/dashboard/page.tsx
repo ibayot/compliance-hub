@@ -55,6 +55,7 @@ import { documentsApi } from '@/lib/api/documents';
 import { ticketsApi, ticketSettingsApi, TicketDashboardStats, TechAssignedStats } from '@/app/api/references';
 
 import { incidentsApi, TodayStats } from '@/lib/api/incidents';
+import { usersApi } from '@/lib/api/users';
 import { cybersecurityApi, CybersecurityMetric } from '@/lib/api/cybersecurity';
 import { DashboardSummaryResponse, kpiApi } from '@/lib/api/kpi';
 
@@ -150,8 +151,6 @@ export default function DashboardPage() {
     return false;
   }, [globalConfig]);
 
-  const appMode = globalConfig?.appMode || 'full';
-
   const getGradient = (color: string) => {
     if (color === 'default' || color === 'action') {
       return isDark 
@@ -164,8 +163,11 @@ export default function DashboardPage() {
       : `linear-gradient(135deg, ${alpha(mainColor, 0.15)} 0%, ${alpha(mainColor, 0.05)} 100%)`;
   };
 
+  const [appMode, setAppMode] = useState<string>('full');
+
   useEffect(() => {
     ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(() => { });
+    usersApi.getAppMode().then((res: any) => setAppMode(res.appMode || 'full')).catch(() => {});
   }, []);
 
   useEffect(() => {
