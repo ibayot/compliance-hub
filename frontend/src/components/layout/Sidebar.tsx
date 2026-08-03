@@ -67,12 +67,12 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user, myCap } = useAuth();
   const { isCollapsed, drawerWidth } = useSidebar();
-  const [appMode, setAppMode] = useState<string>('full');
+  const [appMode, setAppMode] = useState<string>('loading');
 
   useEffect(() => {
     usersApi.getAppMode().then((res: any) => {
       setAppMode(res.appMode || 'full');
-    }).catch(() => {/* non-blocking */});
+    }).catch(() => setAppMode('full'));
   }, []);
 
   const mainNavItems: NavItem[] = [
@@ -217,6 +217,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   ) => {
     // Application Mode filter: hide strictly unrelated services
     // Shared services (users, core) are always visible
+    if (appMode === 'loading' && service !== 'core' && service !== 'users' && service !== undefined) return false;
     if (service === 'ticketing' && appMode === 'compliance_only') return false;
     if (service === 'compliance' && appMode === 'ticketing_only') return false;
 

@@ -163,11 +163,11 @@ export default function DashboardPage() {
       : `linear-gradient(135deg, ${alpha(mainColor, 0.15)} 0%, ${alpha(mainColor, 0.05)} 100%)`;
   };
 
-  const [appMode, setAppMode] = useState<string>('full');
+  const [appMode, setAppMode] = useState<string>('loading');
 
   useEffect(() => {
     ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(() => { });
-    usersApi.getAppMode().then((res: any) => setAppMode(res.appMode || 'full')).catch(() => {});
+    usersApi.getAppMode().then((res: any) => setAppMode(res.appMode || 'full')).catch(() => setAppMode('full'));
   }, []);
 
   useEffect(() => {
@@ -298,7 +298,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading) {
+  if (loading || appMode === 'loading') {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
@@ -1478,7 +1478,7 @@ export default function DashboardPage() {
                   )}
 
                   {/* Technician Pause / Resume */}
-                  {user?.role !== 'user' && (
+                  {user?.role !== 'user' && appMode !== 'compliance_only' && (
                     <>
                       <Button
                         variant="outlined"
