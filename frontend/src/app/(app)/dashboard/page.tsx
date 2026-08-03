@@ -1373,7 +1373,7 @@ export default function DashboardPage() {
       )}
 
       {/* Recent Documents and Compliance Overview — CO / super_admin only */}
-      {isFullDashboard && (
+      {isFullDashboard && appMode !== 'ticketing_only' && (
         <Grid container spacing={3} mb={4}>
           <Grid item xs={12} md={8}>
             <Card>
@@ -1459,7 +1459,7 @@ export default function DashboardPage() {
                   Quick Actions
                 </Typography>
                 <Box display="flex" flexDirection="column" gap={2} mt={2}>
-                  {isFullDashboard && (
+                  {isFullDashboard && appMode !== 'ticketing_only' && (
                     <>
                       <Button variant="contained" href="/governance/documents/upload" fullWidth>
                         Upload Document
@@ -1469,9 +1469,11 @@ export default function DashboardPage() {
                       </Button>
                     </>
                   )}
-                  <Button variant="outlined" href="/operations/tickets" fullWidth>
-                    View Issues
-                  </Button>
+                  {appMode !== 'compliance_only' && (
+                    <Button variant="outlined" href="/operations/tickets" fullWidth>
+                      View Issues
+                    </Button>
+                  )}
 
                   {/* Technician Pause / Resume */}
                   {user?.role !== 'user' && (
