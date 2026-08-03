@@ -261,13 +261,13 @@ export default function AttendancePage() {
       attendanceApi
         .getAttendance(startDate, endDate, attType || undefined)
         .then((data) => setAttendance(data))
-        .catch(() => {});
+        .catch(() => { });
     } catch (err: any) {
       // Rollback: re-fetch silently to restore truthful server state
       attendanceApi
         .getOfficeDays(String(month + 1), String(year))
         .then((data) => setOfficeDays(data))
-        .catch(() => {});
+        .catch(() => { });
       enqueueSnackbar(err?.response?.data?.message || 'Failed to update office day', {
         variant: 'error',
       });
@@ -585,7 +585,7 @@ export default function AttendancePage() {
                       const records =
                         attRecordsMap.get(userId) ?? new Map<string, TechAttendance>();
                       return (
-                        <TableRow 
+                        <TableRow
                           key={userId}
                           sx={{ '&:hover .name-cell::after': { opacity: 1 } }}
                         >
@@ -628,63 +628,63 @@ export default function AttendancePage() {
                             const isFutureDate = dateStr > todayStr;
                             const isToday = dateStr === todayStr;
 
-                              const cellClickHandler = () => {
-                                if (!canManage || isPastDate || isFutureDate) return;
-                                const cycle: AttendanceStatus[] = [
-                                  'present',
-                                  'absent',
-                                  'half_day',
-                                  'out_of_office',
-                                ];
-                                if (!status) {
-                                  handleSetAttendance(userId, dateStr, cycle[0]);
+                            const cellClickHandler = () => {
+                              if (!canManage || isPastDate || isFutureDate) return;
+                              const cycle: AttendanceStatus[] = [
+                                'present',
+                                'absent',
+                                'half_day',
+                                'out_of_office',
+                              ];
+                              if (!status) {
+                                handleSetAttendance(userId, dateStr, cycle[0]);
+                              } else {
+                                const currentIdx = cycle.indexOf(status);
+                                if (currentIdx === cycle.length - 1) {
+                                  setAttendance((prev) => prev.filter((r) => !(r.userId === userId && r.date.slice(0, 10) === dateStr)));
+                                  attendanceApi.deleteAttendance(userId, dateStr).catch(() => fetchAttendance());
                                 } else {
-                                  const currentIdx = cycle.indexOf(status);
-                                  if (currentIdx === cycle.length - 1) {
-                                    setAttendance((prev) => prev.filter((r) => !(r.userId === userId && r.date.slice(0, 10) === dateStr)));
-                                    attendanceApi.deleteAttendance(userId, dateStr).catch(() => fetchAttendance());
-                                  } else {
-                                    handleSetAttendance(userId, dateStr, cycle[currentIdx + 1]);
-                                  }
+                                  handleSetAttendance(userId, dateStr, cycle[currentIdx + 1]);
                                 }
-                              };
+                              }
+                            };
 
-                              return (
-                                <TableCell 
-                                  key={dateStr} 
-                                  align="center" 
-                                  onClick={cellClickHandler}
-                                  sx={{ 
-                                    p: 0, 
-                                    height: '40px',
-                                    bgcolor: isToday ? 'primary.50' : 'inherit',
-                                    cursor: (canManage && !isPastDate && !isFutureDate) ? 'pointer' : 'default',
-                                    '&:hover': (canManage && !isPastDate && !isFutureDate) 
-                                      ? { bgcolor: 'rgba(0, 0, 0, 0.08)' } 
-                                      : (!isToday ? { bgcolor: 'rgba(0, 0, 0, 0.02)' } : {})
-                                  }}
-                                >
-                                  {canManage ? (
-                                    <Box display="flex" width="100%" height="100%" justifyContent="center" alignItems="center">
-                                      <Box
-                                        sx={{
-                                          color: cfg ? `${cfg.color}.main` : 'action.active',
-                                          display: 'flex'
-                                        }}
-                                      >
-                                        {cfg ? (
-                                          cfg.icon
-                                        ) : (
-                                          <Typography
-                                            variant="body1"
-                                            sx={{ fontSize: '1.1rem', lineHeight: 1, color: 'text.secondary' }}
-                                          >
-                                            •
-                                          </Typography>
-                                        )}
-                                      </Box>
+                            return (
+                              <TableCell
+                                key={dateStr}
+                                align="center"
+                                onClick={cellClickHandler}
+                                sx={{
+                                  p: 0,
+                                  height: '40px',
+                                  bgcolor: isToday ? 'primary.50' : 'inherit',
+                                  cursor: (canManage && !isPastDate && !isFutureDate) ? 'pointer' : 'default',
+                                  '&:hover': (canManage && !isPastDate && !isFutureDate)
+                                    ? { bgcolor: 'rgba(0, 0, 0, 0.08)' }
+                                    : (!isToday ? { bgcolor: 'rgba(0, 0, 0, 0.02)' } : {})
+                                }}
+                              >
+                                {canManage ? (
+                                  <Box display="flex" width="100%" height="100%" justifyContent="center" alignItems="center">
+                                    <Box
+                                      sx={{
+                                        color: cfg ? `${cfg.color}.main` : 'action.active',
+                                        display: 'flex'
+                                      }}
+                                    >
+                                      {cfg ? (
+                                        cfg.icon
+                                      ) : (
+                                        <Typography
+                                          variant="body1"
+                                          sx={{ fontSize: '1.1rem', lineHeight: 1, color: 'text.secondary' }}
+                                        >
+                                          •
+                                        </Typography>
+                                      )}
                                     </Box>
-                                  ) : cfg ? (
+                                  </Box>
+                                ) : cfg ? (
                                   <Chip
                                     size="small"
                                     icon={cfg.icon as any}

@@ -195,6 +195,7 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-907503372813-5393jo7p27hhbq0ih49tjm0gknr01it4.apps.googleusercontent.com}
+        - VITE_PROFILE_IMAGE_URL=${VITE_PROFILE_IMAGE_URL}
     container_name: rictms_frontend
     networks:
       - app_network

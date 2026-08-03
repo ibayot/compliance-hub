@@ -2294,7 +2294,12 @@ export class TicketService implements OnModuleInit {
 
   // --- Statistics ----------------------------------------------------------
 
-  async getStatistics(): Promise<{
+  async getStatistics(filters?: {
+    year?: number;
+    month?: number;
+    quarter?: number;
+    semester?: number;
+  }): Promise<{
     total: number;
     byStatus: Record<string, number>;
     byType: Record<string, number>;
@@ -2303,7 +2308,26 @@ export class TicketService implements OnModuleInit {
     resolvedTickets: number;
     userClosedTickets: number;
   }> {
-    const all = await this.ticketRepo.find();
+    const qb = this.ticketRepo.createQueryBuilder('t');
+
+    if (filters?.year) {
+      qb.andWhere('YEAR(t.createdAt) = :year', { year: filters.year });
+    }
+    if (filters?.month) {
+      qb.andWhere('MONTH(t.createdAt) = :month', { month: filters.month });
+    }
+    if (filters?.quarter) {
+      qb.andWhere('QUARTER(t.createdAt) = :quarter', { quarter: filters.quarter });
+    }
+    if (filters?.semester) {
+      if (filters.semester == 1) {
+        qb.andWhere('MONTH(t.createdAt) BETWEEN 1 AND 6');
+      } else {
+        qb.andWhere('MONTH(t.createdAt) BETWEEN 7 AND 12');
+      }
+    }
+
+    const all = await qb.getMany();
     const byStatus: Record<string, number> = {};
     const byType: Record<string, number> = {};
     let ratingSum = 0;

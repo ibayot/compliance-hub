@@ -12,6 +12,7 @@ import {
   Divider,
   Alert,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { CredentialResponse, GoogleLogin } from '@react-oauth/google';
 import { useSnackbar } from 'notistack';
 import { useLocation } from 'react-router-dom';
@@ -36,7 +37,7 @@ export default function LoginPage() {
       await login(email, password, redirect ?? undefined);
     } catch (err: any) {
       console.error("LOGIN ERROR:", err);
-      
+
       const msg =
         err?.response?.data?.message ||
         (err?.message === 'Network Error' || !err?.response
@@ -74,8 +75,32 @@ export default function LoginPage() {
         alignItems="center"
         minHeight="100vh"
       >
-        <Card sx={{ width: '100%', maxWidth: 450 }}>
-          <CardContent sx={{ p: 4 }}>
+        <Card sx={{
+          width: '100%',
+          maxWidth: 450,
+          position: 'relative',
+          overflow: 'visible',
+          boxShadow: 3
+        }}>
+          {/* Seamless Watermark */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              height: '150%',
+              aspectRatio: '1 / 1',
+              backgroundImage: 'url(/images/logos/app-logo.png)',
+              backgroundSize: 'contain',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+              opacity: 0.3,
+              pointerEvents: 'none',
+              zIndex: 0,
+            }}
+          />
+          <CardContent sx={{ p: 4, position: 'relative', zIndex: 1 }}>
             <Box textAlign="center" mb={4}>
               <Typography variant="h4" component="h1" gutterBottom>
                 RICTMS Compliance Hub

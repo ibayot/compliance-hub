@@ -641,8 +641,19 @@ export const ticketsApi = {
     };
   },
 
-  getStatistics: async (): Promise<Record<string, unknown>> => {
-    const response = await apiClient.get(`/tickets/statistics`);
+  getStatistics: async (filters?: {
+    year?: number;
+    month?: number;
+    quarter?: number;
+    semester?: number;
+  }): Promise<Record<string, unknown>> => {
+    let url = '/tickets/statistics?';
+    const params = new URLSearchParams();
+    if (filters?.year) params.append('year', filters.year.toString());
+    if (filters?.month) params.append('month', filters.month.toString());
+    if (filters?.quarter) params.append('quarter', filters.quarter.toString());
+    if (filters?.semester) params.append('semester', filters.semester.toString());
+    const response = await apiClient.get(url + params.toString());
     return response.data;
   },
 

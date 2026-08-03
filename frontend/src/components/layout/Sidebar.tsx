@@ -282,27 +282,49 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     return content;
   };
 
+  let sidebarLogo = '/images/logos/app-logo.png';
+  let sidebarTitle = 'RICTMS Compliance Hub';
+
+  if (user?.role === 'user') {
+    sidebarLogo = '/images/logos/ticketing-logo.png';
+    sidebarTitle = 'RICTMS Helpdesk';
+  } else {
+    if (appMode === 'ticketing_only') {
+      sidebarLogo = '/images/logos/ticketing-logo.png';
+      sidebarTitle = 'RICTMS Helpdesk';
+    } else if (appMode === 'compliance_only') {
+      sidebarLogo = '/images/logos/compliance-logo.png';
+      sidebarTitle = 'RICTMS Compliance';
+    }
+  }
+
   const drawerContent = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Toolbar
         sx={{
-          px: isCollapsed ? 1 : 3,
+          px: isCollapsed ? 1 : 2,
           py: 2,
           justifyContent: isCollapsed ? 'center' : 'flex-start',
         }}
       >
-        {isCollapsed ? (
-          <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: 'primary.main' }}>
-            CH
-          </Typography>
-        ) : (
+        <Box 
+          component="img" 
+          src={sidebarLogo} 
+          alt="Logo" 
+          sx={{ 
+            height: 32, 
+            width: 'auto', 
+            objectFit: 'contain', 
+            mr: isCollapsed ? 0 : 1.5 
+          }} 
+        />
+        {!isCollapsed && (
           <Typography
-            variant="h6"
-            noWrap
+            variant="subtitle1"
             component="div"
-            sx={{ fontWeight: 700, color: 'primary.main' }}
+            sx={{ fontWeight: 700, color: 'primary.main', lineHeight: 1.2, flexGrow: 1 }}
           >
-            Compliance Hub
+            {sidebarTitle}
           </Typography>
         )}
       </Toolbar>

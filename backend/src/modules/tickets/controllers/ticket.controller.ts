@@ -173,8 +173,18 @@ export class TicketController {
     UserRole.INFOSEC,
     'focal',
   )
-  async getStatistics() {
-    return this.ticketService.getStatistics();
+  async getStatistics(
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+    @Query('quarter') quarter?: string,
+    @Query('semester') semester?: string,
+  ) {
+    return this.ticketService.getStatistics({
+      year: year ? Number(year) : undefined,
+      month: month ? Number(month) : undefined,
+      quarter: quarter ? Number(quarter) : undefined,
+      semester: semester ? Number(semester) : undefined,
+    });
   }
 
   /** GET /tickets/technicians */

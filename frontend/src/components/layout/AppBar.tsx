@@ -213,7 +213,11 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
             onClick={handleProfileMenuOpen}
             color="inherit"
           >
-            <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+            <Avatar 
+              sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}
+              src={import.meta.env.VITE_PROFILE_IMAGE_URL ? `${import.meta.env.VITE_PROFILE_IMAGE_URL}/${user?.staffId}.jpg` : undefined}
+              imgProps={{ style: { objectPosition: 'center 20%' } }}
+            >
               {user?.firstName?.charAt(0)}
               {user?.lastName?.charAt(0)}
             </Avatar>

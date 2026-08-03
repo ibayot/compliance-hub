@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Autocomplete,
+  Avatar,
   Box,
   Button,
   Card,
@@ -1739,6 +1740,7 @@ export default function SettingsPage() {
     isSuperAdmin || user?.role === UserRole.SECTION_HEAD || user?.role === 'compliance_officer';
   const canManageSystemRoles = isSuperAdmin || Boolean(myCap?.isSystemRolesAccess);
   const canManageRoleCapabilities = isSuperAdmin || Boolean(myCap?.isRoleCapabilitiesAccess);
+  const canManageSecuritySettings = isSuperAdmin || Boolean(myCap?.isSecuritySettingsAccess);
 
   return (
     <Box>
@@ -1753,61 +1755,44 @@ export default function SettingsPage() {
 
       {/* Account Info */}
       <Card elevation={2} sx={{ mb: 3 }}>
-        <CardHeader
-          avatar={<RoleIcon color="action" />}
-          title="Account Information"
-          subheader="Your current session identity."
-        />
-        <CardContent>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Full Name
-              </Typography>
-              <Typography variant="body1">
-                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || '—'}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} sm={6} md={4}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Email
-              </Typography>
-              <Typography variant="body1">{user?.email || '—'}</Typography>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Role
-              </Typography>
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', py: 4 }}>
+          <Avatar 
+            src={import.meta.env.VITE_PROFILE_IMAGE_URL ? `${import.meta.env.VITE_PROFILE_IMAGE_URL}/${user?.staffId}.jpg` : undefined} 
+            imgProps={{ style: { objectPosition: 'center 20%' } }}
+            sx={{ 
+              width: 120, 
+              height: 120, 
+              mb: 2, 
+              bgcolor: 'primary.main', 
+              fontSize: '3rem',
+              boxShadow: 2
+            }}
+          >
+            {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}
+          </Avatar>
+          
+          <Typography variant="h5" fontWeight="bold" gutterBottom>
+            {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || '—'}
+          </Typography>
+          
+          <Typography variant="body1" color="text.secondary" gutterBottom>
+            {user?.email || '—'}
+          </Typography>
+          
+          <Box display="flex" gap={1} mt={2} justifyContent="center" flexWrap="wrap">
+            <Chip
+              label={user?.role?.replace('_', ' ').toUpperCase() || '—'}
+              color="primary"
+            />
+            {user?.units && (user.units as any[]).map((unit: any) => (
               <Chip
-                label={user?.role?.replace('_', ' ').toUpperCase() || '—'}
-                size="small"
-                color="primary"
+                key={unit.id}
+                label={unit.name}
                 variant="outlined"
+                color="secondary"
               />
-            </Grid>
-            <Grid item xs={12} sm={6} md={2}>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Assigned Units
-              </Typography>
-              {user?.units && user.units.length > 0 ? (
-                <Box display="flex" flexWrap="wrap" gap={0.5} mt={0.25}>
-                  {(user.units as any[]).map((unit: any) => (
-                    <Chip
-                      key={unit.id}
-                      label={unit.name}
-                      size="small"
-                      variant="outlined"
-                      color="secondary"
-                    />
-                  ))}
-                </Box>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  None assigned
-                </Typography>
-              )}
-            </Grid>
-          </Grid>
+            ))}
+          </Box>
         </CardContent>
       </Card>
 
@@ -1815,10 +1800,12 @@ export default function SettingsPage() {
         <Grid item xs={12} md={6}>
           <ThemeCard />
           </Grid>
+          {canManageSecuritySettings && (
+            <Grid item xs={12} md={6}>
+              <SecuritySettingsCard />
+            </Grid>
+          )}
           <Grid item xs={12} md={6}>
-            <SecuritySettingsCard />
-        </Grid>
-        <Grid item xs={12} md={6}>
           <ChangePasswordCard />
         </Grid>
         <Grid item xs={12} md={6}>

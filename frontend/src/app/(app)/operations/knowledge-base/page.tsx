@@ -30,6 +30,7 @@ import {
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { knowledgeBaseApi } from '@/app/api/references';
+import ReactMarkdown from 'react-markdown';
 import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
 
 interface KBArticle {
@@ -207,9 +208,9 @@ export default function KnowledgeBasePage() {
                     </Box>
                   </AccordionSummary>
                   <AccordionDetails>
-                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mb: 2, color: 'text.primary' }}>
-                      {art.content}
-                    </Typography>
+                    <Box sx={{ mb: 2, typography: 'body2', color: 'text.primary', '& p': { m: 0, mb: 1 }, '& ul, & ol': { m: 0, pl: 2 } }}>
+                      <ReactMarkdown>{art.content}</ReactMarkdown>
+                    </Box>
                     {art.tags &&
                       art.tags.split(',').map((tag) => (
                         <Chip

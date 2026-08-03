@@ -24,7 +24,9 @@ import {
   DialogContent,
   DialogActions,
   Alert,
+  Select,
 } from '@mui/material';
+import { useTheme, alpha } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
 import {
   Description as DocumentIcon,
@@ -44,17 +46,21 @@ import {
   Computer as DesktopIcon,
   Wifi as ItSupportIcon,
   Error as ErrorIcon,
+  AcUnit as FrozenIcon,
+  FileCopy as DuplicateIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { documentsApi } from '@/lib/api/documents';
 import { ticketsApi, ticketSettingsApi, TicketDashboardStats, TechAssignedStats } from '@/app/api/references';
-import GeneralOverview from '@/components/dashboard/GeneralOverview';
+
 import { incidentsApi, TodayStats } from '@/lib/api/incidents';
 import { cybersecurityApi, CybersecurityMetric } from '@/lib/api/cybersecurity';
 import { DashboardSummaryResponse, kpiApi } from '@/lib/api/kpi';
 
 export default function DashboardPage() {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const { user, myCap } = useAuth();
   const router = useRouter();
   const { enqueueSnackbar } = useSnackbar();
@@ -97,6 +103,14 @@ export default function DashboardPage() {
     resolvedTickets: number;
   } | null>(null);
 
+  // IT Help Desk Overview Filters
+  const [itStatsMode, setItStatsMode] = useState<'year' | 'semester' | 'quarter' | 'month'>('year');
+  const [itStatsYear, setItStatsYear] = useState(() => new Date().getFullYear());
+  const [itStatsSemester, setItStatsSemester] = useState(() => (new Date().getMonth() < 6 ? 1 : 2));
+  const [itStatsQuarter, setItStatsQuarter] = useState(() => Math.floor(new Date().getMonth() / 3) + 1);
+  const [itStatsMonth, setItStatsMonth] = useState(() => new Date().getMonth() + 1);
+  const [itStatsLoading, setItStatsLoading] = useState(false);
+
   const now = useMemo(() => new Date(), []);
   const periodYear = now.getFullYear();
   const periodMonth = now.getMonth() + 1;
@@ -118,7 +132,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (myCap?.isTicketSettingsFocal) {
       ticketsApi.getSlaSummary().then(setSlaSummary).catch(console.error);
-        ticketsApi.getGeneralOverviewStats(techStatsYear, techStatsMonth).then(setGeneralStats).catch(console.error);
+
     }
   }, [myCap?.isTicketSettingsFocal, techStatsYear, techStatsMonth]);
 
@@ -136,6 +150,20 @@ export default function DashboardPage() {
     return false;
   }, [globalConfig]);
 
+  const appMode = globalConfig?.appMode || 'full';
+
+  const getGradient = (color: string) => {
+    if (color === 'default' || color === 'action') {
+      return isDark 
+        ? `linear-gradient(135deg, ${alpha('#9e9e9e', 0.2)} 0%, ${alpha('#9e9e9e', 0.05)} 100%)` 
+        : `linear-gradient(135deg, ${alpha('#9e9e9e', 0.15)} 0%, ${alpha('#9e9e9e', 0.05)} 100%)`;
+    }
+    const mainColor = (theme.palette as any)[color]?.main || '#9e9e9e';
+    return isDark
+      ? `linear-gradient(135deg, ${alpha(mainColor, 0.2)} 0%, ${alpha(mainColor, 0.05)} 100%)`
+      : `linear-gradient(135deg, ${alpha(mainColor, 0.15)} 0%, ${alpha(mainColor, 0.05)} 100%)`;
+  };
+
   useEffect(() => {
     ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(() => { });
   }, []);
@@ -143,6 +171,36 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchDashboardData();
   }, [user]);
+
+  // Fetch IT Help Desk Overview stats when filters change
+  useEffect(() => {
+    if (!isFullDashboard) return;
+    setItStatsLoading(true);
+    const filters: any = {};
+    if (itStatsMode === 'year') {
+      filters.year = itStatsYear;
+    } else if (itStatsMode === 'semester') {
+      filters.year = itStatsYear;
+      filters.semester = itStatsSemester;
+    } else if (itStatsMode === 'quarter') {
+      filters.year = itStatsYear;
+      filters.quarter = itStatsQuarter;
+    } else if (itStatsMode === 'month') {
+      filters.year = itStatsYear;
+      filters.month = itStatsMonth;
+    }
+    
+    ticketsApi.getStatistics(filters)
+      .then((data: any) => {
+        setTicketMetrics(data);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch IT Help Desk stats:', err);
+      })
+      .finally(() => {
+        setItStatsLoading(false);
+      });
+  }, [isFullDashboard, itStatsMode, itStatsYear, itStatsSemester, itStatsQuarter, itStatsMonth]);
 
   useEffect(() => {
     if (!isRegularUser) return;
@@ -194,7 +252,7 @@ export default function DashboardPage() {
         documentsApi.listDocuments({ limit: 1000 }),
         cybersecurityApi.getAll(),
         incidentsApi.getTodayStats(),
-        ticketsApi.getStatistics(),
+        ticketsApi.getStatistics(), // Fetch unfiltered stats for top cards
         kpiApi.dashboardSummary(periodYear, periodMonth),
         ticketsApi.getDashboardStats(),
       ]);
@@ -206,34 +264,6 @@ export default function DashboardPage() {
       const pending = docs.filter(
         (d: any) => d.status === 'pending' || d.status === 'processing',
       ).length;
-
-      // Fetch ticket statistics
-      let ticketStats: any = {
-        total: 0,
-        byStatus: {},
-        byType: {},
-        satisfactionAvg: null,
-        satisfactionFillRate: 0,
-        resolvedTickets: 0,
-      };
-      if (ticketStatsResult.status === 'fulfilled') {
-        ticketStats = ticketStatsResult.value;
-      } else {
-        // Statistics endpoint might not be available
-        const tickets = await ticketsApi.getAll({});
-        const openTickets = tickets.filter(
-          (t: any) => t.status === 'open' || t.status === 'in_progress',
-        );
-        ticketStats = {
-          total: tickets.length,
-          byStatus: { open: openTickets.length },
-          byType: {},
-          satisfactionAvg: null,
-          satisfactionFillRate: 0,
-          resolvedTickets: 0,
-        };
-      }
-      setTicketMetrics(ticketStats);
 
       // Fetch cybersecurity metrics from API
       if (metricsResult.status === 'fulfilled') {
@@ -256,7 +286,7 @@ export default function DashboardPage() {
         totalDocuments: totalDocsCount,
         compliantDocuments: compliant,
         pendingDocuments: pending,
-        openTickets: (ticketStats.byStatus as any)?.open || 0,
+        openTickets: (ticketStatsResult.status === 'fulfilled' ? (ticketStatsResult.value as any)?.byStatus?.open : 0) || 0,
         recentDocuments: docs.slice(0, 5), // Latest 5 documents
       });
     } catch (err) {
@@ -475,7 +505,7 @@ export default function DashboardPage() {
       </Box>
 
       {/* Technician Personal Assignment Stats */}
-      {isTechnicianAny && (
+      {isTechnicianAny && appMode !== 'compliance_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box
@@ -503,6 +533,7 @@ export default function DashboardPage() {
                   value={techStatsMonth}
                   onChange={(e) => setTechStatsMonth(Number(e.target.value))}
                   sx={{ minWidth: 110 }}
+                  SelectProps={{ MenuProps: { disableScrollLock: true } }}
                 >
                   {[
                     'January',
@@ -530,6 +561,7 @@ export default function DashboardPage() {
                   value={techStatsYear}
                   onChange={(e) => setTechStatsYear(Number(e.target.value))}
                   sx={{ minWidth: 90 }}
+                  SelectProps={{ MenuProps: { disableScrollLock: true } }}
                 >
                   {[2024, 2025, 2026, 2027, 2028].map((y) => (
                     <MenuItem key={y} value={y}>
@@ -575,14 +607,15 @@ export default function DashboardPage() {
                     ] as const
                   ).map(({ label, value, color, Icon }) => (
                     <Grid item xs={6} sm={3} key={label}>
-                      <Paper
+                      <Card
                         sx={{
-                          p: 2,
+                          borderRadius: 3,
+                          boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.4)' : `0 4px 20px ${alpha((theme.palette as any)[color]?.main || '#9e9e9e', 0.15)}`,
+                          background: getGradient(color),
                           textAlign: 'center',
-                          border: 1,
-                          borderColor: color === 'default' ? 'divider' : `${color}.main`,
                         }}
                       >
+                        <CardContent>
                         <Icon color={color === 'default' ? 'action' : color} fontSize="large" />
                         <Typography
                           variant="h4"
@@ -594,7 +627,8 @@ export default function DashboardPage() {
                         <Typography variant="caption" color="text.secondary">
                           {label}
                         </Typography>
-                      </Paper>
+                      </CardContent>
+                      </Card>
                     </Grid>
                   ))}
                 </Grid>
@@ -635,11 +669,7 @@ export default function DashboardPage() {
               </Typography>
             )}
 
-            {myCap?.isTicketSettingsFocal && (
-              <Box mt={4}>
-                <GeneralOverview stats={generalStats} />
-              </Box>
-            )}
+
           </CardContent>
         </Card>
       )}
@@ -701,7 +731,8 @@ export default function DashboardPage() {
             </Card>
           </Grid>
 
-          {isFullDashboard && (
+
+          {isFullDashboard && appMode !== 'ticketing_only' && (
             <Grid item xs={12} md={6} lg={3}>
               <Card
                 sx={{
@@ -736,7 +767,7 @@ export default function DashboardPage() {
             </Grid>
           )}
 
-          {isFullDashboard && (
+          {isFullDashboard && appMode !== 'compliance_only' && (
             <Grid item xs={12} md={6} lg={3}>
               <Card>
                 <CardContent>
@@ -759,7 +790,7 @@ export default function DashboardPage() {
       )}
 
       {/* Incident Response Tracking — visible only to super_admin, CO, Section Head, and Cybersecurity Officer */}
-      {(isFullDashboard || isSectionHead || isCybersecurityOfficer) && incidentStats && (
+      {(isFullDashboard || isSectionHead || isCybersecurityOfficer) && incidentStats && appMode !== 'ticketing_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box display="flex" alignItems="center" gap={2} mb={3}>
@@ -776,44 +807,80 @@ export default function DashboardPage() {
             </Box>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6} md={3}>
-                <Paper sx={{ p: 2, border: 1, borderColor: 'info.main', bgcolor: 'info.50' }}>
+                <Card
+                  sx={{
+                    borderRadius: 3,
+                    boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.4)' : `0 4px 20px ${alpha((theme.palette as any)['info']?.main || '#9e9e9e', 0.15)}`,
+                    background: getGradient('info'),
+                    textAlign: 'center',
+                  }}
+                >
+                  <CardContent>
                   <Typography variant="body2" fontWeight={600} color="text.secondary">
                     Low Severity
                   </Typography>
                   <Typography variant="h5" color="info.main">
                     {incidentStats.severityBreakdown.low}
                   </Typography>
-                </Paper>
+                </CardContent>
+                </Card>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
-                <Paper sx={{ p: 2, border: 1, borderColor: 'warning.main', bgcolor: 'warning.50' }}>
+                <Card
+                  sx={{
+                    borderRadius: 3,
+                    boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.4)' : `0 4px 20px ${alpha((theme.palette as any)['warning']?.main || '#9e9e9e', 0.15)}`,
+                    background: getGradient('warning'),
+                    textAlign: 'center',
+                  }}
+                >
+                  <CardContent>
                   <Typography variant="body2" fontWeight={600} color="text.secondary">
                     Medium Severity
                   </Typography>
                   <Typography variant="h5" color="warning.main">
                     {incidentStats.severityBreakdown.medium}
                   </Typography>
-                </Paper>
+                </CardContent>
+                </Card>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
-                <Paper sx={{ p: 2, border: 1, borderColor: 'error.main', bgcolor: 'error.50' }}>
+                <Card
+                  sx={{
+                    borderRadius: 3,
+                    boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.4)' : `0 4px 20px ${alpha((theme.palette as any)['error']?.main || '#9e9e9e', 0.15)}`,
+                    background: getGradient('error'),
+                    textAlign: 'center',
+                  }}
+                >
+                  <CardContent>
                   <Typography variant="body2" fontWeight={600} color="text.secondary">
                     High Severity
                   </Typography>
                   <Typography variant="h5" color="error.main">
                     {incidentStats.severityBreakdown.high}
                   </Typography>
-                </Paper>
+                </CardContent>
+                </Card>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
-                <Paper sx={{ p: 2, border: 1, borderColor: 'error.dark', bgcolor: 'error.100' }}>
+                <Card
+                  sx={{
+                    borderRadius: 3,
+                    boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.4)' : `0 4px 20px ${alpha((theme.palette as any)['error']?.main || '#9e9e9e', 0.15)}`,
+                    background: getGradient('error'),
+                    textAlign: 'center',
+                  }}
+                >
+                  <CardContent>
                   <Typography variant="body2" fontWeight={600} color="text.secondary">
                     Critical Severity
                   </Typography>
                   <Typography variant="h5" color="error.dark">
                     {incidentStats.severityBreakdown.critical}
                   </Typography>
-                </Paper>
+                </CardContent>
+                </Card>
               </Grid>
             </Grid>
           </CardContent>
@@ -821,7 +888,7 @@ export default function DashboardPage() {
       )}
 
       {/* IT Help Desk Metrics */}
-      {isFullDashboard && ticketMetrics && (
+      {isFullDashboard && ticketMetrics && appMode !== 'compliance_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
@@ -836,9 +903,69 @@ export default function DashboardPage() {
                   </Typography>
                 </Box>
               </Box>
-              <Button variant="outlined" size="small" href="/operations/tickets">
-                View All Tickets
-              </Button>
+              <Box display="flex" alignItems="center" gap={1}>
+                {itStatsLoading && <CircularProgress size={20} />}
+                <Select
+                  size="small"
+                  value={itStatsMode}
+                  onChange={(e) => setItStatsMode(e.target.value as any)}
+                  sx={{ width: 130 }}
+                  MenuProps={{ disableScrollLock: true }}
+                >
+                  <MenuItem value="year">All Year</MenuItem>
+                  <MenuItem value="semester">By Semester</MenuItem>
+                  <MenuItem value="quarter">By Quarter</MenuItem>
+                  <MenuItem value="month">By Month</MenuItem>
+                </Select>
+
+                {itStatsMode === 'semester' && (
+                  <Select
+                    size="small"
+                    value={itStatsSemester}
+                    onChange={(e) => setItStatsSemester(Number(e.target.value))}
+                    sx={{ width: 100 }}
+                    MenuProps={{ disableScrollLock: true }}
+                  >
+                    <MenuItem value={1}>1st Sem</MenuItem>
+                    <MenuItem value={2}>2nd Sem</MenuItem>
+                  </Select>
+                )}
+
+                {itStatsMode === 'quarter' && (
+                  <Select
+                    size="small"
+                    value={itStatsQuarter}
+                    onChange={(e) => setItStatsQuarter(Number(e.target.value))}
+                    sx={{ width: 100 }}
+                    MenuProps={{ disableScrollLock: true }}
+                  >
+                    <MenuItem value={1}>Q1</MenuItem>
+                    <MenuItem value={2}>Q2</MenuItem>
+                    <MenuItem value={3}>Q3</MenuItem>
+                    <MenuItem value={4}>Q4</MenuItem>
+                  </Select>
+                )}
+
+                {itStatsMode === 'month' && (
+                  <Select
+                    size="small"
+                    value={itStatsMonth}
+                    onChange={(e) => setItStatsMonth(Number(e.target.value))}
+                    sx={{ width: 130 }}
+                    MenuProps={{ disableScrollLock: true }}
+                  >
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <MenuItem key={i + 1} value={i + 1}>
+                        {format(new Date(periodYear, i), 'MMMM')}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                )}
+
+                <Button variant="outlined" size="small" href="/operations/tickets">
+                  View All Tickets
+                </Button>
+              </Box>
             </Box>
 
             {/* Status Breakdown */}
@@ -859,20 +986,23 @@ export default function DashboardPage() {
                   Icon: ResolvedIcon,
                 },
                 { key: 'closed', label: 'Closed', color: 'default' as const, Icon: ClosedIcon },
+                { key: 'frozen', label: 'Frozen', color: 'info' as const, Icon: FrozenIcon },
+                { key: 'duplicate', label: 'Duplicate', color: 'error' as const, Icon: DuplicateIcon },
               ].map(({ key, label, color, Icon }) => (
-                <Grid item xs={6} sm={4} md={2} key={key}>
-                  <Paper
+                <Grid item xs={6} sm={4} md={3} key={key}>
+                  <Card
                     sx={{
-                      p: 1.5,
+                      borderRadius: 3,
+                      boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.4)' : `0 4px 20px ${alpha((theme.palette as any)[color]?.main || '#9e9e9e', 0.15)}`,
+                      background: getGradient(color),
                       textAlign: 'center',
-                      border: 1,
-                      borderColor: color === 'default' ? 'divider' : `${color}.main`,
                     }}
                   >
+                    <CardContent sx={{ p: '12px !important' }}>
                     <Icon color={color === 'default' ? 'action' : color} fontSize="small" />
                     <Typography
                       variant="h5"
-                      color={color === 'default' ? 'text.secondary' : `${color}.main`}
+                      color={color === 'default' ? 'text.secondary' : (color === 'info' && key === 'frozen' ? 'info.light' : `${color}.main`)}
                       mt={0.5}
                     >
                       {ticketMetrics.byStatus[key] ?? 0}
@@ -880,11 +1010,20 @@ export default function DashboardPage() {
                     <Typography variant="caption" color="text.secondary">
                       {label}
                     </Typography>
-                  </Paper>
+                  </CardContent>
+                  </Card>
                 </Grid>
               ))}
-              <Grid item xs={6} sm={4} md={2}>
-                <Paper sx={{ p: 1.5, textAlign: 'center', border: 1, borderColor: 'divider' }}>
+              <Grid item xs={6} sm={4} md={3}>
+                <Card
+                  sx={{
+                    borderRadius: 3,
+                    boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.4)' : `0 4px 20px ${alpha(theme.palette.warning.main, 0.15)}`,
+                    background: getGradient('warning'),
+                    textAlign: 'center',
+                  }}
+                >
+                  <CardContent sx={{ p: '12px !important' }}>
                   <StarIcon color="warning" fontSize="small" />
                   <Typography variant="h5" color="warning.main" mt={0.5}>
                     {ticketMetrics.satisfactionAvg !== null
@@ -894,7 +1033,8 @@ export default function DashboardPage() {
                   <Typography variant="caption" color="text.secondary">
                     Satisfaction
                   </Typography>
-                </Paper>
+                </CardContent>
+                </Card>
               </Grid>
             </Grid>
 
@@ -996,7 +1136,7 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {myCap?.isTicketSettingsFocal && slaSummary && (
+      {myCap?.isTicketSettingsFocal && slaSummary && appMode !== 'compliance_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Typography variant="h6" fontWeight={600} mb={2}>
@@ -1006,24 +1146,23 @@ export default function DashboardPage() {
               <Grid item xs={12} md={4}>
                 <Card
                   sx={{
-                    borderRadius: 3,
-                    boxShadow: '0 4px 20px rgba(211, 47, 47, 0.15)',
-                    background: 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)',
+                    boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.4)' : '0 4px 20px rgba(211, 47, 47, 0.15)',
+                    background: isDark
+                      ? `linear-gradient(135deg, ${alpha(theme.palette.error.main, 0.2)} 0%, ${alpha(theme.palette.error.main, 0.05)} 100%)`
+                      : 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)',
                     position: 'relative',
                     overflow: 'hidden',
                   }}
                 >
-                  <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.2 }}>
-                    <ErrorIcon sx={{ fontSize: 120, color: 'error.main' }} />
-                  </Box>
+                  
                   <CardContent sx={{ position: 'relative', zIndex: 1 }}>
                     <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-                      <ErrorIcon color="error" />
-                      <Typography color="error.dark" variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
+                      <ErrorIcon color={isDark ? 'error' : 'error'} />
+                      <Typography color={isDark ? 'error.light' : 'error.dark'} variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
                         Breached / Overdue
                       </Typography>
                     </Stack>
-                    <Typography variant="h2" color="error.dark" fontWeight={800}>
+                    <Typography variant="h2" color={isDark ? 'error.light' : 'error.dark'} fontWeight={800}>
                       {slaSummary.breached}
                     </Typography>
                   </CardContent>
@@ -1034,23 +1173,23 @@ export default function DashboardPage() {
                 <Card
                   sx={{
                     borderRadius: 3,
-                    boxShadow: '0 4px 20px rgba(237, 108, 2, 0.15)',
-                    background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)',
+                    boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.4)' : '0 4px 20px rgba(237, 108, 2, 0.15)',
+                    background: isDark
+                      ? `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.2)} 0%, ${alpha(theme.palette.warning.main, 0.05)} 100%)`
+                      : 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)',
                     position: 'relative',
                     overflow: 'hidden',
                   }}
                 >
-                  <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.2 }}>
-                    <WarningIcon sx={{ fontSize: 120, color: 'warning.main' }} />
-                  </Box>
+                  
                   <CardContent sx={{ position: 'relative', zIndex: 1 }}>
                     <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-                      <WarningIcon color="warning" />
-                      <Typography color="warning.dark" variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
+                      <WarningIcon color={isDark ? 'warning' : 'warning'} />
+                      <Typography color={isDark ? 'warning.light' : 'warning.dark'} variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
                         Nearing Breach
                       </Typography>
                     </Stack>
-                    <Typography variant="h2" color="warning.dark" fontWeight={800}>
+                    <Typography variant="h2" color={isDark ? 'warning.light' : 'warning.dark'} fontWeight={800}>
                       {slaSummary.nearing}
                     </Typography>
                   </CardContent>
@@ -1061,23 +1200,23 @@ export default function DashboardPage() {
                 <Card
                   sx={{
                     borderRadius: 3,
-                    boxShadow: '0 4px 20px rgba(46, 125, 50, 0.15)',
-                    background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)',
+                    boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.4)' : '0 4px 20px rgba(46, 125, 50, 0.15)',
+                    background: isDark
+                      ? `linear-gradient(135deg, ${alpha(theme.palette.success.main, 0.2)} 0%, ${alpha(theme.palette.success.main, 0.05)} 100%)`
+                      : 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)',
                     position: 'relative',
                     overflow: 'hidden',
                   }}
                 >
-                  <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.2 }}>
-                    <CompliantIcon sx={{ fontSize: 120, color: 'success.main' }} />
-                  </Box>
+                  
                   <CardContent sx={{ position: 'relative', zIndex: 1 }}>
                     <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-                      <CompliantIcon color="success" />
-                      <Typography color="success.dark" variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
+                      <CompliantIcon color={isDark ? 'success' : 'success'} />
+                      <Typography color={isDark ? 'success.light' : 'success.dark'} variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
                         On Track
                       </Typography>
                     </Stack>
-                    <Typography variant="h2" color="success.dark" fontWeight={800}>
+                    <Typography variant="h2" color={isDark ? 'success.light' : 'success.dark'} fontWeight={800}>
                       {slaSummary.onTrack}
                     </Typography>
                   </CardContent>
@@ -1089,7 +1228,7 @@ export default function DashboardPage() {
       )}
 
       {/* Cybersecurity Metrics */}
-      {isFullDashboard && (
+      {isFullDashboard && appMode !== 'ticketing_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box display="flex" alignItems="center" gap={2} mb={3}>
@@ -1161,8 +1300,8 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {/* KPI Overview */}
-      {!isTechnicianAny && (
+      {/* Compliance Management Metrics */}
+      {isFullDashboard && appMode !== 'ticketing_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
