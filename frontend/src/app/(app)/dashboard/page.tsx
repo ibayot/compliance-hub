@@ -175,8 +175,83 @@ export default function DashboardPage() {
     // For staff/admins, wait until capabilities are loaded before fetching data
     if (!isRegularUser && myCap === null) return;
     
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+
+        // For regular users — only fetch ticket dashboard stats
+        if (isRegularUser) {
+          try {
+            const dashStats = await ticketsApi.getDashboardStats();
+            setUserTicketStats(dashStats);
+          } catch (err) {
+            console.error('Failed to fetch user ticket stats:', err);
+          }
+          return;
+        }
+
+        // Technicians: tech stats are loaded by the dedicated useEffect above — no extra data needed
+        // BUT if they are also full dashboard users, they need the extra data!
+        if (isTechnicianAny && !isFullDashboard) return;
+
+        // Staff / admin: full dashboard
+        const [
+          docsResponse,
+          metricsResult,
+          incidentsResult,
+          ticketStatsResult,
+          kpiSummaryResult,
+          userDashStatsResult,
+        ] = await Promise.allSettled([
+          documentsApi.listDocuments({ limit: 1000 }),
+          cybersecurityApi.getAll(),
+          incidentsApi.getTodayStats(),
+          ticketsApi.getStatistics(), // Fetch unfiltered stats for top cards
+          kpiApi.dashboardSummary(periodYear, periodMonth),
+          ticketsApi.getDashboardStats(),
+        ]);
+
+        const docs = docsResponse.status === 'fulfilled' ? docsResponse.value.data : [];
+        const totalDocsCount =
+          docsResponse.status === 'fulfilled' ? docsResponse.value.total : docs.length;
+        const compliant = docs.filter((d: any) => d.status === 'ready').length;
+        const pending = docs.filter(
+          (d: any) => d.status === 'pending' || d.status === 'processing',
+        ).length;
+
+        // Fetch cybersecurity metrics from API
+        if (metricsResult.status === 'fulfilled') {
+          setCyberMetrics(metricsResult.value);
+        }
+
+        // Fetch today's incident tracking (8AM - 5PM Philippines time)
+        if (incidentsResult.status === 'fulfilled') {
+          setIncidentStats(incidentsResult.value);
+        }
+
+        if (kpiSummaryResult.status === 'fulfilled') {
+          setKpiSummary(kpiSummaryResult.value);
+        }
+        if (userDashStatsResult.status === 'fulfilled') {
+          setUserTicketStats(userDashStatsResult.value);
+        }
+
+        setStats({
+          totalDocuments: totalDocsCount,
+          compliantDocuments: compliant,
+          pendingDocuments: pending,
+          openTickets: (ticketStatsResult.status === 'fulfilled' ? (ticketStatsResult.value as any)?.byStatus?.open : 0) || 0,
+          recentDocuments: docs.slice(0, 5), // Latest 5 documents
+        });
+      } catch (err) {
+        console.error('Failed to fetch dashboard data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchDashboardData();
-  }, [user?.id, myCap, isRegularUser]);
+  }, [user?.id, myCap, isRegularUser, isTechnicianAny, isFullDashboard, periodYear, periodMonth]);
 
   // Fetch IT Help Desk Overview stats when filters change
   useEffect(() => {
@@ -228,79 +303,7 @@ export default function DashboardPage() {
       .finally(() => setTechStatsLoading(false));
   }, [isTechnicianAny, user?.id, techStatsYear, techStatsMonth]);
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
 
-      // For regular users — only fetch ticket dashboard stats
-      if (isRegularUser) {
-        try {
-          const dashStats = await ticketsApi.getDashboardStats();
-          setUserTicketStats(dashStats);
-        } catch (err) {
-          console.error('Failed to fetch user ticket stats:', err);
-        }
-        return;
-      }
-
-      // Technicians: tech stats are loaded by the dedicated useEffect above — no extra data needed
-      if (isTechnicianAny) return;
-
-      // Staff / admin: full dashboard
-      const [
-        docsResponse,
-        metricsResult,
-        incidentsResult,
-        ticketStatsResult,
-        kpiSummaryResult,
-        userDashStatsResult,
-      ] = await Promise.allSettled([
-        documentsApi.listDocuments({ limit: 1000 }),
-        cybersecurityApi.getAll(),
-        incidentsApi.getTodayStats(),
-        ticketsApi.getStatistics(), // Fetch unfiltered stats for top cards
-        kpiApi.dashboardSummary(periodYear, periodMonth),
-        ticketsApi.getDashboardStats(),
-      ]);
-
-      const docs = docsResponse.status === 'fulfilled' ? docsResponse.value.data : [];
-      const totalDocsCount =
-        docsResponse.status === 'fulfilled' ? docsResponse.value.total : docs.length;
-      const compliant = docs.filter((d: any) => d.status === 'ready').length;
-      const pending = docs.filter(
-        (d: any) => d.status === 'pending' || d.status === 'processing',
-      ).length;
-
-      // Fetch cybersecurity metrics from API
-      if (metricsResult.status === 'fulfilled') {
-        setCyberMetrics(metricsResult.value);
-      }
-
-      // Fetch today's incident tracking (8AM - 5PM Philippines time)
-      if (incidentsResult.status === 'fulfilled') {
-        setIncidentStats(incidentsResult.value);
-      }
-
-      if (kpiSummaryResult.status === 'fulfilled') {
-        setKpiSummary(kpiSummaryResult.value);
-      }
-      if (userDashStatsResult.status === 'fulfilled') {
-        setUserTicketStats(userDashStatsResult.value);
-      }
-
-      setStats({
-        totalDocuments: totalDocsCount,
-        compliantDocuments: compliant,
-        pendingDocuments: pending,
-        openTickets: (ticketStatsResult.status === 'fulfilled' ? (ticketStatsResult.value as any)?.byStatus?.open : 0) || 0,
-        recentDocuments: docs.slice(0, 5), // Latest 5 documents
-      });
-    } catch (err) {
-      console.error('Failed to fetch dashboard data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading || appMode === 'loading') {
     return (
