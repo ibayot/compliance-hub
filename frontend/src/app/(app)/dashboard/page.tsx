@@ -171,8 +171,12 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    if (!user) return;
+    // For staff/admins, wait until capabilities are loaded before fetching data
+    if (!isRegularUser && myCap === null) return;
+    
     fetchDashboardData();
-  }, [user]);
+  }, [user?.id, myCap, isRegularUser]);
 
   // Fetch IT Help Desk Overview stats when filters change
   useEffect(() => {
