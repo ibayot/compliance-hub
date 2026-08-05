@@ -15,6 +15,9 @@ import { MovModule } from '../modules/mov/mov.module';
 import { ComplianceJwtStrategy } from './compliance-jwt.strategy';
 import { HttpClientsModule } from '../common/http-clients/http-clients.module';
 import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditInterceptor } from '../shared/audit/audit.interceptor';
+import { AuditVariableSubscriber } from '../shared/audit/audit.subscriber';
 
 @Module({
   imports: [
@@ -78,7 +81,14 @@ import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.mid
     MovModule,
     HttpClientsModule,
   ],
-  providers: [ComplianceJwtStrategy],
+  providers: [
+    ComplianceJwtStrategy,
+    AuditVariableSubscriber,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
+    },
+  ],
 })
 export class ComplianceServiceAppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

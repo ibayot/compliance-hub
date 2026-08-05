@@ -138,6 +138,7 @@ export class AuditVariableSubscriber implements EntitySubscriberInterface {
     }
 
     const description = `Application layer ${action} on ${tableName}`;
+    const databaseName = event.connection?.options?.database || 'unknown_db';
 
     try {
       await event.manager.query(
@@ -147,7 +148,7 @@ export class AuditVariableSubscriber implements EntitySubscriberInterface {
         [
           userEmail,
           action,
-          '02_db_stg_compliance_hub_ticketing',
+          databaseName,
           tableName,
           `APP_${action}`,
           rowId,

@@ -8,6 +8,9 @@ import { UnitsModule } from '../modules/units/units.module';
 import { InternalModule } from '../modules/internal/internal.module';
 import { AuditModule } from '../modules/audit/audit.module';
 import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditInterceptor } from '../shared/audit/audit.interceptor';
+import { AuditVariableSubscriber } from '../shared/audit/audit.subscriber';
 
 @Module({
   imports: [
@@ -52,6 +55,13 @@ import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.mid
     UnitsModule,
     InternalModule,
     AuditModule,
+  ],
+  providers: [
+    AuditVariableSubscriber,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
+    },
   ],
 })
 export class UsersServiceAppModule implements NestModule {

@@ -86,6 +86,14 @@ function ChangePasswordCard() {
       enqueueSnackbar('New password and confirmation do not match.', { variant: 'error' });
       return;
     }
+    if (next.includes('/') || next.includes('\\')) {
+      enqueueSnackbar('Password cannot contain forward slash (/) or backslash (\\).', { variant: 'error' });
+      return;
+    }
+    if (current.includes('/') || current.includes('\\')) {
+      enqueueSnackbar('Current Password cannot contain forward slash (/) or backslash (\\).', { variant: 'error' });
+      return;
+    }
     try {
       setBusy(true);
       const res = await authApi.changePassword({ currentPassword: current, newPassword: next });
@@ -94,7 +102,11 @@ function ChangePasswordCard() {
       setNext('');
       setConfirm('');
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to update password.', {
+      let msg = err?.response?.data?.message || 'Failed to update password.';
+      if (Array.isArray(msg)) {
+        msg = msg.join(' | ');
+      }
+      enqueueSnackbar(msg, {
         variant: 'error',
       });
     } finally {

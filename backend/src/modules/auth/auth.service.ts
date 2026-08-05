@@ -530,7 +530,7 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Current password is incorrect');
+      throw new BadRequestException('INCORRECT CURRENT PASSWORD! Please double-check and try again.');
     }
 
     user.passwordHash = await bcrypt.hash(newPassword, 10);
