@@ -78,12 +78,24 @@ export class AuthController {
   @Post('change-password')
   @UseGuards(JwtAuthGuard)
   async changePassword(@CurrentUser() user: User, @Body() dto: ChangePasswordDto) {
-    return this.authService.changePassword(user.id, dto.currentPassword, dto.newPassword, dto.staffId);
+    return this.authService.changePassword(user.id, dto.currentPassword, dto.newPassword);
   }
 
   @Post('reauthenticate')
   @UseGuards(JwtAuthGuard)
   async reauthenticate(@CurrentUser() user: User, @Body('password') password: string) {
     return this.authService.reauthenticate(user.id, password);
+  }
+
+  @Post('generate-random')
+  @UseGuards(JwtAuthGuard)
+  async generateRandomPassword() {
+    return this.authService.generateRandomPassword();
+  }
+
+  @Post('generate-passphrase')
+  @UseGuards(JwtAuthGuard)
+  async generatePassphrase() {
+    return this.authService.generatePassphrase();
   }
 }

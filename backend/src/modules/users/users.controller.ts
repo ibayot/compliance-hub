@@ -69,8 +69,20 @@ export class UsersController {
   }
 
   @Post()
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
-  create(@Body() createUserDto: CreateUserDto) {
+  async create(@Body() createUserDto: CreateUserDto, @Request() req: any) {
+    const isView = this.roleCapabilitiesService.isUserManagementView(req.user.role);
+    const isAdmin = this.roleCapabilitiesService.isUserManagementAdmin(req.user.role);
+    const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
+
+    if (!isView && !isAdmin && !isSuperAdmin) {
+      throw new ForbiddenException('You do not have permission to create users.');
+    }
+
+    if (isView && !isAdmin && !isSuperAdmin) {
+      // Force role to regular user
+      createUserDto.role = UserRole.USER;
+    }
+
     return this.usersService.create(createUserDto);
   }
 
@@ -111,13 +123,21 @@ export class UsersController {
     return this.roleCapabilitiesService.findOne(req.user.role) ?? null;
   }
 
-  /** Updates capability flags for a specific role. Super admin only. */
+  /** Updates capability flags for a specific role. Super admin or Section Head only for Admin cap. */
   @Patch('role-capabilities/:roleValue')
   @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
   async updateRoleCapability(
     @Param('roleValue') roleValue: string,
     @Body() dto: UpdateRoleCapabilityDto,
+    @Request() req: any,
   ) {
+    const isSectionHead = req.user.role === UserRole.SECTION_HEAD;
+    const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
+
+    if (dto.isUserManagementAdmin !== undefined && !isSectionHead && !isSuperAdmin) {
+      throw new ForbiddenException('Only Section Head or Super Admin can modify the User Management Admin capability.');
+    }
+
     const result = await this.roleCapabilitiesService.updateOne(roleValue, dto);
     void this.eventBus.publish(CAPABILITIES_UPDATED_EVENT, {
       role: roleValue,
@@ -140,38 +160,117 @@ export class UsersController {
 
   @Patch(':id')
   // @Roles removed to allow self-update; authorization is checked inside the method
-  update(@Request() req: any, @Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+  async update(@Request() req: any, @Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     const parsedId = parseInt(id, 10);
-    const isAdmin = [
-      UserRole.SUPER_ADMIN,
-      UserRole.SECTION_HEAD,
-      UserRole.COMPLIANCE_OFFICER,
-    ].includes(req.user.role);
+    const targetUser = await this.usersService.findOne(parsedId);
 
-    if (!isAdmin && req.user.id !== parsedId) {
+    const isView = this.roleCapabilitiesService.isUserManagementView(req.user.role);
+    const isAdmin = this.roleCapabilitiesService.isUserManagementAdmin(req.user.role);
+    const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
+    const isSectionHead = req.user.role === UserRole.SECTION_HEAD;
+    const isSelf = req.user.id === parsedId;
+
+    const hasManagementAccess = isView || isAdmin || isSuperAdmin;
+
+    if (!hasManagementAccess && !isSelf) {
       throw new ForbiddenException('You can only update your own profile');
     }
 
-    if (!isAdmin) {
+    // View capability can only target "user" role
+    if (isView && !isAdmin && !isSuperAdmin && !isSelf && targetUser.role !== UserRole.USER) {
+      throw new ForbiddenException('You can only modify Regular Staff users.');
+    }
+
+    const targetIsAdmin = this.roleCapabilitiesService.isUserManagementAdmin(targetUser.role);
+    const targetIsSuperAdmin = targetUser.role === UserRole.SUPER_ADMIN;
+
+    // Admin capability can target anyone except another Admin/SuperAdmin, UNLESS they are a Section Head/Super Admin
+    if (isAdmin && !isSuperAdmin && !isSectionHead && !isSelf && (targetIsAdmin || targetIsSuperAdmin)) {
+      throw new ForbiddenException('You do not have permission to modify another administrator.');
+    }
+
+    // Section Head cannot modify Super Admin
+    if (isSectionHead && !isSuperAdmin && targetIsSuperAdmin) {
+      throw new ForbiddenException('You do not have permission to modify a Super Admin.');
+    }
+
+    if (!hasManagementAccess) {
       // Prevent privilege escalation for normal users
       delete updateUserDto.role;
       delete updateUserDto.active;
       delete updateUserDto.ticketMainFocal;
       delete updateUserDto.ticketTechnician;
+    } else if (isSelf && updateUserDto.active === false) {
+      throw new ForbiddenException('You cannot disable your own account.');
     }
 
     return this.usersService.update(parsedId, updateUserDto);
   }
 
   @Post(':id/reset-password')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
-  resetPassword(@Param('id') id: string) {
-    return this.usersService.resetPassword(+id);
+  async resetPassword(@Param('id') id: string, @Request() req: any) {
+    const parsedId = parseInt(id, 10);
+    const targetUser = await this.usersService.findOne(parsedId);
+
+    const isView = this.roleCapabilitiesService.isUserManagementView(req.user.role);
+    const isAdmin = this.roleCapabilitiesService.isUserManagementAdmin(req.user.role);
+    const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
+    const isSectionHead = req.user.role === UserRole.SECTION_HEAD;
+
+    if (!isView && !isAdmin && !isSuperAdmin) {
+      throw new ForbiddenException('You do not have permission to reset passwords.');
+    }
+
+    if (isView && !isAdmin && !isSuperAdmin && targetUser.role !== UserRole.USER) {
+      throw new ForbiddenException('You can only reset passwords for Regular Staff users.');
+    }
+
+    const targetIsAdmin = this.roleCapabilitiesService.isUserManagementAdmin(targetUser.role);
+    const targetIsSuperAdmin = targetUser.role === UserRole.SUPER_ADMIN;
+
+    if (isAdmin && !isSuperAdmin && !isSectionHead && (targetIsAdmin || targetIsSuperAdmin)) {
+      throw new ForbiddenException('You do not have permission to reset another administrator\'s password.');
+    }
+
+    if (isSectionHead && !isSuperAdmin && targetIsSuperAdmin) {
+      throw new ForbiddenException('You do not have permission to reset a Super Admin\'s password.');
+    }
+
+    return this.usersService.resetPassword(parsedId);
   }
 
   @Delete(':id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(+id);
+  async remove(@Param('id') id: string, @Request() req: any) {
+    const parsedId = parseInt(id, 10);
+    if (req.user.id === parsedId) {
+      throw new ForbiddenException('You cannot disable your own account.');
+    }
+
+    const targetUser = await this.usersService.findOne(parsedId);
+    const isView = this.roleCapabilitiesService.isUserManagementView(req.user.role);
+    const isAdmin = this.roleCapabilitiesService.isUserManagementAdmin(req.user.role);
+    const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
+    const isSectionHead = req.user.role === UserRole.SECTION_HEAD;
+
+    if (!isView && !isAdmin && !isSuperAdmin) {
+      throw new ForbiddenException('You do not have permission to disable users.');
+    }
+
+    if (isView && !isAdmin && !isSuperAdmin && targetUser.role !== UserRole.USER) {
+      throw new ForbiddenException('You can only disable Regular Staff users.');
+    }
+
+    const targetIsAdmin = this.roleCapabilitiesService.isUserManagementAdmin(targetUser.role);
+    const targetIsSuperAdmin = targetUser.role === UserRole.SUPER_ADMIN;
+
+    if (isAdmin && !isSuperAdmin && !isSectionHead && (targetIsAdmin || targetIsSuperAdmin)) {
+      throw new ForbiddenException('You do not have permission to disable another administrator.');
+    }
+
+    if (isSectionHead && !isSuperAdmin && targetIsSuperAdmin) {
+      throw new ForbiddenException('You do not have permission to disable a Super Admin.');
+    }
+
+    return this.usersService.remove(parsedId);
   }
 }

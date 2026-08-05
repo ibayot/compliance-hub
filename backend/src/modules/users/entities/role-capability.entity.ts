@@ -147,6 +147,14 @@ export class RoleCapability {
   @Column({ name: 'is_system_roles_access', type: 'tinyint', width: 1, default: 0 })
   isSystemRolesAccess: boolean;
 
+  /** True for roles that have administrative access to User Management. */
+  @Column({ name: 'is_user_management_admin', type: 'tinyint', width: 1, default: 0 })
+  isUserManagementAdmin: boolean;
+
+  /** True for roles that have view-only or restricted access to User Management. */
+  @Column({ name: 'is_user_management_view', type: 'tinyint', width: 1, default: 0 })
+  isUserManagementView: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

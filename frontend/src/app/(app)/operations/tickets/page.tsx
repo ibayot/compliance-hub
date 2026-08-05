@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
   Box,
@@ -55,6 +55,8 @@ import {
   SentimentVeryDissatisfied,
   FiberManualRecord,
   Upload as UploadIcon,
+  ChevronLeft,
+  ChevronRight,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useRouter } from 'next/navigation';
@@ -120,6 +122,7 @@ export default function TicketsPage() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
   const [showMyTickets, setShowMyTickets] = useState(false);
   const [showEscalatedToMe, setShowEscalatedToMe] = useState(false);
   const [myTicketsCount, setMyTicketsCount] = useState(0);
@@ -235,14 +238,35 @@ export default function TicketsPage() {
   // 0 = All, 1 = Active, 2 = To Rate, 3 = Closed, 4 = Requested For
   const [userTab, setUserTab] = useState(0);
 
-  const activeTickets = tickets.filter((t) =>
+  // Table Scroll State
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const handleTableScroll = useCallback(() => {
+    if (tableContainerRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = tableContainerRef.current;
+      setCanScrollLeft(scrollLeft > 0);
+      setCanScrollRight(Math.ceil(scrollLeft + clientWidth) < scrollWidth);
+    }
+  }, []);
+
+  const frontendFilteredTickets = React.useMemo(() => {
+    return tickets.filter(t => !filterPriority || t.priority === filterPriority);
+  }, [tickets, filterPriority]);
+
+  const frontendFilteredEscalations = React.useMemo(() => {
+    return allEscalations.filter(e => !filterPriority || (e.ticket && e.ticket.priority === filterPriority));
+  }, [allEscalations, filterPriority]);
+
+  const activeTickets = frontendFilteredTickets.filter((t) =>
     ['open', 'assigned', 'in_progress'].includes(t.status),
   );
-  const doneTickets = tickets.filter((t) => ['resolved', 'closed'].includes(t.status));
-  const frozenTickets = tickets.filter((t) => t.status === 'freeze');
-  const duplicateTickets = tickets.filter((t) => t.status === 'duplicate');
+  const doneTickets = frontendFilteredTickets.filter((t) => ['resolved', 'closed'].includes(t.status));
+  const frozenTickets = frontendFilteredTickets.filter((t) => t.status === 'freeze');
+  const duplicateTickets = frontendFilteredTickets.filter((t) => t.status === 'duplicate');
 
-  const toRateTickets = tickets.filter(
+  const toRateTickets = frontendFilteredTickets.filter(
     (t) =>
       (t.status === 'resolved' || t.status === 'closed') &&
       t.requesterId === user?.id &&
@@ -250,12 +274,12 @@ export default function TicketsPage() {
   );
 
   // Tickets that were requested FOR this user (someone else filed on their behalf)
-  const requestedForTickets = tickets.filter(
+  const requestedForTickets = frontendFilteredTickets.filter(
     (t) => t.requesterId === user?.id && t.createdById != null && t.createdById !== user?.id,
   );
 
   // For management/RICTMS: tickets this user created on behalf of someone else
-  const proxyCreatedTickets = tickets.filter(
+  const proxyCreatedTickets = frontendFilteredTickets.filter(
     (t) => t.createdById === user?.id && t.requesterId !== user?.id,
   );
 
@@ -269,13 +293,13 @@ export default function TicketsPage() {
   }, []);
 
   const tabFilteredTickets = canManageAll
-    ? ([tickets, activeTickets, doneTickets, frozenTickets, duplicateTickets, proxyCreatedTickets][
+    ? ([frontendFilteredTickets, activeTickets, doneTickets, frozenTickets, duplicateTickets, proxyCreatedTickets][
       mgmtTab
-    ] ?? tickets)
+    ] ?? frontendFilteredTickets)
     : isTechnician
-      ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
-      : ([tickets, activeTickets, toRateTickets, doneTickets, proxyCreatedTickets][userTab] ??
-        tickets);
+      ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? frontendFilteredTickets)
+      : ([frontendFilteredTickets, activeTickets, toRateTickets, doneTickets, proxyCreatedTickets][userTab] ??
+        frontendFilteredTickets);
 
   const refreshEscalationStates = useCallback(
     async (rows: Ticket[]) => {
@@ -313,6 +337,7 @@ export default function TicketsPage() {
       const data = await ticketsApi.getAll({
         status: (filterStatus as TicketStatus) || undefined,
         ticketType: (filterType as TicketType) || undefined,
+        priority: filterPriority || undefined,
         // assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
         assignedToId: showMyTickets && !showEscalatedToMe ? user?.id : undefined,
         escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
@@ -336,6 +361,7 @@ export default function TicketsPage() {
   }, [
     filterStatus,
     filterType,
+    filterPriority,
     showMyTickets,
     showEscalatedToMe,
     canViewEscalatedQueue,
@@ -381,6 +407,7 @@ export default function TicketsPage() {
       const data = await ticketsApi.getAll({
         status: (filterStatus as TicketStatus) || undefined,
         ticketType: (filterType as TicketType) || undefined,
+        priority: filterPriority || undefined,
         // assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
         assignedToId: showMyTickets && !showEscalatedToMe ? user?.id : undefined,
         escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
@@ -397,6 +424,7 @@ export default function TicketsPage() {
   }, [
     filterStatus,
     filterType,
+    filterPriority,
     showMyTickets,
     showEscalatedToMe,
     canViewEscalatedQueue,
@@ -504,7 +532,7 @@ export default function TicketsPage() {
 
     try {
       setSubmitting(true);
-      
+
       let payload: CreateTicketDto | FormData;
       if (selectedImage) {
         const formData = new FormData();
@@ -778,89 +806,113 @@ export default function TicketsPage() {
       {canManageAll && (
         <Card sx={{ mb: 2 }}>
           <CardContent>
-            <Stack direction="row" spacing={2} flexWrap="wrap">
-              <TextField inputProps={{ maxLength: 255 }}
-                select
-                label="Status"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                size="small"
-                sx={{ minWidth: 140 }}
-              >
-                <MenuItem value="">All Statuses</MenuItem>
-                <MenuItem value="open">Open</MenuItem>
-                <MenuItem value="assigned">Assigned</MenuItem>
-                <MenuItem value="in_progress">In Progress</MenuItem>
-                <MenuItem value="resolved">Resolved</MenuItem>
-                <MenuItem value="closed">Closed</MenuItem>
-                <MenuItem value="freeze">On Hold</MenuItem>
-                <MenuItem value="duplicate">Duplicate</MenuItem>
-              </TextField>
-              <TextField inputProps={{ maxLength: 255 }}
-                select
-                label="Type"
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                size="small"
-                sx={{ minWidth: 160 }}
-              >
-                <MenuItem value="">All Types</MenuItem>
-                <MenuItem value="desktop_support">Desktop Support</MenuItem>
-                <MenuItem value="it_support">IT Support</MenuItem>
-                <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
-              </TextField>
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={() => {
-                  setFilterStatus('');
-                  setFilterType('');
-                }}
-              >
-                Reset
-              </Button>
-              {/* {isTechnician && !isLowerLevelTech && ( */}
-              {(isFocalTech || canManageAll) && (
-                <Badge badgeContent={myTicketsCount} color="error" overlap="circular">
+            <Grid container spacing={2}>
+              <Grid item xs={12} lg={8}>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ '& > *': { flex: 1 } }}>
+                  <TextField inputProps={{ maxLength: 255 }}
+                    select
+                    label="Status"
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    size="small"
+                  >
+                    <MenuItem value="">All Statuses</MenuItem>
+                    <MenuItem value="open">Open</MenuItem>
+                    <MenuItem value="assigned">Assigned</MenuItem>
+                    <MenuItem value="in_progress">In Progress</MenuItem>
+                    <MenuItem value="resolved">Resolved</MenuItem>
+                    <MenuItem value="closed">Closed</MenuItem>
+                    <MenuItem value="freeze">On Hold</MenuItem>
+                    <MenuItem value="duplicate">Duplicate</MenuItem>
+                  </TextField>
+                  <TextField inputProps={{ maxLength: 255 }}
+                    select
+                    label="Type"
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
+                    size="small"
+                  >
+                    <MenuItem value="">All Types</MenuItem>
+                    <MenuItem value="desktop_support">Desktop Support</MenuItem>
+                    <MenuItem value="it_support">IT Support</MenuItem>
+                    <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
+                  </TextField>
+                  <TextField inputProps={{ maxLength: 255 }}
+                    select
+                    label="Priority"
+                    value={filterPriority}
+                    onChange={(e) => setFilterPriority(e.target.value)}
+                    size="small"
+                  >
+                    <MenuItem value="">All Priorities</MenuItem>
+                    <MenuItem value="low">Low</MenuItem>
+                    <MenuItem value="medium">Medium</MenuItem>
+                    <MenuItem value="high">High</MenuItem>
+                    <MenuItem value="urgent">Urgent</MenuItem>
+                    <MenuItem value="critical">Critical</MenuItem>
+                  </TextField>
                   <Button
                     size="small"
-                    variant={showMyTickets ? 'contained' : 'outlined'}
-                    color="primary"
+                    variant="outlined"
+                    sx={{ flex: '0 0 auto', minWidth: 80 }}
                     onClick={() => {
-                      setShowMyTickets((v) => !v);
-                      setShowEscalatedToMe(false);
+                      setFilterStatus('');
+                      setFilterType('');
+                      setFilterPriority('');
                     }}
                   >
-                    {showMyTickets ? 'My Tickets ✓' : 'My Tickets'}
+                    Reset
                   </Button>
-                </Badge>
-              )}
-              {canViewEscalatedQueue && (
-                <Badge badgeContent={escalatedToMeCount} color="error" overlap="circular">
-                  <Button
-                    size="small"
-                    variant={showEscalatedToMe ? 'contained' : 'outlined'}
-                    color="warning"
-                    onClick={() => {
-                      setShowEscalatedToMe((v) => !v);
-                      setShowMyTickets(false);
-                    }}
-                  >
-                    {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
-                  </Button>
-                </Badge>
-              )}
-            </Stack>
+                </Stack>
+              </Grid>
+              <Grid item xs={12} lg={4}>
+                <Stack direction="row" spacing={2} sx={{ '& > *': { flex: 1 } }}>
+                  {(isFocalTech || canManageAll) && (
+                    <Badge badgeContent={myTicketsCount} color="error" overlap="circular" sx={{ width: '100%', '& .MuiBadge-badge': { zIndex: 1 } }}>
+                      <Button
+                        fullWidth
+                        size="small"
+                        variant={showMyTickets ? 'contained' : 'outlined'}
+                        color="primary"
+                        onClick={() => {
+                          setShowMyTickets((v) => !v);
+                          setShowEscalatedToMe(false);
+                        }}
+                      >
+                        {showMyTickets ? 'My Tickets ✓' : 'My Tickets'}
+                      </Button>
+                    </Badge>
+                  )}
+                  {canViewEscalatedQueue && (
+                    <Badge badgeContent={escalatedToMeCount} color="error" overlap="circular" sx={{ width: '100%', '& .MuiBadge-badge': { zIndex: 1 } }}>
+                      <Button
+                        fullWidth
+                        size="small"
+                        variant={showEscalatedToMe ? 'contained' : 'outlined'}
+                        color="warning"
+                        onClick={() => {
+                          setShowEscalatedToMe((v) => !v);
+                          setShowMyTickets(false);
+                        }}
+                      >
+                        {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
+                      </Button>
+                    </Badge>
+                  )}
+                </Stack>
+              </Grid>
+            </Grid>
           </CardContent>
         </Card>
       )}
       {!canManageAll && (isFocalTech || canViewEscalatedQueue) && (
         <Card sx={{ mb: 2 }}>
           <CardContent>
-            <Stack direction="row" spacing={2}>
+            <Stack direction="row" spacing={2} sx={{ '& > *': { flex: 1, maxWidth: { xs: '100%', md: '50%', lg: '33%' } } }}>
               {(isFocalTech || canManageAll) && (
-                <Badge badgeContent={myTicketsCount} color="error" overlap="circular">
+                <Badge badgeContent={myTicketsCount} color="error" overlap="circular" sx={{ width: '100%', '& .MuiBadge-badge': { zIndex: 1 } }}>
                   <Button
+                    fullWidth
                     size="small"
                     variant={showMyTickets ? 'contained' : 'outlined'}
                     color="primary"
@@ -874,8 +926,9 @@ export default function TicketsPage() {
                 </Badge>
               )}
               {canViewEscalatedQueue && (
-                <Badge badgeContent={escalatedToMeCount} color="error" overlap="circular">
+                <Badge badgeContent={escalatedToMeCount} color="error" overlap="circular" sx={{ width: '100%', '& .MuiBadge-badge': { zIndex: 1 } }}>
                   <Button
+                    fullWidth
                     size="small"
                     variant={showEscalatedToMe ? 'contained' : 'outlined'}
                     color="warning"
@@ -911,7 +964,7 @@ export default function TicketsPage() {
               variant="scrollable"
               scrollButtons="auto"
             >
-              <Tab label={`All (${tickets.length})`} />
+              <Tab label={`All (${frontendFilteredTickets.length})`} />
               <Tab label={`Active (${activeTickets.length})`} />
               <Tab label={`Resolved / Closed (${doneTickets.length})`} />
               <Tab label={`Frozen (${frozenTickets.length})`} />
@@ -923,7 +976,7 @@ export default function TicketsPage() {
                   </Badge>
                 }
               />
-              <Tab label={`Escalations (${allEscalations.length})`} />
+              <Tab label={`Escalations (${frontendFilteredEscalations.length})`} />
             </Tabs>
           </CardContent>
         </Card>
@@ -936,6 +989,7 @@ export default function TicketsPage() {
               onChange={(_, v) => setTicketTab(v)}
               variant="scrollable"
               scrollButtons="auto"
+              allowScrollButtonsMobile
             >
               <Tab label={`Active (${activeTickets.length})`} />
               <Tab label={`Resolved / Closed (${doneTickets.length})`} />
@@ -953,9 +1007,10 @@ export default function TicketsPage() {
               onChange={(_, v) => setUserTab(v)}
               variant="scrollable"
               scrollButtons="auto"
+              allowScrollButtonsMobile
               sx={{ mb: 2 }}
             >
-              <Tab label={`All (${tickets.length})`} />
+              <Tab label={`All (${frontendFilteredTickets.length})`} />
               <Tab label={`Active (${activeTickets.length})`} />
               <Tab
                 label={
@@ -984,7 +1039,7 @@ export default function TicketsPage() {
               <Box display="flex" justifyContent="center" p={3}>
                 <CircularProgress size={28} />
               </Box>
-            ) : allEscalations.length === 0 ? (
+            ) : frontendFilteredEscalations.length === 0 ? (
               <Box display="flex" justifyContent="center" p={3}>
                 <Typography color="text.secondary">No escalations found.</Typography>
               </Box>
@@ -1002,7 +1057,7 @@ export default function TicketsPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {allEscalations.map((e) => (
+                    {frontendFilteredEscalations.map((e) => (
                       <TableRow key={e.id} hover onClick={() => router.push(`/operations/tickets/${e.ticketId}`)} sx={{ cursor: 'pointer' }}>
                         <TableCell>{new Date(e.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell>
@@ -1011,10 +1066,10 @@ export default function TicketsPage() {
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Chip 
-                            size="small" 
-                            label={e.status.toUpperCase()} 
-                            color={e.status === 'pending' ? 'warning' : e.status === 'accepted' ? 'success' : 'default'} 
+                          <Chip
+                            size="small"
+                            label={e.status.toUpperCase()}
+                            color={e.status === 'pending' ? 'warning' : e.status === 'accepted' ? 'success' : 'default'}
                           />
                         </TableCell>
                         <TableCell>{e.escalatedBy?.firstName} {e.escalatedBy?.lastName}</TableCell>
@@ -1181,21 +1236,63 @@ export default function TicketsPage() {
           )}
         </Stack>
       ) : (
-        <TableContainer component={Card} sx={{ overflowX: 'auto' }}>
-          <Table size="small">
+        <Box position="relative">
+          {canScrollLeft && (
+            <IconButton
+              size="small"
+              onClick={() => tableContainerRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
+              sx={{
+                position: 'absolute',
+                left: 8, // float over the sticky Ticket column
+                top: '50%',
+                transform: 'translateY(-50%)',
+                zIndex: 4,
+                bgcolor: 'background.paper',
+                boxShadow: 3,
+                '&:hover': { bgcolor: 'background.paper' }
+              }}
+            >
+              <ChevronLeft />
+            </IconButton>
+          )}
+          {canScrollRight && (
+            <IconButton
+              size="small"
+              onClick={() => tableContainerRef.current?.scrollBy({ left: 300, behavior: 'smooth' })}
+              sx={{
+                position: 'absolute',
+                right: 8,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                zIndex: 4,
+                bgcolor: 'background.paper',
+                boxShadow: 3,
+                '&:hover': { bgcolor: 'background.paper' }
+              }}
+            >
+              <ChevronRight />
+            </IconButton>
+          )}
+          <TableContainer 
+            component={Card} 
+            sx={{ overflow: 'auto', maxHeight: 'calc(100vh - 320px)' }}
+            ref={tableContainerRef}
+            onScroll={handleTableScroll}
+          >
+          <Table size="small" stickyHeader sx={{ tableLayout: 'fixed', width: '100%', minWidth: canManageAll ? 1300 : 1060 }}>
             <TableHead>
               <TableRow>
-                <TableCell>Ticket #</TableCell>
-                <TableCell>Subject</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Category</TableCell>
-                <TableCell>Priority</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>SLA</TableCell>
-                {canManageAll && <TableCell>Requester</TableCell>}
-                {canManageAll && <TableCell>Assigned To</TableCell>}
-                <TableCell>Date</TableCell>
-                <TableCell align="right">Actions</TableCell>
+                <TableCell sx={{ width: 90, position: 'sticky', left: 0, backgroundColor: 'background.paper', zIndex: 3, borderRight: '1px solid', borderColor: 'divider' }}>Ticket #</TableCell>
+                <TableCell sx={{ width: 300 }}>Subject</TableCell>
+                <TableCell sx={{ width: 150 }}>Type</TableCell>
+                <TableCell sx={{ width: 130 }}>Category</TableCell>
+                <TableCell sx={{ width: 110 }}>Priority</TableCell>
+                <TableCell sx={{ width: 140 }}>Status</TableCell>
+                <TableCell sx={{ width: 120 }}>SLA</TableCell>
+                {canManageAll && <TableCell sx={{ width: 120 }}>Requester</TableCell>}
+                {canManageAll && <TableCell sx={{ width: 120 }}>Assigned To</TableCell>}
+                <TableCell sx={{ width: 100 }}>Date</TableCell>
+                <TableCell sx={{ width: 120 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1224,36 +1321,55 @@ export default function TicketsPage() {
                     <TableRow
                       key={ticket.id}
                       hover
-                      sx={
+                      className="ticket-row"
+                      sx={[
+                        { '&:hover .ticket-cell::after': { opacity: 1 } },
                         hasPendingSatisfaction
                           ? {
-                            backgroundColor: 'warning.50',
-                            '&:hover': { backgroundColor: 'warning.100' },
-                          }
-                          : undefined
-                      }
+                              backgroundColor: 'warning.50',
+                              '&:hover': { backgroundColor: 'warning.100' },
+                            }
+                          : {}
+                      ]}
                     >
-                      <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                        {ticket.ticketNumber}
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          maxWidth: 220,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
+                      {/* Ticket # */}
+                      <TableCell 
+                        className="ticket-cell"
+                        sx={{ 
+                          fontFamily: 'monospace', fontWeight: 600, wordBreak: 'break-word', 
+                          position: 'sticky', left: 0, 
+                          bgcolor: hasPendingSatisfaction ? 'warning.50' : 'background.paper', 
+                          zIndex: 2, borderRight: '1px solid', borderColor: 'divider',
+                          '&::after': {
+                            content: '""',
+                            position: 'absolute',
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            bgcolor: 'rgba(0, 0, 0, 0.04)',
+                            opacity: 0,
+                            transition: 'opacity 0.2s',
+                            pointerEvents: 'none',
+                            zIndex: 0,
+                          }
                         }}
                       >
+                        <Box sx={{ position: 'relative', zIndex: 1 }}>{ticket.ticketNumber}</Box>
+                      </TableCell>
+                      {/* Subject — only column with ellipsis */}
+                      <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {ticket.subject}
                       </TableCell>
-                      <TableCell>
+                      {/* Type */}
+                      <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
                         <Stack direction="column" spacing={0.5}>
                           {ticket.createdById && ticket.createdById !== ticket.requesterId && (
                             <Chip
                               size="small"
-                              label="Proxy Request"
+                              label="Proxy"
                               color="secondary"
-                              sx={{ alignSelf: 'flex-start' }}
+                              sx={{
+                                width: '100%', height: 'auto', py: 0.5,
+                                '& .MuiChip-label': { display: 'block', whiteSpace: 'normal', wordBreak: 'break-word' }
+                              }}
                             />
                           )}
                           <Chip
@@ -1261,73 +1377,99 @@ export default function TicketsPage() {
                             icon={ticketTypeIcon(ticket.ticketType)}
                             label={TICKET_TYPE_LABELS[ticket.ticketType]}
                             variant="outlined"
+                            sx={{
+                              width: '100%', height: 'auto', py: 0.5,
+                              '& .MuiChip-label': { display: 'block', whiteSpace: 'normal', wordBreak: 'break-word' }
+                            }}
                           />
                         </Stack>
                       </TableCell>
+                      {/* Category */}
                       <TableCell>
                         <Typography variant="body2" color="text.secondary">
                           {ticket.category?.name ?? '—'}
                         </Typography>
                       </TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          label={(ticket.priority ?? 'not set').toUpperCase()}
-                          color={PRIORITY_COLOR[ticket.priority ?? ''] ?? 'default'}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Stack direction="row" spacing={1} alignItems="center">
+                      {/* Priority */}
+                      <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
+                        {ticket.priority ? (
                           <Chip
                             size="small"
-                            label={ticket.status.replace('_', ' ').toUpperCase()}
+                            label={ticket.priority.toUpperCase()}
+                            color={ticket.priority === 'critical' ? 'default' : (PRIORITY_COLOR[ticket.priority] ?? 'default')}
+                            sx={{
+                              width: '100%',
+                              ...(ticket.priority === 'critical' && {
+                                bgcolor: '#000',
+                                color: '#fff',
+                                '& .MuiChip-label': { color: '#fff' },
+                              }),
+                              ...(ticket.priority === 'urgent' && {
+                                bgcolor: 'error.dark',
+                                color: '#fff',
+                                '& .MuiChip-label': { color: '#fff' },
+                              }),
+                            }}
+                          />
+                        ) : (
+                          <Typography variant="body2" color="text.disabled">—</Typography>
+                        )}
+                      </TableCell>
+                      {/* Status */}
+                      <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
+                        <Stack direction="column" spacing={0.5}>
+                          <Chip
+                            size="small"
+                            label={ticket.status.replace(/_/g, ' ').toUpperCase()}
                             color={STATUS_COLOR[ticket.status] ?? 'default'}
+                            sx={{ width: '100%' }}
                           />
                           {hasPendingSatisfaction && (
-                            <Chip size="small" label="Unrated" color="warning" variant="filled" />
+                            <Chip size="small" label="Unrated" color="warning" variant="filled" sx={{ width: '100%' }} />
                           )}
                         </Stack>
                       </TableCell>
-                      <TableCell>
-                        <Stack direction="column" spacing={0.5}>
-                          {(() => {
-                            const s = getSlaStatus(ticket);
-                            return s ? (
-                              <Chip
-                                size="small"
-                                label={SLA_CHIP[s].label}
-                                color={SLA_CHIP[s].color}
-                              />
-                            ) : (
-                              <Typography variant="body2" color="text.disabled">
-                                —
-                              </Typography>
-                            );
-                          })()}
-                        </Stack>
+                      {/* SLA */}
+                      <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
+                        {(() => {
+                          const s = getSlaStatus(ticket);
+                          return s ? (
+                            <Chip
+                              size="small"
+                              label={SLA_CHIP[s].label}
+                              color={SLA_CHIP[s].color}
+                              sx={{ width: '100%' }}
+                            />
+                          ) : (
+                            <Typography variant="body2" color="text.disabled">—</Typography>
+                          );
+                        })()}
                       </TableCell>
+                      {/* Requester */}
                       {canManageAll && (
                         <TableCell>
-                          {ticket.requester
-                            ? `${ticket.requester.firstName ?? ''} ${ticket.requester.lastName ?? ''}`.trim() ||
-                            ticket.requester.email
-                            : '—'}
+                          <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                            {ticket.requester
+                              ? `${ticket.requester.firstName ?? ''} ${ticket.requester.lastName ?? ''}`.trim() ||
+                              ticket.requester.email
+                              : '—'}
+                          </Typography>
                         </TableCell>
                       )}
+                      {/* Assigned To */}
                       {canManageAll && (
                         <TableCell>
                           {ticket.assignedTo ? (
                             <Box display="flex" alignItems="center" gap={0.5}>
-                              <span>
+                              <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
                                 {`${ticket.assignedTo.firstName ?? ''} ${ticket.assignedTo.lastName ?? ''}`.trim() ||
                                   ticket.assignedTo.email}
-                              </span>
-                              {ticket.assignedTechAbsent &&
-                                (canAssign || canManageAll) && (
-                                  <Tooltip title="Technician is absent today">
-                                    <FiberManualRecord sx={{ color: 'error.main', fontSize: 10 }} />
-                                  </Tooltip>
-                                )}
+                              </Typography>
+                              {ticket.assignedTechAbsent && (canAssign || canManageAll) && (
+                                <Tooltip title="Technician is absent today">
+                                  <FiberManualRecord sx={{ color: 'error.main', fontSize: 10, flexShrink: 0 }} />
+                                </Tooltip>
+                              )}
                             </Box>
                           ) : (
                             <Typography color="text.disabled" variant="body2">
@@ -1336,6 +1478,7 @@ export default function TicketsPage() {
                           )}
                         </TableCell>
                       )}
+                      {/* Date */}
                       <TableCell sx={{ whiteSpace: 'nowrap' }}>
                         {new Date(ticket.createdAt).toLocaleDateString()}
                       </TableCell>
@@ -1406,6 +1549,7 @@ export default function TicketsPage() {
             </TableBody>
           </Table>
         </TableContainer>
+        </Box>
       )}
 
       {/* New Ticket Dialog — Redesigned with highlighted support type cards + category dropdown */}
@@ -1484,9 +1628,9 @@ export default function TicketsPage() {
                 if (form.ticketType === 'pantawid_ict_support') return c.isPantawid;
                 return false;
               });
-              
+
               if (filteredCategories.length === 0) return null;
-              
+
               return (
                 <TextField inputProps={{ maxLength: 255 }}
                   select
@@ -1508,9 +1652,9 @@ export default function TicketsPage() {
 
             {user?.role !== 'user' && categories.length > 0 && issues.length > 0 && form.categoryId && (() => {
               const filteredIssues = issues.filter((iss) => !iss.isDeleted && iss.categoryId === form.categoryId);
-              
+
               if (filteredIssues.length === 0) return null;
-              
+
               return (
                 <TextField inputProps={{ maxLength: 255 }}
                   select

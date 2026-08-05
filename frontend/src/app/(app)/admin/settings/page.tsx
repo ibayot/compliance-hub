@@ -50,6 +50,8 @@ import {
   Delete as DeleteIcon,
   Search as SearchIcon,
   Security as SecurityIcon,
+  Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
@@ -70,6 +72,9 @@ function ChangePasswordCard() {
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNext, setShowNext] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
 
   const handleSubmit = async () => {
@@ -96,57 +101,126 @@ function ChangePasswordCard() {
       setBusy(false);
     }
   };
+  const [generating, setGenerating] = useState(false);
+
+  const handleGenerateRandom = async () => {
+    try {
+      setGenerating(true);
+      const res = await authApi.generateRandomPassword();
+      setNext(res.password);
+      setConfirm(res.password);
+      enqueueSnackbar('Random password generated.', { variant: 'info' });
+    } catch (err) {
+      enqueueSnackbar('Failed to generate password.', { variant: 'error' });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleGeneratePassphrase = async () => {
+    try {
+      setGenerating(true);
+      const res = await authApi.generatePassphrase();
+      setNext(res.password);
+      setConfirm(res.password);
+      enqueueSnackbar('Random passphrase generated.', { variant: 'info' });
+    } catch (err) {
+      enqueueSnackbar('Failed to generate passphrase.', { variant: 'error' });
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   return (
     <Card elevation={2}>
       <CardHeader
         avatar={<KeyIcon color="primary" />}
         title="Change Password"
-        subheader="Update your account password. Minimum 8 characters."
+        subheader="Update your account password. Minimum 12 characters. Must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character."
       />
       <CardContent>
         <Grid container spacing={2}>
           <Grid item xs={12} md={4}>
               <TextField
                 label="Current Password"
-                type="password"
+                type={showCurrent ? 'text' : 'password'}
                 value={current}
                 onChange={(e) => setCurrent(e.target.value)}
                 fullWidth
                 autoComplete="current-password"
                 inputProps={{ maxLength: 100 }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={() => setShowCurrent(!showCurrent)} edge="end">
+                        {showCurrent ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
               />
           </Grid>
           <Grid item xs={12} md={4}>
             <TextField
               label="New Password"
-              type="password"
+              type={showNext ? 'text' : 'password'}
               value={next}
               onChange={(e) => setNext(e.target.value)}
               fullWidth
               autoComplete="new-password"
               inputProps={{ maxLength: 100 }}
-              helperText="Minimum 8 characters"
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton onClick={() => setShowNext(!showNext)} edge="end">
+                      {showNext ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
             />
           </Grid>
           <Grid item xs={12} md={4}>
             <TextField
               label="Confirm New Password"
-              type="password"
+              type={showConfirm ? 'text' : 'password'}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               fullWidth
               autoComplete="new-password"
               inputProps={{ maxLength: 100 }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton onClick={() => setShowConfirm(!showConfirm)} edge="end">
+                      {showConfirm ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
             />
           </Grid>
-          <Grid item xs={12}>
+          <Grid item xs={12} sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <Button
               variant="contained"
               onClick={handleSubmit}
               disabled={busy || !current || !next || !confirm}
             >
               {busy ? 'Updating...' : 'Update Password'}
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={handleGenerateRandom}
+              disabled={busy || generating}
+            >
+              Generate Random Password
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={handleGeneratePassphrase}
+              disabled={busy || generating}
+            >
+              Generate Passphrase
             </Button>
           </Grid>
         </Grid>
@@ -390,6 +464,16 @@ const CAPABILITY_COLUMNS: {
     key: 'isSystemRolesAccess',
     label: 'System Roles Admin',
     description: 'Access System Role Definitions',
+  },
+  {
+    key: 'isUserManagementAdmin',
+    label: 'User Mgt Admin',
+    description: 'Create/Edit/Deactivate all users',
+  },
+  {
+    key: 'isUserManagementView',
+    label: 'User Mgt View',
+    description: 'Create/Edit regular users only',
   },
 ];
 
@@ -924,7 +1008,7 @@ function RoleManagementCard() {
 // --- Focal User Management Card ---------------------------------------------
 
 function FocalUserManagementCard() {
-  const { user: currentUser, logout } = useAuth();
+  const { user: currentUser, myCap, logout } = useAuth();
   const [roles, setRoles] = useState<RoleDefinition[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [focalUsers, setFocalUsers] = useState<any[]>([]);
@@ -958,7 +1042,36 @@ function FocalUserManagementCard() {
     unitIds: [] as number[],
   });
 
-  const assignableRoles = useMemo(() => roles.filter((r) => r.assignable), [roles]);
+  const isSuperAdmin = currentUser?.role === UserRole.SUPER_ADMIN;
+  const isUserManagementAdmin = isSuperAdmin || Boolean(myCap?.isUserManagementAdmin);
+
+  const assignableRoles = useMemo(() => {
+    if (isUserManagementAdmin) {
+      return roles.filter((r) => r.assignable);
+    }
+    return roles.filter((r) => r.value === 'user');
+  }, [roles, isUserManagementAdmin]);
+
+  const canModifyUser = useCallback((u: any) => {
+    // No one can modify Super Admin except Super Admin
+    if (u.role === 'super_admin' && !isSuperAdmin) return false;
+
+    if (currentUser?.id === u.id) return true;
+
+    const hasViewCap = Boolean(myCap?.isUserManagementView);
+    
+    if (!isUserManagementAdmin && !hasViewCap) return false;
+
+    if (!isUserManagementAdmin && hasViewCap && u.role !== 'user') return false;
+
+    const isTargetAdmin = ['super_admin', 'section_head', 'compliance_officer'].includes(u.role);
+    
+    if (isSuperAdmin) return true;
+    if (currentUser?.role === 'section_head') return true;
+    if (isUserManagementAdmin && isTargetAdmin) return false;
+    
+    return true;
+  }, [currentUser, isSuperAdmin, isUserManagementAdmin, myCap]);
 
   // Email autocomplete suggestions
   const [emailSuggestions, setEmailSuggestions] = useState<
@@ -1393,54 +1506,63 @@ function FocalUserManagementCard() {
                         </TableCell>
                         <TableCell align="right">
                           <Tooltip title="Quick Reset Password">
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => setResetUser(u)}
-                            >
-                              <KeyIcon fontSize="small" />
-                            </IconButton>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => setResetUser(u)}
+                                disabled={!canModifyUser(u)}
+                              >
+                                <KeyIcon fontSize="small" />
+                              </IconButton>
+                            </span>
                           </Tooltip>
                           <Tooltip title="Edit user">
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              onClick={() => {
-                                setEditUser({
-                                  id: u.id,
-                                  email: u.email || '',
-                                  firstName: u.firstName || '',
-                                  middleName: u.middleName || '',
-                                  lastName: u.lastName || '',
-                                  suffix: u.suffix || '',
-                                  staffId: u.staffId || '',
-                                  position: u.position || '',
-                                  positionFull: u.positionFull || '',
-                                  designation: u.designation || '',
-                                  ticketMainFocal: Boolean(u.ticketMainFocal),
-                                  ticketTechnician: Boolean(u.ticketTechnician),
-                                  role: u.role,
-                                  unitIds: Array.isArray(u.units)
-                                    ? u.units.map((unit: any) => unit.id)
-                                    : [],
-                                });
-                              }}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => {
+                                  setEditUser({
+                                    id: u.id,
+                                    email: u.email || '',
+                                    firstName: u.firstName || '',
+                                    middleName: u.middleName || '',
+                                    lastName: u.lastName || '',
+                                    suffix: u.suffix || '',
+                                    staffId: u.staffId || '',
+                                    position: u.position || '',
+                                    positionFull: u.positionFull || '',
+                                    designation: u.designation || '',
+                                    ticketMainFocal: Boolean(u.ticketMainFocal),
+                                    ticketTechnician: Boolean(u.ticketTechnician),
+                                    role: u.role,
+                                    unitIds: Array.isArray(u.units)
+                                      ? u.units.map((unit: any) => unit.id)
+                                      : [],
+                                  });
+                                }}
+                                disabled={!canModifyUser(u)}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </span>
                           </Tooltip>
                           <Tooltip title={u.is_active || u.active ? 'Deactivate' : 'Activate'}>
-                            <IconButton
-                              size="small"
-                              color={u.is_active || u.active ? 'warning' : 'success'}
-                              onClick={() => handleToggleActive(u)}
-                            >
-                              {u.is_active || u.active ? (
-                                <InactiveIcon fontSize="small" />
-                              ) : (
-                                <ActiveIcon fontSize="small" />
-                              )}
-                            </IconButton>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color={u.is_active || u.active ? 'warning' : 'success'}
+                                onClick={() => handleToggleActive(u)}
+                                disabled={u.id === currentUser?.id || !canModifyUser(u)}
+                              >
+                                {u.is_active || u.active ? (
+                                  <InactiveIcon fontSize="small" />
+                                ) : (
+                                  <ActiveIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </span>
                           </Tooltip>
                         </TableCell>
                       </TableRow>
@@ -1737,10 +1859,21 @@ export default function SettingsPage() {
   const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
   // Users management uses the old cap admin logic for now unless requested otherwise, but roles and capabilities use their new specific DB-driven flags
   const canManageUsers =
-    isSuperAdmin || user?.role === UserRole.SECTION_HEAD || user?.role === 'compliance_officer';
+    isSuperAdmin || Boolean(myCap?.isUserManagementAdmin) || Boolean(myCap?.isUserManagementView);
   const canManageSystemRoles = isSuperAdmin || Boolean(myCap?.isSystemRolesAccess);
   const canManageRoleCapabilities = isSuperAdmin || Boolean(myCap?.isRoleCapabilitiesAccess);
   const canManageSecuritySettings = isSuperAdmin || Boolean(myCap?.isSecuritySettingsAccess);
+
+  const canAccessSettings =
+    user?.role !== UserRole.USER ||
+    canManageUsers ||
+    canManageSystemRoles ||
+    canManageRoleCapabilities ||
+    canManageSecuritySettings;
+
+  if (!user || !canAccessSettings) {
+    return <Typography sx={{ m: 3 }}>You do not have permission to view this page.</Typography>;
+  }
 
   return (
     <Box>
@@ -1805,7 +1938,7 @@ export default function SettingsPage() {
               <SecuritySettingsCard />
             </Grid>
           )}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12}>
           <ChangePasswordCard />
         </Grid>
         <Grid item xs={12} md={6}>

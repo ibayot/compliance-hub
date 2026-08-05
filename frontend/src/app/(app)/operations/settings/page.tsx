@@ -592,6 +592,9 @@ export default function TicketSettingsPage() {
         <Tabs
           value={tab}
           onChange={(_, v) => setTab(v)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab label={`Categories (${categories.filter((c) => !c.isDeleted).length})`} />

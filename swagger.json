@@ -1,0 +1,1 @@
+﻿{"message":"Service currently unavailable for this endpoint in microservices mode.","path":"/docs-json","usersServiceUrl":"http://users-service:4101","ticketingServiceUrl":"http://ticketing-service:4102","complianceServiceUrl":"http://compliance-service:4103"}

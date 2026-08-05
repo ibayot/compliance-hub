@@ -101,4 +101,12 @@ export class UpdateRoleCapabilityDto {
   @IsOptional()
   @IsBoolean()
   isSystemRolesAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isUserManagementAdmin?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isUserManagementView?: boolean;
 }

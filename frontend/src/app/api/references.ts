@@ -92,7 +92,7 @@ export type TicketStatus =
   | 'freeze'
   | 'pause'
   | 'duplicate';
-export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent' | 'critical';
 
 export interface TicketEvent {
   id: string;
@@ -570,6 +570,7 @@ export const ticketsApi = {
   getAll: async (filters?: {
     status?: TicketStatus;
     ticketType?: TicketType;
+    priority?: string;
     requesterId?: number;
     createdById?: number;
     assignedToId?: number;
@@ -578,6 +579,7 @@ export const ticketsApi = {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
     if (filters?.ticketType) params.append('ticketType', filters.ticketType);
+    if (filters?.priority) params.append('priority', filters.priority);
     if (filters?.requesterId) params.append('requesterId', String(filters.requesterId));
     if (filters?.assignedToId) params.append('assignedToId', String(filters.assignedToId));
     if (filters?.escalatedToMe) params.append('escalatedToMe', 'true');
@@ -647,7 +649,7 @@ export const ticketsApi = {
     quarter?: number;
     semester?: number;
   }): Promise<Record<string, unknown>> => {
-    let url = '/tickets/statistics?';
+    const url = '/tickets/statistics?';
     const params = new URLSearchParams();
     if (filters?.year) params.append('year', filters.year.toString());
     if (filters?.month) params.append('month', filters.month.toString());

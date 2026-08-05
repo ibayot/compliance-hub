@@ -121,13 +121,13 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
     <MuiAppBar
       position="fixed"
       sx={{
-        width: { md: `calc(100% - ${drawerWidth}px)` },
-        ml: { md: `${drawerWidth}px` },
+        left: { xs: 0, md: `${drawerWidth}px` },
+        width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
         bgcolor: 'background.paper',
         color: 'text.primary',
         boxShadow: 1,
         transition: (theme) =>
-          theme.transitions.create(['width', 'margin'], {
+          theme.transitions.create(['left', 'width'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.enteringScreen,
           }),

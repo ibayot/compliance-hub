@@ -63,11 +63,9 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         component="main"
         sx={{
           flexGrow: 1,
+          minWidth: 0,
           bgcolor: 'background.default',
           minHeight: '100vh',
-          overflow: 'auto',
-          ml: { md: `${drawerWidth}px` },
-          width: { md: `calc(100% - ${drawerWidth}px)` },
           transition: (theme) =>
             theme.transitions.create(['margin', 'width'], {
               easing: theme.transitions.easing.sharp,

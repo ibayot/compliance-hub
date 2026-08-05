@@ -488,7 +488,10 @@ export default function TicketDetailPage() {
       return;
     }
     try {
-      const payload: UpdateTicketDto = { status: newStatus as Ticket['status'] };
+      const payload: UpdateTicketDto = {};
+      if (newStatus && newStatus !== ticket?.status) {
+        payload.status = newStatus as Ticket['status'];
+      }
       if (resolutionNotes) payload.resolutionNotes = resolutionNotes;
       if (newPriority && newPriority !== ticket?.priority) payload.priority = newPriority as any;
       if (overrideDupOfId) payload.duplicateOfId = overrideDupOfId;
@@ -1098,6 +1101,7 @@ export default function TicketDetailPage() {
                 const activeIssueTypeId = ticket?.issueTypeId || (ticket as any)?.issueTypeConfig?.id;
                 const needsPriority = newStatus === 'in_progress' && (!effectivePriority || !activeIssueTypeId);
                 const isStatusUnchanged = newStatus === ticket?.status && newPriority === ticket?.priority;
+                const isKbMissingNotes = newStatus === 'resolved' && generateKb && !resolutionNotes.trim();
                 return (
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
@@ -1132,7 +1136,7 @@ export default function TicketDetailPage() {
                             : undefined
                         }
                       >
-                        {['low', 'medium', 'high', 'urgent'].map((p) => (
+                        {['low', 'medium', 'high', 'urgent', 'critical'].map((p) => (
                           <MenuItem key={p} value={p}>
                             {p.charAt(0).toUpperCase() + p.slice(1)}
                           </MenuItem>
@@ -1165,12 +1169,14 @@ export default function TicketDetailPage() {
                         fullWidth
                         multiline
                         rows={6}
-                        label="Resolution Notes"
+                        label={generateKb ? "Resolution Notes *" : "Resolution Notes"}
                         value={resolutionNotes}
                         onChange={(e) => setResolutionNotes(e.target.value)}
                         size="small"
                         placeholder="Describe what was done to resolve this ticket..."
                         inputProps={{ maxLength: 1000 }}
+                        error={isKbMissingNotes}
+                        helperText={isKbMissingNotes ? 'Resolution notes are required to generate a KB article.' : undefined}
                       />
                     </Grid>
                     {newStatus === 'resolved' && (
@@ -1202,7 +1208,7 @@ export default function TicketDetailPage() {
                           variant="contained"
                           size="small"
                           onClick={() => handleUpdateStatus()}
-                          disabled={needsPriority || isStatusUnchanged}
+                          disabled={needsPriority || isStatusUnchanged || isKbMissingNotes}
                         >
                           Save
                         </Button>

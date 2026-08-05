@@ -6,6 +6,7 @@ export const PRIORITY_COLOR: Record<string, 'default' | 'info' | 'warning' | 'er
     medium: 'warning',
     high: 'error',
     urgent: 'error',
+    critical: 'default',
   };
 
 export const STATUS_COLOR: Record<

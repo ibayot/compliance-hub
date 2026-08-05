@@ -420,6 +420,8 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         variant="permanent"
         sx={{
           display: { xs: 'none', md: 'block' },
+          width: drawerWidth,
+          flexShrink: 0,
           '& .MuiDrawer-paper': {
             boxSizing: 'border-box',
             width: drawerWidth,

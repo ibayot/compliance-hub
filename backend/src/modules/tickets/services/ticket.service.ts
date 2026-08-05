@@ -821,8 +821,8 @@ export class TicketService implements OnModuleInit {
       status,
       categoryId,
       slaDeadline,
-      isSlaWaiting,
-      slaPausedAt: isSlaWaiting ? new Date() : null,
+      isSlaWaiting: !assignedToId ? true : isSlaWaiting,
+      slaPausedAt: (!assignedToId || isSlaWaiting) ? new Date() : null,
       lastAssignedAt: assignedToId ? new Date() : null,
       issueTypeId,
       issueType: issueTypeKey,
@@ -1427,7 +1427,7 @@ export class TicketService implements OnModuleInit {
 
         // --- SLA Freezing Logic for Terminal DUPLICATE State ---
         if (
-          [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(ticket.status as TicketStatus) &&
+          [TicketStatus.FREEZE, TicketStatus.PAUSE, TicketStatus.OPEN].includes(ticket.status as TicketStatus) &&
           ticket.slaPausedAt
         ) {
           const now = new Date();
@@ -1478,9 +1478,9 @@ export class TicketService implements OnModuleInit {
 
         // --- SLA Freezing Logic ---
         const wasPaused =
-          [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(ticket.status as TicketStatus) ||
+          [TicketStatus.FREEZE, TicketStatus.PAUSE, TicketStatus.OPEN].includes(ticket.status as TicketStatus) ||
           ticket.isSlaWaiting;
-        const willBePaused = [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(
+        const willBePaused = [TicketStatus.FREEZE, TicketStatus.PAUSE, TicketStatus.OPEN].includes(
           dto.status as TicketStatus,
         );
 

@@ -81,4 +81,14 @@ export const authApi = {
     const response = await apiClient.post('/auth/reauthenticate', payload);
     return response.data;
   },
+
+  generateRandomPassword: async (): Promise<{ password: string }> => {
+    const response = await apiClient.post('/auth/generate-random');
+    return response.data;
+  },
+
+  generatePassphrase: async (): Promise<{ password: string }> => {
+    const response = await apiClient.post('/auth/generate-passphrase');
+    return response.data;
+  },
 };

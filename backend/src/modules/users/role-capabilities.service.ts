@@ -204,6 +204,14 @@ export class RoleCapabilitiesService implements OnModuleInit {
     return !!this.get(role)?.isSystemRolesAccess;
   }
 
+  isUserManagementAdmin(role: string): boolean {
+    return !!this.get(role)?.isUserManagementAdmin;
+  }
+
+  isUserManagementView(role: string): boolean {
+    return !!this.get(role)?.isUserManagementView;
+  }
+
   /** Return all role values that have a given capability set to true. */
   getRolesWhere(
     capability:
@@ -230,7 +238,9 @@ export class RoleCapabilitiesService implements OnModuleInit {
       | 'isIssuancesAccess'
       | 'isMetricsAccess'
       | 'isRoleCapabilitiesAccess'
-      | 'isSystemRolesAccess',
+      | 'isSystemRolesAccess'
+      | 'isUserManagementAdmin'
+      | 'isUserManagementView',
   ): string[] {
     return [...this.cache.values()].filter((r) => r[capability]).map((r) => r.roleValue);
   }

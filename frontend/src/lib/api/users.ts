@@ -98,6 +98,8 @@ export interface RoleCapabilityRecord {
   isTicketSettingsFocal: boolean;
   isAllTickets: boolean;
   isTicketFocal: boolean;
+  isUserManagementAdmin?: boolean;
+  isUserManagementView?: boolean;
   isSmtpSettingsAccess: boolean;
   isKpiAccess: boolean;
   isKpiManage: boolean;

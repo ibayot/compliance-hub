@@ -84,6 +84,21 @@ export const getAppTheme = (mode: 'light' | 'dark' = 'light') =>
           autoComplete: 'off',
         },
       },
+      MuiDialog: {
+        defaultProps: {
+          disableScrollLock: true,
+        },
+      },
+      MuiMenu: {
+        defaultProps: {
+          disableScrollLock: true,
+        },
+      },
+      MuiPopover: {
+        defaultProps: {
+          disableScrollLock: true,
+        },
+      },
     },
   });
 

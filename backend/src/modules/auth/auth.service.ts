@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import axios from 'axios';
 import { OAuth2Client, TokenPayload as GoogleTokenPayload } from 'google-auth-library';
 import { UsersService } from '../users/users.service';
 import { AttendanceService } from '../tickets/services/attendance.service';
@@ -520,7 +521,6 @@ export class AuthService {
     userId: number,
     currentPassword: string,
     newPassword: string,
-    staffId?: string,
   ): Promise<{ message: string }> {
     if (this.timingSafeStringEquals(currentPassword, newPassword)) {
       throw new BadRequestException('New password must be different from current password');
@@ -535,10 +535,6 @@ export class AuthService {
 
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     await this.usersService.updatePasswordHash(user.id, user.passwordHash);
-
-    if (staffId && staffId.trim().length > 0) {
-      await this.usersService.update(user.id, { staffId: staffId.trim() } as any);
-    }
 
     return { message: 'Password updated successfully' };
   }
@@ -578,5 +574,156 @@ export class AuthService {
       // If token decoding fails, do nothing
     }
     return { message: 'Logged out successfully' };
+  }
+
+  async generateRandomPassword(): Promise<{ password: string }> {
+    const fallbackPassword = this.generateFallbackPassword();
+    const groqKey = process.env.GROQ_API_KEY;
+    
+    if (!groqKey) return { password: fallbackPassword };
+
+    try {
+      const response = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          model: 'llama3-8b-8192',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a strict password generator. You output ONLY the generated password, with absolutely no markdown, no quotes, and no extra text. Your output must strictly be between 12 and 16 characters. It must contain at least one uppercase letter, one lowercase letter, one number, and one special character (from @$!%*?&_-#).',
+            },
+            {
+              role: 'user',
+              content: 'Generate a strong password meeting all criteria.',
+            }
+          ],
+          temperature: 0.8,
+          max_tokens: 30,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${groqKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 5000,
+        },
+      );
+
+      const pwd = response.data.choices?.[0]?.message?.content?.trim();
+      if (this.isValidStrongPassword(pwd)) {
+        return { password: pwd };
+      }
+      return { password: fallbackPassword };
+    } catch (e) {
+      console.error('Groq password generation failed', e);
+      return { password: fallbackPassword };
+    }
+  }
+
+  async generatePassphrase(): Promise<{ password: string }> {
+    const fallbackPassphrase = this.generateFallbackPassphrase();
+    const groqKey = process.env.GROQ_API_KEY;
+
+    if (!groqKey) return { password: fallbackPassphrase };
+
+    try {
+      const response = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          model: 'llama3-8b-8192',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a strict passphrase generator. You output ONLY the generated passphrase, with absolutely no markdown, no quotes, and no extra text. Choose from a vast vocabulary of thousands of different words, never repeating words often. All words MUST be at least 5 letters long. The passphrase must consist of EXACTLY 3 random words separated by dashes (-). The dashes serve as the special character, do NOT add any other special characters. You must capitalize EXACTLY ONE letter, which MUST be the starting letter of any one of the words (word 1, 2, or 3). You must include EXACTLY ONE single-digit number (0-9). The number should be placed at the very start of the passphrase (followed by a dash), at the very end of the passphrase (preceded by a dash), or attached directly to the end of one of the words. Total length must be at least 12 characters.',
+            },
+            {
+              role: 'user',
+              content: 'Generate a strong passphrase meeting all criteria.',
+            }
+          ],
+          temperature: 0.8,
+          max_tokens: 40,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${groqKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 5000,
+        },
+      );
+
+      const pwd = response.data.choices?.[0]?.message?.content?.trim();
+      if (this.isValidStrongPassword(pwd)) {
+        return { password: pwd };
+      }
+      return { password: fallbackPassphrase };
+    } catch (e) {
+      console.error('Groq passphrase generation failed', e);
+      return { password: fallbackPassphrase };
+    }
+  }
+
+  private isValidStrongPassword(pwd?: string): boolean {
+    if (!pwd || pwd.length < 12) return false;
+    const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&_\-#])/;
+    return regex.test(pwd);
+  }
+
+  private generateFallbackPassword(): string {
+    const chars = 'abcdefghijklmnopqrstuvwxyz';
+    const uppers = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const nums = '0123456789';
+    const specials = '@$!%*?&_-#';
+    
+    const randomChar = (str: string) => str[Math.floor(Math.random() * str.length)];
+    
+    let pwd = randomChar(uppers) + randomChar(chars) + randomChar(nums) + randomChar(specials);
+    const all = chars + uppers + nums + specials;
+    for (let i = 0; i < 10; i++) pwd += randomChar(all);
+    
+    return pwd.split('').sort(() => 0.5 - Math.random()).join('');
+  }
+
+  private generateFallbackPassphrase(): string {
+    const rawWords = [
+      'apple', 'orange', 'banana', 'grape', 'mango', 'lemon', 'peach', 'cherry', 'plum', 'kiwi',
+      'tiger', 'lion', 'bear', 'wolf', 'eagle', 'shark', 'whale', 'dolphin', 'hawk', 'owl',
+      'ocean', 'river', 'mountain', 'forest', 'desert', 'valley', 'canyon', 'island', 'volcano', 'cave',
+      'planet', 'star', 'galaxy', 'comet', 'meteor', 'nebula', 'cosmos', 'orbit', 'moon', 'sun',
+      'guitar', 'piano', 'violin', 'drum', 'flute', 'trumpet', 'cello', 'harp', 'banjo', 'chimes',
+      'breeze', 'storm', 'cloud', 'rain', 'snow', 'thunder', 'lightning', 'frost', 'mist', 'haze',
+      'copper', 'silver', 'gold', 'platinum', 'iron', 'steel', 'bronze', 'brass', 'zinc', 'nickel',
+      'sapphire', 'ruby', 'emerald', 'diamond', 'opal', 'jade', 'topaz', 'quartz', 'garnet', 'pearl',
+      'coffee', 'tea', 'water', 'juice', 'milk', 'wine', 'cider', 'cocoa', 'nectar', 'syrup',
+      'circle', 'square', 'triangle', 'sphere', 'cube', 'pyramid', 'prism', 'cone', 'cylinder', 'spiral'
+    ];
+    const words = rawWords.filter(w => w.length >= 5);
+    
+    const randomWord = () => words[Math.floor(Math.random() * words.length)];
+    
+    const w = [randomWord(), randomWord(), randomWord()];
+    
+    // Capitalize the first letter of a random word (1, 2, or 3)
+    const capIdx = Math.floor(Math.random() * 3);
+    w[capIdx] = w[capIdx].charAt(0).toUpperCase() + w[capIdx].slice(1);
+    
+    // Pick a number 0-9
+    const num = Math.floor(Math.random() * 10).toString();
+    
+    // Insert number either at the start, middle, or end.
+    const pos = Math.floor(Math.random() * 3);
+    let phrase = w.join('-');
+    
+    if (pos === 0) {
+      phrase = num + '-' + phrase;
+    } else if (pos === 1) {
+      phrase = phrase + '-' + num;
+    } else {
+      w[1] = w[1] + num;
+      phrase = w.join('-');
+    }
+    
+    return phrase;
   }
 }
