@@ -148,7 +148,7 @@ function ChangePasswordCard() {
       <CardHeader
         avatar={<KeyIcon color="primary" />}
         title="Change Password"
-        subheader="Update your account password. Minimum 12 characters. Must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character."
+        subheader="Update your account password."
       />
       <CardContent>
         <Grid container spacing={2}>
@@ -1068,7 +1068,7 @@ function FocalUserManagementCard() {
     // No one can modify Super Admin except Super Admin
     if (u.role === 'super_admin' && !isSuperAdmin) return false;
 
-    if (currentUser?.id === u.id) return true;
+    if (currentUser?.id == u.id) return true;
 
     const hasViewCap = Boolean(myCap?.isUserManagementView);
     
@@ -1566,7 +1566,7 @@ function FocalUserManagementCard() {
                                 size="small"
                                 color={u.is_active || u.active ? 'warning' : 'success'}
                                 onClick={() => handleToggleActive(u)}
-                                disabled={u.id === currentUser?.id || !canModifyUser(u)}
+                                disabled={u.id == currentUser?.id || !canModifyUser(u)}
                               >
                                 {u.is_active || u.active ? (
                                   <InactiveIcon fontSize="small" />
@@ -1876,15 +1876,8 @@ export default function SettingsPage() {
   const canManageRoleCapabilities = isSuperAdmin || Boolean(myCap?.isRoleCapabilitiesAccess);
   const canManageSecuritySettings = isSuperAdmin || Boolean(myCap?.isSecuritySettingsAccess);
 
-  const canAccessSettings =
-    user?.role !== UserRole.USER ||
-    canManageUsers ||
-    canManageSystemRoles ||
-    canManageRoleCapabilities ||
-    canManageSecuritySettings;
-
-  if (!user || !canAccessSettings) {
-    return <Typography sx={{ m: 3 }}>You do not have permission to view this page.</Typography>;
+  if (!user) {
+    return <Typography sx={{ m: 3 }}>You must be logged in to view this page.</Typography>;
   }
 
   return (
