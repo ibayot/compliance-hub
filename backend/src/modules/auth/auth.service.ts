@@ -626,6 +626,16 @@ export class AuthService {
 
     if (!groqKey) return { password: fallbackPassphrase };
 
+    const topics = [
+      'astronomy', 'botany', 'music', 'culinary', 'geology', 'architecture', 
+      'nautical', 'aviation', 'chemistry', 'anatomy', 'literature', 'mythology', 
+      'carpentry', 'meteorology', 'zoology', 'fashion', 'sports', 'vehicles',
+      'emotions', 'colors', 'insects', 'reptiles', 'birds', 'mammals', 'fish',
+      'gemstones', 'tools', 'furniture', 'fabric', 'spices', 'weather', 'rivers'
+    ];
+    const shuffle = (arr: string[]) => arr.sort(() => 0.5 - Math.random());
+    const selectedTopics = shuffle([...topics]).slice(0, 3);
+
     try {
       const response = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
@@ -634,7 +644,7 @@ export class AuthService {
           messages: [
             {
               role: 'system',
-              content: 'You are a strict passphrase generator. You output ONLY the generated passphrase, with absolutely no markdown, no quotes, and no extra text. Choose from a vast vocabulary of thousands of different words, never repeating words often. All words MUST be at least 5 letters long. The passphrase must consist of EXACTLY 3 random words separated by dashes (-). The dashes serve as the special character, do NOT add any other special characters. You must capitalize EXACTLY ONE letter, which MUST be the starting letter of any one of the words (word 1, 2, or 3). You must include EXACTLY ONE single-digit number (0-9). The number should be placed at the very start of the passphrase (followed by a dash), at the very end of the passphrase (preceded by a dash), or attached directly to the end of one of the words. Total length must be at least 12 characters.',
+              content: `You are a strict passphrase generator. You output ONLY the generated passphrase, with absolutely no markdown, no quotes, and no extra text. All words MUST be at least 5 letters long. The passphrase must consist of EXACTLY 3 completely different words separated by dashes (-). DO NOT REPEAT ANY WORDS. The first word must be related to ${selectedTopics[0]}. The second word must be related to ${selectedTopics[1]}. The third word must be related to ${selectedTopics[2]}. The dashes serve as the special character, do NOT add any other special characters. You must capitalize EXACTLY ONE letter, which MUST be the starting letter of any one of the words (word 1, 2, or 3). You must include EXACTLY ONE single-digit number (0-9). The number should be placed at the very start of the passphrase (followed by a dash), at the very end of the passphrase (preceded by a dash), or attached directly to the end of one of the words. Total length must be at least 12 characters.`,
             },
             {
               role: 'user',
