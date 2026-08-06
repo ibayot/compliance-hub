@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
   Autocomplete,
   Avatar,
   Box,
@@ -41,6 +44,7 @@ import {
 } from '@mui/material';
 import {
   AdminPanelSettings as RoleIcon,
+  ExpandMore as ExpandMoreIcon,
   Edit as EditIcon,
   Key as KeyIcon,
   Palette as PaletteIcon,
@@ -400,93 +404,63 @@ function SecuritySettingsCard() {
 
 // --- Role Capabilities Card ------------------------------------------------
 
-const CAPABILITY_COLUMNS: {
-  key: keyof RoleCapabilityRecord;
-  label: string;
-  description: string;
-}[] = [
-  { key: 'isFocal', label: 'Focal', description: 'Compliance document & focal-level access' },
-  { key: 'isDesktop', label: 'Desktop', description: 'Handle desktop/hardware support tickets' },
-  { key: 'isItSupport', label: 'IT Support', description: 'Handle IT/software support tickets' },
+const CAPABILITY_CATEGORIES = [
   {
-    key: 'isPantawidIct',
-    label: 'Pantawid ICT',
-    description: 'Handle Pantawid ICT support tickets',
-  },
-  { key: 'isIto', label: 'ITO Staff', description: 'Non-technician ITO professional staff group' },
-  { key: 'isEscalationFocal', label: 'Escalation', description: 'Can receive escalated tickets' },
-  {
-    key: 'isTicketSettingsFocal',
-    label: 'Ticket Admin',
-    description: 'Full ticket settings & reports access',
+    name: 'Ticketing & Support Operations',
+    columns: [
+      { key: 'isFocal', label: 'Focal', description: 'Compliance document & focal-level access' },
+      { key: 'isDesktop', label: 'Desktop', description: 'Handle desktop/hardware support tickets' },
+      { key: 'isItSupport', label: 'IT Support', description: 'Handle IT/software support tickets' },
+      { key: 'isPantawidIct', label: 'Pantawid ICT', description: 'Handle Pantawid ICT support tickets' },
+      { key: 'isIto', label: 'ITO Staff', description: 'Non-technician ITO professional staff group' },
+      { key: 'isEscalationFocal', label: 'Escalation', description: 'Can receive escalated tickets' },
+      { key: 'isTicketSettingsFocal', label: 'Ticket Admin', description: 'Full ticket settings & reports access' },
+      { key: 'isAllTickets', label: 'See All Tickets', description: 'View all tickets system-wide (not just own)' },
+      { key: 'isTicketFocal', label: 'Assign Tickets', description: 'Manually assign/reassign tickets to technicians' },
+    ]
   },
   {
-    key: 'isSmtpSettingsAccess',
-    label: 'SMTP Admin',
-    description: 'Manage SMTP credentials in Ticket Settings',
+    name: 'User & Role Management',
+    columns: [
+      { key: 'isUserManagementAdmin', label: 'User Mgt Admin', description: 'Create/Edit/Deactivate all users' },
+      { key: 'isUserManagementView', label: 'User Mgt View', description: 'Create/Edit regular users only' },
+      { key: 'isSystemRolesAccess', label: 'System Roles Admin', description: 'Access System Role Definitions' },
+      { key: 'isRoleCapabilitiesAccess', label: 'Capabilities Admin', description: 'Access Role Capabilities Matrix' },
+    ]
   },
   {
-    key: 'isSecuritySettingsAccess',
-    label: 'Security Admin',
-    description: 'Manage Default Password in Security Settings',
+    name: 'Compliance',
+    columns: [
+      { key: 'isKpiAccess', label: 'KPI View', description: 'Access KPI dashboard/read endpoints' },
+      { key: 'isKpiManage', label: 'KPI Manage', description: 'Create/update KPI master and monitoring records' },
+      { key: 'isReviewsAccess', label: 'Reviews', description: 'Access review workflows' },
+      { key: 'isMetricsAccess', label: 'Metrics', description: 'Access Metrics module' },
+    ]
   },
   {
-    key: 'isAllTickets',
-    label: 'See All Tickets',
-    description: 'View all tickets system-wide (not just own)',
+    name: 'Attendance',
+    columns: [
+      { key: 'isAttendanceAccess', label: 'Attendance View', description: 'Access attendance and office-day views' },
+      { key: 'isAttendanceManage', label: 'Attendance Manage', description: 'Mutate attendance and office-day records' },
+    ]
   },
   {
-    key: 'isTicketFocal',
-    label: 'Assign Tickets',
-    description: 'Manually assign/reassign tickets to technicians',
-  },
-  { key: 'isKpiAccess', label: 'KPI View', description: 'Access KPI dashboard/read endpoints' },
-  {
-    key: 'isKpiManage',
-    label: 'KPI Manage',
-    description: 'Create/update KPI master and monitoring records',
-  },
-  {
-    key: 'isAttendanceAccess',
-    label: 'Attendance View',
-    description: 'Access attendance and office-day views',
+    name: 'Documents & Records',
+    columns: [
+      { key: 'isReportsAccess', label: 'Reports', description: 'Access consolidated compliance reports' },
+      { key: 'isMovAccess', label: 'MoV', description: 'Access MoV Builder' },
+      { key: 'isDocumentsAccess', label: 'Documents', description: 'Access Documents module' },
+      { key: 'isRepositoryAccess', label: 'Repository', description: 'Access Repository module' },
+      { key: 'isIssuancesAccess', label: 'Issuances', description: 'Access Issuances module' },
+    ]
   },
   {
-    key: 'isAttendanceManage',
-    label: 'Attendance Manage',
-    description: 'Mutate attendance and office-day records',
-  },
-  {
-    key: 'isReportsAccess',
-    label: 'Reports',
-    description: 'Access consolidated compliance reports',
-  },
-  { key: 'isReviewsAccess', label: 'Reviews', description: 'Access review workflows' },
-  { key: 'isMovAccess', label: 'MoV', description: 'Access MoV Builder' },
-  { key: 'isDocumentsAccess', label: 'Documents', description: 'Access Documents module' },
-  { key: 'isRepositoryAccess', label: 'Repository', description: 'Access Repository module' },
-  { key: 'isIssuancesAccess', label: 'Issuances', description: 'Access Issuances module' },
-  { key: 'isMetricsAccess', label: 'Metrics', description: 'Access Metrics module' },
-  {
-    key: 'isRoleCapabilitiesAccess',
-    label: 'Capabilities Admin',
-    description: 'Access Role Capabilities Matrix',
-  },
-  {
-    key: 'isSystemRolesAccess',
-    label: 'System Roles Admin',
-    description: 'Access System Role Definitions',
-  },
-  {
-    key: 'isUserManagementAdmin',
-    label: 'User Mgt Admin',
-    description: 'Create/Edit/Deactivate all users',
-  },
-  {
-    key: 'isUserManagementView',
-    label: 'User Mgt View',
-    description: 'Create/Edit regular users only',
-  },
+    name: 'System & Security Settings',
+    columns: [
+      { key: 'isSecuritySettingsAccess', label: 'Security Admin', description: 'Manage Default Password in Security Settings' },
+      { key: 'isSmtpSettingsAccess', label: 'SMTP Admin', description: 'Manage SMTP credentials in Ticket Settings' },
+    ]
+  }
 ];
 
 function RoleCapabilitiesCard() {
@@ -550,85 +524,107 @@ function RoleCapabilitiesCard() {
             </Typography>
           </Box>
         ) : (
-          <TableContainer>
-            <Table size="small" sx={{ minWidth: 900 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell
-                    sx={{
-                      fontWeight: 700,
-                      minWidth: 160,
-                      position: 'sticky',
-                      left: 0,
-                      zIndex: 101,
-                      bgcolor: 'background.paper',
-                      borderRight: '1px solid',
-                      borderColor: 'divider',
-                    }}
-                  >
-                    Role
-                  </TableCell>
-                  {CAPABILITY_COLUMNS.map((col) => (
-                    <TableCell
-                      key={col.key}
-                      align="center"
-                      sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}
-                    >
-                      <Tooltip title={col.description} placement="top">
-                        <span>{col.label}</span>
-                      </Tooltip>
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {caps
-                  .filter((c) => c.roleValue !== 'user')
-                  .map((cap) => (
-                    <TableRow
-                      key={cap.roleValue}
-                      hover
-                      sx={{ opacity: saving === cap.roleValue ? 0.6 : 1 }}
-                    >
-                      <TableCell
-                        sx={{
-                          position: 'sticky',
-                          left: 0,
-                          zIndex: 100,
-                          bgcolor: 'background.paper',
-                          borderRight: '1px solid',
-                          borderColor: 'divider',
-                        }}
-                      >
-                        <Chip
-                          label={cap.roleValue}
-                          size="small"
-                          variant="outlined"
-                          color={cap.roleValue === 'super_admin' ? 'error' : 'default'}
-                        />
-                      </TableCell>
-                      {CAPABILITY_COLUMNS.map((col) => {
-                        const val = cap[col.key] as boolean;
-                        const isLocked = cap.roleValue === 'super_admin' || !canEdit;
-                        return (
-                          <TableCell key={col.key} align="center">
-                            <Switch
-                              size="small"
-                              checked={cap.roleValue === 'super_admin' ? true : Boolean(val)}
-                              disabled={isLocked || saving === cap.roleValue}
-                              onChange={(e) =>
-                                handleToggle(cap.roleValue, col.key, e.target.checked)
-                              }
-                              color="primary"
-                            />
+          <Box>
+            {CAPABILITY_CATEGORIES.map((category) => (
+              <Accordion
+                key={category.name}
+                disableGutters
+                square
+                sx={{ borderBottom: 1, borderColor: 'divider', '&:before': { display: 'none' } }}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    {category.name}
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ p: 0 }}>
+                  <TableContainer>
+                    <Table size="small" sx={{ minWidth: 600 }}>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell
+                            sx={{
+                              fontWeight: 700,
+                              minWidth: 160,
+                              position: 'sticky',
+                              left: 0,
+                              zIndex: 101,
+                              bgcolor: 'background.paper',
+                              borderRight: '1px solid',
+                              borderColor: 'divider',
+                            }}
+                          >
+                            Role
                           </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                          {category.columns.map((col) => (
+                            <TableCell
+                              key={col.key as string}
+                              align="center"
+                              sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}
+                            >
+                              <Tooltip title={col.description} placement="top">
+                                <span>{col.label}</span>
+                              </Tooltip>
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {caps
+                          .filter((c) => c.roleValue !== 'user')
+                          .map((cap) => (
+                            <TableRow
+                              key={cap.roleValue}
+                              hover
+                              sx={{ opacity: saving === cap.roleValue ? 0.6 : 1 }}
+                            >
+                              <TableCell
+                                sx={{
+                                  position: 'sticky',
+                                  left: 0,
+                                  zIndex: 100,
+                                  bgcolor: 'background.paper',
+                                  borderRight: '1px solid',
+                                  borderColor: 'divider',
+                                }}
+                              >
+                                <Chip
+                                  label={cap.roleValue}
+                                  size="small"
+                                  variant="outlined"
+                                  color={cap.roleValue === 'super_admin' ? 'error' : 'default'}
+                                />
+                              </TableCell>
+                              {category.columns.map((col) => {
+                                const val = cap[col.key as keyof RoleCapabilityRecord] as boolean;
+                                const isLocked = cap.roleValue === 'super_admin' || !canEdit;
+                                return (
+                                  <TableCell key={col.key as string} align="center">
+                                    <Switch
+                                      size="small"
+                                      checked={cap.roleValue === 'super_admin' ? true : Boolean(val)}
+                                      disabled={isLocked || saving === cap.roleValue}
+                                      onChange={(e) =>
+                                        handleToggle(
+                                          cap.roleValue,
+                                          col.key as keyof RoleCapabilityRecord,
+                                          e.target.checked
+                                        )
+                                      }
+                                      color="primary"
+                                    />
+                                  </TableCell>
+                                );
+                              })}
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </AccordionDetails>
+              </Accordion>
+            ))}
+          </Box>
         )}
       </CardContent>
     </Card>
