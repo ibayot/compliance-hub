@@ -20,6 +20,7 @@ export const STATUS_COLOR: Record<
   closed: 'default',
   freeze: 'secondary',
   duplicate: 'default',
+  paused: 'secondary',
 };
 
 export const TICKET_TYPE_LABELS: Record<TicketType, string> = {

@@ -42,7 +42,7 @@ export default function LoginPage() {
         err?.response?.data?.message ||
         (err?.message === 'Network Error' || !err?.response
           ? 'Cannot connect to server. Please make sure backend API is running on port 4000.'
-          : 'Invalid email or password');
+          : 'Invalid credentials. Please try again.');
       enqueueSnackbar(msg, { variant: 'error' });
     } finally {
       setLoading(false);
@@ -112,7 +112,13 @@ export default function LoginPage() {
 
             {reason === 'session_expired' && (
               <Alert severity="warning" sx={{ mb: 2 }}>
-                Your session has expired or your account was deactivated. Please sign in again.
+                Your session has expired. Please try again.
+              </Alert>
+            )}
+
+            {reason === 'deactivated' && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                Account is deactivated. Please contact the RICTMS for reactivation.
               </Alert>
             )}
 

@@ -194,6 +194,8 @@ export interface Ticket {
   isOverdue?: boolean;
   isNearingSLA?: boolean;
   isSlaWaiting?: boolean;
+  hasUnreadUser?: boolean;
+  hasUnreadTechnician?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -565,8 +567,6 @@ export const ticketsApi = {
     return res.data;
   },
 
-  // ... existing methods
-
   getAll: async (filters?: {
     status?: TicketStatus;
     ticketType?: TicketType;
@@ -575,6 +575,10 @@ export const ticketsApi = {
     createdById?: number;
     assignedToId?: number;
     escalatedToMe?: boolean;
+    year?: string;
+    month?: string;
+    quarter?: string;
+    semester?: string;
   }): Promise<Ticket[]> => {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
@@ -583,6 +587,10 @@ export const ticketsApi = {
     if (filters?.requesterId) params.append('requesterId', String(filters.requesterId));
     if (filters?.assignedToId) params.append('assignedToId', String(filters.assignedToId));
     if (filters?.escalatedToMe) params.append('escalatedToMe', 'true');
+    if (filters?.year) params.append('year', filters.year);
+    if (filters?.month) params.append('month', filters.month);
+    if (filters?.quarter) params.append('quarter', filters.quarter);
+    if (filters?.semester) params.append('semester', filters.semester);
     const response = await apiClient.get(`/tickets?${params}`);
     return response.data;
   },

@@ -152,7 +152,7 @@ describe('TicketService — getIssueCountsReport (multi-status grouping)', () =>
   });
 
   it('should return flat rows with issueName, categoryName, status, and numeric count', async () => {
-    const result = await service.getIssueCountsReport();
+    const result = await service.getIssueCountsReport({});
 
     expect(result).toBeDefined();
     expect(Array.isArray(result)).toBe(true);
@@ -168,7 +168,7 @@ describe('TicketService — getIssueCountsReport (multi-status grouping)', () =>
   });
 
   it('should return separate rows for each status of the same issue', async () => {
-    const result = await service.getIssueCountsReport();
+    const result = await service.getIssueCountsReport({});
 
     const paperJamRows = result.filter((r) => r.issueName === 'Paper Jam');
     expect(paperJamRows.length).toBe(4); // open, in_progress, resolved, closed
@@ -181,7 +181,7 @@ describe('TicketService — getIssueCountsReport (multi-status grouping)', () =>
   });
 
   it('should correctly sum counts per status row', async () => {
-    const result = await service.getIssueCountsReport();
+    const result = await service.getIssueCountsReport({});
 
     const openJam = result.find((r) => r.issueName === 'Paper Jam' && r.status === 'open');
     expect(openJam?.count).toBe(3);
@@ -191,7 +191,7 @@ describe('TicketService — getIssueCountsReport (multi-status grouping)', () =>
   });
 
   it('should support frontend drillDownData grouping — aggregate per-issue status counts', async () => {
-    const result = await service.getIssueCountsReport();
+    const result = await service.getIssueCountsReport({});
 
     // Simulate what the frontend drillDownData useMemo does:
     // Group rows by issueName and pivot statuses into properties

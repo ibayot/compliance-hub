@@ -116,7 +116,7 @@ export class AuthService {
     const candidate = await this.usersService.findByEmail(loginDto.email);
     if (candidate && !candidate.active) {
       throw new UnauthorizedException(
-        'This account has been deactivated. Please contact the administrator.',
+        'Account is deactivated. Please contact the RICTMS for reactivation.',
       );
     }
 
@@ -240,7 +240,7 @@ export class AuthService {
     }
 
     if (!user.active) {
-      throw new UnauthorizedException('Your account is inactive.');
+      throw new UnauthorizedException('Account is deactivated. Please contact the RICTMS for reactivation.');
     }
 
     // Record login timestamp for staff activity tracking

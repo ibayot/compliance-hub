@@ -165,6 +165,12 @@ export class Ticket {
   @Column({ name: 'is_kb_generation_pending', type: 'tinyint', default: 0 })
   isKbGenerationPending: boolean;
 
+  @Column({ name: 'has_unread_user', type: 'boolean', default: false })
+  hasUnreadUser: boolean;
+
+  @Column({ name: 'has_unread_technician', type: 'boolean', default: false })
+  hasUnreadTechnician: boolean;
+
   // --- Relations ---
   @OneToMany(() => TicketComment, (c) => c.ticket, { cascade: true })
   comments: TicketComment[];

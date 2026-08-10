@@ -86,7 +86,7 @@ export class User {
   @Column({ name: 'sex', nullable: true })
   sex: string;
 
-  @Column({ name: 'staff_id', nullable: true, length: 6 })
+  @Column({ name: 'staff_id', nullable: true, length: 6, unique: true })
   staffId: string;
 
   @Column({ name: 'position', nullable: true, length: 12 })

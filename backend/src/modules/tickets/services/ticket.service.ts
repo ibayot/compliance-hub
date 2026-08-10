@@ -909,6 +909,10 @@ export class TicketService implements OnModuleInit {
     limit?: number;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    year?: number;
+    month?: number;
+    quarter?: number;
+    semester?: number;
   }): Promise<
     | Ticket[]
     | {
@@ -987,6 +991,24 @@ export class TicketService implements OnModuleInit {
         if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
         if (filters.ticketType)
           qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+      }
+    }
+
+    // Apply date filters
+    if (filters.year) {
+      qb.andWhere('EXTRACT(YEAR FROM t.createdAt) = :year', { year: filters.year });
+    }
+    if (filters.month) {
+      qb.andWhere('EXTRACT(MONTH FROM t.createdAt) = :month', { month: filters.month });
+    }
+    if (filters.quarter) {
+      qb.andWhere('EXTRACT(QUARTER FROM t.createdAt) = :quarter', { quarter: filters.quarter });
+    }
+    if (filters.semester) {
+      if (filters.semester === 1) {
+        qb.andWhere('EXTRACT(MONTH FROM t.createdAt) <= 6');
+      } else {
+        qb.andWhere('EXTRACT(MONTH FROM t.createdAt) > 6');
       }
     }
 
@@ -1099,6 +1121,20 @@ export class TicketService implements OnModuleInit {
     if (!ticket) throw new NotFoundException('Ticket not found');
     await this.enrichTicketsWithUsers([ticket]);
     await this.assertTicketReadAccess(ticket, viewerId, viewerRole);
+
+    let needsSave = false;
+    if (viewerRole === UserRole.USER && ticket.hasUnreadUser) {
+      ticket.hasUnreadUser = false;
+      needsSave = true;
+    } else if (viewerRole !== UserRole.USER && ticket.hasUnreadTechnician) {
+      ticket.hasUnreadTechnician = false;
+      needsSave = true;
+    }
+    
+    if (needsSave) {
+      await this.ticketRepo.save(ticket);
+    }
+
     // Strip internal notes for regular users — they should never see staff-only comments
     if (viewerRole === UserRole.USER && ticket.comments) {
       (ticket as any).comments = ticket.comments.filter((c: any) => !c.isInternal);
@@ -1292,21 +1328,21 @@ export class TicketService implements OnModuleInit {
         currentIssueType = issueType;
       }
 
-      // Recalculate SLA if ticket has an SLA deadline and is in an active state
-      if (ticket.slaDeadline && currentIssueType?.slaHours) {
+      // Recalculate SLA if ticket has an SLA deadline or is being assigned one
+      if (currentIssueType?.slaHours) {
         const config = await this.configRepo.findOne({ where: { id: 1 } });
         if (config) {
-          const startTime = new Date(ticket.createdAt);
           const now = new Date();
+          const referenceTime = ticket.slaPausedAt ? new Date(ticket.slaPausedAt) : now;
           const activeBusinessSeconds = await this.calculateBusinessSeconds(
-            startTime,
-            now,
+            new Date(ticket.createdAt),
+            referenceTime,
             config as TicketingConfig
           );
           const totalConsumedSeconds = activeBusinessSeconds - (ticket.accumulatedPauseSeconds || 0);
           const remainingHours = Math.max(0, currentIssueType.slaHours - (totalConsumedSeconds / 3600));
           ticket.slaDeadline = await this.calculateSlaDeadline(
-            now,
+            referenceTime,
             remainingHours,
             config as TicketingConfig
           );
@@ -1497,7 +1533,7 @@ export class TicketService implements OnModuleInit {
           ticket.accumulatedPauseSeconds =
             (ticket.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
 
-          if (ticket.slaDeadline && ticket.issueTypeConfig?.slaHours) {
+          if (ticket.issueTypeConfig?.slaHours) {
             const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
               new Date(ticket.createdAt),
               now,
@@ -2180,6 +2216,14 @@ export class TicketService implements OnModuleInit {
     });
 
     const savedComment = await this.commentRepo.save(comment);
+
+    if (actorRole === UserRole.USER) {
+      ticket.hasUnreadTechnician = true;
+    } else {
+      ticket.hasUnreadUser = true;
+    }
+    await this.ticketRepo.save(ticket);
+
     return savedComment;
   }
 
@@ -3980,14 +4024,20 @@ export class TicketService implements OnModuleInit {
       }).format(d); // returns YYYY-MM-DD
     };
 
+    const createManilaDate = (baseDateStr: string, addDays: number, hourFloat: number): Date => {
+      const [y, m, day] = baseDateStr.split('-').map(Number);
+      const temp = new Date(Date.UTC(y, m - 1, day + addDays));
+      const nextY = temp.getUTCFullYear();
+      const nextM = String(temp.getUTCMonth() + 1).padStart(2, '0');
+      const nextD = String(temp.getUTCDate()).padStart(2, '0');
+      const hh = String(Math.floor(hourFloat)).padStart(2, '0');
+      const mm = String(Math.round((hourFloat % 1) * 60)).padStart(2, '0');
+      return new Date(`${nextY}-${nextM}-${nextD}T${hh}:${mm}:00+08:00`);
+    };
+
     // Helper: advance to start of next Manila day at shiftStartHour
     const advanceToNextDayStart = (d: Date): Date => {
-      const manilaDate = getManilaDateString(d);
-      const [y, m, day] = manilaDate.split('-').map(Number);
-      const local = new Date(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
-      local.setDate(local.getDate() + 1);
-      local.setHours(Math.floor(shiftStartHour), Math.round((shiftStartHour % 1) * 60), 0, 0);
-      return local;
+      return createManilaDate(getManilaDateString(d), 1, shiftStartHour);
     };
 
     let current = new Date(start);
@@ -4020,11 +4070,7 @@ export class TicketService implements OnModuleInit {
       const block = blocks[currentBlockIndex];
 
       if (manilaHour < block.start) {
-        const manilaDate = getManilaDateString(current);
-        const [y, m, day] = manilaDate.split('-').map(Number);
-        const local = new Date(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
-        local.setHours(Math.floor(block.start), Math.round((block.start % 1) * 60), 0, 0);
-        current = local;
+        current = createManilaDate(getManilaDateString(current), 0, block.start);
         continue;
       }
 
@@ -4035,11 +4081,7 @@ export class TicketService implements OnModuleInit {
         remainingHours = 0;
       } else {
         remainingHours -= availableHoursInBlock;
-        const manilaDate = getManilaDateString(current);
-        const [y, m, day] = manilaDate.split('-').map(Number);
-        const local = new Date(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
-        local.setHours(Math.floor(block.end), Math.round((block.end % 1) * 60), 0, 0);
-        current = local;
+        current = createManilaDate(getManilaDateString(current), 0, block.end);
       }
     }
 
@@ -4098,13 +4140,19 @@ export class TicketService implements OnModuleInit {
       }).format(d);
     };
 
+    const createManilaDate = (baseDateStr: string, addDays: number, hourFloat: number): Date => {
+      const [y, m, day] = baseDateStr.split('-').map(Number);
+      const temp = new Date(Date.UTC(y, m - 1, day + addDays));
+      const nextY = temp.getUTCFullYear();
+      const nextM = String(temp.getUTCMonth() + 1).padStart(2, '0');
+      const nextD = String(temp.getUTCDate()).padStart(2, '0');
+      const hh = String(Math.floor(hourFloat)).padStart(2, '0');
+      const mm = String(Math.round((hourFloat % 1) * 60)).padStart(2, '0');
+      return new Date(`${nextY}-${nextM}-${nextD}T${hh}:${mm}:00+08:00`);
+    };
+
     const advanceToNextDayStart = (d: Date): Date => {
-      const manilaDate = getManilaDateString(d);
-      const [y, m, day] = manilaDate.split('-').map(Number);
-      const local = new Date(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
-      local.setDate(local.getDate() + 1);
-      local.setHours(Math.floor(shiftStartHour), Math.round((shiftStartHour % 1) * 60), 0, 0);
-      return local;
+      return createManilaDate(getManilaDateString(d), 1, shiftStartHour);
     };
 
     let current = new Date(start);
@@ -4137,11 +4185,7 @@ export class TicketService implements OnModuleInit {
       const block = blocks[currentBlockIndex];
 
       if (manilaHour < block.start) {
-        const manilaDate = getManilaDateString(current);
-        const [y, m, day] = manilaDate.split('-').map(Number);
-        const local = new Date(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
-        local.setHours(Math.floor(block.start), Math.round((block.start % 1) * 60), 0, 0);
-        current = local;
+        current = createManilaDate(getManilaDateString(current), 0, block.start);
         if (current >= end) break;
         continue;
       }
@@ -4163,11 +4207,7 @@ export class TicketService implements OnModuleInit {
         break;
       }
 
-      const manilaDate = getManilaDateString(current);
-      const [y, m, day] = manilaDate.split('-').map(Number);
-      const local = new Date(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
-      local.setHours(Math.floor(block.end), Math.round((block.end % 1) * 60), 0, 0);
-      current = local;
+      current = createManilaDate(getManilaDateString(current), 0, block.end);
     }
 
     return Math.round(seconds);
@@ -4407,7 +4447,14 @@ export class TicketService implements OnModuleInit {
     }
   }
 
-  async getIssueCountsReport(startDate?: any, endDate?: any): Promise<{ issueName: string; count: number; categoryName: string; status: string }[]> {
+  async getIssueCountsReport(filters: {
+    year?: number;
+    month?: number;
+    quarter?: number;
+    semester?: number;
+    technicianId?: string;
+    ticketType?: string;
+  }): Promise<{ issueName: string; count: number; categoryName: string; status: string }[]> {
     const qb = this.ticketRepo.createQueryBuilder('ticket')
       .leftJoin('ticket.issueTypeConfig', 'issueType')
       .leftJoin('issueType.category', 'category')
@@ -4422,11 +4469,27 @@ export class TicketService implements OnModuleInit {
 
     qb.andWhere("ticket.status != 'duplicate'");
 
-    if (startDate) {
-      qb.andWhere('ticket.createdAt >= :startDate', { startDate: new Date(startDate) });
+    if (filters.year) {
+      qb.andWhere('YEAR(ticket.createdAt) = :year', { year: filters.year });
     }
-    if (endDate) {
-      qb.andWhere('ticket.createdAt <= :endDate', { endDate: new Date(endDate) });
+    if (filters.month) {
+      qb.andWhere('MONTH(ticket.createdAt) = :month', { month: filters.month });
+    }
+    if (filters.quarter) {
+      qb.andWhere('QUARTER(ticket.createdAt) = :quarter', { quarter: filters.quarter });
+    }
+    if (filters.semester) {
+      if (filters.semester === 1) {
+        qb.andWhere('MONTH(ticket.createdAt) BETWEEN 1 AND 6');
+      } else {
+        qb.andWhere('MONTH(ticket.createdAt) BETWEEN 7 AND 12');
+      }
+    }
+    if (filters.technicianId) {
+      qb.andWhere('ticket.assignedToId = :techId', { techId: filters.technicianId });
+    }
+    if (filters.ticketType) {
+      qb.andWhere('ticket.ticketType = :ticketType', { ticketType: filters.ticketType });
     }
 
     const raw = await qb.getRawMany();

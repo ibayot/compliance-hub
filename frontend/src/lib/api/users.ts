@@ -52,6 +52,7 @@ export interface RoleDefinition {
 
 export interface UpdateUserPayload {
   email?: string;
+  staffId?: string;
   password?: string;
   firstName?: string;
   middleName?: string;

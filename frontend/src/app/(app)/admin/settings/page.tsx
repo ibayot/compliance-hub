@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
   Accordion,
   AccordionSummary,
@@ -56,6 +56,8 @@ import {
   Security as SecurityIcon,
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
@@ -463,6 +465,164 @@ const CAPABILITY_CATEGORIES = [
   }
 ];
 
+function CapabilityCategoryAccordion({ category, caps, saving, handleToggle, canEdit }: { category: any, caps: any[], saving: string | null, handleToggle: (role: string, field: any, val: boolean) => void, canEdit: boolean }) {
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const handleTableScroll = useCallback(() => {
+    if (tableContainerRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = tableContainerRef.current;
+      setCanScrollLeft(scrollLeft > 0);
+      setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 1);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(handleTableScroll, 100);
+    window.addEventListener('resize', handleTableScroll);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleTableScroll);
+    };
+  }, [handleTableScroll, caps]);
+
+  return (
+    <Accordion
+      disableGutters
+      square
+      sx={{ borderBottom: 1, borderColor: 'divider', '&:before': { display: 'none' } }}
+    >
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Typography variant="subtitle1" fontWeight="bold">
+          {category.name}
+        </Typography>
+      </AccordionSummary>
+      <AccordionDetails sx={{ p: 0, position: 'relative' }}>
+        {canScrollLeft && (
+          <IconButton
+            size="small"
+            onClick={() => tableContainerRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
+            sx={{
+              position: 'absolute',
+              left: 250,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 102,
+              bgcolor: 'background.paper',
+              boxShadow: 1,
+              '&:hover': { bgcolor: 'background.default' },
+            }}
+          >
+            <ChevronLeftIcon />
+          </IconButton>
+        )}
+        {canScrollRight && (
+          <IconButton
+            size="small"
+            onClick={() => tableContainerRef.current?.scrollBy({ left: 300, behavior: 'smooth' })}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 102,
+              bgcolor: 'background.paper',
+              boxShadow: 1,
+              '&:hover': { bgcolor: 'background.default' },
+            }}
+          >
+            <ChevronRightIcon />
+          </IconButton>
+        )}
+        <TableContainer ref={tableContainerRef} onScroll={handleTableScroll}>
+          <Table size="small" sx={{ minWidth: 600 }}>
+            <TableHead>
+              <TableRow>
+                <TableCell
+                  sx={{
+                    fontWeight: 700,
+                    width: 250,
+                    minWidth: 250,
+                    maxWidth: 250,
+                    position: 'sticky',
+                    left: 0,
+                    zIndex: 101,
+                    bgcolor: 'background.paper',
+                    borderRight: '1px solid',
+                    borderColor: 'divider',
+                  }}
+                >
+                  Role
+                </TableCell>
+                {category.columns.map((col: any) => (
+                  <TableCell
+                    key={col.key as string}
+                    align="center"
+                    sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}
+                  >
+                    <Tooltip title={col.description} placement="top">
+                      <span>{col.label}</span>
+                    </Tooltip>
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {caps
+                .filter((c) => c.roleValue !== 'user' && c.roleValue !== 'super_admin')
+                .map((cap) => (
+                  <TableRow
+                    key={cap.roleValue}
+                    hover
+                    sx={{ opacity: saving === cap.roleValue ? 0.6 : 1 }}
+                  >
+                    <TableCell
+                      sx={{
+                        width: 250,
+                        minWidth: 250,
+                        maxWidth: 250,
+                        position: 'sticky',
+                        left: 0,
+                        zIndex: 100,
+                        bgcolor: 'background.paper',
+                        borderRight: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Chip
+                        label={cap.roleValue}
+                        size="small"
+                        color={cap.roleValue === 'super_admin' ? 'error' : 'default'}
+                      />
+                    </TableCell>
+                    {category.columns.map((col: any) => {
+                      const val = cap[col.key as keyof RoleCapabilityRecord] as boolean;
+                      const isLocked = cap.roleValue === 'super_admin' || !canEdit;
+                      return (
+                        <TableCell key={col.key as string} align="center">
+                          <Switch
+                            size="small"
+                            checked={cap.roleValue === 'super_admin' ? true : Boolean(val)}
+                            disabled={isLocked || saving === cap.roleValue}
+                            onChange={(e) =>
+                              handleToggle(cap.roleValue, col.key as string, e.target.checked)
+                            }
+                            color="primary"
+                          />
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </AccordionDetails>
+    </Accordion>
+  );
+}
+
 function RoleCapabilitiesCard() {
   const { user, myCap } = useAuth();
   const canEdit = user?.role === UserRole.SUPER_ADMIN || Boolean(myCap?.isRoleCapabilitiesAccess);
@@ -526,103 +686,14 @@ function RoleCapabilitiesCard() {
         ) : (
           <Box>
             {CAPABILITY_CATEGORIES.map((category) => (
-              <Accordion
+              <CapabilityCategoryAccordion
                 key={category.name}
-                disableGutters
-                square
-                sx={{ borderBottom: 1, borderColor: 'divider', '&:before': { display: 'none' } }}
-              >
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    {category.name}
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ p: 0 }}>
-                  <TableContainer>
-                    <Table size="small" sx={{ minWidth: 600 }}>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell
-                            sx={{
-                              fontWeight: 700,
-                              minWidth: 160,
-                              position: 'sticky',
-                              left: 0,
-                              zIndex: 101,
-                              bgcolor: 'background.paper',
-                              borderRight: '1px solid',
-                              borderColor: 'divider',
-                            }}
-                          >
-                            Role
-                          </TableCell>
-                          {category.columns.map((col) => (
-                            <TableCell
-                              key={col.key as string}
-                              align="center"
-                              sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}
-                            >
-                              <Tooltip title={col.description} placement="top">
-                                <span>{col.label}</span>
-                              </Tooltip>
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {caps
-                          .filter((c) => c.roleValue !== 'user')
-                          .map((cap) => (
-                            <TableRow
-                              key={cap.roleValue}
-                              hover
-                              sx={{ opacity: saving === cap.roleValue ? 0.6 : 1 }}
-                            >
-                              <TableCell
-                                sx={{
-                                  position: 'sticky',
-                                  left: 0,
-                                  zIndex: 100,
-                                  bgcolor: 'background.paper',
-                                  borderRight: '1px solid',
-                                  borderColor: 'divider',
-                                }}
-                              >
-                                <Chip
-                                  label={cap.roleValue}
-                                  size="small"
-                                  variant="outlined"
-                                  color={cap.roleValue === 'super_admin' ? 'error' : 'default'}
-                                />
-                              </TableCell>
-                              {category.columns.map((col) => {
-                                const val = cap[col.key as keyof RoleCapabilityRecord] as boolean;
-                                const isLocked = cap.roleValue === 'super_admin' || !canEdit;
-                                return (
-                                  <TableCell key={col.key as string} align="center">
-                                    <Switch
-                                      size="small"
-                                      checked={cap.roleValue === 'super_admin' ? true : Boolean(val)}
-                                      disabled={isLocked || saving === cap.roleValue}
-                                      onChange={(e) =>
-                                        handleToggle(
-                                          cap.roleValue,
-                                          col.key as keyof RoleCapabilityRecord,
-                                          e.target.checked
-                                        )
-                                      }
-                                      color="primary"
-                                    />
-                                  </TableCell>
-                                );
-                              })}
-                            </TableRow>
-                          ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </AccordionDetails>
-              </Accordion>
+                category={category}
+                caps={caps}
+                saving={saving}
+                handleToggle={handleToggle}
+                canEdit={canEdit}
+              />
             ))}
           </Box>
         )}
@@ -1023,6 +1094,27 @@ function FocalUserManagementCard() {
   const [userTab, setUserTab] = useState(0); // 0 = RICTMS Staff, 1 = Regular Users
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const handleTableScroll = useCallback(() => {
+    if (tableContainerRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = tableContainerRef.current;
+      setCanScrollLeft(scrollLeft > 0);
+      setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 1);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(handleTableScroll, 100);
+    window.addEventListener('resize', handleTableScroll);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleTableScroll);
+    };
+  }, [handleTableScroll, focalUsers]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [creating, setCreating] = useState(false);
@@ -1132,7 +1224,7 @@ function FocalUserManagementCard() {
   const resetForm = () => {
     setForm({
       email: '',
-      password: '',
+      password: defaultPassword,
       firstName: '',
       middleName: '',
       lastName: '',
@@ -1354,7 +1446,7 @@ function FocalUserManagementCard() {
               variant="contained"
               startIcon={<PersonAddIcon />}
               onClick={handleCreate}
-              disabled={creating || !form.email || (!form.password && !isExistingEmail)}
+              disabled={creating || !form.email || (!form.password && !isExistingEmail) || !form.role || !form.firstName || !form.lastName}
             >
               {creating ? 'Creating...' : 'Create User'}
             </Button>
@@ -1447,8 +1539,45 @@ function FocalUserManagementCard() {
 
           return (
             <>
-              <TableContainer>
-                <Table size="small">
+              <Box position="relative">
+                {canScrollLeft && (
+                  <IconButton
+                    size="small"
+                    onClick={() => tableContainerRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
+                    sx={{
+                      position: 'absolute',
+                      left: 8,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      zIndex: 4,
+                      bgcolor: 'background.paper',
+                      boxShadow: 3,
+                      '&:hover': { bgcolor: 'background.paper' }
+                    }}
+                  >
+                    <ChevronLeftIcon />
+                  </IconButton>
+                )}
+                {canScrollRight && (
+                  <IconButton
+                    size="small"
+                    onClick={() => tableContainerRef.current?.scrollBy({ left: 300, behavior: 'smooth' })}
+                    sx={{
+                      position: 'absolute',
+                      right: 8,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      zIndex: 4,
+                      bgcolor: 'background.paper',
+                      boxShadow: 3,
+                      '&:hover': { bgcolor: 'background.paper' }
+                    }}
+                  >
+                    <ChevronRightIcon />
+                  </IconButton>
+                )}
+                <TableContainer ref={tableContainerRef} onScroll={handleTableScroll}>
+                  <Table size="small" sx={{ minWidth: 800 }}>
                   <TableHead>
                     <TableRow>
                       <TableCell>
@@ -1578,6 +1707,7 @@ function FocalUserManagementCard() {
                   </TableBody>
                 </Table>
               </TableContainer>
+              </Box>
               <TablePagination
                 component="div"
                 count={displayUsers.length}
@@ -1863,6 +1993,7 @@ function MobileSettingsCard() {
 
 export default function SettingsPage() {
   const { user, myCap } = useAuth();
+  const [tabIndex, setTabIndex] = useState(0);
 
   const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
   // Users management uses the old cap admin logic for now unless requested otherwise, but roles and capabilities use their new specific DB-driven flags
@@ -1876,6 +2007,23 @@ export default function SettingsPage() {
     return <Typography sx={{ m: 3 }}>You must be logged in to view this page.</Typography>;
   }
 
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabIndex(newValue);
+  };
+
+  const tabs = [
+    { label: 'Profile & Preferences', show: true },
+    { label: 'User Management', show: canManageUsers },
+    { label: 'Role Management', show: canManageSystemRoles },
+    { label: 'Role Capabilities Matrix', show: canManageRoleCapabilities },
+    { label: 'Security Settings', show: canManageSecuritySettings },
+  ];
+
+  // Build the rendered tab array
+  const renderedTabs = tabs.filter(t => t.show);
+  // Ensure the current tabIndex is within bounds if tabs are hidden
+  const currentTab = renderedTabs[tabIndex] || renderedTabs[0];
+
   return (
     <Box>
       <Box mb={4}>
@@ -1887,85 +2035,103 @@ export default function SettingsPage() {
         </Typography>
       </Box>
 
-      {/* Account Info */}
-      <Card elevation={2} sx={{ mb: 3 }}>
-        <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', py: 4 }}>
-          <Avatar 
-            src={import.meta.env.VITE_PROFILE_IMAGE_URL ? `${import.meta.env.VITE_PROFILE_IMAGE_URL}/${user?.staffId}.jpg` : undefined} 
-            imgProps={{ style: { objectPosition: 'center 20%' } }}
-            sx={{ 
-              width: 120, 
-              height: 120, 
-              mb: 2, 
-              bgcolor: 'primary.main', 
-              fontSize: '3rem',
-              boxShadow: 2
-            }}
-          >
-            {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}
-          </Avatar>
-          
-          <Typography variant="h5" fontWeight="bold" gutterBottom>
-            {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || '—'}
-          </Typography>
-          
-          <Typography variant="body1" color="text.secondary" gutterBottom>
-            {user?.email || '—'}
-          </Typography>
-          
-          <Box display="flex" gap={1} mt={2} justifyContent="center" flexWrap="wrap">
-            <Chip
-              label={user?.role?.replace('_', ' ').toUpperCase() || '—'}
-              color="primary"
-            />
-            {user?.units && (user.units as any[]).map((unit: any) => (
-              <Chip
-                key={unit.id}
-                label={unit.name}
-                variant="outlined"
-                color="secondary"
-              />
-            ))}
-          </Box>
-        </CardContent>
-      </Card>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs 
+          value={tabIndex} 
+          onChange={handleTabChange} 
+          variant="scrollable"
+          scrollButtons="auto"
+          aria-label="settings tabs"
+        >
+          {renderedTabs.map((tab, index) => (
+            <Tab key={tab.label} label={tab.label} />
+          ))}
+        </Tabs>
+      </Box>
 
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <ThemeCard />
-          </Grid>
-          {canManageSecuritySettings && (
-            <Grid item xs={12} md={6}>
-              <SecuritySettingsCard />
+      {currentTab.label === 'Profile & Preferences' && (
+        <Box>
+          {/* Account Info */}
+          <Card elevation={2} sx={{ mb: 3 }}>
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', py: 4 }}>
+              <Avatar 
+                src={import.meta.env.VITE_PROFILE_IMAGE_URL ? `${import.meta.env.VITE_PROFILE_IMAGE_URL}/${user?.staffId}.jpg` : undefined} 
+                imgProps={{ style: { objectPosition: 'center 20%' } }}
+                sx={{ 
+                  width: 120, 
+                  height: 120, 
+                  mb: 2, 
+                  bgcolor: 'primary.main', 
+                  fontSize: '3rem',
+                  boxShadow: 2
+                }}
+              >
+                {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}
+              </Avatar>
+              
+              <Typography variant="h5" fontWeight="bold" gutterBottom>
+                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || '—'}
+              </Typography>
+              
+              <Typography variant="body1" color="text.secondary" gutterBottom>
+                {user?.email || '—'}
+              </Typography>
+              
+              <Box display="flex" gap={1} mt={2} justifyContent="center" flexWrap="wrap">
+                <Chip
+                  label={user?.role?.replace('_', ' ').toUpperCase() || '—'}
+                  color="primary"
+                />
+                {user?.units && (user.units as any[]).map((unit: any) => (
+                  <Chip
+                    key={unit.id}
+                    label={unit.name}
+                    variant="outlined"
+                    color="secondary"
+                  />
+                ))}
+              </Box>
+            </CardContent>
+          </Card>
+
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <ThemeCard />
             </Grid>
-          )}
-          <Grid item xs={12}>
-          <ChangePasswordCard />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <MobileSettingsCard />
-        </Grid>
-
-        {canManageSystemRoles && (
-          <Grid item xs={12}>
-            <RoleManagementCard />
+            <Grid item xs={12}>
+              <MobileSettingsCard />
+            </Grid>
+            <Grid item xs={12}>
+              <ChangePasswordCard />
+            </Grid>
           </Grid>
-        )}
-      </Grid>
+        </Box>
+      )}
 
-      {canManageRoleCapabilities && (
-        <Box mt={4}>
+      {currentTab.label === 'User Management' && (
+        <Box>
+          <FocalUserManagementCard />
+        </Box>
+      )}
+
+      {currentTab.label === 'Role Management' && (
+        <Box>
+          <RoleManagementCard />
+        </Box>
+      )}
+
+      {currentTab.label === 'Role Capabilities Matrix' && (
+        <Box>
           <RoleCapabilitiesCard />
         </Box>
       )}
 
-      {canManageUsers && (
-        <Box mt={4}>
-          <Grid item xs={12}>
-            <FocalUserManagementCard />
-          </Grid>
+      {currentTab.label === 'Security Settings' && (
+        <Box>
+          <SecuritySettingsCard />
         </Box>
       )}
+
     </Box>
   );
 }

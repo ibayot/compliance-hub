@@ -133,6 +133,10 @@ export class TicketController {
     @Query('requesterId') requesterId?: string,
     @Query('assignedToId') assignedToId?: string,
     @Query('escalatedToMe') escalatedToMe?: string,
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+    @Query('quarter') quarter?: string,
+    @Query('semester') semester?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('sortBy') sortBy?: string,
@@ -147,6 +151,10 @@ export class TicketController {
       requesterId: requesterId ? Number(requesterId) : undefined,
       assignedToId: assignedToId ? Number(assignedToId) : undefined,
       escalatedToId: showEscalatedToMe ? viewerId : undefined,
+      year: year ? Number(year) : undefined,
+      month: month ? Number(month) : undefined,
+      quarter: quarter ? Number(quarter) : undefined,
+      semester: semester ? Number(semester) : undefined,
       viewerId,
       viewerRole: req?.user?.role,
       page: page ? Number(page) : undefined,
@@ -400,13 +408,9 @@ export class TicketController {
 
   /** GET /tickets/escalations/all */
   @Get('escalations/all')
-  @Roles(
-    UserRole.SUPER_ADMIN,
-    UserRole.SECTION_HEAD,
-    UserRole.DEV_LEAD,
-    UserRole.SQA_LEAD,
-    UserRole.LEAD_INFRA,
-  )
+  @Roles(...ALL_ROLES)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isEscalationFocal')
   async getAllEscalations() {
     return this.ticketService.getAllEscalations();
   }
@@ -545,9 +549,20 @@ export class TicketController {
   @Get('reports/issue-counts')
   @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD)
   async getIssueCountsReport(
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+    @Query('quarter') quarter?: string,
+    @Query('semester') semester?: string,
+    @Query('technicianId') technicianId?: string,
+    @Query('ticketType') ticketType?: string,
   ) {
-    return this.ticketService.getIssueCountsReport(startDate, endDate);
+    return this.ticketService.getIssueCountsReport({
+      year: year ? parseInt(year, 10) : undefined,
+      month: month ? parseInt(month, 10) : undefined,
+      quarter: quarter ? parseInt(quarter, 10) : undefined,
+      semester: semester ? parseInt(semester, 10) : undefined,
+      technicianId,
+      ticketType,
+    });
   }
 }

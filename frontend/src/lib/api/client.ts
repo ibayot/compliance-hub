@@ -78,6 +78,12 @@ class ApiClient {
           return Promise.reject(error);
         }
 
+        // Skip interceptor for authentication endpoints
+        const url = originalRequest.url || '';
+        if (url.includes('/auth/login') || url.includes('/auth/google') || url.includes('/auth/refresh')) {
+          return Promise.reject(error);
+        }
+
         originalRequest._retry = true;
 
         if (typeof window === 'undefined') return Promise.reject(error);
@@ -116,7 +122,9 @@ class ApiClient {
           this.processQueue(refreshError, null);
           tokenStore.remove('accessToken');
           tokenStore.remove('refreshToken');
-          window.location.href = '/login?reason=session_expired';
+          const errorMessage = (refreshError as any)?.response?.data?.message || '';
+          const reason = errorMessage.includes('deactivated') ? 'deactivated' : 'session_expired';
+          window.location.href = `/login?reason=${reason}`;
           return Promise.reject(refreshError);
         } finally {
           this.isRefreshing = false;

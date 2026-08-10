@@ -787,7 +787,7 @@ export default function DashboardPage() {
                         {stats.openTickets}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Open Issues
+                        Open Tickets
                       </Typography>
                     </Box>
                   </Box>
@@ -1480,7 +1480,7 @@ export default function DashboardPage() {
                   )}
                   {appMode !== 'compliance_only' && (
                     <Button variant="outlined" href="/operations/tickets" fullWidth>
-                      View Issues
+                      View Tickets
                     </Button>
                   )}
 

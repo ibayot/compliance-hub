@@ -21,21 +21,10 @@ export class CreateUserDto {
   email: string;
 
   @ApiPropertyOptional({
-    description: 'Password. Must be min 12 chars, 1 uppercase, 1 lowercase, 1 number, 1 special character. Forward slash (/) and backslash (\\) are strictly prohibited.',
-    example: 'StrongPass123!',
+    description: 'Password. Handled internally via default password.',
   })
   @IsString()
   @IsOptional()
-  @MinLength(12)
-  @Matches(/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&_\-#])/, {
-    message: 'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character (@$!%*?&_-#).',
-  })
-  @NotContains('/', {
-    message: 'INVALID PASSWORD! Escape characters (forward slash / and backslash \\) are strictly prohibited.',
-  })
-  @NotContains('\\', {
-    message: 'INVALID PASSWORD! Escape characters (forward slash / and backslash \\) are strictly prohibited.',
-  })
   password?: string;
 
   @IsString()

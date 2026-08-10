@@ -428,8 +428,8 @@ export default function TicketReportsPage() {
               <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                 Filters
               </Typography>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={4} md={2}>
+              <Box sx={{ pb: 1 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, '& > *': { flex: '1 1 120px' } }}>
                   <TextField
                     select
                     fullWidth
@@ -437,6 +437,7 @@ export default function TicketReportsPage() {
                     label="Year"
                     value={year}
                     onChange={(e) => setYear(Number(e.target.value))}
+                    sx={{ minWidth: 120 }}
                   >
                     {YEARS.map((y) => (
                       <MenuItem key={y} value={y}>
@@ -444,8 +445,6 @@ export default function TicketReportsPage() {
                       </MenuItem>
                     ))}
                   </TextField>
-                </Grid>
-                <Grid item xs={12} sm={4} md={2}>
                   <TextField
                     select
                     fullWidth
@@ -453,15 +452,14 @@ export default function TicketReportsPage() {
                     label="Period"
                     value={periodMode}
                     onChange={(e) => setPeriodMode(e.target.value as PeriodMode)}
+                    sx={{ minWidth: 120 }}
                   >
                     <MenuItem value="month">Monthly</MenuItem>
                     <MenuItem value="quarter">Quarterly</MenuItem>
                     <MenuItem value="semester">Semester</MenuItem>
                     <MenuItem value="year">Full Year</MenuItem>
                   </TextField>
-                </Grid>
                 {periodMode === 'month' && (
-                  <Grid item xs={12} sm={4} md={2}>
                     <TextField
                       select
                       fullWidth
@@ -469,6 +467,7 @@ export default function TicketReportsPage() {
                       label="Month"
                       value={month}
                       onChange={(e) => setMonth(Number(e.target.value))}
+                      sx={{ minWidth: 120 }}
                     >
                       {MONTHS.map((m) => (
                         <MenuItem key={m.value} value={m.value}>
@@ -476,10 +475,8 @@ export default function TicketReportsPage() {
                         </MenuItem>
                       ))}
                     </TextField>
-                  </Grid>
                 )}
                 {periodMode === 'quarter' && (
-                  <Grid item xs={12} sm={4} md={2}>
                     <TextField
                       select
                       fullWidth
@@ -487,6 +484,7 @@ export default function TicketReportsPage() {
                       label="Quarter"
                       value={quarter}
                       onChange={(e) => setQuarter(Number(e.target.value))}
+                      sx={{ minWidth: 120 }}
                     >
                       {[1, 2, 3, 4].map((q) => (
                         <MenuItem key={q} value={q}>
@@ -494,10 +492,8 @@ export default function TicketReportsPage() {
                         </MenuItem>
                       ))}
                     </TextField>
-                  </Grid>
                 )}
                 {periodMode === 'semester' && (
-                  <Grid item xs={12} sm={4} md={2}>
                     <TextField
                       select
                       fullWidth
@@ -505,13 +501,12 @@ export default function TicketReportsPage() {
                       label="Semester"
                       value={semester}
                       onChange={(e) => setSemester(Number(e.target.value))}
+                      sx={{ minWidth: 120 }}
                     >
                       <MenuItem value={1}>S1 (Jan–Jun)</MenuItem>
                       <MenuItem value={2}>S2 (Jul–Dec)</MenuItem>
                     </TextField>
-                  </Grid>
                 )}
-                <Grid item xs={12} sm={4} md={2}>
                   <TextField
                     select
                     fullWidth
@@ -519,15 +514,14 @@ export default function TicketReportsPage() {
                     label="Support Type"
                     value={ticketType}
                     onChange={(e) => setTicketType(e.target.value)}
+                    sx={{ minWidth: 120 }}
                   >
                     <MenuItem value="">All Types</MenuItem>
                     <MenuItem value="desktop_support">Desktop Support</MenuItem>
                     <MenuItem value="it_support">IT Support</MenuItem>
                     <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
                   </TextField>
-                </Grid>
                 {isTicketSettingsFocal && (
-                  <Grid item xs={12} sm={4} md={2}>
                     <TextField
                       select
                       fullWidth
@@ -537,6 +531,7 @@ export default function TicketReportsPage() {
                       onChange={(e) =>
                         setTechnicianId(e.target.value === '' ? '' : Number(e.target.value))
                       }
+                      sx={{ minWidth: 120 }}
                     >
                       <MenuItem value="">All Technicians</MenuItem>
                       {technicians.map((t) => (
@@ -545,9 +540,9 @@ export default function TicketReportsPage() {
                         </MenuItem>
                       ))}
                     </TextField>
-                  </Grid>
                 )}
-              </Grid>
+                </Box>
+              </Box>
             </CardContent>
           </Card>
 

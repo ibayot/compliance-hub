@@ -123,7 +123,29 @@ export default function TicketsPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
+
+  const now = new Date();
+  const currentMonth = (now.getMonth() + 1).toString();
+  const currentYear = now.getFullYear().toString();
+
+  const [filterYear, setFilterYear] = useState(currentYear);
+  const [filterMonth, setFilterMonth] = useState(currentMonth);
+  const [filterQuarter, setFilterQuarter] = useState('');
+  const [filterSemester, setFilterSemester] = useState('');
+  const [filterPeriodMode, setFilterPeriodMode] = useState<'month' | 'quarter' | 'semester' | 'year'>('month');
   const [showMyTickets, setShowMyTickets] = useState(false);
+
+  const initializedMyTickets = useRef(false);
+  useEffect(() => {
+    if (myCap && !initializedMyTickets.current) {
+      initializedMyTickets.current = true;
+      const isTech = !!myCap.isDesktop || !!myCap.isItSupport || !!myCap.isPantawidIct || !!myCap.isIto;
+      const canManageAll = !!myCap.isAllTickets;
+      if (isTech && !canManageAll) {
+        setShowMyTickets(true);
+      }
+    }
+  }, [myCap]);
   const [showEscalatedToMe, setShowEscalatedToMe] = useState(false);
   const [myTicketsCount, setMyTicketsCount] = useState(0);
   const [escalatedToMeCount, setEscalatedToMeCount] = useState(0);
@@ -247,9 +269,18 @@ export default function TicketsPage() {
     if (tableContainerRef.current) {
       const { scrollLeft, scrollWidth, clientWidth } = tableContainerRef.current;
       setCanScrollLeft(scrollLeft > 0);
-      setCanScrollRight(Math.ceil(scrollLeft + clientWidth) < scrollWidth);
+      setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 1);
     }
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(handleTableScroll, 100);
+    window.addEventListener('resize', handleTableScroll);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleTableScroll);
+    };
+  }, [handleTableScroll, tickets, allEscalations]);
 
   const frontendFilteredTickets = React.useMemo(() => {
     return tickets.filter(t => !filterPriority || t.priority === filterPriority);
@@ -260,8 +291,9 @@ export default function TicketsPage() {
   }, [allEscalations, filterPriority]);
 
   const activeTickets = frontendFilteredTickets.filter((t) =>
-    ['open', 'assigned', 'in_progress'].includes(t.status),
+    ['open', 'assigned', 'in_progress', 'pause'].includes(t.status),
   );
+  const pausedTickets = frontendFilteredTickets.filter((t) => t.status === 'pause');
   const doneTickets = frontendFilteredTickets.filter((t) => ['resolved', 'closed'].includes(t.status));
   const frozenTickets = frontendFilteredTickets.filter((t) => t.status === 'freeze');
   const duplicateTickets = frontendFilteredTickets.filter((t) => t.status === 'duplicate');
@@ -293,11 +325,11 @@ export default function TicketsPage() {
   }, []);
 
   const tabFilteredTickets = canManageAll
-    ? ([frontendFilteredTickets, activeTickets, doneTickets, frozenTickets, duplicateTickets, proxyCreatedTickets][
+    ? ([frontendFilteredTickets, activeTickets, pausedTickets, doneTickets, frozenTickets, duplicateTickets, proxyCreatedTickets][
       mgmtTab
     ] ?? frontendFilteredTickets)
     : isTechnician
-      ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? frontendFilteredTickets)
+      ? ([activeTickets, pausedTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? frontendFilteredTickets)
       : ([frontendFilteredTickets, activeTickets, toRateTickets, doneTickets, proxyCreatedTickets][userTab] ??
         frontendFilteredTickets);
 
@@ -338,6 +370,10 @@ export default function TicketsPage() {
         status: (filterStatus as TicketStatus) || undefined,
         ticketType: (filterType as TicketType) || undefined,
         priority: filterPriority || undefined,
+        year: filterYear || undefined,
+        month: filterMonth || undefined,
+        quarter: filterQuarter || undefined,
+        semester: filterSemester || undefined,
         // assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
         assignedToId: showMyTickets && !showEscalatedToMe ? user?.id : undefined,
         escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
@@ -362,6 +398,10 @@ export default function TicketsPage() {
     filterStatus,
     filterType,
     filterPriority,
+    filterYear,
+    filterMonth,
+    filterQuarter,
+    filterSemester,
     showMyTickets,
     showEscalatedToMe,
     canViewEscalatedQueue,
@@ -376,9 +416,9 @@ export default function TicketsPage() {
 
   useEffect(() => {
     const rows = canManageAll
-      ? ([tickets, activeTickets, doneTickets, frozenTickets, duplicateTickets][mgmtTab] ?? tickets)
+      ? ([tickets, activeTickets, pausedTickets, doneTickets, frozenTickets, duplicateTickets][mgmtTab] ?? tickets)
       : isTechnician
-        ? ([activeTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
+        ? ([activeTickets, pausedTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
         : tickets;
     refreshEscalationStates(rows);
   }, [tickets, canManageAll, isTechnician, mgmtTab, ticketTab, refreshEscalationStates]);
@@ -408,6 +448,10 @@ export default function TicketsPage() {
         status: (filterStatus as TicketStatus) || undefined,
         ticketType: (filterType as TicketType) || undefined,
         priority: filterPriority || undefined,
+        year: filterYear || undefined,
+        month: filterMonth || undefined,
+        quarter: filterQuarter || undefined,
+        semester: filterSemester || undefined,
         // assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
         assignedToId: showMyTickets && !showEscalatedToMe ? user?.id : undefined,
         escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
@@ -425,6 +469,10 @@ export default function TicketsPage() {
     filterStatus,
     filterType,
     filterPriority,
+    filterYear,
+    filterMonth,
+    filterQuarter,
+    filterSemester,
     showMyTickets,
     showEscalatedToMe,
     canViewEscalatedQueue,
@@ -807,8 +855,8 @@ export default function TicketsPage() {
         <Card sx={{ mb: 2 }}>
           <CardContent>
             <Grid container spacing={2}>
-              <Grid item xs={12} lg={8}>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ '& > *': { flex: 1 } }}>
+              <Grid item xs={12} lg={12}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, '& > *': { flex: '1 1 120px' } }}>
                   <TextField inputProps={{ maxLength: 255 }}
                     select
                     label="Status"
@@ -851,29 +899,129 @@ export default function TicketsPage() {
                     <MenuItem value="urgent">Urgent</MenuItem>
                     <MenuItem value="critical">Critical</MenuItem>
                   </TextField>
-                  <Button
+                  <TextField
+                    select
+                    label="Year"
+                    value={filterYear}
+                    onChange={(e) => setFilterYear(e.target.value)}
                     size="small"
+                  >
+                    <MenuItem value="">All</MenuItem>
+                    <MenuItem value="2026">2026</MenuItem>
+                    <MenuItem value="2027">2027</MenuItem>
+                    <MenuItem value="2028">2028</MenuItem>
+                  </TextField>
+                  <TextField
+                    select
+                    label="Period"
+                    value={filterPeriodMode}
+                    onChange={(e) => {
+                      const mode = e.target.value as 'month' | 'quarter' | 'semester' | 'year';
+                      setFilterPeriodMode(mode);
+                      if (mode === 'year') {
+                        setFilterMonth('');
+                        setFilterQuarter('');
+                        setFilterSemester('');
+                      } else if (mode === 'semester') {
+                        setFilterMonth('');
+                        setFilterQuarter('');
+                        setFilterSemester('');
+                      } else if (mode === 'quarter') {
+                        setFilterMonth('');
+                        setFilterQuarter('');
+                        setFilterSemester('');
+                      } else {
+                        setFilterMonth('');
+                        setFilterQuarter('');
+                        setFilterSemester('');
+                      }
+                    }}
+                    size="small"
+                  >
+                    <MenuItem value="month">Monthly</MenuItem>
+                    <MenuItem value="quarter">Quarterly</MenuItem>
+                    <MenuItem value="semester">Semester</MenuItem>
+                    <MenuItem value="year">Full Year</MenuItem>
+                  </TextField>
+                  {filterPeriodMode === 'month' && (
+                    <TextField
+                      select
+                      label="Month"
+                      value={filterMonth}
+                      onChange={(e) => setFilterMonth(e.target.value)}
+                      size="small"
+                    >
+                      <MenuItem value="">All</MenuItem>
+                      <MenuItem value="1">January</MenuItem>
+                      <MenuItem value="2">February</MenuItem>
+                      <MenuItem value="3">March</MenuItem>
+                      <MenuItem value="4">April</MenuItem>
+                      <MenuItem value="5">May</MenuItem>
+                      <MenuItem value="6">June</MenuItem>
+                      <MenuItem value="7">July</MenuItem>
+                      <MenuItem value="8">August</MenuItem>
+                      <MenuItem value="9">September</MenuItem>
+                      <MenuItem value="10">October</MenuItem>
+                      <MenuItem value="11">November</MenuItem>
+                      <MenuItem value="12">December</MenuItem>
+                    </TextField>
+                  )}
+                  {filterPeriodMode === 'quarter' && (
+                    <TextField
+                      select
+                      label="Quarter"
+                      value={filterQuarter}
+                      onChange={(e) => setFilterQuarter(e.target.value)}
+                      size="small"
+                    >
+                      <MenuItem value="">All</MenuItem>
+                      <MenuItem value="1">Q1</MenuItem>
+                      <MenuItem value="2">Q2</MenuItem>
+                      <MenuItem value="3">Q3</MenuItem>
+                      <MenuItem value="4">Q4</MenuItem>
+                    </TextField>
+                  )}
+                  {filterPeriodMode === 'semester' && (
+                    <TextField
+                      select
+                      label="Semester"
+                      value={filterSemester}
+                      onChange={(e) => setFilterSemester(e.target.value)}
+                      size="small"
+                    >
+                      <MenuItem value="">All</MenuItem>
+                      <MenuItem value="1">1st Semester</MenuItem>
+                      <MenuItem value="2">2nd Semester</MenuItem>
+                    </TextField>
+                  )}
+                  <Button
                     variant="outlined"
-                    sx={{ flex: '0 0 auto', minWidth: 80 }}
+                    sx={{ flex: '0 0 auto', minWidth: 80, height: 40 }}
                     onClick={() => {
                       setFilterStatus('');
                       setFilterType('');
                       setFilterPriority('');
+                      setFilterYear(new Date().getFullYear().toString());
+                      setFilterMonth((new Date().getMonth() + 1).toString());
+                      setFilterQuarter('');
+                      setFilterSemester('');
+                      setFilterPeriodMode('month');
                     }}
                   >
                     Reset
                   </Button>
-                </Stack>
+                </Box>
               </Grid>
               <Grid item xs={12} lg={4}>
                 <Stack direction="row" spacing={2} sx={{ '& > *': { flex: 1 } }}>
                   {(isFocalTech || canManageAll) && (
-                    <Badge badgeContent={myTicketsCount} color="error" overlap="circular" sx={{ width: '100%', '& .MuiBadge-badge': { zIndex: 1 } }}>
+                    <Badge badgeContent={myTicketsCount} color="error" overlap="circular" sx={{ width: '100%', height: 40, '& .MuiBadge-badge': { zIndex: 1 } }}>
                       <Button
                         fullWidth
                         size="small"
                         variant={showMyTickets ? 'contained' : 'outlined'}
                         color="primary"
+                        sx={{ height: '100%' }}
                         onClick={() => {
                           setShowMyTickets((v) => !v);
                           setShowEscalatedToMe(false);
@@ -884,12 +1032,13 @@ export default function TicketsPage() {
                     </Badge>
                   )}
                   {canViewEscalatedQueue && (
-                    <Badge badgeContent={escalatedToMeCount} color="error" overlap="circular" sx={{ width: '100%', '& .MuiBadge-badge': { zIndex: 1 } }}>
+                    <Badge badgeContent={escalatedToMeCount} color="error" overlap="circular" sx={{ width: '100%', height: 40, '& .MuiBadge-badge': { zIndex: 1 } }}>
                       <Button
                         fullWidth
                         size="small"
                         variant={showEscalatedToMe ? 'contained' : 'outlined'}
                         color="warning"
+                        sx={{ height: '100%' }}
                         onClick={() => {
                           setShowEscalatedToMe((v) => !v);
                           setShowMyTickets(false);
@@ -966,6 +1115,7 @@ export default function TicketsPage() {
             >
               <Tab label={`All (${frontendFilteredTickets.length})`} />
               <Tab label={`Active (${activeTickets.length})`} />
+              <Tab label={`Paused (${pausedTickets.length})`} />
               <Tab label={`Resolved / Closed (${doneTickets.length})`} />
               <Tab label={`Frozen (${frozenTickets.length})`} />
               <Tab label={`Duplicate (${duplicateTickets.length})`} />
@@ -992,6 +1142,7 @@ export default function TicketsPage() {
               allowScrollButtonsMobile
             >
               <Tab label={`Active (${activeTickets.length})`} />
+              <Tab label={`Paused (${pausedTickets.length})`} />
               <Tab label={`Resolved / Closed (${doneTickets.length})`} />
               <Tab label={`Frozen (${frozenTickets.length})`} />
               <Tab label={`Duplicate (${duplicateTickets.length})`} />
@@ -1032,7 +1183,7 @@ export default function TicketsPage() {
         </Card>
       )}
 
-      {canManageAll && mgmtTab === 6 ? (
+      {canManageAll && mgmtTab === 7 ? (
         <Card sx={{ mb: 2 }}>
           <CardContent>
             {loading ? (
@@ -1317,19 +1468,15 @@ export default function TicketsPage() {
                     ticket.requesterId === user?.id &&
                     !ticket.satisfactionSubmittedAt;
 
+                  const hasUnread = canManageAll ? ticket.hasUnreadTechnician : ticket.hasUnreadUser;
+
                   return (
                     <TableRow
                       key={ticket.id}
                       hover
                       className="ticket-row"
                       sx={[
-                        { '&:hover .ticket-cell::after': { opacity: 1 } },
-                        hasPendingSatisfaction
-                          ? {
-                              backgroundColor: 'warning.50',
-                              '&:hover': { backgroundColor: 'warning.100' },
-                            }
-                          : {}
+                        { '&:hover .ticket-cell::after': { opacity: 1 } }
                       ]}
                     >
                       {/* Ticket # */}
@@ -1338,7 +1485,7 @@ export default function TicketsPage() {
                         sx={{ 
                           fontFamily: 'monospace', fontWeight: 600, wordBreak: 'break-word', 
                           position: 'sticky', left: 0, 
-                          bgcolor: hasPendingSatisfaction ? 'warning.50' : 'background.paper', 
+                          bgcolor: (theme) => theme.palette.mode === 'dark' ? '#121212' : '#ffffff', 
                           zIndex: 2, borderRight: '1px solid', borderColor: 'divider',
                           '&::after': {
                             content: '""',
@@ -1352,7 +1499,15 @@ export default function TicketsPage() {
                           }
                         }}
                       >
-                        <Box sx={{ position: 'relative', zIndex: 1 }}>{ticket.ticketNumber}</Box>
+                        <Box sx={{ position: 'relative', zIndex: 1 }}>
+                          {hasUnread ? (
+                            <Badge color="error" variant="dot" sx={{ '& .MuiBadge-badge': { right: -6, top: 4 } }}>
+                              {ticket.ticketNumber}
+                            </Badge>
+                          ) : (
+                            ticket.ticketNumber
+                          )}
+                        </Box>
                       </TableCell>
                       {/* Subject — only column with ellipsis */}
                       <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1386,7 +1541,7 @@ export default function TicketsPage() {
                       </TableCell>
                       {/* Category */}
                       <TableCell>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
                           {ticket.category?.name ?? '—'}
                         </Typography>
                       </TableCell>

@@ -16,8 +16,14 @@ import {
   Select,
   Grid,
   InputAdornment,
+  IconButton,
+  Box,
+  Tooltip,
+  Menu,
 } from '@mui/material';
+import { Visibility, VisibilityOff, AutoFixHigh, Key, VpnKey } from '@mui/icons-material';
 import { usersApi } from '@/lib/api/users';
+import { authApi } from '@/lib/api/auth';
 import { unitsApi, Unit } from '@/lib/api/units';
 import { useSnackbar } from 'notistack';
 
@@ -31,8 +37,38 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
   const { enqueueSnackbar } = useSnackbar();
 
   // Password fields
+  // Password fields
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+  const handleGenerateClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleGenerateClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleGeneratePassword = async (type: 'random' | 'passphrase') => {
+    handleGenerateClose();
+    try {
+      let result;
+      if (type === 'random') {
+        result = await authApi.generateRandomPassword();
+      } else {
+        result = await authApi.generatePassphrase();
+      }
+      setNewPassword(result.password);
+      setConfirmPassword(result.password);
+      setShowPassword(true);
+      enqueueSnackbar('Password generated successfully', { variant: 'success' });
+    } catch (err: any) {
+      enqueueSnackbar('Failed to generate password', { variant: 'error' });
+    }
+  };
 
   // Profile fields
   const [staffId, setStaffId] = useState('');
@@ -92,6 +128,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
     try {
       await usersApi.updateUser(userId, {
         password: newPassword,
+        staffId,
         firstName,
         middleName,
         lastName,
@@ -119,26 +156,57 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
 
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-          <Typography variant="subtitle2" sx={{ mb: 1, mt: 2, fontWeight: 'bold' }}>
-            Account Security
-          </Typography>
+          <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mb: 1, mt: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+              Account Security
+            </Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<AutoFixHigh />}
+              onClick={handleGenerateClick}
+            >
+              Generate Password
+            </Button>
+            <Menu
+              anchorEl={anchorEl}
+              open={Boolean(anchorEl)}
+              onClose={handleGenerateClose}
+            >
+              <MenuItem onClick={() => handleGeneratePassword('random')}>
+                <Key fontSize="small" sx={{ mr: 1 }} /> Random Password
+              </MenuItem>
+              <MenuItem onClick={() => handleGeneratePassword('passphrase')}>
+                <VpnKey fontSize="small" sx={{ mr: 1 }} /> Passphrase
+              </MenuItem>
+            </Menu>
+          </Box>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
               <TextField
                 margin="dense"
                 label="New Password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 fullWidth
                 required
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
+                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 margin="dense"
                 label="Confirm New Password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 fullWidth
                 required
                 value={confirmPassword}
@@ -161,6 +229,11 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
                 onChange={(e) => {
                   const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
                   setStaffId(digits);
+                }}
+                onBlur={() => {
+                  if (staffId && staffId.length < 6) {
+                    setStaffId(staffId.padStart(6, '0'));
+                  }
                 }}
                 inputProps={{ inputMode: 'numeric', maxLength: 6 }}
                 placeholder="6 digits"

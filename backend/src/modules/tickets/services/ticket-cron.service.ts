@@ -46,6 +46,38 @@ export class TicketCronService implements OnModuleInit {
     await this.ticketService.retryBenchedKbs();
   }
 
+  @Cron('0 8 * * *', { timeZone: 'Asia/Manila' })
+  async handleDailyFrozenEmails() {
+    this.logger.log('Running daily frozen ticket emails at 8 AM PHT...');
+    const frozenTickets = await this.ticketRepo.find({
+      where: { status: TicketStatus.FREEZE },
+    });
+
+    await this.ticketService.enrichTicketsWithUsers(frozenTickets);
+
+    const byTech: Record<string, { email: string; tickets: Ticket[] }> = {};
+    for (const t of frozenTickets) {
+      if (t.assignedTo?.email) {
+        if (!byTech[t.assignedTo.email]) byTech[t.assignedTo.email] = { email: t.assignedTo.email, tickets: [] };
+        byTech[t.assignedTo.email].tickets.push(t);
+      }
+    }
+
+    for (const data of Object.values(byTech)) {
+      try {
+        const ticketList = data.tickets.map((t) => `- ${t.ticketNumber}: ${t.subject}`).join('\n');
+        await this.emailService.sendGenericEmail(
+          data.email,
+          'Daily Reminder: Frozen Tickets',
+          `You have ${data.tickets.length} frozen ticket(s) waiting for third-party response.\n\n${ticketList}\n\nPlease follow up on them.`
+        );
+        this.logger.log(`Sent daily frozen tickets email to ${data.email}`);
+      } catch (err) {
+        this.logger.error(`Failed to send frozen tickets email to ${data.email}`, err);
+      }
+    }
+  }
+
   private async processSlaSchedules() {
     const config = await this.configRepo.findOne({ where: { id: 1 } });
     if (!config || config.isFlagCeremonyPaused) return;
@@ -208,6 +240,7 @@ export class TicketCronService implements OnModuleInit {
           1,
           UserRole.SUPER_ADMIN,
         );
+        await this.ticketRepo.update(ticket.id, { hasUnreadTechnician: true, hasUnreadUser: true });
         this.logger.log(`Sent daily reminder for frozen ticket ${ticket.ticketNumber}`);
       } catch (err) {
         this.logger.error(

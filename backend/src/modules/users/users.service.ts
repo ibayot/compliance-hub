@@ -781,6 +781,15 @@ export class UsersService {
 
     // Update basic fields
     if (dto.email) user.email = dto.email;
+    if (dto.staffId !== undefined) {
+      if (dto.staffId?.trim()) {
+        const existing = await this.usersRepository.findOne({ where: { staffId: dto.staffId } });
+        if (existing && existing.id !== user.id) {
+          throw new ConflictException('Staff ID is already in use by another account.');
+        }
+      }
+      user.staffId = dto.staffId;
+    }
     if (dto.firstName) user.firstName = dto.firstName;
     if (dto.middleName !== undefined) user.middleName = dto.middleName;
     if (dto.lastName) user.lastName = dto.lastName;
