@@ -88,7 +88,7 @@ export class TicketCronService implements OnModuleInit {
     } 
     // Check if in Late window (after morning end, before late end)
     else if (currentTime > morningEnd && currentTime <= lateEnd) {
-      if (currentMins % 15 === 0) {
+      if (currentMins % 5 === 0) {
         this.logger.log(`Running dynamic Late DTR Sync...`);
         await this.attendanceService.syncAttendanceWithDTR();
       }
