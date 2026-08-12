@@ -235,6 +235,7 @@ export interface UpdateTicketDto {
   ticketType?: TicketType;
   categoryId?: string;
   generateKb?: boolean;
+  statusJustification?: string;
 }
 
 export interface AssignTicketDto {
@@ -430,6 +431,7 @@ export interface TicketIssueType {
   description: string | null;
   slaHours?: number | null;
   allowablePauseHours: number;
+  maxFreezeHours?: number | null;
   isActive: boolean;
   isDeleted: boolean;
   categoryId: string | null;
@@ -466,6 +468,7 @@ export interface TechAttendance {
   status: AttendanceStatus;
   notes?: string;
   setById?: number;
+  clockInTime?: string;
   createdAt: string;
 }
 
@@ -712,8 +715,14 @@ export const ticketsApi = {
   },
 
   /** Get SLA calibration insights (QA #11 extension) */
-  getSlaInsights: async (days: number = 30): Promise<any[]> => {
-    const response = await apiClient.get(`/ticket-settings/sla-insights?days=${days}`);
+  getSlaInsights: async (filters?: { year?: number; month?: number; quarter?: number; semester?: number }): Promise<any[]> => {
+    const params = new URLSearchParams();
+    if (filters?.year) params.append('year', filters.year.toString());
+    if (filters?.month) params.append('month', filters.month.toString());
+    if (filters?.quarter) params.append('quarter', filters.quarter.toString());
+    if (filters?.semester) params.append('semester', filters.semester.toString());
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const response = await apiClient.get(`/ticket-settings/sla-insights${qs}`);
     return response.data;
   },
 
@@ -734,6 +743,26 @@ export const ticketsApi = {
     if (filters?.technicianId) params.append('technicianId', String(filters.technicianId));
     if (filters?.ticketType) params.append('ticketType', filters.ticketType);
     const response = await apiClient.get(`/tickets/reports?${params}`);
+    return response.data;
+  },
+
+  /** Get performance metrics (Resolution time, SLA compliance, Escalation rates) */
+  getPerformanceMetrics: async (filters?: {
+    year?: number;
+    month?: number;
+    quarter?: number;
+    semester?: number;
+    technicianId?: number;
+    ticketType?: string;
+  }): Promise<any> => {
+    const params = new URLSearchParams();
+    if (filters?.year) params.append('year', String(filters.year));
+    if (filters?.month) params.append('month', String(filters.month));
+    if (filters?.quarter) params.append('quarter', String(filters.quarter));
+    if (filters?.semester) params.append('semester', String(filters.semester));
+    if (filters?.technicianId) params.append('technicianId', String(filters.technicianId));
+    if (filters?.ticketType) params.append('ticketType', filters.ticketType);
+    const response = await apiClient.get(`/tickets/performance-metrics?${params}`);
     return response.data;
   },
 
@@ -1024,7 +1053,7 @@ export const ticketSettingsApi = {
   },
 
   // SLA Insights
-  getSlaInsights: async (days?: number): Promise<
+  getSlaInsights: async (filters?: { year?: number; month?: number; quarter?: number; semester?: number }): Promise<
     Array<{
       categoryName: string;
       configuredSlaHours: number;
@@ -1033,7 +1062,12 @@ export const ticketSettingsApi = {
       isFailingSla: boolean;
     }>
   > => {
-    const qs = days ? `?days=${days}` : '';
+    const params = new URLSearchParams();
+    if (filters?.year) params.append('year', filters.year.toString());
+    if (filters?.month) params.append('month', filters.month.toString());
+    if (filters?.quarter) params.append('quarter', filters.quarter.toString());
+    if (filters?.semester) params.append('semester', filters.semester.toString());
+    const qs = params.toString() ? `?${params.toString()}` : '';
     const response = await apiClient.get(`/ticket-settings/sla-insights${qs}`);
     return response.data;
   },
@@ -1077,7 +1111,19 @@ export const auditLogsApi = {
 
 // Attendance API
 export const attendanceApi = {
+  // System Status
+  getSystemStatus: async (): Promise<{ isOnline: boolean }> => {
+    const response = await apiClient.get('/attendance/system-status');
+    return response.data;
+  },
   // Tech attendance
+  getMyShift: async (): Promise<{ clockIn: Date | null; clockOut: Date | null }> => {
+    const response = await apiClient.get('/attendance/my-shift');
+    return {
+      clockIn: response.data.clockIn ? new Date(response.data.clockIn) : null,
+      clockOut: response.data.clockOut ? new Date(response.data.clockOut) : null,
+    };
+  },
   getAttendance: async (
     startDate: string,
     endDate: string,
@@ -1097,6 +1143,7 @@ export const attendanceApi = {
     date: string;
     status: AttendanceStatus;
     notes?: string;
+    clockInTime?: string;
   }): Promise<TechAttendance> => {
     const response = await apiClient.post(`/attendance`, data);
     return response.data;
@@ -1156,6 +1203,21 @@ export const attendanceApi = {
     days: { date: string; isOfficeDay: boolean; notes?: string }[];
   }): Promise<OfficeDay[]> => {
     const response = await apiClient.post(`/attendance/office-days/bulk`, data);
+    return response.data;
+  },
+};
+
+export const notificationsApi = {
+  getUnreadCount: async (): Promise<{ count: number }> => {
+    const response = await apiClient.get('/notifications/unread-count');
+    return response.data;
+  },
+  getMyNotifications: async (): Promise<any[]> => {
+    const response = await apiClient.get('/notifications/mine');
+    return response.data;
+  },
+  markAllRead: async (): Promise<{ success: boolean }> => {
+    const response = await apiClient.post('/notifications/mark-read');
     return response.data;
   },
 };

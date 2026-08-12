@@ -4,6 +4,7 @@ export interface JwtPayload {
   role: string;
   roleCode?: string | null;
   units: number[];
+  staffId?: string;
   jti?: string;
 }
 

@@ -107,6 +107,33 @@ function OverdueTimer({ targetDate }: { targetDate: string }) {
   return <>{elapsed}</>;
 }
 
+function SlaCountdownTimer({ targetDate, isNearingSLA, isOverdue }: { targetDate: string, isNearingSLA: boolean, isOverdue: boolean }) {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    const target = new Date(targetDate).getTime();
+    const tick = () => {
+      const now = Date.now();
+      const diff = target - now;
+      if (diff <= 0) {
+        setTimeLeft('0d 0h 0m 0s');
+        return;
+      }
+      const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+      const m = Math.floor((diff / (1000 * 60)) % 60);
+      const s = Math.floor((diff / 1000) % 60);
+      setTimeLeft(`${d > 0 ? d + 'd ' : ''}${h}h ${m}m ${s}s`);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [targetDate]);
+
+  const color = isOverdue ? 'error' : isNearingSLA ? 'warning' : 'success';
+  return <Typography variant="body2" color={`${color}.main`} fontWeight={600}>{timeLeft}</Typography>;
+}
+
 function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | null {
   if (!ticket.slaDeadline || ticket.isSlaWaiting) return null;
   const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
@@ -144,6 +171,14 @@ export default function TicketDetailPage() {
   // Guard: auto-view mark fires only once per ticket load
   const viewedRef = useRef(false);
 
+  const [parentTicketNumber, setParentTicketNumber] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (ticket?.status === 'duplicate' && ticket?.duplicateOfId) {
+      ticketsApi.getById(ticket.duplicateOfId).then(t => setParentTicketNumber(t.ticketNumber)).catch(() => {});
+    }
+  }, [ticket?.status, ticket?.duplicateOfId]);
+
   // Comment form
   const [comment, setComment] = useState('');
   const [isInternal, setIsInternal] = useState(false);
@@ -152,7 +187,9 @@ export default function TicketDetailPage() {
   // Status/resolution update (staff)
   const [editingStatus, setEditingStatus] = useState(false);
   const [newStatus, setNewStatus] = useState('');
+  const [newPriority, setNewPriority] = useState('');
   const [resolutionNotes, setResolutionNotes] = useState('');
+  const [statusJustification, setStatusJustification] = useState('');
   const [generateKb, setGenerateKb] = useState(false);
 
   // KB picker for resolution
@@ -215,7 +252,6 @@ export default function TicketDetailPage() {
   const [csatSubmitting, setCsatSubmitting] = useState(false);
 
   // Priority update
-  const [newPriority, setNewPriority] = useState('');
 
   // Timeline events
   const [events, setEvents] = useState<TicketEvent[]>([]);
@@ -493,6 +529,7 @@ export default function TicketDetailPage() {
         payload.status = newStatus as Ticket['status'];
       }
       if (resolutionNotes) payload.resolutionNotes = resolutionNotes;
+      if (statusJustification) payload.statusJustification = statusJustification;
       if (newPriority && newPriority !== ticket?.priority) payload.priority = newPriority as any;
       if (overrideDupOfId) payload.duplicateOfId = overrideDupOfId;
       if (newStatus === 'resolved') payload.generateKb = generateKb;
@@ -957,9 +994,7 @@ export default function TicketDetailPage() {
                   )}
                 </>
               )}
-              {!hideTopActionButtons && !acceptedEscalationOnlyStatusAction && isDuplicate && (
-                <Chip label="Duplicate (Terminal)" color="default" size="small" />
-              )}
+
               {!hideTopActionButtons &&
                 (!hasAcceptedEscalation || isAcceptedEscalationFocal) &&
                 canReassign &&
@@ -1102,6 +1137,7 @@ export default function TicketDetailPage() {
                 const needsPriority = newStatus === 'in_progress' && (!effectivePriority || !activeIssueTypeId);
                 const isStatusUnchanged = newStatus === ticket?.status && newPriority === ticket?.priority;
                 const isKbMissingNotes = newStatus === 'resolved' && generateKb && !resolutionNotes.trim();
+                const needsJustification = (newStatus === 'freeze' || newStatus === 'pause') && !statusJustification.trim();
                 return (
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
@@ -1143,6 +1179,26 @@ export default function TicketDetailPage() {
                         ))}
                       </TextField>
                     </Grid>
+
+                    {(newStatus === 'freeze' || newStatus === 'pause') && (
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          required
+                          multiline
+                          rows={3}
+                          label="Status Justification"
+                          value={statusJustification}
+                          onChange={(e) => setStatusJustification(e.target.value)}
+                          size="small"
+                          placeholder={`Please explain why this ticket is being put on ${newStatus}...`}
+                          inputProps={{ maxLength: 1000 }}
+                          error={needsJustification}
+                          helperText={needsJustification ? 'A justification is required for this status.' : undefined}
+                        />
+                      </Grid>
+                    )}
+
                     <Grid item xs={12}>
                       <Box display="flex" alignItems="center" justifyContent="space-between" mb={0.5}>
                         <Typography variant="caption" color="text.secondary">Resolution Notes (optional)</Typography>
@@ -1208,7 +1264,7 @@ export default function TicketDetailPage() {
                           variant="contained"
                           size="small"
                           onClick={() => handleUpdateStatus()}
-                          disabled={needsPriority || isStatusUnchanged || isKbMissingNotes}
+                          disabled={needsPriority || isStatusUnchanged || isKbMissingNotes || needsJustification}
                         >
                           Save
                         </Button>
@@ -1236,6 +1292,20 @@ export default function TicketDetailPage() {
               <Typography variant="body2" whiteSpace="pre-wrap">
                 {ticket.description}
               </Typography>
+
+              {ticket.status === 'duplicate' && ticket.duplicateOfId && (
+                <Box mt={2}>
+                  <Alert severity="warning"
+                    action={
+                      <Button color="inherit" size="small" onClick={() => router.push(`/operations/tickets/${ticket.duplicateOfId}`)}>
+                        View Original
+                      </Button>
+                    }
+                  >
+                    This ticket is a duplicate of <strong>{parentTicketNumber || 'another ticket'}</strong>.
+                  </Alert>
+                </Box>
+              )}
               
               {(() => {
                 const initialAttachmentComment = ticket.comments?.find(
@@ -1407,11 +1477,22 @@ export default function TicketDetailPage() {
                               ? 'error.main'
                               : 'text.primary'
                         }
-                        fontWeight={600}
                       >
                         {new Date(ticket.slaDeadline).toLocaleString()}
                       </Typography>
                     </Box>
+                    {!ticket.resolvedAt && new Date() < new Date(ticket.slaDeadline) && (
+                      <Box mt={1}>
+                        <Typography variant="caption" color="text.secondary">
+                          SLA Remaining
+                        </Typography>
+                        <SlaCountdownTimer 
+                          targetDate={ticket.slaDeadline} 
+                          isNearingSLA={ticket.isNearingSLA ?? false} 
+                          isOverdue={ticket.isOverdue ?? false} 
+                        />
+                      </Box>
+                    )}
                     {ticket.resolvedAt && (
                       <Box>
                         <Typography variant="caption" color="text.secondary">
@@ -1793,7 +1874,9 @@ export default function TicketDetailPage() {
                   created: 'Ticket Created',
                   auto_assigned: 'Auto-Assigned',
                   manually_assigned: 'Manually Assigned',
+                  manually_reassigned: 'Reassigned',
                   status_changed: 'Status Changed',
+                  status_extended: 'Status Extended',
                   in_progress: 'Marked In Progress',
                   resolved: 'Resolved',
                   closed: 'Closed',
@@ -1848,6 +1931,11 @@ export default function TicketDetailPage() {
                           Status: {String(ev.meta.to).replace('_', ' ')}
                         </Typography>
                       )}
+                      {ev.meta?.justification && (
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ fontStyle: 'italic' }}>
+                          Justification: {ev.meta.justification}
+                        </Typography>
+                      )}
                       <Typography variant="caption" color="text.disabled" display="block">
                         {new Date(ev.createdAt).toLocaleString()}
                       </Typography>
@@ -1867,10 +1955,10 @@ export default function TicketDetailPage() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>{isEscalateMode ? 'Escalate Ticket' : 'Assign Technician'}</DialogTitle>
+        <DialogTitle>{ticket?.assignedToId ? 'Reassign Technician' : 'Assign Technician'}</DialogTitle>
         <DialogContent>
           <Autocomplete
-            options={technicians}
+            options={technicians.filter((t) => t.id !== ticket?.assignedToId)}
             getOptionLabel={(t) => `${t.firstName} ${t.lastName} (${t.openCount} open)`}
             value={technicians.find((t) => t.id === assignToId) ?? null}
             onChange={(_, newValue) => setAssignToId(newValue ? Number(newValue.id) : '')}
@@ -2125,21 +2213,14 @@ export default function TicketDetailPage() {
               No other open tickets found for this requester.
             </Alert>
           ) : (
-            <TextField inputProps={{ maxLength: 255 }}
-              select
-              fullWidth
-              label="Original Ticket"
-              value={selectedDupOfId}
-              onChange={(e) => setSelectedDupOfId(e.target.value)}
-              size="small"
+            <Autocomplete
+              options={requesterOpenTickets}
+              getOptionLabel={(option) => `${option.ticketNumber} — ${option.subject}`}
+              renderInput={(params) => <TextField {...params} label="Original Ticket" size="small" />}
+              onChange={(_, newValue) => setSelectedDupOfId(newValue ? newValue.id.toString() : '')}
               sx={{ mt: 2 }}
-            >
-              {requesterOpenTickets.map((t) => (
-                <MenuItem key={t.id} value={t.id}>
-                  {t.ticketNumber} — {t.subject}
-                </MenuItem>
-              ))}
-            </TextField>
+              fullWidth
+            />
           )}
         </DialogContent>
         <DialogActions>

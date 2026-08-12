@@ -263,6 +263,29 @@ export class TicketController {
     });
   }
 
+  @Get('performance-metrics')
+  @Roles(...ALL_ROLES)
+  async getPerformanceMetrics(
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+    @Query('quarter') quarter?: string,
+    @Query('semester') semester?: string,
+    @Query('technicianId') technicianId?: string,
+    @Query('ticketType') ticketType?: string,
+    @Request() req?: any,
+  ) {
+    return this.ticketService.getPerformanceMetrics({
+      year: year ? Number(year) : undefined,
+      month: month ? Number(month) : undefined,
+      quarter: quarter ? Number(quarter) : undefined,
+      semester: semester ? Number(semester) : undefined,
+      technicianId: technicianId ? Number(technicianId) : undefined,
+      ticketType,
+      viewerId: req?.user?.id ?? req?.user?.userId,
+      viewerRole: req?.user?.role,
+    });
+  }
+
   /** GET /tickets/ratings-report — detailed ratings report (Tickets, Techs, Days/Weeks/Months/Quarters) */
   @Get('ratings-report')
   @Roles(...ALL_ROLES)

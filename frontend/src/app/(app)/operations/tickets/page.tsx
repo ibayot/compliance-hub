@@ -42,6 +42,7 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon,
+  Search as SearchIcon,
   Visibility as ViewIcon,
   AssignmentInd as AssignIcon,
   ThumbUp as SatisfactionIcon,
@@ -132,6 +133,7 @@ export default function TicketsPage() {
   const [filterMonth, setFilterMonth] = useState(currentMonth);
   const [filterQuarter, setFilterQuarter] = useState('');
   const [filterSemester, setFilterSemester] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterPeriodMode, setFilterPeriodMode] = useState<'month' | 'quarter' | 'semester' | 'year'>('month');
   const [showMyTickets, setShowMyTickets] = useState(false);
 
@@ -283,8 +285,17 @@ export default function TicketsPage() {
   }, [handleTableScroll, tickets, allEscalations]);
 
   const frontendFilteredTickets = React.useMemo(() => {
-    return tickets.filter(t => !filterPriority || t.priority === filterPriority);
-  }, [tickets, filterPriority]);
+    return tickets.filter(t => {
+      const matchesPriority = !filterPriority || t.priority === filterPriority;
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = !q ? true : (
+        t.ticketNumber.toLowerCase().includes(q) ||
+        t.subject.toLowerCase().includes(q) ||
+        (t.requester?.firstName + " " + t.requester?.lastName).toLowerCase().includes(q)
+      );
+      return matchesPriority && matchesSearch;
+    });
+  }, [tickets, filterPriority, searchQuery]);
 
   const frontendFilteredEscalations = React.useMemo(() => {
     return allEscalations.filter(e => !filterPriority || (e.ticket && e.ticket.priority === filterPriority));
@@ -850,6 +861,26 @@ export default function TicketsPage() {
           </Button>
         </Stack>
       </Box>
+
+      {/* Search Bar (Visible to everyone) */}
+      <Card sx={{ mb: 2 }}>
+        <CardContent sx={{ pb: '16px !important' }}>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search by ticket number, subject, or requester name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </CardContent>
+      </Card>
 
       {canManageAll && (
         <Card sx={{ mb: 2 }}>

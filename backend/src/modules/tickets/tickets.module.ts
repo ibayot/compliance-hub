@@ -12,9 +12,12 @@ import { TicketEscalation } from './entities/ticket-escalation.entity';
 import { EscalationFocalConfig } from './entities/escalation-focal-config.entity';
 import { TicketingConfig } from './entities/ticketing-config.entity';
 import { KnowledgeArticle } from './entities/knowledge-article.entity';
+import { TicketNotification } from './entities/ticket-notification.entity';
+import { DtrView } from './entities/dtr-view.entity';
 import { TicketService } from './services/ticket.service';
 import { TicketSettingsService } from './services/ticket-settings.service';
 import { TicketCronService } from './services/ticket-cron.service';
+import { TicketStatusJustification } from './entities/ticket-status-justification.entity';
 import { KnowledgeBaseService } from './services/knowledge-base.service';
 import { AttendanceService } from './services/attendance.service';
 import { EmailService } from './services/email.service';
@@ -22,6 +25,7 @@ import { AttendanceController } from './controllers/attendance.controller';
 import { TicketController } from './controllers/ticket.controller';
 import { TicketSettingsController } from './controllers/ticket-settings.controller';
 import { KnowledgeBaseController } from './controllers/knowledge-base.controller';
+import { NotificationController } from './controllers/notification.controller';
 import { User, RoleDefinitionEntity, Unit } from '../shared/entities';
 import { RoleCapabilitiesService } from '../users/role-capabilities.service';
 import { RoleCapabilitiesHttpClient } from '../../common/http-clients/role-capabilities.http-client';
@@ -44,6 +48,9 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
       EscalationFocalConfig,
       TicketingConfig,
       KnowledgeArticle,
+      DtrView,
+      TicketStatusJustification,
+      TicketNotification,
       User,
       Unit,
       RoleDefinitionEntity,
@@ -57,6 +64,7 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
     TicketController,
     TicketSettingsController,
     KnowledgeBaseController,
+    NotificationController,
   ],
   providers: [
     TicketService,

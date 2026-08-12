@@ -45,7 +45,7 @@ setInterval(pollVaptMode, 5000);
 
 const SERVICE_DOMAINS: Record<string, string[]> = {
   users: ['/api/auth', '/api/users', '/api/units', '/api/audit-logs'],
-  ticketing: ['/api/tickets', '/api/attendance', '/api/ticket-settings', '/api/knowledge-base'],
+  ticketing: ['/api/tickets', '/api/attendance', '/api/ticket-settings', '/api/knowledge-base', '/api/notifications'],
   compliance: [
     '/api/documents',
     '/api/document-types',
@@ -290,6 +290,10 @@ async function bootstrap() {
     app.use(
       `${prefix}/tickets`,
       createServiceProxy(`${ticketingServiceUrl}/api/tickets`, 'ticketing'),
+    );
+    app.use(
+      `${prefix}/notifications`,
+      createServiceProxy(`${ticketingServiceUrl}/api/notifications`, 'ticketing'),
     );
     app.use(
       `${prefix}/attendance`,

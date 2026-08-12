@@ -153,6 +153,10 @@ export class CreateIssueTypeDto {
   @IsNumber()
   @ApiPropertyOptional()
   allowablePauseHours?: number | null;
+  @IsOptional()
+  @IsNumber()
+  @ApiPropertyOptional()
+  maxFreezeHours?: number | null;
 }
 
 export class UpdateIssueTypeDto {
@@ -180,6 +184,10 @@ export class UpdateIssueTypeDto {
   @IsNumber()
   @ApiPropertyOptional()
   allowablePauseHours?: number | null;
+  @IsOptional()
+  @IsNumber()
+  @ApiPropertyOptional()
+  maxFreezeHours?: number | null;
 }
 
 export class UpdateGlobalConfigDto {
@@ -561,6 +569,8 @@ export class TicketSettingsService {
       isDeleted: false,
       category_id: dto.categoryId || null,
       slaHours: dto.slaHours ?? null,
+      allowablePauseHours: dto.allowablePauseHours ?? 48,
+      maxFreezeHours: dto.maxFreezeHours ?? null,
       created_by: actorId,
       updated_by: actorId,
     });
@@ -606,6 +616,12 @@ export class TicketSettingsService {
         await this.getCategoryById(dto.categoryId);
       }
       issueType.category_id = dto.categoryId || null;
+    }
+    if (dto.allowablePauseHours !== undefined) {
+      issueType.allowablePauseHours = dto.allowablePauseHours ?? 48;
+    }
+    if (dto.maxFreezeHours !== undefined) {
+      issueType.maxFreezeHours = dto.maxFreezeHours ?? null;
     }
     issueType.updated_by = actorId;
 
@@ -861,34 +877,42 @@ export class TicketSettingsService {
 
   // ── SLA Insights ───────────────────────────────────────────────────────
 
-  async getSlaInsights(days: number = 30): Promise<any[]> {
-    // Calculates the average resolution time in hours per issue over the last X days
-    const insights = await this.ticketRepo.query(
-      `
-      SELECT 
-        ti.name as issueName,
-        tc.name as categoryName,
-        ti.sla_hours as configuredSlaHours,
-        COUNT(t.id) as resolvedTicketsCount,
-        AVG(TIMESTAMPDIFF(SECOND, t.created_at, t.resolved_at)) / 3600 as avgResolutionHours
-      FROM tickets t
-      JOIN ticket_issue_types ti ON t.issue_type_id = ti.id
-      JOIN ticket_categories tc ON ti.category_id = tc.id
-      WHERE LOWER(t.status) IN ('resolved', 'closed')
-        AND t.resolved_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
-        AND ti.sla_hours IS NOT NULL AND ti.sla_hours > 0
-      GROUP BY ti.id
-    `,
-      [days],
-    );
+  async getSlaInsights(filters: { year?: number; month?: number; quarter?: number; semester?: number } = {}): Promise<any[]> {
+    // Calculates the average resolution time in hours per issue
+    const qb = this.ticketRepo.createQueryBuilder('t')
+      .innerJoin('t.issueTypeConfig', 'ti')
+      .innerJoin('ti.category', 'tc')
+      .select('ti.name', 'issueName')
+      .addSelect('tc.name', 'categoryName')
+      .addSelect('ti.slaHours', 'configuredSlaHours')
+      .addSelect('COUNT(t.id)', 'resolvedTicketsCount')
+      .addSelect('AVG(TIMESTAMPDIFF(SECOND, t.createdAt, t.resolvedAt)) / 3600', 'avgResolutionHours')
+      .where("LOWER(t.status) IN ('resolved', 'closed')")
+      .andWhere('ti.slaHours IS NOT NULL')
+      .andWhere('ti.slaHours > 0')
+      .groupBy('ti.id');
+
+    if (filters.year || filters.month || filters.quarter || filters.semester) {
+      if (filters.year) qb.andWhere('YEAR(t.resolvedAt) = :year', { year: filters.year });
+      if (filters.month) qb.andWhere('MONTH(t.resolvedAt) = :month', { month: filters.month });
+      if (filters.quarter) qb.andWhere('QUARTER(t.resolvedAt) = :quarter', { quarter: filters.quarter });
+      if (filters.semester) {
+        if (filters.semester === 1) qb.andWhere('MONTH(t.resolvedAt) BETWEEN 1 AND 6');
+        else qb.andWhere('MONTH(t.resolvedAt) BETWEEN 7 AND 12');
+      }
+    } else {
+      qb.andWhere('t.resolvedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)');
+    }
+
+    const insights = await qb.getRawMany();
 
     return insights.map((row: any) => ({
       issueName: row.issueName,
       categoryName: row.categoryName,
       configuredSlaHours: Number(row.configuredSlaHours),
       resolvedTicketsCount: Number(row.resolvedTicketsCount),
-      avgResolutionHours: Number(row.avgResolutionHours),
-      isFailingSla: Number(row.avgResolutionHours) > Number(row.configuredSlaHours),
+      avgResolutionHours: Number(row.avgResolutionHours || 0),
+      isFailingSla: Number(row.avgResolutionHours || 0) > Number(row.configuredSlaHours),
     }));
   }
 }

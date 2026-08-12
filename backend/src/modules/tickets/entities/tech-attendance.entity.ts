@@ -37,6 +37,12 @@ export class TechAttendance {
   @Column({ type: 'varchar', length: 20, default: AttendanceStatus.PRESENT })
   status: AttendanceStatus;
 
+  @Column({ name: 'clock_in_time', type: 'datetime', nullable: true })
+  clockInTime: Date | null;
+
+  @Column({ name: 'is_manual_override', type: 'boolean', default: false })
+  isManualOverride: boolean;
+
   @Column({ name: 'set_by_id', type: 'int', nullable: true })
   setById: number | null;
 

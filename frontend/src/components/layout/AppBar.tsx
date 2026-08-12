@@ -13,6 +13,7 @@ import {
   MenuItem,
   Avatar,
   Divider,
+  Badge,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -23,14 +24,16 @@ import {
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
   Feedback as FeedbackIcon,
+  Notifications as NotificationsIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { usePageTitle } from '@/contexts/PageTitleContext';
 import { useThemeMode } from '@/contexts/ThemeModeContext';
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import FeedbackModal from '../FeedbackModal';
+import { attendanceApi, notificationsApi } from '@/app/api/references';
 
 interface AppBarProps {
   onMenuClick: () => void;
@@ -49,6 +52,92 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
   const { mode, toggleMode } = useThemeMode();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [myShift, setMyShift] = useState<{ clockIn: Date | null; clockOut: Date | null } | null>(null);
+
+  // Notifications
+  const [notifAnchorEl, setNotifAnchorEl] = useState<null | HTMLElement>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [isNotifLoading, setIsNotifLoading] = useState(false);
+
+  useEffect(() => {
+    if (user?.role && user.role !== 'user' && user.role !== 'super_admin') {
+      attendanceApi.getMyShift().then(shift => {
+        if (shift.clockIn && shift.clockOut) {
+          setMyShift(shift);
+        }
+      }).catch(console.error);
+    }
+  }, [user]);
+
+  // Audio ref for notification sound
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  React.useEffect(() => {
+    audioRef.current = new Audio("/notification.mp3");
+  }, []);
+
+  const prevUnreadCountRef = React.useRef(0);
+
+  // Notifications Polling with Page Visibility API
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchUnread = () => {
+      if (true) {
+        notificationsApi.getUnreadCount()
+          .then(res => {
+            const currentCount = res.count;
+            if (currentCount > prevUnreadCountRef.current) {
+               audioRef.current?.play().catch(e => console.log("Audio play failed:", e));
+            }
+            prevUnreadCountRef.current = currentCount;
+            setUnreadCount(currentCount);
+          })
+          .catch(() => {});
+      }
+    };
+
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000);
+
+    const handleVisibilityChange = () => {
+      if (true) {
+        fetchUnread();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user]);
+
+  const handleNotifOpen = async (event: React.MouseEvent<HTMLElement>) => {
+    setNotifAnchorEl(event.currentTarget);
+    setIsNotifLoading(true);
+    try {
+      const notifs = await notificationsApi.getMyNotifications();
+      setNotifications(notifs);
+      if (unreadCount > 0) {
+        await notificationsApi.markAllRead();
+        setUnreadCount(0);
+      }
+    } catch (err) {
+      console.error('Failed to load notifications', err);
+    } finally {
+      setIsNotifLoading(false);
+    }
+  };
+
+  const handleNotifClose = () => {
+    setNotifAnchorEl(null);
+  };
+
+  const handleNotifClick = (ticketId: string) => {
+    handleNotifClose();
+    router.push(`/operations/tickets/${ticketId}`);
+  };
 
   // Generate breadcrumbs from pathname
   // Skip 'dashboard' segment — all pages are inside dashboard already
@@ -201,6 +290,90 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
               );
             })}
           </Breadcrumbs>
+        </Box>
+
+        {/* Shift Indicator */}
+        {myShift && myShift.clockIn && myShift.clockOut && (
+          <Box sx={{ mr: 2, display: { xs: 'none', sm: 'block' } }}>
+            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+              Shift: {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(myShift.clockIn)} - {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(myShift.clockOut)}
+            </Typography>
+          </Box>
+        )}
+
+        {/* Notifications */}
+        <Box sx={{ mr: 2 }}>
+          <IconButton color="inherit" onClick={handleNotifOpen}>
+            <Badge badgeContent={unreadCount} color="error">
+              <NotificationsIcon />
+            </Badge>
+          </IconButton>
+          <Menu
+            anchorEl={notifAnchorEl}
+            open={Boolean(notifAnchorEl)}
+            onClose={handleNotifClose}
+            PaperProps={{
+              elevation: 0,
+              sx: {
+                overflow: 'visible',
+                filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
+                mt: 1.5,
+                width: 320,
+                maxHeight: 400,
+                overflowY: 'auto',
+                '& .MuiAvatar-root': {
+                  width: 32,
+                  height: 32,
+                  ml: -0.5,
+                  mr: 1,
+                },
+                '&:before': {
+                  content: '""',
+                  display: 'block',
+                  position: 'absolute',
+                  top: 0,
+                  right: 14,
+                  width: 10,
+                  height: 10,
+                  bgcolor: 'background.paper',
+                  transform: 'translateY(-50%) rotate(45deg)',
+                  zIndex: 0,
+                },
+              },
+            }}
+            transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+            anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+          >
+            <Box sx={{ px: 2, py: 1 }}>
+              <Typography variant="subtitle1" fontWeight="bold">Notifications</Typography>
+            </Box>
+            <Divider />
+            {isNotifLoading ? (
+              <MenuItem disabled><Typography variant="body2">Loading...</Typography></MenuItem>
+            ) : notifications.length === 0 ? (
+              <MenuItem disabled><Typography variant="body2">No notifications</Typography></MenuItem>
+            ) : (
+              notifications.map((notif) => (
+                <MenuItem
+                  key={notif.id}
+                  onClick={() => handleNotifClick(notif.ticketId)}
+                  sx={{
+                    whiteSpace: 'normal',
+                    bgcolor: notif.isRead ? 'transparent' : 'action.hover',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start'
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: notif.isRead ? 'normal' : 'bold' }}>
+                    {notif.message}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {new Date(notif.createdAt).toLocaleString()}
+                  </Typography>
+                </MenuItem>
+              ))
+            )}
+          </Menu>
         </Box>
 
         {/* User menu */}

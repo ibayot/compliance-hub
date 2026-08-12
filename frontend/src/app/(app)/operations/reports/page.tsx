@@ -131,7 +131,7 @@ export default function TicketReportsPage() {
   const [selectedCategoryName, setSelectedCategoryName] = useState<string | null>(null);
   const [slaInsights, setSlaInsights] = useState<any[]>([]);
   const [slaLoading, setSlaLoading] = useState(false);
-  const [slaFilterDays, setSlaFilterDays] = useState(30);
+
   const [issueCountsData, setIssueCountsData] = useState<any[]>([]);
 
   // Period-filtered technician dropdown
@@ -237,14 +237,19 @@ export default function TicketReportsPage() {
   const fetchSlaInsights = React.useCallback(async () => {
     setSlaLoading(true);
     try {
-      const data = await ticketsApi.getSlaInsights(slaFilterDays);
+      const filters: any = { year };
+      if (periodMode === 'month') filters.month = month;
+      else if (periodMode === 'quarter') filters.quarter = quarter;
+      else if (periodMode === 'semester') filters.semester = semester;
+      
+      const data = await ticketsApi.getSlaInsights(filters);
       setSlaInsights(data);
     } catch (err) {
       console.error('Failed to fetch SLA insights', err);
     } finally {
       setSlaLoading(false);
     }
-  }, [slaFilterDays]);
+  }, [year, month, quarter, semester, periodMode]);
 
   useEffect(() => {
     if (tab === 2) fetchSlaInsights();
@@ -384,8 +389,137 @@ export default function TicketReportsPage() {
           <Tab label="Overview & Ratings" />
           <Tab label="Issues" />
           <Tab label="SLA Insights" />
+          <Tab label="Performance" />
         </Tabs>
       </Box>
+
+      {/* ── Filters ── */}
+      <Card sx={{ mb: 3, '@media print': { display: 'none' } }}>
+        <CardContent>
+          <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+            Filters
+          </Typography>
+          <Box sx={{ pb: 1 }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, '& > *': { flex: '1 1 120px' } }}>
+              <TextField
+                select
+                fullWidth
+                size="small"
+                label="Year"
+                value={year}
+                onChange={(e) => setYear(Number(e.target.value))}
+                sx={{ minWidth: 120 }}
+              >
+                {YEARS.map((y) => (
+                  <MenuItem key={y} value={y}>
+                    {y}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                fullWidth
+                size="small"
+                label="Period"
+                value={periodMode}
+                onChange={(e) => setPeriodMode(e.target.value as PeriodMode)}
+                sx={{ minWidth: 120 }}
+              >
+                <MenuItem value="month">Monthly</MenuItem>
+                <MenuItem value="quarter">Quarterly</MenuItem>
+                <MenuItem value="semester">Semester</MenuItem>
+                <MenuItem value="year">Full Year</MenuItem>
+              </TextField>
+              {periodMode === 'month' && (
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Month"
+                  value={month}
+                  onChange={(e) => setMonth(Number(e.target.value))}
+                  sx={{ minWidth: 120 }}
+                >
+                  {MONTHS.map((m) => (
+                    <MenuItem key={m.value} value={m.value}>
+                      {m.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+              {periodMode === 'quarter' && (
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Quarter"
+                  value={quarter}
+                  onChange={(e) => setQuarter(Number(e.target.value))}
+                  sx={{ minWidth: 120 }}
+                >
+                  {[1, 2, 3, 4].map((q) => (
+                    <MenuItem key={q} value={q}>
+                      Q{q}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+              {periodMode === 'semester' && (
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Semester"
+                  value={semester}
+                  onChange={(e) => setSemester(Number(e.target.value))}
+                  sx={{ minWidth: 120 }}
+                >
+                  <MenuItem value={1}>S1 (Jan–Jun)</MenuItem>
+                  <MenuItem value={2}>S2 (Jul–Dec)</MenuItem>
+                </TextField>
+              )}
+              {[0, 3].includes(tab) && (
+                <>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="Support Type"
+                    value={ticketType}
+                    onChange={(e) => setTicketType(e.target.value)}
+                    sx={{ minWidth: 120 }}
+                  >
+                    <MenuItem value="">All Types</MenuItem>
+                    <MenuItem value="desktop_support">Desktop Support</MenuItem>
+                    <MenuItem value="it_support">IT Support</MenuItem>
+                    <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
+                  </TextField>
+                  {isTicketSettingsFocal && (
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label="Technician"
+                      value={technicianId}
+                      onChange={(e) =>
+                        setTechnicianId(e.target.value === '' ? '' : Number(e.target.value))
+                      }
+                      sx={{ minWidth: 120 }}
+                    >
+                      <MenuItem value="">All Technicians</MenuItem>
+                      {technicians.map((t) => (
+                        <MenuItem key={t.id} value={t.id}>
+                          {t.firstName} {t.lastName}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
+                </>
+              )}
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
 
       {tab === 0 && (
         <Box>
@@ -421,130 +555,6 @@ export default function TicketReportsPage() {
               </Typography>
             )}
           </Box>
-
-          {/* ── Filters ── */}
-          <Card sx={{ mb: 3, '@media print': { display: 'none' } }}>
-            <CardContent>
-              <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                Filters
-              </Typography>
-              <Box sx={{ pb: 1 }}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, '& > *': { flex: '1 1 120px' } }}>
-                  <TextField
-                    select
-                    fullWidth
-                    size="small"
-                    label="Year"
-                    value={year}
-                    onChange={(e) => setYear(Number(e.target.value))}
-                    sx={{ minWidth: 120 }}
-                  >
-                    {YEARS.map((y) => (
-                      <MenuItem key={y} value={y}>
-                        {y}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                  <TextField
-                    select
-                    fullWidth
-                    size="small"
-                    label="Period"
-                    value={periodMode}
-                    onChange={(e) => setPeriodMode(e.target.value as PeriodMode)}
-                    sx={{ minWidth: 120 }}
-                  >
-                    <MenuItem value="month">Monthly</MenuItem>
-                    <MenuItem value="quarter">Quarterly</MenuItem>
-                    <MenuItem value="semester">Semester</MenuItem>
-                    <MenuItem value="year">Full Year</MenuItem>
-                  </TextField>
-                {periodMode === 'month' && (
-                    <TextField
-                      select
-                      fullWidth
-                      size="small"
-                      label="Month"
-                      value={month}
-                      onChange={(e) => setMonth(Number(e.target.value))}
-                      sx={{ minWidth: 120 }}
-                    >
-                      {MONTHS.map((m) => (
-                        <MenuItem key={m.value} value={m.value}>
-                          {m.label}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                )}
-                {periodMode === 'quarter' && (
-                    <TextField
-                      select
-                      fullWidth
-                      size="small"
-                      label="Quarter"
-                      value={quarter}
-                      onChange={(e) => setQuarter(Number(e.target.value))}
-                      sx={{ minWidth: 120 }}
-                    >
-                      {[1, 2, 3, 4].map((q) => (
-                        <MenuItem key={q} value={q}>
-                          Q{q}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                )}
-                {periodMode === 'semester' && (
-                    <TextField
-                      select
-                      fullWidth
-                      size="small"
-                      label="Semester"
-                      value={semester}
-                      onChange={(e) => setSemester(Number(e.target.value))}
-                      sx={{ minWidth: 120 }}
-                    >
-                      <MenuItem value={1}>S1 (Jan–Jun)</MenuItem>
-                      <MenuItem value={2}>S2 (Jul–Dec)</MenuItem>
-                    </TextField>
-                )}
-                  <TextField
-                    select
-                    fullWidth
-                    size="small"
-                    label="Support Type"
-                    value={ticketType}
-                    onChange={(e) => setTicketType(e.target.value)}
-                    sx={{ minWidth: 120 }}
-                  >
-                    <MenuItem value="">All Types</MenuItem>
-                    <MenuItem value="desktop_support">Desktop Support</MenuItem>
-                    <MenuItem value="it_support">IT Support</MenuItem>
-                    <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
-                  </TextField>
-                {isTicketSettingsFocal && (
-                    <TextField
-                      select
-                      fullWidth
-                      size="small"
-                      label="Technician"
-                      value={technicianId}
-                      onChange={(e) =>
-                        setTechnicianId(e.target.value === '' ? '' : Number(e.target.value))
-                      }
-                      sx={{ minWidth: 120 }}
-                    >
-                      <MenuItem value="">All Technicians</MenuItem>
-                      {technicians.map((t) => (
-                        <MenuItem key={t.id} value={t.id}>
-                          {t.firstName} {t.lastName}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                )}
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
 
           {loading && (
             <Box textAlign="center" py={4}>
@@ -742,7 +752,7 @@ export default function TicketReportsPage() {
                                 No data for this period.
                               </Typography>
                             ) : (
-                              <ResponsiveContainer width="100%" height={220}>
+                              <ResponsiveContainer width="100%" height={320}>
                                 <PieChart>
                                   <Pie
                                     data={pieData}
@@ -781,7 +791,7 @@ export default function TicketReportsPage() {
                               <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                                 Escalation Outcome
                               </Typography>
-                              <ResponsiveContainer width="100%" height={220}>
+                              <ResponsiveContainer width="100%" height={320}>
                                 <PieChart>
                                   <Pie
                                     data={escalationPieData}
@@ -799,7 +809,7 @@ export default function TicketReportsPage() {
                                     ))}
                                   </Pie>
                                   <Tooltip />
-                                  <Legend />
+                                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
                                 </PieChart>
                               </ResponsiveContainer>
                             </CardContent>
@@ -847,7 +857,7 @@ export default function TicketReportsPage() {
                               <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                                 SLA Performance
                               </Typography>
-                              <ResponsiveContainer width="100%" height={220}>
+                              <ResponsiveContainer width="100%" height={320}>
                                 <PieChart>
                                   <Pie
                                     data={slaPieData}
@@ -890,7 +900,7 @@ export default function TicketReportsPage() {
                                     ))}
                                   </Pie>
                                   <Tooltip />
-                                  <Legend />
+                                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
                                 </PieChart>
                               </ResponsiveContainer>
                             </CardContent>
@@ -918,7 +928,7 @@ export default function TicketReportsPage() {
                                 No data.
                               </Typography>
                             ) : (
-                              <ResponsiveContainer width="100%" height={220}>
+                              <ResponsiveContainer width="100%" height={320}>
                                 <PieChart>
                                   <Pie
                                     data={pieData}
@@ -969,7 +979,7 @@ export default function TicketReportsPage() {
                                   <XAxis dataKey="issueName" tick={{ fontSize: 11 }} />
                                   <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
                                   <Tooltip formatter={(v: number) => v.toFixed(2)} />
-                                  <Legend />
+                                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
                                   <Bar
                                     dataKey="avg"
                                     name="Avg Rating"
@@ -1003,7 +1013,7 @@ export default function TicketReportsPage() {
                                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                                   <Tooltip />
-                                  <Legend />
+                                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
                                   <Bar
                                     dataKey="tickets"
                                     name="Total Tickets"
@@ -1086,71 +1096,6 @@ export default function TicketReportsPage() {
                     </>
                   )}
 
-                  {/* SLA by Category */}
-                  {result!.slaByType && result!.slaByType.length > 0 && (
-                    <Grid item xs={12} md={6}>
-                      <Card>
-                        <CardContent>
-                          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                            SLA by Category
-                          </Typography>
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Category</TableCell>
-                                <TableCell align="right">Met</TableCell>
-                                <TableCell align="right">Missed</TableCell>
-                                <TableCell align="right">Avg Time (hrs)</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {result!.slaByType.map((row) => (
-                                <TableRow key={row.type}>
-                                  <TableCell>{row.type || 'Unknown'}</TableCell>
-                                  <TableCell align="right">{row.met}</TableCell>
-                                  <TableCell align="right">{row.missed}</TableCell>
-                                  <TableCell align="right">{row.avgResolutionTimeHours}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  )}
-
-                  {/* SLA by Technician */}
-                  {result!.slaByTechnician && result!.slaByTechnician.length > 0 && (
-                    <Grid item xs={12} md={6}>
-                      <Card>
-                        <CardContent>
-                          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                            SLA by Technician
-                          </Typography>
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Technician</TableCell>
-                                <TableCell align="right">Met</TableCell>
-                                <TableCell align="right">Missed</TableCell>
-                                <TableCell align="right">Avg Time (hrs)</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {result!.slaByTechnician.map((row) => (
-                                <TableRow key={row.techId}>
-                                  <TableCell>{row.techName}</TableCell>
-                                  <TableCell align="right">{row.met}</TableCell>
-                                  <TableCell align="right">{row.missed}</TableCell>
-                                  <TableCell align="right">{row.avgResolutionTimeHours}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  )}
                 </Grid>
               </>
             )}
@@ -1350,7 +1295,7 @@ export default function TicketReportsPage() {
                         ))}
                       </Pie>
                       <Tooltip />
-                      <Legend />
+                      <Legend wrapperStyle={{ paddingTop: '20px' }} />
                     </PieChart>
                   </Box>
                 )}
@@ -1530,6 +1475,150 @@ export default function TicketReportsPage() {
         </Box>
       )}
 
+
+      {tab === 3 && result && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="h6" fontWeight={700} gutterBottom>
+            Performance Metrics
+          </Typography>
+          <Grid container spacing={3}>
+            {/* SLA Pie */}
+            {slaPieData.length > 0 && (
+              <Grid item xs={12}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                      SLA Performance
+                    </Typography>
+                    <ResponsiveContainer width="100%" height={320}>
+                      <PieChart>
+                        <Pie
+                          data={slaPieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={40}
+                          outerRadius={80}
+                          dataKey="value"
+                          labelLine={false}
+                          label={({ cx, cy, midAngle, innerRadius, outerRadius, value }) => {
+                            const RADIAN = Math.PI / 180;
+                            const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                            const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                            const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                            return (
+                              <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12}>
+                                {value}
+                              </text>
+                            );
+                          }}
+                        >
+                          {slaPieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.name === "Met SLA" ? "#2e7d32" : entry.name === "Missed SLA" ? "#d32f2f" : "#757575"} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend wrapperStyle={{ paddingTop: "20px" }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
+
+            {/* SLA by Category */}
+            {result.slaByType && result.slaByType.length > 0 && (
+              <Grid item xs={12}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>SLA by Category</Typography>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Category</TableCell>
+                          <TableCell align="right">Met</TableCell>
+                          <TableCell align="right">Missed</TableCell>
+                          <TableCell align="right">Avg Time (hrs)</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {result.slaByType.map((row) => (
+                          <TableRow key={row.type}>
+                            <TableCell>{TYPE_LABELS[row.type] ?? row.type}</TableCell>
+                            <TableCell align="right">{row.met}</TableCell>
+                            <TableCell align="right">{row.missed}</TableCell>
+                            <TableCell align="right">{row.avgResolutionTimeHours}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
+
+            {/* SLA by Technician */}
+            {result.slaByTechnician && result.slaByTechnician.length > 0 && (
+              <Grid item xs={12}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>SLA by Technician</Typography>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Technician</TableCell>
+                          <TableCell align="right">Met</TableCell>
+                          <TableCell align="right">Missed</TableCell>
+                          <TableCell align="right">Avg Time (hrs)</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {result.slaByTechnician.map((row) => (
+                          <TableRow key={row.techId}>
+                            <TableCell>{row.techName}</TableCell>
+                            <TableCell align="right">{row.met}</TableCell>
+                            <TableCell align="right">{row.missed}</TableCell>
+                            <TableCell align="right">{row.avgResolutionTimeHours}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
+            
+            {/* Technician Performance Detail */}
+            {result.avgRatingByTechnician.length > 0 && (
+              <Grid item xs={12}>
+                <Card><CardContent>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>Technician Performance Detail</Typography>
+                  <Table size="small" sx={{ mb: 4 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Technician</TableCell>
+                        <TableCell align="right">Resolved Tickets</TableCell>
+                        <TableCell align="right">Rated Tickets</TableCell>
+                        <TableCell align="right">Average Rating</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {result.avgRatingByTechnician.map((row) => (
+                        <TableRow key={row.techId}>
+                          <TableCell>{row.techName}</TableCell>
+                          <TableCell align="right">{row.count}</TableCell>
+                          <TableCell align="right">{row.ratedCount ?? 0}</TableCell>
+                          <TableCell align="right">{row.avg.toFixed(2)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent></Card>
+              </Grid>
+            )}
+          </Grid>
+        </Box>
+      )}
+
       {/* ── Tab 1: Issues ── */}
       {tab === 1 && result && issueCountsData && (
         <Box sx={{ mt: 2 }}>
@@ -1701,17 +1790,7 @@ export default function TicketReportsPage() {
             <Typography variant="body2" color="text.secondary">
               Compare configured SLA hours against the actual average resolution time for each issue.
             </Typography>
-            <TextField
-              select
-              size="small"
-              value={slaFilterDays}
-              onChange={(e) => setSlaFilterDays(Number(e.target.value))}
-              sx={{ width: 150 }}
-            >
-              <MenuItem value={30}>Last 30 Days</MenuItem>
-              <MenuItem value={90}>Last 90 Days</MenuItem>
-              <MenuItem value={365}>Last 365 Days</MenuItem>
-            </TextField>
+
           </Box>
 
           <Card sx={{ mb: 3 }}>

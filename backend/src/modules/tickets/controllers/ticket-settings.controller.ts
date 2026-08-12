@@ -406,8 +406,18 @@ export class TicketSettingsController {
   @UseGuards(CapabilityGuard)
   @RequireCapability('isTicketSettingsFocal')
   @Roles(...ALL_STAFF_ROLES)
-  async getSlaInsights(@Query('days') days?: string) {
-    const d = days ? Number(days) : 30;
-    return this.settingsService.getSlaInsights(d);
+  async getSlaInsights(
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+    @Query('quarter') quarter?: string,
+    @Query('semester') semester?: string,
+  ) {
+    const filters = {
+      year: year ? Number(year) : undefined,
+      month: month ? Number(month) : undefined,
+      quarter: quarter ? Number(quarter) : undefined,
+      semester: semester ? Number(semester) : undefined,
+    };
+    return this.settingsService.getSlaInsights(filters);
   }
 }

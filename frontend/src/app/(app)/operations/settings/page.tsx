@@ -109,6 +109,7 @@ export default function TicketSettingsPage() {
     slaHours: string;
     allowablePauseHours: string;
     isActive: boolean;
+    maxFreezeHours: string;
   }>({
     name: '',
     description: '',
@@ -116,6 +117,7 @@ export default function TicketSettingsPage() {
     slaHours: '24',
     allowablePauseHours: '48',
     isActive: true,
+    maxFreezeHours: '',
   });
   const [issueSearch, setIssueSearch] = useState('');
   const [issueSubmitting, setIssueSubmitting] = useState(false);
@@ -499,6 +501,7 @@ export default function TicketSettingsPage() {
         slaHours: issue.slaHours != null ? String(issue.slaHours) : '',
         allowablePauseHours: String(issue.allowablePauseHours ?? 48),
         isActive: issue.isActive,
+        maxFreezeHours: issue.maxFreezeHours != null ? String(issue.maxFreezeHours) : '',
       });
     } else {
       setEditIssue(null);
@@ -509,6 +512,7 @@ export default function TicketSettingsPage() {
         slaHours: '24',
         allowablePauseHours: '48',
         isActive: true,
+        maxFreezeHours: '',
       });
     }
     setIssueDialogOpen(true);
@@ -525,6 +529,7 @@ export default function TicketSettingsPage() {
     }
 
     const parsedPause = issueForm.allowablePauseHours ? Number(issueForm.allowablePauseHours) : 48;
+    const parsedFreeze = issueForm.maxFreezeHours ? Number(issueForm.maxFreezeHours) : null;
     if (parsedPause < 0 || parsedPause > 168) {
       enqueueSnackbar('Allowable Pause Hours must be between 0 and 168', { variant: 'warning' });
       return;
@@ -535,7 +540,8 @@ export default function TicketSettingsPage() {
       const payload = {
         ...issueForm,
         slaHours: parsedSla,
-        allowablePauseHours: parsedPause
+        allowablePauseHours: parsedPause,
+        maxFreezeHours: parsedFreeze
       };
       if (editIssue) {
         await ticketSettingsApi.updateIssueType(editIssue.id, payload);
@@ -766,6 +772,7 @@ export default function TicketSettingsPage() {
                         </TableCell>
                         <TableCell>{iss.slaHours != null ? `${iss.slaHours}h` : '—'}</TableCell>
                         <TableCell>{iss.allowablePauseHours ?? 48}h</TableCell>
+                        <TableCell>{iss.maxFreezeHours != null ? `${iss.maxFreezeHours}h` : 'Unlimited'}</TableCell>
                         <TableCell>
                           <Chip
                             label={iss.isActive ? 'Active' : 'Inactive'}
@@ -1413,23 +1420,48 @@ export default function TicketSettingsPage() {
             />
             <TextField
               label="SLA Time Limit (hours)"
-                type="number"
-                inputProps={{ min: 1, max: 99, maxLength: 2 }}
+              type="text"
+              inputMode="numeric"
+              inputProps={{ min: 1, max: 99, maxLength: 2 }}
               fullWidth
               size="small"
               value={issueForm.slaHours}
-              onChange={(e) => setIssueForm({ ...issueForm, slaHours: e.target.value })}
+              onChange={(e) => {
+                let val = e.target.value.replace(/\D/g, '');
+                if (val !== '' && Number(val) > 99) val = '99';
+                setIssueForm({ ...issueForm, slaHours: val });
+              }}
               helperText="Optional. Enter hours > 0."
             />
             <TextField
               label="Allowable Pause Hours *"
-                type="number"
+                type="text"
+                inputMode="numeric"
                 inputProps={{ min: 0, max: 120, maxLength: 3 }}
               fullWidth
               size="small"
               value={issueForm.allowablePauseHours}
-              onChange={(e) => setIssueForm({ ...issueForm, allowablePauseHours: e.target.value })}
-              helperText="Maximum allowed cumulative pause hours before SLA freeze is rejected."
+              onChange={(e) => {
+                let val = e.target.value.replace(/\D/g, '');
+                if (val !== '' && Number(val) > 120) val = '120';
+                setIssueForm({ ...issueForm, allowablePauseHours: val })
+              }}
+              helperText="Maximum allowed cumulative pause hours before SLA pause is rejected."
+            />
+            <TextField
+              label="Max Freeze Hours"
+              type="text"
+              inputMode="numeric"
+              inputProps={{ min: 1, max: 720, maxLength: 3 }}
+              fullWidth
+              size="small"
+              value={issueForm.maxFreezeHours}
+              onChange={(e) => {
+                let val = e.target.value.replace(/\D/g, '');
+                if (val !== '' && Number(val) > 720) val = '720';
+                setIssueForm({ ...issueForm, maxFreezeHours: val });
+              }}
+              helperText="Optional. Max hours a ticket can stay frozen. Leave blank for unlimited."
             />
             <FormControlLabel
               control={

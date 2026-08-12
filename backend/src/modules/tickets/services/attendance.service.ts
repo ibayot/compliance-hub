@@ -7,13 +7,16 @@ import {
   BadRequestException,
   OnModuleInit,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { TechAttendance, AttendanceStatus } from '../entities/tech-attendance.entity';
 import { OfficeDay } from '../entities/office-day.entity';
+import { DtrView } from '../entities/dtr-view.entity';
 import { User, UserRole } from '../../shared/entities';
 import { RoleDefinitionEntity } from '../../shared/entities';
+import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { EventBusService } from '../../../common/events/event-bus.service';
 import { auditContext } from '../../../shared/audit/audit.context';
@@ -37,6 +40,11 @@ export class SetAttendanceDto {
   @IsString()
   @ApiPropertyOptional()
   notes?: string;
+  
+  @IsOptional()
+  @IsString()
+  @ApiPropertyOptional()
+  clockInTime?: string;
 }
 
 export class BulkSetAttendanceDto {
@@ -98,6 +106,7 @@ export class AttendanceService implements OnModuleInit {
   private readonly logger = new Logger(AttendanceService.name);
   private readonly excludedAttendanceEmails: string[] = [];
   private readonly excludedAttendanceRoleValues = ['user', 'super_admin'];
+  public isDtrViewOnline: boolean = true;
 
   constructor(
     @InjectRepository(TechAttendance)
@@ -108,26 +117,17 @@ export class AttendanceService implements OnModuleInit {
     private readonly userRepo: Repository<User>,
     @InjectRepository(RoleDefinitionEntity)
     private readonly roleDefRepo: Repository<RoleDefinitionEntity>,
+    @InjectRepository(DtrView)
+    private readonly dtrViewRepo: Repository<DtrView>,
+    @InjectRepository(TicketingConfig)
+    private readonly configRepo: Repository<TicketingConfig>,
     private readonly roleCapSvc: RoleCapabilitiesService,
     private readonly eventBus: EventBusService,
   ) {}
 
   async onModuleInit() {
-    this.eventBus.subscribe('user.login', (payload: { userId: number }) => {
-      if (payload && payload.userId) {
-        this.autoCorrectAbsentOnLogin(payload.userId)
-          .then(() => {
-            this.eventBus
-              .publish('attendance.verified', { userId: payload.userId })
-              .catch(() => {});
-          })
-          .catch((err) => {
-            this.logger.warn(
-              `Failed autoCorrectAbsentOnLogin for user ${payload.userId}: ${err.message}`,
-            );
-          });
-      }
-    });
+    // We no longer rely on user login for attendance.
+    // Attendance is purely driven by the DTR view (cron-synced).
   }
 
   // ── Attendance ──────────────────────────────────────────────────────────
@@ -243,6 +243,10 @@ export class AttendanceService implements OnModuleInit {
       record.status = dto.status;
       record.notes = dto.notes ?? record.notes;
       record.setById = setById;
+      record.isManualOverride = true;
+      if (dto.clockInTime !== undefined) {
+        record.clockInTime = dto.clockInTime ? new Date(dto.clockInTime) : null as any;
+      }
     } else {
       record = this.attendanceRepo.create({
         userId: dto.userId,
@@ -250,6 +254,8 @@ export class AttendanceService implements OnModuleInit {
         status: dto.status,
         notes: dto.notes ?? null,
         setById,
+        isManualOverride: true,
+        clockInTime: dto.clockInTime ? new Date(dto.clockInTime) : null,
       });
     }
 
@@ -365,7 +371,55 @@ export class AttendanceService implements OnModuleInit {
       `[getPresentTechnicians] presentRowsCount=${presentRows.length}, userIds=[${presentRows.map((r) => r.userId).join(',')}]`,
     );
     const presentIds = new Set<number>(presentRows.map((r) => r.userId));
-    return available.filter((u) => presentIds.has(u.id));
+    let presentTechs = available.filter((u) => presentIds.has(u.id));
+
+    // DTR Auto-Clock-Out Filter
+    // Only apply if the requested date is today
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+    if (date === todayStr && presentTechs.length > 0) {
+      const now = new Date();
+      // Fetch global config to know the schedule mode
+      const config = await this.configRepo.findOne({ where: { id: 1 } });
+      const isCWW = config?.scheduleMode === 'CWW';
+      const stdClockOutStr = config?.officeClockout || '17:00:00';
+
+      presentTechs = presentTechs.filter((u) => {
+        const attendanceRecord = presentRows.find(r => r.userId === u.id);
+        const clockInTime = attendanceRecord?.clockInTime;
+        
+        // Gatekeeper: Technician must have a clock_in_time entry
+        // (unless it was a manual override which we assume grants them tickets anyway)
+        if (!clockInTime && attendanceRecord?.isManualOverride === false) {
+          return false;
+        }
+
+        if (!clockInTime) return true; // manual override fallback
+
+        let isShiftActive = false;
+        
+        if (isCWW) {
+          // Compute clockOut: clockIn + 11 hours
+          const clockOutTime = new Date(clockInTime.getTime() + 11 * 3600 * 1000);
+          isShiftActive = now <= clockOutTime;
+          if (!isShiftActive) {
+            this.logger.log(`[getPresentTechnicians] Excluding user ${u.id}: CWW shift ended at ${clockOutTime.toISOString()}`);
+          }
+        } else {
+          // Standard schedule: Ticket assignment strictly stays between 8AM to 5PM (or config stdClockOutStr)
+          const clockOutTime = new Date();
+          const [hours, minutes] = stdClockOutStr.split(':').map(Number);
+          clockOutTime.setHours(hours, minutes, 0, 0);
+          isShiftActive = now <= clockOutTime;
+          if (!isShiftActive) {
+            this.logger.log(`[getPresentTechnicians] Excluding user ${u.id}: Standard shift ended at ${clockOutTime.toISOString()}`);
+          }
+        }
+        
+        return isShiftActive;
+      });
+    }
+
+    return presentTechs;
   }
 
   /** Get technicians filtered for the current session (all staff or filtered by type) */
@@ -613,5 +667,125 @@ export class AttendanceService implements OnModuleInit {
     );
 
     return staff.filter((s) => !attendedIds.has(s.id));
+  }
+
+  async getMyShift(user: User): Promise<{ clockIn: Date | null; clockOut: Date | null }> {
+    console.log('[getMyShift] Starting for user:', user.email);
+    
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+    
+    const attendanceRecord = await this.attendanceRepo.findOne({
+      where: { date: todayStr, userId: user.id }
+    });
+
+    if (!attendanceRecord || !attendanceRecord.clockInTime) {
+      return { clockIn: null, clockOut: null };
+    }
+
+    const clockIn = attendanceRecord.clockInTime;
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    const isCWW = config?.scheduleMode === 'CWW';
+    
+    if (isCWW) {
+      const clockInEndStr = config?.cwwClockinEnd || '08:00:00';
+      const [endH, endM] = clockInEndStr.split(':').map(Number);
+      const clockInEnd = new Date(clockIn);
+      clockInEnd.setHours(endH, endM, 0, 0);
+
+      if (clockIn <= clockInEnd) {
+        // Exactly 11 hours
+        const clockOut = new Date(clockIn.getTime() + 11 * 3600 * 1000);
+        return { clockIn, clockOut };
+      } else {
+        // Exactly clockout end time
+        const clockOut = new Date(clockIn);
+        const clockOutEndStr = config?.cwwClockoutEnd || '19:00:00';
+        const [outH, outM] = clockOutEndStr.split(':').map(Number);
+        clockOut.setHours(outH, outM, 0, 0);
+        return { clockIn, clockOut };
+      }
+    } else {
+      const clockOut = new Date();
+      const stdClockOutStr = config?.officeClockout || '17:00:00';
+      const [hours, minutes] = stdClockOutStr.split(':').map(Number);
+      clockOut.setHours(hours, minutes, 0, 0);
+      return { clockIn, clockOut };
+    }
+  }
+
+  getDtrSystemStatus(): { isOnline: boolean } {
+    return { isOnline: this.isDtrViewOnline };
+  }
+
+  /** Background cron job to sync attendance from the DTR view for missing staff */
+  async syncAttendanceWithDTR(): Promise<void> {
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+    
+    try {
+      // 1. Get all assignable attendance roles
+      const allRoles = await this.getAssignableAttendanceRoles();
+      if (allRoles.length === 0) return;
+
+      // 2. Get all active staff with these roles
+      const allTechs = await this.userRepo.find({
+        where: { active: true, role: In(allRoles) }
+      });
+      const validTechs = allTechs.filter(t => t.staffId); // Only those with a DTR staffId
+      if (validTechs.length === 0) return;
+
+      // 3. Query DTR View for all valid staff
+      const staffIds = validTechs.map(t => t.staffId);
+      const dtrRecords = await this.dtrViewRepo.find({
+        where: { workDate: todayStr, empCode: In(staffIds) }
+      });
+
+      this.isDtrViewOnline = true; // Connection succeeded!
+
+      // 4. Fetch existing attendance records to update
+      const existingAttendance = await this.attendanceRepo.find({
+        where: { date: todayStr, userId: In(validTechs.map(t => t.id)) }
+      });
+
+      // 5. Upsert the records
+      for (const dtr of dtrRecords) {
+        if (!dtr.firstClockInTime) continue;
+
+        const tech = validTechs.find(t => t.staffId === dtr.empCode);
+        if (!tech) continue;
+
+        const existingRecord = existingAttendance.find(a => a.userId === tech.id);
+        
+        // If the existing record is manual override and already has clock in time, we might skip it or still update it.
+        // User requested: "The sync should happen regardless if the RICTMS staff has an entry in attendance table for the current day... The notes column should indicate Marked present on sync."
+        
+        await auditContext.run(
+          { email: 'system@dswd.gov.ph', ipAddress: 'DTR-Cron', sessionId: 'dtr-sync' },
+          async () => {
+            if (existingRecord) {
+              existingRecord.clockInTime = dtr.firstClockInTime;
+              existingRecord.status = AttendanceStatus.PRESENT;
+              existingRecord.notes = 'Marked present on sync.';
+              await this.attendanceRepo.save(existingRecord);
+            } else {
+              const newRecord = this.attendanceRepo.create({
+                userId: tech.id,
+                date: todayStr,
+                status: AttendanceStatus.PRESENT,
+                clockInTime: dtr.firstClockInTime,
+                isManualOverride: false,
+                notes: 'Marked present on sync.',
+              });
+              await this.attendanceRepo.save(newRecord);
+            }
+          }
+        );
+        
+        // Trigger assignment
+        this.eventBus.publish('attendance.verified', { userId: tech.id }).catch(() => {});
+      }
+    } catch (err: any) {
+      this.logger.error(`Failed to sync DTR attendance: ${err.message}`);
+      this.isDtrViewOnline = false; // Mark system as offline so Fallback UI kicks in
+    }
   }
 }

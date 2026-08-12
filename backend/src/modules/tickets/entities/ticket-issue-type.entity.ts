@@ -36,6 +36,10 @@ export class TicketIssueType {
   @Column({ name: 'allowable_pause_hours', type: 'int', default: 48 })
   allowablePauseHours: number;
 
+  /** Maximum time limit in hours a ticket can stay on hold (frozen) — null = unlimited */
+  @Column({ name: 'max_freeze_hours', type: 'int', nullable: true })
+  maxFreezeHours: number | null;
+
   @Column({ type: 'int', nullable: true })
   created_by: number | null;
 

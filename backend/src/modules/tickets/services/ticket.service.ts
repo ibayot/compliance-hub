@@ -21,6 +21,8 @@ import { TicketEvent } from '../entities/ticket-event.entity';
 import { TicketEscalation, EscalationStatus } from '../entities/ticket-escalation.entity';
 import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
+import { TicketStatusJustification } from '../entities/ticket-status-justification.entity';
+import { TicketNotification } from '../entities/ticket-notification.entity';
 import { UserRole } from '../../shared/entities';
 import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
 import { TicketSettingsService } from './ticket-settings.service';
@@ -116,6 +118,10 @@ export class UpdateTicketDto {
   @IsString()
   @ApiPropertyOptional()
   categoryId?: string;
+  @IsOptional()
+  @IsString()
+  @ApiPropertyOptional()
+  statusJustification?: string;
 }
 
 export class AssignTicketDto {
@@ -249,9 +255,13 @@ export class TicketService implements OnModuleInit {
     private readonly escalationRepo: Repository<TicketEscalation>,
     @InjectRepository(TicketingConfig)
     private readonly configRepo: Repository<TicketingConfig>,
+    @InjectRepository(TicketStatusJustification)
+    private readonly justificationRepo: Repository<TicketStatusJustification>,
     private readonly usersHttpClient: UsersHttpClient,
     @InjectRepository(TicketEvent)
     private readonly eventRepo: Repository<TicketEvent>,
+    @InjectRepository(TicketNotification)
+    private readonly notificationRepo: Repository<TicketNotification>,
     @InjectRepository(EscalationFocalConfig)
     private readonly escalationFocalRepo: Repository<EscalationFocalConfig>,
     private readonly dataSource: DataSource,
@@ -479,6 +489,25 @@ export class TicketService implements OnModuleInit {
   }
 
   /** Return all events for a ticket, ordered chronologically, with actor info */
+
+  async sendNotification(userIds: number[], ticketId: string, eventType: string, message: string) {
+    if (!userIds || userIds.length === 0) return;
+    try {
+      const notifications = userIds.map(userId => this.notificationRepo.create({
+        userId,
+        ticketId,
+        eventType,
+        message,
+      }));
+      await this.notificationRepo.save(notifications);
+      this.logger.log(`Created ${notifications.length} notifications for ticket ${ticketId}`);
+    } catch (e) {
+      this.logger.error("Failed to send notification: " + e.message);
+    }
+  }
+
+
+
   async getTicketEvents(
     ticketId: string,
     viewerId?: number,
@@ -1201,6 +1230,7 @@ export class TicketService implements OnModuleInit {
     actorRole: UserRole,
   ): Promise<Ticket> {
     const ticket = await this.getTicketById(id, actorRole, actorId);
+    const originalStatusForLogging = ticket.status as TicketStatus;
     const latestEscalation = await this.escalationRepo.findOne({
       where: { ticketId: id },
       order: { createdAt: 'DESC' },
@@ -1512,7 +1542,22 @@ export class TicketService implements OnModuleInit {
           );
         }
 
+        // const originalStatus = ticket.status as TicketStatus; // Removed hoisting here
+
         // --- SLA Freezing Logic ---
+        if ([TicketStatus.FREEZE, TicketStatus.PAUSE].includes(dto.status as TicketStatus)) {
+          if (!dto.statusJustification || !dto.statusJustification.trim()) {
+            throw new BadRequestException(`A justification is required when setting the status to ${dto.status.toUpperCase()}.`);
+          }
+          const justif = this.justificationRepo.create({
+            ticketId: ticket.id,
+            status: dto.status,
+            justification: dto.statusJustification.trim(),
+            createdBy: actorId,
+          });
+          await this.justificationRepo.save(justif);
+        }
+
         const wasPaused =
           [TicketStatus.FREEZE, TicketStatus.PAUSE, TicketStatus.OPEN].includes(ticket.status as TicketStatus) ||
           ticket.isSlaWaiting;
@@ -1555,7 +1600,6 @@ export class TicketService implements OnModuleInit {
           ticket.isSlaWaiting = false;
         }
 
-        const originalStatus = ticket.status as TicketStatus;
         ticket.status = dto.status;
 
         if (dto.status === TicketStatus.IN_PROGRESS) {
@@ -1567,7 +1611,7 @@ export class TicketService implements OnModuleInit {
         // We only push back ASSIGNED tickets so that multiple IN_PROGRESS tickets can run concurrently.
         if (
           dto.status === TicketStatus.IN_PROGRESS &&
-          [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(originalStatus) &&
+          [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(originalStatusForLogging) &&
           ticket.assignedToId
         ) {
           const currentActiveTickets = await this.ticketRepo.find({
@@ -1780,10 +1824,29 @@ export class TicketService implements OnModuleInit {
 
     // Log status/priority change event
     if (dto.status) {
-      this.logEvent(saved.id, 'status_changed', actorId, {
-        to: dto.status,
-        resolutionNotes: dto.resolutionNotes ?? undefined,
-      }).catch(() => { });
+      if ([TicketStatus.FREEZE, TicketStatus.PAUSE].includes(dto.status as TicketStatus) && originalStatusForLogging === dto.status) {
+        this.logEvent(saved.id, 'status_extended', actorId, {
+          to: dto.status,
+          justification: dto.statusJustification?.trim(),
+        }).catch(() => { });
+      } else {
+        this.logEvent(saved.id, 'status_changed', actorId, {
+          to: dto.status,
+          resolutionNotes: dto.resolutionNotes ?? undefined,
+          justification: dto.statusJustification?.trim() ?? undefined,
+        }).catch(() => { });
+      }
+
+      // In-app notification
+      const notifyUsers = [];
+      if (ticket.requesterId && ticket.requesterId !== actorId) notifyUsers.push(ticket.requesterId);
+      if (ticket.assignedToId && ticket.assignedToId !== actorId) notifyUsers.push(ticket.assignedToId);
+      this.sendNotification(
+        notifyUsers,
+        saved.id,
+        'status_changed',
+        `Ticket ${saved.ticketNumber} status changed to ${dto.status}`,
+      ).catch(() => {});
 
       if (dto.status === TicketStatus.RESOLVED && ticket.requester?.email) {
         this.emailService
@@ -2118,12 +2181,30 @@ export class TicketService implements OnModuleInit {
     const assigned = await this.ticketRepo.save(ticket);
 
     // Log assignment event
-    this.logEvent(assigned.id, 'manually_assigned', actorId ?? null, {
+    const eventType = previousAssigneeId && previousAssigneeId !== dto.assignedToId ? 'manually_reassigned' : 'manually_assigned';
+    this.logEvent(assigned.id, eventType, actorId ?? null, {
       technicianId: technician.id,
       technicianName:
         [technician.first_name, technician.last_name].filter(Boolean).join(' ') || technician.email,
       previousAssignee: previousAssigneeId !== dto.assignedToId ? previousAssigneeId : undefined,
     }).catch(() => { });
+
+    // Send in-app notification for manual assignment/reassignment
+    this.sendNotification(
+      [dto.assignedToId],
+      assigned.id,
+      eventType,
+      `Ticket ${assigned.ticketNumber} has been ${eventType === 'manually_reassigned' ? 'reassigned' : 'assigned'} to you`
+    ).catch(() => { });
+
+    if (previousAssigneeId && previousAssigneeId !== dto.assignedToId) {
+      this.sendNotification(
+        [previousAssigneeId],
+        assigned.id,
+        'unassigned',
+        `Ticket ${assigned.ticketNumber} has been reassigned to another staff member.`
+      ).catch(() => { });
+    }
 
     // Send assignment notification email (fire-and-forget)
     this.emailService
@@ -2223,6 +2304,20 @@ export class TicketService implements OnModuleInit {
       ticket.hasUnreadUser = true;
     }
     await this.ticketRepo.save(ticket);
+
+    // In-app notification
+    const notifyUsers = [];
+    if (actorRole === UserRole.USER) {
+      if (ticket.assignedToId) notifyUsers.push(ticket.assignedToId);
+    } else {
+      if (!isInternal && ticket.requesterId) notifyUsers.push(ticket.requesterId);
+    }
+    this.sendNotification(
+      notifyUsers,
+      ticket.id,
+      'comment_added',
+      `New comment on ticket ${ticket.ticketNumber}`,
+    ).catch(() => {});
 
     return savedComment;
   }
@@ -3198,8 +3293,8 @@ export class TicketService implements OnModuleInit {
   }> {
     const now = new Date();
     const year = filters.year ?? now.getFullYear();
-    const isTicketSettingsViewer = this.roleCapSvc.isTicketSettingsFocal(filters.viewerRole || '');
-
+    const isSuperAdmin = filters.viewerRole === 'super_admin';
+    const isTicketSettingsViewer = isSuperAdmin || this.roleCapSvc.isTicketSettingsFocal(filters.viewerRole || '');
     const isTechnician =
       filters.viewerRole &&
       !isTicketSettingsViewer &&
@@ -3604,6 +3699,13 @@ export class TicketService implements OnModuleInit {
       hasProof: savedPaths.length > 0,
     }).catch(() => { });
 
+    this.sendNotification(
+      [dto.escalatedToId],
+      ticketId,
+      'escalation_received',
+      `You received an escalation request for ticket ${ticket.ticketNumber}`,
+    ).catch(() => {});
+
     return saved;
   }
 
@@ -3628,7 +3730,9 @@ export class TicketService implements OnModuleInit {
 
     // Auto-transition ticket to in_progress and assign to focal when escalation is accepted
     const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
+    let previousAssigneeId: number | null = null;
     if (ticket) {
+      previousAssigneeId = ticket.assignedToId;
       ticket.assignedToId = actorId;
       ticket.lastAssignedAt = new Date();
       ticket.isSlaWaiting = false;
@@ -3646,6 +3750,22 @@ export class TicketService implements OnModuleInit {
       }
     }
     this.logEvent(ticketId, 'escalation_accepted', actorId).catch(() => { });
+
+    this.sendNotification(
+      [escalation.escalatedById],
+      ticketId,
+      'escalation_accepted',
+      `Your escalation request for ticket ${ticket?.ticketNumber} was accepted`,
+    ).catch(() => {});
+
+    if (ticket && previousAssigneeId && previousAssigneeId !== actorId) {
+      this.sendNotification(
+        [previousAssigneeId],
+        ticketId,
+        'unassigned',
+        `Ticket ${ticket.ticketNumber} has been reassigned to another staff member due to an accepted escalation.`
+      ).catch(() => { });
+    }
 
     return escalation;
   }
@@ -3676,6 +3796,13 @@ export class TicketService implements OnModuleInit {
     this.logEvent(ticketId, 'escalation_returned', actorId, { reason: dto.returnReason }).catch(
       () => { },
     );
+    
+    this.sendNotification(
+      [escalation.escalatedById],
+      ticketId,
+      'escalation_declined',
+      `Your escalation request was declined`,
+    ).catch(() => {});
     return this.escalationRepo.save(escalation);
   }
 
@@ -4445,6 +4572,156 @@ export class TicketService implements OnModuleInit {
         }
       }
     }
+  }
+
+  async getPerformanceMetrics(filters: {
+    year?: number;
+    month?: number;
+    quarter?: number;
+    semester?: number;
+    technicianId?: number;
+    ticketType?: string;
+    viewerId?: number;
+    viewerRole?: string;
+  }) {
+    const isTicketSettingsViewer = this.roleCapSvc.isTicketSettingsFocal(filters.viewerRole || '');
+    const isTechnician =
+      filters.viewerRole &&
+      !isTicketSettingsViewer &&
+      this.roleCapSvc.isTechnician(filters.viewerRole);
+
+    const techIdFilter = isTechnician
+      ? filters.viewerId
+      : isTicketSettingsViewer
+        ? filters.technicianId
+        : undefined;
+
+    const qb = this.ticketRepo
+      .createQueryBuilder('ticket')
+      .leftJoinAndSelect('ticket.assignedTo', 'assignedTo')
+      
+      .where("ticket.status != 'duplicate'");
+
+    if (filters.year) qb.andWhere('YEAR(ticket.createdAt) = :year', { year: filters.year });
+    if (filters.month) qb.andWhere('MONTH(ticket.createdAt) = :month', { month: filters.month });
+    if (filters.quarter) qb.andWhere('QUARTER(ticket.createdAt) = :quarter', { quarter: filters.quarter });
+    if (filters.semester) {
+      if (filters.semester === 1) qb.andWhere('MONTH(ticket.createdAt) BETWEEN 1 AND 6');
+      else qb.andWhere('MONTH(ticket.createdAt) BETWEEN 7 AND 12');
+    }
+    if (techIdFilter) qb.andWhere('ticket.assignedToId = :techId', { techId: techIdFilter });
+    if (filters.ticketType) qb.andWhere('ticket.ticketType = :ticketType', { ticketType: filters.ticketType });
+
+    const tickets = await qb.getMany();
+
+    const avgResolutionByTechnician: any[] = [];
+    const slaComplianceByMonthMap = new Map<string, { met: number; missed: number }>();
+    const escalationRateByTechnician: any[] = [];
+
+    const techStats = new Map<number, { techName: string; totalHours: number; resCount: number; totalTickets: number; escalatedCount: number }>();
+
+    const ticketIds = tickets.map(t => t.id);
+    const escalationsMap = new Map();
+    if (ticketIds.length > 0) {
+      const escalations = await this.escalationRepo.createQueryBuilder('esc')
+        .where('esc.ticketId IN (:...ticketIds)', { ticketIds })
+        .getMany();
+      escalations.forEach(e => {
+        escalationsMap.set(e.ticketId, true);
+      });
+    }
+
+    for (const t of tickets) {
+      const monthLabel = t.createdAt.toLocaleString('default', { month: 'short' });
+      if (!slaComplianceByMonthMap.has(monthLabel)) {
+        slaComplianceByMonthMap.set(monthLabel, { met: 0, missed: 0 });
+      }
+      
+      const isResolvedOrClosed = t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED;
+
+      let missed = false;
+      if (t.slaDeadline) {
+        if (t.resolvedAt) {
+          missed = t.resolvedAt > t.slaDeadline;
+        } else {
+          missed = new Date() > t.slaDeadline;
+        }
+      }
+
+      if (missed) {
+        slaComplianceByMonthMap.get(monthLabel)!.missed += 1;
+      } else if (isResolvedOrClosed) {
+        slaComplianceByMonthMap.get(monthLabel)!.met += 1;
+      }
+
+      if (t.assignedToId && t.assignedTo) {
+        if (!techStats.has(t.assignedToId)) {
+          techStats.set(t.assignedToId, {
+            techName: [t.assignedTo.first_name, t.assignedTo.last_name].filter(Boolean).join(' ') || t.assignedTo.email,
+            totalHours: 0,
+            resCount: 0,
+            totalTickets: 0,
+            escalatedCount: 0,
+          });
+        }
+        
+        const stat = techStats.get(t.assignedToId)!;
+        stat.totalTickets += 1;
+        
+        if (escalationsMap.has(t.id)) {
+          stat.escalatedCount += 1;
+        }
+
+        if (isResolvedOrClosed && t.resolvedAt) {
+          const ms = t.resolvedAt.getTime() - t.createdAt.getTime();
+          stat.totalHours += ms / (1000 * 60 * 60);
+          stat.resCount += 1;
+        }
+      }
+    }
+
+    const monthsOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const slaComplianceByMonth = monthsOrder
+      .filter(m => slaComplianceByMonthMap.has(m))
+      .map(m => {
+        const data = slaComplianceByMonthMap.get(m)!;
+        const total = data.met + data.missed;
+        return {
+          month: m,
+          met: data.met,
+          missed: data.missed,
+          rate: total > 0 ? (data.met / total) * 100 : 0
+        };
+      });
+
+    for (const [techId, stat] of techStats.entries()) {
+      if (stat.resCount > 0) {
+        avgResolutionByTechnician.push({
+          techId,
+          techName: stat.techName,
+          avgHours: stat.totalHours / stat.resCount,
+          count: stat.resCount
+        });
+      }
+      if (stat.totalTickets > 0) {
+        escalationRateByTechnician.push({
+          techId,
+          techName: stat.techName,
+          totalTickets: stat.totalTickets,
+          escalatedCount: stat.escalatedCount,
+          rate: (stat.escalatedCount / stat.totalTickets) * 100
+        });
+      }
+    }
+
+    avgResolutionByTechnician.sort((a, b) => a.avgHours - b.avgHours);
+    escalationRateByTechnician.sort((a, b) => b.rate - a.rate);
+
+    return {
+      avgResolutionByTechnician,
+      slaComplianceByMonth,
+      escalationRateByTechnician
+    };
   }
 
   async getIssueCountsReport(filters: {

@@ -126,6 +126,8 @@ function mapAttendance(a: any) {
     date: a.date,
     status: a.status,
     setById: a.setById,
+    clockInTime: a.clockInTime ?? null,
+    isManualOverride: a.isManualOverride ?? false,
     user: mapUser(a.user),
     setBy: mapUser(a.setBy),
   };
@@ -153,6 +155,21 @@ export class AttendanceController {
 
   // ── Attendance ──────────────────────────────────────────────────────────
 
+  /** GET /attendance/system-status */
+  @Get('system-status')
+  async getSystemStatus() {
+    return this.attendanceService.getDtrSystemStatus();
+  }
+
+  /** GET /attendance/my-shift */
+  @Get('my-shift')
+  async getMyShift(@Request() req: any) {
+    // The JwtAuthGuard populates req.user. We need the full user entity to get staffId
+    // But req.user might already have it if it's in the JWT, else we can fetch it, 
+    // Wait, the AttendanceService.getMyShift expects a User entity. Let's see how req.user is mapped.
+    return this.attendanceService.getMyShift(req.user);
+  }
+
   /** GET /attendance?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&ticketType= */
   @Get()
   @UseGuards(CapabilityGuard)
@@ -178,6 +195,18 @@ export class AttendanceController {
   @HttpCode(HttpStatus.OK)
   async setAttendance(@Body() dto: SetAttendanceDto, @Request() req: any) {
     this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
+    
+    // Check if user is trying to set PRESENT manually
+    if (dto.status === 'present' as any) {
+      const systemStatus = this.attendanceService.getDtrSystemStatus();
+      if (systemStatus.isOnline) {
+        throw new ForbiddenException('Cannot manually set PRESENT while DTR sync is online. Please use the fallback override only when the system is down.');
+      }
+      if (!this.roleCapSvc.isAttendanceManage(req.user?.role)) {
+        throw new ForbiddenException('Only Attendance Admins can use the fallback PRESENT override.');
+      }
+    }
+
     const record = await this.attendanceService.setAttendance(dto, req.user.id ?? req.user.userId, req.user.role);
     return mapAttendance(record);
   }
@@ -198,6 +227,18 @@ export class AttendanceController {
   @HttpCode(HttpStatus.OK)
   async bulkSetAttendance(@Body() dto: BulkSetAttendanceDto, @Request() req: any) {
     this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
+    
+    const hasPresent = dto.entries.some(e => e.status === 'present' as any);
+    if (hasPresent) {
+      const systemStatus = this.attendanceService.getDtrSystemStatus();
+      if (systemStatus.isOnline) {
+        throw new ForbiddenException('Cannot manually set PRESENT while DTR sync is online.');
+      }
+      if (!this.roleCapSvc.isAttendanceManage(req.user?.role)) {
+        throw new ForbiddenException('Only Attendance Admins can use the fallback PRESENT override.');
+      }
+    }
+
     const records = await this.attendanceService.bulkSetAttendance(
       dto,
       req.user.id ?? req.user.userId,

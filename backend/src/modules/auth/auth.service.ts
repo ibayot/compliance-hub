@@ -423,6 +423,7 @@ export class AuthService {
       role: user.role,
       roleCode: roleCode ?? null,
       units: user.units?.map((unit) => unit.id) || [],
+      staffId: user.staffId,
       jti: crypto.randomUUID(),
     };
 

@@ -23,6 +23,12 @@ import {
   Select,
   FormControl,
   InputLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
 } from '@mui/material';
 import {
   ChevronLeft as PrevIcon,
@@ -101,10 +107,16 @@ export default function AttendancePage() {
   const [officeDays, setOfficeDays] = useState<OfficeDay[]>([]);
   const [odLoading, setOdLoading] = useState(false);
 
-  // Attendance — default to '' (all technicians)
   const [attendance, setAttendance] = useState<TechAttendance[]>([]);
   const [attLoading, setAttLoading] = useState(false);
   const [attType, setAttType] = useState('');
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  const [timePickerData, setTimePickerData] = useState<{ userId: number; dateStr: string; status: AttendanceStatus } | null>(null);
+  const [timeStr, setTimeStr] = useState('08:00');
+  
+  // System Status
+  const [systemStatus, setSystemStatus] = useState<{ isOnline: boolean } | null>(null);
 
   // Technicians list (all technicians, regardless of attendance records)
   const [technicians, setTechnicians] = useState<any[]>([]);
@@ -113,6 +125,15 @@ export default function AttendancePage() {
   const days = useMemo(() => getDaysInMonth(year, month), [year, month]);
   const startDate = formatDate(days[0]);
   const endDate = formatDate(days[days.length - 1]);
+
+  const fetchSystemStatus = useCallback(async () => {
+    try {
+      const status = await attendanceApi.getSystemStatus();
+      setSystemStatus(status);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const fetchOfficeDays = useCallback(async () => {
     try {
@@ -152,7 +173,8 @@ export default function AttendancePage() {
 
   useEffect(() => {
     fetchOfficeDays();
-  }, [fetchOfficeDays]);
+    fetchSystemStatus();
+  }, [fetchOfficeDays, fetchSystemStatus]);
   useEffect(() => {
     if (tab === 1) {
       fetchTechnicians();
@@ -300,23 +322,23 @@ export default function AttendancePage() {
     return () => clearInterval(id);
   }, [hasUnmarkedTodayAttendance, silentRefreshTab1]);
 
-  const handleSetAttendance = async (userId: number, date: string, status: AttendanceStatus) => {
+  const handleSetAttendance = async (userId: number, date: string, status: AttendanceStatus, clockInTime?: string) => {
     // Optimistic update — immediately reflect in UI without showing loading spinner
     setAttendance((prev) => {
       const idx = prev.findIndex((r) => r.userId === userId && r.date.slice(0, 10) === date);
       if (idx !== -1) {
         const arr = [...prev];
-        arr[idx] = { ...arr[idx], status };
+        arr[idx] = { ...arr[idx], status, clockInTime: clockInTime ?? arr[idx].clockInTime };
         return arr;
       }
       // No record yet: create a temporary placeholder
       return [
         ...prev,
-        { id: `temp-${userId}-${date}`, userId, date, status, createdAt: '' } as TechAttendance,
+        { id: `temp-${userId}-${date}`, userId, date, status, clockInTime, createdAt: '' } as TechAttendance,
       ];
     });
     try {
-      const updated = await attendanceApi.setAttendance({ userId, date, status });
+      const updated = await attendanceApi.setAttendance({ userId, date, status, clockInTime });
       // Replace temp record with actual server response
       setAttendance((prev) => {
         const idx = prev.findIndex((r) => r.userId === userId && r.date.slice(0, 10) === date);
@@ -516,16 +538,26 @@ export default function AttendancePage() {
                     Click a cell to cycle:
                   </Typography>
                 )}
-                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-                  <Chip
-                    key={key}
-                    size="small"
-                    icon={cfg.icon as any}
-                    label={cfg.label}
-                    color={cfg.color}
-                    variant="outlined"
-                  />
-                ))}
+                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
+                  let label = cfg.label;
+                  if (key === 'present') {
+                    if (systemStatus?.isOnline) {
+                      label = 'Present (Auto-Synced)';
+                    } else if (systemStatus?.isOnline === false) {
+                      label = 'Present (Fallback)';
+                    }
+                  }
+                  return (
+                    <Chip
+                      key={key}
+                      size="small"
+                      icon={cfg.icon as any}
+                      label={label}
+                      color={cfg.color}
+                      variant="outlined"
+                    />
+                  );
+                })}
               </Box>
             </Stack>
 
@@ -630,23 +662,56 @@ export default function AttendancePage() {
 
                             const cellClickHandler = () => {
                               if (!canManage || isPastDate || isFutureDate) return;
-                              const cycle: AttendanceStatus[] = [
-                                'present',
-                                'absent',
-                                'half_day',
-                                'out_of_office',
-                              ];
+                              let cycle: AttendanceStatus[] = ['absent', 'half_day', 'out_of_office'];
+                              
+                              if (systemStatus?.isOnline) {
+                                // If online, present is synced automatically.
+                                // Don't allow manual present toggling.
+                              } else {
+                                // Offline fallback
+                                // Only Admins can set PRESENT fallback
+                                if (canManage) { // assuming canManage means admin here
+                                  cycle = ['present', 'absent', 'half_day', 'out_of_office'];
+                                }
+                              }
+
+                              const handleTransition = (newStatus: AttendanceStatus) => {
+                                if (newStatus === 'present') {
+                                  setTimePickerData({ userId, dateStr, status: newStatus });
+                                } else {
+                                  handleSetAttendance(userId, dateStr, newStatus);
+                                }
+                              };
+
                               if (!status) {
-                                handleSetAttendance(userId, dateStr, cycle[0]);
+                                handleTransition(cycle[0]);
                               } else {
                                 const currentIdx = cycle.indexOf(status);
-                                if (currentIdx === cycle.length - 1) {
+                                if (currentIdx === -1 || currentIdx === cycle.length - 1) {
+                                  // if it was 'present' and not in cycle, or at end of cycle
                                   setAttendance((prev) => prev.filter((r) => !(r.userId === userId && r.date.slice(0, 10) === dateStr)));
                                   attendanceApi.deleteAttendance(userId, dateStr).catch(() => fetchAttendance());
                                 } else {
-                                  handleSetAttendance(userId, dateStr, cycle[currentIdx + 1]);
+                                  handleTransition(cycle[currentIdx + 1]);
                                 }
                               }
+                            };
+
+                            const renderIcon = () => {
+                              if (!cfg) return (
+                                <Typography variant="body1" sx={{ fontSize: '1.1rem', lineHeight: 1, color: 'text.secondary' }}>
+                                  •
+                                </Typography>
+                              );
+                              return canManage ? cfg.icon : (
+                                <Chip
+                                  size="small"
+                                  icon={cfg.icon as any}
+                                  label={cfg.label}
+                                  color={cfg.color}
+                                  sx={{ transform: 'scale(0.85)', transformOrigin: 'center' }}
+                                />
+                              );
                             };
 
                             return (
@@ -664,46 +729,21 @@ export default function AttendancePage() {
                                     : (!isToday ? { bgcolor: 'rgba(0, 0, 0, 0.02)' } : {})
                                 }}
                               >
-                                {canManage ? (
-                                  <Box display="flex" width="100%" height="100%" justifyContent="center" alignItems="center">
+                                  <Box display="flex" flexDirection="column" width="100%" height="100%" justifyContent="center" alignItems="center">
                                     <Box
                                       sx={{
                                         color: cfg ? `${cfg.color}.main` : 'action.active',
                                         display: 'flex'
                                       }}
                                     >
-                                      {cfg ? (
-                                        cfg.icon
-                                      ) : (
-                                        <Typography
-                                          variant="body1"
-                                          sx={{ fontSize: '1.1rem', lineHeight: 1, color: 'text.secondary' }}
-                                        >
-                                          •
-                                        </Typography>
-                                      )}
+                                      {renderIcon()}
                                     </Box>
+                                    {rec?.clockInTime && (
+                                      <Typography variant="caption" sx={{ fontSize: '0.6rem', lineHeight: 1, mt: 0.25, color: 'text.secondary' }}>
+                                        {new Date(rec.clockInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit'})}
+                                      </Typography>
+                                    )}
                                   </Box>
-                                ) : cfg ? (
-                                  <Chip
-                                    size="small"
-                                    icon={cfg.icon as any}
-                                    label={cfg.label}
-                                    color={cfg.color}
-                                    sx={{ transform: 'scale(0.85)', transformOrigin: 'center' }}
-                                  />
-                                ) : (
-                                  <Typography
-                                    variant="body1"
-                                    sx={{
-                                      fontSize: '1.1rem',
-                                      lineHeight: 1,
-                                      color: 'text.secondary',
-                                    }}
-                                  >
-                                    •
-                                  </Typography>
-                                )}
                               </TableCell>
                             );
                           })}
@@ -717,6 +757,43 @@ export default function AttendancePage() {
           </CardContent>
         )}
       </Card>
+      {/* Time Picker Dialog */}
+      <Dialog open={Boolean(timePickerData)} onClose={() => setTimePickerData(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Set Clock-In Time</DialogTitle>
+        <DialogContent>
+          <Box py={2}>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Please set the clock-in time for this manual override.
+            </Typography>
+            <TextField
+              fullWidth
+              type="time"
+              label="Clock-In Time"
+              value={timeStr}
+              onChange={(e) => setTimeStr(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ step: 60 }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTimePickerData(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              if (timePickerData) {
+                // Construct a full ISO date string from dateStr + timeStr
+                const fullDateTimeStr = `${timePickerData.dateStr}T${timeStr}:00+08:00`;
+                const isoTime = new Date(fullDateTimeStr).toISOString();
+                handleSetAttendance(timePickerData.userId, timePickerData.dateStr, timePickerData.status, isoTime);
+              }
+              setTimePickerData(null);
+            }}
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

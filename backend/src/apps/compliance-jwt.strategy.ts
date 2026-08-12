@@ -23,6 +23,7 @@ export class ComplianceJwtStrategy extends PassportStrategy(Strategy) {
       role: payload.role,
       roleCode: payload.roleCode ?? null,
       units: payload.units ?? [],
+      staffId: payload.staffId,
     };
   }
 }

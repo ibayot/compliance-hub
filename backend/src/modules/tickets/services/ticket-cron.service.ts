@@ -6,6 +6,7 @@ import { Ticket, TicketStatus } from '../entities/ticket.entity';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { TicketService } from './ticket.service';
 import { EmailService } from './email.service';
+import { AttendanceService } from './attendance.service';
 import { UserRole } from '../../shared/entities';
 
 @Injectable()
@@ -23,6 +24,7 @@ export class TicketCronService implements OnModuleInit {
     private readonly configRepo: Repository<TicketingConfig>,
     private readonly ticketService: TicketService,
     private readonly emailService: EmailService,
+    private readonly attendanceService: AttendanceService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -30,6 +32,7 @@ export class TicketCronService implements OnModuleInit {
     this.logger.log('Running minute cron tasks...');
     await this.processSlaSchedules();
     await this.processOverdueTicketsUnpauseNext();
+    await this.processDtrSyncs();
   }
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -37,6 +40,7 @@ export class TicketCronService implements OnModuleInit {
     this.logger.log('Running hourly ticketing cron tasks...');
     await this.processAutoClosure();
     await this.processAutoUnpause();
+    await this.processAutoUnfreeze();
     await this.processFrozenTicketsReminders();
     await this.processPercentageAlerts();
   }
@@ -44,6 +48,51 @@ export class TicketCronService implements OnModuleInit {
   @Cron('*/15 * * * *')
   async handle15MinuteTasks() {
     await this.ticketService.retryBenchedKbs();
+  }
+
+  private addHoursToTime(timeStr: string, hoursToAdd: number): string {
+    const [h, m] = timeStr.split(':').map(Number);
+    const date = new Date();
+    date.setHours(h + hoursToAdd, m, 0, 0);
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:00`;
+  }
+
+  private async processDtrSyncs() {
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    if (!config) return;
+
+    // Derive current time in Manila timezone (UTC+8) for schedule boundary comparison
+    const now = new Date();
+    const d = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+    const currentTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:00`;
+
+    let morningStart, morningEnd, lateEnd;
+    if (config.scheduleMode === 'CWW') {
+      morningStart = config.cwwClockinStart;
+      morningEnd = this.addHoursToTime(config.cwwClockinEnd, 2);
+      lateEnd = this.addHoursToTime(config.cwwClockoutEnd, -4);
+    } else {
+      morningStart = config.officeClockin;
+      morningEnd = this.addHoursToTime(config.officeClockin, 2);
+      lateEnd = this.addHoursToTime(config.officeClockout, -4);
+    }
+
+    const currentMins = d.getMinutes();
+    
+    // Check if in Morning window
+    if (currentTime >= morningStart && currentTime <= morningEnd) {
+      if (currentMins % 2 === 0) {
+        this.logger.log(`Running dynamic Morning DTR Sync...`);
+        await this.attendanceService.syncAttendanceWithDTR();
+      }
+    } 
+    // Check if in Late window (after morning end, before late end)
+    else if (currentTime > morningEnd && currentTime <= lateEnd) {
+      if (currentMins % 15 === 0) {
+        this.logger.log(`Running dynamic Late DTR Sync...`);
+        await this.attendanceService.syncAttendanceWithDTR();
+      }
+    }
   }
 
   @Cron('0 8 * * *', { timeZone: 'Asia/Manila' })
@@ -218,6 +267,49 @@ export class TicketCronService implements OnModuleInit {
           this.logger.log(`Auto-unpaused ticket ${ticket.ticketNumber}`);
         } catch (err) {
           this.logger.error(`Failed to auto-unpause ticket ${ticket.ticketNumber}`, err);
+        }
+      }
+    }
+  }
+
+  private async processAutoUnfreeze() {
+    const frozenTickets = await this.ticketRepo.find({
+      where: { status: TicketStatus.FREEZE },
+      relations: ['category', 'issueTypeConfig'],
+    });
+
+    const now = new Date().getTime();
+
+    for (const ticket of frozenTickets) {
+      if (!ticket.slaPausedAt || !ticket.category) continue;
+      
+      if (ticket.issueTypeConfig?.maxFreezeHours == null) continue; // null = unlimited
+
+      const allowableMs = ticket.issueTypeConfig.maxFreezeHours * 60 * 60 * 1000;
+      const frozenMs = now - ticket.slaPausedAt.getTime();
+
+      if (frozenMs >= allowableMs) {
+        try {
+          await this.ticketService.updateTicket(
+            ticket.id,
+            { status: TicketStatus.IN_PROGRESS },
+            ticket.assignedToId || 1,
+            UserRole.SUPER_ADMIN,
+          );
+
+          await this.ticketService.addComment(
+            ticket.id,
+            {
+              content: `System Note: Ticket has reached its maximum allowable hold time (${ticket.issueTypeConfig.maxFreezeHours}h) and has been automatically unfrozen. The SLA clock has resumed.`,
+              isInternal: true,
+            },
+            1, // System User
+            UserRole.SUPER_ADMIN,
+          );
+
+          this.logger.log(`Auto-unfrozen ticket ${ticket.ticketNumber}`);
+        } catch (err) {
+          this.logger.error(`Failed to auto-unfreeze ticket ${ticket.ticketNumber}`, err);
         }
       }
     }
