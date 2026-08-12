@@ -70,11 +70,11 @@ export class TicketCronService implements OnModuleInit {
     if (config.scheduleMode === 'CWW') {
       morningStart = config.cwwClockinStart;
       morningEnd = this.addHoursToTime(config.cwwClockinEnd, 2);
-      lateEnd = this.addHoursToTime(config.cwwClockoutEnd, -4);
+      lateEnd = config.cwwClockoutEnd;
     } else {
       morningStart = config.officeClockin;
       morningEnd = this.addHoursToTime(config.officeClockin, 2);
-      lateEnd = this.addHoursToTime(config.officeClockout, -4);
+      lateEnd = config.officeClockout;
     }
 
     const currentMins = d.getMinutes();
