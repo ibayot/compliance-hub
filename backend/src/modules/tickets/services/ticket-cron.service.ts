@@ -58,8 +58,12 @@ export class TicketCronService implements OnModuleInit {
   }
 
   private async processDtrSyncs() {
+    this.logger.log(`[DTR SYNC DEBUG] Starting processDtrSyncs...`);
     const config = await this.configRepo.findOne({ where: { id: 1 } });
-    if (!config) return;
+    if (!config) {
+      this.logger.error(`[DTR SYNC DEBUG] No global config found! Aborting.`);
+      return;
+    }
 
     // Derive current time in Manila timezone (UTC+8) for schedule boundary comparison
     const now = new Date();
@@ -78,20 +82,19 @@ export class TicketCronService implements OnModuleInit {
     }
 
     const currentMins = d.getMinutes();
+    this.logger.log(`[DTR SYNC DEBUG] CurrentTime: ${currentTime} | Mode: ${config.scheduleMode} | Window: ${morningStart} - ${lateEnd}`);
     
     // Check if in Morning window
     if (currentTime >= morningStart && currentTime <= morningEnd) {
-      if (currentMins % 2 === 0) {
-        this.logger.log(`Running dynamic Morning DTR Sync...`);
-        await this.attendanceService.syncAttendanceWithDTR();
-      }
+      this.logger.log(`[DTR SYNC DEBUG] Inside Morning window. Syncing!`);
+      await this.attendanceService.syncAttendanceWithDTR();
     } 
     // Check if in Late window (after morning end, before late end)
     else if (currentTime > morningEnd && currentTime <= lateEnd) {
-      if (currentMins % 5 === 0) {
-        this.logger.log(`Running dynamic Late DTR Sync...`);
-        await this.attendanceService.syncAttendanceWithDTR();
-      }
+      this.logger.log(`[DTR SYNC DEBUG] Inside Late window. Syncing!`);
+      await this.attendanceService.syncAttendanceWithDTR();
+    } else {
+      this.logger.log(`[DTR SYNC DEBUG] Outside all active windows. Doing nothing.`);
     }
   }
 
