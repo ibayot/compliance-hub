@@ -1,6 +1,6 @@
 import { Entity, Column, PrimaryColumn } from 'typeorm';
 
-@Entity({ name: 'vw_rictms_clock_in', synchronize: false, database: '02_db_stg_compliance_hub_users' })
+@Entity({ name: 'vw_rictms_clock_in', synchronize: false })
 export class DtrView {
   @PrimaryColumn({ name: 'emp_code' })
   empCode: string;
