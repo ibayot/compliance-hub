@@ -760,16 +760,22 @@ export class AttendanceService implements OnModuleInit {
       });
 
       // 5. Upsert the records
+      this.logger.log(`[DTR SYNC DBG] Starting to process ${dtrRecords.length} dtrRecords in loop...`);
+      let savedCount = 0;
       for (const dtr of dtrRecords) {
-        if (!dtr.firstClockInTime) continue;
+        this.logger.log(`[DTR SYNC DBG] Processing empCode=${dtr.empCode}, clockIn=${dtr.firstClockInTime}`);
+        if (!dtr.firstClockInTime) {
+          this.logger.log(`[DTR SYNC DBG] -> Skipped: firstClockInTime is falsy.`);
+          continue;
+        }
 
-        const tech = validTechs.find(t => t.staffId === dtr.empCode);
-        if (!tech) continue;
+        const tech = validTechs.find(t => String(t.staffId) === String(dtr.empCode));
+        if (!tech) {
+          this.logger.log(`[DTR SYNC DBG] -> Skipped: No tech found matching staffId ${dtr.empCode}.`);
+          continue;
+        }
 
         const existingRecord = existingAttendance.find(a => a.userId === tech.id);
-        
-        // If the existing record is manual override and already has clock in time, we might skip it or still update it.
-        // User requested: "The sync should happen regardless if the RICTMS staff has an entry in attendance table for the current day... The notes column should indicate Marked present on sync."
         
         await auditContext.run(
           { email: 'system@dswd.gov.ph', ipAddress: 'DTR-Cron', sessionId: 'dtr-sync' },
@@ -779,6 +785,7 @@ export class AttendanceService implements OnModuleInit {
               existingRecord.status = AttendanceStatus.PRESENT;
               existingRecord.notes = 'Marked present on sync.';
               await this.attendanceRepo.save(existingRecord);
+              this.logger.log(`[DTR SYNC DBG] -> Updated existing attendance for tech ${tech.email}`);
             } else {
               const newRecord = this.attendanceRepo.create({
                 userId: tech.id,
@@ -789,12 +796,13 @@ export class AttendanceService implements OnModuleInit {
                 notes: 'Marked present on sync.',
               });
               await this.attendanceRepo.save(newRecord);
+              this.logger.log(`[DTR SYNC DBG] -> Created NEW attendance for tech ${tech.email}`);
             }
           }
         );
+        savedCount++;
         
         // Trigger assignment
-        this.eventBus.publish('attendance.verified', { userId: tech.id }).catch(() => {});
       }
     } catch (err: any) {
       this.logger.error(`Failed to sync DTR attendance: ${err.message}`);
