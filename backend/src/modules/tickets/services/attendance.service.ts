@@ -719,25 +719,38 @@ export class AttendanceService implements OnModuleInit {
 
   /** Background cron job to sync attendance from the DTR view for missing staff */
   async syncAttendanceWithDTR(): Promise<void> {
+    this.logger.log(`[DTR SYNC DBG] Entering syncAttendanceWithDTR...`);
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
     
     try {
       // 1. Get all assignable attendance roles
       const allRoles = await this.getAssignableAttendanceRoles();
-      if (allRoles.length === 0) return;
+      if (allRoles.length === 0) {
+        this.logger.log(`[DTR SYNC DBG] Aborting: allRoles is empty!`);
+        return;
+      }
+      this.logger.log(`[DTR SYNC DBG] allRoles count: ${allRoles.length}`);
 
       // 2. Get all active staff with these roles
       const allTechs = await this.userRepo.find({
         where: { active: true, role: In(allRoles) }
       });
       const validTechs = allTechs.filter(t => t.staffId); // Only those with a DTR staffId
-      if (validTechs.length === 0) return;
+      if (validTechs.length === 0) {
+        this.logger.log(`[DTR SYNC DBG] Aborting: validTechs (with staffId) is empty!`);
+        return;
+      }
+      this.logger.log(`[DTR SYNC DBG] validTechs count: ${validTechs.length}`);
 
       // 3. Query DTR View for all valid staff
       const staffIds = validTechs.map(t => t.staffId);
+      this.logger.log(`[DTR SYNC DBG] Querying dtrViewRepo for workDate=${todayStr} with staffIds: ${staffIds.join(', ')}`);
+      
       const dtrRecords = await this.dtrViewRepo.find({
         where: { workDate: todayStr, empCode: In(staffIds) }
       });
+      
+      this.logger.log(`[DTR SYNC DBG] dtrRecords fetched count: ${dtrRecords.length}`);
 
       this.isDtrViewOnline = true; // Connection succeeded!
 
