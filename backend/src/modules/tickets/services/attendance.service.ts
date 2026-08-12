@@ -687,17 +687,29 @@ export class AttendanceService implements OnModuleInit {
     const isCWW = config?.scheduleMode === 'CWW';
     
     if (isCWW) {
+      const clockInStartStr = config?.cwwClockinStart || '07:00:00';
+      const [startH, startM] = clockInStartStr.split(':').map(Number);
+      const clockInStart = new Date(clockIn);
+      clockInStart.setHours(startH, startM, 0, 0);
+
       const clockInEndStr = config?.cwwClockinEnd || '08:00:00';
       const [endH, endM] = clockInEndStr.split(':').map(Number);
       const clockInEnd = new Date(clockIn);
       clockInEnd.setHours(endH, endM, 0, 0);
 
-      if (clockIn <= clockInEnd) {
-        // Exactly 11 hours
+      if (clockIn < clockInStart) {
+        // Super early bird - shift ends exactly at official clock-out start
+        const clockOutStartStr = config?.cwwClockoutStart || '18:00:00';
+        const [outH, outM] = clockOutStartStr.split(':').map(Number);
+        const clockOut = new Date(clockIn);
+        clockOut.setHours(outH, outM, 0, 0);
+        return { clockIn, clockOut };
+      } else if (clockIn <= clockInEnd) {
+        // Within sliding window - exactly 11 hours from actual clock in
         const clockOut = new Date(clockIn.getTime() + 11 * 3600 * 1000);
         return { clockIn, clockOut };
       } else {
-        // Exactly clockout end time
+        // Late clock in - shift ends exactly at official clock-out end
         const clockOut = new Date(clockIn);
         const clockOutEndStr = config?.cwwClockoutEnd || '19:00:00';
         const [outH, outM] = clockOutEndStr.split(':').map(Number);
