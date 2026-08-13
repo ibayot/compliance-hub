@@ -167,9 +167,11 @@ export default function DashboardPage() {
   const [appMode, setAppMode] = useState<string>('loading');
 
   useEffect(() => {
-    ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(() => { });
+    if (myCap?.isGlobalSettingsAccess) {
+      ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(() => { });
+    }
     usersApi.getAppMode().then((res: any) => setAppMode(res.appMode || 'full')).catch(() => setAppMode('full'));
-  }, []);
+  }, [myCap?.isGlobalSettingsAccess]);
 
   const silentFetchDashboardData = useCallback(async () => {
     if (!user) return;

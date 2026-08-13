@@ -39,6 +39,7 @@ import {
   useMediaQuery,
   useTheme,
   Grid,
+  Pagination,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -134,6 +135,7 @@ export default function TicketsPage() {
   const [filterQuarter, setFilterQuarter] = useState('');
   const [filterSemester, setFilterSemester] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
   const [filterPeriodMode, setFilterPeriodMode] = useState<'month' | 'quarter' | 'semester' | 'year'>('month');
   const [showMyTickets, setShowMyTickets] = useState(false);
 
@@ -154,11 +156,17 @@ export default function TicketsPage() {
   const [globalConfig, setGlobalConfig] = useState<any>(null);
 
   useEffect(() => {
-    ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(console.error);
-  }, []);
+    if (myCap?.isGlobalSettingsAccess) {
+      ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(() => { });
+    }
+  }, [myCap?.isGlobalSettingsAccess]);
 
   // Pagination for non-admin active tabs
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalTickets, setTotalTickets] = useState(0);
+  const ticketRequestRef = useRef(0);
+  const TICKETS_PAGE_SIZE = 25;
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [form, setForm] = useState<CreateTicketDto>({
     subject: '',
@@ -374,7 +382,16 @@ export default function TicketsPage() {
     [canEscalate],
   );
 
+  useEffect(() => {
+    setPage(1);
+  }, [filterStatus, filterType, filterPriority, filterYear, filterMonth, filterQuarter, filterSemester, searchQuery, showMyTickets, showEscalatedToMe]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchQuery(searchDraft.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [searchDraft]);
   const fetchTickets = useCallback(async () => {
+    const requestId = ++ticketRequestRef.current;
     try {
       setLoading(true);
       const data = await ticketsApi.getAll({
@@ -388,8 +405,14 @@ export default function TicketsPage() {
         // assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
         assignedToId: showMyTickets && !showEscalatedToMe ? user?.id : undefined,
         escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
+        search: searchQuery,
+        page,
+        limit: TICKETS_PAGE_SIZE,
       });
-      setTickets(data);
+      if (requestId !== ticketRequestRef.current) return;
+      setTickets(data.data);
+      setTotalPages(data.totalPages);
+      setTotalTickets(data.total);
 
       const stats = await ticketsApi.getDashboardStats();
       setPendingSatCount(stats.pendingSatisfactionTickets?.length ?? 0);
@@ -413,9 +436,13 @@ export default function TicketsPage() {
     filterMonth,
     filterQuarter,
     filterSemester,
+    searchQuery,
+    page,
     showMyTickets,
     showEscalatedToMe,
     canViewEscalatedQueue,
+    searchQuery,
+    page,
     isFocalTech,
     user?.id,
     canManageAll,
@@ -454,6 +481,7 @@ export default function TicketsPage() {
 
   // Silent auto-refresh — no loading spinner to avoid flicker on background polls
   const silentFetchTickets = useCallback(async () => {
+    const requestId = ++ticketRequestRef.current;
     try {
       const data = await ticketsApi.getAll({
         status: (filterStatus as TicketStatus) || undefined,
@@ -466,8 +494,14 @@ export default function TicketsPage() {
         // assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
         assignedToId: showMyTickets && !showEscalatedToMe ? user?.id : undefined,
         escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
+        search: searchQuery,
+        page,
+        limit: TICKETS_PAGE_SIZE,
       });
-      setTickets(data);
+      if (requestId !== ticketRequestRef.current) return;
+      setTickets(data.data);
+      setTotalPages(data.totalPages);
+      setTotalTickets(data.total);
 
       const stats = await ticketsApi.getDashboardStats();
       setPendingSatCount(stats.pendingSatisfactionTickets?.length ?? 0);
@@ -484,9 +518,13 @@ export default function TicketsPage() {
     filterMonth,
     filterQuarter,
     filterSemester,
+    searchQuery,
+    page,
     showMyTickets,
     showEscalatedToMe,
     canViewEscalatedQueue,
+    searchQuery,
+    page,
     isFocalTech,
     user?.id,
   ]);
@@ -736,7 +774,7 @@ export default function TicketsPage() {
       await ticketsApi.assign(assigningTicket.id, Number(selectedTechId));
       enqueueSnackbar('Ticket assigned.', { variant: 'success' });
       setAssignDialogOpen(false);
-      fetchTickets();
+      await silentFetchTickets();
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to assign', { variant: 'error' });
     }
@@ -866,8 +904,8 @@ export default function TicketsPage() {
             fullWidth
             size="small"
             placeholder="Search by ticket number, subject, or requester name..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={searchDraft}
+            onChange={(e) => { setSearchDraft(e.target.value); setPage(1); }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -879,6 +917,11 @@ export default function TicketsPage() {
         </CardContent>
       </Card>
 
+      {totalPages > 1 && (
+        <Box display="flex" justifyContent="center" sx={{ mb: 2 }}>
+          <Pagination count={totalPages} page={page} onChange={(_, value) => setPage(value)} color="primary" size="small" showFirstButton showLastButton />
+        </Box>
+      )}
       {!canManageAll && isTechnician && (
         <Card sx={{ mb: 2 }}>
           <CardContent>
@@ -1265,7 +1308,7 @@ export default function TicketsPage() {
               variant="scrollable"
               scrollButtons="auto"
             >
-              <Tab label={`All (${frontendFilteredTickets.length})`} />
+              <Tab label={`All (${totalTickets})`} />
               <Tab label={`Active (${activeTickets.length})`} />
               <Tab label={`Paused (${pausedTickets.length})`} />
               <Tab label={`Resolved / Closed (${doneTickets.length})`} />
@@ -1313,7 +1356,7 @@ export default function TicketsPage() {
               allowScrollButtonsMobile
               sx={{ mb: 2 }}
             >
-              <Tab label={`All (${frontendFilteredTickets.length})`} />
+              <Tab label={`All (${totalTickets})`} />
               <Tab label={`Active (${activeTickets.length})`} />
               <Tab
                 label={

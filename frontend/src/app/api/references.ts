@@ -554,6 +554,14 @@ export const issuancesApi = {
   },
 };
 
+export interface PaginatedTickets {
+  data: Ticket[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 // Tickets API (IT Help Desk)
 export const ticketsApi = {
   // Global/Technician Pause Methods
@@ -582,7 +590,10 @@ export const ticketsApi = {
     month?: string;
     quarter?: string;
     semester?: string;
-  }): Promise<Ticket[]> => {
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedTickets> => {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
     if (filters?.ticketType) params.append('ticketType', filters.ticketType);
@@ -594,10 +605,12 @@ export const ticketsApi = {
     if (filters?.month) params.append('month', filters.month);
     if (filters?.quarter) params.append('quarter', filters.quarter);
     if (filters?.semester) params.append('semester', filters.semester);
+    if (filters?.search?.trim()) params.append('search', filters.search.trim());
+    params.append('page', String(filters?.page ?? 1));
+    params.append('limit', String(filters?.limit ?? 25));
     const response = await apiClient.get(`/tickets?${params}`);
     return response.data;
   },
-
   getById: async (id: string): Promise<Ticket> => {
     const response = await apiClient.get(`/tickets/${id}`);
     return response.data;

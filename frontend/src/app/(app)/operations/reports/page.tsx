@@ -366,6 +366,11 @@ export default function TicketReportsPage() {
 
   // Individual view = specific technician selected (privileged) OR non-privileged user viewing own data
   const isIndividualView = isTicketSettingsFocal ? !!technicianId : true;
+  const hasPerformanceData =
+    slaPieData.length > 0 ||
+    (result?.slaByType?.length ?? 0) > 0 ||
+    (result?.slaByTechnician?.length ?? 0) > 0 ||
+    (result?.avgRatingByTechnician?.length ?? 0) > 0;
 
   return (
     <Box>
@@ -1485,6 +1490,11 @@ export default function TicketReportsPage() {
           <Typography variant="h6" fontWeight={700} gutterBottom>
             Performance Metrics
           </Typography>
+          {!hasPerformanceData && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              No performance data is available for the selected period and technician.
+            </Alert>
+          )}
           <Grid container spacing={3}>
             {/* SLA Pie */}
             {slaPieData.length > 0 && (

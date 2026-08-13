@@ -82,6 +82,8 @@ const STATUS_OPTS = [
   { value: 'duplicate', label: 'Duplicate' },
 ];
 
+const COMMENTS_PAGE_SIZE = 5;
+
 function OverdueTimer({ targetDate }: { targetDate: string }) {
   const [elapsed, setElapsed] = useState('');
 
@@ -184,6 +186,7 @@ export default function TicketDetailPage() {
   const [comment, setComment] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [visibleCommentCount, setVisibleCommentCount] = useState(COMMENTS_PAGE_SIZE);
 
   // Status/resolution update (staff)
   const [editingStatus, setEditingStatus] = useState(false);
@@ -321,6 +324,11 @@ export default function TicketDetailPage() {
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
   }, [ticket]);
+  const visibleComments = useMemo(
+    () => sortedComments.slice(Math.max(0, sortedComments.length - visibleCommentCount)),
+    [sortedComments, visibleCommentCount],
+  );
+  const olderCommentCount = sortedComments.length - visibleComments.length;
   const timelineEvents = useMemo(() => {
     const eventPriority = (eventType: string) => {
       if (eventType === 'created') return 2;
@@ -497,12 +505,15 @@ export default function TicketDetailPage() {
     if (!comment.trim() && !commentAttachment) return;
     try {
       setSubmittingComment(true);
-      await ticketsApi.addComment(ticketId, comment, isInternal && canStaff, commentAttachment);
+      const createdComment = await ticketsApi.addComment(ticketId, comment, isInternal && canStaff, commentAttachment);
+      setTicket((current) => current ? {
+        ...current,
+        comments: [...(current.comments ?? []), createdComment],
+      } : current);
+      setVisibleCommentCount(COMMENTS_PAGE_SIZE);
       setComment('');
       setCommentAttachment(null);
       setIsInternal(false);
-      fetchTicket();
-      fetchEvents();
       enqueueSnackbar('Comment added.', { variant: 'success' });
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to add comment', { variant: 'error' });
@@ -1715,9 +1726,16 @@ export default function TicketDetailPage() {
             Comments ({sortedComments.length})
           </Typography>
 
-          {sortedComments.length > 0 ? (
+          {olderCommentCount > 0 && (
+  <Box display="flex" justifyContent="center" mb={1}>
+    <Button size="small" onClick={() => setVisibleCommentCount((count) => count + COMMENTS_PAGE_SIZE)}>
+      ... Load previous {Math.min(COMMENTS_PAGE_SIZE, olderCommentCount)}
+    </Button>
+  </Box>
+)}
+{visibleComments.length > 0 ? (
             <List disablePadding>
-              {sortedComments.map((c: any, i: number) => (
+              {visibleComments.map((c: any, i: number) => (
                 <React.Fragment key={c.id ?? i}>
                   <ListItem alignItems="flex-start" disableGutters>
                     <ListItemText
@@ -1777,7 +1795,7 @@ export default function TicketDetailPage() {
                       }
                     />
                   </ListItem>
-                  {i < sortedComments.length - 1 && <Divider component="li" />}
+                  {i < visibleComments.length - 1 && <Divider component="li" />}
                 </React.Fragment>
               ))}
             </List>

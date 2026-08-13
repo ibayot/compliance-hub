@@ -12,7 +12,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, QueryRunner, Repository, Not, In } from 'typeorm';
+import { Brackets, DataSource, QueryRunner, Repository, Not, In } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Ticket, TicketType, TicketStatus, TicketPriority } from '../entities/ticket.entity';
@@ -949,6 +949,7 @@ export class TicketService implements OnModuleInit {
     month?: number;
     quarter?: number;
     semester?: number;
+    search?: string;
   }): Promise<
     | Ticket[]
     | {
@@ -1030,6 +1031,17 @@ export class TicketService implements OnModuleInit {
       }
     }
 
+    // Apply optional text search before pagination so totals remain accurate.
+    if (filters.search?.trim()) {
+      const search = `%${filters.search.trim().toLowerCase()}%`;
+      qb.andWhere(new Brackets((where) => {
+        where
+          .where('LOWER(t.ticketNumber) LIKE :search', { search })
+          .orWhere('LOWER(t.subject) LIKE :search', { search })
+          .orWhere('LOWER(t.description) LIKE :search', { search })
+          .orWhere("EXISTS (SELECT 1 FROM users u WHERE u.id = t.requester_id AND (LOWER(u.email) LIKE :search OR LOWER(CONCAT(u.first_name, ' ', u.last_name)) LIKE :search))", { search });
+      }));
+    }
     // Apply date filters
     if (filters.year) {
       qb.andWhere('EXTRACT(YEAR FROM t.createdAt) = :year', { year: filters.year });
@@ -2313,12 +2325,19 @@ export class TicketService implements OnModuleInit {
       await this.ticketRepo.update(ticket.id, { hasUnreadUser: true });
     }
 
+    this.logEvent(ticket.id, 'comment_added', actorId, {
+      isInternal,
+      hasAttachment: !!attachment,
+    }).catch(() => { });
+
     // In-app notification
-    const notifyUsers = [];
+    const notifyUsers: number[] = [];
     if (actorRole === UserRole.USER) {
-      if (ticket.assignedToId) notifyUsers.push(ticket.assignedToId);
+      if (ticket.assignedToId && ticket.assignedToId !== actorId) notifyUsers.push(ticket.assignedToId);
+    } else if (ticket.requesterId === actorId) {
+      if (ticket.assignedToId && ticket.assignedToId !== actorId) notifyUsers.push(ticket.assignedToId);
     } else {
-      if (!isInternal && ticket.requesterId) notifyUsers.push(ticket.requesterId);
+      if (!isInternal && ticket.requesterId && ticket.requesterId !== actorId) notifyUsers.push(ticket.requesterId);
     }
     this.sendNotification(
       notifyUsers,
