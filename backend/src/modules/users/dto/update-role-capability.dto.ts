@@ -40,6 +40,10 @@ export class UpdateRoleCapabilityDto {
 
   @IsOptional()
   @IsBoolean()
+  isGlobalSettingsAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   isSecuritySettingsAccess?: boolean;
 
   @IsOptional()

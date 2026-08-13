@@ -625,18 +625,14 @@ export const ticketsApi = {
     isInternal = false,
     attachment?: File | null,
   ): Promise<TicketComment> => {
+    const formData = new FormData();
+    formData.append('comment', comment);
+    formData.append('isInternal', String(isInternal));
     if (attachment) {
-      const formData = new FormData();
-      formData.append('comment', comment);
-      formData.append('isInternal', String(isInternal));
       formData.append('attachment', attachment);
-      // ADD THE HEADERS OVERRIDE HERE
-      const response = await apiClient.post(`/tickets/${ticketId}/comments`, formData);
-      return response.data;
-    } else {
-      const response = await apiClient.post(`/tickets/${ticketId}/comments`, { comment, isInternal });
-      return response.data;
     }
+    const response = await apiClient.post(`/tickets/${ticketId}/comments`, formData);
+    return response.data;
   },
 
   submitSatisfaction: async (id: string, data: SubmitSatisfactionDto): Promise<Ticket> => {
@@ -1117,11 +1113,12 @@ export const attendanceApi = {
     return response.data;
   },
   // Tech attendance
-  getMyShift: async (): Promise<{ clockIn: Date | null; clockOut: Date | null }> => {
+  getMyShift: async (): Promise<{ clockIn: Date | null; clockOut: Date | null; attendanceStatus?: AttendanceStatus | null }> => {
     const response = await apiClient.get('/attendance/my-shift');
     return {
       clockIn: response.data.clockIn ? new Date(response.data.clockIn) : null,
       clockOut: response.data.clockOut ? new Date(response.data.clockOut) : null,
+      attendanceStatus: response.data.attendanceStatus ?? null,
     };
   },
   getAttendance: async (

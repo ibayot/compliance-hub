@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useSse } from '@/lib/utils/useSse';
 import {
   Box,
   Typography,
@@ -37,6 +38,26 @@ export default function IncidentsPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const silentFetchData = useCallback(async () => {
+    try {
+      const [statsData, todayData, periodsData, incidentsData] = await Promise.all([
+        incidentsApi.getStatistics(),
+        incidentsApi.getTodayStats(),
+        incidentsApi.getPeriodStats(),
+        incidentsApi.getAll({ status: 'open,in_progress' }),
+      ]);
+
+      setStatistics(statsData);
+      setTodayStats(todayData);
+      setPeriodStats(periodsData);
+      setRecentIncidents(incidentsData.slice(0, 10)); // Latest 10
+    } catch (err) {
+      console.error('Failed to fetch incident data silently:', err);
+    }
+  }, []);
+
+  useSse(['TICKET_UPDATED', 'INCIDENT_SNAPSHOT_CREATED'], silentFetchData);
 
   const fetchData = async () => {
     try {

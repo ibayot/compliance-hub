@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { IncidentDailySnapshot } from '../entities/incident-daily-snapshot.entity';
 import { Incident, IncidentStatus, IncidentSeverity } from '../entities/incident.entity';
+import { SseService } from '../../../common/events/sse.service';
 
 @Injectable()
 export class SnapshotService {
@@ -12,6 +13,7 @@ export class SnapshotService {
     private snapshotRepository: Repository<IncidentDailySnapshot>,
     @InjectRepository(Incident)
     private incidentRepository: Repository<Incident>,
+    private readonly sseService: SseService,
   ) {}
 
   async createSnapshot(
@@ -68,7 +70,9 @@ export class SnapshotService {
       total_added: addedCounts?.total || 0,
     });
 
-    return await this.snapshotRepository.save(snapshot);
+    const savedSnapshot = await this.snapshotRepository.save(snapshot);
+    this.sseService.emitIncidentSnapshotCreated();
+    return savedSnapshot;
   }
 
   async getSnapshots(date: Date): Promise<IncidentDailySnapshot[]> {

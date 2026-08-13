@@ -79,7 +79,7 @@ import {
   TicketEscalation,
 } from '@/app/api/references';
 import { usersApi, UserRecord } from '@/lib/api/users';
-import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
+import { useSse } from '@/lib/utils/useSse';
 
 import { PRIORITY_COLOR, STATUS_COLOR, TICKET_TYPE_LABELS } from '@/lib/utils/ticket-colors';
 
@@ -490,7 +490,7 @@ export default function TicketsPage() {
     isFocalTech,
     user?.id,
   ]);
-  useAutoRefresh(silentFetchTickets);
+  useSse(['TICKET_UPDATED', 'SYSTEM_STATUS_CHANGED'], silentFetchTickets);
 
   useEffect(() => {
     // Load users for everyone so they can request tickets for others (Proxy Creation)
@@ -522,18 +522,15 @@ export default function TicketsPage() {
     }
   }, [newDialogOpen, form.categoryId]);
 
-  // Poll categories every 10s while dialog is open so admin changes (activate/deactivate)
-  // are reflected without requiring the user to close and re-open the dialog.
-  useEffect(() => {
-    if (!newDialogOpen) return;
-    const id = setInterval(() => {
+  // Listen for admin changes (activate/deactivate) while dialog is open
+  useSse(['GLOBAL_SETTINGS_UPDATED'], () => {
+    if (newDialogOpen) {
       ticketSettingsApi
         .getCategories(form.ticketType, true)
         .then(setCategories)
         .catch(() => { }); // silent — don't show errors on background polls
-    }, 10_000);
-    return () => clearInterval(id);
-  }, [newDialogOpen, form.ticketType]);
+    }
+  });
 
   useEffect(() => {
     if (!form.subject || form.subject.length < 5) {
@@ -881,6 +878,130 @@ export default function TicketsPage() {
           />
         </CardContent>
       </Card>
+
+      {!canManageAll && isTechnician && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            <Grid container spacing={2}>
+              <Grid item xs={12} lg={12}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, '& > *': { flex: '1 1 120px' } }}>
+                  <TextField
+                    select
+                    label="Year"
+                    value={filterYear}
+                    onChange={(e) => setFilterYear(e.target.value)}
+                    size="small"
+                  >
+                    <MenuItem value="">All</MenuItem>
+                    <MenuItem value="2026">2026</MenuItem>
+                    <MenuItem value="2027">2027</MenuItem>
+                    <MenuItem value="2028">2028</MenuItem>
+                  </TextField>
+                  <TextField
+                    select
+                    label="Period"
+                    value={filterPeriodMode}
+                    onChange={(e) => {
+                      const mode = e.target.value as 'month' | 'quarter' | 'semester' | 'year';
+                      setFilterPeriodMode(mode);
+                      if (mode === 'year') {
+                        setFilterMonth('');
+                        setFilterQuarter('');
+                        setFilterSemester('');
+                      } else if (mode === 'semester') {
+                        setFilterMonth('');
+                        setFilterQuarter('');
+                        setFilterSemester('');
+                      } else if (mode === 'quarter') {
+                        setFilterMonth('');
+                        setFilterQuarter('');
+                        setFilterSemester('');
+                      } else {
+                        setFilterMonth('');
+                        setFilterQuarter('');
+                        setFilterSemester('');
+                      }
+                    }}
+                    size="small"
+                  >
+                    <MenuItem value="month">Monthly</MenuItem>
+                    <MenuItem value="quarter">Quarterly</MenuItem>
+                    <MenuItem value="semester">Semester</MenuItem>
+                    <MenuItem value="year">Full Year</MenuItem>
+                  </TextField>
+                  {filterPeriodMode === 'month' && (
+                    <TextField
+                      select
+                      label="Month"
+                      value={filterMonth}
+                      onChange={(e) => setFilterMonth(e.target.value)}
+                      size="small"
+                    >
+                      <MenuItem value="">All</MenuItem>
+                      <MenuItem value="1">January</MenuItem>
+                      <MenuItem value="2">February</MenuItem>
+                      <MenuItem value="3">March</MenuItem>
+                      <MenuItem value="4">April</MenuItem>
+                      <MenuItem value="5">May</MenuItem>
+                      <MenuItem value="6">June</MenuItem>
+                      <MenuItem value="7">July</MenuItem>
+                      <MenuItem value="8">August</MenuItem>
+                      <MenuItem value="9">September</MenuItem>
+                      <MenuItem value="10">October</MenuItem>
+                      <MenuItem value="11">November</MenuItem>
+                      <MenuItem value="12">December</MenuItem>
+                    </TextField>
+                  )}
+                  {filterPeriodMode === 'quarter' && (
+                    <TextField
+                      select
+                      label="Quarter"
+                      value={filterQuarter}
+                      onChange={(e) => setFilterQuarter(e.target.value)}
+                      size="small"
+                    >
+                      <MenuItem value="">All</MenuItem>
+                      <MenuItem value="1">Q1</MenuItem>
+                      <MenuItem value="2">Q2</MenuItem>
+                      <MenuItem value="3">Q3</MenuItem>
+                      <MenuItem value="4">Q4</MenuItem>
+                    </TextField>
+                  )}
+                  {filterPeriodMode === 'semester' && (
+                    <TextField
+                      select
+                      label="Semester"
+                      value={filterSemester}
+                      onChange={(e) => setFilterSemester(e.target.value)}
+                      size="small"
+                    >
+                      <MenuItem value="">All</MenuItem>
+                      <MenuItem value="1">1st Semester</MenuItem>
+                      <MenuItem value="2">2nd Semester</MenuItem>
+                    </TextField>
+                  )}
+                  <Button
+                    variant="outlined"
+                    sx={{ flex: '0 0 auto', minWidth: 80, height: 40 }}
+                    onClick={() => {
+                      setFilterStatus('');
+                      setFilterType('');
+                      setFilterPriority('');
+                      setFilterYear(new Date().getFullYear().toString());
+                      setFilterMonth((new Date().getMonth() + 1).toString());
+                      setFilterQuarter('');
+                      setFilterSemester('');
+                      setFilterPeriodMode('month');
+                    }}
+                  >
+                    Reset
+                  </Button>
+                </Box>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
 
       {canManageAll && (
         <Card sx={{ mb: 2 }}>

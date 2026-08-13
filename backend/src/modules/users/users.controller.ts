@@ -27,6 +27,8 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CapabilityGuard } from '../../common/guards/capability.guard';
+import { RequireCapability } from '../../common/decorators/require-capability.decorator';
 import { UserRole } from './entities/user.entity';
 import { EventBusService, CAPABILITIES_UPDATED_EVENT } from '../../common/events/event-bus.service';
 
@@ -108,7 +110,8 @@ export class UsersController {
 
   /** Returns all role capability rows. Admin read access. */
   @Get('role-capabilities')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isRoleCapabilitiesAccess')
   async getRoleCapabilities() {
     await this.roleCapabilitiesService.reload();
     return this.roleCapabilitiesService.findAll();
@@ -125,7 +128,8 @@ export class UsersController {
 
   /** Updates capability flags for a specific role. Super admin or Section Head only for Admin cap. */
   @Patch('role-capabilities/:roleValue')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isRoleCapabilitiesAccess')
   async updateRoleCapability(
     @Param('roleValue') roleValue: string,
     @Body() dto: UpdateRoleCapabilityDto,

@@ -22,6 +22,7 @@ export type CapabilityKey =
   | 'isEscalationFocal'
   | 'isTicketSettingsFocal'
   | 'isSmtpSettingsAccess'
+  | 'isGlobalSettingsAccess'
   | 'isSecuritySettingsAccess'
   | 'isAllTickets'
   | 'isTicketFocal'
@@ -158,6 +159,11 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
   isSmtpSettingsAccess(role: string): boolean {
     if (role === 'super_admin') return true;
     return !!this.get(role)?.isSmtpSettingsAccess;
+  }
+
+  isGlobalSettingsAccess(role: string): boolean {
+    if (role === 'super_admin') return true;
+    return !!this.get(role)?.isGlobalSettingsAccess;
   }
 
   isSecuritySettingsAccess(role: string): boolean {

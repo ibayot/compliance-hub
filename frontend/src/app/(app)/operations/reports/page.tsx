@@ -41,7 +41,7 @@ import {
 } from 'recharts';
 import { ticketsApi, TicketReportResult, RatingsReportResult } from '@/app/api/references';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
+import { useSse } from '@/lib/utils/useSse';
 
 const TYPE_LABELS: Record<string, string> = {
   desktop_support: 'Desktop Support',
@@ -148,9 +148,11 @@ export default function TicketReportsPage() {
       .catch(() => { });
   }, [isTicketSettingsFocal, year, periodMode, month, quarter, semester, ticketType]);
 
-  const fetchReports = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchReports = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const filters: Parameters<typeof ticketsApi.getReports>[0] = { year };
       if (periodMode === 'month') filters.month = month;
@@ -216,7 +218,9 @@ export default function TicketReportsPage() {
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to load report data.');
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [
     year,
@@ -337,7 +341,7 @@ export default function TicketReportsPage() {
     const maxLen = Math.max(...slaInsights.map(i => (i.issueName || '').length));
     return Math.max(60, maxLen * 3.5);
   }, [slaInsights]);
-  useAutoRefresh(fetchReports);
+  useSse(['TICKET_UPDATED'], () => fetchReports(true));
 
   const periodLabel = (() => {
     if (periodMode === 'month') return MONTHS.find((m) => m.value === month)?.label ?? '';

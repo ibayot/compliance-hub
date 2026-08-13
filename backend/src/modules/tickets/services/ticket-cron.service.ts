@@ -7,6 +7,7 @@ import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { TicketService } from './ticket.service';
 import { EmailService } from './email.service';
 import { AttendanceService } from './attendance.service';
+import { SseService } from './sse.service';
 import { UserRole } from '../../shared/entities';
 
 @Injectable()
@@ -25,6 +26,7 @@ export class TicketCronService implements OnModuleInit {
     private readonly ticketService: TicketService,
     private readonly emailService: EmailService,
     private readonly attendanceService: AttendanceService,
+    private readonly sseService: SseService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -32,7 +34,10 @@ export class TicketCronService implements OnModuleInit {
     this.logger.log('Running minute cron tasks...');
     await this.processSlaSchedules();
     await this.processOverdueTicketsUnpauseNext();
-    await this.processDtrSyncs();
+    const dtrSynced = await this.processDtrSyncs();
+    if (dtrSynced) {
+      this.sseService.emitAttendanceUpdated();
+    }
   }
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -42,7 +47,7 @@ export class TicketCronService implements OnModuleInit {
     await this.processAutoUnpause();
     await this.processAutoUnfreeze();
     await this.processFrozenTicketsReminders();
-    await this.processPercentageAlerts();
+    await this.processPercentageAlerts();
   }
 
   @Cron('*/15 * * * *')
@@ -62,7 +67,7 @@ export class TicketCronService implements OnModuleInit {
     const config = await this.configRepo.findOne({ where: { id: 1 } });
     if (!config) {
       this.logger.error(`[DTR SYNC DEBUG] No global config found! Aborting.`);
-      return;
+      return false;
     }
 
     // Derive current time in Manila timezone (UTC+8) for schedule boundary comparison
@@ -87,14 +92,15 @@ export class TicketCronService implements OnModuleInit {
     // Check if in Morning window
     if (currentTime >= morningStart && currentTime <= morningEnd) {
       this.logger.log(`[DTR SYNC DEBUG] Inside Morning window. Syncing!`);
-      await this.attendanceService.syncAttendanceWithDTR();
+      return await this.attendanceService.syncAttendanceWithDTR();
     } 
     // Check if in Late window (after morning end, before late end)
     else if (currentTime > morningEnd && currentTime <= lateEnd) {
       this.logger.log(`[DTR SYNC DEBUG] Inside Late window. Syncing!`);
-      await this.attendanceService.syncAttendanceWithDTR();
+      return await this.attendanceService.syncAttendanceWithDTR();
     } else {
       this.logger.log(`[DTR SYNC DEBUG] Outside all active windows. Doing nothing.`);
+      return false;
     }
   }
 

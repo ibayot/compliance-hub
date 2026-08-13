@@ -41,7 +41,7 @@ import {
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { attendanceApi, TechAttendance, OfficeDay, AttendanceStatus } from '@/app/api/references';
-import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
+import { useSse } from '@/lib/utils/useSse';
 
 const STATUS_CONFIG: Record<
   AttendanceStatus,
@@ -209,8 +209,11 @@ export default function AttendancePage() {
     }
   }, [tab, attType, startDate, endDate]);
 
-  useAutoRefresh(silentRefreshOfficeDays);
-  useAutoRefresh(silentRefreshTab1);
+  useSse(['ATTENDANCE_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
+    silentRefreshOfficeDays();
+    silentRefreshTab1();
+    silentRefreshTab0Attendance();
+  });
 
   // Live refresh for attendance data in Tab 0 — so presence indicators update in real time
   // when a manager tags a staff member as present without requiring a page reload.
@@ -223,7 +226,6 @@ export default function AttendancePage() {
       /* silent */
     }
   }, [tab, isRICTMSStaff, startDate, endDate, attType]);
-  useAutoRefresh(silentRefreshTab0Attendance);
 
   // Office day map: date → OfficeDay
   const odMap = useMemo(() => {
@@ -313,14 +315,7 @@ export default function AttendancePage() {
     return technicians.some((tech: any) => !attRecordsMap.get(tech.id)?.get(todayStr));
   }, [tab, todayInViewedMonth, technicians, attRecordsMap, todayStr]);
 
-  // Keep live-refreshing today's attendance while there are still unmarked staff.
-  useEffect(() => {
-    if (!hasUnmarkedTodayAttendance) return;
-    const id = setInterval(() => {
-      silentRefreshTab1();
-    }, 5_000);
-    return () => clearInterval(id);
-  }, [hasUnmarkedTodayAttendance, silentRefreshTab1]);
+  // SSE now handles live-refreshing today's attendance even for unmarked staff.
 
   const handleSetAttendance = async (userId: number, date: string, status: AttendanceStatus, clockInTime?: string) => {
     // Optimistic update — immediately reflect in UI without showing loading spinner

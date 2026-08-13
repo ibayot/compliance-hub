@@ -27,6 +27,7 @@ import {
   InputAdornment,
   ListItemText,
   MenuItem,
+  Stack,
   Select,
   Switch,
   Tab,
@@ -63,10 +64,11 @@ import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { useThemeMode } from '@/contexts/ThemeModeContext';
 import { authApi } from '@/lib/api/auth';
+import { ticketSettingsApi } from '@/app/api/references';
 import { usersApi, RoleDefinition, RoleCapabilityRecord } from '@/lib/api/users';
 import { unitsApi, Unit } from '@/lib/api/units';
 import { UserRole } from '@/lib/types/auth';
-import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
+import { useSse } from '@/lib/utils/useSse';
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { NativeBiometric } from '@capgo/capacitor-native-biometric';
@@ -404,6 +406,172 @@ function SecuritySettingsCard() {
   );
 }
 
+
+function GlobalSettingsCard() {
+  const { myCap } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
+  const canManageGlobal = Boolean(myCap?.isGlobalSettingsAccess);
+  const canManageSmtp = canManageGlobal || Boolean(myCap?.isSmtpSettingsAccess);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [smtpTestLoading, setSmtpTestLoading] = useState(false);
+  const [smtpTestEmail, setSmtpTestEmail] = useState('');
+  const [config, setConfig] = useState<any>({
+    assignmentStrategy: 'CURRENT_AUTO',
+    roundRobinCapHours: 80,
+    autoCloseDays: 3,
+    smtpHost: '',
+    smtpPort: 587,
+    smtpUser: '',
+    smtpPass: '',
+    smtpFrom: '',
+    smtpFromName: '',
+    primarySmtpDailyLimit: 2000,
+    scheduleMode: 'OFFICE_HOURS',
+    officeClockin: '08:00:00',
+    officeClockout: '17:00:00',
+    cwwClockinStart: '07:00:00',
+    cwwClockinEnd: '08:00:00',
+    cwwClockoutStart: '18:00:00',
+    cwwClockoutEnd: '19:00:00',
+    isEmailNotificationsEnabled: true,
+    emailTestOverride: '',
+  });
+
+  const load = useCallback(async () => {
+    if (!canManageGlobal) {
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      setConfig(await ticketSettingsApi.getGlobalConfig());
+    } catch {
+      enqueueSnackbar('Failed to load global settings', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [canManageGlobal, enqueueSnackbar]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useSse(['GLOBAL_SETTINGS_UPDATED'], load);
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      const { id, createdAt, updatedAt, primarySmtpSentToday, primarySmtpLastSentDate, ...payload } = config as any;
+      await ticketSettingsApi.updateGlobalConfig(payload);
+      enqueueSnackbar('Global settings updated', { variant: 'success' });
+      await load();
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to update global settings', { variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTest = async () => {
+    if (!smtpTestEmail.trim()) {
+      enqueueSnackbar('Please enter an email address to test', { variant: 'warning' });
+      return;
+    }
+    try {
+      setSmtpTestLoading(true);
+      const res = await ticketSettingsApi.testEmail(smtpTestEmail.trim());
+      enqueueSnackbar(res.message, { variant: res.sent ? 'success' : 'error' });
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Test email failed', { variant: 'error' });
+    } finally {
+      setSmtpTestLoading(false);
+    }
+  };
+
+  if (!canManageGlobal) return null;
+
+  return (
+    <Card elevation={2}>
+      <CardHeader
+        avatar={<SecurityIcon color="primary" />}
+        title="Global Settings"
+        subheader="Manage routing, work hours, and outbound emails."
+      />
+      <CardContent>
+        {loading ? (
+          <Typography>Loading...</Typography>
+        ) : (
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6" fontWeight={600} mb={2}>Routing Configuration</Typography>
+              <Stack spacing={2}>
+                <TextField select label="Assignment Strategy" value={config.assignmentStrategy} onChange={(e) => setConfig((p: any) => ({ ...p, assignmentStrategy: e.target.value }))} fullWidth>
+                  <MenuItem value="CURRENT_AUTO">Zero-Active</MenuItem>
+                  <MenuItem value="CAPPED_ROUND_ROBIN">Capped Round-Robin</MenuItem>
+                </TextField>
+                <TextField label="Auto Close (Days)" type="number" value={config.autoCloseDays} onChange={(e) => setConfig((p: any) => ({ ...p, autoCloseDays: Number(e.target.value) }))} fullWidth />
+                {config.assignmentStrategy === 'CAPPED_ROUND_ROBIN' && (
+                  <TextField label="Round-Robin SLA Cap (hours)" type="number" value={config.roundRobinCapHours} onChange={(e) => setConfig((p: any) => ({ ...p, roundRobinCapHours: Number(e.target.value) }))} fullWidth />
+                )}
+              </Stack>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6" fontWeight={600} mb={2}>Work Hours & Schedule</Typography>
+              <Stack spacing={2}>
+                <TextField select label="Schedule Mode" value={config.scheduleMode || 'OFFICE_HOURS'} onChange={(e) => setConfig((p: any) => ({ ...p, scheduleMode: e.target.value }))} fullWidth>
+                  <MenuItem value="OFFICE_HOURS">Standard Office Hours</MenuItem>
+                  <MenuItem value="CWW">Compressed Work Week (CWW)</MenuItem>
+                </TextField>
+                {config.scheduleMode === 'OFFICE_HOURS' && (
+                  <>
+                    <TextField label="Office Clock-in" type="time" value={config.officeClockin || '08:00:00'} onChange={(e) => setConfig((p: any) => ({ ...p, officeClockin: e.target.value }))} fullWidth InputLabelProps={{ shrink: true }} />
+                    <TextField label="Office Clock-out" type="time" value={config.officeClockout || '17:00:00'} onChange={(e) => setConfig((p: any) => ({ ...p, officeClockout: e.target.value }))} fullWidth InputLabelProps={{ shrink: true }} />
+                  </>
+                )}
+                {config.scheduleMode === 'CWW' && (
+                  <>
+                    <TextField label="CWW Clock-in Start" type="time" value={config.cwwClockinStart || '07:00:00'} onChange={(e) => setConfig((p: any) => ({ ...p, cwwClockinStart: e.target.value }))} fullWidth InputLabelProps={{ shrink: true }} />
+                    <TextField label="CWW Clock-in End" type="time" value={config.cwwClockinEnd || '08:00:00'} onChange={(e) => setConfig((p: any) => ({ ...p, cwwClockinEnd: e.target.value }))} fullWidth InputLabelProps={{ shrink: true }} />
+                    <TextField label="CWW Clock-out Start" type="time" value={config.cwwClockoutStart || '18:00:00'} onChange={(e) => setConfig((p: any) => ({ ...p, cwwClockoutStart: e.target.value }))} fullWidth InputLabelProps={{ shrink: true }} />
+                    <TextField label="CWW Clock-out End" type="time" value={config.cwwClockoutEnd || '19:00:00'} onChange={(e) => setConfig((p: any) => ({ ...p, cwwClockoutEnd: e.target.value }))} fullWidth InputLabelProps={{ shrink: true }} />
+                  </>
+                )}
+              </Stack>
+            </Grid>
+            {canManageSmtp && (
+              <Grid item xs={12}>
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="h6" fontWeight={600} mb={2}>SMTP Configuration</Typography>
+                <Stack spacing={2} maxWidth={520}>
+                  <Box display="flex" alignItems="center" justifyContent="space-between">
+                    <Typography variant="subtitle1" fontWeight={600}>Enable Outbound Emails</Typography>
+                    <Switch checked={config.isEmailNotificationsEnabled ?? true} onChange={(e) => setConfig((p: any) => ({ ...p, isEmailNotificationsEnabled: e.target.checked }))} />
+                  </Box>
+                  {config.isEmailNotificationsEnabled && (
+                    <TextField label="Test Override Email" value={config.emailTestOverride || ''} onChange={(e) => setConfig((p: any) => ({ ...p, emailTestOverride: e.target.value }))} fullWidth />
+                  )}
+                  <TextField label="SMTP Host" value={config.smtpHost || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpHost: e.target.value }))} fullWidth />
+                  <TextField label="SMTP Port" type="number" value={config.smtpPort || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpPort: Number(e.target.value) }))} fullWidth />
+                  <TextField label="SMTP Username" value={config.smtpUser || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpUser: e.target.value }))} fullWidth />
+                  <TextField label="SMTP Password" type="password" value={config.smtpPass || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpPass: e.target.value }))} fullWidth />
+                  <TextField label="From Email Address" value={config.smtpFrom || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpFrom: e.target.value }))} fullWidth />
+                  <TextField label="From Name" value={config.smtpFromName || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpFromName: e.target.value }))} fullWidth />
+                  <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
+                    <Button variant="contained" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Global Settings'}</Button>
+                    <TextField size="small" label="Test Recipient Email" value={smtpTestEmail} onChange={(e) => setSmtpTestEmail(e.target.value)} sx={{ flexGrow: 1, minWidth: 240 }} />
+                    <Button variant="outlined" onClick={handleTest} disabled={smtpTestLoading}>{smtpTestLoading ? 'Sending...' : 'Test Connection'}</Button>
+                  </Box>
+                </Stack>
+              </Grid>
+            )}
+          </Grid>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // --- Role Capabilities Card ------------------------------------------------
 
 const CAPABILITY_CATEGORIES = [
@@ -457,9 +625,10 @@ const CAPABILITY_CATEGORIES = [
     ]
   },
   {
-    name: 'System & Security Settings',
+    name: 'Global, Security & SMTP Settings',
     columns: [
-      { key: 'isSecuritySettingsAccess', label: 'Security Admin', description: 'Manage Default Password in Security Settings' },
+      { key: 'isGlobalSettingsAccess', label: 'Global Settings Admin', description: 'Manage routing and work hours in Ticket Settings' },
+      { key: 'isSecuritySettingsAccess', label: 'Security Settings Admin', description: 'Manage the default password in Security Settings' },
       { key: 'isSmtpSettingsAccess', label: 'SMTP Admin', description: 'Manage SMTP credentials in Ticket Settings' },
     ]
   }
@@ -645,7 +814,7 @@ function RoleCapabilitiesCard() {
   useEffect(() => {
     load();
   }, [load]);
-  useAutoRefresh(load);
+  useSse(['GLOBAL_SETTINGS_UPDATED'], load);
 
   const handleToggle = async (
     roleValue: string,
@@ -734,7 +903,7 @@ function RoleManagementCard() {
   useEffect(() => {
     loadRoles();
   }, [loadRoles]);
-  useAutoRefresh(loadRoles);
+  useSse(['GLOBAL_SETTINGS_UPDATED'], loadRoles);
 
   const handleCreate = async () => {
     const codeVal = form.value.trim().toLowerCase().replace(/\s+/g, '_');
@@ -1219,7 +1388,7 @@ function FocalUserManagementCard() {
   useEffect(() => {
     reload();
   }, [reload]);
-  useAutoRefresh(reload);
+  useSse(['GLOBAL_SETTINGS_UPDATED'], reload);
 
   const resetForm = () => {
     setForm({
@@ -2001,6 +2170,7 @@ export default function SettingsPage() {
     isSuperAdmin || Boolean(myCap?.isUserManagementAdmin) || Boolean(myCap?.isUserManagementView);
   const canManageSystemRoles = isSuperAdmin || Boolean(myCap?.isSystemRolesAccess);
   const canManageRoleCapabilities = isSuperAdmin || Boolean(myCap?.isRoleCapabilitiesAccess);
+  const canManageGlobalSettings = Boolean(myCap?.isGlobalSettingsAccess);
   const canManageSecuritySettings = isSuperAdmin || Boolean(myCap?.isSecuritySettingsAccess);
 
   if (!user) {
@@ -2016,6 +2186,7 @@ export default function SettingsPage() {
     { label: 'User Management', show: canManageUsers },
     { label: 'Role Management', show: canManageSystemRoles },
     { label: 'Role Capabilities Matrix', show: canManageRoleCapabilities },
+    { label: 'Global Settings', show: canManageGlobalSettings },
     { label: 'Security Settings', show: canManageSecuritySettings },
   ];
 
@@ -2123,6 +2294,12 @@ export default function SettingsPage() {
       {currentTab.label === 'Role Capabilities Matrix' && (
         <Box>
           <RoleCapabilitiesCard />
+        </Box>
+      )}
+
+      {currentTab.label === 'Global Settings' && (
+        <Box>
+          <GlobalSettingsCard />
         </Box>
       )}
 

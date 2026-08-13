@@ -132,6 +132,10 @@ export class RoleCapabilitiesService implements OnModuleInit {
     return !!this.get(role)?.isSmtpSettingsAccess;
   }
 
+  isGlobalSettingsAccess(role: string): boolean {
+    return !!this.get(role)?.isGlobalSettingsAccess;
+  }
+
   isSecuritySettingsAccess(role: string): boolean {
     return !!this.get(role)?.isSecuritySettingsAccess;
   }
@@ -223,6 +227,7 @@ export class RoleCapabilitiesService implements OnModuleInit {
       | 'isEscalationFocal'
       | 'isTicketSettingsFocal'
       | 'isSmtpSettingsAccess'
+      | 'isGlobalSettingsAccess'
       | 'isSecuritySettingsAccess'
       | 'isAllTickets'
       | 'isTicketFocal'

@@ -73,6 +73,13 @@ export class RoleCapability {
   isSmtpSettingsAccess: boolean;
 
   /**
+   * True for roles that can manage the shared Global Settings area.
+   * This covers routing, work hours, and SMTP configuration from the Settings module.
+   */
+  @Column({ name: 'is_global_settings_access', type: 'tinyint', width: 1, default: 0 })
+  isGlobalSettingsAccess: boolean;
+
+  /**
    * True for Security Administrators who can manage system-wide security settings,
    * such as the default fallback password.
    */

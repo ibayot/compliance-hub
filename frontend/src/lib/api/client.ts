@@ -27,10 +27,16 @@ export const tokenStore = {
   set: (key: 'accessToken' | 'refreshToken', value: string) => {
     if (typeof window === 'undefined') return;
     window.sessionStorage.setItem(key, value);
+    if (key === 'accessToken') {
+      window.dispatchEvent(new CustomEvent('auth:tokenChanged', { detail: value }));
+    }
   },
   remove: (key: 'accessToken' | 'refreshToken') => {
     if (typeof window === 'undefined') return;
     window.sessionStorage.removeItem(key);
+    if (key === 'accessToken') {
+      window.dispatchEvent(new CustomEvent('auth:tokenChanged', { detail: null }));
+    }
   },
 };
 
@@ -62,6 +68,16 @@ class ApiClient {
         if (typeof window !== 'undefined') {
           const token = tokenStore.get('accessToken');
           if (token) config.headers.Authorization = `Bearer ${token}`;
+        }
+        if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+          const headers: any = config.headers ?? {};
+          if (typeof headers.delete === 'function') {
+            headers.delete('Content-Type');
+            headers.delete('content-type');
+          } else {
+            delete headers['Content-Type'];
+            delete headers['content-type'];
+          }
         }
         return config;
       },

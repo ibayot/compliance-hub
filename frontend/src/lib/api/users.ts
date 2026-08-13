@@ -102,6 +102,7 @@ export interface RoleCapabilityRecord {
   isUserManagementAdmin?: boolean;
   isUserManagementView?: boolean;
   isSmtpSettingsAccess: boolean;
+  isGlobalSettingsAccess: boolean;
   isKpiAccess: boolean;
   isKpiManage: boolean;
   isAttendanceAccess: boolean;
@@ -129,6 +130,7 @@ export interface UpdateRoleCapabilityPayload {
   isAllTickets?: boolean;
   isTicketFocal?: boolean;
   isSmtpSettingsAccess?: boolean;
+  isGlobalSettingsAccess?: boolean;
   isKpiAccess?: boolean;
   isKpiManage?: boolean;
   isAttendanceAccess?: boolean;

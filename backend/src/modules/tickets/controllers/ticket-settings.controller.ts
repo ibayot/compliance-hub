@@ -67,10 +67,12 @@ export class TicketSettingsController {
     private readonly roleCapSvc: RoleCapabilitiesService,
   ) {}
 
-  /** POST /ticket-settings/email-test — send a test email to verify SMTP (super_admin only) */
+  /** POST /ticket-settings/email-test — send a test email to verify SMTP (global settings access) */
   @ApiTags('_test-only')
   @Post('email-test')
-  @Roles(UserRole.SUPER_ADMIN)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isGlobalSettingsAccess')
+  @Roles(...ALL_STAFF_ROLES)
   @HttpCode(HttpStatus.OK)
   async testEmail(@Body('to') to: string) {
     if (!to) {
@@ -372,7 +374,7 @@ export class TicketSettingsController {
 
   @Get('global-config')
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isTicketSettingsFocal')
+  @RequireCapability('isGlobalSettingsAccess')
   @Roles(...ALL_STAFF_ROLES)
   async getGlobalConfig() {
     return this.settingsService.getGlobalConfig();
@@ -380,7 +382,7 @@ export class TicketSettingsController {
 
   @Patch('global-config')
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isTicketSettingsFocal')
+  @RequireCapability('isGlobalSettingsAccess')
   @Roles(...ALL_STAFF_ROLES)
   async updateGlobalConfig(@Body() dto: UpdateGlobalConfigDto) {
     const updated = await this.settingsService.updateGlobalConfig(dto);

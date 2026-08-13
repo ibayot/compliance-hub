@@ -6,9 +6,10 @@ import { IncidentsController } from './controllers/incidents.controller';
 import { IncidentsService } from './services/incidents.service';
 import { SnapshotService } from './services/snapshot.service';
 import { HttpClientsModule } from '../../common/http-clients/http-clients.module';
+import { RealtimeModule } from '../../common/events/realtime.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Incident, IncidentDailySnapshot]), HttpClientsModule],
+  imports: [TypeOrmModule.forFeature([Incident, IncidentDailySnapshot]), HttpClientsModule, RealtimeModule],
   controllers: [IncidentsController],
   providers: [IncidentsService, SnapshotService],
   exports: [IncidentsService, SnapshotService],

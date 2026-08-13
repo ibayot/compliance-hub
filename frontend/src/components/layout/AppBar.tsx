@@ -31,9 +31,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { usePageTitle } from '@/contexts/PageTitleContext';
 import { useThemeMode } from '@/contexts/ThemeModeContext';
+import { useSse } from '@/lib/utils/useSse';
 import React, { useState, useEffect } from 'react';
 import FeedbackModal from '../FeedbackModal';
-import { attendanceApi, notificationsApi } from '@/app/api/references';
+import { attendanceApi, notificationsApi, AttendanceStatus } from '@/app/api/references';
 
 interface AppBarProps {
   onMenuClick: () => void;
@@ -52,7 +53,11 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
   const { mode, toggleMode } = useThemeMode();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [myShift, setMyShift] = useState<{ clockIn: Date | null; clockOut: Date | null } | null>(null);
+  const [myShift, setMyShift] = useState<{
+    clockIn: Date | null;
+    clockOut: Date | null;
+    attendanceStatus?: AttendanceStatus | null;
+  } | null>(null);
 
   // Notifications
   const [notifAnchorEl, setNotifAnchorEl] = useState<null | HTMLElement>(null);
@@ -60,60 +65,111 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotifLoading, setIsNotifLoading] = useState(false);
 
-  useEffect(() => {
+  const fetchMyShift = React.useCallback(() => {
     if (user?.role && user.role !== 'user' && user.role !== 'super_admin') {
       attendanceApi.getMyShift().then(shift => {
         if (shift.clockIn && shift.clockOut) {
           setMyShift(shift);
+        } else if (shift.attendanceStatus) {
+          setMyShift(shift);
+        } else {
+          setMyShift(null);
         }
       }).catch(console.error);
     }
   }, [user]);
 
+  useEffect(() => {
+    fetchMyShift();
+  }, [fetchMyShift]);
+
   // Audio ref for notification sound
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
   React.useEffect(() => {
     audioRef.current = new Audio("/notification.mp3");
+    audioRef.current.preload = 'auto';
   }, []);
 
+  const notificationAudioUnlockedRef = React.useRef(false);
+  const unlockNotificationAudio = React.useCallback(async () => {
+    if (notificationAudioUnlockedRef.current || !audioRef.current) return;
+    try {
+      audioRef.current.volume = 0;
+      await audioRef.current.play();
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current.volume = 1;
+      notificationAudioUnlockedRef.current = true;
+    } catch {
+      // Ignore autoplay policy failures; the next user gesture can retry.
+    }
+  }, []);
+
+  useEffect(() => {
+    const unlock = () => {
+      void unlockNotificationAudio();
+    };
+    document.addEventListener('pointerdown', unlock, { once: true });
+    document.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      document.removeEventListener('pointerdown', unlock);
+      document.removeEventListener('keydown', unlock);
+    };
+  }, [unlockNotificationAudio]);
+
   const prevUnreadCountRef = React.useRef(0);
+  const attendanceStatusLabel: Record<AttendanceStatus, string> = {
+    present: 'Present',
+    absent: 'Absent',
+    half_day: 'Half Day',
+    out_of_office: 'Out of Office',
+  };
+
+  const fetchUnread = React.useCallback(() => {
+    if (user) {
+      notificationsApi.getUnreadCount()
+        .then(res => {
+          const currentCount = res.count;
+          if (currentCount > prevUnreadCountRef.current) {
+             audioRef.current?.play().catch(e => console.log("Audio play failed:", e));
+          }
+          prevUnreadCountRef.current = currentCount;
+          setUnreadCount(currentCount);
+        })
+        .catch(() => {});
+    }
+  }, [user]);
 
   // Notifications Polling with Page Visibility API
   useEffect(() => {
     if (!user) return;
 
-    const fetchUnread = () => {
-      if (true) {
-        notificationsApi.getUnreadCount()
-          .then(res => {
-            const currentCount = res.count;
-            if (currentCount > prevUnreadCountRef.current) {
-               audioRef.current?.play().catch(e => console.log("Audio play failed:", e));
-            }
-            prevUnreadCountRef.current = currentCount;
-            setUnreadCount(currentCount);
-          })
-          .catch(() => {});
-      }
-    };
-
+    // Load initially
     fetchUnread();
-    const interval = setInterval(fetchUnread, 30000);
 
     const handleVisibilityChange = () => {
-      if (true) {
+      if (document.visibilityState === 'visible') {
         fetchUnread();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user]);
+  }, [user, fetchUnread]);
+
+  // Live updates – listen for SSE changes
+  useSse(['NOTIFICATION_CREATED'], () => {
+    fetchUnread();
+  });
+
+  useSse(['ATTENDANCE_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
+    fetchMyShift();
+  });
 
   const handleNotifOpen = async (event: React.MouseEvent<HTMLElement>) => {
+    void unlockNotificationAudio();
     setNotifAnchorEl(event.currentTarget);
     setIsNotifLoading(true);
     try {
@@ -293,13 +349,19 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
         </Box>
 
         {/* Shift Indicator */}
-        {myShift && myShift.clockIn && myShift.clockOut && (
+        {myShift && myShift.attendanceStatus && myShift.attendanceStatus !== 'present' ? (
+          <Box sx={{ mr: 2, display: { xs: 'none', sm: 'block' } }}>
+            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+              Attendance: {attendanceStatusLabel[myShift.attendanceStatus]}
+            </Typography>
+          </Box>
+        ) : myShift && myShift.clockIn && myShift.clockOut ? (
           <Box sx={{ mr: 2, display: { xs: 'none', sm: 'block' } }}>
             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
               Shift: {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(myShift.clockIn)} - {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(myShift.clockOut)}
             </Typography>
           </Box>
-        )}
+        ) : null}
 
         {/* Notifications */}
         <Box sx={{ mr: 2 }}>

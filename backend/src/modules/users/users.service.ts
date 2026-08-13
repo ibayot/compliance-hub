@@ -290,6 +290,7 @@ export class UsersService {
         isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
       isTicketSettingsFocal:
         isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
+      isGlobalSettingsAccess: isSuperAdmin || isSectionHead,
       isAllTickets: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
       isTicketFocal: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
       isKpiAccess: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,

@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsNumber, IsBoolean, IsEnum, IsOptional, IsNotEmpty, IsArray, ValidateNested } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 import {
   Injectable,
@@ -28,6 +29,7 @@ import { UsersHttpClient } from '../../../common/http-clients/users.http-client'
 import { TicketSettingsService } from './ticket-settings.service';
 import { AttendanceService } from './attendance.service';
 import { EmailService, TicketEmailData } from './email.service';
+import { SseService } from './sse.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { EventBusService } from '../../../common/events/event-bus.service';
 import { KnowledgeBaseService } from './knowledge-base.service';
@@ -142,6 +144,7 @@ export class AddCommentDto {
   @ApiPropertyOptional()
   comment?: string;
   @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   @ApiPropertyOptional()
   isInternal?: boolean;
@@ -270,8 +273,8 @@ export class TicketService implements OnModuleInit {
     private readonly emailService: EmailService,
     private readonly roleCapSvc: RoleCapabilitiesService,
     private readonly kbService: KnowledgeBaseService,
-    @Optional()
-    private readonly eventBus?: EventBusService,
+    private readonly sseService: SseService,
+    @Optional() private readonly eventBus?: EventBusService,
   ) { }
 
   // --- Schema Migration ----------------------------------------------------
@@ -483,6 +486,7 @@ export class TicketService implements OnModuleInit {
         meta: meta ? JSON.stringify(meta) : null,
       });
       await this.eventRepo.save(event);
+      this.sseService.emitTicketUpdated(ticketId);
     } catch (err: any) {
       this.logger.warn(`logEvent failed (non-fatal): ${err?.message}`);
     }
@@ -500,6 +504,9 @@ export class TicketService implements OnModuleInit {
         message,
       }));
       await this.notificationRepo.save(notifications);
+      for (const notification of notifications) {
+        this.sseService.emitNotificationCreated(notification.userId);
+      }
       this.logger.log(`Created ${notifications.length} notifications for ticket ${ticketId}`);
     } catch (e) {
       this.logger.error("Failed to send notification: " + e.message);
@@ -2300,10 +2307,11 @@ export class TicketService implements OnModuleInit {
 
     if (actorRole === UserRole.USER) {
       ticket.hasUnreadTechnician = true;
+      await this.ticketRepo.update(ticket.id, { hasUnreadTechnician: true });
     } else {
       ticket.hasUnreadUser = true;
+      await this.ticketRepo.update(ticket.id, { hasUnreadUser: true });
     }
-    await this.ticketRepo.save(ticket);
 
     // In-app notification
     const notifyUsers = [];

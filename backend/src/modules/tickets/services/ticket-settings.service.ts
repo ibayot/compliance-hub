@@ -12,6 +12,7 @@ import { RoleDefinitionEntity } from '../../users/entities/role-definition.entit
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { Ticket } from '../entities/ticket.entity';
+import { SseService } from './sse.service';
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -295,6 +296,7 @@ export class TicketSettingsService {
     @InjectRepository(Ticket)
     private readonly ticketRepo: Repository<Ticket>,
     private readonly roleCapSvc: RoleCapabilitiesService,
+    private readonly sseService: SseService,
   ) {}
 
   // ── Categories ──────────────────────────────────────────────────────────
@@ -348,7 +350,9 @@ export class TicketSettingsService {
       softDeleted.isDeleted = false;
       softDeleted.created_by = actorId;
       softDeleted.updated_by = actorId;
-      return this.categoryRepo.save(softDeleted);
+      const saved = await this.categoryRepo.save(softDeleted);
+      this.sseService.emitGlobalSettingsUpdated();
+      return saved;
     }
 
     const cat = this.categoryRepo.create({
@@ -363,7 +367,9 @@ export class TicketSettingsService {
       created_by: actorId,
       updated_by: actorId,
     });
-    return this.categoryRepo.save(cat);
+    const saved = await this.categoryRepo.save(cat);
+    this.sseService.emitGlobalSettingsUpdated();
+    return saved;
   }
 
   async updateCategory(
@@ -409,6 +415,7 @@ export class TicketSettingsService {
     cat.isActive = false;
     cat.updated_by = actorId;
     await this.categoryRepo.save(cat);
+    this.sseService.emitGlobalSettingsUpdated();
   }
 
   // ── Keyword Rules ──────────────────────────────────────────────────────
@@ -454,7 +461,9 @@ export class TicketSettingsService {
       isActive: true,
       createdBy: actorId,
     });
-    return this.keywordRepo.save(rule);
+    const saved = await this.keywordRepo.save(rule);
+    this.sseService.emitGlobalSettingsUpdated();
+    return saved;
   }
 
   async updateKeywordRule(id: string, dto: UpdateKeywordRuleDto): Promise<TicketKeywordRule> {
@@ -492,12 +501,15 @@ export class TicketSettingsService {
     }
     if (dto.isActive !== undefined) rule.isActive = dto.isActive;
 
-    return this.keywordRepo.save(rule);
+    const saved = await this.keywordRepo.save(rule);
+    this.sseService.emitGlobalSettingsUpdated();
+    return saved;
   }
 
   async deleteKeywordRule(id: string): Promise<void> {
     const rule = await this.getKeywordRuleById(id);
     await this.keywordRepo.remove(rule);
+    this.sseService.emitGlobalSettingsUpdated();
   }
 
   // ── Issue Types ───────────────────────────────────────────────────────
@@ -575,7 +587,9 @@ export class TicketSettingsService {
       updated_by: actorId,
     });
 
-    return this.issueTypeRepo.save(issueType);
+    const saved = await this.issueTypeRepo.save(issueType);
+    this.sseService.emitGlobalSettingsUpdated();
+    return saved;
   }
 
   async updateIssueType(
@@ -625,7 +639,9 @@ export class TicketSettingsService {
     }
     issueType.updated_by = actorId;
 
-    return this.issueTypeRepo.save(issueType);
+    const saved = await this.issueTypeRepo.save(issueType);
+    this.sseService.emitGlobalSettingsUpdated();
+    return saved;
   }
 
   async deleteIssueType(id: string, actorId: number): Promise<void> {
@@ -634,6 +650,7 @@ export class TicketSettingsService {
     issueType.isActive = false;
     issueType.updated_by = actorId;
     await this.issueTypeRepo.save(issueType);
+    this.sseService.emitGlobalSettingsUpdated();
   }
 
   /** Find the first matching keyword rule for a given text (subject + description) */
@@ -818,7 +835,9 @@ export class TicketSettingsService {
       label: dto.label?.trim() || name,
       createdById: actorId,
     });
-    return this.escalationFocalRepo.save(config);
+    const saved = await this.escalationFocalRepo.save(config);
+    this.sseService.emitGlobalSettingsUpdated();
+    return saved;
   }
 
   /** Remove an escalation focal config */
@@ -826,6 +845,7 @@ export class TicketSettingsService {
     const config = await this.escalationFocalRepo.findOne({ where: { id } });
     if (!config) throw new NotFoundException(`Escalation focal config ${id} not found`);
     await this.escalationFocalRepo.remove(config);
+    this.sseService.emitGlobalSettingsUpdated();
   }
 
   // ── Global Config ───────────────────────────────────────────────────────
@@ -872,7 +892,9 @@ export class TicketSettingsService {
       config.isEmailNotificationsEnabled = dto.isEmailNotificationsEnabled;
     if (dto.emailTestOverride !== undefined) config.emailTestOverride = dto.emailTestOverride;
 
-    return this.configRepo.save(config);
+    const saved = await this.configRepo.save(config);
+    this.sseService.emitGlobalSettingsUpdated();
+    return saved;
   }
 
   // ── SLA Insights ───────────────────────────────────────────────────────

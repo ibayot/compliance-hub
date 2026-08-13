@@ -33,7 +33,7 @@ import ForcePasswordChangeModal from '@/components/ForcePasswordChangeModal';
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 
-const tokenStore = {
+export const tokenStore = {
   get: (key: 'accessToken' | 'refreshToken'): string | null => {
     if (typeof window === 'undefined') return null;
     return window.sessionStorage.getItem(key);
@@ -41,10 +41,16 @@ const tokenStore = {
   set: (key: 'accessToken' | 'refreshToken', value: string) => {
     if (typeof window === 'undefined') return;
     window.sessionStorage.setItem(key, value);
+    if (key === 'accessToken') {
+      window.dispatchEvent(new CustomEvent('auth:tokenChanged', { detail: value }));
+    }
   },
   remove: (key: 'accessToken' | 'refreshToken') => {
     if (typeof window === 'undefined') return;
     window.sessionStorage.removeItem(key);
+    if (key === 'accessToken') {
+      window.dispatchEvent(new CustomEvent('auth:tokenChanged', { detail: null }));
+    }
   },
 };
 

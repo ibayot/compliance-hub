@@ -341,15 +341,28 @@ const capabilityManuals: ManualItem[] = [
     }
   },
   {
+    title: 'Global Settings Management',
+    path: 'isGlobalSettingsAccess',
+    details: {
+      purpose: 'As a global settings administrator I need to manage routing and work-hour configuration so that ticketing behavior follows current operational rules.',
+      activities: [
+        { name: 'Configure routing settings', description: 'As a global settings administrator I need to update assignment strategy and round-robin limits so that ticket routing follows the current workflow.' },
+        { name: 'Configure work hours', description: 'As a global settings administrator I need to update schedule windows so that the system matches the office operating calendar.' }
+      ],
+      results: [
+        { name: 'Apply global settings changes', description: 'As a global settings administrator I need to see routing and work-hour updates take effect immediately so that operators use the latest configuration.' }
+      ]
+    }
+  },  {
     title: 'Security Settings Management',
     path: 'isSecuritySettingsAccess',
     details: {
-      purpose: 'As a security administrator I need to manage application-wide security settings so that compliance and access protocols are enforced.',
+      purpose: 'As a security administrator I need to manage application-wide security controls so that compliance and access protocols are enforced.',
       activities: [
         { name: 'Configure default passwords', description: 'As a security administrator I need to set the default password that is assigned to newly created or reset user accounts so that standard onboarding security is maintained.' }
       ],
       results: [
-        { name: 'Apply security settings', description: 'As a security administrator I need to ensure that any user whose password matches the default password is required to change it upon their next login.' }
+        { name: 'Apply security controls', description: 'As a security administrator I need to ensure that any user whose password matches the default password is required to change it upon their next login.' }
       ]
     }
   }

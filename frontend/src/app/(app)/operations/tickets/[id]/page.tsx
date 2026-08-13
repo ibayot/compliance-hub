@@ -34,6 +34,7 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSse } from '@/lib/utils/useSse';
 import { UserRole } from '@/lib/types/auth';
 import {
   ticketsApi,
@@ -423,9 +424,10 @@ export default function TicketDetailPage() {
     };
   }, [escalations, ticketId]);
 
-  // Live updates – poll every 30 s for all users (QA #7: ensures user-side sees status changes)
-  useEffect(() => {
-    const id = setInterval(async () => {
+  // Live updates – listen for SSE changes (QA #7: ensures user-side sees status changes)
+  useSse(['TICKET_UPDATED'], async (payload) => {
+    // Only refresh if the update is for this specific ticket (or global)
+    if (!payload?.ticketId || payload.ticketId === ticketId) {
       try {
         const [ticketData, eventsData, escalationsData] = await Promise.all([
           ticketsApi.getById(ticketId),
@@ -438,9 +440,8 @@ export default function TicketDetailPage() {
       } catch {
         /* silent */
       }
-    }, 30_000);
-    return () => clearInterval(id);
-  }, [ticketId]);
+    }
+  });
 
   useEffect(() => {
     if (canStaff) fetchTechnicians();

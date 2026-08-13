@@ -10,6 +10,7 @@ import { RoleDefinitionEntity } from './entities/role-definition.entity';
 import { RoleCapability } from './entities/role-capability.entity';
 import { RoleCapabilitiesService } from './role-capabilities.service';
 import { EventBusModule } from '../../common/events/event-bus.module';
+import { RealtimeModule } from '../../common/events/realtime.module';
 
 import { TicketingConfig } from '../tickets/entities/ticketing-config.entity';
 
@@ -25,6 +26,7 @@ import { TicketingConfig } from '../tickets/entities/ticketing-config.entity';
       TicketingConfig,
     ]),
     EventBusModule,
+    RealtimeModule,
   ],
   controllers: [AttendanceController],
   providers: [AttendanceService, RoleCapabilitiesService],

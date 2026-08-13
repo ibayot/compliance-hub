@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
+import { useSse } from '@/lib/utils/useSse';
 import {
   Box,
   Button,
@@ -50,6 +50,7 @@ import {
   ticketsApi,
 } from '@/app/api/references';
 import { feedbackApi, Feedback } from '@/lib/api/feedback';
+import { UserRole } from '@/lib/types/auth';
 
 const TYPE_LABELS: Record<string, string> = {
   it_support: 'IT Support',
@@ -60,6 +61,9 @@ const TYPE_LABELS: Record<string, string> = {
 export default function TicketSettingsPage() {
   const { user, myCap } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
+  const canManageGlobalSettings = user?.role === UserRole.SUPER_ADMIN || Boolean(myCap?.isGlobalSettingsAccess);
+  const globalSettingsTabIndex = canManageGlobalSettings ? 4 : -1;
+  const userFeedbackTabIndex = canManageGlobalSettings ? 5 : 4;
 
   const [tab, setTab] = useState(0);
 
@@ -152,6 +156,15 @@ export default function TicketSettingsPage() {
     'all',
   );
 
+  const silentFetchFeedbacks = useCallback(async () => {
+    try {
+      const res = await feedbackApi.list(feedbackFilter);
+      setFeedbacks(res.data);
+    } catch {
+      //
+    }
+  }, [feedbackFilter]);
+
   const fetchFeedbacks = useCallback(async () => {
     try {
       setFeedbackLoading(true);
@@ -205,6 +218,7 @@ export default function TicketSettingsPage() {
   const [smtpTestEmail, setSmtpTestEmail] = useState('');
 
   const fetchGlobalData = useCallback(async () => {
+    if (!canManageGlobalSettings) return;
     try {
       setGlobalLoading(true);
       const [config] = await Promise.all([
@@ -216,7 +230,13 @@ export default function TicketSettingsPage() {
     } finally {
       setGlobalLoading(false);
     }
-  }, [enqueueSnackbar]);
+  }, [enqueueSnackbar, canManageGlobalSettings]);
+
+  useEffect(() => {
+    if (canManageGlobalSettings) {
+      fetchGlobalData();
+    }
+  }, [canManageGlobalSettings, fetchGlobalData]);
 
 
 
@@ -348,7 +368,7 @@ export default function TicketSettingsPage() {
     fetchFeedbacks();
     fetchGlobalData();
   }, [fetchCategories, fetchRules, fetchFocals, fetchFeedbacks, fetchGlobalData]);
-  useAutoRefresh(fetchFeedbacks);
+  useSse(['TICKET_UPDATED', 'GLOBAL_SETTINGS_UPDATED'], silentFetchFeedbacks);
 
   // Category CRUD
   const openCatDialog = (cat?: TicketCategory) => {
@@ -607,7 +627,7 @@ export default function TicketSettingsPage() {
           <Tab label={`Issues (${issues.length})`} />
           <Tab label={`Keyword Rules (${rules.length})`} />
           <Tab label={`Escalation Focals (${focals.length})`} />
-          <Tab label={`Global Settings`} />
+          {canManageGlobalSettings && <Tab label={`Global Settings`} />}
           <Tab label={`User Feedback (${feedbacks.length})`} />
         </Tabs>
 
@@ -990,7 +1010,7 @@ export default function TicketSettingsPage() {
         )}
 
         {/* ── Global Settings & SLA Insights Tab ── */}
-        {tab === 4 && (
+        {canManageGlobalSettings && tab === globalSettingsTabIndex && (
           <CardContent>
             <Typography variant="h6" fontWeight={600} mb={2}>
               Routing Configuration
@@ -1151,7 +1171,7 @@ export default function TicketSettingsPage() {
               </Stack>
             )}
 
-            {!!myCap?.isSmtpSettingsAccess && (
+            {false && (
               <>
                 <Typography variant="h6" fontWeight={600} mb={2} mt={4}>
                   SMTP Configuration
@@ -1262,7 +1282,7 @@ export default function TicketSettingsPage() {
         )}
 
         {/* ── User Feedback Tab ── */}
-        {tab === 5 && (
+        {tab === userFeedbackTabIndex && (
           <CardContent>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
               <Typography variant="body2" color="text.secondary">

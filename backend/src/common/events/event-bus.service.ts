@@ -116,6 +116,16 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
 
     this.enabled = true;
     this.logger.log(`Event bus connected: redis://${host}:${port}`);
+
+    // If any listeners were registered before the Redis connection finished
+    // initializing, subscribe them now.
+    for (const channel of this.handlers.keys()) {
+      try {
+        await this.subClient.subscribe(channel);
+      } catch (err) {
+        this.logger.warn(`EventBus late subscribe error on "${channel}": ${this.formatError(err)}`);
+      }
+    }
   }
 
   private formatError(err: unknown): string {

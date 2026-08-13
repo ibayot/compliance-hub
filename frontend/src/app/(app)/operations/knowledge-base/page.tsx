@@ -31,7 +31,6 @@ import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { knowledgeBaseApi } from '@/app/api/references';
 import ReactMarkdown from 'react-markdown';
-import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
 
 interface KBArticle {
   id: number;

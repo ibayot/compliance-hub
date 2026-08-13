@@ -26,6 +26,9 @@ import { TicketController } from './controllers/ticket.controller';
 import { TicketSettingsController } from './controllers/ticket-settings.controller';
 import { KnowledgeBaseController } from './controllers/knowledge-base.controller';
 import { NotificationController } from './controllers/notification.controller';
+import { SseController } from './controllers/sse.controller';
+import { RealtimeModule } from '../../common/events/realtime.module';
+import { AttendanceSseInterceptor } from './interceptors/attendance-sse.interceptor';
 import { User, RoleDefinitionEntity, Unit } from '../shared/entities';
 import { RoleCapabilitiesService } from '../users/role-capabilities.service';
 import { RoleCapabilitiesHttpClient } from '../../common/http-clients/role-capabilities.http-client';
@@ -58,6 +61,7 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
     ]),
     HttpClientsModule,
     EventBusModule,
+    RealtimeModule,
   ],
   controllers: [
     AttendanceController,
@@ -65,6 +69,7 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
     TicketSettingsController,
     KnowledgeBaseController,
     NotificationController,
+    SseController,
   ],
   providers: [
     TicketService,
@@ -73,6 +78,7 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
     EmailService,
     TicketCronService,
     KnowledgeBaseService,
+    AttendanceSseInterceptor,
     // Phase B: RoleCapabilitiesHttpClient provides all methods of RoleCapabilitiesService
     // without the TypeORM cross-DB View dependency.
     { provide: RoleCapabilitiesService, useClass: RoleCapabilitiesHttpClient },

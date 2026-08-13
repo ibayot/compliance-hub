@@ -11,7 +11,10 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
 } from '@nestjs/common';
+import { Response } from 'express';
+import { AttendanceSseInterceptor } from '../interceptors/attendance-sse.interceptor';
 import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
@@ -136,6 +139,7 @@ function mapAttendance(a: any) {
 @ApiTags('attendance')
 @Controller('attendance')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@UseInterceptors(AttendanceSseInterceptor)
 export class AttendanceController {
   constructor(
     private readonly attendanceService: AttendanceService,

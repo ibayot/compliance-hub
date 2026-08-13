@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSse } from '@/lib/utils/useSse';
 import {
   Box,
   Typography,
@@ -169,6 +170,63 @@ export default function DashboardPage() {
     ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(() => { });
     usersApi.getAppMode().then((res: any) => setAppMode(res.appMode || 'full')).catch(() => setAppMode('full'));
   }, []);
+
+  const silentFetchDashboardData = useCallback(async () => {
+    if (!user) return;
+    if (!isRegularUser && myCap === null) return;
+
+    try {
+      if (isRegularUser) {
+        try {
+          const dashStats = await ticketsApi.getDashboardStats();
+          setUserTicketStats(dashStats);
+        } catch (err) {
+          console.error('Failed to silently fetch user ticket stats:', err);
+        }
+        return;
+      }
+
+      if (isTechnicianAny && !isFullDashboard) return;
+
+      const [
+        docsResponse,
+        metricsResult,
+        incidentsResult,
+        ticketStatsResult,
+        kpiSummaryResult,
+        userDashStatsResult,
+      ] = await Promise.allSettled([
+        documentsApi.listDocuments({ limit: 1000 }),
+        cybersecurityApi.getAll(),
+        incidentsApi.getTodayStats(),
+        ticketsApi.getStatistics(),
+        kpiApi.dashboardSummary(periodYear, periodMonth),
+        ticketsApi.getDashboardStats(),
+      ]);
+
+      const docs = docsResponse.status === 'fulfilled' ? docsResponse.value.data : [];
+      const totalDocsCount = docsResponse.status === 'fulfilled' ? docsResponse.value.total : docs.length;
+      const compliant = docs.filter((d: any) => d.status === 'ready').length;
+      const pending = docs.filter((d: any) => d.status === 'pending' || d.status === 'processing').length;
+
+      if (metricsResult.status === 'fulfilled') setCyberMetrics(metricsResult.value);
+      if (incidentsResult.status === 'fulfilled') setIncidentStats(incidentsResult.value);
+      if (kpiSummaryResult.status === 'fulfilled') setKpiSummary(kpiSummaryResult.value);
+      if (userDashStatsResult.status === 'fulfilled') setUserTicketStats(userDashStatsResult.value);
+
+      setStats({
+        totalDocuments: totalDocsCount,
+        compliantDocuments: compliant,
+        pendingDocuments: pending,
+        openTickets: (ticketStatsResult.status === 'fulfilled' ? (ticketStatsResult.value as any)?.byStatus?.open : 0) || 0,
+        recentDocuments: docs.slice(0, 5),
+      });
+    } catch (err) {
+      console.error('Failed to silently fetch dashboard data:', err);
+    }
+  }, [user, myCap, isRegularUser, isTechnicianAny, isFullDashboard, periodYear, periodMonth]);
+
+  useSse(['TICKET_UPDATED', 'INCIDENT_SNAPSHOT_CREATED'], silentFetchDashboardData);
 
   useEffect(() => {
     if (!user) return;

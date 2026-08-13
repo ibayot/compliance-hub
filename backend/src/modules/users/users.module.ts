@@ -8,6 +8,7 @@ import { RoleDefinitionEntity } from './entities/role-definition.entity';
 import { RoleCapability } from './entities/role-capability.entity';
 import { RoleCapabilitiesService } from './role-capabilities.service';
 import { EventBusModule } from '../../common/events/event-bus.module';
+import { CapabilityGuard } from '../../common/guards/capability.guard';
 import { Feedback } from './entities/feedback.entity';
 import { FeedbackController } from './feedback.controller';
 import { FeedbackService } from './feedback.service';
@@ -30,7 +31,7 @@ import { UserTrustedDevice } from './entities/user-trusted-device.entity';
     EventBusModule,
   ],
   controllers: [SecurityConfigController, UsersController, FeedbackController],
-  providers: [UsersService, RoleCapabilitiesService, FeedbackService, SecurityConfigService],
+  providers: [UsersService, RoleCapabilitiesService, FeedbackService, SecurityConfigService, CapabilityGuard],
   exports: [UsersService, RoleCapabilitiesService, FeedbackService, SecurityConfigService],
 })
 export class UsersModule {}

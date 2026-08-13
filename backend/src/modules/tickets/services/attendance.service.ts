@@ -19,6 +19,7 @@ import { RoleDefinitionEntity } from '../../shared/entities';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { EventBusService } from '../../../common/events/event-bus.service';
+import { SseService } from './sse.service';
 import { auditContext } from '../../../shared/audit/audit.context';
 
 // --- DTOs ------------------------------------------------------------------
@@ -123,6 +124,7 @@ export class AttendanceService implements OnModuleInit {
     private readonly configRepo: Repository<TicketingConfig>,
     private readonly roleCapSvc: RoleCapabilitiesService,
     private readonly eventBus: EventBusService,
+    private readonly sseService: SseService,
   ) {}
 
   async onModuleInit() {
@@ -669,7 +671,7 @@ export class AttendanceService implements OnModuleInit {
     return staff.filter((s) => !attendedIds.has(s.id));
   }
 
-  async getMyShift(user: User): Promise<{ clockIn: Date | null; clockOut: Date | null }> {
+  async getMyShift(user: User): Promise<{ clockIn: Date | null; clockOut: Date | null; attendanceStatus: AttendanceStatus | null }> {
     console.log('[getMyShift] Starting for user:', user.email);
     
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
@@ -679,7 +681,11 @@ export class AttendanceService implements OnModuleInit {
     });
 
     if (!attendanceRecord || !attendanceRecord.clockInTime) {
-      return { clockIn: null, clockOut: null };
+      return {
+        clockIn: null,
+        clockOut: null,
+        attendanceStatus: attendanceRecord?.status ?? null,
+      };
     }
 
     const clockIn = attendanceRecord.clockInTime;
@@ -703,25 +709,25 @@ export class AttendanceService implements OnModuleInit {
         const [outH, outM] = clockOutStartStr.split(':').map(Number);
         const clockOut = new Date(clockIn);
         clockOut.setHours(outH, outM, 0, 0);
-        return { clockIn, clockOut };
+        return { clockIn, clockOut, attendanceStatus: attendanceRecord.status };
       } else if (clockIn <= clockInEnd) {
         // Within sliding window - exactly 11 hours from actual clock in
         const clockOut = new Date(clockIn.getTime() + 11 * 3600 * 1000);
-        return { clockIn, clockOut };
+        return { clockIn, clockOut, attendanceStatus: attendanceRecord.status };
       } else {
         // Late clock in - shift ends exactly at official clock-out end
         const clockOut = new Date(clockIn);
         const clockOutEndStr = config?.cwwClockoutEnd || '19:00:00';
         const [outH, outM] = clockOutEndStr.split(':').map(Number);
         clockOut.setHours(outH, outM, 0, 0);
-        return { clockIn, clockOut };
+        return { clockIn, clockOut, attendanceStatus: attendanceRecord.status };
       }
     } else {
       const clockOut = new Date();
       const stdClockOutStr = config?.officeClockout || '17:00:00';
       const [hours, minutes] = stdClockOutStr.split(':').map(Number);
       clockOut.setHours(hours, minutes, 0, 0);
-      return { clockIn, clockOut };
+      return { clockIn, clockOut, attendanceStatus: attendanceRecord.status };
     }
   }
 
@@ -730,7 +736,7 @@ export class AttendanceService implements OnModuleInit {
   }
 
   /** Background cron job to sync attendance from the DTR view for missing staff */
-  async syncAttendanceWithDTR(): Promise<void> {
+  async syncAttendanceWithDTR(): Promise<boolean> {
     this.logger.log(`[DTR SYNC DBG] Entering syncAttendanceWithDTR...`);
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
     
@@ -739,7 +745,7 @@ export class AttendanceService implements OnModuleInit {
       const allRoles = await this.getAssignableAttendanceRoles();
       if (allRoles.length === 0) {
         this.logger.log(`[DTR SYNC DBG] Aborting: allRoles is empty!`);
-        return;
+        return false;
       }
       this.logger.log(`[DTR SYNC DBG] allRoles count: ${allRoles.length}`);
 
@@ -750,7 +756,7 @@ export class AttendanceService implements OnModuleInit {
       const validTechs = allTechs.filter(t => t.staffId); // Only those with a DTR staffId
       if (validTechs.length === 0) {
         this.logger.log(`[DTR SYNC DBG] Aborting: validTechs (with staffId) is empty!`);
-        return;
+        return false;
       }
       this.logger.log(`[DTR SYNC DBG] validTechs count: ${validTechs.length}`);
 
@@ -764,7 +770,12 @@ export class AttendanceService implements OnModuleInit {
       
       this.logger.log(`[DTR SYNC DBG] dtrRecords fetched count: ${dtrRecords.length}`);
 
-      this.isDtrViewOnline = true; // Connection succeeded!
+      if (!this.isDtrViewOnline) {
+        this.isDtrViewOnline = true; // Connection succeeded!
+        this.sseService.emitSystemStatusChanged(true);
+      } else {
+        this.isDtrViewOnline = true; // Connection succeeded!
+      }
 
       // 4. Fetch existing attendance records to update
       const existingAttendance = await this.attendanceRepo.find({
@@ -816,9 +827,16 @@ export class AttendanceService implements OnModuleInit {
         
         // Trigger assignment
       }
+      return savedCount > 0;
     } catch (err: any) {
       this.logger.error(`Failed to sync DTR attendance: ${err.message}`);
-      this.isDtrViewOnline = false; // Mark system as offline so Fallback UI kicks in
+      if (this.isDtrViewOnline) {
+        this.isDtrViewOnline = false; // Mark system as offline so Fallback UI kicks in
+        this.sseService.emitSystemStatusChanged(false);
+      } else {
+        this.isDtrViewOnline = false; // Mark system as offline so Fallback UI kicks in
+      }
+      return false;
     }
   }
 }

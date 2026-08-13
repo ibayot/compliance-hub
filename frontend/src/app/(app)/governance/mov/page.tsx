@@ -51,7 +51,7 @@ import { movApi, MovArtifact } from '@/app/api/mov';
 import { kpiApi } from '@/lib/api/kpi';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types/auth';
-import { useAutoRefresh } from '@/lib/utils/useAutoRefresh';
+import { useSse } from '@/lib/utils/useSse';
 
 type RegisterType = 'legal' | 'standards' | 'internal';
 
@@ -228,7 +228,7 @@ export default function MovBuilderPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-  useAutoRefresh(loadData);
+  useSse(['GLOBAL_SETTINGS_UPDATED'], loadData);
 
   // Pre-fill "Prepared by" from the current logged-in user on first load.
   // Uses a separate effect so it doesn't interfere with loadData / preset loading.
