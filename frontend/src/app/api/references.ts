@@ -560,6 +560,10 @@ export interface PaginatedTickets {
   page: number;
   limit: number;
   totalPages: number;
+  statusCounts?: Record<string, number>;
+  pendingSatisfactionCount?: number;
+  myTicketsCount?: number;
+  escalatedToMeCount?: number;
 }
 
 // Tickets API (IT Help Desk)

@@ -538,6 +538,9 @@ export class TicketController {
       throw new NotFoundException('Proof file not found.');
     }
 
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-store');
     res.sendFile(filePath);
   }
 
@@ -561,6 +564,9 @@ export class TicketController {
       throw new NotFoundException('Attachment file not found.');
     }
 
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-store');
     res.sendFile(filePath);
   }
 
@@ -572,7 +578,9 @@ export class TicketController {
   }
 
   @Get('reports/issue-counts')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketSettingsFocal')
+  @Roles(...ALL_ROLES)
   async getIssueCountsReport(
     @Query('year') year?: string,
     @Query('month') month?: string,

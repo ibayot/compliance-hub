@@ -627,9 +627,9 @@ const CAPABILITY_CATEGORIES = [
   {
     name: 'Global, Security & SMTP Settings',
     columns: [
-      { key: 'isGlobalSettingsAccess', label: 'Global Settings Admin', description: 'Manage routing and work hours in Ticket Settings' },
+      { key: 'isGlobalSettingsAccess', label: 'Global Settings Admin', description: 'Manage routing, work hours, schedules, and SMTP in Settings' },
       { key: 'isSecuritySettingsAccess', label: 'Security Settings Admin', description: 'Manage the default password in Security Settings' },
-      { key: 'isSmtpSettingsAccess', label: 'SMTP Admin', description: 'Manage SMTP credentials in Ticket Settings' },
+      { key: 'isSmtpSettingsAccess', label: 'SMTP Admin', description: 'Manage SMTP credentials in Settings' },
     ]
   }
 ];

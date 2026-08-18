@@ -618,7 +618,10 @@ export class AttendanceService implements OnModuleInit {
       });
     }
 
-    return this.officeDayRepo.save(record);
+    const saved = await this.officeDayRepo.save(record);
+    await this.eventBus.publish('office-day.changed', { date: dto.date, isOfficeDay: dto.isOfficeDay });
+    this.sseService.emitAttendanceUpdated();
+    return saved;
   }
 
   /** Bulk set office days */

@@ -91,6 +91,13 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
   }, []);
 
   const notificationAudioUnlockedRef = React.useRef(false);
+  const playNotificationSound = React.useCallback(() => {
+    const audio = new Audio('/notification.mp3');
+    audio.volume = 1;
+    void audio.play().catch(() => {
+      // Browsers may block sound until the user interacts with the page.
+    });
+  }, []);
   const unlockNotificationAudio = React.useCallback(async () => {
     if (notificationAudioUnlockedRef.current || !audioRef.current) return;
     try {
@@ -125,20 +132,20 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
     out_of_office: 'Out of Office',
   };
 
-  const fetchUnread = React.useCallback(() => {
+  const fetchUnread = React.useCallback((playSound = false) => {
     if (user) {
       notificationsApi.getUnreadCount()
         .then(res => {
           const currentCount = res.count;
-          if (currentCount > prevUnreadCountRef.current) {
-             audioRef.current?.play().catch(e => console.log("Audio play failed:", e));
-          }
+           if (playSound && currentCount > prevUnreadCountRef.current) {
+             playNotificationSound();
+           }
           prevUnreadCountRef.current = currentCount;
           setUnreadCount(currentCount);
         })
         .catch(() => {});
     }
-  }, [user]);
+  }, [playNotificationSound, user]);
 
   // Notifications Polling with Page Visibility API
   useEffect(() => {
@@ -149,7 +156,7 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        fetchUnread();
+        fetchUnread(true);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -161,6 +168,7 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
 
   // Live updates – listen for SSE changes
   useSse(['NOTIFICATION_CREATED'], () => {
+    playNotificationSound();
     fetchUnread();
   });
 

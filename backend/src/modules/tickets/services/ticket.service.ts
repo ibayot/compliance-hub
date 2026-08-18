@@ -12,9 +12,10 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, DataSource, QueryRunner, Repository, Not, In } from 'typeorm';
+import { Brackets, DataSource, QueryRunner, Repository, Not, In, LessThan, MoreThanOrEqual } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { Ticket, TicketType, TicketStatus, TicketPriority } from '../entities/ticket.entity';
 import { TicketComment } from '../entities/ticket-comment.entity';
 import { TicketIssueType } from '../entities/ticket-issue-type.entity';
@@ -277,6 +278,53 @@ export class TicketService implements OnModuleInit {
     @Optional() private readonly eventBus?: EventBusService,
   ) { }
 
+  /**
+   * Returns the start of the current calendar week in Asia/Manila.
+   * Weekly cap accounting uses the assignment timestamp, not current status.
+   */
+  private getManilaWeekStart(now = new Date()): Date {
+    const dateText = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila',
+    }).format(now);
+    const weekday = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Manila',
+      weekday: 'short',
+    }).format(now);
+    const dayIndex = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(weekday);
+    const weekStart = new Date(`${dateText}T00:00:00+08:00`);
+    weekStart.setTime(weekStart.getTime() - Math.max(dayIndex, 0) * 24 * 60 * 60 * 1000);
+    return weekStart;
+  }
+
+  private async hasBreachedActiveTicket(technicianId: number): Promise<boolean> {
+    const now = Date.now();
+    const activeTickets = (await this.ticketRepo.find({
+      where: [
+        { assignedToId: technicianId, status: TicketStatus.ASSIGNED, isSlaWaiting: false },
+        // IN_PROGRESS is authoritative; legacy queue flags must not hide a breach.
+        { assignedToId: technicianId, status: TicketStatus.IN_PROGRESS },
+      ],
+    })) || [];
+
+    return activeTickets.some(
+      (ticket) => ticket.slaDeadline && new Date(ticket.slaDeadline).getTime() < now,
+    );
+  }
+  private async getWeeklySlaLoad(technicianId: number): Promise<number> {
+    const weekStart = this.getManilaWeekStart();
+    const weeklyTickets = (await this.ticketRepo.find({
+      where: {
+        assignedToId: technicianId,
+        lastAssignedAt: MoreThanOrEqual(weekStart),
+      },
+      relations: ['issueTypeConfig'],
+    })) || [];
+
+    return weeklyTickets.reduce(
+      (total, ticket) => total + Number(ticket.issueTypeConfig?.slaHours || 24),
+      0,
+    );
+  }
   // --- Schema Migration ----------------------------------------------------
 
   async onModuleInit(): Promise<void> {
@@ -291,6 +339,12 @@ export class TicketService implements OnModuleInit {
     }
 
     if (this.eventBus) {
+      this.eventBus.subscribe('office-day.changed', () => {
+        this.recalculateActiveSlaDeadlines().catch((err) => {
+          this.logger.warn(`SLA deadline recalculation failed: ${err?.message}`);
+        });
+      });
+
       this.eventBus.subscribe('attendance.unavailable', (payload: any) => {
         if (payload?.techId) {
           this.reassignUnavailableTechnicianTickets(payload.techId).catch(() => { });
@@ -433,8 +487,8 @@ export class TicketService implements OnModuleInit {
       if (Number(existing?.cnt) === 0) {
         await qr
           .query(
-            `INSERT INTO ticket_categories (id, \`key\`, name, ticket_type, is_active, is_deleted, created_at, updated_at, sla_hours)
-           VALUES (UUID(), ?, ?, ?, 1, 0, NOW(), NOW(), 24)`,
+            `INSERT INTO ticket_categories (id, \`key\`, name, ticket_type, is_active, is_deleted, created_at, updated_at)
+           VALUES (UUID(), ?, ?, ?, 1, 0, NOW(), NOW())`,
             [c.key, c.name, c.type],
           )
           .catch(() => undefined);
@@ -619,30 +673,36 @@ export class TicketService implements OnModuleInit {
       issueTypeKey = issueType.key;
     }
 
-    // ── Auto-Shift based on keyword rules (QA #13: skipped for Pantawid ICT) ────
-    if (dto.ticketType !== TicketType.PANTAWID_ICT_SUPPORT) {
-      try {
-        const combinedText = `${dto.subject} ${dto.description}`;
-        const matchedRule = await this.settingsService.matchKeywordRules(combinedText, dto.ticketType);
-        if (matchedRule) {
-          ticketType = matchedRule.targetTicketType as TicketType;
-          if (matchedRule.targetCategoryId) {
-            categoryId = matchedRule.targetCategoryId;
-          }
-          if (matchedRule.targetIssueTypeId) {
-            issueTypeId = matchedRule.targetIssueTypeId;
-            if (matchedRule.targetIssueType) {
-              issueTypeKey = matchedRule.targetIssueType.key;
-            }
-          }
-          autoShifted = true;
-          this.logger.log(
-            `Auto-shift: keyword "${matchedRule.keyword}" → type=${ticketType}, cat=${categoryId}, issueTypeId=${issueTypeId}`,
-          );
+    // ── Auto-Shift based on keyword rules ─────────────────────────────────
+    // The selected support type is passed to the matcher so duplicate rules
+    // resolve to the closest support-type-specific category and issue type.
+    try {
+      const combinedText = dto.subject + ' ' + dto.description;
+      const matchedRule = await this.settingsService.matchKeywordRules(combinedText, dto.ticketType);
+      if (matchedRule) {
+        ticketType = matchedRule.targetTicketType as TicketType;
+        if (matchedRule.targetCategoryId) {
+          categoryId = matchedRule.targetCategoryId;
         }
-      } catch (err: any) {
-        this.logger.warn(`Auto-shift failed (non-fatal): ${err?.message}`);
+        if (matchedRule.targetIssueTypeId) {
+          issueTypeId = matchedRule.targetIssueTypeId;
+          if (matchedRule.targetIssueType) {
+            issueTypeKey = matchedRule.targetIssueType.key;
+          } else {
+            const issueType = await this.issueTypeRepo.findOne({
+              where: { id: matchedRule.targetIssueTypeId, isDeleted: false, isActive: true },
+            });
+            if (issueType) issueTypeKey = issueType.key;
+          }
+        }
+        autoShifted = true;
+        this.logger.log(
+          'Auto-shift: keyword "' + matchedRule.keyword + '" -> type=' + ticketType +
+          ', cat=' + categoryId + ', issueTypeId=' + issueTypeId,
+        );
       }
+    } catch (err: any) {
+      this.logger.warn('Auto-shift failed (non-fatal): ' + err?.message);
     }
 
     if (!categoryId) {
@@ -654,13 +714,14 @@ export class TicketService implements OnModuleInit {
     let assignedTech: any = null;
     let noTechAvailable = false;
     let isSlaWaiting = false;
+    let shouldStartInProgress = false;
 
     try {
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
       const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
 
       // ── Unified Fallback Chain for Auto-Assignment ──
-      let fallbackChain: TicketType[] = [];
+      let fallbackChain: string[] = [];
       if (ticketType === TicketType.IT_SUPPORT) {
         fallbackChain = [
           TicketType.IT_SUPPORT,
@@ -674,11 +735,8 @@ export class TicketService implements OnModuleInit {
           TicketType.PANTAWID_ICT_SUPPORT,
         ];
       } else if (ticketType === TicketType.PANTAWID_ICT_SUPPORT) {
-        fallbackChain = [
-          TicketType.PANTAWID_ICT_SUPPORT,
-          TicketType.DESKTOP_SUPPORT,
-          TicketType.IT_SUPPORT,
-        ];
+        // Pantawid tries Pantawid technicians first, then any eligible technician.
+        fallbackChain = [TicketType.PANTAWID_ICT_SUPPORT, 'all'];
       } else {
         fallbackChain = [ticketType];
       }
@@ -694,6 +752,8 @@ export class TicketService implements OnModuleInit {
         if (availableTechs.length > 0) {
           // QA #2: Senior technicians are NOT eligible for auto-assignment
           // Fix: Ensure a ticket is never assigned to its own requester
+          this.logger.log(`[Auto-assign] fallback=${tType} present=${availableTechs.length}`);
+
           const eligibleTechs = availableTechs.filter(
             (t) => !this.roleCapSvc.isSeniorTech(t.role) && t.id !== requesterId,
           );
@@ -710,25 +770,10 @@ export class TicketService implements OnModuleInit {
 
               for (const tech of eligibleTechs) {
                 // 1. Calculate Active SLA Load
-                const activeTickets = await this.ticketRepo.find({
-                  where: [
-                    { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
-                    { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
-                  ],
-                  relations: ['category', 'issueTypeConfig'],
-                });
+                // Weekly cap: count SLA hours assigned during the current Manila week.
+                const weeklySlaLoad = await this.getWeeklySlaLoad(tech.id);
 
-                let activeSlaLoad = 0;
-                for (const t of activeTickets) {
-                  if (t.issueTypeConfig?.slaHours) {
-                    activeSlaLoad += t.issueTypeConfig.slaHours;
-                  } else {
-                    activeSlaLoad += 24; // Default fallback if no SLA
-                  }
-                }
-
-                // 2. Check Capacity Cap
-                if (activeSlaLoad < roundRobinCapHours) {
+                if (weeklySlaLoad < roundRobinCapHours) {
                   // 3. Find tech with oldest lastAssignedTime
                   const lastTicket = await this.ticketRepo.findOne({
                     where: { assignedToId: tech.id },
@@ -747,7 +792,7 @@ export class TicketService implements OnModuleInit {
               }
 
               // Fallback: If ALL eligible techs are at max capacity, fallback to the one with the lowest load
-              if (!assignedTech && eligibleTechs.length > 0) {
+              if (false && !assignedTech && eligibleTechs.length > 0) {
                 let minLoad = Infinity;
                 for (const tech of eligibleTechs) {
                   const openCount = await this.ticketRepo.count({
@@ -792,7 +837,9 @@ export class TicketService implements OnModuleInit {
                 { assignedToId: assignedTech.id, status: TicketStatus.PAUSE },
               ],
             });
-            isSlaWaiting = activeTicketsCount > 0;
+            const hasBreachedTicket = await this.hasBreachedActiveTicket(assignedTech.id);
+            shouldStartInProgress = activeTicketsCount === 0 || hasBreachedTicket;
+            isSlaWaiting = activeTicketsCount > 0 && !hasBreachedTicket;
 
             this.logger.log(
               `Auto-assign resolved: original=${ticketType} -> assigned=${tType} to ${assignedTech.email} using ${assignmentStrategy} (isSlaWaiting: ${isSlaWaiting})`,
@@ -811,10 +858,12 @@ export class TicketService implements OnModuleInit {
     }
 
     // const ticketNumber = await this.generateTicketNumber();
-    const status = assignedToId ? TicketStatus.ASSIGNED : TicketStatus.OPEN;
+    const status = assignedToId
+      ? (shouldStartInProgress ? TicketStatus.IN_PROGRESS : TicketStatus.ASSIGNED)
+      : TicketStatus.OPEN;
 
     // Evaluate isSlaWaiting for manually assigned tickets (if not already done by auto-assign)
-    if (assignedToId && !isSlaWaiting) {
+    if (assignedToId && !isSlaWaiting && !shouldStartInProgress) {
       const activeTicketsCount = await this.ticketRepo.count({
         where: [
           { assignedToId: assignedToId, status: TicketStatus.ASSIGNED },
@@ -825,28 +874,9 @@ export class TicketService implements OnModuleInit {
       isSlaWaiting = activeTicketsCount > 0;
     }
 
-    let slaDeadline: Date | null = null;
-    if (assignedToId && issueTypeId) {
-      const issueType = await this.settingsService.getIssueTypeById(issueTypeId).catch(() => null);
-      if (issueType?.slaHours) {
-        const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch((err) => {
-          this.logger.warn(`[SLA] Failed to load slaConfig: ${err?.message}`);
-          return null;
-        });
-        if (!slaConfig)
-          this.logger.warn('[SLA] slaConfig is null — falling back to naive +hours calc');
-        slaDeadline = slaConfig
-          ? await this.calculateSlaDeadline(new Date(), issueType.slaHours, slaConfig)
-          : (() => {
-            const d = new Date();
-            d.setHours(d.getHours() + issueType.slaHours);
-            return d;
-          })();
-        this.logger.log(
-          `[SLA] deadline set: ${slaDeadline?.toISOString()}, slaHours=${issueType.slaHours}, mode=${slaConfig?.scheduleMode ?? 'fallback'}`,
-        );
-      }
-    }
+    const slaDeadline = assignedToId
+      ? await this.calculateTicketSlaDeadline({ issueTypeId, categoryId }, new Date())
+      : null;
 
     const ticket = this.ticketRepo.create({
       ticketNumber: '', //ticketNumber,
@@ -958,6 +988,10 @@ export class TicketService implements OnModuleInit {
       page: number;
       limit: number;
       totalPages: number;
+      statusCounts: Record<string, number>;
+      pendingSatisfactionCount?: number;
+      myTicketsCount?: number;
+      escalatedToMeCount?: number;
     }
   > {
     const allowedSortColumns: Record<string, string> = {
@@ -1100,6 +1134,18 @@ export class TicketService implements OnModuleInit {
     const config = await this.configRepo.findOne({ where: { id: 1 } });
     const withAvailability = await Promise.all(
       tickets.map(async (t) => {
+        if (t.status === TicketStatus.IN_PROGRESS && t.isSlaWaiting) {
+          t.isSlaWaiting = false;
+          t.slaPausedAt = null;
+          await this.ticketRepo.save(t);
+        }
+        if (t.status === TicketStatus.IN_PROGRESS && !t.slaDeadline && t.assignedToId) {
+          t.slaDeadline = await this.calculateTicketSlaDeadline(
+            t,
+            new Date(t.lastAssignedAt || t.createdAt),
+          );
+          await this.ticketRepo.save(t);
+        }
         let isOverdue = false;
         let isNearingSLA = false;
         if (t.slaDeadline) {
@@ -1148,6 +1194,18 @@ export class TicketService implements OnModuleInit {
       })
     );
 
+    const statusRows = await qb
+      .clone()
+      .select('t.status', 'status')
+      .addSelect('COUNT(DISTINCT t.id)', 'count')
+      .groupBy('t.status')
+      .orderBy('t.status', 'ASC')
+      .getRawMany<{ status: string; count: string | number }>();
+    const statusCounts: Record<string, number> = {};
+    for (const row of statusRows) statusCounts[row.status] = Number(row.count);
+
+    const dashboardStats = filters.viewerId ? await this.getUserDashboardStats(filters.viewerId) : null;
+
     if (!usePagination) {
       return withAvailability;
     }
@@ -1158,6 +1216,10 @@ export class TicketService implements OnModuleInit {
       page: page as number,
       limit: limit as number,
       totalPages: Math.max(1, Math.ceil(total / (limit as number))),
+      statusCounts,
+      pendingSatisfactionCount: dashboardStats?.pendingSatisfactionTickets.length ?? 0,
+      myTicketsCount: dashboardStats?.myTicketsCount ?? 0,
+      escalatedToMeCount: dashboardStats?.escalatedToMeCount ?? 0,
     };
   }
 
@@ -1171,6 +1233,19 @@ export class TicketService implements OnModuleInit {
     await this.assertTicketReadAccess(ticket, viewerId, viewerRole);
 
     let needsSave = false;
+    // IN_PROGRESS tickets are active; repair legacy rows that still carry the queue flag.
+    if (ticket.status === TicketStatus.IN_PROGRESS && ticket.isSlaWaiting) {
+      ticket.isSlaWaiting = false;
+      ticket.slaPausedAt = null;
+      needsSave = true;
+    }
+    if (ticket.status === TicketStatus.IN_PROGRESS && !ticket.slaDeadline && ticket.assignedToId) {
+      ticket.slaDeadline = await this.calculateTicketSlaDeadline(
+        ticket,
+        new Date(ticket.lastAssignedAt || ticket.createdAt),
+      );
+      needsSave = true;
+    }
     if (viewerRole === UserRole.USER && ticket.hasUnreadUser) {
       ticket.hasUnreadUser = false;
       needsSave = true;
@@ -1672,10 +1747,10 @@ export class TicketService implements OnModuleInit {
               today,
             );
 
-            const eligibleTechs =
-              ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
-                ? presentTechs
-                : presentTechs.filter((t) => !this.roleCapSvc.isSeniorTech(t.role));
+            // Senior focal roles are never eligible for automatic assignment.
+            const eligibleTechs = presentTechs.filter(
+              (t) => !this.roleCapSvc.isSeniorTech(t.role),
+            );
 
             // Fetch Routing Configuration
             const config = await this.configRepo.findOne({ where: { id: 1 } });
@@ -1686,18 +1761,10 @@ export class TicketService implements OnModuleInit {
             if (assignmentStrategy === 'CAPPED_ROUND_ROBIN') {
               let minLastAssignedTime = Infinity;
               for (const tech of eligibleTechs) {
-                const activeTickets = await this.ticketRepo.find({
-                  where: [
-                    { assignedToId: tech.id, status: TicketStatus.ASSIGNED },
-                    { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
-                  ],
-                  relations: ['category', 'issueTypeConfig'],
-                });
-                let activeSlaLoad = 0;
-                for (const t of activeTickets) {
-                  activeSlaLoad += t.issueTypeConfig?.slaHours || 24;
-                }
-                if (activeSlaLoad < roundRobinCapHours) {
+                // Weekly cap: count SLA hours assigned during the current Manila week.
+                const weeklySlaLoad = await this.getWeeklySlaLoad(tech.id);
+
+                if (weeklySlaLoad < roundRobinCapHours) {
                   const lastTicket = await this.ticketRepo.findOne({
                     where: { assignedToId: tech.id },
                     order: { lastAssignedAt: 'DESC' },
@@ -1711,7 +1778,7 @@ export class TicketService implements OnModuleInit {
                   }
                 }
               }
-              if (!assignedTech && eligibleTechs.length > 0) {
+              if (false && !assignedTech && eligibleTechs.length > 0) {
                 let minLoad = Infinity;
                 for (const tech of eligibleTechs) {
                   const openCount = await this.ticketRepo.count({
@@ -1920,17 +1987,10 @@ export class TicketService implements OnModuleInit {
 
         if (!isSeniorTech) {
           // Check technician is available today before assigning
-          const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-          const absentRow = await this.dataSource
-            .createQueryBuilder()
-            .select('ta.user_id', 'userId')
-            .from('attendance', 'ta')
-            .where('ta.date = :today', { today })
-            .andWhere('ta.user_id = :uid', { uid: saved.assignedToId })
-            .andWhere("ta.status IN ('absent', 'out_of_office')")
-            .getRawOne();
+          const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });            const presentTechs = await this.attendanceService.getPresentTechnicians('all', today);
+            const isPresent = presentTechs.some((tech) => tech.id === saved.assignedToId);
 
-          if (!absentRow) {
+          if (isPresent) {
             // Check if the technician is still busy with other tickets
             const busyCount = await this.ticketRepo.count({
               where: [
@@ -1952,13 +2012,26 @@ export class TicketService implements OnModuleInit {
                 // Done unpausing
               } else {
                 // 2. Find next oldest unassigned open ticket
-                const nextTicket = await this.ticketRepo
+                let nextTicket = await this.ticketRepo
                   .createQueryBuilder('t')
                   .where('t.status = :status', { status: TicketStatus.OPEN })
                   .andWhere('t.assignedToId IS NULL')
                   .andWhere('t.requesterId != :assignedToId', { assignedToId: saved.assignedToId })
                   .orderBy('t.createdAt', 'ASC')
                   .getOne();
+                if (nextTicket) {
+                  const assignmentConfig = await this.configRepo.findOne({ where: { id: 1 } });
+                  if (assignmentConfig?.assignmentStrategy === 'CAPPED_ROUND_ROBIN') {
+                    const weeklySlaLoad = await this.getWeeklySlaLoad(saved.assignedToId);
+                    const weeklyCap = assignmentConfig.roundRobinCapHours || 80;
+                    if (weeklySlaLoad >= weeklyCap) {
+                      this.logger.log(
+                        `Auto-reassign on resolve: technician #${saved.assignedToId} reached weekly cap (${weeklySlaLoad}/${weeklyCap}).`,
+                      );
+                      nextTicket = null;
+                    }
+                  }
+                }
 
                 if (nextTicket) {
                   nextTicket.assignedToId = saved.assignedToId;
@@ -2069,10 +2142,8 @@ export class TicketService implements OnModuleInit {
     const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     const attendanceRecord = await this.attendanceService.getAttendanceForDate(todayStr);
     const techAttendance = attendanceRecord.find((a) => a.userId === dto.assignedToId);
-    if (techAttendance && ['absent', 'out_of_office', 'half_day'].includes(techAttendance.status)) {
-      throw new BadRequestException(
-        `Cannot assign ticket to a technician who is currently ${techAttendance.status}.`,
-      );
+    if (!techAttendance || techAttendance.status !== 'present') {
+      throw new BadRequestException('Cannot assign a ticket to a technician who is not explicitly marked present.');
     }
 
     // Once an escalation is accepted, only CO/SH/super_admin may reassign,
@@ -2104,24 +2175,6 @@ export class TicketService implements OnModuleInit {
           'During an accepted escalation, reassignment is limited to configured escalation focal users for this ticket type.',
         );
       }
-    }
-
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-    const attendanceRow = await this.dataSource
-      .createQueryBuilder()
-      .select('ta.status', 'status')
-      .from('attendance', 'ta')
-      .where('ta.user_id = :userId', { userId: dto.assignedToId })
-      .andWhere('ta.date = :today', { today })
-      .getRawOne<{ status?: string }>();
-    if (
-      attendanceRow?.status === 'absent' ||
-      attendanceRow?.status === 'out_of_office' ||
-      attendanceRow?.status === 'half_day'
-    ) {
-      throw new BadRequestException(
-        'Selected technician is not available today and cannot be assigned tickets.',
-      );
     }
 
     // If the actor has ticketMainFocal=true they are empowered to re-assign freely (skip busy guard)
@@ -2253,7 +2306,7 @@ export class TicketService implements OnModuleInit {
     const ticket = await this.getTicketById(id, viewerRole, viewerId);
     // Only auto-transition when the assigned technician views an 'assigned' ticket
     // QA #5: Skip auto-transition if priority has not been set yet
-    if (ticket.status === TicketStatus.ASSIGNED && ticket.assignedToId === viewerId) {
+    if (ticket.status === TicketStatus.ASSIGNED && ticket.assignedToId === viewerId && !ticket.isSlaWaiting) {
       if (!ticket.priority) {
         this.logger.log(
           `Auto in_progress skipped: ticket ${ticket.ticketNumber} has no priority set.`,
@@ -2261,6 +2314,8 @@ export class TicketService implements OnModuleInit {
         return null; // Priority must be set first
       }
       ticket.status = TicketStatus.IN_PROGRESS;
+      ticket.isSlaWaiting = false;
+      ticket.slaPausedAt = null;
       const saved = await this.ticketRepo.save(ticket);
       this.logger.log(
         `Auto in_progress: ticket ${ticket.ticketNumber} viewed by technician #${viewerId}`,
@@ -2271,6 +2326,24 @@ export class TicketService implements OnModuleInit {
     return null; // no change
   }
 
+  private validateImageUpload(file: Express.Multer.File): void {
+    const buffer = file?.buffer;
+    const mime = String(file?.mimetype || '').toLowerCase();
+    const isJpeg = buffer?.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    const isPng = buffer?.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    const isGif = buffer?.length >= 6 && (buffer.subarray(0, 6).toString('ascii') === 'GIF87a' || buffer.subarray(0, 6).toString('ascii') === 'GIF89a');
+    const isWebp = buffer?.length >= 12 && buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP';
+    const valid = (isJpeg && mime === 'image/jpeg') || (isPng && mime === 'image/png') || (isGif && mime === 'image/gif') || (isWebp && mime === 'image/webp');
+    if (!valid) {
+      throw new BadRequestException('Only valid JPEG, PNG, GIF, or WebP images are allowed.');
+    }
+  }
+
+  private createSafeImageFilename(file: Express.Multer.File): string {
+    const mime = String(file.mimetype).toLowerCase();
+    const extension = mime === 'image/jpeg' ? 'jpg' : mime.split('/')[1];
+    return `${randomUUID()}.${extension}`;
+  }
   // --- Comments ------------------------------------------------------------
 
   async addComment(
@@ -2295,13 +2368,11 @@ export class TicketService implements OnModuleInit {
 
     let attachmentPath: string | null = null;
     if (attachment) {
-      if (!attachment.mimetype.startsWith('image/')) {
-        throw new BadRequestException('Only picture attachments (images) are allowed.');
-      }
+      this.validateImageUpload(attachment);
       const dir = path.join(this.commentAttachmentStorageRoot(), ticketId);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-      const filename = `${Date.now()}-${attachment.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const filename = this.createSafeImageFilename(attachment);
       const fullPath = path.join(dir, filename);
       fs.writeFileSync(fullPath, attachment.buffer);
       attachmentPath = `comment-attachments/${ticketId}/${filename}`;
@@ -3074,27 +3145,44 @@ export class TicketService implements OnModuleInit {
       const available = await this.attendanceService.getPresentTechnicians(ticketType, today);
       const isPresent = available.some((t) => t.id === techId);
       if (!isPresent) return;
-
-      // Guard: tech must currently have zero active tickets
+      // Existing active work affects queue state, but not the weekly cap.
       const currentOpen = await this.ticketRepo
         .createQueryBuilder('t')
         .where('t.assignedToId = :id', { id: techId })
-        .andWhere('t.status NOT IN (:...terminal)', {
-          terminal: [TicketStatus.CLOSED, TicketStatus.DUPLICATE, TicketStatus.RESOLVED],
+        .andWhere('t.status IN (:...active)', {
+          active: [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE],
         })
         .getCount();
-      if (currentOpen > 0) return;
 
-      // Find the oldest unassigned OPEN ticket of the matching type
-      // Fix: ensure the ticket requester is not the technician being assigned
-      const pending = await this.ticketRepo
-        .createQueryBuilder('t')
-        .where('t.status = :status', { status: TicketStatus.OPEN })
-        .andWhere('t.assignedToId IS NULL')
-        .andWhere('t.ticketType = :type', { type: ticketType })
-        .andWhere('t.requesterId != :techId', { techId })
-        .orderBy('t.createdAt', 'ASC')
-        .getOne();
+      const config = await this.configRepo.findOne({ where: { id: 1 } });
+      const assignmentStrategy = config?.assignmentStrategy || 'CURRENT_AUTO';
+      const roundRobinCapHours = config?.roundRobinCapHours || 80;
+      const weeklySlaLoad = await this.getWeeklySlaLoad(techId);
+      if (assignmentStrategy === 'CAPPED_ROUND_ROBIN' && weeklySlaLoad >= roundRobinCapHours) {
+        this.logger.log(
+          `[Attendance Auto-Assign] Technician #${techId} reached the weekly SLA cap (${weeklySlaLoad}/${roundRobinCapHours}).`,
+        );
+        return;
+      }
+      if (assignmentStrategy !== 'CAPPED_ROUND_ROBIN' && currentOpen > 0) return;
+      // Use the same support-type fallback order as new-ticket assignment.
+      const pendingTypes = ticketType === TicketType.DESKTOP_SUPPORT
+        ? [TicketType.DESKTOP_SUPPORT, TicketType.IT_SUPPORT, TicketType.PANTAWID_ICT_SUPPORT]
+        : ticketType === TicketType.IT_SUPPORT
+          ? [TicketType.IT_SUPPORT, TicketType.DESKTOP_SUPPORT, TicketType.PANTAWID_ICT_SUPPORT]
+          : [TicketType.PANTAWID_ICT_SUPPORT, TicketType.DESKTOP_SUPPORT, TicketType.IT_SUPPORT];
+      let pending: Ticket | null = null;
+      for (const pendingType of pendingTypes) {
+        pending = await this.ticketRepo
+          .createQueryBuilder('t')
+          .where('t.status = :status', { status: TicketStatus.OPEN })
+          .andWhere('t.assignedToId IS NULL')
+          .andWhere('t.ticketType = :type', { type: pendingType })
+          .andWhere('t.requesterId != :techId', { techId })
+          .orderBy('t.createdAt', 'ASC')
+          .getOne();
+        if (pending) break;
+      }
 
       if (!pending) return;
 
@@ -3120,10 +3208,12 @@ export class TicketService implements OnModuleInit {
       }
 
       pending.assignedToId = techId;
-      pending.status = TicketStatus.ASSIGNED;
+      const hasBreachedTicket = await this.hasBreachedActiveTicket(techId);
+      const shouldStartInProgress = currentOpen === 0 || hasBreachedTicket;
+      pending.status = shouldStartInProgress ? TicketStatus.IN_PROGRESS : TicketStatus.ASSIGNED;
       pending.lastAssignedAt = new Date();
-      pending.isSlaWaiting = false;
-      pending.slaPausedAt = null;
+      pending.isSlaWaiting = currentOpen > 0 && !hasBreachedTicket;
+      pending.slaPausedAt = currentOpen > 0 && !hasBreachedTicket ? new Date() : null;
       if (slaDeadlineOnAssign) pending.slaDeadline = slaDeadlineOnAssign;
       await this.ticketRepo.save(pending);
 
@@ -3180,10 +3270,10 @@ export class TicketService implements OnModuleInit {
             ticket.ticketType,
             today,
           );
-          const eligibleTechs =
-            ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT
-              ? presentTechs
-              : presentTechs.filter((t) => !this.roleCapSvc.isSeniorTech(t.role));
+          // Senior focal roles are never eligible for automatic assignment.
+            const eligibleTechs = presentTechs.filter(
+              (t) => !this.roleCapSvc.isSeniorTech(t.role),
+            );
 
           for (const tech of eligibleTechs) {
             const openCount = await this.ticketRepo.count({
@@ -3697,13 +3787,12 @@ export class TicketService implements OnModuleInit {
     const savedPaths: string[] = [];
     if (proofFiles && proofFiles.length > 0) {
       for (const f of proofFiles) {
-        if (!f.mimetype.startsWith('image/'))
-          throw new BadRequestException('Only image files are allowed for proof photos.');
+        this.validateImageUpload(f);
       }
       const dir = path.join(this.escalationStorageRoot(), ticketId);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       for (const file of proofFiles) {
-        const filename = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const filename = this.createSafeImageFilename(file);
         const fullPath = path.join(dir, filename);
         fs.writeFileSync(fullPath, file.buffer);
         savedPaths.push(`escalation-proofs/${ticketId}/${filename}`);
@@ -3934,14 +4023,13 @@ export class TicketService implements OnModuleInit {
 
     if (proofFiles && proofFiles.length > 0) {
       for (const f of proofFiles) {
-        if (!f.mimetype.startsWith('image/'))
-          throw new BadRequestException('Only image files are allowed for proof photos.');
+        this.validateImageUpload(f);
       }
       const dir = path.join(this.escalationStorageRoot(), ticketId);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       const savedPaths: string[] = [...(escalation.proofFiles ?? [])];
       for (const file of proofFiles) {
-        const filename = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const filename = this.createSafeImageFilename(file);
         const fullPath = path.join(dir, filename);
         fs.writeFileSync(fullPath, file.buffer);
         savedPaths.push(`escalation-proofs/${ticketId}/${filename}`);
@@ -4124,6 +4212,31 @@ export class TicketService implements OnModuleInit {
     return events;
   }
 
+  private async calculateTicketSlaDeadline(
+    ticket: Partial<Ticket>,
+    start: Date,
+  ): Promise<Date> {
+    let slaHours = Number(ticket.issueTypeConfig?.slaHours || 0);
+
+    if (!slaHours && ticket.issueTypeId) {
+      const issueType = await this.settingsService
+        .getIssueTypeById(ticket.issueTypeId)
+        .catch(() => null);
+      slaHours = Number(issueType?.slaHours || 0);
+    }
+
+
+    // Every assigned ticket must have a running SLA. 24h is the existing
+    // system fallback used by capped round-robin.
+    if (!slaHours) slaHours = 24;
+
+    const config = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
+    if (config) return this.calculateSlaDeadline(start, slaHours, config);
+
+    const fallback = new Date(start);
+    fallback.setHours(fallback.getHours() + slaHours);
+    return fallback;
+  }
   // --- SLA Computation Algorithm ---
   private async calculateSlaDeadline(
     start: Date,
@@ -4147,7 +4260,7 @@ export class TicketService implements OnModuleInit {
 
     if (config.scheduleMode === 'CWW') {
       shiftStartHour = parseTime(config.cwwClockinStart, 7);
-      shiftEndHour = parseTime(config.cwwClockoutEnd, 19);
+      shiftEndHour = parseTime(config.cwwClockoutStart, 18);
     } else {
       shiftStartHour = parseTime(config.officeClockin, 8);
       shiftEndHour = parseTime(config.officeClockout, 17);
@@ -4242,6 +4355,38 @@ export class TicketService implements OnModuleInit {
     return current;
   }
 
+  /** Exposes the shared business-time calculator to scheduled alert processing. */
+  async calculateBusinessSecondsForSla(start: Date, end: Date, config: TicketingConfig): Promise<number> {
+    return this.calculateBusinessSeconds(start, end, config);
+  }
+
+  private async recalculateActiveSlaDeadlines(): Promise<void> {
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    if (!config) return;
+
+    const tickets = await this.ticketRepo.find({
+      where: { status: In([TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS]) },
+      relations: ['issueTypeConfig'],
+    });
+    const now = new Date();
+
+    for (const ticket of tickets) {
+      if (!ticket.slaDeadline || !ticket.createdAt || !ticket.issueTypeConfig?.slaHours) continue;
+      const elapsedSeconds = await this.calculateBusinessSeconds(ticket.createdAt, now, config);
+      const remainingHours = ticket.issueTypeConfig.slaHours -
+        Math.max(0, elapsedSeconds - (ticket.accumulatedPauseSeconds || 0)) / 3600;
+      if (remainingHours <= 0) continue;
+
+      const adjustedDeadline = await this.calculateSlaDeadline(now, remainingHours, config);
+      if (adjustedDeadline.getTime() === new Date(ticket.slaDeadline).getTime()) continue;
+      ticket.slaDeadline = adjustedDeadline;
+      await this.ticketRepo.save(ticket);
+      await this.logEvent(ticket.id, 'sla_deadline_adjusted', null, {
+        reason: 'office_day_changed',
+      });
+    }
+  }
+
   private async calculateBusinessSeconds(
     start: Date,
     end: Date,
@@ -4265,7 +4410,7 @@ export class TicketService implements OnModuleInit {
 
     if (config.scheduleMode === 'CWW') {
       shiftStartHour = parseTime(config.cwwClockinStart, 7);
-      shiftEndHour = parseTime(config.cwwClockoutEnd, 19);
+      shiftEndHour = parseTime(config.cwwClockoutStart, 18);
     } else {
       shiftStartHour = parseTime(config.officeClockin, 8);
       shiftEndHour = parseTime(config.officeClockout, 17);

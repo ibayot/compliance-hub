@@ -90,6 +90,7 @@ export default function DashboardPage() {
   const [techAssignedStats, setTechAssignedStats] = useState<TechAssignedStats | null>(null);
   const [generalStats, setGeneralStats] = useState<any>(null);
   const [techStatsYear, setTechStatsYear] = useState(() => new Date().getFullYear());
+  const yearOptions = Array.from({ length: 7 }, (_, index) => new Date().getFullYear() - 3 + index);
   const [techStatsMonth, setTechStatsMonth] = useState(() => new Date().getMonth() + 1);
   const [techStatsLoading, setTechStatsLoading] = useState(false);
 
@@ -632,9 +633,9 @@ export default function DashboardPage() {
                   sx={{ minWidth: 90 }}
                   SelectProps={{ MenuProps: { disableScrollLock: true } }}
                 >
-                  {[2024, 2025, 2026, 2027, 2028].map((y) => (
-                    <MenuItem key={y} value={y}>
-                      {y}
+                  {yearOptions.map((year) => (
+                    <MenuItem key={year} value={year}>
+                      {year}
                     </MenuItem>
                   ))}
                 </TextField>

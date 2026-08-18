@@ -25,6 +25,8 @@ Release-by-release history is maintained in `CHANGELOG.md`.
 - Split microservices architecture (`users-service`, `ticketing-service`, `compliance-service`, `api-gateway`)
 - Document upload, review, approval, and repository flows
 - Ticket lifecycle with escalation, assignment, and reporting
+- SLA timers based on issue-type configuration, including live overdue tracking
+- Keyword-based category and issue selection with selected-support-type tie-breaking
 - Issuance/reference management and document mapping
 - KPI monitoring, scoring, dashboards, and trends
 
@@ -75,6 +77,15 @@ cd frontend
 npm install
 npm run dev
 ```
+
+## Ticket SLA and Assignment Behavior
+
+- SLA hours are configured on `ticket_issue_types.sla_hours`.
+- When a ticket has an issue type, its business-hours deadline is calculated from that issue type. Tickets without an issue type use the system fallback SLA.
+- The ticket detail countdown changes to a live overdue timer when the deadline passes; no page refresh is required.
+- Keyword rules populate the matching category and issue type. If the same keyword exists for multiple support types, the selected support type is preferred.
+- When an active ticket breaches its SLA, the next queued ticket for the same technician is promoted to `IN_PROGRESS` alongside the breached ticket.
+- Automatic queue promotion is checked by the ticket cron every minute. The browser timer changes immediately, while queue promotion may take up to one minute.
 
 ## Environment Variables (High-Level)
 

@@ -112,6 +112,7 @@ function OverdueTimer({ targetDate }: { targetDate: string }) {
 
 function SlaCountdownTimer({ targetDate, isNearingSLA, isOverdue }: { targetDate: string, isNearingSLA: boolean, isOverdue: boolean }) {
   const [timeLeft, setTimeLeft] = useState('');
+  const [hasExpired, setHasExpired] = useState(false);
 
   useEffect(() => {
     const target = new Date(targetDate).getTime();
@@ -119,9 +120,11 @@ function SlaCountdownTimer({ targetDate, isNearingSLA, isOverdue }: { targetDate
       const now = Date.now();
       const diff = target - now;
       if (diff <= 0) {
+        setHasExpired(true);
         setTimeLeft('0d 0h 0m 0s');
         return;
       }
+      setHasExpired(false);
       const d = Math.floor(diff / (1000 * 60 * 60 * 24));
       const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
       const m = Math.floor((diff / (1000 * 60)) % 60);
@@ -133,12 +136,20 @@ function SlaCountdownTimer({ targetDate, isNearingSLA, isOverdue }: { targetDate
     return () => clearInterval(interval);
   }, [targetDate]);
 
+  if (hasExpired) {
+    return (
+      <Typography variant="body2" color="error.main" fontWeight={600}>
+        Elapsed time after SLA Deadline: <OverdueTimer targetDate={targetDate} />
+      </Typography>
+    );
+  }
+
   const color = isOverdue ? 'error' : isNearingSLA ? 'warning' : 'success';
   return <Typography variant="body2" color={`${color}.main`} fontWeight={600}>{timeLeft}</Typography>;
 }
 
 function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | null {
-  if (!ticket.slaDeadline || ticket.isSlaWaiting) return null;
+  if (!ticket.slaDeadline || (ticket.isSlaWaiting && ticket.status !== 'in_progress')) return null;
   const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
   if (isTerminal) {
     const deadline = new Date(ticket.slaDeadline).getTime();
@@ -1471,7 +1482,7 @@ export default function TicketDetailPage() {
                     </Typography>
                   </Box>
                 )}
-                {ticket.slaDeadline && !ticket.isSlaWaiting && (
+                {ticket.slaDeadline && (!ticket.isSlaWaiting || ticket.status === 'in_progress') && (
                   <>
                     <Divider sx={{ my: 1 }} />
                     <Box>
@@ -1495,9 +1506,6 @@ export default function TicketDetailPage() {
                     </Box>
                     {!ticket.resolvedAt && new Date() < new Date(ticket.slaDeadline) && (
                       <Box mt={1}>
-                        <Typography variant="caption" color="text.secondary">
-                          SLA Remaining
-                        </Typography>
                         <SlaCountdownTimer 
                           targetDate={ticket.slaDeadline} 
                           isNearingSLA={ticket.isNearingSLA ?? false} 

@@ -61,7 +61,7 @@ const TYPE_LABELS: Record<string, string> = {
 export default function TicketSettingsPage() {
   const { user, myCap } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
-  const canManageGlobalSettings = user?.role === UserRole.SUPER_ADMIN || Boolean(myCap?.isGlobalSettingsAccess);
+  const canManageGlobalSettings = false;
   const globalSettingsTabIndex = canManageGlobalSettings ? 4 : -1;
   const userFeedbackTabIndex = canManageGlobalSettings ? 5 : 4;
 

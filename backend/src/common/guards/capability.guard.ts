@@ -33,8 +33,6 @@ export class CapabilityGuard implements CanActivate {
     const role: string | undefined = request.user?.role;
     if (!role) return false;
 
-    if (role === 'super_admin') return true;
-
     const capabilityCheckers: Record<string, (r: string) => boolean> = {
       isFocal: (r) => this.roleCapSvc.isFocal(r),
       isIto: (r) => this.roleCapSvc.isIto(r),

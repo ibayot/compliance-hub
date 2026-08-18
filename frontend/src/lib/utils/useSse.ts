@@ -25,8 +25,9 @@ type SseListener = {
 };
 const activeListeners = new Set<SseListener>();
 
-function connectSse(token: string) {
-  if (masterEventSource && currentToken === token) {
+async function connectSse(token: string) {
+  // Mark the token before awaiting the ticket request so mounted pages share one request.
+  if (currentToken === token) {
     return;
   }
 
@@ -38,7 +39,12 @@ function connectSse(token: string) {
   }
 
   currentToken = token;
-  const source = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
+  const ticketResponse = await fetch('/api/events/token', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!ticketResponse.ok) throw new Error('Unable to obtain SSE connection ticket.');
+  const { token: ticket } = await ticketResponse.json();
+  const source = new EventSource(`/api/events?ticket=${encodeURIComponent(ticket)}`);
   masterEventSource = source;
 
   source.onopen = () => {
@@ -83,7 +89,7 @@ function connectSse(token: string) {
       setTimeout(() => {
         if (masterEventSource === source && currentToken) {
           console.log('[SSE] Forcing reconnection after fatal closure...');
-          connectSse(currentToken);
+          void connectSse(currentToken).catch(() => undefined);
         }
       }, 5000);
     }
@@ -109,7 +115,7 @@ if (typeof window !== 'undefined') {
     const newToken = e.detail;
     // If we have active listeners, immediately reconnect with new token
     if (activeListeners.size > 0 && newToken) {
-      connectSse(newToken);
+      void connectSse(newToken).catch(() => undefined);
     }
   });
 }
@@ -141,7 +147,7 @@ export function useSse(eventTypes: SseEventType[], callback: (payload?: any) => 
     };
 
     activeListeners.add(listener);
-    connectSse(token);
+    void connectSse(token).catch(() => undefined);
 
     return () => {
       activeListeners.delete(listener);

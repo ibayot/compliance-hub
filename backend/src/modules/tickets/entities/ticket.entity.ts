@@ -123,7 +123,7 @@ export class Ticket {
   @Column({ name: 'duplicate_of_id', type: 'varchar', length: 36, nullable: true })
   duplicateOfId: string | null;
 
-  /** SLA deadline — set at assignment time based on category.slaHours */
+  /** SLA deadline — set at assignment time based on issueType.slaHours */
   @Column({ name: 'sla_deadline', type: 'datetime', nullable: true })
   slaDeadline: Date | null;
 

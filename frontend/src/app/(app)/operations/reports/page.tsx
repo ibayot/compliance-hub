@@ -169,8 +169,12 @@ export default function TicketReportsPage() {
       const data = await ticketsApi.getReports(filters);
       setResult(data);
       try {
-        const issueData = await ticketsApi.getIssueCountsReport(filters);
-        setIssueCountsData(issueData);
+        if (isTicketSettingsFocal) {
+          const issueData = await ticketsApi.getIssueCountsReport(filters);
+          setIssueCountsData(issueData);
+        } else {
+          setIssueCountsData([]);
+        }
       } catch (err) {
         console.error('Failed to fetch issue counts', err);
       }

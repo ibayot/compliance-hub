@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { ConfigService } from '@nestjs/config';
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'crypto';
 import { Observable, Subject, interval, merge } from 'rxjs';
 import { filter, map } from 'rxjs/operators';
 import { EventBusService } from './event-bus.service';
@@ -22,8 +23,37 @@ export class SseService implements OnModuleInit {
   private readonly logger = new Logger(SseService.name);
   private readonly instanceId = randomUUID();
   private readonly eventSubject = new Subject<SseEvent>();
+  private readonly tokenSecret: Buffer;
+  private readonly connectionTicketTtlMs = 60_000;
 
-  constructor(private readonly eventBus: EventBusService) {}
+  constructor(private readonly eventBus: EventBusService, configService: ConfigService) {
+    const secret = configService.get<string>('SSE_TOKEN_SECRET') || configService.get<string>('JWT_SECRET');
+    if (!secret) throw new Error('SSE_TOKEN_SECRET or JWT_SECRET must be configured.');
+    this.tokenSecret = createHash('sha256').update(secret).digest();
+  }
+
+  createConnectionToken(userId: number): string {
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', this.tokenSecret, iv);
+    const payload = Buffer.from(JSON.stringify({ sub: userId, exp: Date.now() + this.connectionTicketTtlMs }));
+    const encrypted = Buffer.concat([cipher.update(payload), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return [iv, tag, encrypted].map((part) => part.toString('base64url')).join('.');
+  }
+
+  validateConnectionToken(token: string): number | null {
+    try {
+      const [ivRaw, tagRaw, encryptedRaw] = String(token || '').split('.');
+      if (!ivRaw || !tagRaw || !encryptedRaw) return null;
+      const decipher = createDecipheriv('aes-256-gcm', this.tokenSecret, Buffer.from(ivRaw, 'base64url'));
+      decipher.setAuthTag(Buffer.from(tagRaw, 'base64url'));
+      const payload = JSON.parse(Buffer.concat([decipher.update(Buffer.from(encryptedRaw, 'base64url')), decipher.final()]).toString('utf8'));
+      if (!Number.isInteger(payload.sub) || payload.exp < Date.now()) return null;
+      return payload.sub;
+    } catch {
+      return null;
+    }
+  }
 
   async onModuleInit(): Promise<void> {
     await this.eventBus.subscribe<SseEnvelope>(SSE_EVENT_CHANNEL, (message) => {

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - 2026-08-18 - SLA Timer and Ticket Assignment Corrections
+
+### Added
+- Live overdue timer transition when an SLA countdown reaches its deadline.
+- Automatic issue-type selection from keyword rules for Pantawid ICT Support tickets.
+
+### Changed
+- Duplicate keyword rules now prefer the selected support type when resolving category and issue type.
+- SLA hours are resolved from `ticket_issue_types.sla_hours`; tickets without an issue type use the existing fallback SLA.
+- SLA breach detection uses the authoritative ticket status and `tickets.sla_deadline` fields. `ticket_events` remains audit history only.
+- A breached active ticket can promote the next queued ticket to `IN_PROGRESS` without waiting for the breached ticket to finish.
+
+### Operational Note
+- The browser overdue timer updates immediately. Automatic queue promotion runs in the ticket cron every minute and may take up to one minute after a breach is detected.
+
 ## [0.0.122] Comprehensive - 2026-07-22 - Ticket Reports and SLA Insights Enhancements
 
 ### Added

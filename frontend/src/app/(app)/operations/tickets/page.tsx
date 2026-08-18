@@ -93,7 +93,7 @@ function ticketTypeIcon(t: TicketType) {
 }
 
 function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | null {
-  if (!ticket.slaDeadline || ticket.isSlaWaiting) return null;
+  if (!ticket.slaDeadline || (ticket.isSlaWaiting && ticket.status !== 'in_progress')) return null;
   const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
   if (isTerminal) {
     const deadline = new Date(ticket.slaDeadline).getTime();
@@ -129,6 +129,7 @@ export default function TicketsPage() {
   const now = new Date();
   const currentMonth = (now.getMonth() + 1).toString();
   const currentYear = now.getFullYear().toString();
+  const yearOptions = Array.from({ length: 7 }, (_, index) => Number(currentYear) - 3 + index);
 
   const [filterYear, setFilterYear] = useState(currentYear);
   const [filterMonth, setFilterMonth] = useState(currentMonth);
@@ -165,6 +166,7 @@ export default function TicketsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalTickets, setTotalTickets] = useState(0);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const ticketRequestRef = useRef(0);
   const TICKETS_PAGE_SIZE = 25;
   const [newDialogOpen, setNewDialogOpen] = useState(false);
@@ -316,6 +318,11 @@ export default function TicketsPage() {
   const doneTickets = frontendFilteredTickets.filter((t) => ['resolved', 'closed'].includes(t.status));
   const frozenTickets = frontendFilteredTickets.filter((t) => t.status === 'freeze');
   const duplicateTickets = frontendFilteredTickets.filter((t) => t.status === 'duplicate');
+  const activeCount = ['open', 'assigned', 'in_progress', 'pause'].reduce((sum, status) => sum + (statusCounts[status] ?? 0), 0);
+  const pausedCount = statusCounts.pause ?? 0;
+  const doneCount = (statusCounts.resolved ?? 0) + (statusCounts.closed ?? 0);
+  const frozenCount = statusCounts.freeze ?? 0;
+  const duplicateCount = statusCounts.duplicate ?? 0;
 
   const toRateTickets = frontendFilteredTickets.filter(
     (t) =>
@@ -413,11 +420,10 @@ export default function TicketsPage() {
       setTickets(data.data);
       setTotalPages(data.totalPages);
       setTotalTickets(data.total);
-
-      const stats = await ticketsApi.getDashboardStats();
-      setPendingSatCount(stats.pendingSatisfactionTickets?.length ?? 0);
-      setMyTicketsCount(stats.myTicketsCount ?? 0);
-      setEscalatedToMeCount(stats.escalatedToMeCount ?? 0);
+      setStatusCounts(data.statusCounts ?? {});
+      setPendingSatCount(data.pendingSatisfactionCount ?? 0);
+      setMyTicketsCount(data.myTicketsCount ?? 0);
+      setEscalatedToMeCount(data.escalatedToMeCount ?? 0);
 
       if (canManageAll) {
         const escalations = await ticketsApi.getAllEscalations();
@@ -502,11 +508,10 @@ export default function TicketsPage() {
       setTickets(data.data);
       setTotalPages(data.totalPages);
       setTotalTickets(data.total);
-
-      const stats = await ticketsApi.getDashboardStats();
-      setPendingSatCount(stats.pendingSatisfactionTickets?.length ?? 0);
-      setMyTicketsCount(stats.myTicketsCount ?? 0);
-      setEscalatedToMeCount(stats.escalatedToMeCount ?? 0);
+      setStatusCounts(data.statusCounts ?? {});
+      setPendingSatCount(data.pendingSatisfactionCount ?? 0);
+      setMyTicketsCount(data.myTicketsCount ?? 0);
+      setEscalatedToMeCount(data.escalatedToMeCount ?? 0);
     } catch {
       /* silent */
     }
@@ -922,7 +927,7 @@ export default function TicketsPage() {
           <Pagination count={totalPages} page={page} onChange={(_, value) => setPage(value)} color="primary" size="small" showFirstButton showLastButton />
         </Box>
       )}
-      {!canManageAll && isTechnician && (
+      {!canManageAll && (
         <Card sx={{ mb: 2 }}>
           <CardContent>
             <Grid container spacing={2}>
@@ -936,9 +941,10 @@ export default function TicketsPage() {
                     size="small"
                   >
                     <MenuItem value="">All</MenuItem>
-                    <MenuItem value="2026">2026</MenuItem>
-                    <MenuItem value="2027">2027</MenuItem>
-                    <MenuItem value="2028">2028</MenuItem>
+
+                    {yearOptions.map((year) => (
+                      <MenuItem key={year} value={year.toString()}>{year}</MenuItem>
+                    ))}
                   </TextField>
                   <TextField
                     select
@@ -1102,9 +1108,10 @@ export default function TicketsPage() {
                     size="small"
                   >
                     <MenuItem value="">All</MenuItem>
-                    <MenuItem value="2026">2026</MenuItem>
-                    <MenuItem value="2027">2027</MenuItem>
-                    <MenuItem value="2028">2028</MenuItem>
+
+                    {yearOptions.map((year) => (
+                      <MenuItem key={year} value={year.toString()}>{year}</MenuItem>
+                    ))}
                   </TextField>
                   <TextField
                     select
@@ -1309,11 +1316,11 @@ export default function TicketsPage() {
               scrollButtons="auto"
             >
               <Tab label={`All (${totalTickets})`} />
-              <Tab label={`Active (${activeTickets.length})`} />
-              <Tab label={`Paused (${pausedTickets.length})`} />
-              <Tab label={`Resolved / Closed (${doneTickets.length})`} />
-              <Tab label={`Frozen (${frozenTickets.length})`} />
-              <Tab label={`Duplicate (${duplicateTickets.length})`} />
+              <Tab label={`Active (${activeCount})`} />
+              <Tab label={`Paused (${pausedCount})`} />
+              <Tab label={`Resolved / Closed (${doneCount})`} />
+              <Tab label={`Frozen (${frozenCount})`} />
+              <Tab label={`Duplicate (${duplicateCount})`} />
               <Tab
                 label={
                   <Badge color="info" variant="dot" invisible={proxyCreatedTickets.length === 0}>
@@ -1336,11 +1343,11 @@ export default function TicketsPage() {
               scrollButtons="auto"
               allowScrollButtonsMobile
             >
-              <Tab label={`Active (${activeTickets.length})`} />
-              <Tab label={`Paused (${pausedTickets.length})`} />
-              <Tab label={`Resolved / Closed (${doneTickets.length})`} />
-              <Tab label={`Frozen (${frozenTickets.length})`} />
-              <Tab label={`Duplicate (${duplicateTickets.length})`} />
+              <Tab label={`Active (${activeCount})`} />
+              <Tab label={`Paused (${pausedCount})`} />
+              <Tab label={`Resolved / Closed (${doneCount})`} />
+              <Tab label={`Frozen (${frozenCount})`} />
+              <Tab label={`Duplicate (${duplicateCount})`} />
             </Tabs>
           </CardContent>
         </Card>
@@ -1357,7 +1364,7 @@ export default function TicketsPage() {
               sx={{ mb: 2 }}
             >
               <Tab label={`All (${totalTickets})`} />
-              <Tab label={`Active (${activeTickets.length})`} />
+              <Tab label={`Active (${activeCount})`} />
               <Tab
                 label={
                   <Badge color="warning" variant="dot" invisible={toRateTickets.length === 0}>
@@ -1365,7 +1372,7 @@ export default function TicketsPage() {
                   </Badge>
                 }
               />
-              <Tab label={`Closed / Resolved (${doneTickets.length})`} />
+              <Tab label={`Closed / Resolved (${doneCount})`} />
               <Tab
                 label={
                   <Badge color="info" variant="dot" invisible={proxyCreatedTickets.length === 0}>

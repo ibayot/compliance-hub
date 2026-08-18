@@ -18,6 +18,8 @@ import { TicketIssueType } from '../entities/ticket-issue-type.entity';
 import { TicketEscalation } from '../entities/ticket-escalation.entity';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { TicketEvent } from '../entities/ticket-event.entity';
+import { TicketNotification } from '../entities/ticket-notification.entity';
+import { TicketStatusJustification } from '../entities/ticket-status-justification.entity';
 import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
 import { TicketCategoryConfig } from '../entities/ticket-category.entity';
 import { DataSource, SelectQueryBuilder } from 'typeorm';
@@ -28,6 +30,7 @@ import { AttendanceService } from './attendance.service';
 import { EmailService } from './email.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { EventBusService } from '../../../common/events/event-bus.service';
+import { SseService } from './sse.service';
 import { KeywordCheckEngine } from '../../metrics/engines/keyword-check.engine';
 
 // ---------------------------------------------------------------------------
@@ -135,7 +138,9 @@ describe('TicketService — getIssueCountsReport (multi-status grouping)', () =>
         { provide: getRepositoryToken(TicketIssueType), useValue: mockRepository() },
         { provide: getRepositoryToken(TicketEscalation), useValue: mockRepository() },
         { provide: getRepositoryToken(TicketingConfig), useValue: mockRepository() },
+        { provide: getRepositoryToken(TicketStatusJustification), useValue: mockRepository() },
         { provide: getRepositoryToken(TicketEvent), useValue: mockRepository() },
+        { provide: getRepositoryToken(TicketNotification), useValue: mockRepository() },
         { provide: getRepositoryToken(EscalationFocalConfig), useValue: mockRepository() },
         { provide: DataSource, useValue: mockDataSource },
         { provide: UsersHttpClient, useValue: {} },
@@ -144,6 +149,7 @@ describe('TicketService — getIssueCountsReport (multi-status grouping)', () =>
         { provide: EmailService, useValue: {} },
         { provide: RoleCapabilitiesService, useValue: {} },
         { provide: KnowledgeBaseService, useValue: {} },
+        { provide: SseService, useValue: {} },
         { provide: EventBusService, useValue: {} },
       ],
     }).compile();

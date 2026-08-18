@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, In, Raw } from 'typeorm';
+import { Repository, LessThan, In } from 'typeorm';
 import { Ticket, TicketStatus } from '../entities/ticket.entity';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { TicketService } from './ticket.service';
@@ -13,6 +13,8 @@ import { UserRole } from '../../shared/entities';
 @Injectable()
 export class TicketCronService implements OnModuleInit {
   private readonly logger = new Logger(TicketCronService.name);
+  // Prevent one overdue ticket from promoting the queue repeatedly every minute.
+  private readonly advancedOverdueTickets = new Set<string>();
 
   onModuleInit() {
     this.logger.log('TicketCronService initialized and ready for cron jobs.');
@@ -161,43 +163,42 @@ export class TicketCronService implements OnModuleInit {
 
   private async processOverdueTicketsUnpauseNext() {
     const overdueActiveTickets = await this.ticketRepo.find({
-      where: {
-        isSlaWaiting: false,
-        slaDeadline: Raw((alias) => `${alias} < UTC_TIMESTAMP()`),
-        status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS]),
-      },
+      where: [
+        {
+          status: TicketStatus.ASSIGNED,
+          isSlaWaiting: false,
+          slaDeadline: LessThan(new Date()),
+        },
+        {
+          // IN_PROGRESS is authoritative even if an old row has a stale queue flag.
+          status: TicketStatus.IN_PROGRESS,
+          slaDeadline: LessThan(new Date()),
+        },
+      ],
     });
 
     if (overdueActiveTickets.length > 0) {
       this.logger.log(`Cron check: found ${overdueActiveTickets.length} overdue active tickets.`);
     }
+    const overdueIds = new Set(overdueActiveTickets.map((ticket) => ticket.id));
+    for (const ticketId of this.advancedOverdueTickets) {
+      if (!overdueIds.has(ticketId)) this.advancedOverdueTickets.delete(ticketId);
+    }
 
-    const overdueTechIds = new Set(overdueActiveTickets.map((t) => t.assignedToId));
+    // Every newly detected SLA breach advances one queued ticket, even when
+    // the technician already has another IN_PROGRESS ticket.
+    for (const overdueTicket of overdueActiveTickets) {
+      const techId = overdueTicket.assignedToId;
+      if (!techId || this.advancedOverdueTickets.has(overdueTicket.id)) continue;
 
-    for (const techId of overdueTechIds) {
-      if (!techId) continue;
-
-      // Check if there is no IN_PROGRESS ticket for this technician
-      const inProgressCount = await this.ticketRepo.count({
-        where: {
-          assignedToId: techId,
-          status: TicketStatus.IN_PROGRESS,
-          isSlaWaiting: false,
-        },
-      });
-
-      if (inProgressCount > 0) {
-        continue; // They already have an IN_PROGRESS ticket, skip
-      }
-
-      // If no IN_PROGRESS ticket, unpause the next queued ticket and change its status to IN_PROGRESS
-      const unpausedTicketId = await this.ticketService.unpauseNextWaitingTicketAndSetInProgress(
+      const promoted = await this.ticketService.unpauseNextWaitingTicketAndSetInProgress(
         techId,
-        'cron_overdue_unstack',
+        'cron_sla_breach_overflow',
       );
-      if (unpausedTicketId) {
+      if (promoted) {
+        this.advancedOverdueTickets.add(overdueTicket.id);
         this.logger.log(
-          `Cron: Technician #${techId} has an overdue active ticket but no IN_PROGRESS ticket. Unpaused their next queued ticket and set to IN_PROGRESS.`,
+          `Cron: SLA breach on ticket ${overdueTicket.ticketNumber}; promoted the next queued ticket for technician #${techId} to IN_PROGRESS alongside the breached ticket.`,
         );
       }
     }
@@ -341,7 +342,7 @@ export class TicketCronService implements OnModuleInit {
           1,
           UserRole.SUPER_ADMIN,
         );
-        await this.ticketRepo.update(ticket.id, { hasUnreadTechnician: true, hasUnreadUser: true });
+        await this.ticketRepo.update(ticket.id, { hasUnreadTechnician: true, hasUnreadUser: false });
         this.logger.log(`Sent daily reminder for frozen ticket ${ticket.ticketNumber}`);
       } catch (err) {
         this.logger.error(
@@ -364,10 +365,20 @@ export class TicketCronService implements OnModuleInit {
       if (!ticket.slaDeadline || !ticket.issueTypeConfig || !ticket.createdAt || !ticket.issueTypeConfig.slaHours)
         continue;
 
-      const totalSlaMs = ticket.issueTypeConfig.slaHours * 60 * 60 * 1000;
-      const elapsedMs =
-        now - ticket.createdAt.getTime() - (ticket.accumulatedPauseSeconds || 0) * 1000;
-      const percentage = (elapsedMs / totalSlaMs) * 100;
+      const config = await this.configRepo.findOne({ where: { id: 1 } });
+      if (!config) continue;
+
+      const businessSeconds = await this.ticketService.calculateBusinessSecondsForSla(
+        ticket.createdAt,
+        new Date(),
+        config,
+      );
+      const elapsedSeconds = Math.max(
+        0,
+        businessSeconds - (ticket.accumulatedPauseSeconds || 0),
+      );
+      const percentage =
+        (elapsedSeconds / (ticket.issueTypeConfig.slaHours * 60 * 60)) * 100;
 
       // Ensure we don't spam emails by tracking alert state (would need a DB column in a real scenario,
       // but for MVP we just log if no DB column exists, or we could just use ticketEvent logs to check if sent).
