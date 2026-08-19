@@ -51,3 +51,4 @@ backend/test/
 !scripts/**/*
 
 Compliance_Hub_Postman_Collection.json
+docker-compose.staging.yml
