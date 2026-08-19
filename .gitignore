@@ -1,26 +1,57 @@
-﻿# Standard Node.js & general ignores
+# Dependencies
 node_modules/
-dist/
-build/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pnp
+.pnp.js
+
+# Build, cache, and generated test outputs
 coverage/
-logs/
-storage/
-temp/
-uploads/
-.DS_Store
-*.log
+.nyc_output/
+playwright-report/
+test-results/
+frontend/test-results/
+backend/test-results/
+smoke-artifacts/
+
+# Production build output
+build/
+dist/
+
+# Local env files
 .env
 .env*
 .env*.local
 
-# Ignore any folder starting with '.' that is not used by docker building
+# IDEs & OS files
 .*/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
 
-# Ignore specific extensions
-*.png
+# Large or generated project artifacts
+storage/
+temp/
+uploads/
+scratch/
+regulatory-issuances/
+tentative-compliance-report/
+frontend/ddos-report.json
+backend/src/database/seed-data.sql
+
+# Keep Codex context aligned with repository-local ignore policy
 *.sql
-
-# Ignore all markdown files EXCEPT the ones specified
+*.png
 *.md
 !AGENTS.md
 !CAPABILITIES.md
@@ -32,23 +63,37 @@ uploads/
 !SECURITY.md
 !SETUP.md
 !WALKTHROUGH.md
-
-# Ignore specific folders
-scratch/
-frontend/test-results/
-backend/test/
-
-# Ignore files containing specific keywords
 *test*
 *smoke*
 *regression*
 *fix*
 *restore*
 *seed*
-
-# EXCEPTION: Do not ignore anything from scripts folder
 !scripts/
 !scripts/**/*
-
 Compliance_Hub_Postman_Collection.json
+
+# Disposable test-only folders
+frontend/tests/
+backend/test/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+logs/
+*.log
+
+# Ignore only generated PDFs
+frontend/**/*.pdf
+backend/**/*.pdf
+
+# Ignore only generated images
+frontend/test-results/**/*.png
+**/debug-*.png
+
+# Keep important context docs visible
+!MASTER-CONTEXT.md
+!AGENTS.md
 docker-compose.staging.yml
