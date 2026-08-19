@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, Optional } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, HttpException, HttpStatus, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -126,6 +126,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password.');
     }
 
+    if (user.mfaLockedUntil && new Date() < new Date(user.mfaLockedUntil)) {
+      throw new HttpException('Your account is locked for 15 minutes after repeated MFA failures.', HttpStatus.TOO_MANY_REQUESTS);
+    }
+
     // Record login timestamp for staff activity tracking
     await this.usersService.recordLogin(user.id);
 
@@ -161,9 +165,6 @@ export class AuthService {
       const expiresAt = new Date();
       expiresAt.setMinutes(expiresAt.getMinutes() + 15);
       await this.usersService.updateMfaCode(user.id, code, expiresAt);
-
-      // Log the MFA code to the console for debugging/local testing without SMTP
-      console.log(`[MFA] Generated verification code for ${user.email}: ${code}`);
 
       const htmlTemplate = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
@@ -288,6 +289,9 @@ export class AuthService {
   async sendMfaCode(userId: number): Promise<{ message: string }> {
     const user = await this.usersService.findOne(userId);
     if (!user) throw new UnauthorizedException('User not found');
+    if (user.mfaLockedUntil && new Date() < new Date(user.mfaLockedUntil)) {
+      throw new HttpException('Your account is locked for 15 minutes after repeated MFA failures.', HttpStatus.TOO_MANY_REQUESTS);
+    }
 
     // Generate 6-digit code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -339,21 +343,42 @@ export class AuthService {
       throw new UnauthorizedException('Invalid temporary token payload.');
     }
 
-    const userId = payload.sub;
-    const user = await this.usersService.findOne(userId);
-    if (!user) throw new UnauthorizedException('User not found');
+      const userId = payload.sub;
+      const user = await this.usersService.findOne(userId);
+      if (!user) throw new UnauthorizedException('User not found');
+
+      if (user.mfaLockedUntil && new Date() < new Date(user.mfaLockedUntil)) {
+        throw new HttpException('MFA verification is temporarily locked. Request a new code later.', HttpStatus.TOO_MANY_REQUESTS);
+      }
 
     if (!user.mfaCode || !user.mfaExpiresAt) {
       throw new BadRequestException('No verification code found. Please request a new one.');
     }
 
-    if (new Date() > user.mfaExpiresAt) {
-      throw new BadRequestException('Verification code has expired. Please request a new one.');
-    }
+      if (new Date() > user.mfaExpiresAt) {
+        throw new BadRequestException('Verification code has expired. Please request a new one.');
+      }
 
-    if (user.mfaCode !== code) {
-      throw new BadRequestException('Invalid verification code.');
-    }
+      if (user.mfaCode !== code) {
+        const attempts = Number(user.mfaAttempts || 0) + 1;
+        const challengeAttempts = Number(user.mfaChallengeAttempts || 0) + 1;
+        const lockedUntil = attempts >= 9 ? new Date(Date.now() + 15 * 60 * 1000) : null;
+        const challengeExpired = challengeAttempts >= 3;
+        await this.usersService.recordMfaFailure(
+          userId,
+          attempts,
+          challengeAttempts,
+          lockedUntil,
+          Boolean(lockedUntil || challengeExpired),
+        );
+        if (lockedUntil) {
+          throw new HttpException('Too many invalid MFA attempts. Your account is locked for 15 minutes.', HttpStatus.TOO_MANY_REQUESTS);
+        }
+        if (challengeExpired) {
+          throw new UnauthorizedException('Three MFA attempts failed. Please log in again to request a new code.');
+        }
+        throw new BadRequestException(`Invalid verification code. Attempt ${challengeAttempts} of 3 for this login.`);
+      }
 
     await this.usersService.markMfaVerified(userId);
 
@@ -449,13 +474,17 @@ export class AuthService {
     return { accessToken, refreshToken, roleCode: roleCode ?? null };
   }
 
-  async refresh(refreshToken: string): Promise<{ accessToken: string }> {
+  async refresh(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
     try {
       const payload = await this.jwtService.verifyAsync(refreshToken, {
         secret: this.configService.get('JWT_REFRESH_SECRET'),
         issuer: this.jwtIssuer,
         audience: this.jwtAudience,
       });
+
+      if (!payload.jti || await this.tokenBlacklistRepo.findOne({ where: { tokenJti: payload.jti } })) {
+        throw new UnauthorizedException('Refresh token has been revoked.');
+      }
 
       const user = await this.usersService.findOne(payload.sub);
 
@@ -464,24 +493,13 @@ export class AuthService {
         throw new UnauthorizedException('Account has been deactivated.');
       }
 
-      const newAccessToken = await this.jwtService.signAsync(
-        {
-          sub: user.id,
-          email: user.email,
-          role: user.role,
-          roleCode: await this.usersService.getRoleCodeForRole(user.role).catch(() => null),
-          units: user.units?.map((unit) => unit.id) || [],
-          jti: crypto.randomUUID(),
-        },
-        {
-          secret: this.configService.get('JWT_SECRET'),
-          expiresIn: process.env.VAPT_MODE === 'true' ? '12h' : this.configService.get('JWT_EXPIRATION'),
-          issuer: this.jwtIssuer,
-          audience: this.jwtAudience,
-        },
-      );
+      await this.tokenBlacklistRepo.save({
+        tokenJti: payload.jti,
+        expiresAt: new Date(payload.exp * 1000),
+      });
 
-      return { accessToken: newAccessToken };
+      const tokens = await this.generateTokens(user);
+      return { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token');
     }

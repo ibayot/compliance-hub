@@ -30,29 +30,11 @@ import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { usersApi, RoleCapabilityRecord } from '@/lib/api/users';
 import ForcePasswordChangeModal from '@/components/ForcePasswordChangeModal';
+import { tokenStore } from '@/lib/api/client';
+
+export { tokenStore } from '@/lib/api/client';
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
-
-export const tokenStore = {
-  get: (key: 'accessToken' | 'refreshToken'): string | null => {
-    if (typeof window === 'undefined') return null;
-    return window.sessionStorage.getItem(key);
-  },
-  set: (key: 'accessToken' | 'refreshToken', value: string) => {
-    if (typeof window === 'undefined') return;
-    window.sessionStorage.setItem(key, value);
-    if (key === 'accessToken') {
-      window.dispatchEvent(new CustomEvent('auth:tokenChanged', { detail: value }));
-    }
-  },
-  remove: (key: 'accessToken' | 'refreshToken') => {
-    if (typeof window === 'undefined') return;
-    window.sessionStorage.removeItem(key);
-    if (key === 'accessToken') {
-      window.dispatchEvent(new CustomEvent('auth:tokenChanged', { detail: null }));
-    }
-  },
-};
 
 function parseJwt(token: string) {
   try {
@@ -172,20 +154,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Check for existing token and fetch user profile
     const initAuth = async () => {
       const token = tokenStore.get('accessToken');
-      if (token) {
+        if (token || !Capacitor.isNativePlatform()) {
         if (sessionStorage.getItem('isSessionLocked') === 'true') {
           setIsSessionLocked(true);
         }
         try {
           const profile = await authApi.getProfile();
 
-          let jwtRole = null;
+            let jwtRole = null;
           try {
-            const payload = parseJwt(token);
-            if (payload) jwtRole = payload.role;
+            if (token) {
+              const payload = parseJwt(token);
+              if (payload) jwtRole = payload.role;
+            }
           } catch (err) { /* ignore */ }
 
-          const roleChanged = jwtRole && jwtRole !== profile.role;
+            const roleChanged = jwtRole && jwtRole !== profile.role;
 
           setUser(profile);
 
@@ -211,6 +195,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (error) {
           tokenStore.remove('accessToken');
           tokenStore.remove('refreshToken');
+          sessionStorage.removeItem('isSessionLocked');
+          setIsSessionLocked(false);
         }
       }
       setLoading(false);
@@ -304,9 +290,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    tokenStore.set('accessToken', response.accessToken);
-    tokenStore.set('refreshToken', response.refreshToken);
-    saveTokensToPreferences(response.accessToken, response.refreshToken);
+    if (response.accessToken && response.refreshToken) {
+      tokenStore.set('accessToken', response.accessToken);
+      tokenStore.set('refreshToken', response.refreshToken);
+      saveTokensToPreferences(response.accessToken, response.refreshToken);
+    }
     // Set user from login response first (includes units now)
     setUser(response.user as any);
     if (response.requiresPasswordChange) {
@@ -329,9 +317,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithGoogle = async (idToken: string, redirectTo?: string) => {
     const response = await authApi.loginWithGoogle({ idToken });
-    tokenStore.set('accessToken', response.accessToken);
-    tokenStore.set('refreshToken', response.refreshToken);
-    saveTokensToPreferences(response.accessToken, response.refreshToken);
+    if (response.accessToken && response.refreshToken) {
+      tokenStore.set('accessToken', response.accessToken);
+      tokenStore.set('refreshToken', response.refreshToken);
+      saveTokensToPreferences(response.accessToken, response.refreshToken);
+    }
     setUser(response.user as any);
     if (response.requiresPasswordChange) {
       setRequiresPasswordChange(true);
@@ -391,8 +381,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('You must sign in with the exact same Google account to unlock.');
       }
 
-      tokenStore.set('accessToken', res.accessToken);
-      tokenStore.set('refreshToken', res.refreshToken);
+      if (res.accessToken && res.refreshToken) {
+        tokenStore.set('accessToken', res.accessToken);
+        tokenStore.set('refreshToken', res.refreshToken);
+      }
       sessionStorage.removeItem('isSessionLocked');
       setIsSessionLocked(false);
       scheduleInactivityLock();

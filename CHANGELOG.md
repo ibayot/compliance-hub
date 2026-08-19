@@ -5,17 +5,30 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased] - 2026-08-18 - SLA Timer and Ticket Assignment Corrections
+## [Unreleased] - 2026-08-18 - Ticketing, SLA, Assignment and SSE Updates
 
 ### Added
-- Live overdue timer transition when an SLA countdown reaches its deadline.
-- Automatic issue-type selection from keyword rules for Pantawid ICT Support tickets.
+- Short-lived encrypted SSE connection tickets from `GET /api/events/token`; the browser no longer places the JWT in the SSE URL.
+- Live notification sound playback when a new notification is received, subject to browser audio autoplay rules.
+- Rolling year selectors covering the current year plus or minus three years.
 
 ### Changed
-- Duplicate keyword rules now prefer the selected support type when resolving category and issue type.
-- SLA hours are resolved from `ticket_issue_types.sla_hours`; tickets without an issue type use the existing fallback SLA.
-- SLA breach detection uses the authoritative ticket status and `tickets.sla_deadline` fields. `ticket_events` remains audit history only.
-- A breached active ticket can promote the next queued ticket to `IN_PROGRESS` without waiting for the breached ticket to finish.
+- Automatic assignment now uses weekly SLA-hour accounting for `CAPPED_ROUND_ROBIN`, selecting the eligible technician with the oldest `lastAssignedAt` while skipping technicians at or above the configured cap.
+- Automatic assignment uses support-type fallback order: Desktop -> IT Support -> Pantawid ICT; IT Support -> Desktop -> Pantawid ICT; Pantawid ICT -> any eligible technician.
+- Automatic assignment excludes senior technician roles and requires present attendance; manual assignment also requires an explicit `PRESENT` record.
+- Newly assigned tickets start `IN_PROGRESS` when the technician has no active ticket or has a breached active ticket; otherwise they enter the waiting queue.
+- Keyword matching now applies to Pantawid ICT Support tickets and prefers the selected support type when duplicate rules match.
+- SLA hours are resolved from `ticket_issue_types.sla_hours`, with the existing fallback used when no issue type SLA is available.
+- SLA deadline calculation and percentage reporting use business-time calculations, including schedule and pause handling.
+- Changing office-day configuration triggers recalculation of active SLA deadlines when adjustment is needed.
+- Ticket detail and list views display the overdue timer after the SLA deadline and display a running timer for `IN_PROGRESS` tickets.
+- A breached active ticket can promote the next queued ticket to `IN_PROGRESS` alongside the breached ticket, allowing simultaneous in-progress work.
+- Ticketing SSE now uses heartbeat events and encrypted short-lived connection tickets, with gateway routing and buffering headers for realtime delivery.
+- Ticket reports and dashboard queries were reduced where the page already had the required ticket statistics, and ticket filters use dynamic year ranges.
+- Global Settings and SMTP capability labels now describe their ownership under Settings rather than Ticket Settings.
+
+### Known Limitation
+- The current cap guard checks whether the technician's existing weekly SLA load is below the configured cap before selecting them. It does not yet check whether adding the incoming ticket's SLA hours would exceed the cap. For example, a technician at 35 hours can still be selected for a 10-hour ticket.
 
 ### Operational Note
 - The browser overdue timer updates immediately. Automatic queue promotion runs in the ticket cron every minute and may take up to one minute after a breach is detected.

@@ -301,13 +301,14 @@ export class DocumentController {
   @Get(':id/versions/:vid/download')
   async downloadVersion(
     @Param('vid') versionId: string,
+    @CurrentUser() user: any,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    const { buffer, fileName, mimeType } = await this.versionService.downloadVersion(versionId);
+    const { buffer, fileName, mimeType } = await this.versionService.downloadVersion(versionId, user);
 
     res.set({
       'Content-Type': mimeType,
-      'Content-Disposition': `attachment; filename="${fileName}"`,
+      'Content-Disposition': `attachment; filename="${String(fileName).replace(/[\r\n"\\/]/g, '_')}"`,
       'Content-Length': buffer.length,
     });
 
@@ -321,9 +322,10 @@ export class DocumentController {
   @Get(':id/versions/:vid/preview')
   async getPreview(
     @Param('vid') versionId: string,
+    @CurrentUser() user: any,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    const { buffer, mimeType } = await this.versionService.getPreview(versionId);
+    const { buffer, mimeType } = await this.versionService.getPreview(versionId, user);
 
     res.set({
       'Content-Type': mimeType,

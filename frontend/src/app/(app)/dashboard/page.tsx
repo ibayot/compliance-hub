@@ -166,20 +166,23 @@ export default function DashboardPage() {
   };
 
   const [appMode, setAppMode] = useState<string>('loading');
+  const ticketingEnabled = appMode !== 'compliance_only';
+  const complianceEnabled = appMode !== 'ticketing_only';
 
   useEffect(() => {
-    if (myCap?.isGlobalSettingsAccess) {
+    if (myCap?.isGlobalSettingsAccess && ticketingEnabled) {
       ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(() => { });
     }
     usersApi.getAppMode().then((res: any) => setAppMode(res.appMode || 'full')).catch(() => setAppMode('full'));
-  }, [myCap?.isGlobalSettingsAccess]);
+  }, [myCap?.isGlobalSettingsAccess, ticketingEnabled]);
 
   const silentFetchDashboardData = useCallback(async () => {
     if (!user) return;
+    if (appMode === 'loading') return;
     if (!isRegularUser && myCap === null) return;
 
     try {
-      if (isRegularUser) {
+      if (isRegularUser && ticketingEnabled) {
         try {
           const dashStats = await ticketsApi.getDashboardStats();
           setUserTicketStats(dashStats);
@@ -199,12 +202,12 @@ export default function DashboardPage() {
         kpiSummaryResult,
         userDashStatsResult,
       ] = await Promise.allSettled([
-        documentsApi.listDocuments({ limit: 1000 }),
-        cybersecurityApi.getAll(),
-        incidentsApi.getTodayStats(),
-        ticketsApi.getStatistics(),
-        kpiApi.dashboardSummary(periodYear, periodMonth),
-        ticketsApi.getDashboardStats(),
+        complianceEnabled ? documentsApi.listDocuments({ limit: 1000 }) : Promise.resolve({ data: [], total: 0 }),
+        complianceEnabled ? cybersecurityApi.getAll() : Promise.resolve(null),
+        complianceEnabled ? incidentsApi.getTodayStats() : Promise.resolve(null),
+        ticketingEnabled ? ticketsApi.getStatistics() : Promise.resolve(null),
+        complianceEnabled ? kpiApi.dashboardSummary(periodYear, periodMonth) : Promise.resolve(null),
+        ticketingEnabled ? ticketsApi.getDashboardStats() : Promise.resolve(null),
       ]);
 
       const docs = docsResponse.status === 'fulfilled' ? docsResponse.value.data : [];
@@ -212,7 +215,7 @@ export default function DashboardPage() {
       const compliant = docs.filter((d: any) => d.status === 'ready').length;
       const pending = docs.filter((d: any) => d.status === 'pending' || d.status === 'processing').length;
 
-      if (metricsResult.status === 'fulfilled') setCyberMetrics(metricsResult.value);
+      if (metricsResult.status === 'fulfilled' && metricsResult.value) setCyberMetrics(metricsResult.value);
       if (incidentsResult.status === 'fulfilled') setIncidentStats(incidentsResult.value);
       if (kpiSummaryResult.status === 'fulfilled') setKpiSummary(kpiSummaryResult.value);
       if (userDashStatsResult.status === 'fulfilled') setUserTicketStats(userDashStatsResult.value);
@@ -227,12 +230,13 @@ export default function DashboardPage() {
     } catch (err) {
       console.error('Failed to silently fetch dashboard data:', err);
     }
-  }, [user, myCap, isRegularUser, isTechnicianAny, isFullDashboard, periodYear, periodMonth]);
+  }, [user, myCap, isRegularUser, isTechnicianAny, isFullDashboard, periodYear, periodMonth, appMode, ticketingEnabled, complianceEnabled]);
 
   useSse(['TICKET_UPDATED', 'INCIDENT_SNAPSHOT_CREATED'], silentFetchDashboardData);
 
   useEffect(() => {
     if (!user) return;
+    if (appMode === 'loading') return;
     // For staff/admins, wait until capabilities are loaded before fetching data
     if (!isRegularUser && myCap === null) return;
     
@@ -241,7 +245,7 @@ export default function DashboardPage() {
         setLoading(true);
 
         // For regular users — only fetch ticket dashboard stats
-        if (isRegularUser) {
+        if (isRegularUser && ticketingEnabled) {
           try {
             const dashStats = await ticketsApi.getDashboardStats();
             setUserTicketStats(dashStats);
@@ -264,12 +268,12 @@ export default function DashboardPage() {
           kpiSummaryResult,
           userDashStatsResult,
         ] = await Promise.allSettled([
-          documentsApi.listDocuments({ limit: 1000 }),
-          cybersecurityApi.getAll(),
-          incidentsApi.getTodayStats(),
-          ticketsApi.getStatistics(), // Fetch unfiltered stats for top cards
-          kpiApi.dashboardSummary(periodYear, periodMonth),
-          ticketsApi.getDashboardStats(),
+          complianceEnabled ? documentsApi.listDocuments({ limit: 1000 }) : Promise.resolve({ data: [], total: 0 }),
+          complianceEnabled ? cybersecurityApi.getAll() : Promise.resolve(null),
+          complianceEnabled ? incidentsApi.getTodayStats() : Promise.resolve(null),
+          ticketingEnabled ? ticketsApi.getStatistics() : Promise.resolve(null), // Fetch unfiltered stats for top cards
+          complianceEnabled ? kpiApi.dashboardSummary(periodYear, periodMonth) : Promise.resolve(null),
+          ticketingEnabled ? ticketsApi.getDashboardStats() : Promise.resolve(null),
         ]);
 
         const docs = docsResponse.status === 'fulfilled' ? docsResponse.value.data : [];
@@ -281,7 +285,7 @@ export default function DashboardPage() {
         ).length;
 
         // Fetch cybersecurity metrics from API
-        if (metricsResult.status === 'fulfilled') {
+        if (metricsResult.status === 'fulfilled' && metricsResult.value) {
           setCyberMetrics(metricsResult.value);
         }
 
@@ -312,11 +316,11 @@ export default function DashboardPage() {
     };
 
     fetchDashboardData();
-  }, [user?.id, myCap, isRegularUser, isTechnicianAny, isFullDashboard, periodYear, periodMonth]);
+  }, [user?.id, myCap, isRegularUser, isTechnicianAny, isFullDashboard, periodYear, periodMonth, appMode, ticketingEnabled, complianceEnabled]);
 
   // Fetch IT Help Desk Overview stats when filters change
   useEffect(() => {
-    if (!isFullDashboard) return;
+    if (appMode === 'loading' || !isFullDashboard || !ticketingEnabled) return;
     setItStatsLoading(true);
     const filters: any = {};
     if (itStatsMode === 'year') {
@@ -342,7 +346,7 @@ export default function DashboardPage() {
       .finally(() => {
         setItStatsLoading(false);
       });
-  }, [isFullDashboard, itStatsMode, itStatsYear, itStatsSemester, itStatsQuarter, itStatsMonth]);
+  }, [appMode, isFullDashboard, ticketingEnabled, itStatsMode, itStatsYear, itStatsSemester, itStatsQuarter, itStatsMonth]);
 
   useEffect(() => {
     if (!isRegularUser) return;
@@ -355,14 +359,14 @@ export default function DashboardPage() {
 
   // Fetch monthly assigned-ticket stats for technicians whenever period changes
   useEffect(() => {
-    if (!isTechnicianAny || !user?.id) return;
+    if (appMode === 'loading' || !isTechnicianAny || !user?.id || !ticketingEnabled) return;
     setTechStatsLoading(true);
     ticketsApi
       .getAssignedStats(techStatsYear, techStatsMonth)
       .then((data) => setTechAssignedStats(data))
       .catch(() => { })
       .finally(() => setTechStatsLoading(false));
-  }, [isTechnicianAny, user?.id, techStatsYear, techStatsMonth]);
+  }, [appMode, isTechnicianAny, user?.id, ticketingEnabled, techStatsYear, techStatsMonth]);
 
 
 

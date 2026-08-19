@@ -112,11 +112,15 @@ function disconnectSse() {
 // Global listener for token refresh
 if (typeof window !== 'undefined') {
   window.addEventListener('auth:tokenChanged', (e: any) => {
-    const newToken = e.detail;
-    // If we have active listeners, immediately reconnect with new token
-    if (activeListeners.size > 0 && newToken) {
-      void connectSse(newToken).catch(() => undefined);
-    }
+      const newToken = e.detail;
+      // If we have active listeners, immediately reconnect with new token
+      if (activeListeners.size > 0 && newToken) {
+        void connectSse(newToken).catch(() => undefined);
+      } else if (!newToken) {
+        // Logout, forced reauthentication, and account lockout all clear the token.
+        // Close the shared stream immediately instead of waiting for EventSource retry.
+        disconnectSse();
+      }
   });
 }
 

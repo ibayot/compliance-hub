@@ -9,6 +9,7 @@ import { GatewayAppModule } from './gateway.module';
 import { GlobalExceptionFilter } from '../shared/filters/global-exception.filter';
 import * as swaggerUi from 'swagger-ui-express';
 import axios from 'axios';
+import { docsAuthMiddleware } from '../common/middleware/docs-auth.middleware';
 
 let vaptModeCache = process.env.VAPT_MODE === 'true';
 
@@ -250,16 +251,24 @@ async function bootstrap() {
 
   // ── Unified Swagger UI at /api/docs ──────────────────────────────
   // Fetch each service's OpenAPI spec and serve as a multi-URL Swagger UI
+  const swaggerServiceConfig = () => {
+    const username = process.env.SWAGGER_USERNAME || '';
+    const password = process.env.SWAGGER_PASSWORD || '';
+    return username && password
+      ? { headers: { Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}` } }
+      : {};
+  };
+  app.use('/api/docs', docsAuthMiddleware);
   app.use('/api/docs/openapi-users.json', async (_req: any, res: any) => {
-    const spec = await axios.get(`${usersServiceUrl}/api/openapi.json`).then((r) => r.data).catch(() => ({}));
+    const spec = await axios.get(`${usersServiceUrl}/api/openapi.json`, swaggerServiceConfig()).then((r) => r.data).catch(() => ({}));
     res.json(spec);
   });
   app.use('/api/docs/openapi-ticketing.json', async (_req: any, res: any) => {
-    const spec = await axios.get(`${ticketingServiceUrl}/api/openapi.json`).then((r) => r.data).catch(() => ({}));
+    const spec = await axios.get(`${ticketingServiceUrl}/api/openapi.json`, swaggerServiceConfig()).then((r) => r.data).catch(() => ({}));
     res.json(spec);
   });
   app.use('/api/docs/openapi-compliance.json', async (_req: any, res: any) => {
-    const spec = await axios.get(`${complianceServiceUrl}/api/openapi.json`).then((r) => r.data).catch(() => ({}));
+    const spec = await axios.get(`${complianceServiceUrl}/api/openapi.json`, swaggerServiceConfig()).then((r) => r.data).catch(() => ({}));
     res.json(spec);
   });
 

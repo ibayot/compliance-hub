@@ -68,6 +68,21 @@ export class User {
   @ApiHideProperty()
   mfaLastVerifiedAt: Date;
 
+  @Column({ name: 'mfa_attempts', type: 'int', default: 0 })
+  @Exclude()
+  @ApiHideProperty()
+  mfaAttempts: number;
+
+  @Column({ name: 'mfa_challenge_attempts', type: 'int', default: 0 })
+  @Exclude()
+  @ApiHideProperty()
+  mfaChallengeAttempts: number;
+
+  @Column({ name: 'mfa_locked_until', type: 'timestamp', nullable: true })
+  @Exclude()
+  @ApiHideProperty()
+  mfaLockedUntil: Date;
+
   @Column({ name: 'first_name', nullable: true, length: 100 })
   firstName: string;
 

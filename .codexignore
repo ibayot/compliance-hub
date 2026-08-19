@@ -49,6 +49,30 @@ tentative-compliance-report/
 frontend/ddos-report.json
 backend/src/database/seed-data.sql
 
+# Keep Codex context aligned with repository-local ignore policy
+*.sql
+*.png
+*.md
+!AGENTS.md
+!CAPABILITIES.md
+!CHANGELOG.md
+!INSTALLATION.md
+!MAIN-SYSTEM-DOCUMENTATION.md
+!MASTER-CONTEXT.md
+!README.md
+!SECURITY.md
+!SETUP.md
+!WALKTHROUGH.md
+*test*
+*smoke*
+*regression*
+*fix*
+*restore*
+*seed*
+!scripts/
+!scripts/**/*
+Compliance_Hub_Postman_Collection.json
+
 # Disposable test-only folders
 frontend/tests/
 backend/test/

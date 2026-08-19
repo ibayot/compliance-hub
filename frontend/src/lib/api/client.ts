@@ -20,12 +20,19 @@ if (Capacitor.isNativePlatform()) {
 }
 
 export const tokenStore = {
+  browserTokens: {} as Partial<Record<'accessToken' | 'refreshToken', string>>,
   get: (key: 'accessToken' | 'refreshToken'): string | null => {
     if (typeof window === 'undefined') return null;
+    if (!Capacitor.isNativePlatform()) return tokenStore.browserTokens[key] || null;
     return window.sessionStorage.getItem(key);
   },
   set: (key: 'accessToken' | 'refreshToken', value: string) => {
     if (typeof window === 'undefined') return;
+    if (!Capacitor.isNativePlatform()) {
+      tokenStore.browserTokens[key] = value;
+      if (key === 'accessToken') window.dispatchEvent(new CustomEvent('auth:tokenChanged', { detail: value }));
+      return;
+    }
     window.sessionStorage.setItem(key, value);
     if (key === 'accessToken') {
       window.dispatchEvent(new CustomEvent('auth:tokenChanged', { detail: value }));
@@ -33,6 +40,11 @@ export const tokenStore = {
   },
   remove: (key: 'accessToken' | 'refreshToken') => {
     if (typeof window === 'undefined') return;
+    if (!Capacitor.isNativePlatform()) {
+      delete tokenStore.browserTokens[key];
+      if (key === 'accessToken') window.dispatchEvent(new CustomEvent('auth:tokenChanged', { detail: null }));
+      return;
+    }
     window.sessionStorage.removeItem(key);
     if (key === 'accessToken') {
       window.dispatchEvent(new CustomEvent('auth:tokenChanged', { detail: null }));
@@ -45,7 +57,7 @@ class ApiClient {
   /** Guard: only one token-refresh attempt runs at a time */
   private isRefreshing = false;
   /** Queue of request callbacks waiting for the refresh to complete */
-  private failedQueue: Array<{ resolve: (token: string) => void; reject: (err: unknown) => void }> =
+  private failedQueue: Array<{ resolve: (token: string | null) => void; reject: (err: unknown) => void }> =
     [];
 
   private processQueue(error: unknown, token: string | null) {
@@ -58,6 +70,7 @@ class ApiClient {
 
   constructor() {
     this.client = axios.create({
+      withCredentials: true,
       baseURL: API_URL,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -65,6 +78,7 @@ class ApiClient {
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
       (config) => {
+        config.headers['X-Client-Platform'] = Capacitor.isNativePlatform() ? 'mobile' : 'browser';
         if (typeof window !== 'undefined') {
           const token = tokenStore.get('accessToken');
           if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -96,7 +110,7 @@ class ApiClient {
 
         // Skip interceptor for authentication endpoints
         const url = originalRequest.url || '';
-        if (url.includes('/auth/login') || url.includes('/auth/google') || url.includes('/auth/refresh')) {
+        if (url.includes('/auth/')) {
           return Promise.reject(error);
         }
 
@@ -106,19 +120,24 @@ class ApiClient {
 
         const refreshToken = tokenStore.get('refreshToken');
         // No refresh token at all — clear access token and redirect immediately
-        if (!refreshToken) {
+        const isBrowser = !Capacitor.isNativePlatform();
+        const isAuthPage = window.location.pathname === '/login'
+          || window.location.pathname.startsWith('/mfa-verify');
+        // Browser refresh tokens are HttpOnly cookies and invisible to JavaScript.
+        if (!refreshToken && !isBrowser) {
           tokenStore.remove('accessToken');
-          window.location.href = '/login?reason=session_expired';
+          if (!isAuthPage) window.location.href = '/login?reason=session_expired';
           return Promise.reject(error);
         }
 
         // If a refresh is already in flight, queue this request
         if (this.isRefreshing) {
-          return new Promise<string>((resolve, reject) => {
-            this.failedQueue.push({ resolve, reject });
-          })
+            return new Promise<string | null>((resolve, reject) => {
+              this.failedQueue.push({ resolve, reject });
+            })
             .then((token) => {
-              originalRequest.headers.Authorization = `Bearer ${token}`;
+              if (token) originalRequest.headers.Authorization = `Bearer ${token}`;
+              else delete originalRequest.headers.Authorization;
               return this.client(originalRequest);
             })
             .catch(() => Promise.reject(error));
@@ -127,11 +146,17 @@ class ApiClient {
         this.isRefreshing = true;
 
         try {
-          const response = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
-          const { accessToken } = response.data;
-          tokenStore.set('accessToken', accessToken);
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-          this.processQueue(null, accessToken);
+            const response = await axios.post(
+              `${API_URL}/auth/refresh`,
+              Capacitor.isNativePlatform() ? { refreshToken } : {},
+              { withCredentials: true, headers: { 'X-Client-Platform': Capacitor.isNativePlatform() ? 'mobile' : 'browser' } },
+            );
+            const { accessToken, refreshToken: rotatedRefreshToken } = response.data || {};
+            if (accessToken) tokenStore.set('accessToken', accessToken);
+            if (rotatedRefreshToken) tokenStore.set('refreshToken', rotatedRefreshToken);
+          if (accessToken) originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+          else delete originalRequest.headers.Authorization;
+          this.processQueue(null, accessToken || null);
           return this.client(originalRequest);
         } catch (refreshError) {
           // Refresh failed (e.g. user deactivated) — log out and notify
@@ -140,7 +165,7 @@ class ApiClient {
           tokenStore.remove('refreshToken');
           const errorMessage = (refreshError as any)?.response?.data?.message || '';
           const reason = errorMessage.includes('deactivated') ? 'deactivated' : 'session_expired';
-          window.location.href = `/login?reason=${reason}`;
+          if (!isAuthPage) window.location.href = `/login?reason=${reason}`;
           return Promise.reject(refreshError);
         } finally {
           this.isRefreshing = false;

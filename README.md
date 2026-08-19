@@ -1,6 +1,6 @@
 # RICTMS Compliance Hub
 
-> **Current Version:** `v0.0.105` (Backend) / `v0.0.99` (Frontend)
+> **Current Version:** `v0.0.136` (Backend) / `v0.0.133` (Frontend)
 
 Compliance Hub is an internal document governance and compliance platform for government teams. It supports document intake and review workflows, ticketing and escalation, issuance mapping, KPI monitoring, and role-based operations across split microservices.
 
@@ -27,6 +27,7 @@ Release-by-release history is maintained in `CHANGELOG.md`.
 - Ticket lifecycle with escalation, assignment, and reporting
 - SLA timers based on issue-type configuration, including live overdue tracking
 - Keyword-based category and issue selection with selected-support-type tie-breaking
+- Server-Sent Events for live ticket, notification, attendance, and settings updates
 - Issuance/reference management and document mapping
 - KPI monitoring, scoring, dashboards, and trends
 
@@ -84,8 +85,15 @@ npm run dev
 - When a ticket has an issue type, its business-hours deadline is calculated from that issue type. Tickets without an issue type use the system fallback SLA.
 - The ticket detail countdown changes to a live overdue timer when the deadline passes; no page refresh is required.
 - Keyword rules populate the matching category and issue type. If the same keyword exists for multiple support types, the selected support type is preferred.
+- Automatic assignment uses the configured `CAPPED_ROUND_ROBIN` strategy when selected in Routing Configuration. It considers only technicians explicitly marked `PRESENT`, excludes senior technician roles and the requester, and selects the eligible technician with the oldest `lastAssignedAt` timestamp.
+- The capped strategy counts the SLA hours of tickets assigned during the current Asia/Manila calendar week. A technician at or above the configured weekly cap is skipped, and support-type fallback is applied in this order: Desktop -> IT Support -> Pantawid ICT; IT Support -> Desktop -> Pantawid ICT; Pantawid ICT -> any eligible technician.
+- The cap check currently compares the technician's existing weekly load with the cap before assignment. It does not yet reject a ticket when `existing weekly load + incoming ticket SLA` would exceed the cap; treat the configured cap as a selection threshold rather than a strict maximum until that rule is tightened.
+- A newly assigned ticket starts `IN_PROGRESS` when the selected technician has no active ticket or has a breached active ticket. Otherwise, it is placed in the technician's waiting queue.
+- Manual assignment requires an explicit `PRESENT` attendance record. Absent, out-of-office, half-day, and missing attendance records are rejected.
 - When an active ticket breaches its SLA, the next queued ticket for the same technician is promoted to `IN_PROGRESS` alongside the breached ticket.
 - Automatic queue promotion is checked by the ticket cron every minute. The browser timer changes immediately, while queue promotion may take up to one minute.
+- The SSE browser URL uses a short-lived encrypted connection ticket rather than the JWT. SSE remains compatible with the HTTP/1.1 deployment and sends heartbeat events to keep connections alive.
+- Year selectors use a rolling seven-year range: three years before the current year through three years after it.
 
 ## Environment Variables (High-Level)
 

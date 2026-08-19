@@ -29,11 +29,26 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     // Handle TypeORM QueryFailedError (often triggered by ZAP injecting invalid characters)
     // Map this to a 400 Bad Request instead of a 500 Internal Server Error.
     if (exception instanceof QueryFailedError) {
-      this.logger.warn(`Database query failed on ${request.method} ${request.url}`);
-      return response.status(HttpStatus.BAD_REQUEST).json({
-        statusCode: HttpStatus.BAD_REQUEST,
-        message: 'Invalid input provided.',
-        error: 'Bad Request',
+      const code = String((exception as any).driverError?.code || '');
+      const clientInputCodes = new Set([
+        'ER_DATA_TOO_LONG',
+        'ER_TRUNCATED_WRONG_VALUE',
+        'ER_BAD_NULL_ERROR',
+        'ER_WARN_DATA_OUT_OF_RANGE',
+      ]);
+      if (clientInputCodes.has(code)) {
+        this.logger.warn(`Invalid database input on ${request.method} ${request.url} (${code})`);
+        return response.status(HttpStatus.BAD_REQUEST).json({
+          statusCode: HttpStatus.BAD_REQUEST,
+          message: 'Invalid input provided.',
+          error: 'Bad Request',
+        });
+      }
+      this.logger.error(`Database failure on ${request.method} ${request.url} (${code || 'unknown'})`, exception.stack);
+      return response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'A database error occurred. Please contact support.',
+        error: 'Internal Server Error',
       });
     }
 

@@ -58,9 +58,11 @@ export default function MfaVerifyPage() {
       const response = await authApi.verifyMfaCode(tempToken, code, rememberDevice);
       enqueueSnackbar('MFA Verification successful.', { variant: 'success' });
       
-      // Store standard tokens
-      tokenStore.set('accessToken', response.accessToken);
-      tokenStore.set('refreshToken', response.refreshToken);
+      // Native clients receive bearer tokens; browser clients use HttpOnly cookies.
+      if (response.accessToken && response.refreshToken) {
+        tokenStore.set('accessToken', response.accessToken);
+        tokenStore.set('refreshToken', response.refreshToken);
+      }
       if (response.deviceToken) {
         localStorage.setItem('deviceToken', response.deviceToken);
       }
@@ -72,7 +74,19 @@ export default function MfaVerifyPage() {
       // Force reload to let AuthContext pick up the tokens
       window.location.href = '/dashboard';
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Verification failed. Invalid or expired code.');
+      const message = err.response?.data?.message || 'Verification failed. Invalid or expired code.';
+      const mustReauthenticate = err.response?.status === 401
+        && /three MFA attempts|log in again/i.test(String(message));
+      const accountLocked = err.response?.status === 429
+        && /locked for 15 minutes/i.test(String(message));
+      if (mustReauthenticate || accountLocked) {
+        sessionStorage.removeItem('mfaTempToken');
+        sessionStorage.removeItem('mfaTestModeCode');
+        setCode('');
+        window.location.replace('/login?reason=mfa_failed');
+        return;
+      }
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -101,6 +115,9 @@ export default function MfaVerifyPage() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3, textAlign: 'center' }}>
             We've sent a 6-digit verification code to your registered email address.
           </Typography>
+          <Alert severity="info" sx={{ mb: 3 }}>
+            You have 3 attempts for this login. After 3 failed attempts, you must log in again. After 9 total failed attempts, your account will be locked for 15 minutes.
+          </Alert>
 
           {error && (
             <Alert severity="error" sx={{ mb: 3 }}>

@@ -605,14 +605,33 @@ export class UsersService {
     await this.usersRepository.update(userId, {
       mfaCode: code,
       mfaExpiresAt: expiresAt,
+      mfaChallengeAttempts: 0,
+    } as any);
+  }
+
+  async recordMfaFailure(
+    userId: number,
+    attempts: number,
+    challengeAttempts: number,
+    lockedUntil: Date | null,
+    invalidateCode = false,
+  ): Promise<void> {
+    await this.usersRepository.update(userId, {
+      mfaAttempts: attempts,
+      mfaChallengeAttempts: challengeAttempts,
+      mfaLockedUntil: lockedUntil,
+      ...(invalidateCode ? { mfaCode: null, mfaExpiresAt: null } : {}),
     } as any);
   }
 
   async markMfaVerified(userId: number): Promise<void> {
     await this.usersRepository.update(userId, {
-      mfaCode: null,
-      mfaExpiresAt: null,
-      mfaLastVerifiedAt: new Date(),
+        mfaCode: null,
+        mfaExpiresAt: null,
+        mfaLastVerifiedAt: new Date(),
+        mfaAttempts: 0,
+        mfaChallengeAttempts: 0,
+        mfaLockedUntil: null,
     } as any);
   }
 

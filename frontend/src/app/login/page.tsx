@@ -38,8 +38,10 @@ export default function LoginPage() {
     } catch (err: any) {
       console.error("LOGIN ERROR:", err);
 
+      const responseData = err?.response?.data;
+      const serverMessage = typeof responseData === 'string' ? responseData : responseData?.message;
       const msg =
-        err?.response?.data?.message ||
+        serverMessage ||
         (err?.message === 'Network Error' || !err?.response
           ? 'Cannot connect to server. Please make sure backend API is running on port 4000.'
           : 'Invalid credentials. Please try again.');
@@ -113,6 +115,12 @@ export default function LoginPage() {
             {reason === 'session_expired' && (
               <Alert severity="warning" sx={{ mb: 2 }}>
                 Your session has expired. Please try again.
+              </Alert>
+            )}
+
+            {reason === 'mfa_failed' && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                MFA attempts for that login were exhausted. Please sign in again.
               </Alert>
             )}
 

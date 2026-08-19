@@ -401,7 +401,8 @@ export default function TicketsPage() {
     const requestId = ++ticketRequestRef.current;
     try {
       setLoading(true);
-      const data = await ticketsApi.getAll({
+      const [data, dashboardStats] = await Promise.all([
+        ticketsApi.getAll({
         status: (filterStatus as TicketStatus) || undefined,
         ticketType: (filterType as TicketType) || undefined,
         priority: filterPriority || undefined,
@@ -414,16 +415,18 @@ export default function TicketsPage() {
         escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
         search: searchQuery,
         page,
-        limit: TICKETS_PAGE_SIZE,
-      });
+          limit: TICKETS_PAGE_SIZE,
+        }),
+        ticketsApi.getDashboardStats(),
+      ]);
       if (requestId !== ticketRequestRef.current) return;
       setTickets(data.data);
       setTotalPages(data.totalPages);
       setTotalTickets(data.total);
       setStatusCounts(data.statusCounts ?? {});
-      setPendingSatCount(data.pendingSatisfactionCount ?? 0);
-      setMyTicketsCount(data.myTicketsCount ?? 0);
-      setEscalatedToMeCount(data.escalatedToMeCount ?? 0);
+      setPendingSatCount(dashboardStats.pendingSatisfactionTickets?.length ?? 0);
+      setMyTicketsCount(dashboardStats.myTicketsCount ?? 0);
+      setEscalatedToMeCount(dashboardStats.escalatedToMeCount ?? 0);
 
       if (canManageAll) {
         const escalations = await ticketsApi.getAllEscalations();
@@ -489,7 +492,8 @@ export default function TicketsPage() {
   const silentFetchTickets = useCallback(async () => {
     const requestId = ++ticketRequestRef.current;
     try {
-      const data = await ticketsApi.getAll({
+      const [data, dashboardStats] = await Promise.all([
+        ticketsApi.getAll({
         status: (filterStatus as TicketStatus) || undefined,
         ticketType: (filterType as TicketType) || undefined,
         priority: filterPriority || undefined,
@@ -502,16 +506,18 @@ export default function TicketsPage() {
         escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
         search: searchQuery,
         page,
-        limit: TICKETS_PAGE_SIZE,
-      });
+          limit: TICKETS_PAGE_SIZE,
+        }),
+        ticketsApi.getDashboardStats(),
+      ]);
       if (requestId !== ticketRequestRef.current) return;
       setTickets(data.data);
       setTotalPages(data.totalPages);
       setTotalTickets(data.total);
       setStatusCounts(data.statusCounts ?? {});
-      setPendingSatCount(data.pendingSatisfactionCount ?? 0);
-      setMyTicketsCount(data.myTicketsCount ?? 0);
-      setEscalatedToMeCount(data.escalatedToMeCount ?? 0);
+      setPendingSatCount(dashboardStats.pendingSatisfactionTickets?.length ?? 0);
+      setMyTicketsCount(dashboardStats.myTicketsCount ?? 0);
+      setEscalatedToMeCount(dashboardStats.escalatedToMeCount ?? 0);
     } catch {
       /* silent */
     }

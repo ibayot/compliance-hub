@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import { DataSource } from 'typeorm';
 import { TicketingServiceAppModule } from './ticketing-service.module';
 import { GlobalExceptionFilter } from '../shared/filters/global-exception.filter';
+import { docsAuthMiddleware } from '../common/middleware/docs-auth.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(TicketingServiceAppModule);
@@ -103,6 +104,8 @@ async function bootstrap() {
     .addTag('knowledge-base', 'Knowledge base and FAQs')
     .build();
   const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
+  app.use('/api/docs', docsAuthMiddleware);
+  app.use('/api/openapi.json', docsAuthMiddleware);
   SwaggerModule.setup('api/docs', app, swaggerDoc, {
     jsonDocumentUrl: 'api/openapi.json',
   });

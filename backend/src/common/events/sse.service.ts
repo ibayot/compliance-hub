@@ -8,6 +8,7 @@ import { EventBusService } from './event-bus.service';
 export const SSE_EVENT_CHANNEL = 'realtime.sse.events';
 
 export interface SseEvent {
+  id?: string;
   type: string;
   payload?: any;
   targetUserId?: number;
@@ -23,6 +24,8 @@ export class SseService implements OnModuleInit {
   private readonly logger = new Logger(SseService.name);
   private readonly instanceId = randomUUID();
   private readonly eventSubject = new Subject<SseEvent>();
+  private readonly replayBuffer: SseEvent[] = [];
+  private eventSequence = 0;
   private readonly tokenSecret: Buffer;
   private readonly connectionTicketTtlMs = 60_000;
 
@@ -65,17 +68,33 @@ export class SseService implements OnModuleInit {
     });
   }
 
-  getEventStream(userId: number): Observable<{ data: any }> {
+  getEventStream(userId: number, lastEventId?: string): Observable<{ id?: string; data: any }> {
+    const replayStart = lastEventId
+      ? this.replayBuffer.findIndex((event) => event.id === lastEventId)
+      : -1;
+    const replayEvents = replayStart >= 0 ? this.replayBuffer.slice(replayStart + 1) : [];
     const events$ = this.eventSubject.pipe(
       filter(
         (event) =>
           event.targetUserId == null || event.targetUserId === userId,
       ),
       map((event) => ({
+        id: event.id,
         data: {
           type: event.type,
           payload: event.payload,
         },
+      })),
+    );
+
+    const replay$ = new Observable<SseEvent>((subscriber) => {
+      replayEvents.forEach((event) => subscriber.next(event));
+      subscriber.complete();
+    }).pipe(
+      filter((event) => event.targetUserId == null || event.targetUserId === userId),
+      map((event) => ({
+        id: event.id,
+        data: { type: event.type, payload: event.payload },
       })),
     );
 
@@ -90,10 +109,13 @@ export class SseService implements OnModuleInit {
       })),
     );
 
-    return merge(events$, heartbeat$);
+    return merge(replay$, events$, heartbeat$);
   }
 
   private emit(event: SseEvent) {
+    event.id = `${++this.eventSequence}`;
+    this.replayBuffer.push(event);
+    if (this.replayBuffer.length > 1000) this.replayBuffer.shift();
     this.eventSubject.next(event);
     void this.eventBus.publish<SseEnvelope>(SSE_EVENT_CHANNEL, {
       sourceId: this.instanceId,

@@ -24,6 +24,7 @@ export class SseController {
   subscribeToEvents(@Req() req: any): Observable<{ data: any }> {
     const userId = this.sseService.validateConnectionToken(req.query?.ticket);
     if (!userId) throw new UnauthorizedException('Invalid or expired SSE connection ticket.');
-    return this.sseService.getEventStream(userId);
+    const lastEventId = req.headers?.['last-event-id'] || req.query?.lastEventId;
+    return this.sseService.getEventStream(userId, lastEventId);
   }
 }

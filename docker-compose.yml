@@ -64,10 +64,13 @@ services:
       - DB_PASSWORD=admin
       - DB_BOOTSTRAP=false
       - REDIS_HOST=redis
+      # Replace these sample values with the Swagger credentials you will use.
+      - SWAGGER_USERNAME=REPLACE_WITH_YOUR_SWAGGER_USERNAME
+      - SWAGGER_PASSWORD=REPLACE_WITH_YOUR_SWAGGER_PASSWORD
     ports:
-      - "4101:4101"
+        - "4101:4101"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4101/api/docs').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4101/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
       timeout: 5s
       retries: 8
@@ -102,10 +105,12 @@ services:
       - CEREBRAS_API_KEY=${CEREBRAS_API_KEY:-}
       - COMMENT_ATTACHMENT_STORAGE_ROOT=/app/uploads/comments
       - ESCALATION_STORAGE_ROOT=/app/uploads/escalations
+      - SWAGGER_USERNAME=REPLACE_WITH_YOUR_SWAGGER_USERNAME
+      - SWAGGER_PASSWORD=REPLACE_WITH_YOUR_SWAGGER_PASSWORD
     ports:
       - "4102:4102"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4102/api/docs').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4102/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
       timeout: 5s
       retries: 8
@@ -138,10 +143,12 @@ services:
       - DB_BOOTSTRAP=false
       - REDIS_HOST=redis
       - USERS_SERVICE_URL=http://users-service:4101
+      - SWAGGER_USERNAME=REPLACE_WITH_YOUR_SWAGGER_USERNAME
+      - SWAGGER_PASSWORD=REPLACE_WITH_YOUR_SWAGGER_PASSWORD
     ports:
       - "4103:4103"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4103/api/docs').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4103/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
       timeout: 5s
       retries: 8
@@ -177,6 +184,8 @@ services:
       - COMPLIANCE_SERVICE_URL=http://compliance-service:4103
       - RATE_LIMIT_WINDOW_MS=60000
       - RATE_LIMIT_MAX_REQUESTS=4000
+      - SWAGGER_USERNAME=REPLACE_WITH_YOUR_SWAGGER_USERNAME
+      - SWAGGER_PASSWORD=REPLACE_WITH_YOUR_SWAGGER_PASSWORD
     ports:
       - "4000:4000"
     healthcheck:

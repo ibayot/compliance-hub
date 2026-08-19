@@ -7,7 +7,10 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 export class ComplianceJwtStrategy extends PassportStrategy(Strategy) {
   constructor(configService: ConfigService) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        (request: any) => request?.headers?.cookie?.split(';').map((value: string) => value.trim()).find((value: string) => value.startsWith('auth_access='))?.slice('auth_access='.length),
+      ]),
       ignoreExpiration: false,
       secretOrKey: configService.get('JWT_SECRET'),
       issuer: configService.get('JWT_ISSUER') || 'compliance-hub-api',

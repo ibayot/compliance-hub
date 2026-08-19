@@ -21,6 +21,7 @@ import { DocumentReference } from '../entities/document-reference.entity';
 import * as mammoth from 'mammoth';
 import pdfParse from 'pdf-parse';
 import * as net from 'net';
+import * as path from 'path';
 import { ReportorialDocumentType } from '../entities/reportorial-document-type.entity';
 import { ReportorialDocTypeService } from './reportorial-doc-type.service';
 import { MetricsService } from '../../metrics/services/metrics.service';
@@ -653,10 +654,14 @@ export class DocumentService implements OnModuleInit {
     const { user_role, ...persistedMetadata } = metadata;
 
     // Validate file type
-    const isDocx = file.originalname.toLowerCase().endsWith('.docx');
-    const isPdf = file.originalname.toLowerCase().endsWith('.pdf');
-    if (!isDocx && !isPdf) {
-      throw new BadRequestException('Only DOCX and PDF files are allowed');
+    const safeName = path.basename(file.originalname).replace(/[\r\n"\\/]/g, '_').slice(0, 180);
+    const isDocx = safeName.toLowerCase().endsWith('.docx');
+    const isPdf = safeName.toLowerCase().endsWith('.pdf');
+    const isPdfSignature = file.buffer.subarray(0, 5).toString('ascii') === '%PDF-';
+    const isDocxSignature = file.buffer.subarray(0, 4).toString('binary') === 'PK\x03\x04' &&
+      file.buffer.includes(Buffer.from('[Content_Types].xml')) && file.buffer.includes(Buffer.from('word/'));
+    if ((!isPdf && !isDocx) || (isPdf && !isPdfSignature) || (isDocx && !isDocxSignature)) {
+      throw new BadRequestException('Only valid DOCX and PDF files are allowed');
     }
 
     const normalizedDocumentType = this.normalizeDocumentType(metadata.document_type);
@@ -664,7 +669,7 @@ export class DocumentService implements OnModuleInit {
     if (this.roleCapSvc.isFocal(user_role as string) && !metadata.reportorial_doc_type_id) {
       await this.validateFocalSubmission(
         { ...metadata, document_type: normalizedDocumentType, file },
-        file.originalname,
+        safeName,
       );
     }
 
@@ -697,7 +702,7 @@ export class DocumentService implements OnModuleInit {
         expectedFilename = ReportorialDocTypeService.computeExpectedFilename(reportorialDocType);
       }
 
-      const uploadedBase = file.originalname.replace(/\.(docx|pdf)$/i, '');
+      const uploadedBase = safeName.replace(/\.(docx|pdf)$/i, '');
       if (uploadedBase !== expectedFilename) {
         throw new BadRequestException(
           `Invalid filename. Expected "${expectedFilename}.docx" or "${expectedFilename}.pdf" based on the document type and selected period.`,
@@ -756,7 +761,7 @@ export class DocumentService implements OnModuleInit {
     // Save file to storage
     const filePath = await this.storageService.saveFile(
       file.buffer,
-      file.originalname,
+      safeName,
       'documents',
     );
 
@@ -787,10 +792,10 @@ export class DocumentService implements OnModuleInit {
     const version = await this.versionRepo.save({
       document_id: document.id,
       version_number: 1,
-      file_name: file.originalname,
+      file_name: safeName,
       file_path: filePath,
       file_blob: file.buffer,
-      mime_type: file.mimetype,
+      mime_type: isPdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       file_size: file.size,
       checksum,
       preview_path: isPdf ? filePath : null,

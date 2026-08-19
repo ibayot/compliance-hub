@@ -1137,14 +1137,12 @@ export class TicketService implements OnModuleInit {
         if (t.status === TicketStatus.IN_PROGRESS && t.isSlaWaiting) {
           t.isSlaWaiting = false;
           t.slaPausedAt = null;
-          await this.ticketRepo.save(t);
         }
         if (t.status === TicketStatus.IN_PROGRESS && !t.slaDeadline && t.assignedToId) {
           t.slaDeadline = await this.calculateTicketSlaDeadline(
             t,
             new Date(t.lastAssignedAt || t.createdAt),
           );
-          await this.ticketRepo.save(t);
         }
         let isOverdue = false;
         let isNearingSLA = false;
@@ -1204,9 +1202,7 @@ export class TicketService implements OnModuleInit {
     const statusCounts: Record<string, number> = {};
     for (const row of statusRows) statusCounts[row.status] = Number(row.count);
 
-    const dashboardStats = filters.viewerId ? await this.getUserDashboardStats(filters.viewerId) : null;
-
-    if (!usePagination) {
+      if (!usePagination) {
       return withAvailability;
     }
 
@@ -1217,9 +1213,6 @@ export class TicketService implements OnModuleInit {
       limit: limit as number,
       totalPages: Math.max(1, Math.ceil(total / (limit as number))),
       statusCounts,
-      pendingSatisfactionCount: dashboardStats?.pendingSatisfactionTickets.length ?? 0,
-      myTicketsCount: dashboardStats?.myTicketsCount ?? 0,
-      escalatedToMeCount: dashboardStats?.escalatedToMeCount ?? 0,
     };
   }
 
@@ -1232,32 +1225,23 @@ export class TicketService implements OnModuleInit {
     await this.enrichTicketsWithUsers([ticket]);
     await this.assertTicketReadAccess(ticket, viewerId, viewerRole);
 
-    let needsSave = false;
     // IN_PROGRESS tickets are active; repair legacy rows that still carry the queue flag.
     if (ticket.status === TicketStatus.IN_PROGRESS && ticket.isSlaWaiting) {
       ticket.isSlaWaiting = false;
       ticket.slaPausedAt = null;
-      needsSave = true;
     }
     if (ticket.status === TicketStatus.IN_PROGRESS && !ticket.slaDeadline && ticket.assignedToId) {
       ticket.slaDeadline = await this.calculateTicketSlaDeadline(
         ticket,
         new Date(ticket.lastAssignedAt || ticket.createdAt),
       );
-      needsSave = true;
     }
     if (viewerRole === UserRole.USER && ticket.hasUnreadUser) {
       ticket.hasUnreadUser = false;
-      needsSave = true;
     } else if (viewerRole !== UserRole.USER && ticket.hasUnreadTechnician) {
       ticket.hasUnreadTechnician = false;
-      needsSave = true;
     }
     
-    if (needsSave) {
-      await this.ticketRepo.save(ticket);
-    }
-
     // Strip internal notes for regular users — they should never see staff-only comments
     if (viewerRole === UserRole.USER && ticket.comments) {
       (ticket as any).comments = ticket.comments.filter((c: any) => !c.isInternal);
@@ -2304,6 +2288,10 @@ export class TicketService implements OnModuleInit {
     viewerRole: UserRole,
   ): Promise<Ticket | null> {
     const ticket = await this.getTicketById(id, viewerRole, viewerId);
+    // Persist unread clearing only through this explicit mutation endpoint.
+    await this.ticketRepo.update(id, viewerRole === UserRole.USER
+      ? { hasUnreadUser: false }
+      : { hasUnreadTechnician: false });
     // Only auto-transition when the assigned technician views an 'assigned' ticket
     // QA #5: Skip auto-transition if priority has not been set yet
     if (ticket.status === TicketStatus.ASSIGNED && ticket.assignedToId === viewerId && !ticket.isSlaWaiting) {
