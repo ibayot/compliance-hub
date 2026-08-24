@@ -12,7 +12,7 @@ import { CAPABILITY_KEY } from '../decorators/require-capability.decorator';
  *   @RequireCapability('isTicketSettingsFocal')
  *   @UseGuards(JwtAuthGuard, RolesGuard, CapabilityGuard)
  *
- * super_admin always passes (bypasses the flag check).
+ * Every role, including super_admin, is evaluated against its database row.
  */
 @Injectable()
 export class CapabilityGuard implements CanActivate {
