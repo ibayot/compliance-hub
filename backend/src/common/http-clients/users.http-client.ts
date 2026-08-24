@@ -38,6 +38,8 @@ export interface RoleCapabilityStub {
   isRepositoryAccess: boolean;
   isIssuancesAccess: boolean;
   isMetricsAccess: boolean;
+  isDutyViewerAccess: boolean;
+  isDutyAdminAccess: boolean;
 }
 
 /** Circuit breaker states for inter-service calls. */

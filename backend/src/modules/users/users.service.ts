@@ -305,6 +305,8 @@ export class UsersService {
       isRepositoryAccess: isSuperAdmin || isFocal,
       isIssuancesAccess: isSuperAdmin || isComplianceRole,
       isMetricsAccess: isSuperAdmin || isComplianceRole,
+      isDutyViewerAccess: isSuperAdmin,
+      isDutyAdminAccess: isSuperAdmin,
     });
   }
 

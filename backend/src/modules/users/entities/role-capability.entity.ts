@@ -162,6 +162,14 @@ export class RoleCapability {
   @Column({ name: 'is_user_management_view', type: 'tinyint', width: 1, default: 0 })
   isUserManagementView: boolean;
 
+  /** True for roles that can view Duty cards and the Duty calendar map. */
+  @Column({ name: 'is_duty_viewer_access', type: 'tinyint', width: 1, default: 0 })
+  isDutyViewerAccess: boolean;
+
+  /** True for roles that can administer Duty rosters, logs, exceptions, and schedules. */
+  @Column({ name: 'is_duty_admin_access', type: 'tinyint', width: 1, default: 0 })
+  isDutyAdminAccess: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

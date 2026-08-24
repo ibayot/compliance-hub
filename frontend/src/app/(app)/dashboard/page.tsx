@@ -59,6 +59,7 @@ import { incidentsApi, TodayStats } from '@/lib/api/incidents';
 import { usersApi } from '@/lib/api/users';
 import { cybersecurityApi, CybersecurityMetric } from '@/lib/api/cybersecurity';
 import { DashboardSummaryResponse, kpiApi } from '@/lib/api/kpi';
+import { dutiesApi } from '@/lib/api/duties';
 
 export default function DashboardPage() {
   const theme = useTheme();
@@ -85,6 +86,7 @@ export default function DashboardPage() {
   // User-specific ticket dashboard stats
   const [userTicketStats, setUserTicketStats] = useState<TicketDashboardStats | null>(null);
   const [pendingSatReminderOpen, setPendingSatReminderOpen] = useState(false);
+  const [dutyCards, setDutyCards] = useState<any[]>([]);
 
   // Tech monthly assigned-ticket stats with selectable period
   const [techAssignedStats, setTechAssignedStats] = useState<TechAssignedStats | null>(null);
@@ -128,6 +130,16 @@ export default function DashboardPage() {
   // Section Head and Cybersecurity Officer — identified via roleCode
   const isSectionHead = user?.roleCode === 'section_head';
   const isCybersecurityOfficer = user?.roleCode === 'cybersecurity_officer';
+  const canViewDuties = !!myCap?.isDutyViewerAccess || !!myCap?.isDutyAdminAccess;
+
+  useEffect(() => {
+    if (!canViewDuties) { setDutyCards([]); return; }
+    dutiesApi.dashboard().then(setDutyCards).catch(() => setDutyCards([]));
+  }, [canViewDuties]);
+
+  useSse(['DUTY_UPDATED'], () => {
+    if (canViewDuties) dutiesApi.dashboard().then(setDutyCards).catch(() => undefined);
+  });
 
   const [globalConfig, setGlobalConfig] = useState<any>(null);
   const [slaSummary, setSlaSummary] = useState<{ breached: number; nearing: number; onTrack: number } | null>(null);
@@ -577,6 +589,32 @@ export default function DashboardPage() {
           Welcome back, {user?.firstName || user?.email}!
         </Typography>
       </Box>
+
+      {canViewDuties && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent>
+            <Typography variant="h6" fontWeight={800} mb={2}>Today&apos;s Duty Coverage</Typography>
+            <Grid container spacing={2}>
+              {dutyCards.map((item) => (
+                <Grid item xs={12} sm={6} lg={3} key={item.dutyType}>
+                  <Card sx={{ height: '100%', background: getGradient(item.dutyType === 'OD' ? 'warning' : 'info') }}>
+                    <CardContent>
+                      <Typography variant="overline" color="text.secondary">
+                        {item.dutyType === 'OD' ? 'OFFICER OF THE DAY' : item.dutyType}
+                      </Typography>
+                      <Typography variant="h6">{item.name}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {item.daysSince == null ? '' : `${item.daysSince} days since previous duty`}
+                      </Typography>
+                      {item.isSubstitute && <Chip size="small" color="warning" label="Substitute" sx={{ mt: 1 }} />}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Technician Personal Assignment Stats */}
       {isTechnicianAny && appMode !== 'compliance_only' && (

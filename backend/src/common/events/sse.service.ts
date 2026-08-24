@@ -163,6 +163,10 @@ export class SseService implements OnModuleInit {
     });
   }
 
+  emitDutyUpdated() {
+    this.emit({ type: 'DUTY_UPDATED' });
+  }
+
   emitIncidentSnapshotCreated() {
     this.emit({
       type: 'INCIDENT_SNAPSHOT_CREATED',

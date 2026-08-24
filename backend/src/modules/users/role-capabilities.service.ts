@@ -216,6 +216,14 @@ export class RoleCapabilitiesService implements OnModuleInit {
     return !!this.get(role)?.isUserManagementView;
   }
 
+  isDutyViewerAccess(role: string): boolean {
+    return !!this.get(role)?.isDutyViewerAccess;
+  }
+
+  isDutyAdminAccess(role: string): boolean {
+    return !!this.get(role)?.isDutyAdminAccess;
+  }
+
   /** Return all role values that have a given capability set to true. */
   getRolesWhere(
     capability:
@@ -245,7 +253,9 @@ export class RoleCapabilitiesService implements OnModuleInit {
       | 'isRoleCapabilitiesAccess'
       | 'isSystemRolesAccess'
       | 'isUserManagementAdmin'
-      | 'isUserManagementView',
+      | 'isUserManagementView'
+      | 'isDutyViewerAccess'
+      | 'isDutyAdminAccess',
   ): string[] {
     return [...this.cache.values()].filter((r) => r[capability]).map((r) => r.roleValue);
   }

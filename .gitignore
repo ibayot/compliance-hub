@@ -51,6 +51,8 @@ backend/src/database/seed-data.sql
 
 # Keep Codex context aligned with repository-local ignore policy
 *.sql
+!db-init/20260820-duty-monitoring.sql
+!db-init/20260820-duty-constraints.sql
 *.png
 *.md
 !AGENTS.md

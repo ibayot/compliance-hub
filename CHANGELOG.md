@@ -5,14 +5,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased] - 2026-08-18 - Ticketing, SLA, Assignment and SSE Updates
+## [Unreleased] - 2026-08-20 - Duty Monitoring, Ticketing, SLA, Assignment and SSE Updates
 
 ### Added
+- Duty Monitoring module with Overview, monthly Map, Duty Log CRUD, Rotation Tracker, Exceptions CRUD, Meeting Schedule, and roster management.
+- Four capability-aware Duty dashboard cards for Officer of the Day, ROC, OPCEN, and Conference.
+- Database-driven `isDutyViewerAccess` and `isDutyAdminAccess` capability flags in the Role Capabilities Matrix.
+- Ticketing tables for duty rosters, assignment logs, exceptions, meeting reservations, and one-per-venue daily coverage.
+- Duty SSE updates and gateway routes for `/api/duties` and `/api/v1/duties`.
+- Duty rotation and automatic-assignment regression tests.
 - Short-lived encrypted SSE connection tickets from `GET /api/events/token`; the browser no longer places the JWT in the SSE URL.
 - Live notification sound playback when a new notification is received, subject to browser audio autoplay rules.
 - Rolling year selectors covering the current year plus or minus three years.
 
 ### Changed
+- Automatic ticket assignment now excludes technicians with active Duty coverage through the shared attendance eligibility path.
+- Meeting coverage selects the first present rotation candidate with no active tickets, records substitutes explicitly, and requires administrator intervention rather than silently reassigning tickets when all candidates are busy.
+- OD is now resolved first at office-hours start on a five-minute attendance-aware cycle. Late, absent, not-clocked-in, or out-of-shift technicians are skipped, and the selected person is excluded from other duties that day.
+- Same-day duplicate Duty Logs and Exceptions now return `400` validation errors and are shown through the standard snackbar.
+- Duty overview cards reuse the dashboard gradient treatment, and Map day cells open a detail modal with non-clipping event badges.
+- Whole-day Duty attendance is restored through the existing attendance verification event when an administrator releases coverage or end-of-day finalization runs.
 - Automatic assignment now uses weekly SLA-hour accounting for `CAPPED_ROUND_ROBIN`, selecting the eligible technician with the oldest `lastAssignedAt` while skipping technicians at or above the configured cap.
 - Automatic assignment uses support-type fallback order: Desktop -> IT Support -> Pantawid ICT; IT Support -> Desktop -> Pantawid ICT; Pantawid ICT -> any eligible technician.
 - Automatic assignment excludes senior technician roles and requires present attendance; manual assignment also requires an explicit `PRESENT` record.

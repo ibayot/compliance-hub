@@ -35,6 +35,9 @@ import { RoleCapabilitiesHttpClient } from '../../common/http-clients/role-capab
 import { HttpClientsModule } from '../../common/http-clients/http-clients.module';
 import { EventBusModule } from '../../common/events/event-bus.module';
 import { CapabilityGuard } from '../../common/guards/capability.guard';
+import { DutyAssignment, DutyDailyCoverage, DutyException, DutyMeetingReservation, DutyRosterMembership } from './entities/duty.entity';
+import { DutyService } from './services/duty.service';
+import { DutyController } from './controllers/duty.controller';
 
 @Module({
   imports: [
@@ -57,6 +60,11 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
       User,
       Unit,
       RoleDefinitionEntity,
+      DutyAssignment,
+      DutyDailyCoverage,
+      DutyException,
+      DutyMeetingReservation,
+      DutyRosterMembership,
       // RoleCapability removed: now loaded via RoleCapabilitiesHttpClient → users-service HTTP API
     ]),
     HttpClientsModule,
@@ -70,6 +78,7 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
     KnowledgeBaseController,
     NotificationController,
     SseController,
+    DutyController,
   ],
   providers: [
     TicketService,
@@ -83,6 +92,7 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
     // without the TypeORM cross-DB View dependency.
     { provide: RoleCapabilitiesService, useClass: RoleCapabilitiesHttpClient },
     CapabilityGuard,
+    DutyService,
   ],
   exports: [
     TicketService,
@@ -91,6 +101,7 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
     EmailService,
     RoleCapabilitiesService,
     KnowledgeBaseService,
+    DutyService,
   ],
 })
 export class TicketsModule {

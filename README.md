@@ -1,6 +1,6 @@
 # RICTMS Compliance Hub
 
-> **Current Version:** `v0.0.136` (Backend) / `v0.0.133` (Frontend)
+> **Current Version:** `v0.0.137` (Backend) / `v0.0.134` (Frontend)
 
 Compliance Hub is an internal document governance and compliance platform for government teams. It supports document intake and review workflows, ticketing and escalation, issuance mapping, KPI monitoring, and role-based operations across split microservices.
 
@@ -25,9 +25,11 @@ Release-by-release history is maintained in `CHANGELOG.md`.
 - Split microservices architecture (`users-service`, `ticketing-service`, `compliance-service`, `api-gateway`)
 - Document upload, review, approval, and repository flows
 - Ticket lifecycle with escalation, assignment, and reporting
+- Duty Monitoring with rotation tracking, duty logs, exceptions, meeting coverage, and a monthly map
 - SLA timers based on issue-type configuration, including live overdue tracking
 - Keyword-based category and issue selection with selected-support-type tie-breaking
 - Server-Sent Events for live ticket, notification, attendance, and settings updates
+- Database-driven Duty Viewer and Duty Administrator role capabilities
 - Issuance/reference management and document mapping
 - KPI monitoring, scoring, dashboards, and trends
 
@@ -94,6 +96,20 @@ npm run dev
 - Automatic queue promotion is checked by the ticket cron every minute. The browser timer changes immediately, while queue promotion may take up to one minute.
 - The SSE browser URL uses a short-lived encrypted connection ticket rather than the JWT. SSE remains compatible with the HTTP/1.1 deployment and sends heartbeat events to keep connections alive.
 - Year selectors use a rolling seven-year range: three years before the current year through three years after it.
+
+## Duty Monitoring
+
+- `isDutyViewerAccess` displays the four Duty cards on the main dashboard and grants access to the monthly Duty map.
+- `isDutyAdminAccess` includes viewer access and enables Duty Log, Rotation Tracker, Exceptions, Meeting Schedule, and roster management.
+- The current Officer of the Day may add or update ROC, OPCEN, and CONFERENCE reservations without receiving permanent administrator access.
+- Rotation uses the oldest last-assigned date per duty roster. Never-assigned members are first, while same-day exceptions such as Travel Order, Exam, Assistance, PACD, Canvass, Due to TA, and Other are excluded.
+- OD is resolved first at office-hours start. A technician who is absent, not yet clocked in, outside the configured CWW/office shift, or clocked in late is skipped in favor of the next eligible OD. The same technician cannot be selected for another duty on that date.
+- A confirmed same-day meeting selects the first present rotation member with no active `ASSIGNED`, `IN_PROGRESS`, or `PAUSE` tickets. The selected technician is marked `OUT_OF_OFFICE` with a venue-duty remark and is excluded from every automatic ticket-assignment path.
+- If the primary has active tickets, the next eligible ticket-free member becomes the whole-day substitute. If every eligible member has active tickets, coverage is marked `intervention_required`; no tickets are silently reassigned.
+- The Duty Administrator can return a coverage technician to ticket assignment. Attendance is restored and the existing `attendance.verified` flow can assign queued work again.
+- Multiple meetings at the same venue on one date share one coverage record and produce at most one Duty Log credit. Cancelled or unconfirmed scheduled meetings do not advance rotation.
+- Duty Log and Exceptions reject duplicate same-day records for the same technician with a `400` response; the frontend displays those validation messages in a snackbar.
+- Duty data is stored in the ticketing database. Existing environments must apply `db-init/20260820-duty-monitoring.sql` before starting the updated services.
 
 ## Environment Variables (High-Level)
 

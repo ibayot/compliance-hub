@@ -117,6 +117,8 @@ export interface RoleCapabilityRecord {
   isSystemRolesAccess: boolean;
   isIssuancesAccess: boolean;
   isSecuritySettingsAccess: boolean;
+  isDutyViewerAccess: boolean;
+  isDutyAdminAccess: boolean;
 }
 
 export interface UpdateRoleCapabilityPayload {
@@ -145,6 +147,8 @@ export interface UpdateRoleCapabilityPayload {
   isSystemRolesAccess?: boolean;
   isIssuancesAccess?: boolean;
   isSecuritySettingsAccess?: boolean;
+  isDutyViewerAccess?: boolean;
+  isDutyAdminAccess?: boolean;
 }
 
 export const usersApi = {

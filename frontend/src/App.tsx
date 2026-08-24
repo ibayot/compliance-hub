@@ -29,6 +29,7 @@ import AttendancePage from '@/app/(app)/admin/attendance/page';
 import TicketReportsPage from '@/app/(app)/operations/reports/page';
 import KnowledgeBasePage from '@/app/(app)/operations/knowledge-base/page';
 import AuditLogsPage from '@/app/(app)/admin/audit-logs/page';
+import DutiesPage from '@/app/(app)/operations/duties/page';
 
 function ProtectedDashboard({
   children,
@@ -247,6 +248,14 @@ export default function App() {
         element={
           <ProtectedDashboard>
             <KnowledgeBasePage />
+          </ProtectedDashboard>
+        }
+      />
+      <Route
+        path="/operations/duties"
+        element={
+          <ProtectedDashboard>
+            <DutiesPage />
           </ProtectedDashboard>
         }
       />

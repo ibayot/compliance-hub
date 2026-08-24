@@ -36,7 +36,9 @@ export type CapabilityKey =
   | 'isDocumentsAccess'
   | 'isRepositoryAccess'
   | 'isIssuancesAccess'
-  | 'isMetricsAccess';
+  | 'isMetricsAccess'
+  | 'isDutyViewerAccess'
+  | 'isDutyAdminAccess';
 
 /**
  * RoleCapabilitiesHttpClient — full drop-in replacement for RoleCapabilitiesService
@@ -234,6 +236,14 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
   isMetricsAccess(role: string): boolean {
     if (role === 'super_admin') return true;
     return !!this.get(role)?.isMetricsAccess;
+  }
+
+  isDutyViewerAccess(role: string): boolean {
+    return !!this.get(role)?.isDutyViewerAccess;
+  }
+
+  isDutyAdminAccess(role: string): boolean {
+    return !!this.get(role)?.isDutyAdminAccess;
   }
 
   // ── Derived helpers ───────────────────────────────────────────────────────

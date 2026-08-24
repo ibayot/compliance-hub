@@ -35,6 +35,7 @@ import {
   BarChart as TicketReportsIcon,
   LibraryBooks as KBIcon,
   History as HistoryIcon,
+  CalendarMonth as DutiesIcon,
 } from '@mui/icons-material';
 import type { ElementType } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -96,6 +97,14 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       path: '/operations/knowledge-base',
       roles: ['all'],
       service: 'ticketing',
+    },
+    {
+      label: 'Duties',
+      icon: DutiesIcon,
+      path: '/operations/duties',
+      roles: [],
+      service: 'core',
+      capabilityKeys: ['isDutyViewerAccess', 'isDutyAdminAccess'],
     },
     {
       label: 'Documents',

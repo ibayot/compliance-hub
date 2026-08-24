@@ -8,6 +8,7 @@ import {
   OnModuleInit,
   ForbiddenException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -21,6 +22,7 @@ import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { EventBusService } from '../../../common/events/event-bus.service';
 import { SseService } from './sse.service';
 import { auditContext } from '../../../shared/audit/audit.context';
+import { DutyService } from './duty.service';
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -125,6 +127,7 @@ export class AttendanceService implements OnModuleInit {
     private readonly roleCapSvc: RoleCapabilitiesService,
     private readonly eventBus: EventBusService,
     private readonly sseService: SseService,
+    @Optional() private readonly dutyService?: DutyService,
   ) {}
 
   async onModuleInit() {
@@ -373,7 +376,8 @@ export class AttendanceService implements OnModuleInit {
       `[getPresentTechnicians] presentRowsCount=${presentRows.length}, userIds=[${presentRows.map((r) => r.userId).join(',')}]`,
     );
     const presentIds = new Set<number>(presentRows.map((r) => r.userId));
-    let presentTechs = available.filter((u) => presentIds.has(u.id));
+    const dutyBlockedIds = new Set(this.dutyService ? await this.dutyService.blockedTechnicianIds(date) : []);
+    let presentTechs = available.filter((u) => presentIds.has(u.id) && !dutyBlockedIds.has(u.id));
 
     // DTR Auto-Clock-Out Filter
     // Only apply if the requested date is today

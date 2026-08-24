@@ -628,6 +628,8 @@ const CAPABILITY_CATEGORIES = [
     name: 'Global, Security & SMTP Settings',
     columns: [
       { key: 'isGlobalSettingsAccess', label: 'Global Settings Admin', description: 'Manage routing, work hours, schedules, and SMTP in Settings' },
+      { key: 'isDutyViewerAccess', label: 'Duty Viewer', description: 'View Duty dashboard cards and monthly Duty map' },
+      { key: 'isDutyAdminAccess', label: 'Duty Administrator', description: 'Manage duty rosters, logs, exceptions, meetings, and attendance release' },
       { key: 'isSecuritySettingsAccess', label: 'Security Settings Admin', description: 'Manage the default password in Security Settings' },
       { key: 'isSmtpSettingsAccess', label: 'SMTP Admin', description: 'Manage SMTP credentials in Settings' },
     ]
