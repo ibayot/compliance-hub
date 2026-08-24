@@ -34,8 +34,8 @@ export default function DocumentDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
-  const isFocal = user?.roleCode === 'focal';
+  const { user, myCap } = useAuth();
+  const isFocal = !!myCap?.isFocal;
   const documentId = params.id as string;
 
   const { setPageTitle } = usePageTitle();
@@ -145,7 +145,7 @@ export default function DocumentDetailsPage() {
     const isSuperOrCompliance =
       user?.role === 'super_admin' ||
       user?.role === 'compliance_officer' ||
-      user?.roleCode === 'compliance_officer';
+      !!myCap?.isReportsAccess;
     if (cs === 'compliant') {
       return { label: isSuperOrCompliance ? 'COMPLIANT' : 'Approved', color: 'success' as const };
     }

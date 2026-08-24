@@ -288,8 +288,8 @@ export default function TicketDetailPage() {
   const canAssignByCapability = !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
   const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isAllTickets;
   const canPriority = canStaff;
-  const isComplianceOfficer = user?.roleCode === 'compliance_officer';
-  const isSectionHead = user?.roleCode === 'section_head';
+  const isComplianceOfficer = !!myCap?.isReportsAccess && user?.role !== UserRole.SUPER_ADMIN;
+  const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage && user?.role !== UserRole.SUPER_ADMIN;
   const canEscalate =
     !!myCap?.isTicketSettingsFocal ||
     !!myCap?.isTicketFocal ||

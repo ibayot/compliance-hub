@@ -21,7 +21,6 @@ import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 interface AuthUser {
   id: number;
   role: string;
-  roleCode?: string | null;
   units?: Array<number | string | { id?: number | string }>;
 }
 

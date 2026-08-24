@@ -57,7 +57,7 @@ export class VersionService {
     // TODO: Replace this temporary role/unit policy with a database-backed
     // document-download capability when the governance capability matrix is extended.
     if (actor) {
-      const role = String(actor.role || actor.roleCode || '');
+      const role = String(actor.role || '');
       const privileged = ['super_admin', 'compliance_officer'].includes(role);
       const unitIds = Array.isArray(actor.units)
         ? actor.units.map((unit: any) => Number(typeof unit === 'object' ? unit.id : unit))

@@ -50,12 +50,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
     }
 
-    const roleDef = await this.usersService.findRoleDefinition(user.role).catch(() => null);
     return {
       id: user.id,
       email: user.email,
       role: user.role,
-      roleCode: roleDef?.roleCode ?? null,
       units: payload.units,
       staffId: user.staffId,
     };

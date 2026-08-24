@@ -45,10 +45,10 @@ const MONTH_NAMES = [
 ];
 
 export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
-  const isFocal = user?.roleCode === 'focal';
+  const isFocal = !!myCap?.isFocal;
 
   const now = new Date();
 

@@ -26,10 +26,10 @@ import { format } from 'date-fns';
 
 export default function ArchivedDocumentsPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
 
   // Only focal users should access this page
-  const isFocal = user?.roleCode === 'focal';
+  const isFocal = !!myCap?.isFocal;
 
   const { data, isLoading } = useQuery({
     queryKey: ['documents', 'archived'],

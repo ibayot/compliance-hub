@@ -151,8 +151,7 @@ export class DocumentController {
   ) {
     const isPrivileged =
       user.role === UserRole.SUPER_ADMIN ||
-      user.role === UserRole.COMPLIANCE_OFFICER ||
-      user?.roleCode === 'compliance_officer';
+      user.role === UserRole.COMPLIANCE_OFFICER;
     return this.documentService.listAssignments({
       user_id: isPrivileged && userId ? Number(userId) : user.id,
       unit_id: unitId ? Number(unitId) : undefined,

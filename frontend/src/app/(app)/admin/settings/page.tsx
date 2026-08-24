@@ -1294,7 +1294,6 @@ function FocalUserManagementCard() {
   const [resetting, setResetting] = useState(false);
   const [defaultPassword, setDefaultPassword] = useState('Changeme123!');
   const [editing, setEditing] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
   const { enqueueSnackbar } = useSnackbar();
   const [form, setForm] = useState({
     email: '',
@@ -1416,12 +1415,10 @@ function FocalUserManagementCard() {
     resetForm();
     setEmailInputValue('');
     setEmailSuggestions([]);
-    setCreateError(null);
     setCreateDialogOpen(true);
   };
 
   const handleCreate = async () => {
-    setCreateError(null);
     try {
       setCreating(true);
       // Only include password in payload if it was provided (blank = no change for existing accounts)
@@ -1433,7 +1430,9 @@ function FocalUserManagementCard() {
       setCreateDialogOpen(false);
       await reload();
     } catch (err: any) {
-      setCreateError(err?.response?.data?.message || 'Failed to create user.');
+      const message = err?.response?.data?.message;
+      const conciseMessage = Array.isArray(message) ? message[0] : message;
+      enqueueSnackbar(conciseMessage || 'Failed to create user.', { variant: 'error' });
     } finally {
       setCreating(false);
     }
@@ -1534,11 +1533,6 @@ function FocalUserManagementCard() {
         >
           <DialogTitle>Create New User</DialogTitle>
           <DialogContent>
-            {createError && (
-              <Typography color="error" sx={{ mb: 2, mt: 0.5 }}>
-                {createError}
-              </Typography>
-            )}
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
               <Grid item xs={12} md={6}>
                 <TextField

@@ -107,7 +107,7 @@ const sanitizeIssuancePayload = (
 };
 
 export default function IssuancesPage() {
-  const { user } = useAuth();
+  const { user, myCap } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const [allIssuances, setAllIssuances] = useState<Issuance[]>([]);
   const [processOwnerOptions, setProcessOwnerOptions] = useState<
@@ -172,7 +172,7 @@ export default function IssuancesPage() {
   const canManageIssuances =
     user?.role === 'super_admin' ||
     user?.role === 'compliance_officer' ||
-    user?.roleCode === 'compliance_officer';
+    !!myCap?.isIssuancesAccess;
 
   useEffect(() => {
     fetchIssuances();
@@ -202,12 +202,9 @@ export default function IssuancesPage() {
         .filter((entry: UserRecord) => entry.active)
         .filter((entry: UserRecord) => {
           const role = String(entry.role);
-          const rc = entry.roleCode;
           return (
             ['compliance_officer', 'section_head', 'super_admin'].includes(role) ||
-            rc === 'focal' ||
-            rc === 'section_head' ||
-            rc === 'compliance_officer'
+            ['lead_infra', 'server_admin', 'db_admin', 'network_admin', 'project_mgr', 'dev_lead', 'sqa_lead', 'records_officer', 'hr_id_officer'].includes(role)
           );
         })
         .map((entry: UserRecord) => {

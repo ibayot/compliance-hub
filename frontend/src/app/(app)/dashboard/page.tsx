@@ -123,13 +123,11 @@ export default function DashboardPage() {
   const isRegularUser = user?.role === 'user';
   const isTechnicianAny = !!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct;
   const isLowerLevelTech = (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
-  // Compliance Officer = any role tagged with roleCode 'compliance_officer'
-  const isComplianceOfficer = user?.roleCode === 'compliance_officer';
+  const isComplianceOfficer = !!myCap?.isReportsAccess && user?.role !== 'super_admin';
   // Full dashboard: super_admin or CO; generic staff (focal, etc.) see doc cards + KPI only
   const isFullDashboard = !!myCap?.isReportsAccess || !!myCap?.isReviewsAccess || !!myCap?.isTicketSettingsFocal;
-  // Section Head and Cybersecurity Officer — identified via roleCode
-  const isSectionHead = user?.roleCode === 'section_head';
-  const isCybersecurityOfficer = user?.roleCode === 'cybersecurity_officer';
+  const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage && user?.role !== 'super_admin';
+  const isCybersecurityOfficer = !!myCap?.isIto;
   const canViewDuties = !!myCap?.isDutyViewerAccess || !!myCap?.isDutyAdminAccess;
 
   useEffect(() => {

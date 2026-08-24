@@ -1,6 +1,6 @@
 import {
   IsEmail,
-  IsEnum,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MinLength,
@@ -11,7 +11,6 @@ import {
   NotContains,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { UserRole } from '../entities/user.entity';
 
 export class CreateUserDto {
   @IsEmail()
@@ -75,8 +74,9 @@ export class CreateUserDto {
   @IsOptional()
   ticketTechnician?: boolean;
 
-  @IsEnum(UserRole)
-  role: UserRole;
+  @IsString()
+  @IsNotEmpty()
+  role: string;
 
   @IsArray()
   @IsNumber({}, { each: true })

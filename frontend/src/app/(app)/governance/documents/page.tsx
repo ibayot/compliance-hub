@@ -43,7 +43,7 @@ export default function DocumentsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const isFocal = user?.roleCode === 'focal';
+  const isFocal = !!myCap?.isFocal;
   const canAccessDocuments = user?.role === 'super_admin' || !!myCap?.isDocumentsAccess;
 
   const [filters, setFilters] = useState<ListDocumentsParams>({
@@ -196,7 +196,7 @@ export default function DocumentsPage() {
     const isSuperOrCompliance =
       user?.role === 'super_admin' ||
       user?.role === 'compliance_officer' ||
-      user?.roleCode === 'compliance_officer';
+      !!myCap?.isReportsAccess;
 
     if (isSuperOrCompliance) {
       if (complianceStatus === 'compliant') {
@@ -220,7 +220,7 @@ export default function DocumentsPage() {
     const isSuperOrCompliance =
       user?.role === 'super_admin' ||
       user?.role === 'compliance_officer' ||
-      user?.roleCode === 'compliance_officer';
+      !!myCap?.isReportsAccess;
     if (!isSuperOrCompliance) {
       return {
         allowed: false,
@@ -255,7 +255,7 @@ export default function DocumentsPage() {
     const isSuperOrCompliance =
       user?.role === 'super_admin' ||
       user?.role === 'compliance_officer' ||
-      user?.roleCode === 'compliance_officer';
+      !!myCap?.isReportsAccess;
     if (!isSuperOrCompliance) {
       return {
         allowed: false,

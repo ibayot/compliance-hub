@@ -56,7 +56,7 @@ const ALL_ROLES = [
   UserRole.IT_SUPPORT_SR,
   UserRole.DESKTOP_JR,
   UserRole.IT_SUPPORT_JR,
-  // Named focal-equivalent roles (also matched via roleCode='focal' in RolesGuard)
+  // Named focal-equivalent roles.
   UserRole.LEAD_INFRA,
   UserRole.SERVER_ADMIN,
   UserRole.DB_ADMIN,
@@ -66,7 +66,7 @@ const ALL_ROLES = [
   UserRole.SQA_LEAD,
   UserRole.RECORDS_OFFICER,
   UserRole.HR_ID_OFFICER,
-  // Generic roleCode aliases for custom role values managed from role definitions.
+  // Generic role aliases for custom role values managed from role definitions.
   'technician',
   'focal',
   'ito',

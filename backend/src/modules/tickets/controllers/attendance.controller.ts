@@ -55,10 +55,10 @@ const FOCAL_ROLES = [
   UserRole.HR_ID_OFFICER,
 ];
 
-/** Strict role-only check (no roleCode fallback) for attendance mutation endpoints. */
+/** Role-only check for attendance mutation endpoints. */
 const STRICT_ATTENDANCE_MANAGE_ROLES: string[] = [];
 
-/** Strict role-only check (no roleCode fallback) for office-day mutation endpoints. */
+/** Role-only check for office-day mutation endpoints. */
 const STRICT_OFFICEDAY_MANAGE_ROLES: string[] = [];
 
 /** Roles that can manage office days (set/toggle office calendar) */

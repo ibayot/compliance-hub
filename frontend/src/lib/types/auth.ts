@@ -16,9 +16,6 @@ export interface User {
   authProvider?: 'local' | 'google';
   role: UserRole;
   units?: Unit[];
-  /** Platform role code from role_definitions — used for feature routing.
-   *  Known values: 'compliance_officer', 'section_head' */
-  roleCode?: string | null;
   requiresPasswordChange?: boolean;
   requiresMfa?: boolean;
 }
@@ -27,7 +24,7 @@ export enum UserRole {
   SUPER_ADMIN = 'super_admin',
   SECTION_HEAD = 'section_head',
   USER = 'user',
-  // RICTMS-specific named roles (use roleCode for feature routing)
+  // RICTMS-specific named roles.
   COMPLIANCE_OFFICER = 'compliance_officer',
   CYBERSEC = 'cybersec',
   INFOSEC = 'infosec',

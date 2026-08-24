@@ -23,7 +23,6 @@ import { UserTrustedDevice } from './entities/user-trusted-device.entity';
 
 const DEFAULT_ROLE_DEFINITIONS: Array<
   Pick<RoleDefinitionEntity, 'value' | 'label' | 'description' | 'assignable' | 'isSystem'> & {
-    roleCode?: string | null;
     technicianType?: string | null;
   }
 > = [
@@ -35,7 +34,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Full system access: manage users, units, issuances, metrics, tickets, documents, and settings.',
     assignable: false,
     isSystem: true,
-    roleCode: null,
     technicianType: null,
   },
   {
@@ -45,7 +43,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Unit/section leader. Has access to KPI monitoring, reports, ticket assignment, and incident response statistics across their assigned units.',
     assignable: true,
     isSystem: true,
-    roleCode: 'section_head',
     technicianType: null,
   },
   // ── Staff roles with focal-equivalent access ─────────────────────────────
@@ -56,7 +53,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Leads the network and infrastructure team. Responsible for network architecture, server infrastructure, and ICT compliance documentation for their unit.',
     assignable: true,
     isSystem: true,
-    roleCode: 'focal',
     technicianType: null,
   },
   {
@@ -66,7 +62,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages server infrastructure and operations. Responsible for server compliance documentation and ICT system administration.',
     assignable: true,
     isSystem: true,
-    roleCode: 'focal',
     technicianType: null,
   },
   {
@@ -76,7 +71,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages database systems and operations. Responsible for database compliance documentation and data management policies.',
     assignable: true,
     isSystem: true,
-    roleCode: 'focal',
     technicianType: null,
   },
   {
@@ -86,7 +80,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages network systems and connectivity. Responsible for network compliance documentation and infrastructure maintenance.',
     assignable: true,
     isSystem: true,
-    roleCode: 'focal',
     technicianType: null,
   },
   {
@@ -96,7 +89,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages ICT projects and deliverables. Responsible for project compliance documentation and team coordination.',
     assignable: true,
     isSystem: true,
-    roleCode: 'focal',
     technicianType: null,
   },
   {
@@ -106,7 +98,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Leads software development projects. Responsible for development compliance documentation and code quality standards.',
     assignable: true,
     isSystem: true,
-    roleCode: 'focal',
     technicianType: null,
   },
   {
@@ -116,7 +107,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Leads software quality assurance activities. Responsible for QA compliance documentation and testing standards.',
     assignable: true,
     isSystem: true,
-    roleCode: 'focal',
     technicianType: null,
   },
   {
@@ -126,7 +116,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages records and documentation. Responsible for records management compliance and document retention policies.',
     assignable: true,
     isSystem: true,
-    roleCode: 'focal',
     technicianType: null,
   },
   {
@@ -136,7 +125,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages HR information systems and ID issuance. Responsible for HRIS compliance documentation and personnel data management.',
     assignable: true,
     isSystem: true,
-    roleCode: 'focal',
     technicianType: null,
   },
   // ── Compliance / review roles ────────────────────────────────────────────
@@ -147,7 +135,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Reviews and tags documents as compliant, non-compliant, or for revision. Manages issuances, KPI monitoring, MoV artifacts, and compliance reports.',
     assignable: true,
     isSystem: true,
-    roleCode: 'compliance_officer',
     technicianType: null,
   },
   {
@@ -157,7 +144,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages cybersecurity operations and incident response. Has compliance officer access plus cybersecurity and incident dashboard.',
     assignable: true,
     isSystem: true,
-    roleCode: 'cybersecurity_officer',
     technicianType: null,
   },
   {
@@ -167,7 +153,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages information security policies and incident response. Has compliance officer access plus information security and incident dashboard.',
     assignable: true,
     isSystem: true,
-    roleCode: 'cybersecurity_officer',
     technicianType: null,
   },
   // ── Technician / support roles ───────────────────────────────────────────
@@ -178,7 +163,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Handles all desktop/hardware support tickets: workstations, printers, peripherals, and hardware troubleshooting. Sees all desktop support tickets.',
     assignable: true,
     isSystem: true,
-    roleCode: null,
     technicianType: 'desktop_support',
   },
   {
@@ -188,7 +172,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Handles all IT/software support tickets: software, network, internet connectivity, and system-level issues. Sees all IT support tickets.',
     assignable: true,
     isSystem: true,
-    roleCode: null,
     technicianType: 'it_support',
   },
   {
@@ -198,7 +181,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Handles desktop/hardware support tickets assigned to them. Escalates complex issues to senior engineers.',
     assignable: true,
     isSystem: true,
-    roleCode: null,
     technicianType: 'desktop_support',
   },
   {
@@ -208,7 +190,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Handles IT/software support tickets assigned to them. Escalates complex issues to senior specialists.',
     assignable: true,
     isSystem: true,
-    roleCode: null,
     technicianType: 'it_support',
   },
   {
@@ -218,7 +199,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Handles Pantawid Pamilyang Pilipino Program (4Ps) ICT support requests exclusively.',
     assignable: true,
     isSystem: true,
-    roleCode: null,
     technicianType: 'pantawid_ict_support',
   },
   // ── End-user role ────────────────────────────────────────────────────────
@@ -229,7 +209,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'External or non-staff user. Can submit help desk tickets and view their own ticket history. No access to compliance modules.',
     assignable: true,
     isSystem: true,
-    roleCode: null,
     technicianType: null,
   },
 ];
@@ -267,13 +246,23 @@ export class UsersService {
 
   private buildCapabilitySeed(role: RoleDefinitionEntity) {
     const roleValue = role.value;
-    const roleCode = role.roleCode ?? null;
     const technicianType = role.technicianType ?? null;
     const isSuperAdmin = roleValue === UserRole.SUPER_ADMIN;
     const isComplianceRole = roleValue === UserRole.COMPLIANCE_OFFICER;
     const isSectionHead = roleValue === UserRole.SECTION_HEAD;
     const isCyberRole = roleValue === UserRole.CYBERSEC || roleValue === UserRole.INFOSEC;
-    const isFocal = isSuperAdmin || roleCode === 'focal' || isComplianceRole || isSectionHead;
+    const focalRoleValues = new Set([
+      UserRole.LEAD_INFRA,
+      UserRole.SERVER_ADMIN,
+      UserRole.DB_ADMIN,
+      UserRole.NETWORK_ADMIN,
+      UserRole.PROJECT_MGR,
+      UserRole.DEV_LEAD,
+      UserRole.SQA_LEAD,
+      UserRole.RECORDS_OFFICER,
+      UserRole.HR_ID_OFFICER,
+    ]);
+    const isFocal = isSuperAdmin || focalRoleValues.has(roleValue as UserRole) || isComplianceRole || isSectionHead;
     const isDesktop = technicianType === 'desktop_support';
     const isItSupport = technicianType === 'it_support';
     const isPantawidIct = technicianType === 'pantawid_ict_support';
@@ -359,12 +348,6 @@ export class UsersService {
     return this.roleDefinitionsRepository.find({ order: { label: 'ASC' } });
   }
 
-  /** Look up the role_code for a given role value from role_definitions. */
-  async getRoleCodeForRole(roleValue: string): Promise<string | null> {
-    const def = await this.roleDefinitionsRepository.findOne({ where: { value: roleValue } });
-    return def?.roleCode ?? null;
-  }
-
   async createRoleDefinition(dto: CreateRoleDefinitionDto) {
     const existing = await this.roleDefinitionsRepository.findOne({ where: { value: dto.value } });
     if (existing) {
@@ -379,7 +362,6 @@ export class UsersService {
       assignable: dto.value === UserRole.SUPER_ADMIN ? false : (dto.assignable ?? true),
       isSystem: isSystemRole,
       technicianType: dto.technicianType ?? null,
-      roleCode: dto.roleCode ?? null,
     });
 
     const savedRole = await this.roleDefinitionsRepository.save(role);
@@ -415,9 +397,6 @@ export class UsersService {
     if (dto.technicianType !== undefined) {
       role.technicianType = dto.technicianType ?? null;
     }
-    if (dto.roleCode !== undefined) {
-      role.roleCode = dto.roleCode ?? null;
-    }
 
     const previousValue = value;
     const saved = await this.roleDefinitionsRepository.save(role);
@@ -450,6 +429,11 @@ export class UsersService {
     );
   }
 
+  private optionalText(value: string | null | undefined): string | null {
+    const normalized = value?.trim();
+    return normalized ? normalized : null;
+  }
+
   async create(createUserDto: CreateUserDto): Promise<User> {
     // Check if user already exists
     const existingUser = await this.usersRepository.findOne({
@@ -460,20 +444,20 @@ export class UsersService {
       // If no password supplied, we're adding/updating an existing account (e.g. Google SSO walk-in)
       if (!createUserDto.password) {
         // Update profile fields only; role changes should go through the explicit admin update flow.
-        if (createUserDto.firstName !== undefined) existingUser.firstName = createUserDto.firstName;
-        if (createUserDto.lastName !== undefined) existingUser.lastName = createUserDto.lastName;
+        if (createUserDto.firstName !== undefined) existingUser.firstName = this.optionalText(createUserDto.firstName) as any;
+        if (createUserDto.lastName !== undefined) existingUser.lastName = this.optionalText(createUserDto.lastName) as any;
         if ((createUserDto as any).middleName !== undefined)
-          existingUser.middleName = (createUserDto as any).middleName;
+          existingUser.middleName = this.optionalText((createUserDto as any).middleName) as any;
         if ((createUserDto as any).suffix !== undefined)
-          existingUser.suffix = (createUserDto as any).suffix;
+          existingUser.suffix = this.optionalText((createUserDto as any).suffix) as any;
         if ((createUserDto as any).staffId !== undefined)
-          existingUser.staffId = (createUserDto as any).staffId;
+          existingUser.staffId = this.optionalText((createUserDto as any).staffId) as any;
         if ((createUserDto as any).position !== undefined)
-          existingUser.position = (createUserDto as any).position;
+          existingUser.position = this.optionalText((createUserDto as any).position) as any;
         if ((createUserDto as any).positionFull !== undefined)
-          existingUser.positionFull = (createUserDto as any).positionFull;
+          existingUser.positionFull = this.optionalText((createUserDto as any).positionFull) as any;
         if ((createUserDto as any).designation !== undefined)
-          existingUser.designation = (createUserDto as any).designation;
+          existingUser.designation = this.optionalText((createUserDto as any).designation) as any;
         if ((createUserDto as any).ticketMainFocal !== undefined)
           existingUser.ticketMainFocal = Boolean((createUserDto as any).ticketMainFocal);
         if ((createUserDto as any).ticketTechnician !== undefined)
@@ -488,13 +472,25 @@ export class UsersService {
       throw new ConflictException('User with this email already exists');
     }
 
-    // New user must provide a password
-    if (!createUserDto.password) {
-      throw new BadRequestException('Password is required when creating a new account');
+    const roleDefinition = await this.roleDefinitionsRepository.findOne({
+      where: { value: createUserDto.role },
+    });
+    if (!roleDefinition || !roleDefinition.assignable) {
+      throw new BadRequestException('The selected role is not available for user creation.');
     }
 
+    const firstName = createUserDto.firstName?.trim() || '';
+    const lastName = createUserDto.lastName?.trim() || '';
+    if (!firstName || !lastName) {
+      throw new BadRequestException('First name and last name are required when creating a new account');
+    }
+
+    // Admin-created accounts may omit a password; use the configured first-login password.
+    const securityConfig = await this.securityConfigService.getConfig();
+    const password = createUserDto.password?.trim() || securityConfig.defaultPassword;
+
     // Hash password
-    const passwordHash = await bcrypt.hash(createUserDto.password, 10);
+    const passwordHash = await bcrypt.hash(password, 10);
 
     // Get units if provided
     let units: Unit[] = [];
@@ -507,22 +503,22 @@ export class UsersService {
     const user = this.usersRepository.create({
       email: createUserDto.email,
       passwordHash,
-      firstName: createUserDto.firstName,
-      middleName: (createUserDto as any).middleName,
-      lastName: createUserDto.lastName,
-      suffix: (createUserDto as any).suffix,
-      staffId: (createUserDto as any).staffId,
-      position: (createUserDto as any).position,
-      positionFull: (createUserDto as any).positionFull,
-      designation: (createUserDto as any).designation,
+      firstName,
+      middleName: this.optionalText((createUserDto as any).middleName),
+      lastName,
+      suffix: this.optionalText((createUserDto as any).suffix),
+      staffId: this.optionalText((createUserDto as any).staffId),
+      position: this.optionalText((createUserDto as any).position),
+      positionFull: this.optionalText((createUserDto as any).positionFull),
+      designation: this.optionalText((createUserDto as any).designation),
       ticketMainFocal: Boolean((createUserDto as any).ticketMainFocal),
       ticketTechnician: Boolean((createUserDto as any).ticketTechnician),
       authProvider: AuthProvider.LOCAL,
       googleSub: null,
       // Admin-created users are always RICTMS staff → default to FOCAL unless explicitly set
-      role: createUserDto.role ?? UserRole.USER,
+      role: createUserDto.role as UserRole,
       units,
-    });
+    } as any) as unknown as User;
 
     return await this.usersRepository.save(user);
   }
@@ -543,7 +539,7 @@ export class UsersService {
     }
   }
 
-  /** Look up a role definition by value string — returns null if not found. Used for roleCode lookups. */
+  /** Look up a role definition by value string. */
   async findRoleDefinition(value: string): Promise<RoleDefinitionEntity | null> {
     return this.roleDefinitionsRepository.findOne({ where: { value } });
   }

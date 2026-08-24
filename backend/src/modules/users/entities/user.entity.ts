@@ -15,7 +15,7 @@ export enum UserRole {
   SUPER_ADMIN = 'super_admin',
   SECTION_HEAD = 'section_head',
   USER = 'user',
-  // v0.6.14: RICTMS-specific named roles (use roleCode for feature routing)
+  // RICTMS-specific named roles.
   COMPLIANCE_OFFICER = 'compliance_officer',
   CYBERSEC = 'cybersec',
   INFOSEC = 'infosec',
@@ -129,11 +129,8 @@ export class User {
   @ApiHideProperty()
   googleSub: string | null;
 
-  @Column({
-    type: 'enum',
-    enum: UserRole,
-    default: UserRole.USER,
-  })
+  // Role values are backed by role_definitions and may be extended without a code release.
+  @Column({ type: 'varchar', length: 60, default: UserRole.USER })
   role: UserRole;
 
   @Column({ default: true })

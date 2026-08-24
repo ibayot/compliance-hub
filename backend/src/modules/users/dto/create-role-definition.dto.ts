@@ -39,13 +39,4 @@ export class CreateRoleDefinitionDto {
   @IsIn(['it_support', 'desktop_support', 'pantawid_ict_support'])
   technicianType?: string | null;
 
-  /**
-   * Optional platform code that grants the user a specific feature set
-   * regardless of the role's value string.
-   * Known codes: 'compliance_officer', 'section_head'
-   */
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  roleCode?: string | null;
 }

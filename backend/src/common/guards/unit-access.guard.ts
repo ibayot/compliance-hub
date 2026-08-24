@@ -16,16 +16,13 @@ export class UnitAccessGuard implements CanActivate {
     const user = request.user;
     const unitId = request.params.unitId || request.query.unitId || request.body.unitId;
 
-    // Roles (or roleCode mappings) with global unit visibility bypass per-unit restrictions
-    if (
-      GLOBAL_ACCESS_ROLES.has(user.role) ||
-      (user.roleCode && GLOBAL_ACCESS_ROLES.has(user.roleCode))
-    ) {
+    // System roles with global unit visibility bypass per-unit restrictions.
+    if (GLOBAL_ACCESS_ROLES.has(user.role)) {
       return true;
     }
 
-    // Focal users and technicians (matched via roleCode) can only access their assigned units
-    if (user.roleCode === 'focal' || user.roleCode === 'technician') {
+    // Non-global users can only access their assigned units.
+    if (user.role) {
       if (!unitId) {
         return true; // Let controller handle missing unitId
       }

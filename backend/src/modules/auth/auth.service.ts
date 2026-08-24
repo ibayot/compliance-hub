@@ -60,7 +60,6 @@ export class AuthService {
   private buildAuthResponse(
     user: User,
     tokens: { accessToken: string; refreshToken: string },
-    roleCode?: string | null,
     requiresPasswordChange?: boolean,
     requiresMfa?: boolean,
   ): AuthResponse {
@@ -82,7 +81,6 @@ export class AuthService {
         ticketMainFocal: user.ticketMainFocal,
         ticketTechnician: user.ticketTechnician,
         role: user.role,
-        roleCode: roleCode ?? null,
         units: user.units?.map((u) => ({ id: u.id, name: u.name })) || [],
       },
     };
@@ -200,7 +198,7 @@ export class AuthService {
     }
 
     const tokens = await this.generateTokens(user);
-    return this.buildAuthResponse(user, tokens, tokens.roleCode, isUsingDefaultPassword, false);
+    return this.buildAuthResponse(user, tokens, isUsingDefaultPassword, false);
   }
 
   private checkRequiresMfa(user: User, globalMfaEnabled: boolean): boolean {
@@ -260,7 +258,6 @@ export class AuthService {
     return this.buildAuthResponse(
       user,
       tokens,
-      tokens.roleCode,
       isUsingDefaultPassword,
       requiresMfa,
     );
@@ -392,7 +389,6 @@ export class AuthService {
     const authResponse = this.buildAuthResponse(
       user,
       tokens,
-      tokens.roleCode,
       isUsingDefaultPassword,
       false,
     );
@@ -437,16 +433,14 @@ export class AuthService {
 
   async generateTokens(
     user: User,
-  ): Promise<{ accessToken: string; refreshToken: string; roleCode: string | null }> {
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     // Attempt auto-resume
     this.handleAutoResume(user).catch(() => {});
 
-    const roleCode = await this.usersService.getRoleCodeForRole(user.role).catch(() => null);
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
-      roleCode: roleCode ?? null,
       units: user.units?.map((unit) => unit.id) || [],
       staffId: user.staffId,
       jti: crypto.randomUUID(),
@@ -471,7 +465,7 @@ export class AuthService {
       }),
     ]);
 
-    return { accessToken, refreshToken, roleCode: roleCode ?? null };
+    return { accessToken, refreshToken };
   }
 
   async refresh(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
@@ -507,7 +501,6 @@ export class AuthService {
 
   async getProfile(userId: number): Promise<Record<string, any>> {
     const user = await this.usersService.findOne(userId);
-    const roleDef = await this.usersService.findRoleDefinition(user.role);
     const securityConfig = await this.securityConfigService.getConfig();
     const requiresPasswordChange = await bcrypt.compare(
       securityConfig.defaultPassword,
@@ -532,7 +525,6 @@ export class AuthService {
       role: user.role,
       requiresPasswordChange,
       units: user.units?.map((u) => ({ id: u.id, name: u.name })) || [],
-      roleCode: roleDef?.roleCode ?? null,
     };
   }
 

@@ -13,7 +13,7 @@ const PAGE_SIZE = 10;
 const EMPTY_PAGE = { items: [], total: 0, page: 1, limit: PAGE_SIZE, totalPages: 0 };
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const TODAY = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
-const isDutyStaff = (user: any) => user.active !== false && user.role !== 'user' && user.role !== 'super_admin' && user.roleCode !== 'super_admin';
+const isDutyStaff = (user: any) => user.active !== false && user.role !== 'user' && user.role !== 'super_admin';
 const formatType = (value: string) => String(value || '').replaceAll('_', ' ').toUpperCase();
 const userName = (users: UserRecord[], id: number) => { const u = users.find((x) => x.id === id); return u ? `${u.firstName} ${u.lastName}`.trim() : `User #${id}`; };
 const meetingSlot = (x: any) => !x.startTime && !x.endTime ? 'Whole Day' : Number(String(x.startTime).slice(0, 2)) < 12 ? 'AM' : 'PM';

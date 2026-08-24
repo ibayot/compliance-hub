@@ -33,15 +33,6 @@ export class RoleDefinitionEntity {
   @Column({ name: 'technician_type', type: 'varchar', length: 30, nullable: true, default: null })
   technicianType: string | null;
 
-  /**
-   * Optional system-level role code that maps this custom role to platform
-   * feature sets (e.g. 'compliance_officer', 'section_head').
-   * When set, users with this role receive the dashboards/permissions defined
-   * for that code — even if the role was created with a different value string.
-   */
-  @Column({ name: 'role_code', type: 'varchar', length: 50, nullable: true, default: null })
-  roleCode: string | null;
-
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
