@@ -87,4 +87,22 @@ describe('RoleCapabilitiesService', () => {
 
     expect(service.findAll().map((row) => row.roleValue)).toEqual(['a_role', 'z_role']);
   });
+
+  it('saves capability changes as an entity so the audit subscriber receives the update', async () => {
+    const capability = { roleValue: 'custom_role', isTicketModuleAccess: false };
+    const repo = {
+      find: jest.fn().mockResolvedValue([capability]),
+      findOne: jest.fn().mockResolvedValue(capability),
+      create: jest.fn(),
+      save: jest.fn().mockResolvedValue(capability),
+    };
+    const roleDefinitionsRepo = { find: jest.fn().mockResolvedValue([]) };
+    const service = new RoleCapabilitiesService(repo as any, roleDefinitionsRepo as any);
+
+    await service.reload();
+    await service.updateOne('custom_role', { isTicketModuleAccess: true });
+
+    expect(repo.save).toHaveBeenCalledWith(capability);
+    expect(capability.isTicketModuleAccess).toBe(true);
+  });
 });

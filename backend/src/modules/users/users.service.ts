@@ -381,7 +381,12 @@ export class UsersService {
 const previousValue = value;
     const saved = await this.roleDefinitionsRepository.save(role);
     if (saved.value !== previousValue) {
-      await this.roleCapabilitiesRepository.delete({ roleValue: previousValue });
+      const previousCapability = await this.roleCapabilitiesRepository.findOne({
+        where: { roleValue: previousValue },
+      });
+      if (previousCapability) {
+        await this.roleCapabilitiesRepository.remove(previousCapability);
+      }
       await this.ensureRoleCapabilityRows();
     }
     return saved;
@@ -398,7 +403,10 @@ const previousValue = value;
       );
     }
     await this.roleDefinitionsRepository.remove(role);
-    await this.roleCapabilitiesRepository.delete({ roleValue: value });
+    const capability = await this.roleCapabilitiesRepository.findOne({ where: { roleValue: value } });
+    if (capability) {
+      await this.roleCapabilitiesRepository.remove(capability);
+    }
   }
 
   private isMissingUserUnitAccessError(error: unknown): boolean {
@@ -797,7 +805,13 @@ const previousValue = value;
   }
 
   async updatePasswordHash(id: number, passwordHash: string): Promise<void> {
-    await this.usersRepository.update({ id }, { passwordHash });
+    const user = await this.usersRepository.findOne({ where: { id } });
+    if (!user) return;
+
+    // Use entity persistence so the password change is audited. The audit
+    // redaction helper ensures the hash itself is never stored or returned.
+    user.passwordHash = passwordHash;
+    await this.usersRepository.save(user);
   }
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {

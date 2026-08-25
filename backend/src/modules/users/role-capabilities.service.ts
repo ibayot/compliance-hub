@@ -366,7 +366,13 @@ export class RoleCapabilitiesService implements OnModuleInit {
     if (!this.cache.has(roleValue)) {
       throw new NotFoundException(`Role capability row not found for role "${roleValue}"`);
     }
-    await this.repo.update({ roleValue }, dto);
+    const capability = await this.repo.findOne({ where: { roleValue } });
+    if (!capability) {
+      throw new NotFoundException(`Role capability row not found for role "${roleValue}"`);
+    }
+
+    Object.assign(capability, dto);
+    await this.repo.save(capability);
     await this.reload();
     return this.cache.get(roleValue)!;
   }

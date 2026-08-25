@@ -1,5 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { redactAuditJson } from '../../../shared/audit/audit-redaction';
+
+const AUDITED_DATABASES = [
+  '02_db_stg_compliance_hub_ticketing',
+  '02_db_stg_compliance_hub_users',
+] as const;
+
+const AUDITED_DATABASE_PREDICATE = 'database_name IN (?, ?)';
 
 export interface AuditLogQueryDto {
   page?: number;
@@ -35,17 +43,17 @@ export class AuditService {
         session_id as "sessionId", 
         timestamp as "createdAt"
       FROM 02_db_audit_stg.audit_log
-      WHERE database_name = '02_db_stg_compliance_hub_ticketing'
+      WHERE ${AUDITED_DATABASE_PREDICATE}
     `;
 
     const countSqlBase = `
       SELECT COUNT(*) as total
       FROM 02_db_audit_stg.audit_log
-      WHERE database_name = '02_db_stg_compliance_hub_ticketing'
+      WHERE ${AUDITED_DATABASE_PREDICATE}
     `;
 
-    const params: any[] = [];
-    const countParams: any[] = [];
+    const params: any[] = [...AUDITED_DATABASES];
+    const countParams: any[] = [...AUDITED_DATABASES];
     let whereClause = '';
 
     if (query.action) {
@@ -82,10 +90,16 @@ export class AuditService {
       this.dataSource.query(countSql, countParams),
     ]);
 
+    const safeLogs = logs.map((log: any) => ({
+      ...log,
+      oldValues: redactAuditJson(log.oldValues),
+      newValues: redactAuditJson(log.newValues),
+    }));
+
     const total = Number(countResult[0]?.total || 0);
 
     return {
-      data: logs,
+      data: safeLogs,
       total,
       page,
       limit,
@@ -97,10 +111,10 @@ export class AuditService {
     const sql = `
       SELECT DISTINCT table_name as "tableName"
       FROM 02_db_audit_stg.audit_log
-      WHERE database_name = '02_db_stg_compliance_hub_ticketing'
+      WHERE ${AUDITED_DATABASE_PREDICATE}
       ORDER BY table_name ASC
     `;
-    const results = await this.dataSource.query(sql);
+    const results = await this.dataSource.query(sql, [...AUDITED_DATABASES]);
     return results.map((r: any) => r.tableName);
   }
 }

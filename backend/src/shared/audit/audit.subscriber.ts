@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 import { auditContext } from './audit.context';
+import { redactAuditValue } from './audit-redaction';
 
 @Injectable()
 @EventSubscriber()
@@ -89,7 +90,7 @@ export class AuditVariableSubscriber implements EntitySubscriberInterface {
           delete sanitized[key];
         }
       }
-      return sanitized;
+      return redactAuditValue(sanitized);
     };
 
     let oldValues = null;

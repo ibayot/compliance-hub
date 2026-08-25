@@ -106,6 +106,12 @@ function humanizeTableName(table: string): string {
   return table.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
+function humanizeDatabaseName(database: string): string {
+  if (database?.endsWith('_users')) return 'Users Service';
+  if (database?.endsWith('_ticketing')) return 'Ticketing Service';
+  return database || 'Unknown Service';
+}
+
 function humanizeKey(key: string): string {
   if (key === 'id') return 'ID';
   if (key.endsWith('Id')) key = key.slice(0, -2);
@@ -272,6 +278,7 @@ export default function AuditLogsPage() {
             <TableRow>
               <TableCell>Timestamp</TableCell>
               <TableCell>Action</TableCell>
+              <TableCell>Service</TableCell>
               <TableCell>Table</TableCell>
               <TableCell>User</TableCell>
               <TableCell>IP Address</TableCell>
@@ -292,6 +299,7 @@ export default function AuditLogsPage() {
                     } 
                   />
                 </TableCell>
+                <TableCell>{humanizeDatabaseName(log.databaseName)}</TableCell>
                 <TableCell>{humanizeTableName(log.tableName)}</TableCell>
                 <TableCell>{log.userEmail || 'System'}</TableCell>
                 <TableCell>{log.ipAddress}</TableCell>
@@ -304,7 +312,7 @@ export default function AuditLogsPage() {
             ))}
             {logs.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
                   No audit logs found.
                 </TableCell>
               </TableRow>
@@ -333,6 +341,7 @@ export default function AuditLogsPage() {
                 
                 <Typography variant="body2"><strong>Timestamp:</strong> {new Date(selectedLog.createdAt).toLocaleString()}</Typography>
                 <Typography variant="body2"><strong>Action:</strong> {selectedLog.action}</Typography>
+                <Typography variant="body2"><strong>Service:</strong> {humanizeDatabaseName(selectedLog.databaseName)}</Typography>
                 <Typography variant="body2"><strong>Table:</strong> {humanizeTableName(selectedLog.tableName)}</Typography>
                 
                 <Typography variant="body2"><strong>User:</strong> {selectedLog.userEmail || 'System'}</Typography>
