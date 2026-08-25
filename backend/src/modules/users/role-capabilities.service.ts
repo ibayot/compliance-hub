@@ -155,6 +155,7 @@ export class RoleCapabilitiesService implements OnModuleInit {
   isTicketFocal(role: string): boolean {
     return !!this.get(role)?.isTicketFocal;
   }
+  isTicketModuleAccess(role: string): boolean { return !!this.get(role)?.isTicketModuleAccess; }
 
   isKpiAccess(role: string): boolean {
     return !!this.get(role)?.isKpiAccess;
@@ -224,6 +225,23 @@ export class RoleCapabilitiesService implements OnModuleInit {
     return !!this.get(role)?.isDutyAdminAccess;
   }
 
+  isAttendanceEligible(role: string): boolean {
+    return !!this.get(role)?.isAttendanceEligible;
+  }
+
+  isAuditAccess(role: string): boolean { return !!this.get(role)?.isAuditAccess; }
+  isUnitsAccess(role: string): boolean { return !!this.get(role)?.isUnitsAccess; }
+  isUnitsManage(role: string): boolean { return !!this.get(role)?.isUnitsManage; }
+  isDocumentTypesManage(role: string): boolean { return !!this.get(role)?.isDocumentTypesManage; }
+  isMetricsManage(role: string): boolean { return !!this.get(role)?.isMetricsManage; }
+  isUserManagementRolesManage(role: string): boolean {
+    return !!this.get(role)?.isUserManagementRolesManage;
+  }
+  isDocumentsManage(role: string): boolean { return !!this.get(role)?.isDocumentsManage; }
+  isDocumentsDelete(role: string): boolean { return !!this.get(role)?.isDocumentsDelete; }
+  isIssuancesManage(role: string): boolean { return !!this.get(role)?.isIssuancesManage; }
+  isMetricsDelete(role: string): boolean { return !!this.get(role)?.isMetricsDelete; }
+
   /** Return all role values that have a given capability set to true. */
   getRolesWhere(
     capability:
@@ -239,6 +257,7 @@ export class RoleCapabilitiesService implements OnModuleInit {
       | 'isSecuritySettingsAccess'
       | 'isAllTickets'
       | 'isTicketFocal'
+      | 'isTicketModuleAccess'
       | 'isKpiAccess'
       | 'isKpiManage'
       | 'isAttendanceAccess'
@@ -255,7 +274,18 @@ export class RoleCapabilitiesService implements OnModuleInit {
       | 'isUserManagementAdmin'
       | 'isUserManagementView'
       | 'isDutyViewerAccess'
-      | 'isDutyAdminAccess',
+      | 'isDutyAdminAccess'
+      | 'isAttendanceEligible'
+      | 'isAuditAccess'
+      | 'isUnitsAccess'
+      | 'isUnitsManage'
+      | 'isDocumentTypesManage'
+      | 'isMetricsManage'
+      | 'isUserManagementRolesManage'
+      | 'isDocumentsManage'
+      | 'isDocumentsDelete'
+      | 'isIssuancesManage'
+      | 'isMetricsDelete',
   ): string[] {
     return [...this.cache.values()].filter((r) => r[capability]).map((r) => r.roleValue);
   }

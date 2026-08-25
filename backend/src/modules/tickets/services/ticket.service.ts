@@ -238,6 +238,20 @@ export class ReturnEscalationDto {
   returnReason: string;
 }
 
+export const roundRating = (value: number): number =>
+  Math.floor((value + Number.EPSILON) * 100) / 100;
+
+export const deriveSatisfactionRating = (
+  likert: Array<number | string | 'NA'>,
+): number | null => {
+  const numericLikert = likert.filter(
+    (value): value is number =>
+      typeof value === 'number' && value >= 1 && value <= 5,
+  );
+  return numericLikert.length > 0
+    ? roundRating(numericLikert.reduce((sum, value) => sum + value, 0) / numericLikert.length)
+    : null;
+};
 // --- Service -----------------------------------------------------------------
 
 @Injectable()
@@ -531,6 +545,7 @@ export class TicketService implements OnModuleInit {
     eventType: string,
     actorId: number | null,
     meta?: Record<string, any>,
+    emitUpdate = true,
   ): Promise<void> {
     try {
       const event = this.eventRepo.create({
@@ -540,7 +555,7 @@ export class TicketService implements OnModuleInit {
         meta: meta ? JSON.stringify(meta) : null,
       });
       await this.eventRepo.save(event);
-      this.sseService.emitTicketUpdated(ticketId);
+      if (emitUpdate) this.sseService.emitTicketUpdated(ticketId);
     } catch (err: any) {
       this.logger.warn(`logEvent failed (non-fatal): ${err?.message}`);
     }
@@ -1866,6 +1881,7 @@ export class TicketService implements OnModuleInit {
     }
 
     const saved = await this.ticketRepo.save(ticket);
+    this.sseService.emitTicketUpdated(saved.id);
 
     // AI Knowledge Base Generation (Fire-and-forget)
     if (saved.isKbGenerationPending) {
@@ -1898,13 +1914,13 @@ export class TicketService implements OnModuleInit {
         this.logEvent(saved.id, 'status_extended', actorId, {
           to: dto.status,
           justification: dto.statusJustification?.trim(),
-        }).catch(() => { });
+        }, false).catch(() => { });
       } else {
         this.logEvent(saved.id, 'status_changed', actorId, {
           to: dto.status,
           resolutionNotes: dto.resolutionNotes ?? undefined,
           justification: dto.statusJustification?.trim() ?? undefined,
-        }).catch(() => { });
+        }, false).catch(() => { });
       }
 
       // In-app notification
@@ -2139,7 +2155,7 @@ export class TicketService implements OnModuleInit {
         const adminList =
           escalationAdminRoles.length > 0
             ? escalationAdminRoles.join(', ')
-            : 'super_admin, section_head, compliance_officer';
+            : 'configured escalation focal role(s)';
 
         throw new ForbiddenException(
           `This ticket has an accepted escalation. Only escalation admin role(s) (${adminList}) can reassign it.`,
@@ -2448,14 +2464,7 @@ export class TicketService implements OnModuleInit {
 
       // Compute satisfactionRating as the average of all answered (numeric) Likert items.
       // Items with value 'NA' are excluded from the average.
-      const numericLikert = (form.likert as (number | string | 'NA')[]).filter(
-        (v) => typeof v === 'number' && (v as number) >= 1 && (v as number) <= 5,
-      ) as number[];
-      const derivedRating =
-        numericLikert.length > 0
-          ? Math.round((numericLikert.reduce((acc, v) => acc + v, 0) / numericLikert.length) * 10) /
-          10
-          : null;
+            const derivedRating = deriveSatisfactionRating(form.likert);
 
       ticket.satisfactionRating = derivedRating;
       ticket.satisfactionComment = null;
@@ -2466,7 +2475,7 @@ export class TicketService implements OnModuleInit {
       if (rating < 1 || rating > 5) {
         throw new BadRequestException('Rating must be between 1 and 5.');
       }
-      ticket.satisfactionRating = rating;
+      ticket.satisfactionRating = roundRating(rating);
       ticket.satisfactionComment = dto.comment ?? null;
     }
 
@@ -2584,7 +2593,7 @@ export class TicketService implements OnModuleInit {
       total: operationalTotal,
       byStatus,
       byType,
-      satisfactionAvg: ratingCount > 0 ? Math.round((ratingSum / ratingCount) * 10) / 10 : null,
+      satisfactionAvg: ratingCount > 0 ? roundRating(ratingSum / ratingCount) : null,
       satisfactionFillRate: fillRate,
       resolvedTickets: resolvedCount,
       userClosedTickets: userClosedCount,
@@ -2670,7 +2679,7 @@ export class TicketService implements OnModuleInit {
     const technicianAverages: Record<string, { average: number; count: number }> = {};
     for (const [tech, data] of Object.entries(byTechnician)) {
       technicianAverages[tech] = {
-        average: Math.round((data.total / data.count) * 10) / 10,
+        average: roundRating(data.total / data.count),
         count: data.count,
       };
     }
@@ -2699,13 +2708,13 @@ export class TicketService implements OnModuleInit {
       .sort()
       .map((date) => ({
         date,
-        avgRating: Math.round((byDayMap[date].total / byDayMap[date].count) * 10) / 10,
+        avgRating: roundRating(byDayMap[date].total / byDayMap[date].count),
       }));
     const byWeek = Object.keys(byWeekMap)
       .sort()
       .map((week) => ({
         week,
-        avgRating: Math.round((byWeekMap[week].total / byWeekMap[week].count) * 10) / 10,
+        avgRating: roundRating(byWeekMap[week].total / byWeekMap[week].count),
       }));
 
     return {
@@ -2714,7 +2723,7 @@ export class TicketService implements OnModuleInit {
       byTicket,
       byTechnician: technicianAverages,
       summary: {
-        average: validCount > 0 ? Math.round((totalSum / validCount) * 10) / 10 : 0,
+        average: validCount > 0 ? roundRating(totalSum / validCount) : 0,
         count: validCount,
       },
     };
@@ -2940,7 +2949,7 @@ export class TicketService implements OnModuleInit {
       frozen,
       duplicate,
       ratedCount: countSat,
-      satisfactionAvg: countSat > 0 ? Number((totalSat / countSat).toFixed(1)) : null,
+      satisfactionAvg: countSat > 0 ? roundRating(totalSat / countSat) : null,
     };
   }
 
@@ -2994,7 +3003,7 @@ export class TicketService implements OnModuleInit {
       resolved,
       closed,
       ratedCount: countSat,
-      satisfactionAvg: countSat > 0 ? Math.round((totalSat / countSat) * 10) / 10 : null,
+      satisfactionAvg: countSat > 0 ? roundRating(totalSat / countSat) : null,
     };
   }
 
@@ -3013,7 +3022,7 @@ export class TicketService implements OnModuleInit {
     // Fetch all active users except standard 'USER' role
     const allTechUsers = await this.usersHttpClient.getUsers();
     const technicians = allTechUsers.filter(
-      (u: any) => u.role !== UserRole.USER && u.role !== UserRole.SUPER_ADMIN,
+      (u: any) => this.roleCapSvc.isAttendanceEligible(u.role),
     );
 
     // Read attendance for today so assignment UI can hide unavailable technicians.
@@ -3103,25 +3112,14 @@ export class TicketService implements OnModuleInit {
       const tech = await this.usersHttpClient.getUserById(techId);
       if (!tech) return;
 
-      // Determine which ticket types this technician handles
-      const roleDefRows = await this.dataSource.query(
-        'SELECT technician_type as technicianType FROM role_definitions WHERE value = ?',
-        [tech.role],
-      );
-      let ticketType: string | null = roleDefRows[0]?.technicianType || null;
+      // Determine ticket type from the technician capability row.
+      let ticketType: string | null = null;
+      if (this.roleCapSvc.isDesktop(tech.role)) ticketType = 'desktop_support';
+      else if (this.roleCapSvc.isItSupport(tech.role)) ticketType = 'it_support';
+      else if (this.roleCapSvc.isPantawidIct(tech.role)) ticketType = 'pantawid_ict_support';
 
-      if (!ticketType) {
-        const DESKTOP_ROLES: string[] = [UserRole.DESKTOP_JR];
-        const IT_ROLES: string[] = [UserRole.IT_SUPPORT_JR];
-        const PANTAWID_ROLES: string[] = [UserRole.PANTAWID_ICT];
-        if (DESKTOP_ROLES.includes(tech.role)) ticketType = 'desktop_support';
-        else if (IT_ROLES.includes(tech.role)) ticketType = 'it_support';
-        else if (PANTAWID_ROLES.includes(tech.role)) ticketType = 'pantawid_ict_support';
-      }
-
-      // Senior roles are excluded from auto-assignment per existing rule
-      const SENIOR_EXCLUDED: string[] = [UserRole.IT_SUPPORT_SR, UserRole.DESKTOP_SR];
-      if (SENIOR_EXCLUDED.includes(tech.role)) return;
+      // Senior technicians are excluded from auto-assignment per existing rule.
+      if (this.roleCapSvc.isSeniorTech(tech.role)) return;
 
       if (!ticketType) return;
 
@@ -3370,8 +3368,8 @@ export class TicketService implements OnModuleInit {
     totalTickets: number;
     totalWithRating: number;
     avgOverallRating: number | null;
-    avgRatingByType: Array<{ type: string; avg: number; count: number }>;
-    avgRatingByTechnician: Array<{ techId: number; techName: string; avg: number; count: number }>;
+    avgRatingByType: Array<{ type: string; avg: number; count: number; ratedCount: number; resolvedCount: number }>;
+    avgRatingByTechnician: Array<{ techId: number; techName: string; avg: number; count: number; ratedCount: number; resolvedCount: number }>;
     totalEscalations: number;
     acceptedEscalations: number;
     returnedEscalations: number;
@@ -3398,8 +3396,8 @@ export class TicketService implements OnModuleInit {
   }> {
     const now = new Date();
     const year = filters.year ?? now.getFullYear();
-    const isSuperAdmin = filters.viewerRole === 'super_admin';
-    const isTicketSettingsViewer = isSuperAdmin || this.roleCapSvc.isTicketSettingsFocal(filters.viewerRole || '');
+
+    const isTicketSettingsViewer = this.roleCapSvc.isTicketSettingsFocal(filters.viewerRole || '');
     const isTechnician =
       filters.viewerRole &&
       !isTicketSettingsViewer &&
@@ -3494,33 +3492,41 @@ export class TicketService implements OnModuleInit {
     // Overall average
     const overallSum = ratedTickets.reduce((s, t) => s + (t.satisfactionRating ?? 0), 0);
     const avgOverallRating =
-      totalWithRating > 0 ? Math.round((overallSum / totalWithRating) * 10) / 10 : null;
+      totalWithRating > 0 ? roundRating(overallSum / totalWithRating) : null;
 
     // Per type (count total ALL TICKETS, but avg based on rated)
-    const byTypeMap = new Map<string, { sum: number; ratedCount: number; totalCount: number }>();
+    const byTypeMap = new Map<
+      string,
+      { sum: number; ratedCount: number; resolvedCount: number; totalCount: number }
+    >();
     for (const t of allTickets) {
       const key = t.ticketType;
-      const cur = byTypeMap.get(key) ?? { sum: 0, ratedCount: 0, totalCount: 0 };
-      if (t.satisfactionRating !== null) {
-        byTypeMap.set(key, {
-          sum: cur.sum + t.satisfactionRating,
-          ratedCount: cur.ratedCount + 1,
-          totalCount: cur.totalCount + 1,
-        });
-      } else {
-        byTypeMap.set(key, { ...cur, totalCount: cur.totalCount + 1 });
-      }
+      const cur = byTypeMap.get(key) ?? {
+        sum: 0,
+        ratedCount: 0,
+        resolvedCount: 0,
+        totalCount: 0,
+      };
+      const hasRating = t.satisfactionRating !== null;
+      const isResolved = [TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(t.status);
+      byTypeMap.set(key, {
+        sum: cur.sum + (hasRating ? t.satisfactionRating! : 0),
+        ratedCount: cur.ratedCount + (hasRating ? 1 : 0),
+        resolvedCount: cur.resolvedCount + (isResolved ? 1 : 0),
+        totalCount: cur.totalCount + 1,
+      });
     }
     const avgRatingByType = Array.from(byTypeMap.entries()).map(
-      ([type, { sum, ratedCount, totalCount }]) => ({
+      ([type, { sum, ratedCount, resolvedCount, totalCount }]) => ({
         type,
-        avg: ratedCount > 0 ? Math.round((sum / ratedCount) * 10) / 10 : 0,
+        avg: ratedCount > 0 ? roundRating(sum / ratedCount) : 0,
         count: totalCount,
         ratedCount,
+        resolvedCount,
       }),
     );
 
-    // Per technician
+    // Per technician (the source query is resolved/closed tickets only)
     const byTechMap = new Map<
       number,
       { name: string; sum: number; ratedCount: number; totalCount: number }
@@ -3552,9 +3558,10 @@ export class TicketService implements OnModuleInit {
       .map(([techId, { name, sum, ratedCount, totalCount }]) => ({
         techId,
         techName: name,
-        avg: ratedCount > 0 ? Math.round((sum / ratedCount) * 10) / 10 : 0,
+        avg: ratedCount > 0 ? roundRating(sum / ratedCount) : 0,
         count: totalCount,
         ratedCount,
+        resolvedCount: totalCount,
       }))
       .sort((a, b) => b.count - a.count);
 

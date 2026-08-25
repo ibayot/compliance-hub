@@ -18,6 +18,7 @@ export interface UserRecord {
   ticketTechnician?: boolean;
   role: string;
   active: boolean;
+  attendanceEligible?: boolean;
   units?: any[];
 }
 
@@ -45,8 +46,7 @@ export interface RoleDefinition {
   assignable: boolean;
   isSystem?: boolean;
   is_system?: boolean;
-  /** Technician type tag — includes members of this role in the attendance grid */
-  technicianType?: string | null;
+
 }
 
 export interface UpdateUserPayload {
@@ -74,7 +74,6 @@ export interface CreateRolePayload {
   label: string;
   description: string;
   assignable?: boolean;
-  technicianType?: string | null;
 }
 
 export interface UpdateRolePayload {
@@ -82,7 +81,6 @@ export interface UpdateRolePayload {
   label?: string;
   description?: string;
   assignable?: boolean;
-  technicianType?: string | null;
 }
 
 /** Mirrors the role_capabilities table. One row per role. */
@@ -98,6 +96,7 @@ export interface RoleCapabilityRecord {
   isTicketSettingsFocal: boolean;
   isAllTickets: boolean;
   isTicketFocal: boolean;
+  isTicketModuleAccess: boolean;
   isUserManagementAdmin?: boolean;
   isUserManagementView?: boolean;
   isSmtpSettingsAccess: boolean;
@@ -118,6 +117,17 @@ export interface RoleCapabilityRecord {
   isSecuritySettingsAccess: boolean;
   isDutyViewerAccess: boolean;
   isDutyAdminAccess: boolean;
+  isAuditAccess: boolean;
+  isUnitsAccess: boolean;
+  isUnitsManage: boolean;
+  isDocumentTypesManage: boolean;
+  isMetricsManage: boolean;
+  isUserManagementRolesManage: boolean;
+  isAttendanceEligible: boolean;
+  isDocumentsManage: boolean;
+  isDocumentsDelete: boolean;
+  isIssuancesManage: boolean;
+  isMetricsDelete: boolean;
 }
 
 export interface UpdateRoleCapabilityPayload {
@@ -130,6 +140,7 @@ export interface UpdateRoleCapabilityPayload {
   isTicketSettingsFocal?: boolean;
   isAllTickets?: boolean;
   isTicketFocal?: boolean;
+  isTicketModuleAccess?: boolean;
   isSmtpSettingsAccess?: boolean;
   isGlobalSettingsAccess?: boolean;
   isKpiAccess?: boolean;
@@ -148,6 +159,17 @@ export interface UpdateRoleCapabilityPayload {
   isSecuritySettingsAccess?: boolean;
   isDutyViewerAccess?: boolean;
   isDutyAdminAccess?: boolean;
+  isAuditAccess?: boolean;
+  isUnitsAccess?: boolean;
+  isUnitsManage?: boolean;
+  isDocumentTypesManage?: boolean;
+  isMetricsManage?: boolean;
+  isUserManagementRolesManage?: boolean;
+  isAttendanceEligible?: boolean;
+  isDocumentsManage?: boolean;
+  isDocumentsDelete?: boolean;
+  isIssuancesManage?: boolean;
+  isMetricsDelete?: boolean;
 }
 
 export const usersApi = {

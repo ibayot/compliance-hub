@@ -24,9 +24,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { FilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../../common/guards/roles.guard';
 import { CapabilityGuard } from '../../../common/guards/capability.guard';
-import { Roles } from '../../../common/decorators/roles.decorator';
 import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { UserRole } from '../../users/entities/user.entity';
 import {
@@ -42,41 +40,9 @@ import {
 import { TicketStatus, TicketType } from '../entities/ticket.entity';
 import { TicketSettingsService } from '../services/ticket-settings.service';
 
-const ALL_ROLES = [
-  UserRole.USER,
-  UserRole.SECTION_HEAD,
-  UserRole.SUPER_ADMIN,
-  // Named compliance roles
-  UserRole.COMPLIANCE_OFFICER,
-  UserRole.CYBERSEC,
-  UserRole.INFOSEC,
-  // Named technician roles
-  UserRole.PANTAWID_ICT,
-  UserRole.DESKTOP_SR,
-  UserRole.IT_SUPPORT_SR,
-  UserRole.DESKTOP_JR,
-  UserRole.IT_SUPPORT_JR,
-  // Named focal-equivalent roles.
-  UserRole.LEAD_INFRA,
-  UserRole.SERVER_ADMIN,
-  UserRole.DB_ADMIN,
-  UserRole.NETWORK_ADMIN,
-  UserRole.PROJECT_MGR,
-  UserRole.DEV_LEAD,
-  UserRole.SQA_LEAD,
-  UserRole.RECORDS_OFFICER,
-  UserRole.HR_ID_OFFICER,
-  // Generic role aliases for custom role values managed from role definitions.
-  'technician',
-  'focal',
-  'ito',
-  'compliance_officer',
-  'section_head',
-];
-
 @ApiTags('tickets')
 @Controller('tickets')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, CapabilityGuard)
 export class TicketController {
   private readonly logger = new Logger(TicketController.name);
   constructor(
@@ -86,7 +52,7 @@ export class TicketController {
 
   /** POST /tickets - Any authenticated user can submit a ticket */
   @Post()
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(FileInterceptor('image', { limits: { fileSize: 10 * 1024 * 1024 } }))
   async createTicket(
@@ -126,7 +92,7 @@ export class TicketController {
 
   /** GET /tickets - Role-scoped listing */
   @Get()
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getTickets(
     @Query('status') status?: TicketStatus,
     @Query('ticketType') ticketType?: TicketType,
@@ -168,21 +134,14 @@ export class TicketController {
 
   /** GET /tickets/sla/summary — aggregate SLA breach and due metrics */
   @Get('sla/summary')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getSlaSummary(@Request() req: any) {
     return this.ticketService.getSlaSummary(req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** GET /tickets/statistics */
   @Get('statistics')
-  @Roles(
-    UserRole.SUPER_ADMIN,
-    UserRole.SECTION_HEAD,
-    UserRole.COMPLIANCE_OFFICER,
-    UserRole.CYBERSEC,
-    UserRole.INFOSEC,
-    'focal',
-  )
+  @RequireCapability('isReportsAccess')
   async getStatistics(
     @Query('year') year?: string,
     @Query('month') month?: string,
@@ -199,14 +158,14 @@ export class TicketController {
 
   /** GET /tickets/technicians */
   @Get('technicians')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getTechnicians() {
     return this.ticketService.getTechnicianAvailability();
   }
 
   /** GET /tickets/general-overview-stats?year=&month= */
   @Get('general-overview-stats')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD)
+  @RequireCapability('isReportsAccess')
   async getGeneralOverviewStats(
     @Query('year') year?: string,
     @Query('month') month?: string,
@@ -220,14 +179,14 @@ export class TicketController {
 
   /** GET /tickets/dashboard */
   @Get('dashboard')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getDashboardStats(@Request() req: any) {
     return this.ticketService.getUserDashboardStats(req.user.id ?? req.user.userId);
   }
 
   /** GET /tickets/assigned-stats?year=&month= — monthly stats for tickets ASSIGNED to the caller */
   @Get('assigned-stats')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getAssignedStats(
     @Request() req: any,
     @Query('year') year?: string,
@@ -243,7 +202,7 @@ export class TicketController {
 
   /** GET /tickets/reports — satisfaction reports (QA #11) */
   @Get('reports')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getTicketReports(
     @Query('year') year?: string,
     @Query('month') month?: string,
@@ -266,7 +225,7 @@ export class TicketController {
   }
 
   @Get('performance-metrics')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getPerformanceMetrics(
     @Query('year') year?: string,
     @Query('month') month?: string,
@@ -290,7 +249,7 @@ export class TicketController {
 
   /** GET /tickets/ratings-report — detailed ratings report (Tickets, Techs, Days/Weeks/Months/Quarters) */
   @Get('ratings-report')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getRatingsReport(
     @Query('year') year?: string,
     @Query('month') month?: string,
@@ -311,7 +270,7 @@ export class TicketController {
 
   /** GET /tickets/report-technicians — technicians who had tickets in a given period */
   @Get('report-technicians')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getReportTechnicians(
     @Query('year') year?: string,
     @Query('month') month?: string,
@@ -330,7 +289,7 @@ export class TicketController {
 
   /** GET /tickets/:id */
   @Get(':id')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getTicket(@Param('id') id: string, @Request() req: any) {
     return this.ticketService.getTicketById(
       id,
@@ -341,14 +300,14 @@ export class TicketController {
 
   /** PATCH /tickets/:id */
   @Patch(':id')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async updateTicket(@Param('id') id: string, @Body() dto: UpdateTicketDto, @Request() req: any) {
     return this.ticketService.updateTicket(id, dto, req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** GET /tickets/requester/:requesterId/open - open tickets for Duplicate picker */
   @Get('requester/:requesterId/open')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getRequesterOpenTickets(@Param('requesterId') requesterId: string, @Request() req: any) {
     return this.ticketService.getOpenTicketsForRequester(
       Number(requesterId),
@@ -359,28 +318,28 @@ export class TicketController {
 
   /** PATCH /tickets/:id/assign */
   @Patch(':id/assign')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async assignTicket(@Param('id') id: string, @Body() dto: AssignTicketDto, @Request() req: any) {
     return this.ticketService.assignTicket(id, dto, req.user.role, req.user.id ?? req.user.userId);
   }
 
   /** PATCH /tickets/:id/mark-viewed — auto-transition assigned→in_progress when technician views the ticket */
   @Patch(':id/mark-viewed')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async markTicketViewed(@Param('id') id: string, @Request() req: any) {
     return this.ticketService.markTicketViewed(id, req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** GET /tickets/:id/events — timeline of all ticket events */
   @Get(':id/events')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getTicketEvents(@Param('id') id: string, @Request() req: any) {
     return this.ticketService.getTicketEvents(id, req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** POST /tickets/:id/comments */
   @Post(':id/comments')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   @UseInterceptors(FileInterceptor('attachment', { limits: { fileSize: 10 * 1024 * 1024 } }))
   async addComment(
     @Param('id') ticketId: string,
@@ -402,7 +361,7 @@ export class TicketController {
 
   /** POST /tickets/:id/satisfaction */
   @Post(':id/satisfaction')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async submitSatisfaction(
     @Param('id') id: string,
     @Body() dto: SubmitSatisfactionDto,
@@ -413,7 +372,7 @@ export class TicketController {
 
   /** POST /tickets/:id/rate — backward-compatible alias for satisfaction submission */
   @Post(':id/rate')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async submitSatisfactionAlias(
     @Param('id') id: string,
     @Body() dto: SubmitSatisfactionDto,
@@ -424,7 +383,7 @@ export class TicketController {
 
   /** GET /tickets/satisfaction/unit-suggestions — distinct unit values from past CSAT forms */
   @Get('satisfaction/unit-suggestions')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getSatisfactionUnitSuggestions() {
     return this.ticketService.getSatisfactionUnitSuggestions();
   }
@@ -433,7 +392,6 @@ export class TicketController {
 
   /** GET /tickets/escalations/all */
   @Get('escalations/all')
-  @Roles(...ALL_ROLES)
   @UseGuards(CapabilityGuard)
   @RequireCapability('isEscalationFocal')
   async getAllEscalations() {
@@ -442,14 +400,14 @@ export class TicketController {
 
   /** GET /tickets/:id/escalations */
   @Get(':id/escalations')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getEscalations(@Param('id') id: string, @Request() req: any) {
     return this.ticketService.getEscalations(id, req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** POST /tickets/:id/escalate — upload proof photos (multipart/form-data) */
   @Post(':id/escalate')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   @UseInterceptors(FilesInterceptor('proofFiles', 10, { limits: { fileSize: 10 * 1024 * 1024 } }))
   async escalateTicket(
     @Param('id') id: string,
@@ -477,14 +435,14 @@ export class TicketController {
 
   /** PATCH /tickets/:id/escalation/:eid/accept */
   @Patch(':id/escalation/:eid/accept')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async acceptEscalation(@Param('id') id: string, @Param('eid') eid: string, @Request() req: any) {
     return this.ticketService.acceptEscalation(id, eid, req.user.id ?? req.user.userId);
   }
 
   /** PATCH /tickets/:id/escalation/:eid/return */
   @Patch(':id/escalation/:eid/return')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async returnEscalation(
     @Param('id') id: string,
     @Param('eid') eid: string,
@@ -500,7 +458,7 @@ export class TicketController {
    * to a pending escalation they initiated.
    */
   @Patch(':id/escalation/:eid/update-proof')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   @UseInterceptors(FilesInterceptor('proofFiles', 10, { limits: { fileSize: 10 * 1024 * 1024 } }))
   async updateEscalationProof(
     @Param('id') id: string,
@@ -520,7 +478,7 @@ export class TicketController {
 
   /** GET /tickets/proof/:ticketId/:filename — serve escalation proof photo */
   @Get('proof/:ticketId/:filename')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async serveProofFile(
     @Param('ticketId') ticketId: string,
     @Param('filename') filename: string,
@@ -546,7 +504,7 @@ export class TicketController {
 
   /** GET /tickets/comment-attachment/:ticketId/:filename — serve comment attachment */
   @Get('comment-attachment/:ticketId/:filename')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async serveCommentAttachmentFile(
     @Param('ticketId') ticketId: string,
     @Param('filename') filename: string,
@@ -580,7 +538,7 @@ export class TicketController {
   @Get('reports/issue-counts')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isTicketSettingsFocal')
-  @Roles(...ALL_ROLES)
+  @RequireCapability('isTicketModuleAccess')
   async getIssueCountsReport(
     @Query('year') year?: string,
     @Query('month') month?: string,

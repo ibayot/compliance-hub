@@ -348,11 +348,8 @@ export default function KpiPage() {
     status: 'draft' as KpiMonitoringStatus,
   });
 
-  const canManage =
-    user?.role === 'super_admin' ||
-    !!myCap?.isKpiManage ||
-    ['section_head', 'compliance_officer'].includes(String(user?.role));
-  const canAccessKpi = user?.role === 'super_admin' || !!myCap?.isKpiAccess || canManage;
+  const canManage = !!myCap?.isKpiManage;
+  const canAccessKpi = !!myCap?.isKpiAccess || canManage;
   const userUnitIds = useMemo(
     () => ((user?.units || []) as any[]).map((u: any) => Number(u.id)).filter(Number.isFinite),
     [user?.units],

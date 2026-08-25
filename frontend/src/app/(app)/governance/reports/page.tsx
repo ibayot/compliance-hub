@@ -1411,7 +1411,7 @@ function ReportView({ params }: { params: ReportParams }) {
 export default function ReportsPage() {
   const now = new Date();
   const { user, myCap } = useAuth();
-  const canAccessReports = user?.role === UserRole.SUPER_ADMIN || !!myCap?.isReportsAccess;
+  const canAccessReports = !!myCap?.isReportsAccess;
 
 
 

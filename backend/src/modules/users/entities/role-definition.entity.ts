@@ -26,12 +26,6 @@ export class RoleDefinitionEntity {
   @Column({ name: 'is_system', default: true })
   isSystem: boolean;
 
-  /**
-   * Optional tag to include users with this custom role in the technician attendance grid.
-   * Values: null (not a technician) | 'it_support' | 'desktop_support' | 'pantawid_ict_support'
-   */
-  @Column({ name: 'technician_type', type: 'varchar', length: 30, nullable: true, default: null })
-  technicianType: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

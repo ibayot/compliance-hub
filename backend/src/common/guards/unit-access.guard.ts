@@ -1,23 +1,16 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
-
-/** Roles that bypass per-unit access scoping and can see all units. */
-const GLOBAL_ACCESS_ROLES = new Set([
-  'super_admin',
-  'section_head', // Section heads oversee all units under their purview
-  'compliance_officer',
-  'cybersec',
-  'infosec',
-]);
+import { RoleCapabilitiesService } from '../../modules/users/role-capabilities.service';
 
 @Injectable()
 export class UnitAccessGuard implements CanActivate {
+  constructor(private readonly roleCapabilitiesService: RoleCapabilitiesService) {}
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
     const unitId = request.params.unitId || request.query.unitId || request.body.unitId;
 
-    // System roles with global unit visibility bypass per-unit restrictions.
-    if (GLOBAL_ACCESS_ROLES.has(user.role)) {
+    // Database-backed unit access permits global unit visibility.
+    if (this.roleCapabilitiesService.isUnitsAccess(user.role)) {
       return true;
     }
 

@@ -17,11 +17,8 @@ import { Response } from 'express';
 import { AttendanceSseInterceptor } from '../interceptors/attendance-sse.interceptor';
 import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../../common/guards/roles.guard';
 import { CapabilityGuard } from '../../../common/guards/capability.guard';
-import { Roles } from '../../../common/decorators/roles.decorator';
 import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
-import { UserRole } from '../../users/entities/user.entity';
 import {
   AttendanceService,
   SetAttendanceDto,
@@ -31,83 +28,14 @@ import {
 } from '../services/attendance.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 
-/** Roles that can manage technician attendance (set present/absent/etc.) */
-const FOCAL_ROLES = [
-  UserRole.SUPER_ADMIN,
-  UserRole.SECTION_HEAD,
-  // v0.6.14 named roles
-  UserRole.PANTAWID_ICT,
-  UserRole.DESKTOP_SR,
-  UserRole.IT_SUPPORT_SR,
-  UserRole.DESKTOP_JR,
-  UserRole.IT_SUPPORT_JR,
-  UserRole.COMPLIANCE_OFFICER,
-  UserRole.CYBERSEC,
-  UserRole.INFOSEC,
-  UserRole.LEAD_INFRA,
-  UserRole.SERVER_ADMIN,
-  UserRole.DB_ADMIN,
-  UserRole.NETWORK_ADMIN,
-  UserRole.PROJECT_MGR,
-  UserRole.DEV_LEAD,
-  UserRole.SQA_LEAD,
-  UserRole.RECORDS_OFFICER,
-  UserRole.HR_ID_OFFICER,
-];
-
-/** Role-only check for attendance mutation endpoints. */
 const STRICT_ATTENDANCE_MANAGE_ROLES: string[] = [];
-
-/** Role-only check for office-day mutation endpoints. */
 const STRICT_OFFICEDAY_MANAGE_ROLES: string[] = [];
 
+/** Roles that can manage technician attendance (set present/absent/etc.) */
+/** Role-only check for attendance mutation endpoints. */
+/** Role-only check for office-day mutation endpoints. */
 /** Roles that can manage office days (set/toggle office calendar) */
-const OFFICE_DAY_ROLES = [
-  UserRole.SUPER_ADMIN,
-  UserRole.SECTION_HEAD,
-  // v0.6.14 ITO focal-equivalent roles
-  UserRole.COMPLIANCE_OFFICER,
-  UserRole.CYBERSEC,
-  UserRole.INFOSEC,
-  UserRole.LEAD_INFRA,
-  UserRole.SERVER_ADMIN,
-  UserRole.DB_ADMIN,
-  UserRole.NETWORK_ADMIN,
-  UserRole.PROJECT_MGR,
-  UserRole.DEV_LEAD,
-  UserRole.SQA_LEAD,
-  UserRole.RECORDS_OFFICER,
-  UserRole.HR_ID_OFFICER,
-  // Senior tech roles may also need to manage office days for their teams
-  UserRole.DESKTOP_SR,
-  UserRole.IT_SUPPORT_SR,
-  UserRole.PANTAWID_ICT,
-];
-
 /** Roles that can read attendance */
-const READ_ROLES = [
-  UserRole.SUPER_ADMIN,
-  UserRole.SECTION_HEAD,
-  // v0.6.14 named roles
-  UserRole.PANTAWID_ICT,
-  UserRole.DESKTOP_SR,
-  UserRole.IT_SUPPORT_SR,
-  UserRole.DESKTOP_JR,
-  UserRole.IT_SUPPORT_JR,
-  UserRole.COMPLIANCE_OFFICER,
-  UserRole.CYBERSEC,
-  UserRole.INFOSEC,
-  UserRole.LEAD_INFRA,
-  UserRole.SERVER_ADMIN,
-  UserRole.DB_ADMIN,
-  UserRole.NETWORK_ADMIN,
-  UserRole.PROJECT_MGR,
-  UserRole.DEV_LEAD,
-  UserRole.SQA_LEAD,
-  UserRole.RECORDS_OFFICER,
-  UserRole.HR_ID_OFFICER,
-];
-
 function mapUser(u: any) {
   if (!u) return u;
   return {
@@ -138,7 +66,7 @@ function mapAttendance(a: any) {
 
 @ApiTags('attendance')
 @Controller('attendance')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, CapabilityGuard)
 @UseInterceptors(AttendanceSseInterceptor)
 export class AttendanceController {
   constructor(
@@ -178,7 +106,7 @@ export class AttendanceController {
   @Get()
   @UseGuards(CapabilityGuard)
   @RequireCapability('isAttendanceAccess')
-  @Roles(...READ_ROLES)
+
   async getAttendance(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
@@ -195,7 +123,7 @@ export class AttendanceController {
 
   /** POST /attendance — set a single attendance record */
   @Post()
-  @Roles(...FOCAL_ROLES, ...OFFICE_DAY_ROLES)
+  @RequireCapability('isAttendanceManage')
   @HttpCode(HttpStatus.OK)
   async setAttendance(@Body() dto: SetAttendanceDto, @Request() req: any) {
     this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
@@ -218,7 +146,7 @@ export class AttendanceController {
   /** DELETE /attendance/:userId/:date */
   @Delete(':userId/:date')
   @ApiTags('_test-only')
-  @Roles(...FOCAL_ROLES)
+  @RequireCapability('isAttendanceManage')
   @HttpCode(HttpStatus.OK)
   async deleteAttendance(@Param('userId') userId: string, @Param('date') date: string, @Request() req: any) {
     this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
@@ -227,7 +155,7 @@ export class AttendanceController {
 
   /** POST /attendance/bulk — set multiple attendance records */
   @Post('bulk')
-  @Roles(...FOCAL_ROLES, ...OFFICE_DAY_ROLES)
+  @RequireCapability('isAttendanceManage')
   @HttpCode(HttpStatus.OK)
   async bulkSetAttendance(@Body() dto: BulkSetAttendanceDto, @Request() req: any) {
     this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
@@ -254,7 +182,7 @@ export class AttendanceController {
   /** DELETE /attendance/all — super_admin only: clear all attendance records */
   @ApiTags('_test-only')
   @Delete('all')
-  @Roles(UserRole.SUPER_ADMIN)
+  @RequireCapability('isAttendanceManage')
   @HttpCode(HttpStatus.OK)
   async clearAllAttendance() {
     return this.attendanceService.clearAllAttendance();
@@ -264,7 +192,7 @@ export class AttendanceController {
   @Get('technicians')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isAttendanceAccess')
-  @Roles(...READ_ROLES)
+
   async listTechnicians(@Query('ticketType') ticketType?: string, @Request() req?: any) {
     return this.attendanceService.listTechnicians(ticketType, req?.user?.role);
   }
@@ -275,7 +203,7 @@ export class AttendanceController {
   @Get('office-days')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isAttendanceAccess')
-  @Roles(...READ_ROLES)
+
   async getOfficeDays(@Query('startDate') startDate: string, @Query('endDate') endDate: string) {
     if (!startDate || !endDate) {
       // Default to current month
@@ -289,7 +217,7 @@ export class AttendanceController {
 
   /** POST /attendance/office-days — set a single office day */
   @Post('office-days')
-  @Roles(...OFFICE_DAY_ROLES)
+  @RequireCapability('isAttendanceManage')
   @HttpCode(HttpStatus.OK)
   async setOfficeDay(@Body() dto: SetOfficeDayDto, @Request() req: any) {
     this.ensureStrictRole(req.user?.role, STRICT_OFFICEDAY_MANAGE_ROLES, 'manage office days');
@@ -298,7 +226,7 @@ export class AttendanceController {
 
   /** POST /attendance/office-days/bulk — set multiple office days */
   @Post('office-days/bulk')
-  @Roles(...OFFICE_DAY_ROLES)
+  @RequireCapability('isAttendanceManage')
   @HttpCode(HttpStatus.OK)
   async bulkSetOfficeDays(@Body() dto: BulkSetOfficeDaysDto, @Request() req: any) {
     this.ensureStrictRole(req.user?.role, STRICT_OFFICEDAY_MANAGE_ROLES, 'manage office days');
@@ -309,7 +237,7 @@ export class AttendanceController {
   @Get('staff-logins')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isAttendanceAccess')
-  @Roles(...READ_ROLES)
+
   async getStaffLogins(@Query('date') date?: string) {
     const target = date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     return this.attendanceService.getStaffLoginsForDate(target);
@@ -319,7 +247,7 @@ export class AttendanceController {
   @Get('staff-logins-monthly')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isAttendanceAccess')
-  @Roles(...READ_ROLES)
+
   async getStaffLoginsMonthly(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,

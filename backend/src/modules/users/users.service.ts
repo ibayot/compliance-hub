@@ -23,7 +23,6 @@ import { UserTrustedDevice } from './entities/user-trusted-device.entity';
 
 const DEFAULT_ROLE_DEFINITIONS: Array<
   Pick<RoleDefinitionEntity, 'value' | 'label' | 'description' | 'assignable' | 'isSystem'> & {
-    technicianType?: string | null;
   }
 > = [
   // ── Core administrative roles ────────────────────────────────────────────
@@ -34,7 +33,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Full system access: manage users, units, issuances, metrics, tickets, documents, and settings.',
     assignable: false,
     isSystem: true,
-    technicianType: null,
   },
   {
     value: UserRole.SECTION_HEAD,
@@ -43,7 +41,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Unit/section leader. Has access to KPI monitoring, reports, ticket assignment, and incident response statistics across their assigned units.',
     assignable: true,
     isSystem: true,
-    technicianType: null,
   },
   // ── Staff roles with focal-equivalent access ─────────────────────────────
   {
@@ -53,7 +50,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Leads the network and infrastructure team. Responsible for network architecture, server infrastructure, and ICT compliance documentation for their unit.',
     assignable: true,
     isSystem: true,
-    technicianType: null,
   },
   {
     value: UserRole.SERVER_ADMIN,
@@ -62,7 +58,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages server infrastructure and operations. Responsible for server compliance documentation and ICT system administration.',
     assignable: true,
     isSystem: true,
-    technicianType: null,
   },
   {
     value: UserRole.DB_ADMIN,
@@ -71,7 +66,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages database systems and operations. Responsible for database compliance documentation and data management policies.',
     assignable: true,
     isSystem: true,
-    technicianType: null,
   },
   {
     value: UserRole.NETWORK_ADMIN,
@@ -80,7 +74,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages network systems and connectivity. Responsible for network compliance documentation and infrastructure maintenance.',
     assignable: true,
     isSystem: true,
-    technicianType: null,
   },
   {
     value: UserRole.PROJECT_MGR,
@@ -89,7 +82,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages ICT projects and deliverables. Responsible for project compliance documentation and team coordination.',
     assignable: true,
     isSystem: true,
-    technicianType: null,
   },
   {
     value: UserRole.DEV_LEAD,
@@ -98,7 +90,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Leads software development projects. Responsible for development compliance documentation and code quality standards.',
     assignable: true,
     isSystem: true,
-    technicianType: null,
   },
   {
     value: UserRole.SQA_LEAD,
@@ -107,7 +98,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Leads software quality assurance activities. Responsible for QA compliance documentation and testing standards.',
     assignable: true,
     isSystem: true,
-    technicianType: null,
   },
   {
     value: UserRole.RECORDS_OFFICER,
@@ -116,7 +106,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages records and documentation. Responsible for records management compliance and document retention policies.',
     assignable: true,
     isSystem: true,
-    technicianType: null,
   },
   {
     value: UserRole.HR_ID_OFFICER,
@@ -125,7 +114,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages HR information systems and ID issuance. Responsible for HRIS compliance documentation and personnel data management.',
     assignable: true,
     isSystem: true,
-    technicianType: null,
   },
   // ── Compliance / review roles ────────────────────────────────────────────
   {
@@ -135,7 +123,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Reviews and tags documents as compliant, non-compliant, or for revision. Manages issuances, KPI monitoring, MoV artifacts, and compliance reports.',
     assignable: true,
     isSystem: true,
-    technicianType: null,
   },
   {
     value: UserRole.CYBERSEC,
@@ -144,7 +131,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages cybersecurity operations and incident response. Has compliance officer access plus cybersecurity and incident dashboard.',
     assignable: true,
     isSystem: true,
-    technicianType: null,
   },
   {
     value: UserRole.INFOSEC,
@@ -153,7 +139,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Manages information security policies and incident response. Has compliance officer access plus information security and incident dashboard.',
     assignable: true,
     isSystem: true,
-    technicianType: null,
   },
   // ── Technician / support roles ───────────────────────────────────────────
   {
@@ -163,7 +148,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Handles all desktop/hardware support tickets: workstations, printers, peripherals, and hardware troubleshooting. Sees all desktop support tickets.',
     assignable: true,
     isSystem: true,
-    technicianType: 'desktop_support',
   },
   {
     value: UserRole.IT_SUPPORT_SR,
@@ -172,7 +156,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Handles all IT/software support tickets: software, network, internet connectivity, and system-level issues. Sees all IT support tickets.',
     assignable: true,
     isSystem: true,
-    technicianType: 'it_support',
   },
   {
     value: UserRole.DESKTOP_JR,
@@ -181,7 +164,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Handles desktop/hardware support tickets assigned to them. Escalates complex issues to senior engineers.',
     assignable: true,
     isSystem: true,
-    technicianType: 'desktop_support',
   },
   {
     value: UserRole.IT_SUPPORT_JR,
@@ -190,7 +172,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Handles IT/software support tickets assigned to them. Escalates complex issues to senior specialists.',
     assignable: true,
     isSystem: true,
-    technicianType: 'it_support',
   },
   {
     value: UserRole.PANTAWID_ICT,
@@ -199,7 +180,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'Handles Pantawid Pamilyang Pilipino Program (4Ps) ICT support requests exclusively.',
     assignable: true,
     isSystem: true,
-    technicianType: 'pantawid_ict_support',
   },
   // ── End-user role ────────────────────────────────────────────────────────
   {
@@ -209,7 +189,6 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
       'External or non-staff user. Can submit help desk tickets and view their own ticket history. No access to compliance modules.',
     assignable: true,
     isSystem: true,
-    technicianType: null,
   },
 ];
 
@@ -246,7 +225,6 @@ export class UsersService {
 
   private buildCapabilitySeed(role: RoleDefinitionEntity) {
     const roleValue = role.value;
-    const technicianType = role.technicianType ?? null;
     const isSuperAdmin = roleValue === UserRole.SUPER_ADMIN;
     const isComplianceRole = roleValue === UserRole.COMPLIANCE_OFFICER;
     const isSectionHead = roleValue === UserRole.SECTION_HEAD;
@@ -263,10 +241,9 @@ export class UsersService {
       UserRole.HR_ID_OFFICER,
     ]);
     const isFocal = isSuperAdmin || focalRoleValues.has(roleValue as UserRole) || isComplianceRole || isSectionHead;
-    const isDesktop = technicianType === 'desktop_support';
-    const isItSupport = technicianType === 'it_support';
-    const isPantawidIct = technicianType === 'pantawid_ict_support';
-    const isTech = isDesktop || isItSupport || isPantawidIct;
+    const isDesktop = roleValue === UserRole.DESKTOP_SR || roleValue === UserRole.DESKTOP_JR;
+    const isItSupport = roleValue === UserRole.IT_SUPPORT_SR || roleValue === UserRole.IT_SUPPORT_JR;
+    const isPantawidIct = roleValue === UserRole.PANTAWID_ICT;    const isTech = isDesktop || isItSupport || isPantawidIct;
 
     return this.roleCapabilitiesRepository.create({
       roleValue,
@@ -282,6 +259,7 @@ export class UsersService {
       isGlobalSettingsAccess: isSuperAdmin || isSectionHead,
       isAllTickets: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
       isTicketFocal: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
+      isTicketModuleAccess: role.isSystem,
       isKpiAccess: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
       isKpiManage: isSuperAdmin || isSectionHead || isComplianceRole,
       isAttendanceAccess:
@@ -290,12 +268,19 @@ export class UsersService {
       isReportsAccess: isSuperAdmin || isComplianceRole,
       isReviewsAccess: isSuperAdmin || isComplianceRole || isCyberRole,
       isMovAccess: isSuperAdmin || isComplianceRole,
-      isDocumentsAccess: isSuperAdmin || isFocal,
+      isDocumentsAccess: isSuperAdmin || isFocal || isTech,
       isRepositoryAccess: isSuperAdmin || isFocal,
       isIssuancesAccess: isSuperAdmin || isComplianceRole,
+      isDocumentsManage: isSuperAdmin || isFocal || isTech,
+      isUnitsAccess: isSuperAdmin,
+      isUnitsManage: isSuperAdmin,
+      isDocumentsDelete: isSuperAdmin || isComplianceRole,
+      isIssuancesManage: isSuperAdmin || isComplianceRole,
+      isMetricsDelete: isSuperAdmin,
       isMetricsAccess: isSuperAdmin || isComplianceRole,
       isDutyViewerAccess: isSuperAdmin,
       isDutyAdminAccess: isSuperAdmin,
+      isAttendanceEligible: role.assignable && roleValue !== UserRole.USER && roleValue !== UserRole.SUPER_ADMIN,
     });
   }
 
@@ -361,7 +346,6 @@ export class UsersService {
       description: dto.description,
       assignable: dto.value === UserRole.SUPER_ADMIN ? false : (dto.assignable ?? true),
       isSystem: isSystemRole,
-      technicianType: dto.technicianType ?? null,
     });
 
     const savedRole = await this.roleDefinitionsRepository.save(role);
@@ -394,11 +378,7 @@ export class UsersService {
     if (dto.assignable !== undefined) {
       role.assignable = role.value === UserRole.SUPER_ADMIN ? false : dto.assignable;
     }
-    if (dto.technicianType !== undefined) {
-      role.technicianType = dto.technicianType ?? null;
-    }
-
-    const previousValue = value;
+const previousValue = value;
     const saved = await this.roleDefinitionsRepository.save(role);
     if (saved.value !== previousValue) {
       await this.roleCapabilitiesRepository.delete({ roleValue: previousValue });
@@ -524,18 +504,32 @@ export class UsersService {
   }
 
   async findAll(): Promise<User[]> {
+    const decorate = async (users: User[]): Promise<User[]> => {
+      const capabilityRows = await this.roleCapabilitiesRepository.find({
+        select: ['roleValue', 'isAttendanceEligible'],
+      });
+      const eligibleByRole = new Map(
+        capabilityRows.map((row) => [row.roleValue, Boolean(row.isAttendanceEligible)]),
+      );
+      return users.map((user) => ({
+        ...user,
+        attendanceEligible: eligibleByRole.get(user.role) ?? false,
+      })) as User[];
+    };
+
     try {
-      return await this.usersRepository.find({
+      const users = await this.usersRepository.find({
         relations: ['units'],
         // Return all users (including inactive) so management UI can show/toggle them
       });
+      return decorate(users);
     } catch (error) {
       if (!this.isMissingUserUnitAccessError(error)) {
         throw error;
       }
 
       const users = await this.usersRepository.find();
-      return users.map((user) => ({ ...user, units: [] }) as User);
+      return decorate(users.map((user) => ({ ...user, units: [] }) as User));
     }
   }
 

@@ -1,5 +1,5 @@
 import { DutyService } from './duty.service';
-import { DutyCoverageStatus, DutyExceptionType, DutyType } from '../entities/duty.entity';
+import { DutyCoverageStatus, DutyExceptionType, DutyReservationStatus, DutyType } from '../entities/duty.entity';
 import { TicketStatus } from '../entities/ticket.entity';
 
 const repo = (overrides: Record<string, any> = {}) => ({
@@ -240,6 +240,43 @@ describe('DutyService', () => {
       }));
     },
   );
+
+  it('deletes meeting reservations instead of cancelling them', async () => {
+    const reservations = repo({
+      findOne: jest.fn().mockResolvedValue({ id: 'meeting-1', status: DutyReservationStatus.CONFIRMED }),
+    });
+    const assignments = repo({ exist: jest.fn().mockResolvedValue(true) });
+    const service = makeService({
+      reservations,
+      assignments,
+      caps: { isDutyAdminAccess: jest.fn().mockReturnValue(true), isDutyViewerAccess: jest.fn() },
+    });
+
+    await service.deleteReservation({ id: 99, role: 'custom_admin' }, 'meeting-1');
+
+    expect(reservations.delete).toHaveBeenCalledWith('meeting-1');
+    expect(reservations.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects duty exceptions for users outside the shared roster', async () => {
+    const roster = repo({
+      find: jest.fn().mockResolvedValue([
+        { id: 'roster-1', userId: 1, dutyType: DutyType.OD, sortOrder: 0, isActive: true },
+      ]),
+    });
+    const exceptions = repo({ find: jest.fn().mockResolvedValue([]) });
+    const service = makeService({ roster, exceptions, caps: { isDutyAdminAccess: jest.fn().mockReturnValue(true), isDutyViewerAccess: jest.fn() } });
+
+    await expect(service.saveException(
+      { id: 99, role: 'admin' },
+      {
+        exceptionDate: '2026-08-20',
+        userId: 2,
+        type: DutyExceptionType.TRAVEL_ORDER,
+      },
+    )).rejects.toThrow('shared duty roster');
+  });
+
 });
 
 function chain(result: any) {

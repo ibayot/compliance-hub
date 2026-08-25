@@ -38,6 +38,7 @@ export enum TicketPriority {
   MEDIUM = 'medium',
   HIGH = 'high',
   URGENT = 'urgent',
+  CRITICAL = 'critical',
 }
 
 @Entity('tickets')
@@ -141,7 +142,17 @@ export class Ticket {
 
   // --- Client Satisfaction ---
   /** Overall satisfaction rating derived from CSAT form item 0 */
-  @Column({ name: 'satisfaction_rating', type: 'tinyint', nullable: true })
+  @Column({
+    name: 'satisfaction_rating',
+    type: 'decimal',
+    precision: 4,
+    scale: 2,
+    nullable: true,
+    transformer: {
+      to: (value: number | null) => value,
+      from: (value: string | number | null) => (value == null ? null : Number(value)),
+    },
+  })
   satisfactionRating: number | null;
 
   @Column({ name: 'satisfaction_comment', type: 'text', nullable: true })

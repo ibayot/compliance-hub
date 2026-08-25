@@ -303,7 +303,7 @@ export interface TicketReportsData {
   totalTickets: number;
   totalWithRating: number;
   avgOverallRating: number | null;
-  avgRatingByType: Array<{ type: string; avg: number; count: number; ratedCount?: number }>;
+  avgRatingByType: Array<{ type: string; avg: number; count: number; ratedCount?: number; resolvedCount?: number }>;
   avgRatingByTechnician: Array<{
     techId: number;
     techName: string;
@@ -325,7 +325,7 @@ export interface TicketReportResult {
   totalTickets: number;
   totalWithRating: number;
   avgOverallRating: number | null;
-  avgRatingByType: Array<{ type: string; avg: number; count: number; ratedCount?: number }>;
+  avgRatingByType: Array<{ type: string; avg: number; count: number; ratedCount?: number; resolvedCount?: number }>;
   avgRatingByTechnician: Array<{
     techId: number;
     techName: string;

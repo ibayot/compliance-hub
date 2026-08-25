@@ -84,6 +84,17 @@ const STATUS_OPTS = [
 
 const COMMENTS_PAGE_SIZE = 5;
 
+const populatedFieldSx = (populated: boolean) =>
+  populated
+    ? {
+        '& .MuiInputBase-input': { color: '#000', fontStyle: 'italic' },
+        '& .MuiInputBase-input.Mui-disabled': {
+          color: '#000',
+          WebkitTextFillColor: '#000',
+          fontStyle: 'italic',
+        },
+      }
+    : undefined;
 function OverdueTimer({ targetDate }: { targetDate: string }) {
   const [elapsed, setElapsed] = useState('');
 
@@ -288,8 +299,8 @@ export default function TicketDetailPage() {
   const canAssignByCapability = !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
   const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isAllTickets;
   const canPriority = canStaff;
-  const isComplianceOfficer = !!myCap?.isReportsAccess && user?.role !== UserRole.SUPER_ADMIN;
-  const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage && user?.role !== UserRole.SUPER_ADMIN;
+  const isComplianceOfficer = !!myCap?.isReportsAccess;
+  const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage;
   const canEscalate =
     !!myCap?.isTicketSettingsFocal ||
     !!myCap?.isTicketFocal ||
@@ -556,13 +567,14 @@ export default function TicketDetailPage() {
       if (newPriority && newPriority !== ticket?.priority) payload.priority = newPriority as any;
       if (overrideDupOfId) payload.duplicateOfId = overrideDupOfId;
       if (newStatus === 'resolved') payload.generateKb = generateKb;
-      await ticketsApi.update(ticketId, payload);
+      const updatedTicket = await ticketsApi.update(ticketId, payload);
+      setTicket(updatedTicket);
+      setNewStatus(updatedTicket.status);
       setEditingStatus(false);
       setDupDialogOpen(false);
       setDupConfirmOpen(false);
       setNewPriority('');
-      fetchTicket();
-      fetchEvents();
+      await Promise.all([fetchTicket(), fetchEvents()]);
       enqueueSnackbar('Ticket updated.', { variant: 'success' });
       if (newStatus === 'resolved' && generateKb) {
         enqueueSnackbar('AI is generating a Knowledge Base article in the background. It will be available shortly.', {
@@ -746,9 +758,10 @@ export default function TicketDetailPage() {
     }
     try {
       setCsatSubmitting(true);
-      await ticketsApi.submitSatisfaction(ticketId, { formData: csatForm });
+      const updatedTicket = await ticketsApi.submitSatisfaction(ticketId, { formData: csatForm });
+      setTicket(updatedTicket);
       setSatDialogOpen(false);
-      fetchTicket();
+      await Promise.all([fetchTicket(), fetchEvents()]);
       enqueueSnackbar('Thank you for your feedback!', { variant: 'success' });
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to submit satisfaction', {
@@ -999,7 +1012,7 @@ export default function TicketDetailPage() {
                   (isTechnician ||
                     isSectionHead ||
                     isComplianceOfficer ||
-                    user?.role === 'super_admin')) ||
+                    !!myCap?.isTicketSettingsFocal)) ||
                   (hasAcceptedEscalation && isAcceptedEscalationFocal)) && (
                   <Button variant="outlined" size="small" onClick={() => setEditingStatus(true)}>
                     Update Status
@@ -2301,6 +2314,7 @@ export default function TicketDetailPage() {
                   freeSolo
                   fullWidth
                   disabled={!!user?.units?.[0]?.name}
+                  sx={populatedFieldSx(!!user?.units?.[0]?.name)}
                   value={csatForm.unitSection}
                   onInputChange={(_, v) => setCsatForm((f) => ({ ...f, unitSection: v }))}
                   renderInput={(params) => <TextField {...params} label="Unit/Section *" />}
@@ -2312,6 +2326,7 @@ export default function TicketDetailPage() {
                   disabled
                   fullWidth
                   InputLabelProps={{ shrink: true }}
+                  sx={populatedFieldSx(true)}
                 />
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -2320,26 +2335,28 @@ export default function TicketDetailPage() {
                   value={csatForm.clientFirstName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientFirstName: e.target.value }))}
                   fullWidth
+                  sx={populatedFieldSx(!!user?.firstName)}
                 />
-                <TextField label="Middle Initial"
+                <TextField label="M.I."
                   disabled={!!user?.middleName}
                   value={csatForm.clientMiddleInitial}
                   onChange={(e) =>
                     setCsatForm((f) => ({ ...f, clientMiddleInitial: e.target.value.substring(0, 1) }))
                   }
-                  sx={{ width: 100 }}
+                  sx={{ width: 140, ...populatedFieldSx(!!user?.middleName) }}
                 />
                 <TextField label="Last Name *"
                   disabled={!!user?.lastName}
                   value={csatForm.clientLastName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientLastName: e.target.value }))}
                   fullWidth
+                  sx={populatedFieldSx(!!user?.lastName)}
                 />
                 <TextField label="Suffix"
                   disabled={!!user?.suffix}
                   value={csatForm.suffix}
                   onChange={(e) => setCsatForm((f) => ({ ...f, suffix: e.target.value }))}
-                  sx={{ width: 100 }}
+                  sx={{ width: 180, ...populatedFieldSx(!!user?.suffix) }}
                 />
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -2361,7 +2378,7 @@ export default function TicketDetailPage() {
                   disabled={!!user?.sex}
                   value={csatForm.sex}
                   onChange={(e) => setCsatForm((f) => ({ ...f, sex: e.target.value }))}
-                  sx={{ minWidth: 120 }}
+                  sx={{ minWidth: 120, ...populatedFieldSx(!!user?.sex) }}
                 >
                   <MenuItem value="Male">Male</MenuItem>
                   <MenuItem value="Female">Female</MenuItem>
@@ -2379,7 +2396,7 @@ export default function TicketDetailPage() {
                     startAdornment: <InputAdornment position="start">+63</InputAdornment>,
                   }}
                   inputProps={{ inputMode: 'numeric' }}
-                  sx={{ flex: 1 }}
+                  sx={{ flex: 1, ...populatedFieldSx(!!user?.phoneNumber) }}
                 />
               </Stack>
               <TextField label="Technician Name"

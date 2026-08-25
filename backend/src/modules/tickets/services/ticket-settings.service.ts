@@ -37,6 +37,10 @@ export class CreateCategoryDto {
   @IsString()
   @ApiPropertyOptional()
   description?: string;
+  @IsOptional()
+  @IsBoolean()
+  @ApiPropertyOptional()
+  isActive?: boolean;
 }
 
 export class UpdateCategoryDto {
@@ -88,6 +92,10 @@ export class CreateKeywordRuleDto {
   @IsString()
   @ApiPropertyOptional()
   targetIssueTypeId?: string;
+  @IsOptional()
+  @IsBoolean()
+  @ApiPropertyOptional()
+  isActive?: boolean;
 }
 
 export class UpdateKeywordRuleDto {
@@ -158,6 +166,10 @@ export class CreateIssueTypeDto {
   @IsNumber()
   @ApiPropertyOptional()
   maxFreezeHours?: number | null;
+  @IsOptional()
+  @IsBoolean()
+  @ApiPropertyOptional()
+  isActive?: boolean;
 }
 
 export class UpdateIssueTypeDto {
@@ -362,7 +374,7 @@ export class TicketSettingsService {
       isDesktop: !!dto.isDesktop,
       isPantawid: !!dto.isPantawid,
       description: dto.description?.trim() || null,
-      isActive: true,
+      isActive: dto.isActive ?? true,
       isDeleted: false,
       created_by: actorId,
       updated_by: actorId,
@@ -458,7 +470,7 @@ export class TicketSettingsService {
       targetTicketType: dto.targetTicketType,
       targetCategoryId: dto.targetCategoryId || null,
       targetIssueTypeId: dto.targetIssueTypeId || null,
-      isActive: true,
+      isActive: dto.isActive ?? true,
       createdBy: actorId,
     });
     const saved = await this.keywordRepo.save(rule);
@@ -577,7 +589,7 @@ export class TicketSettingsService {
       key,
       name: dto.name.trim(),
       description: dto.description?.trim() || null,
-      isActive: (dto.slaHours ?? null) !== null,
+      isActive: dto.isActive ?? (dto.slaHours ?? null) !== null,
       isDeleted: false,
       category_id: dto.categoryId || null,
       slaHours: dto.slaHours ?? null,

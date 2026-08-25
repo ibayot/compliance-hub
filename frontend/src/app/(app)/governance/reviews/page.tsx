@@ -30,7 +30,7 @@ import { UserRole } from '@/lib/types/auth';
 
 export default function ReviewsPage() {
   const { user, myCap } = useAuth();
-  const isSuperOrReviewer = user?.role === UserRole.SUPER_ADMIN || !!myCap?.isReviewsAccess;
+  const isSuperOrReviewer = !!myCap?.isReviewsAccess;
   const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [latestReviewByDoc, setLatestReviewByDoc] = useState<Record<string, string>>({});

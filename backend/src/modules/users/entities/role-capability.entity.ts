@@ -102,6 +102,10 @@ export class RoleCapability {
   @Column({ name: 'is_ticket_focal', type: 'tinyint', width: 1, default: 0 })
   isTicketFocal: boolean;
 
+  /** True for roles that can use the ticket module. */
+  @Column({ name: 'is_ticket_module_access', type: 'tinyint', width: 1, default: 0 })
+  isTicketModuleAccess: boolean;
+
   /** True for roles that can access the KPI module pages and read endpoints. */
   @Column({ name: 'is_kpi_access', type: 'tinyint', width: 1, default: 0 })
   isKpiAccess: boolean;
@@ -169,6 +173,41 @@ export class RoleCapability {
   /** True for roles that can administer Duty rosters, logs, exceptions, and schedules. */
   @Column({ name: 'is_duty_admin_access', type: 'tinyint', width: 1, default: 0 })
   isDutyAdminAccess: boolean;
+
+  /** True for accounts eligible to appear in attendance views. */
+  @Column({ name: 'is_attendance_eligible', type: 'tinyint', width: 1, default: 0 })
+  isAttendanceEligible: boolean;
+
+  /** Feature and administration permissions formerly guarded by role names. */
+  @Column({ name: 'is_audit_access', type: 'tinyint', width: 1, default: 0 })
+  isAuditAccess: boolean;
+
+  @Column({ name: 'is_units_access', type: 'tinyint', width: 1, default: 0 })
+  isUnitsAccess: boolean;
+
+  @Column({ name: 'is_units_manage', type: 'tinyint', width: 1, default: 0 })
+  isUnitsManage: boolean;
+
+  @Column({ name: 'is_document_types_manage', type: 'tinyint', width: 1, default: 0 })
+  isDocumentTypesManage: boolean;
+
+  @Column({ name: 'is_metrics_manage', type: 'tinyint', width: 1, default: 0 })
+  isMetricsManage: boolean;
+
+  @Column({ name: 'is_user_management_roles_manage', type: 'tinyint', width: 1, default: 0 })
+  isUserManagementRolesManage: boolean;
+
+  @Column({ name: 'is_documents_manage', type: 'tinyint', width: 1, default: 0 })
+  isDocumentsManage: boolean;
+
+  @Column({ name: 'is_documents_delete', type: 'tinyint', width: 1, default: 0 })
+  isDocumentsDelete: boolean;
+
+  @Column({ name: 'is_issuances_manage', type: 'tinyint', width: 1, default: 0 })
+  isIssuancesManage: boolean;
+
+  @Column({ name: 'is_metrics_delete', type: 'tinyint', width: 1, default: 0 })
+  isMetricsDelete: boolean;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -169,10 +169,7 @@ export default function IssuancesPage() {
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
   const [deleteConfirmIssuance, setDeleteConfirmIssuance] = useState<string | null>(null);
   const [actionsIssuance, setActionsIssuance] = useState<Issuance | null>(null);
-  const canManageIssuances =
-    user?.role === 'super_admin' ||
-    user?.role === 'compliance_officer' ||
-    !!myCap?.isIssuancesAccess;
+  const canManageIssuances = !!myCap?.isIssuancesManage;
 
   useEffect(() => {
     fetchIssuances();

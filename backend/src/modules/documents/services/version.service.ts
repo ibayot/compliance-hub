@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { DocumentVersion } from '../entities/document-version.entity';
 import { Document, DocumentStatus } from '../entities/document.entity';
 import { StorageService } from './storage.service';
+import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import * as mammoth from 'mammoth';
@@ -40,6 +41,7 @@ export class VersionService {
     private documentRepo: Repository<Document>,
     private storageService: StorageService,
     @InjectQueue('document-processing') private documentQueue: Queue,
+    private readonly roleCapSvc: RoleCapabilitiesService,
   ) {}
 
   private async getVersionWithBlobs(id: string, actor?: any): Promise<DocumentVersion> {
@@ -54,11 +56,9 @@ export class VersionService {
       throw new NotFoundException(`Version with ID ${id} not found`);
     }
 
-    // TODO: Replace this temporary role/unit policy with a database-backed
-    // document-download capability when the governance capability matrix is extended.
     if (actor) {
       const role = String(actor.role || '');
-      const privileged = ['super_admin', 'compliance_officer'].includes(role);
+      const privileged = this.roleCapSvc.isDocumentsAccess(role);
       const unitIds = Array.isArray(actor.units)
         ? actor.units.map((unit: any) => Number(typeof unit === 'object' ? unit.id : unit))
         : [];

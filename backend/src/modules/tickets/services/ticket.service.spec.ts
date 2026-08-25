@@ -32,6 +32,7 @@ import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { EventBusService } from '../../../common/events/event-bus.service';
 import { SseService } from './sse.service';
 import { KeywordCheckEngine } from '../../metrics/engines/keyword-check.engine';
+import { deriveSatisfactionRating, roundRating } from './ticket.service';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -711,5 +712,19 @@ describe('SLA Fix Migration — retroactive issue_type_id assignment', () => {
 
     // All 3 tickets should have an issue_type_id after migration
     expect(withIssueType.length).toBe(3);
+  });
+});
+
+describe('CSAT rating precision', () => {
+  it('stores the average of numeric Likert answers to two decimal places', () => {
+    expect(deriveSatisfactionRating([5, 4, 3, 2, 4, 5, 'NA', 'NA', 'NA'])).toBe(3.83);
+  });
+
+  it('rounds report averages down to two decimals', () => {
+    expect(roundRating(3.915)).toBe(3.91);
+  });
+
+  it('ignores non-applicable answers and returns null when none are numeric', () => {
+    expect(deriveSatisfactionRating(['NA', 'NA', 'NA'])).toBeNull();
   });
 });

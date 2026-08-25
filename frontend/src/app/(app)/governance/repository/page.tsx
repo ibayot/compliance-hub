@@ -147,7 +147,7 @@ function BucketFolder({
 
 export default function RepositoryPage() {
   const { user, myCap } = useAuth();
-  const canAccessRepository = user?.role === 'super_admin' || !!myCap?.isRepositoryAccess;
+  const canAccessRepository = !!myCap?.isRepositoryAccess;
   const [selectedBucketKey, setSelectedBucketKey] = useState<string | null>(null);
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);

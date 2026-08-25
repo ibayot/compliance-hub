@@ -1,10 +1,11 @@
 {
   "name": "rictms-frontend",
-  "version": "0.0.135",
+  "version": "0.0.136",
   "private": true,
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test:e2e": "playwright test",
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,json,css,md}\""

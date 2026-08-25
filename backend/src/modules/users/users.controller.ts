@@ -44,19 +44,22 @@ export class UsersController {
   ) {}
 
   @Get('roles')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isUserManagementRolesManage')
   getRoles() {
     return this.usersService.getRoles();
   }
 
   @Post('roles')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isUserManagementRolesManage')
   createRole(@Body() createRoleDefinitionDto: CreateRoleDefinitionDto) {
     return this.usersService.createRoleDefinition(createRoleDefinitionDto);
   }
 
   @Patch('roles/:value')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isUserManagementRolesManage')
   updateRole(
     @Param('value') value: string,
     @Body() updateRoleDefinitionDto: UpdateRoleDefinitionDto,
@@ -65,7 +68,8 @@ export class UsersController {
   }
 
   @Delete('roles/:value')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isUserManagementRolesManage')
   deleteRole(@Param('value') value: string) {
     return this.usersService.deleteRoleDefinition(value);
   }
@@ -74,13 +78,13 @@ export class UsersController {
   async create(@Body() createUserDto: CreateUserDto, @Request() req: any) {
     const isView = this.roleCapabilitiesService.isUserManagementView(req.user.role);
     const isAdmin = this.roleCapabilitiesService.isUserManagementAdmin(req.user.role);
-    const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
+    const canManageRoles = this.roleCapabilitiesService.isUserManagementRolesManage(req.user.role);
 
-    if (!isView && !isAdmin && !isSuperAdmin) {
+    if (!isView && !isAdmin && !canManageRoles) {
       throw new ForbiddenException('You do not have permission to create users.');
     }
 
-    if (isView && !isAdmin && !isSuperAdmin) {
+    if (isView && !isAdmin && !canManageRoles) {
       // Force role to regular user
       createUserDto.role = UserRole.USER;
     }
@@ -89,7 +93,8 @@ export class UsersController {
   }
 
   @Get('search-email')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isUserManagementView')
   searchEmail(@Query('q') q: string) {
     return this.usersService.searchEmails(q);
   }
@@ -101,7 +106,8 @@ export class UsersController {
   }
 
   @Get('federated')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isUserManagementView')
   getFederatedUsers() {
     return this.usersService.getFederatedUsers();
   }
@@ -135,10 +141,9 @@ export class UsersController {
     @Body() dto: UpdateRoleCapabilityDto,
     @Request() req: any,
   ) {
-    const isSectionHead = req.user.role === UserRole.SECTION_HEAD;
-    const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
+    const canManageRoles = this.roleCapabilitiesService.isUserManagementRolesManage(req.user.role);
 
-    if (dto.isUserManagementAdmin !== undefined && !isSectionHead && !isSuperAdmin) {
+    if (dto.isUserManagementAdmin !== undefined && !canManageRoles) {
       throw new ForbiddenException('Only Section Head or Super Admin can modify the User Management Admin capability.');
     }
 
@@ -153,7 +158,8 @@ export class UsersController {
   // ── Generic user :id routes — kept AFTER static capability routes ──
 
   @Get(':id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SECTION_HEAD, UserRole.COMPLIANCE_OFFICER)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isUserManagementView')
   findOne(@Param('id') id: string) {
     const parsedId = parseInt(id, 10);
     if (isNaN(parsedId)) {
@@ -170,18 +176,17 @@ export class UsersController {
 
     const isView = this.roleCapabilitiesService.isUserManagementView(req.user.role);
     const isAdmin = this.roleCapabilitiesService.isUserManagementAdmin(req.user.role);
-    const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
-    const isSectionHead = req.user.role === UserRole.SECTION_HEAD;
+    const canManageRoles = this.roleCapabilitiesService.isUserManagementRolesManage(req.user.role);
     const isSelf = req.user.id === parsedId;
 
-    const hasManagementAccess = isView || isAdmin || isSuperAdmin;
+    const hasManagementAccess = isView || isAdmin || canManageRoles;
 
     if (!hasManagementAccess && !isSelf) {
       throw new ForbiddenException('You can only update your own profile');
     }
 
     // View capability can only target "user" role
-    if (isView && !isAdmin && !isSuperAdmin && !isSelf && targetUser.role !== UserRole.USER) {
+    if (isView && !isAdmin && !canManageRoles && !isSelf && targetUser.role !== UserRole.USER) {
       throw new ForbiddenException('You can only modify Regular Staff users.');
     }
 
@@ -189,14 +194,10 @@ export class UsersController {
     const targetIsSuperAdmin = targetUser.role === UserRole.SUPER_ADMIN;
 
     // Admin capability can target anyone except another Admin/SuperAdmin, UNLESS they are a Section Head/Super Admin
-    if (isAdmin && !isSuperAdmin && !isSectionHead && !isSelf && (targetIsAdmin || targetIsSuperAdmin)) {
+    if (isAdmin && !canManageRoles && !isSelf && (targetIsAdmin || targetIsSuperAdmin)) {
       throw new ForbiddenException('You do not have permission to modify another administrator.');
     }
 
-    // Section Head cannot modify Super Admin
-    if (isSectionHead && !isSuperAdmin && targetIsSuperAdmin) {
-      throw new ForbiddenException('You do not have permission to modify a Super Admin.');
-    }
 
     if (!hasManagementAccess) {
       // Prevent privilege escalation for normal users
@@ -218,27 +219,23 @@ export class UsersController {
 
     const isView = this.roleCapabilitiesService.isUserManagementView(req.user.role);
     const isAdmin = this.roleCapabilitiesService.isUserManagementAdmin(req.user.role);
-    const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
-    const isSectionHead = req.user.role === UserRole.SECTION_HEAD;
+    const canManageRoles = this.roleCapabilitiesService.isUserManagementRolesManage(req.user.role);
 
-    if (!isView && !isAdmin && !isSuperAdmin) {
+    if (!isView && !isAdmin && !canManageRoles) {
       throw new ForbiddenException('You do not have permission to reset passwords.');
     }
 
-    if (isView && !isAdmin && !isSuperAdmin && targetUser.role !== UserRole.USER) {
+    if (isView && !isAdmin && !canManageRoles && targetUser.role !== UserRole.USER) {
       throw new ForbiddenException('You can only reset passwords for Regular Staff users.');
     }
 
     const targetIsAdmin = this.roleCapabilitiesService.isUserManagementAdmin(targetUser.role);
     const targetIsSuperAdmin = targetUser.role === UserRole.SUPER_ADMIN;
 
-    if (isAdmin && !isSuperAdmin && !isSectionHead && (targetIsAdmin || targetIsSuperAdmin)) {
+    if (isAdmin && !canManageRoles && (targetIsAdmin || targetIsSuperAdmin)) {
       throw new ForbiddenException('You do not have permission to reset another administrator\'s password.');
     }
 
-    if (isSectionHead && !isSuperAdmin && targetIsSuperAdmin) {
-      throw new ForbiddenException('You do not have permission to reset a Super Admin\'s password.');
-    }
 
     return this.usersService.resetPassword(parsedId);
   }
@@ -253,27 +250,23 @@ export class UsersController {
     const targetUser = await this.usersService.findOne(parsedId);
     const isView = this.roleCapabilitiesService.isUserManagementView(req.user.role);
     const isAdmin = this.roleCapabilitiesService.isUserManagementAdmin(req.user.role);
-    const isSuperAdmin = req.user.role === UserRole.SUPER_ADMIN;
-    const isSectionHead = req.user.role === UserRole.SECTION_HEAD;
+    const canManageRoles = this.roleCapabilitiesService.isUserManagementRolesManage(req.user.role);
 
-    if (!isView && !isAdmin && !isSuperAdmin) {
+    if (!isView && !isAdmin && !canManageRoles) {
       throw new ForbiddenException('You do not have permission to disable users.');
     }
 
-    if (isView && !isAdmin && !isSuperAdmin && targetUser.role !== UserRole.USER) {
+    if (isView && !isAdmin && !canManageRoles && targetUser.role !== UserRole.USER) {
       throw new ForbiddenException('You can only disable Regular Staff users.');
     }
 
     const targetIsAdmin = this.roleCapabilitiesService.isUserManagementAdmin(targetUser.role);
     const targetIsSuperAdmin = targetUser.role === UserRole.SUPER_ADMIN;
 
-    if (isAdmin && !isSuperAdmin && !isSectionHead && (targetIsAdmin || targetIsSuperAdmin)) {
+    if (isAdmin && !canManageRoles && (targetIsAdmin || targetIsSuperAdmin)) {
       throw new ForbiddenException('You do not have permission to disable another administrator.');
     }
 
-    if (isSectionHead && !isSuperAdmin && targetIsSuperAdmin) {
-      throw new ForbiddenException('You do not have permission to disable a Super Admin.');
-    }
 
     return this.usersService.remove(parsedId);
   }

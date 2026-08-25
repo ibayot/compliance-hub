@@ -47,7 +47,7 @@ const isIdSegment = (s: string) =>
 export default function AppBar({ onMenuClick }: AppBarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, myCap, logout } = useAuth();
   const { isCollapsed, toggleSidebar, drawerWidth } = useSidebar();
   const { pageTitle } = usePageTitle();
   const { mode, toggleMode } = useThemeMode();
@@ -66,7 +66,7 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
   const [isNotifLoading, setIsNotifLoading] = useState(false);
 
   const fetchMyShift = React.useCallback(() => {
-    if (user?.role && user.role !== 'user' && user.role !== 'super_admin') {
+    if (myCap?.isAttendanceEligible) {
       attendanceApi.getMyShift().then(shift => {
         if (shift.clockIn && shift.clockOut) {
           setMyShift(shift);
@@ -77,7 +77,7 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
         }
       }).catch(console.error);
     }
-  }, [user]);
+  }, [myCap?.isAttendanceEligible]);
 
   useEffect(() => {
     fetchMyShift();

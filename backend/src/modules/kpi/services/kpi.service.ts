@@ -194,8 +194,8 @@ export class KpiService {
   }
 
   async removeKpiMaster(user: AuthUser, code: string) {
-    if (!['super_admin'].includes(user.role)) {
-      throw new ForbiddenException('Only super_admin can delete KPI master records.');
+    if (!this.canManage(user)) {
+      throw new ForbiddenException('You do not have KPI manage capability.');
     }
     const kpi = await this.ensureKpiMaster(code);
     await this.kpiMasterRepo.remove(kpi);
@@ -789,8 +789,8 @@ export class KpiService {
   }
 
   async upsertThreshold(user: AuthUser, id: number | null, dto: UpsertKpiThresholdDto) {
-    if (!['super_admin'].includes(user.role)) {
-      throw new ForbiddenException('Only super_admin can maintain KPI thresholds.');
+    if (!this.canManage(user)) {
+      throw new ForbiddenException('You do not have KPI manage capability.');
     }
 
     const entity = id
@@ -815,8 +815,8 @@ export class KpiService {
   }
 
   async upsertScoringRule(user: AuthUser, id: number | null, dto: UpsertKpiScoringRuleDto) {
-    if (!['super_admin'].includes(user.role)) {
-      throw new ForbiddenException('Only super_admin can maintain KPI scoring rules.');
+    if (!this.canManage(user)) {
+      throw new ForbiddenException('You do not have KPI manage capability.');
     }
 
     const entity = id

@@ -1,6 +1,5 @@
 import {
   IsBoolean,
-  IsIn,
   IsOptional,
   IsString,
   MaxLength,
@@ -31,12 +30,5 @@ export class CreateRoleDefinitionDto {
   @IsOptional()
   assignable?: boolean;
 
-  /**
-   * Optional: tag this role as a specific technician type so members are
-   * automatically included in the attendance grid regardless of their role code.
-   */
-  @IsOptional()
-  @IsIn(['it_support', 'desktop_support', 'pantawid_ict_support'])
-  technicianType?: string | null;
 
 }

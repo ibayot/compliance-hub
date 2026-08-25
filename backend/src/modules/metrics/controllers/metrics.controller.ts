@@ -14,6 +14,8 @@ import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { CapabilityGuard } from '../../../common/guards/capability.guard';
+import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { UserRole } from '../../users/entities/user.entity';
 import { MetricsService } from '../services/metrics.service';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -25,7 +27,7 @@ import { DocumentVersion } from '../../documents/entities/document-version.entit
 
 @ApiTags('metrics')
 @Controller('metrics')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, CapabilityGuard)
 export class MetricsController {
   private readonly logger = new Logger(MetricsController.name);
 
@@ -42,6 +44,7 @@ export class MetricsController {
    * GET /metrics
    */
   @Get()
+  @RequireCapability('isMetricsAccess')
   async listMetricTemplates() {
     return this.metricTemplateRepo.find({
       relations: ['applicability'],
@@ -54,7 +57,7 @@ export class MetricsController {
    * POST /metrics
    */
   @Post()
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  @RequireCapability('isMetricsManage')
   async createMetricTemplate(
     @Body()
     body: {
@@ -117,6 +120,7 @@ export class MetricsController {
    * GET /metrics/:id
    */
   @Get(':id')
+  @RequireCapability('isMetricsAccess')
   async getMetricTemplate(@Param('id') id: string) {
     return this.metricTemplateRepo.findOne({
       where: { id },
@@ -129,7 +133,7 @@ export class MetricsController {
    * PATCH /metrics/:id
    */
   @Patch(':id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+  @RequireCapability('isMetricsManage')
   async updateMetricTemplate(
     @Param('id') id: string,
     @Body()
@@ -197,7 +201,7 @@ export class MetricsController {
    * DELETE /metrics/:id
    */
   @Delete(':id')
-  @Roles(UserRole.SUPER_ADMIN)
+  @RequireCapability('isMetricsDelete')
   async deleteMetricTemplate(@Param('id') id: string, @Request() req: any) {
     await this.metricTemplateRepo.delete(id);
     this.logger.log(

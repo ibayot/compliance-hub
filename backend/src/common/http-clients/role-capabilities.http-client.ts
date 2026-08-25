@@ -26,6 +26,7 @@ export type CapabilityKey =
   | 'isSecuritySettingsAccess'
   | 'isAllTickets'
   | 'isTicketFocal'
+  | 'isTicketModuleAccess'
   | 'isKpiAccess'
   | 'isKpiManage'
   | 'isAttendanceAccess'
@@ -38,7 +39,18 @@ export type CapabilityKey =
   | 'isIssuancesAccess'
   | 'isMetricsAccess'
   | 'isDutyViewerAccess'
-  | 'isDutyAdminAccess';
+  | 'isDutyAdminAccess'
+  | 'isAttendanceEligible'
+  | 'isAuditAccess'
+  | 'isUnitsAccess'
+  | 'isUnitsManage'
+  | 'isDocumentTypesManage'
+  | 'isMetricsManage'
+  | 'isUserManagementRolesManage'
+  | 'isDocumentsManage'
+  | 'isDocumentsDelete'
+  | 'isIssuancesManage'
+  | 'isMetricsDelete';
 
 /**
  * RoleCapabilitiesHttpClient — full drop-in replacement for RoleCapabilitiesService
@@ -154,87 +166,71 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
   }
 
   isTicketSettingsFocal(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isTicketSettingsFocal;
   }
 
   isSmtpSettingsAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isSmtpSettingsAccess;
   }
 
   isGlobalSettingsAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isGlobalSettingsAccess;
   }
 
   isSecuritySettingsAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isSecuritySettingsAccess;
   }
 
   isAllTickets(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isAllTickets;
   }
 
   isTicketFocal(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isTicketFocal;
   }
+  isTicketModuleAccess(role: string): boolean { return !!this.get(role)?.isTicketModuleAccess; }
 
   isKpiAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isKpiAccess;
   }
 
   isKpiManage(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isKpiManage;
   }
 
   isAttendanceAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isAttendanceAccess;
   }
 
   isAttendanceManage(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isAttendanceManage;
   }
 
   isReportsAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isReportsAccess;
   }
 
   isReviewsAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isReviewsAccess;
   }
 
   isMovAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isMovAccess;
   }
 
   isDocumentsAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isDocumentsAccess;
   }
 
   isRepositoryAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isRepositoryAccess;
   }
 
   isIssuancesAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isIssuancesAccess;
   }
 
   isMetricsAccess(role: string): boolean {
-    if (role === 'super_admin') return true;
     return !!this.get(role)?.isMetricsAccess;
   }
 
@@ -246,6 +242,23 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
     return !!this.get(role)?.isDutyAdminAccess;
   }
 
+  isAttendanceEligible(role: string): boolean {
+    return !!this.get(role)?.isAttendanceEligible;
+  }
+
+  isAuditAccess(role: string): boolean { return !!this.get(role)?.isAuditAccess; }
+  isUnitsAccess(role: string): boolean { return !!this.get(role)?.isUnitsAccess; }
+  isUnitsManage(role: string): boolean { return !!this.get(role)?.isUnitsManage; }
+  isDocumentTypesManage(role: string): boolean { return !!this.get(role)?.isDocumentTypesManage; }
+  isMetricsManage(role: string): boolean { return !!this.get(role)?.isMetricsManage; }
+  isUserManagementRolesManage(role: string): boolean {
+    return !!this.get(role)?.isUserManagementRolesManage;
+  }
+  isDocumentsManage(role: string): boolean { return !!this.get(role)?.isDocumentsManage; }
+  isDocumentsDelete(role: string): boolean { return !!this.get(role)?.isDocumentsDelete; }
+  isIssuancesManage(role: string): boolean { return !!this.get(role)?.isIssuancesManage; }
+  isMetricsDelete(role: string): boolean { return !!this.get(role)?.isMetricsDelete; }
+
   // ── Derived helpers ───────────────────────────────────────────────────────
 
   canSeeAllTickets(role: string): boolean {
@@ -253,13 +266,11 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
   }
 
   canChangePriority(role: string): boolean {
-    if (role === 'super_admin') return true;
     const c = this.get(role);
     return !!(c?.isFocal || c?.isIto || c?.isDesktop || c?.isItSupport || c?.isPantawidIct);
   }
 
   isSeniorAuthority(role: string): boolean {
-    if (role === 'super_admin') return true;
     const c = this.get(role);
     return !!(c?.isFocal || c?.isIto);
   }

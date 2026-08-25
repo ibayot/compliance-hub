@@ -53,6 +53,11 @@ backend/src/database/seed-data.sql
 *.sql
 !db-init/20260820-duty-monitoring.sql
 !db-init/20260820-duty-constraints.sql
+!db-init/20260824-ticket-settings-duty-fixes.sql
+!db-init/20260824-capability-authority-expansion.sql
+!db-init/20260824-capability-refactor-complete.sql
+!db-init/20260824-duty-monitoring.sql
+!db-init/20260825-ticketing-ui-crud.sql
 *.png
 *.md
 !AGENTS.md
@@ -71,12 +76,22 @@ backend/src/database/seed-data.sql
 *fix*
 *restore*
 *seed*
+!db-init/20260824-ticket-settings-duty-fixes.sql
+!db-init/20260824-capability-authority-expansion.sql
+!db-init/20260824-capability-refactor-complete.sql
+!db-init/20260824-duty-monitoring.sql
+!db-init/20260825-ticketing-ui-crud.sql
 !scripts/
 !scripts/**/*
 Compliance_Hub_Postman_Collection.json
 
 # Disposable test-only folders
 frontend/tests/
+!frontend/tests/
+frontend/tests/*
+!frontend/tests/e2e/
+frontend/tests/e2e/*
+!frontend/tests/e2e/13-capability-visibility.spec.ts
 backend/test/
 
 # Logs

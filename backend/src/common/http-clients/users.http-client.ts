@@ -27,6 +27,7 @@ export interface RoleCapabilityStub {
   isSecuritySettingsAccess: boolean;
   isAllTickets: boolean;
   isTicketFocal: boolean;
+  isTicketModuleAccess: boolean;
   isKpiAccess: boolean;
   isKpiManage: boolean;
   isAttendanceAccess: boolean;
@@ -40,6 +41,17 @@ export interface RoleCapabilityStub {
   isMetricsAccess: boolean;
   isDutyViewerAccess: boolean;
   isDutyAdminAccess: boolean;
+  isAttendanceEligible: boolean;
+  isAuditAccess: boolean;
+  isUnitsAccess: boolean;
+  isUnitsManage: boolean;
+  isDocumentTypesManage: boolean;
+  isMetricsManage: boolean;
+  isUserManagementRolesManage: boolean;
+  isDocumentsManage: boolean;
+  isDocumentsDelete: boolean;
+  isIssuancesManage: boolean;
+  isMetricsDelete: boolean;
 }
 
 /** Circuit breaker states for inter-service calls. */

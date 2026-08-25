@@ -15,6 +15,10 @@ import { DateCheckEngine } from './engines/date-check.engine';
 import { MetricsProcessor } from './processors/metrics.processor';
 import { ManualReview } from '../reviews/entities/manual-review.entity';
 import { ReportorialDocumentType } from '../documents/entities/reportorial-document-type.entity';
+import { RoleCapabilitiesService } from '../users/role-capabilities.service';
+import { RoleCapabilitiesHttpClient } from '../../common/http-clients/role-capabilities.http-client';
+import { HttpClientsModule } from '../../common/http-clients/http-clients.module';
+import { CapabilityGuard } from '../../common/guards/capability.guard';
 
 @Module({
   imports: [
@@ -30,6 +34,7 @@ import { ReportorialDocumentType } from '../documents/entities/reportorial-docum
     BullModule.registerQueue({
       name: 'document-processing',
     }),
+    HttpClientsModule,
   ],
   controllers: [MetricsController, DocumentMetricsController],
   providers: [
@@ -39,6 +44,8 @@ import { ReportorialDocumentType } from '../documents/entities/reportorial-docum
     PropertyCheckEngine,
     DateCheckEngine,
     MetricsProcessor,
+    { provide: RoleCapabilitiesService, useClass: RoleCapabilitiesHttpClient },
+    CapabilityGuard,
   ],
   exports: [MetricsService],
 })

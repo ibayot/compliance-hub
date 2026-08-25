@@ -294,7 +294,7 @@ function SecuritySettingsCard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const canManage = user?.role === UserRole.SUPER_ADMIN || Boolean(myCap?.isSecuritySettingsAccess) || Boolean(myCap?.isTicketSettingsFocal);
+  const canManage = Boolean(myCap?.isSecuritySettingsAccess) || Boolean(myCap?.isTicketSettingsFocal);
 
   useEffect(() => {
     if (canManage) {
@@ -596,6 +596,7 @@ const CAPABILITY_CATEGORIES = [
       { key: 'isUserManagementView', label: 'User Mgt View', description: 'Create/Edit regular users only' },
       { key: 'isSystemRolesAccess', label: 'System Roles Admin', description: 'Access System Role Definitions' },
       { key: 'isRoleCapabilitiesAccess', label: 'Capabilities Admin', description: 'Access Role Capabilities Matrix' },
+      { key: 'isUserManagementRolesManage', label: 'Role Definition Manage', description: 'Create, edit, and delete role definitions' },
     ]
   },
   {
@@ -605,6 +606,7 @@ const CAPABILITY_CATEGORIES = [
       { key: 'isKpiManage', label: 'KPI Manage', description: 'Create/update KPI master and monitoring records' },
       { key: 'isReviewsAccess', label: 'Reviews', description: 'Access review workflows' },
       { key: 'isMetricsAccess', label: 'Metrics', description: 'Access Metrics module' },
+      { key: 'isMetricsManage', label: 'Metrics Manage', description: 'Create, edit, and delete metric templates' },
     ]
   },
   {
@@ -622,6 +624,10 @@ const CAPABILITY_CATEGORIES = [
       { key: 'isDocumentsAccess', label: 'Documents', description: 'Access Documents module' },
       { key: 'isRepositoryAccess', label: 'Repository', description: 'Access Repository module' },
       { key: 'isIssuancesAccess', label: 'Issuances', description: 'Access Issuances module' },
+      { key: 'isDocumentTypesManage', label: 'Document Types Manage', description: 'Manage reportorial document types' },
+      { key: 'isAuditAccess', label: 'Audit Logs', description: 'Access audit log records' },
+      { key: 'isUnitsAccess', label: 'Units View', description: 'View organizational units' },
+      { key: 'isUnitsManage', label: 'Units Manage', description: 'Create, edit, and delete organizational units' },
     ]
   },
   {
@@ -796,7 +802,7 @@ function CapabilityCategoryAccordion({ category, caps, saving, handleToggle, can
 
 function RoleCapabilitiesCard() {
   const { user, myCap } = useAuth();
-  const canEdit = user?.role === UserRole.SUPER_ADMIN || Boolean(myCap?.isRoleCapabilitiesAccess);
+  const canEdit = Boolean(myCap?.isRoleCapabilitiesAccess);
   const [caps, setCaps] = useState<RoleCapabilityRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null); // roleValue being saved
@@ -888,7 +894,6 @@ function RoleManagementCard() {
     label: '',
     description: '',
     assignable: true,
-    technicianType: null as string | null,
   });
 
   const loadRoles = useCallback(async () => {
@@ -920,11 +925,11 @@ function RoleManagementCard() {
       await usersApi.createRoleDefinition({
         ...form,
         value: codeVal,
-        technicianType: form.technicianType || null,
+
       });
       enqueueSnackbar('Role definition added.', { variant: 'success' });
       setCreateOpen(false);
-      setForm({ value: '', label: '', description: '', assignable: true, technicianType: null });
+      setForm({ value: '', label: '', description: '', assignable: true });
       await loadRoles();
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to create role definition.', {
@@ -945,7 +950,6 @@ function RoleManagementCard() {
         label: selected.label,
         description: selected.description,
         assignable: selected.value === 'super_admin' ? false : selected.assignable,
-        technicianType: selected.technicianType ?? null,
       });
       enqueueSnackbar('Role definition updated.', { variant: 'success' });
       setSelected(null);
@@ -1130,24 +1134,7 @@ function RoleManagementCard() {
                   }
                   label="Assignable during user creation"
                 />
-                <TextField
-                  select
-                  label="Technician Type (Attendance)"
-                  value={selected?.technicianType ?? ''}
-                  onChange={(e) =>
-                    setSelected((prev) =>
-                      prev ? { ...prev, technicianType: e.target.value || null } : prev,
-                    )
-                  }
-                  fullWidth
-                  sx={{ mt: 2 }}
-                  helperText="Tag this role so members appear in the Technician Attendance grid"
-                >
-                  <MenuItem value="">— Not a technician role —</MenuItem>
-                  <MenuItem value="it_support">IT Support</MenuItem>
-                  <MenuItem value="desktop_support">Desktop Support</MenuItem>
-                  <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
-                </TextField>
+
               </DialogContent>
               <DialogActions>
                 <Button onClick={() => setSelected(null)}>Close</Button>
@@ -1205,22 +1192,7 @@ function RoleManagementCard() {
                   }
                   label="Assignable during user creation"
                 />
-                <TextField
-                  select
-                  label="Technician Type (Attendance)"
-                  value={form.technicianType ?? ''}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, technicianType: e.target.value || null }))
-                  }
-                  fullWidth
-                  sx={{ mt: 2 }}
-                  helperText="Tag this role so members appear in the Technician Attendance grid"
-                >
-                  <MenuItem value="">— Not a technician role —</MenuItem>
-                  <MenuItem value="it_support">IT Support</MenuItem>
-                  <MenuItem value="desktop_support">Desktop Support</MenuItem>
-                  <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
-                </TextField>
+
               </DialogContent>
               <DialogActions>
                 <Button onClick={() => setCreateOpen(false)}>Cancel</Button>
@@ -1313,7 +1285,7 @@ function FocalUserManagementCard() {
   });
 
   const isSuperAdmin = currentUser?.role === UserRole.SUPER_ADMIN;
-  const isUserManagementAdmin = isSuperAdmin || Boolean(myCap?.isUserManagementAdmin);
+  const isUserManagementAdmin = Boolean(myCap?.isUserManagementAdmin);
 
   const assignableRoles = useMemo(() => {
     if (isUserManagementAdmin) {
@@ -1336,8 +1308,7 @@ function FocalUserManagementCard() {
 
     const isTargetAdmin = ['super_admin', 'section_head', 'compliance_officer'].includes(u.role);
     
-    if (isSuperAdmin) return true;
-    if (currentUser?.role === 'section_head') return true;
+    if (myCap?.isUserManagementRolesManage) return true;
     if (isUserManagementAdmin && isTargetAdmin) return false;
     
     return true;
@@ -1784,7 +1755,7 @@ function FocalUserManagementCard() {
                         )}
                         <TableCell>
                           <Chip
-                            label={u.role?.replace(/_/g, ' ').toUpperCase()}
+                            label={String(u.role || u.roleValue || u.role_value || u.userRole || '—').replace(/_/g, ' ').toUpperCase()}
                             size="small"
                             variant="outlined"
                           />
@@ -2162,12 +2133,11 @@ export default function SettingsPage() {
 
   const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
   // Users management uses the old cap admin logic for now unless requested otherwise, but roles and capabilities use their new specific DB-driven flags
-  const canManageUsers =
-    isSuperAdmin || Boolean(myCap?.isUserManagementAdmin) || Boolean(myCap?.isUserManagementView);
-  const canManageSystemRoles = isSuperAdmin || Boolean(myCap?.isSystemRolesAccess);
-  const canManageRoleCapabilities = isSuperAdmin || Boolean(myCap?.isRoleCapabilitiesAccess);
+  const canManageUsers = Boolean(myCap?.isUserManagementAdmin) || Boolean(myCap?.isUserManagementView);
+  const canManageSystemRoles = Boolean(myCap?.isSystemRolesAccess);
+  const canManageRoleCapabilities = Boolean(myCap?.isRoleCapabilitiesAccess);
   const canManageGlobalSettings = Boolean(myCap?.isGlobalSettingsAccess);
-  const canManageSecuritySettings = isSuperAdmin || Boolean(myCap?.isSecuritySettingsAccess);
+  const canManageSecuritySettings = Boolean(myCap?.isSecuritySettingsAccess);
 
   if (!user) {
     return <Typography sx={{ m: 3 }}>You must be logged in to view this page.</Typography>;

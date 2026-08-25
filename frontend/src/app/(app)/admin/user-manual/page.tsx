@@ -374,14 +374,12 @@ export default function UserManualPage() {
 
   const hasCapabilityAccess = (capKey: string): boolean => {
     if (!user) return false;
-    if (user.role === 'super_admin') return true;
-
-    if (capKey === 'global') return true;
+    if (capKey === 'global') return Boolean(myCap?.isGlobalSettingsAccess);
 
     if (capKey === 'isSupportStaff') {
       if (!myCap) return false;
       return Boolean(
-        myCap.isFocal || myCap.isDesktop || myCap.isItSupport || myCap.isPantawidIct || myCap.isIto || myCap.isTicketFocal || myCap.isAllTickets
+        myCap.isFocal || myCap.isDesktop || myCap.isItSupport || myCap.isPantawidIct || myCap.isIto || myCap.isTicketFocal || myCap.isAllTickets || myCap.isTicketModuleAccess
       );
     }
 

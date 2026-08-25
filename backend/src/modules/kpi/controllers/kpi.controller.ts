@@ -55,7 +55,8 @@ export class KpiController {
   }
 
   @Delete('master/:code')
-  @Roles(UserRole.SUPER_ADMIN)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiManage')
   removeKpiMaster(@Request() req: any, @Param('code') code: string) {
     return this.kpiService.removeKpiMaster(req.user, code);
   }
@@ -180,13 +181,15 @@ export class KpiController {
   }
 
   @Post('lookups/thresholds')
-  @Roles(UserRole.SUPER_ADMIN)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiManage')
   createThreshold(@Request() req: any, @Body() dto: UpsertKpiThresholdDto) {
     return this.kpiService.upsertThreshold(req.user, null, dto);
   }
 
   @Patch('lookups/thresholds/:id')
-  @Roles(UserRole.SUPER_ADMIN)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiManage')
   updateThreshold(
     @Request() req: any,
     @Param('id', ParseIntPipe) id: number,
@@ -203,13 +206,15 @@ export class KpiController {
   }
 
   @Post('lookups/scoring-rules')
-  @Roles(UserRole.SUPER_ADMIN)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiManage')
   createScoringRule(@Request() req: any, @Body() dto: UpsertKpiScoringRuleDto) {
     return this.kpiService.upsertScoringRule(req.user, null, dto);
   }
 
   @Patch('lookups/scoring-rules/:id')
-  @Roles(UserRole.SUPER_ADMIN)
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isKpiManage')
   updateScoringRule(
     @Request() req: any,
     @Param('id', ParseIntPipe) id: number,

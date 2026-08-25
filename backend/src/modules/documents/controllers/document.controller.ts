@@ -18,10 +18,9 @@ import { ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../../common/guards/roles.guard';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { CapabilityGuard } from '../../../common/guards/capability.guard';
+import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import { UserRole } from '../../users/entities/user.entity';
 import {
   DocumentService,
   UploadDocumentDto,
@@ -31,14 +30,16 @@ import { VersionService, CreateVersionDto } from '../services/version.service';
 import { Document, DocumentStatus } from '../entities/document.entity';
 import { SubmissionFrequency } from '../entities/document-assignment.entity';
 import { UploadBulkheadInterceptor } from '../../../common/interceptors/upload-bulkhead.interceptor';
+import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 
 @ApiTags('documents')
 @Controller('documents')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, CapabilityGuard)
 export class DocumentController {
   constructor(
     private documentService: DocumentService,
     private versionService: VersionService,
+    private roleCapabilitiesService: RoleCapabilitiesService,
   ) {}
 
   /**
@@ -46,7 +47,7 @@ export class DocumentController {
    * POST /documents
    */
   @Post()
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @RequireCapability('isDocumentsManage')
   @UseInterceptors(
     UploadBulkheadInterceptor,
     FileInterceptor('file', {
@@ -75,7 +76,7 @@ export class DocumentController {
    * POST /documents/google-doc
    */
   @Post('google-doc')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @RequireCapability('isDocumentsManage')
   @UseInterceptors(UploadBulkheadInterceptor)
   async uploadGoogleDoc(
     @Body()
@@ -132,7 +133,7 @@ export class DocumentController {
   }
 
   @Get('upload-options')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @RequireCapability('isDocumentsManage')
   async getUploadOptions(
     @CurrentUser() user: any,
     @Query('period') period: string,
@@ -142,16 +143,14 @@ export class DocumentController {
   }
 
   @Get('assignments')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @RequireCapability('isDocumentsAccess')
   async listAssignments(
     @CurrentUser() user: any,
     @Query('user_id') userId?: string,
     @Query('unit_id') unitId?: string,
     @Query('active_only') activeOnly?: string,
   ) {
-    const isPrivileged =
-      user.role === UserRole.SUPER_ADMIN ||
-      user.role === UserRole.COMPLIANCE_OFFICER;
+    const isPrivileged = this.roleCapabilitiesService.isDocumentsManage(user.role);
     return this.documentService.listAssignments({
       user_id: isPrivileged && userId ? Number(userId) : user.id,
       unit_id: unitId ? Number(unitId) : undefined,
@@ -160,7 +159,7 @@ export class DocumentController {
   }
 
   @Post('assignments')
-  @Roles(UserRole.SUPER_ADMIN)
+  @RequireCapability('isDocumentsManage')
   async createAssignment(
     @Body()
     body: {
@@ -178,7 +177,7 @@ export class DocumentController {
   }
 
   @Patch('assignments/:id')
-  @Roles(UserRole.SUPER_ADMIN)
+  @RequireCapability('isDocumentsManage')
   async updateAssignment(
     @Param('id') id: string,
     @Body()
@@ -196,7 +195,7 @@ export class DocumentController {
   }
 
   @Delete('assignments/:id')
-  @Roles(UserRole.SUPER_ADMIN)
+  @RequireCapability('isDocumentsManage')
   async deleteAssignment(@Param('id') id: string) {
     await this.documentService.deleteAssignment(id);
     return { message: 'Assignment deleted successfully' };
@@ -230,13 +229,13 @@ export class DocumentController {
   }
 
   @Get(':id/references')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @RequireCapability('isDocumentsAccess')
   async getDocumentReferences(@Param('id') id: string) {
     return this.documentService.listDocumentReferences(id);
   }
 
   @Post(':id/references')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @RequireCapability('isDocumentsManage')
   async linkDocumentReference(
     @Param('id') sourceDocumentId: string,
     @Body()
@@ -255,7 +254,7 @@ export class DocumentController {
   }
 
   @Delete(':id/references/:targetId')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @RequireCapability('isDocumentsManage')
   async unlinkDocumentReference(
     @Param('id') sourceDocumentId: string,
     @Param('targetId') targetDocumentId: string,
@@ -269,7 +268,7 @@ export class DocumentController {
    * POST /documents/:id/versions
    */
   @Post(':id/versions')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER, 'focal', 'technician')
+  @RequireCapability('isDocumentsManage')
   @UseInterceptors(
     FileInterceptor('file', {
       limits: {
@@ -340,7 +339,7 @@ export class DocumentController {
    * POST /documents/:id/archive
    */
   @Post(':id/archive')
-  @Roles('focal')
+  @RequireCapability('isDocumentsManage')
   async archiveDocument(@Param('id') id: string, @CurrentUser() user: any) {
     await this.documentService.archiveDocument(id, user.id);
     return { message: 'Document archived successfully.' };
@@ -350,8 +349,7 @@ export class DocumentController {
    * Admin/Reviewer re-queue processing for stuck/failed documents
    * POST /documents/:id/reprocess
    */
-  @Post(':id/reprocess')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+    @RequireCapability('isDocumentsDelete')
   async reprocessDocument(@Param('id') id: string) {
     await this.documentService.reprocessDocument(id);
     return { message: 'Document reprocessing enqueued.' };
@@ -361,8 +359,7 @@ export class DocumentController {
    * Return document for focal revision (non-destructive)
    * POST /documents/:id/return
    */
-  @Post(':id/return')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+    @RequireCapability('isDocumentsDelete')
   async returnDocument(
     @Param('id') id: string,
     @Body() body: { remarks: string },
@@ -384,8 +381,7 @@ export class DocumentController {
    * Soft delete a document
    * DELETE /documents/:id
    */
-  @Delete(':id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPLIANCE_OFFICER)
+    @RequireCapability('isDocumentsDelete')
   async deleteDocument(@Param('id') id: string) {
     await this.documentService.deleteDocument(id);
     return { message: 'Document deleted successfully' };

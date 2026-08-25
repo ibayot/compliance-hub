@@ -123,10 +123,10 @@ export default function DashboardPage() {
   const isRegularUser = user?.role === 'user';
   const isTechnicianAny = !!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct;
   const isLowerLevelTech = (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
-  const isComplianceOfficer = !!myCap?.isReportsAccess && user?.role !== 'super_admin';
+  const isComplianceOfficer = !!myCap?.isReportsAccess;
   // Full dashboard: super_admin or CO; generic staff (focal, etc.) see doc cards + KPI only
   const isFullDashboard = !!myCap?.isReportsAccess || !!myCap?.isReviewsAccess || !!myCap?.isTicketSettingsFocal;
-  const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage && user?.role !== 'super_admin';
+  const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage;
   const isCybersecurityOfficer = !!myCap?.isIto;
   const canViewDuties = !!myCap?.isDutyViewerAccess || !!myCap?.isDutyAdminAccess;
 
@@ -1418,7 +1418,7 @@ export default function DashboardPage() {
               <Box>
                 <Typography variant="h6">KPI Overview</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {user?.role === 'super_admin' || isComplianceOfficer
+                  {!!myCap?.isReportsAccess
                     ? 'Consolidated KPI visibility across all units.'
                     : 'KPI visibility scoped to your assigned unit(s).'}
                 </Typography>
@@ -1622,7 +1622,7 @@ export default function DashboardPage() {
                         </Button>
                       )}
 
-                      {user?.role === 'super_admin' && (
+                      {!!myCap?.isGlobalSettingsAccess && (
                         <Button
                           variant="text"
                           color="secondary"
@@ -1637,7 +1637,7 @@ export default function DashboardPage() {
                   )}
 
                   {/* Global Pause / Resume (Settings Focals only) */}
-                  {(!!myCap?.isTicketSettingsFocal || user?.role === 'super_admin') && (
+                  {!!myCap?.isTicketSettingsFocal && (
                     <>
                       <Button
                         variant="contained"

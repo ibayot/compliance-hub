@@ -43,6 +43,7 @@ export class CapabilityGuard implements CanActivate {
       isTicketSettingsFocal: (r) => this.roleCapSvc.isTicketSettingsFocal(r),
       isAllTickets: (r) => this.roleCapSvc.isAllTickets(r),
       isTicketFocal: (r) => this.roleCapSvc.isTicketFocal(r),
+      isTicketModuleAccess: (r) => this.roleCapSvc.isTicketModuleAccess(r),
       isKpiAccess: (r) => this.roleCapSvc.isKpiAccess(r),
       isKpiManage: (r) => this.roleCapSvc.isKpiManage(r),
       isAttendanceAccess: (r) => this.roleCapSvc.isAttendanceAccess(r),
@@ -63,6 +64,16 @@ export class CapabilityGuard implements CanActivate {
       isUserManagementView: (r) => this.roleCapSvc.isUserManagementView(r),
       isDutyViewerAccess: (r) => this.roleCapSvc.isDutyViewerAccess(r),
       isDutyAdminAccess: (r) => this.roleCapSvc.isDutyAdminAccess(r),
+      isAuditAccess: (r) => this.roleCapSvc.isAuditAccess(r),
+      isUnitsAccess: (r) => this.roleCapSvc.isUnitsAccess(r),
+      isUnitsManage: (r) => this.roleCapSvc.isUnitsManage(r),
+      isDocumentTypesManage: (r) => this.roleCapSvc.isDocumentTypesManage(r),
+      isMetricsManage: (r) => this.roleCapSvc.isMetricsManage(r),
+      isUserManagementRolesManage: (r) => this.roleCapSvc.isUserManagementRolesManage(r),
+      isDocumentsManage: (r) => this.roleCapSvc.isDocumentsManage(r),
+      isDocumentsDelete: (r) => this.roleCapSvc.isDocumentsDelete(r),
+      isIssuancesManage: (r) => this.roleCapSvc.isIssuancesManage(r),
+      isMetricsDelete: (r) => this.roleCapSvc.isMetricsDelete(r),
     };
 
     const checker = capabilityCheckers[required];

@@ -86,6 +86,17 @@ import { PRIORITY_COLOR, STATUS_COLOR, TICKET_TYPE_LABELS } from '@/lib/utils/ti
 
 import { unitsApi } from '@/lib/api/units';
 
+const populatedFieldSx = (populated: boolean) =>
+  populated
+    ? {
+        '& .MuiInputBase-input': { color: '#000', fontStyle: 'italic' },
+        '& .MuiInputBase-input.Mui-disabled': {
+          color: '#000',
+          WebkitTextFillColor: '#000',
+          fontStyle: 'italic',
+        },
+      }
+    : undefined;
 function ticketTypeIcon(t: TicketType) {
   if (t === 'desktop_support') return <DesktopIcon />;
   if (t === 'pantawid_ict_support') return <PantawidIcon />;
@@ -1646,11 +1657,11 @@ export default function TicketsPage() {
                 <TableCell sx={{ width: 150 }}>Type</TableCell>
                 <TableCell sx={{ width: 130 }}>Category</TableCell>
                 <TableCell sx={{ width: 110 }}>Priority</TableCell>
-                <TableCell sx={{ width: 140 }}>Status</TableCell>
+                <TableCell sx={{ width: 140, ...populatedFieldSx(!!user?.middleName) }}>Status</TableCell>
                 <TableCell sx={{ width: 120 }}>SLA</TableCell>
                 {canManageAll && <TableCell sx={{ width: 120 }}>Requester</TableCell>}
                 {canManageAll && <TableCell sx={{ width: 120 }}>Assigned To</TableCell>}
-                <TableCell sx={{ width: 100 }}>Date</TableCell>
+                <TableCell sx={{ width: 140, ...populatedFieldSx(!!user?.middleName) }}>Date</TableCell>
                 <TableCell sx={{ width: 120 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -2438,7 +2449,7 @@ export default function TicketsPage() {
                   options={unitSuggestions}
                   freeSolo
                   fullWidth
-                  disabled={!!user?.units?.[0]?.name}
+                  disabled={!!user?.units?.[0]?.name} sx={populatedFieldSx(!!user?.units?.[0]?.name)}
                   value={csatForm.unitSection}
                   onInputChange={(_, v) => setCsatForm((f) => ({ ...f, unitSection: v }))}
                   renderInput={(params) => <TextField {...params} label="Unit/Section *" />}
@@ -2449,27 +2460,27 @@ export default function TicketsPage() {
                   InputProps={{ readOnly: true }}
                   disabled
                   fullWidth
-                  InputLabelProps={{ shrink: true }}
+                  InputLabelProps={{ shrink: true }} sx={populatedFieldSx(true)}
                 />
               </Stack>
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField label="First Name *"
-                  disabled={!!user?.firstName}
+                  disabled={!!user?.firstName} sx={populatedFieldSx(!!user?.firstName)}
                   value={csatForm.clientFirstName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientFirstName: e.target.value }))}
                   fullWidth
                 />
-                <TextField label="Middle Initial"
+                <TextField label="M.I."
                   disabled={!!user?.middleName}
                   value={csatForm.clientMiddleInitial}
                   onChange={(e) =>
                     setCsatForm((f) => ({ ...f, clientMiddleInitial: e.target.value.substring(0, 1) }))
                   }
-                  sx={{ width: 100 }}
+                  sx={{ width: 140, ...populatedFieldSx(!!user?.middleName) }}
                 />
                 <TextField label="Last Name *"
-                  disabled={!!user?.lastName}
+                  disabled={!!user?.lastName} sx={populatedFieldSx(!!user?.lastName)}
                   value={csatForm.clientLastName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientLastName: e.target.value }))}
                   fullWidth
@@ -2478,7 +2489,7 @@ export default function TicketsPage() {
                   disabled={!!user?.suffix}
                   value={csatForm.suffix}
                   onChange={(e) => setCsatForm((f) => ({ ...f, suffix: e.target.value }))}
-                  sx={{ width: 200 }}
+                  sx={{ width: 200, ...populatedFieldSx(!!user?.suffix) }}
                 />
               </Stack>
 
@@ -2493,7 +2504,7 @@ export default function TicketsPage() {
                 <TextField label="Religion"
                   value={csatForm.religion ?? ''}
                   onChange={(e) => setCsatForm((f) => ({ ...f, religion: e.target.value }))}
-                  sx={{ flex: 1 }}
+                  sx={{ flex: 1, ...populatedFieldSx(!!user?.phoneNumber) }}
                 />
                 <TextField inputProps={{ maxLength: 255 }}
                   select
@@ -2501,7 +2512,7 @@ export default function TicketsPage() {
                   disabled={!!user?.sex}
                   value={csatForm.sex}
                   onChange={(e) => setCsatForm((f) => ({ ...f, sex: e.target.value }))}
-                  sx={{ minWidth: 120 }}
+                  sx={{ minWidth: 120, ...populatedFieldSx(!!user?.sex) }}
                 >
                   <MenuItem value="Male">Male</MenuItem>
                   <MenuItem value="Female">Female</MenuItem>
@@ -2519,7 +2530,7 @@ export default function TicketsPage() {
                     startAdornment: <InputAdornment position="start">+63</InputAdornment>,
                   }}
                   inputProps={{ inputMode: 'numeric' }}
-                  sx={{ flex: 1 }}
+                  sx={{ flex: 1, ...populatedFieldSx(!!user?.phoneNumber) }}
                 />
               </Stack>
 
@@ -2527,7 +2538,7 @@ export default function TicketsPage() {
                 value={csatForm.technicianName}
                 InputProps={{ readOnly: true }}
                 disabled
-              // fullWidth
+              sx={populatedFieldSx(true)}
               />
 
               <Typography variant="subtitle2" fontWeight={700} mt={1}>

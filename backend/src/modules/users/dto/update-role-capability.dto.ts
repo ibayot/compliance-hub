@@ -56,6 +56,10 @@ export class UpdateRoleCapabilityDto {
 
   @IsOptional()
   @IsBoolean()
+  isTicketModuleAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   isKpiAccess?: boolean;
 
   @IsOptional()
@@ -121,4 +125,48 @@ export class UpdateRoleCapabilityDto {
   @IsOptional()
   @IsBoolean()
   isDutyAdminAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isAttendanceEligible?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isAuditAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isUnitsAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isUnitsManage?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isDocumentTypesManage?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isMetricsManage?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isUserManagementRolesManage?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isDocumentsManage?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isDocumentsDelete?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isIssuancesManage?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isMetricsDelete?: boolean;
 }

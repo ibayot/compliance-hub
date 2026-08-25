@@ -44,7 +44,7 @@ export default function DocumentsPage() {
   const queryClient = useQueryClient();
 
   const isFocal = !!myCap?.isFocal;
-  const canAccessDocuments = user?.role === 'super_admin' || !!myCap?.isDocumentsAccess;
+  const canAccessDocuments = !!myCap?.isDocumentsAccess;
 
   const [filters, setFilters] = useState<ListDocumentsParams>({
     page: 1,
@@ -193,10 +193,7 @@ export default function DocumentsPage() {
 
   const getWorkflowStatus = (document: Document) => {
     const complianceStatus = document.compliance_status || 'pending';
-    const isSuperOrCompliance =
-      user?.role === 'super_admin' ||
-      user?.role === 'compliance_officer' ||
-      !!myCap?.isReportsAccess;
+    const isSuperOrCompliance = !!myCap?.isDocumentsDelete;
 
     if (isSuperOrCompliance) {
       if (complianceStatus === 'compliant') {
@@ -217,14 +214,11 @@ export default function DocumentsPage() {
   };
 
   const canReturnDocument = (document: Document) => {
-    const isSuperOrCompliance =
-      user?.role === 'super_admin' ||
-      user?.role === 'compliance_officer' ||
-      !!myCap?.isReportsAccess;
+    const isSuperOrCompliance = !!myCap?.isDocumentsDelete;
     if (!isSuperOrCompliance) {
       return {
         allowed: false,
-        reason: 'Only super admin and compliance roles can return documents.',
+        reason: 'You do not have document-delete capability to return documents.',
       };
     }
 
@@ -252,14 +246,11 @@ export default function DocumentsPage() {
   };
 
   const canDeleteDocument = (document: Document) => {
-    const isSuperOrCompliance =
-      user?.role === 'super_admin' ||
-      user?.role === 'compliance_officer' ||
-      !!myCap?.isReportsAccess;
+    const isSuperOrCompliance = !!myCap?.isDocumentsDelete;
     if (!isSuperOrCompliance) {
       return {
         allowed: false,
-        reason: 'Only super admin and compliance roles can delete documents.',
+        reason: 'You do not have document-delete capability to delete documents.',
       };
     }
 

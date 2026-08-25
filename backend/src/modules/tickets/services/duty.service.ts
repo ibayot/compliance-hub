@@ -365,6 +365,10 @@ export class DutyService {
     if (id && !existing) throw new NotFoundException('Duty exception not found.');
     const exceptionDate = String(body.exceptionDate ?? existing?.exceptionDate ?? '');
     const userId = Number(body.userId ?? existing?.userId);
+    const registeredRoster = await this.sharedRosterMembers();
+    if (!registeredRoster.some((member) => member.userId === userId)) {
+      throw new BadRequestException('Duty exceptions can only be registered for technicians on the shared duty roster.');
+    }
     const dutyType = body.dutyType !== undefined
       ? (body.dutyType ? this.assertDutyType(String(body.dutyType)) : null)
       : (existing?.dutyType ?? null);
@@ -408,7 +412,7 @@ export class DutyService {
     const users = await this.usersById();
     for (const userId of selectedUserIds) {
       const user = users.get(userId);
-      if (!user || user.role === 'super_admin' || user.role === 'user') {
+      if (!user || !this.roleCaps.isAttendanceEligible(user.role)) {
         throw new BadRequestException('Only active duty staff can be added to a Duty roster.');
       }
     }
@@ -451,8 +455,7 @@ export class DutyService {
     if (!access.canSchedule) throw new ForbiddenException('Duty schedule access is required.');
     const row = await this.reservationRepo.findOne({ where: { id } });
     if (!row) return;
-    row.status = DutyReservationStatus.CANCELLED;
-    await this.reservationRepo.save(row);
+    await this.reservationRepo.delete(id);
     this.sse.emitDutyUpdated();
   }
 

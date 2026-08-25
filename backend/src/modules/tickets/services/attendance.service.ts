@@ -16,7 +16,6 @@ import { TechAttendance, AttendanceStatus } from '../entities/tech-attendance.en
 import { OfficeDay } from '../entities/office-day.entity';
 import { DtrView } from '../entities/dtr-view.entity';
 import { User, UserRole } from '../../shared/entities';
-import { RoleDefinitionEntity } from '../../shared/entities';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { EventBusService } from '../../../common/events/event-bus.service';
@@ -108,7 +107,6 @@ export class TechnicianListItemDto {
 export class AttendanceService implements OnModuleInit {
   private readonly logger = new Logger(AttendanceService.name);
   private readonly excludedAttendanceEmails: string[] = [];
-  private readonly excludedAttendanceRoleValues = ['user', 'super_admin'];
   public isDtrViewOnline: boolean = true;
 
   constructor(
@@ -118,8 +116,6 @@ export class AttendanceService implements OnModuleInit {
     private readonly officeDayRepo: Repository<OfficeDay>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
-    @InjectRepository(RoleDefinitionEntity)
-    private readonly roleDefRepo: Repository<RoleDefinitionEntity>,
     @InjectRepository(DtrView)
     private readonly dtrViewRepo: Repository<DtrView>,
     @InjectRepository(TicketingConfig)
@@ -137,49 +133,19 @@ export class AttendanceService implements OnModuleInit {
 
   // ── Attendance ──────────────────────────────────────────────────────────
 
-  private async getAssignableAttendanceRoles(): Promise<string[]> {
-    const rows = await this.roleDefRepo
-      .createQueryBuilder('rd')
-      .select('rd.value', 'value')
-      .where('rd.assignable = :assignable', { assignable: true })
-      .andWhere('rd.value NOT IN (:...excluded)', { excluded: this.excludedAttendanceRoleValues })
-      .getRawMany<{ value: string }>();
-    return rows.map((r) => r.value);
-  }
-
-  private async getTechnicianTypeRoles(technicianType: string): Promise<string[]> {
-    const rows = await this.roleDefRepo
-      .createQueryBuilder('rd')
-      .select('rd.value', 'value')
-      .where('rd.assignable = :assignable', { assignable: true })
-      .andWhere('rd.technicianType = :technicianType', { technicianType })
-      .andWhere('rd.value NOT IN (:...excluded)', { excluded: this.excludedAttendanceRoleValues })
-      .getRawMany<{ value: string }>();
-    return rows.map((r) => r.value);
-  }
-
   private getItoRoles(): string[] {
-    // Derived from role_capabilities.is_ito=1 (startup-cached)
+    // Derived from role_capabilities.is_ito (startup-cached).
     return this.roleCapSvc.getRolesWhere('isIto');
   }
 
-  // ✅ CENTRALIZED ROLE GROUPING
+  // Capability-backed groups keep attendance and assignment independent of role names.
   private async getRoleGroups(): Promise<Record<string, string[]>> {
-    const [desktopSupportRoles, itSupportRoles, pantawidRoles, allRoles] = await Promise.all([
-      this.getTechnicianTypeRoles('desktop_support'),
-      this.getTechnicianTypeRoles('it_support'),
-      this.getTechnicianTypeRoles('pantawid_ict_support'),
-      this.getAssignableAttendanceRoles(),
-    ]);
-
     return {
-      desktop_support: [
-        ...new Set([UserRole.DESKTOP_SR, UserRole.DESKTOP_JR, ...desktopSupportRoles]),
-      ],
-      it_support: [...new Set([UserRole.IT_SUPPORT_SR, UserRole.IT_SUPPORT_JR, ...itSupportRoles])],
-      pantawid_ict_support: [...new Set([UserRole.PANTAWID_ICT, ...pantawidRoles])],
-      ito: this.getItoRoles(),
-      all: [...new Set(allRoles)],
+      desktop_support: this.roleCapSvc.getRolesWhere('isDesktop'),
+      it_support: this.roleCapSvc.getRolesWhere('isItSupport'),
+      pantawid_ict_support: this.roleCapSvc.getRolesWhere('isPantawidIct'),
+      ito: this.roleCapSvc.getRolesWhere('isIto'),
+      all: this.roleCapSvc.getRolesWhere('isAttendanceEligible'),
     };
   }
 
@@ -199,6 +165,14 @@ export class AttendanceService implements OnModuleInit {
 
     const groups = await this.getRoleGroups();
     const roles = groups[ticketType || 'all'] || groups.all;
+
+    // An empty capability group is valid while a staging database is being
+    // migrated. Do not emit an invalid empty IN predicate; return a
+    // successful empty result until the capability rows are available.
+    if (!roles || roles.length === 0) {
+      return [];
+    }
+
     qb.andWhere('user.role IN (:...roles)', { roles });
 
     return qb.getMany();
@@ -317,6 +291,9 @@ export class AttendanceService implements OnModuleInit {
     const groups = await this.getRoleGroups();
     const roles = groups[ticketType] || groups.all;
 
+    // Avoid generating invalid empty IN clauses when the capability cache/schema
+    // has no matching technician roles yet.
+    if (!roles || roles.length === 0) return [];
     // Get all active techs with matching roles
     const byRole = await this.userRepo
       .createQueryBuilder('u')
@@ -749,7 +726,7 @@ export class AttendanceService implements OnModuleInit {
     
     try {
       // 1. Get all assignable attendance roles
-      const allRoles = await this.getAssignableAttendanceRoles();
+      const allRoles = this.roleCapSvc.getRolesWhere('isAttendanceEligible');
       if (allRoles.length === 0) {
         this.logger.log(`[DTR SYNC DBG] Aborting: allRoles is empty!`);
         return false;

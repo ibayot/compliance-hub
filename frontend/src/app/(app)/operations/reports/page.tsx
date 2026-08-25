@@ -88,7 +88,7 @@ function RatingBar({ avg }: { avg: number }) {
         />
       </Box>
       <Typography variant="body2" fontWeight={700} minWidth={28}>
-        {avg.toFixed(1)}
+        {avg.toFixed(2)}
       </Typography>
     </Box>
   );
@@ -104,7 +104,7 @@ const ESC_PIE_COLORS: Record<string, string> = {
 export default function TicketReportsPage() {
   const { user, myCap } = useAuth();
   /** True for all staff with ticket settings admin access (DB-driven via is_ticket_settings_focal flag) */
-  const isTicketSettingsFocal = user?.role === 'super_admin' || !!myCap?.isTicketSettingsFocal;
+  const isTicketSettingsFocal = !!myCap?.isTicketSettingsFocal;
 
   const [year, setYear] = useState<number>(CURRENT_YEAR);
   const [periodMode, setPeriodMode] = useState<PeriodMode>('month');
@@ -626,7 +626,7 @@ export default function TicketReportsPage() {
                         {result.avgOverallRating !== null ? (
                           <>
                             <Typography variant="h4" fontWeight={700}>
-                              {result.avgOverallRating.toFixed(1)}
+                              {result.avgOverallRating.toFixed(2)}
                             </Typography>
                             <Chip
                               label={
@@ -850,7 +850,7 @@ export default function TicketReportsPage() {
                                         {TYPE_LABELS[row.type] ?? row.type}
                                       </Typography>
                                       <Typography variant="caption" color="text.secondary">
-                                        {row.count} rated
+                                        {row.ratedCount ?? 0} rated / {row.resolvedCount ?? 0} resolved / {row.count} tickets
                                       </Typography>
                                     </Box>
                                     <RatingBar avg={row.avg} />
@@ -1060,7 +1060,7 @@ export default function TicketReportsPage() {
                                         {TYPE_LABELS[row.type] ?? row.type}
                                       </Typography>
                                       <Typography variant="caption" color="text.secondary">
-                                        {row.ratedCount ?? 0} rated / {row.count} resolved
+                                        {row.ratedCount ?? 0} rated / {row.resolvedCount ?? 0} resolved / {row.count} tickets
                                       </Typography>
                                     </Box>
                                     <RatingBar avg={row.avg} />
@@ -1262,7 +1262,7 @@ export default function TicketReportsPage() {
                     <Typography variant="subtitle2" color="text.secondary">
                       Avg Rating
                     </Typography>
-                    <Typography variant="h6">{result.avgOverallRating?.toFixed(1) ?? 'N/A'}</Typography>
+                    <Typography variant="h6">{result.avgOverallRating?.toFixed(2) ?? 'N/A'}</Typography>
                   </Grid>
                   {(result.totalEscalations ?? 0) > 0 && (
                     <>

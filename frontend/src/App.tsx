@@ -34,13 +34,12 @@ import DutiesPage from '@/app/(app)/operations/duties/page';
 function ProtectedDashboard({
   children,
   requiredCapability,
-  allowedRoles,
 }: {
   children: React.ReactNode;
-  requiredCapability?: keyof RoleCapabilityRecord;
-  allowedRoles?: string[];
+  requiredCapability?: keyof RoleCapabilityRecord | Array<keyof RoleCapabilityRecord>;
+
 }) {
-  const { isAuthenticated, loading, user, myCap } = useAuth();
+  const { isAuthenticated, loading, myCap } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -57,11 +56,14 @@ function ProtectedDashboard({
 
   // Deep linking allowed
 
-  const hasCapability = requiredCapability ? Boolean(myCap?.[requiredCapability]) : true;
-  const hasRoleAccess = allowedRoles
-    ? Boolean(user?.role && allowedRoles.includes(user.role))
-    : true;
-  const isAllowed = (requiredCapability ? hasCapability : true) && hasRoleAccess;
+  const capabilityKeys = requiredCapability
+    ? Array.isArray(requiredCapability)
+      ? requiredCapability
+      : [requiredCapability]
+    : [];
+  const hasCapability =
+    capabilityKeys.length === 0 || capabilityKeys.some((key) => Boolean(myCap?.[key]));
+  const isAllowed = hasCapability;
 
   if (!isAllowed) {
     return (
@@ -150,7 +152,7 @@ export default function App() {
       <Route
         path="/admin/units"
         element={
-          <ProtectedDashboard allowedRoles={['super_admin', 'section_head']}>
+          <ProtectedDashboard requiredCapability="isUnitsAccess">
             <UnitsPage />
           </ProtectedDashboard>
         }
@@ -262,7 +264,7 @@ export default function App() {
       <Route
         path="/admin/audit-logs"
         element={
-          <ProtectedDashboard allowedRoles={['super_admin', 'compliance_officer']}>
+          <ProtectedDashboard requiredCapability="isAuditAccess">
             <AuditLogsPage />
           </ProtectedDashboard>
         }
@@ -272,4 +274,3 @@ export default function App() {
     </Routes>
   );
 }
-
