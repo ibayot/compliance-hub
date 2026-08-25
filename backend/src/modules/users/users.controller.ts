@@ -155,6 +155,11 @@ export class UsersController {
     return result;
   }
 
+  @Get('profile-units')
+  getProfileUnits() {
+    return this.usersService.getProfileUnits();
+  }
+
   // ── Generic user :id routes — kept AFTER static capability routes ──
 
   @Get(':id')
@@ -203,8 +208,7 @@ export class UsersController {
       // Prevent privilege escalation for normal users
       delete updateUserDto.role;
       delete updateUserDto.active;
-      delete updateUserDto.ticketMainFocal;
-      delete updateUserDto.ticketTechnician;
+
     } else if (isSelf && updateUserDto.active === false) {
       throw new ForbiddenException('You cannot disable your own account.');
     }

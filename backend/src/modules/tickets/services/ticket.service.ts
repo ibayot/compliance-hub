@@ -2177,14 +2177,8 @@ export class TicketService implements OnModuleInit {
       }
     }
 
-    // If the actor has ticketMainFocal=true they are empowered to re-assign freely (skip busy guard)
-    let actorIsMainFocal = false;
-    if (actorId) {
-      const actorUser = await this.usersHttpClient.getUserById(actorId);
-      actorIsMainFocal = actorUser?.ticketMainFocal === true;
-    }
+    // Reassignment authority is capability-based; no user-level ticket flags are used.
     const bypassBusyGuard =
-      actorIsMainFocal ||
       this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
       this.roleCapSvc.isFocal(actorRole as string);
 

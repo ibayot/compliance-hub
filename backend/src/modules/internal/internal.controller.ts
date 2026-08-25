@@ -43,7 +43,7 @@ export class InternalController {
       middle_name: u.middleName ?? null,
       role: u.role,
       staff_id: (u as any).staff_id ?? null,
-      ticketMainFocal: u.ticketMainFocal,
+
       units: u.units || [],
     }));
   }
@@ -63,7 +63,7 @@ export class InternalController {
       middle_name: user.middleName ?? null,
       role: user.role,
       staff_id: (user as any).staff_id ?? null,
-      ticketMainFocal: user.ticketMainFocal,
+
       units: user.units || [],
     };
   }

@@ -113,11 +113,6 @@ export class User {
   @Column({ name: 'designation', nullable: true, length: 100 })
   designation: string;
 
-  @Column({ name: 'ticket_main_focal', default: false })
-  ticketMainFocal: boolean;
-
-  @Column({ name: 'ticket_technician', default: false })
-  ticketTechnician: boolean;
 
   @Column({ name: 'auth_provider', type: 'enum', enum: AuthProvider, default: AuthProvider.LOCAL })
   @Exclude()

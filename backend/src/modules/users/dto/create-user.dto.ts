@@ -6,7 +6,7 @@ import {
   MinLength,
   IsArray,
   IsNumber,
-  IsBoolean,
+
   Matches,
   NotContains,
 } from 'class-validator';
@@ -65,14 +65,6 @@ export class CreateUserDto {
   @IsString()
   @IsOptional()
   designation?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  ticketMainFocal?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  ticketTechnician?: boolean;
 
   @IsString()
   @IsNotEmpty()

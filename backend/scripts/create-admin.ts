@@ -8,7 +8,7 @@ async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
   const userRepo = app.get(getRepositoryToken(User));
   
-  const hash = await bcrypt.hash('password123', 10);
+  const hash = await bcrypt.hash('Changeme123!@#', 10);
   
   await userRepo.save({
     email: 'testadmin@dswd.gov.ph',
@@ -19,7 +19,7 @@ async function bootstrap() {
     active: true,
   });
   
-  console.log('Admin created: testadmin@dswd.gov.ph / password123');
+  console.log('Admin created: testadmin@dswd.gov.ph / Changeme123!@#');
   await app.close();
 }
 bootstrap();

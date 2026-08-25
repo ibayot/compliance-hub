@@ -5,8 +5,6 @@ async function run() {
     'position VARCHAR(255) NULL',
     'position_full VARCHAR(255) NULL',
     'designation VARCHAR(255) NULL',
-    'ticket_main_focal BOOLEAN DEFAULT FALSE',
-    'ticket_technician BOOLEAN DEFAULT FALSE',
     'google_sub VARCHAR(255) NULL',
     'mfa_code VARCHAR(255) NULL',
     'mfa_code_expires_at DATETIME NULL',

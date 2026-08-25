@@ -438,10 +438,7 @@ const previousValue = value;
           existingUser.positionFull = this.optionalText((createUserDto as any).positionFull) as any;
         if ((createUserDto as any).designation !== undefined)
           existingUser.designation = this.optionalText((createUserDto as any).designation) as any;
-        if ((createUserDto as any).ticketMainFocal !== undefined)
-          existingUser.ticketMainFocal = Boolean((createUserDto as any).ticketMainFocal);
-        if ((createUserDto as any).ticketTechnician !== undefined)
-          existingUser.ticketTechnician = Boolean((createUserDto as any).ticketTechnician);
+
         if (createUserDto.unitIds !== undefined) {
           existingUser.units = await this.unitsRepository.find({
             where: { id: In(createUserDto.unitIds) },
@@ -491,8 +488,7 @@ const previousValue = value;
       position: this.optionalText((createUserDto as any).position),
       positionFull: this.optionalText((createUserDto as any).positionFull),
       designation: this.optionalText((createUserDto as any).designation),
-      ticketMainFocal: Boolean((createUserDto as any).ticketMainFocal),
-      ticketTechnician: Boolean((createUserDto as any).ticketTechnician),
+
       authProvider: AuthProvider.LOCAL,
       googleSub: null,
       // Admin-created users are always RICTMS staff → default to FOCAL unless explicitly set
@@ -649,6 +645,14 @@ const previousValue = value;
     return this.trustedDeviceRepository.save(device);
   }
 
+  /** Units available for self-service profile selection. This is not the Units administration endpoint. */
+  async getProfileUnits(): Promise<Unit[]> {
+    return this.unitsRepository.find({
+      where: { active: true },
+      order: { name: 'ASC' },
+    });
+  }
+
   /** Autocomplete: find registered emails that start with (or contain) a query string */
   async searchEmails(
     query: string,
@@ -775,8 +779,7 @@ const previousValue = value;
       role: payload.role || UserRole.USER,
       authProvider: AuthProvider.GOOGLE,
       googleSub: payload.googleSub,
-      ticketMainFocal: false,
-      ticketTechnician: false,
+
       units: [],
     });
 
@@ -811,8 +814,7 @@ const previousValue = value;
     if (dto.position !== undefined) user.position = dto.position;
     if (dto.positionFull !== undefined) user.positionFull = dto.positionFull;
     if (dto.designation !== undefined) user.designation = dto.designation;
-    if (dto.ticketMainFocal !== undefined) user.ticketMainFocal = Boolean(dto.ticketMainFocal);
-    if (dto.ticketTechnician !== undefined) user.ticketTechnician = Boolean(dto.ticketTechnician);
+
     if (dto.role !== undefined) user.role = dto.role;
     if ((dto as any).active !== undefined) user.active = (dto as any).active;
 

@@ -8,7 +8,7 @@ export interface UserStub {
   middle_name?: string | null;
   role: string;
   staff_id?: string | null;
-  ticketMainFocal?: boolean;
+
   units?: any[];
 }
 

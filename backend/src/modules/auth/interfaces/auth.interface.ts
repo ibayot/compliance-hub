@@ -23,8 +23,6 @@ export interface AuthResponse {
     position?: string;
     positionFull?: string;
     designation?: string;
-    ticketMainFocal?: boolean;
-    ticketTechnician?: boolean;
     role: string;
     units: { id: number; name: string }[];
   };

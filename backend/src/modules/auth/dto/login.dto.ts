@@ -5,6 +5,6 @@ export class LoginDto {
   email: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(12, { message: 'Password must be at least 12 characters long.' })
   password: string;
 }
