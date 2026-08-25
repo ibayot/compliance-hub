@@ -13,7 +13,7 @@ const PAGE_SIZE = 10;
 const EMPTY_PAGE = { items: [], total: 0, page: 1, limit: PAGE_SIZE, totalPages: 0 };
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const TODAY = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
-const isDutyStaff = (user: any) => user.active !== false && user.attendanceEligible === true;
+const isDutyStaff = (user: any) => user.active !== false && user.role !== 'super_admin' && user.role !== 'user' && user.technicianEligible === true;
 const formatType = (value: string) => String(value || '').replaceAll('_', ' ').toUpperCase();
 const userName = (users: UserRecord[], id: number) => { const u = users.find((x) => x.id === id); return u ? `${u.firstName} ${u.lastName}`.trim() : `User #${id}`; };
 const meetingSlot = (x: any) => !x.startTime && !x.endTime ? 'Whole Day' : Number(String(x.startTime).slice(0, 2)) < 12 ? 'AM' : 'PM';
@@ -64,7 +64,7 @@ export default function DutiesPage() {
         a.admin || a.canSchedule ? dutiesApi.reservations() : [], a.admin ? usersApi.list() : [],
         a.admin ? dutiesApi.roster() : [],
       ]);
-      setData({ dashboard, rotation, roster, map, logs, exceptions, reservations }); setUsers(staff); setError('');
+      setData({ dashboard, rotation, roster, map, logs, exceptions, reservations }); setUsers(staff.filter(isDutyStaff)); setError('');
     } catch (e: any) { setError(e?.response?.data?.message || 'Unable to load Duty Monitoring.'); }
     finally { setBusy(false); }
   };
@@ -166,6 +166,6 @@ export default function DutiesPage() {
 function Section({title,add,children}:any){return <Box><Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}><Typography variant="h6">{title}</Typography><Button variant="contained" startIcon={<Add/>} onClick={add}>Add</Button></Stack>{children}</Box>}
 function ActionButtons({edit,remove}:any){return <Stack direction="row"><IconButton color="primary" size="small" aria-label="Edit" onClick={edit}><Edit fontSize="small" /></IconButton><IconButton color="error" size="small" aria-label="Delete" onClick={remove}><Delete fontSize="small" /></IconButton></Stack>}
 function DateField({label,value,change}:any){return <TextField type="date" label={label} InputLabelProps={{shrink:true}} value={value||''} onChange={(e)=>change(e.target.value)}/>}
-function UserField({users,value,change}:any){return <FormControl><InputLabel>Name</InputLabel><Select label="Name" value={value||''} onChange={(e)=>change(+e.target.value)}>{users.filter((u:any)=>u.active!==false&&u.attendanceEligible===true).map((u:UserRecord)=><MenuItem key={u.id} value={u.id}>{userName(users,u.id)}</MenuItem>)}</Select></FormControl>}
+function UserField({users,value,change}:any){return <FormControl><InputLabel>Name</InputLabel><Select label="Name" value={value||''} onChange={(e)=>change(+e.target.value)}>{users.filter(isDutyStaff).map((u:UserRecord)=><MenuItem key={u.id} value={u.id}>{userName(users,u.id)}</MenuItem>)}</Select></FormControl>}
 function DutyField({value,change}:any){return <SelectField label="Duty" value={value} values={TYPES} change={change}/>}
 function SelectField({label,value,values,change}:any){return <FormControl><InputLabel>{label}</InputLabel><Select label={label} value={value||''} onChange={(e)=>change(e.target.value)}>{values.map((x:string)=><MenuItem key={x} value={x}>{x.replaceAll('_',' ').toUpperCase()}</MenuItem>)}</Select></FormControl>}

@@ -7,6 +7,9 @@ export interface UserStub {
   last_name: string;
   middle_name?: string | null;
   role: string;
+  active?: boolean;
+  attendanceEligible?: boolean;
+  technicianEligible?: boolean;
   autoAssignmentEligible?: boolean;
   staff_id?: string | null;
 

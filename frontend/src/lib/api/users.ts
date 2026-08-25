@@ -18,6 +18,7 @@ export interface UserRecord {
   role: string;
   active: boolean;
   attendanceEligible?: boolean;
+  technicianEligible?: boolean;
   autoAssignmentEligible?: boolean;
   units?: any[];
 }

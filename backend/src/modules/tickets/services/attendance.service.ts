@@ -140,12 +140,13 @@ export class AttendanceService implements OnModuleInit {
 
   // Capability-backed groups keep attendance and assignment independent of role names.
   private async getRoleGroups(): Promise<Record<string, string[]>> {
+    const withoutSuperAdmin = (roles: string[]) => roles.filter((role) => role !== UserRole.SUPER_ADMIN);
     return {
-      desktop_support: this.roleCapSvc.getRolesWhere('isDesktop'),
-      it_support: this.roleCapSvc.getRolesWhere('isItSupport'),
-      pantawid_ict_support: this.roleCapSvc.getRolesWhere('isPantawidIct'),
-      ito: this.roleCapSvc.getRolesWhere('isIto'),
-      all: this.roleCapSvc.getRolesWhere('isAttendanceEligible'),
+      desktop_support: withoutSuperAdmin(this.roleCapSvc.getRolesWhere('isDesktop')),
+      it_support: withoutSuperAdmin(this.roleCapSvc.getRolesWhere('isItSupport')),
+      pantawid_ict_support: withoutSuperAdmin(this.roleCapSvc.getRolesWhere('isPantawidIct')),
+      ito: withoutSuperAdmin(this.roleCapSvc.getRolesWhere('isIto')),
+      all: withoutSuperAdmin(this.roleCapSvc.getRolesWhere('isAttendanceEligible')),
     };
   }
 
@@ -471,6 +472,7 @@ export class AttendanceService implements OnModuleInit {
     return this.userRepo
       .createQueryBuilder('u')
       .where('u.active = :active', { active: true })
+      .andWhere('u.role <> :superAdmin', { superAdmin: UserRole.SUPER_ADMIN })
       .andWhere('u.last_login BETWEEN :start AND :end', {
         start: startOfDay.toISOString().replace('T', ' ').replace('Z', ''),
         end: endOfDay.toISOString().replace('T', ' ').replace('Z', ''),

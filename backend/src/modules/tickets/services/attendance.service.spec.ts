@@ -52,6 +52,23 @@ describe('AttendanceService capability-backed technician queries', () => {
 
     expect(userRepo.createQueryBuilder).not.toHaveBeenCalled();
   });
+
+  it('keeps super_admin out of every capability-backed attendance group', async () => {
+    const roleCapSvc = {
+      getRolesWhere: jest.fn().mockReturnValue(['super_admin', 'desktop_jr']),
+      isAttendanceAccess: jest.fn().mockReturnValue(true),
+    };
+    const service = createService(roleCapSvc) as any;
+
+    await expect(service.getRoleGroups()).resolves.toEqual({
+      desktop_support: ['desktop_jr'],
+      it_support: ['desktop_jr'],
+      pantawid_ict_support: ['desktop_jr'],
+      ito: ['desktop_jr'],
+      all: ['desktop_jr'],
+    });
+  });
+
   it('excludes opted-out technicians only from the automatic-assignment pool', async () => {
     const service = createService(emptyCapabilityService(), {} as any) as any;
     const optedIn = { id: 1, autoAssignmentEligible: true };

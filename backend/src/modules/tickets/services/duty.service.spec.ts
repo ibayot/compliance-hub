@@ -42,6 +42,31 @@ describe('DutyService', () => {
     await expect(service.blockedTechnicianIds('2026-08-20')).resolves.toEqual([7]);
   });
 
+  it('removes super_admin, user, and non-technician users from the shared roster', async () => {
+    const roster = repo({ find: jest.fn().mockResolvedValue([
+      { id: 'super', userId: 1, dutyType: DutyType.OD, sortOrder: 0, isActive: true },
+      { id: 'user', userId: 2, dutyType: DutyType.OD, sortOrder: 1, isActive: true },
+      { id: 'ito', userId: 3, dutyType: DutyType.OD, sortOrder: 2, isActive: true },
+      { id: 'tech', userId: 4, dutyType: DutyType.OD, sortOrder: 3, isActive: true },
+    ]) });
+    const users = { getUsers: jest.fn().mockResolvedValue([
+      { id: 1, role: 'super_admin', first_name: 'Super', last_name: 'Admin' },
+      { id: 2, role: 'user', first_name: 'Regular', last_name: 'User' },
+      { id: 3, role: 'ito', first_name: 'ITO', last_name: 'Staff' },
+      { id: 4, role: 'desktop_jr', first_name: 'Desktop', last_name: 'Tech' },
+    ]) };
+    const caps = {
+      isTechnician: jest.fn((role: string) => role === 'desktop_jr'),
+      isDutyAdminAccess: jest.fn(),
+      isDutyViewerAccess: jest.fn(),
+    };
+    const service = makeService({ roster, users, caps });
+
+    await expect(service.getRoster()).resolves.toEqual([
+      expect.objectContaining({ userId: 4, name: 'Desktop Tech' }),
+    ]);
+  });
+
   it('uses one shared roster and selects each technician only once in duty priority order', async () => {
     const roster = repo({ find: jest.fn().mockResolvedValue([
       { id: 'a', userId: 1, dutyType: DutyType.OD, sortOrder: 0, isActive: true },
@@ -265,7 +290,11 @@ describe('DutyService', () => {
       ]),
     });
     const exceptions = repo({ find: jest.fn().mockResolvedValue([]) });
-    const service = makeService({ roster, exceptions, caps: { isDutyAdminAccess: jest.fn().mockReturnValue(true), isDutyViewerAccess: jest.fn() } });
+    const service = makeService({ roster, exceptions, caps: {
+      isDutyAdminAccess: jest.fn().mockReturnValue(true),
+      isDutyViewerAccess: jest.fn(),
+      isTechnician: jest.fn().mockReturnValue(true),
+    } });
 
     await expect(service.saveException(
       { id: 99, role: 'admin' },
@@ -303,7 +332,11 @@ function makeService(custom: Record<string, any> = {}) {
       { id: 1, first_name: 'Ana', last_name: 'One' },
       { id: 2, first_name: 'Ben', last_name: 'Two' },
     ]) },
-    caps: { isDutyAdminAccess: jest.fn(), isDutyViewerAccess: jest.fn() },
+    caps: {
+      isDutyAdminAccess: jest.fn(),
+      isDutyViewerAccess: jest.fn(),
+      isTechnician: jest.fn().mockReturnValue(true),
+    },
     config: { findOne: jest.fn().mockResolvedValue({ scheduleMode: 'OFFICE_HOURS', officeClockin: '08:00:00', officeClockout: '17:00:00' }) },
     events: { publish: jest.fn() }, sse: { emitDutyUpdated: jest.fn(), emitAttendanceUpdated: jest.fn() },
     ...custom,

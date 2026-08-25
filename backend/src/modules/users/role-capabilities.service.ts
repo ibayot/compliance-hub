@@ -41,7 +41,11 @@ export class RoleCapabilitiesService implements OnModuleInit {
       // row on reload without changing existing capability values.
       let roleDefinitions: RoleDefinitionEntity[] = [];
       try {
-        roleDefinitions = await this.roleDefinitionsRepo.find({ order: { id: 'ASC' } });
+        roleDefinitions = await this.roleDefinitionsRepo.find({ order: { label: 'ASC', value: 'ASC' } });
+        roleDefinitions.sort((a, b) =>
+          String(a.label || a.value).localeCompare(String(b.label || b.value)) ||
+          String(a.value).localeCompare(String(b.value)),
+        );
         await this.ensureRowsForRoleDefinitions(roleDefinitions);
       } catch (err: any) {
         // Keep startup non-fatal if an older staging database has not exposed

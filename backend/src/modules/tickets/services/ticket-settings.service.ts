@@ -10,6 +10,7 @@ import { TicketIssueType } from '../entities/ticket-issue-type.entity';
 import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
 import { RoleDefinitionEntity } from '../../users/entities/role-definition.entity';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
+import { UserRole } from '../../shared/entities';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { Ticket } from '../entities/ticket.entity';
 import { SseService } from './sse.service';
@@ -782,7 +783,9 @@ export class TicketSettingsService {
 
   async listAvailableEscalationUsers(): Promise<{ value: string; label: string }[]> {
     const rows = await this.roleDefRepo.find();
-    const focalRoles = rows.filter((r) => this.roleCapSvc.isEscalationFocal(r.value));
+    const focalRoles = rows.filter(
+      (r) => r.value !== UserRole.SUPER_ADMIN && this.roleCapSvc.isEscalationFocal(r.value),
+    );
     const roleMap = new Map(focalRoles.map((r) => [r.value, r.label]));
 
     // Fetch users with focal roles
@@ -833,6 +836,9 @@ export class TicketSettingsService {
     );
     if (!user || user.length === 0) {
       throw new BadRequestException('Selected user does not exist or is inactive.');
+    }
+    if (user[0].role === UserRole.SUPER_ADMIN) {
+      throw new BadRequestException('Super Admin accounts cannot be escalation focal users.');
     }
 
     if (!this.roleCapSvc.isEscalationFocal(user[0].role)) {

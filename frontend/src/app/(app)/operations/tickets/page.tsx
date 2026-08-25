@@ -556,7 +556,7 @@ export default function TicketsPage() {
     // Load users for everyone so they can request tickets for others (Proxy Creation)
     usersApi
       .list()
-      .then((users) => setAllUsers(users.filter((u) => u.active)))
+      .then((users) => setAllUsers(users.filter((u) => u.active && u.role !== 'super_admin')))
       .catch(() => { });
   }, []);
 

@@ -505,14 +505,21 @@ const previousValue = value;
   async findAll(): Promise<User[]> {
     const decorate = async (users: User[]): Promise<User[]> => {
       const capabilityRows = await this.roleCapabilitiesRepository.find({
-        select: ['roleValue', 'isAttendanceEligible'],
+        select: ['roleValue', 'isAttendanceEligible', 'isDesktop', 'isItSupport', 'isPantawidIct'],
       });
       const eligibleByRole = new Map(
         capabilityRows.map((row) => [row.roleValue, Boolean(row.isAttendanceEligible)]),
       );
+      const technicianByRole = new Map(
+        capabilityRows.map((row) => [
+          row.roleValue,
+          Boolean(row.isDesktop || row.isItSupport || row.isPantawidIct),
+        ]),
+      );
       return users.map((user) => ({
         ...user,
         attendanceEligible: eligibleByRole.get(user.role) ?? false,
+        technicianEligible: technicianByRole.get(user.role) ?? false,
       })) as User[];
     };
 

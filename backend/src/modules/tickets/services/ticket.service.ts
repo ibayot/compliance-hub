@@ -2138,6 +2138,9 @@ export class TicketService implements OnModuleInit {
 
     const technician = await this.usersHttpClient.getUserById(dto.assignedToId);
     if (!technician) throw new NotFoundException('Technician not found');
+    if (technician.role === UserRole.SUPER_ADMIN) {
+      throw new BadRequestException('Super Admin accounts cannot be assigned tickets.');
+    }
 
     const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     const attendanceRecord = await this.attendanceService.getAttendanceForDate(todayStr);
@@ -3016,7 +3019,7 @@ export class TicketService implements OnModuleInit {
     // Fetch all active users except standard 'USER' role
     const allTechUsers = await this.usersHttpClient.getUsers();
     const technicians = allTechUsers.filter(
-      (u: any) => this.roleCapSvc.isAttendanceEligible(u.role),
+      (u: any) => u.role !== UserRole.SUPER_ADMIN && this.roleCapSvc.isAttendanceEligible(u.role),
     );
 
     // Read attendance for today so assignment UI can hide unavailable technicians.
@@ -3337,7 +3340,9 @@ export class TicketService implements OnModuleInit {
 
     const ids = rows.map((r) => Number(r.id)).filter(Boolean);
     const allUserRows = await this.usersHttpClient.getUsers();
-    const users = allUserRows.filter((u: any) => ids.includes(u.id) && techRoles.includes(u.role));
+    const users = allUserRows.filter(
+      (u: any) => u.role !== UserRole.SUPER_ADMIN && ids.includes(u.id) && techRoles.includes(u.role),
+    );
 
     return users.map((u) => ({
       id: u.id,

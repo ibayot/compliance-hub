@@ -196,11 +196,11 @@ export default function IssuancesPage() {
     try {
       const users = await usersApi.list();
       const options = users
-        .filter((entry: UserRecord) => entry.active)
+        .filter((entry: UserRecord) => entry.active && entry.role !== 'super_admin')
         .filter((entry: UserRecord) => {
           const role = String(entry.role);
           return (
-            ['compliance_officer', 'section_head', 'super_admin'].includes(role) ||
+            ['compliance_officer', 'section_head'].includes(role) ||
             ['lead_infra', 'server_admin', 'db_admin', 'network_admin', 'project_mgr', 'dev_lead', 'sqa_lead', 'records_officer', 'hr_id_officer'].includes(role)
           );
         })

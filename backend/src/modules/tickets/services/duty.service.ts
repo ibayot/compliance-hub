@@ -10,6 +10,7 @@ import { In, Repository } from 'typeorm';
 import { UsersHttpClient, UserStub } from '../../../common/http-clients/users.http-client';
 import { EventBusService } from '../../../common/events/event-bus.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
+import { UserRole } from '../../shared/entities';
 import {
   DutyAssignment,
   DutyCoverageStatus,
@@ -154,7 +155,11 @@ export class DutyService {
 
   private async usersById(): Promise<Map<number, UserStub>> {
     const users = await this.usersClient.getUsers();
-    return new Map(users.map((u) => [u.id, u]));
+    return new Map(users
+      .filter((u) => u.active !== false)
+      .filter((u) => u.role !== UserRole.SUPER_ADMIN && u.role !== UserRole.USER)
+      .filter((u) => this.roleCaps.isTechnician(u.role))
+      .map((u) => [u.id, u]));
   }
 
   /**
@@ -171,8 +176,11 @@ export class DutyService {
     const source = canonicalRows.length
       ? canonicalRows
       : [...rows].sort((a, b) => DUTY_PRIORITY.indexOf(a.dutyType) - DUTY_PRIORITY.indexOf(b.dutyType) || a.sortOrder - b.sortOrder);
+    const users = await this.usersById();
     const unique = new Map<number, DutyRosterMembership>();
-    for (const row of source) if (!unique.has(row.userId)) unique.set(row.userId, row);
+    for (const row of source) {
+      if (users.has(row.userId) && !unique.has(row.userId)) unique.set(row.userId, row);
+    }
     return [...unique.values()].sort((a, b) => a.sortOrder - b.sortOrder || a.userId - b.userId);
   }
 
@@ -412,7 +420,7 @@ export class DutyService {
     const users = await this.usersById();
     for (const userId of selectedUserIds) {
       const user = users.get(userId);
-      if (!user || !this.roleCaps.isAttendanceEligible(user.role)) {
+      if (!user || !this.roleCaps.isTechnician(user.role)) {
         throw new BadRequestException('Only active duty staff can be added to a Duty roster.');
       }
     }
