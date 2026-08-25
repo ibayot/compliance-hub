@@ -61,6 +61,7 @@ backend/src/database/seed-data.sql
 !db-init/20260825-remove-user-ticket-flags.sql
 !db-init/20260825-update-user-views-after-flag-removal.sql
 !db-init/20260825-users-auth-columns.sql
+!db-init/20260825-auto-assignment-eligibility.sql
 *.png
 *.md
 !AGENTS.md

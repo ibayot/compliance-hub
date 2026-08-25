@@ -18,6 +18,7 @@ export interface UserRecord {
   role: string;
   active: boolean;
   attendanceEligible?: boolean;
+  autoAssignmentEligible?: boolean;
   units?: any[];
 }
 
@@ -35,6 +36,7 @@ export interface CreateUserPayload {
   designation?: string;
 
   unitIds?: number[];
+  autoAssignmentEligible?: boolean;
 }
 
 export interface RoleDefinition {
@@ -64,6 +66,7 @@ export interface UpdateUserPayload {
   role?: UserRole;
   active?: boolean;
   unitIds?: number[];
+  autoAssignmentEligible?: boolean;
 }
 
 export interface CreateRolePayload {

@@ -131,6 +131,9 @@ export class User {
   @Column({ default: true })
   active: boolean;
 
+  @Column({ name: 'auto_assignment_eligible', default: true })
+  autoAssignmentEligible: boolean;
+
   @ManyToMany(() => Unit, (unit) => unit.users)
   @JoinTable({
     name: 'user_unit_access',

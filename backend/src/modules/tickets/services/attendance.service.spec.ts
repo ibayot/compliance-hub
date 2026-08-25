@@ -52,4 +52,16 @@ describe('AttendanceService capability-backed technician queries', () => {
 
     expect(userRepo.createQueryBuilder).not.toHaveBeenCalled();
   });
+  it('excludes opted-out technicians only from the automatic-assignment pool', async () => {
+    const service = createService(emptyCapabilityService(), {} as any) as any;
+    const optedIn = { id: 1, autoAssignmentEligible: true };
+    const legacyDefault = { id: 2 };
+    const optedOut = { id: 3, autoAssignmentEligible: false };
+    service.getPresentTechnicians = jest.fn().mockResolvedValue([optedIn, legacyDefault, optedOut]);
+
+    await expect(service.getAutoAssignmentTechnicians('desktop_support', '2026-08-24')).resolves.toEqual([
+      optedIn,
+      legacyDefault,
+    ]);
+  });
 });

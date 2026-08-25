@@ -13,6 +13,7 @@ export interface User {
   designation?: string;
   authProvider?: 'local' | 'google';
   role: UserRole;
+  autoAssignmentEligible?: boolean;
   units?: Unit[];
   requiresPasswordChange?: boolean;
   requiresMfa?: boolean;

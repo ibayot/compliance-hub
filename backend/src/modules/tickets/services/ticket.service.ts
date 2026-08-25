@@ -762,7 +762,7 @@ export class TicketService implements OnModuleInit {
           continue;
         }
 
-        const availableTechs = await this.attendanceService.getPresentTechnicians(tType, today);
+        const availableTechs = await this.attendanceService.getAutoAssignmentTechnicians(tType, today);
 
         if (availableTechs.length > 0) {
           // QA #2: Senior technicians are NOT eligible for auto-assignment
@@ -1741,7 +1741,7 @@ export class TicketService implements OnModuleInit {
           const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
           const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
           if (ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT || isOfficeDayToday) {
-            const presentTechs = await this.attendanceService.getPresentTechnicians(
+            const presentTechs = await this.attendanceService.getAutoAssignmentTechnicians(
               ticket.ticketType,
               today,
             );
@@ -1987,7 +1987,7 @@ export class TicketService implements OnModuleInit {
 
         if (!isSeniorTech) {
           // Check technician is available today before assigning
-          const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });            const presentTechs = await this.attendanceService.getPresentTechnicians('all', today);
+          const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });            const presentTechs = await this.attendanceService.getAutoAssignmentTechnicians('all', today);
             const isPresent = presentTechs.some((tech) => tech.id === saved.assignedToId);
 
           if (isPresent) {
@@ -3122,7 +3122,7 @@ export class TicketService implements OnModuleInit {
       if (ticketType !== TicketType.PANTAWID_ICT_SUPPORT && !isOfficeDayToday) return;
 
       // Guard: tech must be present (attendance check)
-      const available = await this.attendanceService.getPresentTechnicians(ticketType, today);
+      const available = await this.attendanceService.getAutoAssignmentTechnicians(ticketType, today);
       const isPresent = available.some((t) => t.id === techId);
       if (!isPresent) return;
       // Existing active work affects queue state, but not the weekly cap.
@@ -3246,7 +3246,7 @@ export class TicketService implements OnModuleInit {
         const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
         const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
         if (ticket.ticketType === TicketType.PANTAWID_ICT_SUPPORT || isOfficeDayToday) {
-          const presentTechs = await this.attendanceService.getPresentTechnicians(
+          const presentTechs = await this.attendanceService.getAutoAssignmentTechnicians(
             ticket.ticketType,
             today,
           );

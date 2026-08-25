@@ -6,6 +6,7 @@ import {
   MinLength,
   IsArray,
   IsNumber,
+  IsBoolean,
 
   Matches,
   NotContains,
@@ -74,4 +75,8 @@ export class CreateUserDto {
   @IsNumber({}, { each: true })
   @IsOptional()
   unitIds?: number[];
+
+  @IsBoolean()
+  @IsOptional()
+  autoAssignmentEligible?: boolean;
 }

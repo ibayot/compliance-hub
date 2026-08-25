@@ -405,6 +405,16 @@ export class AttendanceService implements OnModuleInit {
     return presentTechs;
   }
 
+  /**
+   * Automatic-assignment pool. Manual technician lists intentionally use the
+   * unfiltered availability methods so an opted-out technician can still be
+   * selected explicitly by an authorized user.
+   */
+  async getAutoAssignmentTechnicians(ticketType: string, date: string): Promise<User[]> {
+    const presentTechs = await this.getPresentTechnicians(ticketType, date);
+    return presentTechs.filter((technician) => technician.autoAssignmentEligible !== false);
+  }
+
   /** Get technicians filtered for the current session (all staff or filtered by type) */
   async listTechnicians(ticketType?: string, actorRole?: string): Promise<TechnicianListItemDto[]> {
     // Focal technicians see only their own staff tier when no explicit filter is set,

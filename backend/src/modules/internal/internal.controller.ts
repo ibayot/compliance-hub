@@ -42,6 +42,7 @@ export class InternalController {
       last_name: u.lastName,
       middle_name: u.middleName ?? null,
       role: u.role,
+      autoAssignmentEligible: u.autoAssignmentEligible !== false,
       staff_id: (u as any).staff_id ?? null,
 
       units: u.units || [],
@@ -62,6 +63,7 @@ export class InternalController {
       last_name: user.lastName,
       middle_name: user.middleName ?? null,
       role: user.role,
+      autoAssignmentEligible: user.autoAssignmentEligible !== false,
       staff_id: (user as any).staff_id ?? null,
 
       units: user.units || [],

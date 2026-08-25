@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/com
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RoleCapability } from './entities/role-capability.entity';
+import { RoleDefinitionEntity } from './entities/role-definition.entity';
 
 /**
  * Startup-cached service for role capability lookups.
@@ -19,10 +20,13 @@ import { RoleCapability } from './entities/role-capability.entity';
 export class RoleCapabilitiesService implements OnModuleInit {
   private readonly logger = new Logger(RoleCapabilitiesService.name);
   private readonly cache = new Map<string, RoleCapability>();
+  private readonly roleOrder = new Map<string, number>();
 
   constructor(
     @InjectRepository(RoleCapability)
     private readonly repo: Repository<RoleCapability>,
+    @InjectRepository(RoleDefinitionEntity)
+    private readonly roleDefinitionsRepo: Repository<RoleDefinitionEntity>,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -32,8 +36,23 @@ export class RoleCapabilitiesService implements OnModuleInit {
   /** Reload the in-memory cache from DB. Call after any write to role_capabilities. */
   async reload(): Promise<void> {
     try {
+      // role_definitions is the source of truth for which roles exist. A role
+      // added directly to the database receives a default-disabled capability
+      // row on reload without changing existing capability values.
+      let roleDefinitions: RoleDefinitionEntity[] = [];
+      try {
+        roleDefinitions = await this.roleDefinitionsRepo.find({ order: { id: 'ASC' } });
+        await this.ensureRowsForRoleDefinitions(roleDefinitions);
+      } catch (err: any) {
+        // Keep startup non-fatal if an older staging database has not exposed
+        // role_definitions to this service yet.
+        this.logger.warn(`Role definition synchronization skipped: ${err?.message}`);
+      }
+
       const rows = await this.repo.find();
       this.cache.clear();
+      this.roleOrder.clear();
+      roleDefinitions.forEach((role, index) => this.roleOrder.set(role.value, index));
       for (const row of rows) {
         this.cache.set(row.roleValue, row);
       }
@@ -42,6 +61,21 @@ export class RoleCapabilitiesService implements OnModuleInit {
       this.logger.warn(
         `RoleCapabilities cache load failed (non-fatal — run v0.0.31 migration): ${err?.message}`,
       );
+    }
+  }
+
+  private async ensureRowsForRoleDefinitions(roleDefinitions: RoleDefinitionEntity[]): Promise<void> {
+    if (roleDefinitions.length === 0) return;
+
+    const existingRows = await this.repo.find();
+    const existingValues = new Set(existingRows.map((row) => row.roleValue));
+    const missingRows = roleDefinitions
+      .filter((role) => !existingValues.has(role.value))
+      .map((role) => this.repo.create({ roleValue: role.value }));
+
+    if (missingRows.length > 0) {
+      await this.repo.save(missingRows);
+      this.logger.log(`RoleCapabilities rows synchronized: added ${missingRows.length} role(s)`);
     }
   }
 
@@ -306,9 +340,13 @@ export class RoleCapabilitiesService implements OnModuleInit {
 
   // ── Admin CRUD ─────────────────────────────────────────────────────────────
 
-  /** Return all capability rows sorted by role_value, served from cache. */
+  /** Return all capability rows in role-definition order, served from cache. */
   findAll(): RoleCapability[] {
-    return [...this.cache.values()].sort((a, b) => a.roleValue.localeCompare(b.roleValue));
+    return [...this.cache.values()].sort((a, b) => {
+      const aOrder = this.roleOrder.get(a.roleValue) ?? Number.MAX_SAFE_INTEGER;
+      const bOrder = this.roleOrder.get(b.roleValue) ?? Number.MAX_SAFE_INTEGER;
+      return aOrder - bOrder || a.roleValue.localeCompare(b.roleValue);
+    });
   }
 
   /** Return the capability row for a single role from cache (undefined if not found). */

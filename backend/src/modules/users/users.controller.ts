@@ -128,7 +128,8 @@ export class UsersController {
    * Accessible to any logged-in user (no @Roles restriction).
    */
   @Get('role-capabilities/me')
-  getMyCapabilities(@Request() req: any) {
+  async getMyCapabilities(@Request() req: any) {
+    await this.roleCapabilitiesService.reload();
     return this.roleCapabilitiesService.findOne(req.user.role) ?? null;
   }
 

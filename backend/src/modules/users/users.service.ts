@@ -438,6 +438,8 @@ const previousValue = value;
           existingUser.positionFull = this.optionalText((createUserDto as any).positionFull) as any;
         if ((createUserDto as any).designation !== undefined)
           existingUser.designation = this.optionalText((createUserDto as any).designation) as any;
+        if (createUserDto.autoAssignmentEligible !== undefined)
+          existingUser.autoAssignmentEligible = createUserDto.autoAssignmentEligible;
 
         if (createUserDto.unitIds !== undefined) {
           existingUser.units = await this.unitsRepository.find({
@@ -493,6 +495,7 @@ const previousValue = value;
       googleSub: null,
       // Admin-created users are always RICTMS staff → default to FOCAL unless explicitly set
       role: createUserDto.role as UserRole,
+      autoAssignmentEligible: createUserDto.autoAssignmentEligible ?? true,
       units,
     } as any) as unknown as User;
 
@@ -817,6 +820,9 @@ const previousValue = value;
 
     if (dto.role !== undefined) user.role = dto.role;
     if ((dto as any).active !== undefined) user.active = (dto as any).active;
+    if (dto.autoAssignmentEligible !== undefined) {
+      user.autoAssignmentEligible = dto.autoAssignmentEligible;
+    }
 
     if (dto.password) {
       user.passwordHash = await bcrypt.hash(dto.password, 10);

@@ -1279,6 +1279,7 @@ function FocalUserManagementCard() {
     position: '',
     positionFull: '',
     designation: '',
+    autoAssignmentEligible: true,
 
     unitIds: [] as number[],
   });
@@ -1374,6 +1375,7 @@ function FocalUserManagementCard() {
       position: '',
       positionFull: '',
       designation: '',
+      autoAssignmentEligible: true,
       unitIds: [],
     });
     setIsExistingEmail(false);
@@ -1423,6 +1425,7 @@ function FocalUserManagementCard() {
         positionFull: editUser.positionFull,
         designation: editUser.designation,
 
+        autoAssignmentEligible: Boolean(editUser.autoAssignmentEligible),
         role: editUser.role,
         unitIds: editUser.unitIds,
       });
@@ -1530,6 +1533,20 @@ function FocalUserManagementCard() {
                     </MenuItem>
                   ))}
                 </TextField>
+              </Grid>
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={form.autoAssignmentEligible}
+                      onChange={(e) => setForm({ ...form, autoAssignmentEligible: e.target.checked })}
+                    />
+                  }
+                  label="Eligible for automatic ticket assignment"
+                />
+                <Typography variant="caption" display="block" color="text.secondary">
+                  Disable this for a technician who should remain manually assignable but not receive automatic tickets.
+                </Typography>
               </Grid>
               <Grid item xs={12} md={3}>
                 <TextField
@@ -1809,6 +1826,7 @@ function FocalUserManagementCard() {
                                     positionFull: u.positionFull || '',
                                     designation: u.designation || '',
 
+                                    autoAssignmentEligible: u.autoAssignmentEligible !== false,
                                     role: u.role,
                                     unitIds: Array.isArray(u.units)
                                       ? u.units.map((unit: any) => unit.id)
@@ -2038,6 +2056,25 @@ function FocalUserManagementCard() {
                     ))}
                   </Select>
                 </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={editUser?.autoAssignmentEligible !== false}
+                      onChange={(e) =>
+                        setEditUser((prev: any) => ({
+                          ...prev,
+                          autoAssignmentEligible: e.target.checked,
+                        }))
+                      }
+                    />
+                  }
+                  label="Eligible for automatic ticket assignment"
+                />
+                <Typography variant="caption" display="block" color="text.secondary">
+                  Turn this off to keep the technician available for manual assignment while excluding them from automatic routing.
+                </Typography>
               </Grid>
             </Grid>
           </DialogContent>
