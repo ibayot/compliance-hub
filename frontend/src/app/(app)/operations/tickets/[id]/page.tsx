@@ -35,7 +35,6 @@ import { useParams, useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSse } from '@/lib/utils/useSse';
-import { UserRole } from '@/lib/types/auth';
 import {
   ticketsApi,
   ticketSettingsApi,
@@ -1770,11 +1769,6 @@ export default function TicketDetailPage() {
                           {(() => {
                             if (!c.user) return null;
                             const isAssignedTech = (ticket as any)?.assignedToId === c.user.id;
-                            const isAdminOrFocal = c.user.role === UserRole.SUPER_ADMIN || c.user.ticketMainFocal;
-
-                            if (isAdminOrFocal) {
-                              return <Chip label={c.user.role === UserRole.SUPER_ADMIN ? "Admin" : "Focal"} size="small" color="error" />;
-                            }
                             if (isAssignedTech) {
                               return <Chip label="Assigned Tech" size="small" color="primary" />;
                             }

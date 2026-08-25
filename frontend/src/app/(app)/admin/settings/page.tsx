@@ -1279,8 +1279,7 @@ function FocalUserManagementCard() {
     position: '',
     positionFull: '',
     designation: '',
-    ticketMainFocal: false,
-    ticketTechnician: false,
+
     unitIds: [] as number[],
   });
 
@@ -1375,8 +1374,6 @@ function FocalUserManagementCard() {
       position: '',
       positionFull: '',
       designation: '',
-      ticketMainFocal: false,
-      ticketTechnician: false,
       unitIds: [],
     });
     setIsExistingEmail(false);
@@ -1415,6 +1412,9 @@ function FocalUserManagementCard() {
       setEditing(true);
       await usersApi.updateUser(editUser.id, {
         email: editUser.email,
+        staffId: editUser.staffId,
+        phoneNumber: editUser.phoneNumber,
+        sex: editUser.sex,
         firstName: editUser.firstName,
         middleName: editUser.middleName,
         lastName: editUser.lastName,
@@ -1422,8 +1422,7 @@ function FocalUserManagementCard() {
         position: editUser.position,
         positionFull: editUser.positionFull,
         designation: editUser.designation,
-        ticketMainFocal: Boolean(editUser.ticketMainFocal),
-        ticketTechnician: Boolean(editUser.ticketTechnician),
+
         role: editUser.role,
         unitIds: editUser.unitIds,
       });
@@ -1804,11 +1803,12 @@ function FocalUserManagementCard() {
                                     lastName: u.lastName || '',
                                     suffix: u.suffix || '',
                                     staffId: u.staffId || '',
+                                     phoneNumber: u.phoneNumber || '',
+                                     sex: u.sex || '',
                                     position: u.position || '',
                                     positionFull: u.positionFull || '',
                                     designation: u.designation || '',
-                                    ticketMainFocal: Boolean(u.ticketMainFocal),
-                                    ticketTechnician: Boolean(u.ticketTechnician),
+
                                     role: u.role,
                                     unitIds: Array.isArray(u.units)
                                       ? u.units.map((unit: any) => unit.id)
@@ -1887,7 +1887,35 @@ function FocalUserManagementCard() {
                   helperText="Optional employee identifier"
                 />
               </Grid>
-              <Grid item xs={12} md={3}>
+               <Grid item xs={12} md={3}>
+                 <TextField
+                   label="Phone Number"
+                   value={editUser?.phoneNumber || ''}
+                   onChange={(e) =>
+                     setEditUser((prev: any) => ({ ...prev, phoneNumber: e.target.value.replace(/\D/g, '').slice(0, 10) }))
+                   }
+                   inputProps={{ inputMode: 'numeric', maxLength: 10 }}
+                   InputProps={{ startAdornment: <InputAdornment position="start">+63</InputAdornment> }}
+                   fullWidth
+                 />
+               </Grid>
+               <Grid item xs={12} md={3}>
+                 <FormControl fullWidth>
+                   <InputLabel>Sex</InputLabel>
+                   <Select
+                     value={editUser?.sex || ''}
+                     label="Sex"
+                     onChange={(e) => setEditUser((prev: any) => ({ ...prev, sex: e.target.value }))}
+                   >
+                     <MenuItem value=""><em>Not specified</em></MenuItem>
+                     <MenuItem value="Male">Male</MenuItem>
+                     <MenuItem value="Female">Female</MenuItem>
+                     <MenuItem value="Other">Other</MenuItem>
+                     <MenuItem value="Prefer not to say">Prefer not to say</MenuItem>
+                   </Select>
+                 </FormControl>
+               </Grid>
+               <Grid item xs={12} md={3}>
                 <TextField
                   label="First Name"
                   value={editUser?.firstName || ''}
@@ -2127,6 +2155,113 @@ function MobileSettingsCard() {
 }
 
 
+function ProfilePreferencesCard() {
+  const { user } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
+  const [units, setUnits] = useState<{ id: number; name: string }[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    phoneNumber: '',
+    sex: '',
+    unitId: '' as number | '',
+    position: '',
+    positionFull: '',
+    designation: '',
+  });
+
+  useEffect(() => {
+    if (!user) return;
+    setForm({
+      phoneNumber: user.phoneNumber || '',
+      sex: user.sex || '',
+      unitId: user.units?.[0]?.id ?? '',
+      position: user.position || '',
+      positionFull: user.positionFull || '',
+      designation: user.designation || '',
+    });
+    usersApi.getProfileUnits().then(setUnits).catch(() => {
+      enqueueSnackbar('Unable to load unit options.', { variant: 'error' });
+    });
+  }, [user?.id, enqueueSnackbar]);
+
+  const handleSave = async () => {
+    if (!user) return;
+    try {
+      setSaving(true);
+      await usersApi.updateUser(user.id, {
+        phoneNumber: form.phoneNumber.replace(/\D/g, '').slice(0, 10),
+        sex: form.sex || undefined,
+        unitIds: form.unitId === '' ? [] : [Number(form.unitId)],
+        position: form.position.trim() || undefined,
+        positionFull: form.positionFull.trim() || undefined,
+        designation: form.designation.trim() || undefined,
+      });
+      enqueueSnackbar('Profile information updated successfully.', { variant: 'success' });
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to update profile information.', { variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card elevation={2}>
+      <CardHeader
+        title="Profile Information"
+        subheader="Update your contact, unit, and position details. Password changes are handled separately below."
+      />
+      <CardContent>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <TextField
+              label="Phone Number"
+              value={form.phoneNumber}
+              onChange={(e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+              inputProps={{ inputMode: 'numeric', maxLength: 10 }}
+              InputProps={{ startAdornment: <InputAdornment position="start">+63</InputAdornment> }}
+              fullWidth
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <FormControl fullWidth>
+              <InputLabel>Sex</InputLabel>
+              <Select value={form.sex} label="Sex" onChange={(e) => setForm((prev) => ({ ...prev, sex: e.target.value }))}>
+                <MenuItem value=""><em>Not specified</em></MenuItem>
+                <MenuItem value="Male">Male</MenuItem>
+                <MenuItem value="Female">Female</MenuItem>
+                <MenuItem value="Other">Other</MenuItem>
+                <MenuItem value="Prefer not to say">Prefer not to say</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <FormControl fullWidth>
+              <InputLabel>Unit/Section</InputLabel>
+              <Select value={form.unitId} label="Unit/Section" onChange={(e) => setForm((prev) => ({ ...prev, unitId: e.target.value as number | '' }))}>
+                <MenuItem value=""><em>None</em></MenuItem>
+                {units.map((unit) => <MenuItem key={unit.id} value={unit.id}>{unit.name}</MenuItem>)}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField label="Position" value={form.position} onChange={(e) => setForm((prev) => ({ ...prev, position: e.target.value }))} inputProps={{ maxLength: 12 }} fullWidth />
+          </Grid>
+          <Grid item xs={12} md={8}>
+            <TextField label="Position Full" value={form.positionFull} onChange={(e) => setForm((prev) => ({ ...prev, positionFull: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField label="Designation" value={form.designation} onChange={(e) => setForm((prev) => ({ ...prev, designation: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
+          </Grid>
+        </Grid>
+        <Box mt={2} display="flex" justifyContent="flex-end">
+          <Button variant="contained" onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving...' : 'Save Profile Information'}
+          </Button>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
 export default function SettingsPage() {
   const { user, myCap } = useAuth();
   const [tabIndex, setTabIndex] = useState(0);
@@ -2232,6 +2367,9 @@ export default function SettingsPage() {
           </Card>
 
           <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <ProfilePreferencesCard />
+            </Grid>
             <Grid item xs={12}>
               <ThemeCard />
             </Grid>

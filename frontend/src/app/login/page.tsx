@@ -31,6 +31,10 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (password.length < 12) {
+      enqueueSnackbar('Password must be at least 12 characters long.', { variant: 'error' });
+      return;
+    }
     setLoading(true);
 
     try {

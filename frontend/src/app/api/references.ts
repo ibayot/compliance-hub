@@ -208,7 +208,7 @@ export interface TicketComment {
   isInternal: boolean;
   createdAt: string;
   attachmentPath?: string | null;
-  user?: { id: number; email: string; firstName?: string; lastName?: string; role?: string; ticketMainFocal?: boolean };
+  user?: { id: number; email: string; firstName?: string; lastName?: string; role?: string };
 }
 
 export interface CreateTicketDto {

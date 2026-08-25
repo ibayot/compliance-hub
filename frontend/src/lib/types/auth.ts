@@ -11,8 +11,6 @@ export interface User {
   position?: string;
   positionFull?: string;
   designation?: string;
-  ticketMainFocal?: boolean;
-  ticketTechnician?: boolean;
   authProvider?: 'local' | 'google';
   role: UserRole;
   units?: Unit[];

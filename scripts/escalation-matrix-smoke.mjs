@@ -89,7 +89,7 @@ async function loginAdmin() {
   throw new Error('Admin login failed. Set ADMIN_EMAIL and ADMIN_PASSWORD.');
 }
 
-async function ensureUser(adminToken, email, role, firstName, lastName, ticketTechnician = false) {
+async function ensureUser(adminToken, email, role, firstName, lastName) {
   const create = await api('/users', {
     method: 'POST',
     token: adminToken,
@@ -99,7 +99,6 @@ async function ensureUser(adminToken, email, role, firstName, lastName, ticketTe
       firstName,
       lastName,
       role,
-      ticketTechnician,
       unitIds: [1],
     },
   });
@@ -160,7 +159,6 @@ async function runRoleScenario(adminToken, roleValue, requesterToken, juniorToke
     roleValue,
     'Test',
     `Focal_${roleValue}`,
-    false,
   );
 
   const focalLogin = await login(focalEmail, 'TestSmoke123!');
@@ -319,7 +317,6 @@ async function main() {
     'user',
     'Test',
     'Requester',
-    false,
   );
 
   const junior = await ensureUser(
@@ -328,7 +325,6 @@ async function main() {
     'it_support_jr',
     'Test',
     'Junior',
-    true,
   );
 
   const juniorLogin = await login(`test.junior.${runId}@rictms.local`, 'TestSmoke123!');

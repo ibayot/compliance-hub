@@ -14,8 +14,7 @@ export interface UserRecord {
   position?: string;
   positionFull?: string;
   designation?: string;
-  ticketMainFocal?: boolean;
-  ticketTechnician?: boolean;
+
   role: string;
   active: boolean;
   attendanceEligible?: boolean;
@@ -34,8 +33,7 @@ export interface CreateUserPayload {
   position?: string;
   positionFull?: string;
   designation?: string;
-  ticketMainFocal?: boolean;
-  ticketTechnician?: boolean;
+
   unitIds?: number[];
 }
 
@@ -62,8 +60,7 @@ export interface UpdateUserPayload {
   position?: string;
   positionFull?: string;
   designation?: string;
-  ticketMainFocal?: boolean;
-  ticketTechnician?: boolean;
+
   role?: UserRole;
   active?: boolean;
   unitIds?: number[];
@@ -195,6 +192,11 @@ export const usersApi = {
 
   getUserById: async (id: number): Promise<UserRecord> => {
     const response = await apiClient.get(`/users/${id}`);
+    return response.data;
+  },
+
+  getProfileUnits: async (): Promise<{ id: number; name: string }[]> => {
+    const response = await apiClient.get('/users/profile-units');
     return response.data;
   },
 

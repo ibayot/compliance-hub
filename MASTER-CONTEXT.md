@@ -183,7 +183,7 @@ The Docker bootstrap scripts create four databases:
 - `user.role` is the raw role string stored in the DB and JWT
 - `user.roleCode` is derived from `role_definitions.role_code`
 - `role_capabilities` is the capability matrix used by services
-- `ticketMainFocal` and `ticketTechnician` are per-user overrides in the users table
+- Technician and ticket-focal behavior is controlled by role capabilities, not per-user ticket flags.
 
 **The `role_capabilities` matrix now includes capability flags for:**
 - focal access

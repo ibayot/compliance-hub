@@ -99,14 +99,13 @@ async function loginAdminWithFallbacks() {
   throw new Error('Admin login failed for all fallback credentials. Set ADMIN_EMAIL and ADMIN_PASSWORD explicitly.');
 }
 
-async function createUser(adminToken, { email, role, firstName, lastName, ticketTechnician = false }) {
+async function createUser(adminToken, { email, role, firstName, lastName }) {
   const body = {
     email,
-    password: 'Smoke123!',
+    password: 'Smoke123!@#',
     firstName,
     lastName,
     role,
-    ticketTechnician,
     unitIds: [1],
   };
   const r = await request('/users', {
@@ -169,38 +168,34 @@ async function main() {
     role: 'desktop_jr',
     firstName: 'Smoke',
     lastName: 'Junior',
-    ticketTechnician: true,
   });
   await createUser(adminToken, {
     email: emails.focal1,
     role: 'desktop_sr',
     firstName: 'Smoke',
     lastName: 'FocalOne',
-    ticketTechnician: true,
   });
   await createUser(adminToken, {
     email: emails.focal2,
     role: 'desktop_sr',
     firstName: 'Smoke',
     lastName: 'FocalTwo',
-    ticketTechnician: true,
   });
   await createUser(adminToken, {
     email: emails.pantawid,
     role: 'pantawid_ict',
     firstName: 'Smoke',
     lastName: 'Pantawid',
-    ticketTechnician: true,
   });
 
   // Allow async hooks to settle in some environments
   await sleep(300);
 
-  const requester = await login(emails.requester, 'Smoke123!');
-  const junior = await login(emails.junior, 'Smoke123!');
-  const focal1 = await login(emails.focal1, 'Smoke123!');
-  const focal2 = await login(emails.focal2, 'Smoke123!');
-  const pantawid = await login(emails.pantawid, 'Smoke123!');
+  const requester = await login(emails.requester, 'Smoke123!@#');
+  const junior = await login(emails.junior, 'Smoke123!@#');
+  const focal1 = await login(emails.focal1, 'Smoke123!@#');
+  const focal2 = await login(emails.focal2, 'Smoke123!@#');
+  const pantawid = await login(emails.pantawid, 'Smoke123!@#');
 
   await ensureEscalationFocal(adminToken, 'desktop_support', 'desktop_sr', 'Desktop Senior');
 
