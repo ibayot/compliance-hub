@@ -164,17 +164,16 @@ export class AttendanceService implements OnModuleInit {
       .orderBy('a.date', 'ASC')
       .addOrderBy('user.lastName', 'ASC');
 
-    const groups = await this.getRoleGroups();
-    const roles = groups[ticketType || 'all'] || groups.all;
-
-    // An empty capability group is valid while a staging database is being
-    // migrated. Do not emit an invalid empty IN predicate; return a
-    // successful empty result until the capability rows are available.
-    if (!roles || roles.length === 0) {
-      return [];
+    if (ticketType) {
+      const groups = await this.getRoleGroups();
+      const roles = groups[ticketType] || [];
+      if (roles.length === 0) return [];
+      qb.andWhere('user.role IN (:...roles)', { roles });
+    } else {
+      qb.andWhere('user.role NOT IN (:...excludedRoles)', {
+        excludedRoles: [UserRole.USER, UserRole.SUPER_ADMIN],
+      });
     }
-
-    qb.andWhere('user.role IN (:...roles)', { roles });
 
     return qb.getMany();
   }
@@ -429,18 +428,22 @@ export class AttendanceService implements OnModuleInit {
 
     const forcedType = ticketType;
 
-    const groups = await this.getRoleGroups();
-    const roles = groups[forcedType || 'all'] || groups.all;
-
-    if (!roles || roles.length === 0) {
-      return [];
-    }
-
-    // Fetch by known roles (hardcoded + custom-tagged)
-    const byRole = await this.userRepo
+    const query = this.userRepo
       .createQueryBuilder('u')
       .where('u.active = :active', { active: true })
-      .andWhere('u.role IN (:...roles)', { roles })
+    if (forcedType) {
+      const groups = await this.getRoleGroups();
+      const roles = groups[forcedType] || [];
+      if (roles.length === 0) return [];
+      query.andWhere('u.role IN (:...roles)', { roles });
+    } else {
+      query.andWhere('u.role NOT IN (:...excludedRoles)', {
+        excludedRoles: [UserRole.USER, UserRole.SUPER_ADMIN],
+      });
+    }
+
+    // Fetch active users, excluding only regular users and super admins by default.
+    const byRole = await query
       .orderBy('u.lastName', 'ASC')
       .addOrderBy('u.firstName', 'ASC')
       .getMany();

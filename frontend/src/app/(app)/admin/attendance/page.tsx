@@ -14,7 +14,6 @@ import {
   TableRow,
   IconButton,
   Chip,
-  MenuItem,
   Stack,
   CircularProgress,
   Tabs,
@@ -109,7 +108,6 @@ export default function AttendancePage() {
 
   const [attendance, setAttendance] = useState<TechAttendance[]>([]);
   const [attLoading, setAttLoading] = useState(false);
-  const [attType, setAttType] = useState('');
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const [timePickerData, setTimePickerData] = useState<{ userId: number; dateStr: string; status: AttendanceStatus } | null>(null);
@@ -150,26 +148,26 @@ export default function AttendancePage() {
   const fetchAttendance = useCallback(async () => {
     try {
       setAttLoading(true);
-      const data = await attendanceApi.getAttendance(startDate, endDate, attType || undefined);
+      const data = await attendanceApi.getAttendance(startDate, endDate);
       setAttendance(data);
     } catch {
       enqueueSnackbar('Failed to load attendance', { variant: 'error' });
     } finally {
       setAttLoading(false);
     }
-  }, [startDate, endDate, attType]);
+  }, [startDate, endDate]);
 
   const fetchTechnicians = useCallback(async () => {
     try {
       setTechLoading(true);
-      const data = await attendanceApi.getTechnicians(attType || undefined);
+      const data = await attendanceApi.getTechnicians();
       setTechnicians(data);
     } catch {
       enqueueSnackbar('Failed to load technicians', { variant: 'error' });
     } finally {
       setTechLoading(false);
     }
-  }, [attType]);
+  }, []);
 
   useEffect(() => {
     fetchOfficeDays();
@@ -199,15 +197,15 @@ export default function AttendancePage() {
     if (tab !== 1) return;
     try {
       const [techs, att] = await Promise.all([
-        attendanceApi.getTechnicians(attType || undefined),
-        attendanceApi.getAttendance(startDate, endDate, attType || undefined),
+        attendanceApi.getTechnicians(),
+        attendanceApi.getAttendance(startDate, endDate),
       ]);
       setTechnicians(techs);
       setAttendance(att);
     } catch {
       /* silent */
     }
-  }, [tab, attType, startDate, endDate]);
+  }, [tab, startDate, endDate]);
 
   useSse(['ATTENDANCE_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
     silentRefreshOfficeDays();
@@ -220,12 +218,12 @@ export default function AttendancePage() {
   const silentRefreshTab0Attendance = useCallback(async () => {
     if (tab !== 0 || !isRICTMSStaff) return;
     try {
-      const data = await attendanceApi.getAttendance(startDate, endDate, attType || undefined);
+      const data = await attendanceApi.getAttendance(startDate, endDate);
       setAttendance(data);
     } catch {
       /* silent */
     }
-  }, [tab, isRICTMSStaff, startDate, endDate, attType]);
+  }, [tab, isRICTMSStaff, startDate, endDate]);
 
   // Office day map: date → OfficeDay
   const odMap = useMemo(() => {
@@ -283,7 +281,7 @@ export default function AttendancePage() {
       });
       // Silently refresh attendance presence indicators (no loading spinner)
       attendanceApi
-        .getAttendance(startDate, endDate, attType || undefined)
+        .getAttendance(startDate, endDate)
         .then((data) => setAttendance(data))
         .catch(() => { });
     } catch (err: any) {
@@ -513,20 +511,6 @@ export default function AttendancePage() {
         {tab === 1 && (
           <CardContent>
             <Stack direction="row" spacing={2} mb={2} alignItems="center">
-              <FormControl size="small" sx={{ minWidth: 220 }}>
-                <InputLabel>Category</InputLabel>
-                <Select
-                  value={attType}
-                  label="Category"
-                  onChange={(e) => setAttType(e.target.value)}
-                >
-                  <MenuItem value="">All</MenuItem>
-                  <MenuItem value="ito">ITOs</MenuItem>
-                  <MenuItem value="it_support">IT Support</MenuItem>
-                  <MenuItem value="desktop_support">Desktop Support</MenuItem>
-                  <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
-                </Select>
-              </FormControl>
               <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
                 {canManage && (
                   <Typography variant="body2" color="text.secondary" mr={1}>

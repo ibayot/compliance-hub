@@ -14,8 +14,8 @@ describe('AttendanceService capability-backed technician queries', () => {
     isAttendanceAccess: jest.fn().mockReturnValue(true),
   });
 
-  it('returns a successful empty attendance result when no attendance-eligible capability rows exist', async () => {
-    const getMany = jest.fn();
+  it('shows all non-user and non-super-admin attendance records by default', async () => {
+    const getMany = jest.fn().mockResolvedValue([]);
     const queryBuilder = {
       leftJoinAndSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
@@ -31,17 +31,31 @@ describe('AttendanceService capability-backed technician queries', () => {
 
     await expect(service.getAttendance('2026-08-24', '2026-08-24')).resolves.toEqual([]);
 
-    expect(queryBuilder.andWhere).not.toHaveBeenCalled();
-    expect(getMany).not.toHaveBeenCalled();
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'user.role NOT IN (:...excludedRoles)',
+      { excludedRoles: ['user', 'super_admin'] },
+    );
+    expect(getMany).toHaveBeenCalled();
   });
 
-  it('returns a successful empty technician list without issuing an empty role predicate', async () => {
-    const userRepo = { createQueryBuilder: jest.fn() };
+  it('shows all active non-user and non-super-admin technicians by default', async () => {
+    const queryBuilder = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+    };
+    const userRepo = { createQueryBuilder: jest.fn().mockReturnValue(queryBuilder) };
     const service = createService(emptyCapabilityService(), { userRepo });
 
     await expect(service.listTechnicians(undefined, 'super_admin')).resolves.toEqual([]);
 
-    expect(userRepo.createQueryBuilder).not.toHaveBeenCalled();
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'u.role NOT IN (:...excludedRoles)',
+      { excludedRoles: ['user', 'super_admin'] },
+    );
+    expect(queryBuilder.getMany).toHaveBeenCalled();
   });
 
   it('returns no available technicians without issuing an empty role predicate', async () => {
