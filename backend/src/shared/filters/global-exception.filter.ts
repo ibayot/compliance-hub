@@ -29,18 +29,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     // Handle TypeORM QueryFailedError (often triggered by ZAP injecting invalid characters)
     // Map this to a 400 Bad Request instead of a 500 Internal Server Error.
     if (exception instanceof QueryFailedError) {
-      const queryFailedError = exception as QueryFailedError & {
-        query?: string;
-        driverError?: {
-          code?: string;
-          errno?: number;
-          sqlState?: string;
-          sqlMessage?: string;
-          message?: string;
-        };
-      };
-      const driverError = queryFailedError.driverError;
-      const code = String(driverError?.code || '');
+      const code = String((exception as any).driverError?.code || '');
       const clientInputCodes = new Set([
         'ER_DATA_TOO_LONG',
         'ER_TRUNCATED_WRONG_VALUE',
@@ -55,20 +44,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           error: 'Bad Request',
         });
       }
-      this.logger.error(
-        [
-          `Database failure on ${request.method} ${request.url} (${code || 'unknown'})`,
-          `SQL: ${queryFailedError.query || '[unavailable]'}`,
-          `Driver error: ${JSON.stringify({
-            code: driverError?.code,
-            errno: driverError?.errno,
-            sqlState: driverError?.sqlState,
-            sqlMessage: driverError?.sqlMessage,
-            message: driverError?.message,
-          })}`,
-        ].join('\n'),
-        exception.stack,
-      );
+      this.logger.error(`Database failure on ${request.method} ${request.url} (${code || 'unknown'})`, exception.stack);
       return response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'A database error occurred. Please contact support.',
