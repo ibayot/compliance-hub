@@ -58,6 +58,8 @@ backend/src/database/seed-data.sql
 !db-init/20260824-capability-refactor-complete.sql
 !db-init/20260824-duty-monitoring.sql
 !db-init/20260825-ticketing-ui-crud.sql
+!db-init/20260825-remove-user-ticket-flags.sql
+!db-init/20260825-update-user-views-after-flag-removal.sql
 *.png
 *.md
 !AGENTS.md
@@ -81,6 +83,7 @@ backend/src/database/seed-data.sql
 !db-init/20260824-capability-refactor-complete.sql
 !db-init/20260824-duty-monitoring.sql
 !db-init/20260825-ticketing-ui-crud.sql
+!db-init/20260825-remove-user-ticket-flags.sql
 !scripts/
 !scripts/**/*
 Compliance_Hub_Postman_Collection.json
