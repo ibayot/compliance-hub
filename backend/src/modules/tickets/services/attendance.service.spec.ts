@@ -95,4 +95,16 @@ describe('AttendanceService capability-backed technician queries', () => {
       legacyDefault,
     ]);
   });
+
+  it('excludes pending duty candidates from automatic assignment only', async () => {
+    const service = createService(emptyCapabilityService(), {} as any) as any;
+    const available = [{ id: 1 }, { id: 2 }];
+    service.getPresentTechnicians = jest.fn().mockResolvedValue(available);
+    service.dutyService = { blockedTechnicianIds: jest.fn().mockResolvedValue([2]) };
+
+    await expect(service.getAutoAssignmentTechnicians('desktop_support', '2026-08-24')).resolves.toEqual([
+      available[0],
+    ]);
+    expect(service.dutyService.blockedTechnicianIds).toHaveBeenCalledWith('2026-08-24');
+  });
 });

@@ -5,6 +5,8 @@ describe('CapabilityGuard', () => {
   const reflector = { getAllAndOverride: jest.fn() };
   const roleCapSvc = {
     isTicketModuleAccess: jest.fn(),
+    isTicketReportsAccess: jest.fn(),
+    isTicketReportsManage: jest.fn(),
   };
   const guard = new CapabilityGuard(reflector as any, roleCapSvc as any);
 
@@ -39,6 +41,19 @@ describe('CapabilityGuard', () => {
     roleCapSvc.isTicketModuleAccess.mockReturnValue(false);
 
     expect(guard.canActivate(contextFor('custom_role'))).toBe(false);
+  });
+
+  it.each([
+    ['isTicketReportsAccess', 'isTicketReportsAccess'],
+    ['isTicketReportsManage', 'isTicketReportsManage'],
+  ])('enforces %s from the database capability row', (required, checker) => {
+    reflector.getAllAndOverride.mockReturnValue(required);
+    const capabilityChecker = (roleCapSvc as any)[checker];
+    capabilityChecker.mockReturnValueOnce(true).mockReturnValueOnce(false);
+
+    expect(guard.canActivate(contextFor('custom_role'))).toBe(true);
+    expect(guard.canActivate(contextFor('custom_role'))).toBe(false);
+    expect(capabilityChecker).toHaveBeenCalledWith('custom_role');
   });
 
   it('denies requests without an authenticated role', () => {

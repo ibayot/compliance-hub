@@ -44,6 +44,8 @@ export class CapabilityGuard implements CanActivate {
       isAllTickets: (r) => this.roleCapSvc.isAllTickets(r),
       isTicketFocal: (r) => this.roleCapSvc.isTicketFocal(r),
       isTicketModuleAccess: (r) => this.roleCapSvc.isTicketModuleAccess(r),
+      isTicketReportsAccess: (r) => this.roleCapSvc.isTicketReportsAccess(r),
+      isTicketReportsManage: (r) => this.roleCapSvc.isTicketReportsManage(r),
       isKpiAccess: (r) => this.roleCapSvc.isKpiAccess(r),
       isKpiManage: (r) => this.roleCapSvc.isKpiManage(r),
       isAttendanceAccess: (r) => this.roleCapSvc.isAttendanceAccess(r),

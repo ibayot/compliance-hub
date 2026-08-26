@@ -1248,7 +1248,7 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {myCap?.isTicketSettingsFocal && slaSummary && appMode !== 'compliance_only' && (
+      {!!myCap?.isTicketSettingsFocal && slaSummary && appMode !== 'compliance_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Typography variant="h6" fontWeight={600} mb={2}>

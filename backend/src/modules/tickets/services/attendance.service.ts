@@ -353,8 +353,7 @@ export class AttendanceService implements OnModuleInit {
       `[getPresentTechnicians] presentRowsCount=${presentRows.length}, userIds=[${presentRows.map((r) => r.userId).join(',')}]`,
     );
     const presentIds = new Set<number>(presentRows.map((r) => r.userId));
-    const dutyBlockedIds = new Set(this.dutyService ? await this.dutyService.blockedTechnicianIds(date) : []);
-    let presentTechs = available.filter((u) => presentIds.has(u.id) && !dutyBlockedIds.has(u.id));
+    let presentTechs = available.filter((u) => presentIds.has(u.id));
 
     // DTR Auto-Clock-Out Filter
     // Only apply if the requested date is today
@@ -412,7 +411,10 @@ export class AttendanceService implements OnModuleInit {
    */
   async getAutoAssignmentTechnicians(ticketType: string, date: string): Promise<User[]> {
     const presentTechs = await this.getPresentTechnicians(ticketType, date);
-    return presentTechs.filter((technician) => technician.autoAssignmentEligible !== false);
+    const dutyBlockedIds = new Set(this.dutyService ? await this.dutyService.blockedTechnicianIds(date) : []);
+    return presentTechs.filter((technician) =>
+      !dutyBlockedIds.has(technician.id) && technician.autoAssignmentEligible !== false,
+    );
   }
 
   /** Get technicians filtered for the current session (all staff or filtered by type) */

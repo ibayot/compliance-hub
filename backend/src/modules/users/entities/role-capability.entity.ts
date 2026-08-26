@@ -106,6 +106,14 @@ export class RoleCapability {
   @Column({ name: 'is_ticket_module_access', type: 'tinyint', width: 1, default: 0 })
   isTicketModuleAccess: boolean;
 
+  /** True for technician-scoped Ticket Reports access. */
+  @Column({ name: 'is_ticket_reports_access', type: 'tinyint', width: 1, default: 0 })
+  isTicketReportsAccess: boolean;
+
+  /** True for full Ticket Reports access, including Issues and SLA Insights. */
+  @Column({ name: 'is_ticket_reports_manage', type: 'tinyint', width: 1, default: 0 })
+  isTicketReportsManage: boolean;
+
   /** True for roles that can access the KPI module pages and read endpoints. */
   @Column({ name: 'is_kpi_access', type: 'tinyint', width: 1, default: 0 })
   isKpiAccess: boolean;

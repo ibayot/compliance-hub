@@ -158,7 +158,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       icon: TicketReportsIcon,
       path: '/operations/reports',
       service: 'ticketing',
-      capabilityKeys: ['isTicketSettingsFocal', 'isDesktop', 'isItSupport', 'isPantawidIct'],
+      capabilityKeys: ['isTicketReportsAccess'],
     },
     {
       label: 'Attendance',

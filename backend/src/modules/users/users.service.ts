@@ -260,6 +260,13 @@ export class UsersService {
       isAllTickets: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
       isTicketFocal: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
       isTicketModuleAccess: role.isSystem,
+      isTicketReportsAccess:
+        isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
+      isTicketReportsManage:
+        isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole
+        || roleValue === UserRole.DESKTOP_SR
+        || roleValue === UserRole.IT_SUPPORT_SR
+        || isPantawidIct,
       isKpiAccess: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
       isKpiManage: isSuperAdmin || isSectionHead || isComplianceRole,
       isAttendanceAccess:

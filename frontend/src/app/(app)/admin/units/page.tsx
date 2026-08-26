@@ -44,6 +44,12 @@ import {
   SubmissionFrequency,
   computeExpectedFilename,
 } from '@/lib/api/document-types';
+import { useAuth } from '@/contexts/AuthContext';
+
+const apiErrorMessage = (error: any, fallback: string) => {
+  const message = error?.response?.data?.message;
+  return Array.isArray(message) ? message.join(', ') : message || fallback;
+};
 
 const FREQ_LABELS: Record<SubmissionFrequency, string> = {
   monthly: 'Monthly',
@@ -52,7 +58,7 @@ const FREQ_LABELS: Record<SubmissionFrequency, string> = {
 };
 
 // ---------- Reportorial Doc Types panel per unit ----------
-function DocTypesPanel({ unit }: { unit: Unit }) {
+function DocTypesPanel({ unit, canManage }: { unit: Unit; canManage: boolean }) {
   const { enqueueSnackbar } = useSnackbar();
   const [docTypes, setDocTypes] = useState<ReportorialDocType[]>([]);
   const [loading, setLoading] = useState(false);
@@ -149,7 +155,7 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
         <Typography variant="subtitle2" color="text.secondary">
           Reportorial Document Types
         </Typography>
-        <Button
+        {canManage && <Button
           size="small"
           startIcon={<AddIcon />}
           onClick={(e) => {
@@ -159,7 +165,7 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
           }}
         >
           Add
-        </Button>
+        </Button>}
       </Box>
 
       {loading ? (
@@ -179,7 +185,7 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
               <TableCell>Frequency</TableCell>
               <TableCell>Sample Filename</TableCell>
               <TableCell>Status</TableCell>
-              <TableCell align="right">Actions</TableCell>
+              {canManage && <TableCell align="right">Actions</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -200,11 +206,11 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
                     label={dt.active ? 'Active' : 'Inactive'}
                     size="small"
                     color={dt.active ? 'success' : 'default'}
-                    onClick={() => handleToggleActive(dt)}
-                    sx={{ cursor: 'pointer' }}
+                    onClick={canManage ? () => handleToggleActive(dt) : undefined}
+                    sx={{ cursor: canManage ? 'pointer' : 'default' }}
                   />
                 </TableCell>
-                <TableCell align="right">
+                {canManage && <TableCell align="right">
                   <Tooltip title="Edit">
                     <IconButton size="small" onClick={() => openEdit(dt)}>
                       <EditIcon fontSize="small" />
@@ -215,7 +221,7 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
-                </TableCell>
+                </TableCell>}
               </TableRow>
             ))}
           </TableBody>
@@ -316,6 +322,9 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
 // ---------- Main Units Page ----------
 export default function UnitsPage() {
   const { enqueueSnackbar } = useSnackbar();
+  const { myCap } = useAuth();
+  const canManageUnits = !!myCap?.isUnitsManage;
+  const canManageDocumentTypes = !!myCap?.isDocumentTypesManage;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -370,15 +379,20 @@ export default function UnitsPage() {
       setOpen(false);
       await loadUnits();
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to save unit.', { variant: 'error' });
+      enqueueSnackbar(apiErrorMessage(err, 'Failed to save unit.'), { variant: 'error' });
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (unit: Unit) => {
-    await unitsApi.deleteUnit(unit.id);
-    await loadUnits();
+    try {
+      await unitsApi.deleteUnit(unit.id);
+      enqueueSnackbar('Unit deleted successfully.', { variant: 'success' });
+      await loadUnits();
+    } catch (err: any) {
+      enqueueSnackbar(apiErrorMessage(err, 'Failed to delete unit.'), { variant: 'error' });
+    }
   };
 
   return (
@@ -392,9 +406,9 @@ export default function UnitsPage() {
             Manage organizational units and their reportorial document types
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
+        {canManageUnits && <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
           Add Unit
-        </Button>
+        </Button>}
       </Box>
 
       {loading ? (
@@ -423,7 +437,7 @@ export default function UnitsPage() {
                       </Typography>
                     )}
                   </Box>
-                  <Box onClick={(e) => e.stopPropagation()} display="flex" gap={1}>
+                  {canManageUnits && <Box onClick={(e) => e.stopPropagation()} display="flex" gap={1}>
                     <Tooltip title="Edit unit">
                       <IconButton size="small" onClick={() => handleEdit(unit)}>
                         <EditIcon fontSize="small" />
@@ -434,11 +448,11 @@ export default function UnitsPage() {
                         <DeleteIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                  </Box>
+                  </Box>}
                 </Box>
               </AccordionSummary>
               <AccordionDetails>
-                <DocTypesPanel unit={unit} />
+                <DocTypesPanel unit={unit} canManage={canManageDocumentTypes} />
               </AccordionDetails>
             </Accordion>
           ))}

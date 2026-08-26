@@ -35,7 +35,7 @@ describe('KnowledgeBaseService', () => {
       ok: true,
       json: async () => ({
         success: true,
-          result: { response: '{"title":"AD account creation","content":"```markdown\\n## Problem\\nAD access was needed.\\n\\n## Resolution\\nCreate the account.\\n```","tags":"active-directory"}' },
+          result: { response: '{"title":"Creating an Active Directory User Account","content":"**Problem:**\\nAn authorized user requires an Active Directory account.\\n\\n**Solution:**\\n1. **Open the AD tool.** Start the approved administration tool.\\n2. **Create the account.** Populate the required fields and press Save.\\n\\n**Result:**\\nConfirm that the account exists and the credential email was sent.","tags":"Active Directory,Account Creation,User Access"}' },
       }),
     } as Response);
     const service = new KnowledgeBaseService(repo, {} as any, config);
@@ -52,10 +52,13 @@ describe('KnowledgeBaseService', () => {
       expect.objectContaining({ method: 'POST' }),
     );
     expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'AD account creation',
-      content: '## Problem\nAD access was needed.\n\n## Resolution\nCreate the account.',
-      tags: 'active-directory',
+      title: 'Creating an Active Directory User Account',
+      content: expect.stringMatching(/^\*\*Problem:\*\*[\s\S]*\*\*Solution:\*\*[\s\S]*1\. \*\*Open the AD tool\.\*\*[\s\S]*\*\*Result:\*\*/),
+      tags: 'Active Directory,Account Creation,User Access',
     }));
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(requestBody.prompt).toContain('**Problem:**, **Solution:**, and **Result:**');
+    expect(requestBody.prompt).toContain('Solution must be a numbered list');
   });
 
   it('tries the next code-defined Cloudflare model when the preferred model is unavailable', async () => {

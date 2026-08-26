@@ -252,6 +252,12 @@ export const deriveSatisfactionRating = (
     ? roundRating(numericLikert.reduce((sum, value) => sum + value, 0) / numericLikert.length)
     : null;
 };
+
+export const resolveTicketReportTechnicianId = (
+  canManageReports: boolean,
+  viewerId?: number,
+  requestedTechnicianId?: number,
+): number | undefined => canManageReports ? requestedTechnicianId : viewerId;
 // --- Service -----------------------------------------------------------------
 
 @Injectable()
@@ -2605,6 +2611,8 @@ export class TicketService implements OnModuleInit {
     semester?: number;
     technicianId?: number;
     ticketType?: string;
+    viewerId?: number;
+    viewerRole?: string;
   }): Promise<{
     byDay: { date: string; avgRating: number }[];
     byWeek: { week: string; avgRating: number }[];
@@ -2633,8 +2641,14 @@ export class TicketService implements OnModuleInit {
         qb.andWhere('MONTH(t.satisfactionSubmittedAt) BETWEEN 7 AND 12');
       }
     }
-    if (filters.technicianId) {
-      qb.andWhere('t.assignedToId = :techId', { techId: filters.technicianId });
+    const canManageReports = this.roleCapSvc.isTicketReportsManage(filters.viewerRole || '');
+    const effectiveTechnicianId = resolveTicketReportTechnicianId(
+      canManageReports,
+      filters.viewerId,
+      filters.technicianId,
+    );
+    if (effectiveTechnicianId) {
+      qb.andWhere('t.assignedToId = :techId', { techId: effectiveTechnicianId });
     }
     if (filters.ticketType) {
       qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
@@ -3397,19 +3411,12 @@ export class TicketService implements OnModuleInit {
     const now = new Date();
     const year = filters.year ?? now.getFullYear();
 
-    const isTicketSettingsViewer = this.roleCapSvc.isTicketSettingsFocal(filters.viewerRole || '');
-    const isTechnician =
-      filters.viewerRole &&
-      !isTicketSettingsViewer &&
-      this.roleCapSvc.isTechnician(filters.viewerRole);
-
-    const requesterIdFilter =
-      !isTicketSettingsViewer && !isTechnician ? filters.viewerId : undefined;
-    const techIdFilter = isTechnician
-      ? filters.viewerId
-      : isTicketSettingsViewer
-        ? filters.technicianId
-        : undefined;
+    const canManageReports = this.roleCapSvc.isTicketReportsManage(filters.viewerRole || '');
+    const techIdFilter = resolveTicketReportTechnicianId(
+      canManageReports,
+      filters.viewerId,
+      filters.technicianId,
+    );
 
     // Build date range from filters
     let startDate: Date;
@@ -3440,9 +3447,6 @@ export class TicketService implements OnModuleInit {
         statuses: [TicketStatus.CLOSED, TicketStatus.RESOLVED],
       });
 
-    if (requesterIdFilter) {
-      qb = qb.andWhere('t.requesterId = :requesterId', { requesterId: requesterIdFilter });
-    }
     if (techIdFilter) {
       qb = qb.andWhere('t.assignedToId = :techId', { techId: techIdFilter });
     }
@@ -3458,10 +3462,6 @@ export class TicketService implements OnModuleInit {
       .createQueryBuilder('t')
       .where('t.createdAt >= :startDate', { startDate })
       .andWhere('t.createdAt <= :endDate', { endDate });
-    if (requesterIdFilter)
-      totalQb = totalQb.andWhere('t.requesterId = :requesterId', {
-        requesterId: requesterIdFilter,
-      });
     if (techIdFilter)
       totalQb = totalQb.andWhere('t.assignedToId = :techId', { techId: techIdFilter });
     if (filters.ticketType)
@@ -3667,8 +3667,8 @@ export class TicketService implements OnModuleInit {
       .innerJoin('tickets', 't', 't.id = e.ticket_id')
       .where('t.created_at >= :startDate', { startDate })
       .andWhere('t.created_at <= :endDate', { endDate });
-    if (requesterIdFilter) {
-      escQb = escQb.andWhere('t.requester_id = :requesterId', { requesterId: requesterIdFilter });
+    if (techIdFilter) {
+      escQb = escQb.andWhere('t.assigned_to_id = :techId', { techId: techIdFilter });
     }
     if (filters.ticketType) {
       escQb = escQb.andWhere('t.ticket_type = :ticketType', { ticketType: filters.ticketType });
@@ -4751,17 +4751,12 @@ export class TicketService implements OnModuleInit {
     viewerId?: number;
     viewerRole?: string;
   }) {
-    const isTicketSettingsViewer = this.roleCapSvc.isTicketSettingsFocal(filters.viewerRole || '');
-    const isTechnician =
-      filters.viewerRole &&
-      !isTicketSettingsViewer &&
-      this.roleCapSvc.isTechnician(filters.viewerRole);
-
-    const techIdFilter = isTechnician
-      ? filters.viewerId
-      : isTicketSettingsViewer
-        ? filters.technicianId
-        : undefined;
+    const canManageReports = this.roleCapSvc.isTicketReportsManage(filters.viewerRole || '');
+    const techIdFilter = resolveTicketReportTechnicianId(
+      canManageReports,
+      filters.viewerId,
+      filters.technicianId,
+    );
 
     const qb = this.ticketRepo
       .createQueryBuilder('ticket')

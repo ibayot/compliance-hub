@@ -475,7 +475,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }
             }).catch(() => setRequiresPasswordChange(false));
           }}
-          userId={user.id}
+          user={user}
         />
       )}
     </>

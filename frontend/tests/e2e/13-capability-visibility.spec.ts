@@ -2,6 +2,8 @@ import { expect, Page, test } from '@playwright/test';
 
 type CapabilityKey =
   | 'isTicketModuleAccess'
+  | 'isTicketReportsAccess'
+  | 'isTicketReportsManage'
   | 'isDutyViewerAccess'
   | 'isDutyAdminAccess'
   | 'isDocumentsAccess'
@@ -23,7 +25,9 @@ type CapabilityKey =
   | 'isUserManagementView'
   | 'isRoleCapabilitiesAccess'
   | 'isSystemRolesAccess'
-  | 'isSecuritySettingsAccess';
+  | 'isSecuritySettingsAccess'
+  | 'isUnitsManage'
+  | 'isDocumentTypesManage';
 
 const navigationCapabilities: Array<{
   label: string;
@@ -55,7 +59,7 @@ const navigationCapabilities: Array<{
   {
     label: 'Ticket Reports',
     path: '/operations/reports',
-    capabilities: ['isTicketSettingsFocal', 'isDesktop', 'isItSupport', 'isPantawidIct'],
+    capabilities: ['isTicketReportsAccess'],
   },
   { label: 'Attendance', path: '/admin/attendance', capabilities: ['isAttendanceAccess'] },
   { label: 'Reviews', path: '/governance/reviews', capabilities: ['isReviewsAccess'] },
@@ -71,6 +75,9 @@ const navigationCapabilities: Array<{
 
 const allCapabilities = [
   ...new Set(navigationCapabilities.flatMap(({ capabilities }) => capabilities)),
+  'isTicketReportsManage',
+  'isUnitsManage',
+  'isDocumentTypesManage',
 ];
 
 function capabilityRow(enabled: Partial<Record<CapabilityKey, boolean>> = {}) {
@@ -86,6 +93,7 @@ async function installCapabilityApiMock(
   page: Page,
   enabled: Partial<Record<CapabilityKey, boolean>> = {},
   appMode: 'full' | 'ticketing_only' | 'compliance_only' = 'full',
+  requiresPasswordChange = false,
 ) {
   await page.route('**/api/**', async (route) => {
     const request = route.request();
@@ -103,12 +111,16 @@ async function installCapabilityApiMock(
         id: 9001,
         email: 'capability-test@example.test',
         firstName: 'Capability',
+        middleName: 'Middle',
         lastName: 'Tester',
+        phoneNumber: '9123456789',
+        sex: 'Male',
+        staffId: '009001',
         role: 'custom_role',
         active: true,
         requiresMfa: false,
-        requiresPasswordChange: false,
-        units: [],
+        requiresPasswordChange,
+        units: [{ id: 77, name: 'ICT Unit' }],
       };
     } else if (pathname.endsWith('/users/role-capabilities/me')) {
       responseBody = capabilityRow(enabled);
@@ -185,6 +197,10 @@ async function installCapabilityApiMock(
     } else if (pathname.endsWith('/feedback')) {
       responseBody = { data: [], total: 0 };
     } else if (pathname.endsWith('/users/profile-units')) {
+      responseBody = [{ id: 77, name: 'ICT Unit' }, { id: 78, name: 'Records Unit' }];
+    } else if (pathname.endsWith('/units')) {
+      responseBody = [{ id: 77, name: 'ICT Unit', description: 'Information technology', active: true, created_at: '2026-08-26' }];
+    } else if (pathname.includes('/reportorial-document-types')) {
       responseBody = [];
     } else if (pathname.endsWith('/users')) {
       responseBody = [];
@@ -208,9 +224,10 @@ async function openShell(
   page: Page,
   enabled: Partial<Record<CapabilityKey, boolean>> = {},
   appMode: 'full' | 'ticketing_only' | 'compliance_only' = 'full',
+  requiresPasswordChange = false,
 ) {
   await page.unroute('**/api/**');
-  await installCapabilityApiMock(page, enabled, appMode);
+  await installCapabilityApiMock(page, enabled, appMode, requiresPasswordChange);
   const appModeResponse = page.waitForResponse((response) =>
     response.url().includes('/api/users/security-config/app-mode'),
     { timeout: 300_000 },
@@ -221,7 +238,11 @@ async function openShell(
   );
   await page.goto('/');
   await Promise.all([appModeResponse, capabilityResponse]);
-  await expect(page.getByRole('button', { name: 'Dashboard', exact: true })).toBeVisible();
+  if (requiresPasswordChange) {
+    await expect(page.getByRole('heading', { name: 'Complete Your Profile & Change Password' })).toBeVisible();
+  } else {
+    await expect(page.getByRole('button', { name: 'Dashboard', exact: true })).toBeVisible();
+  }
 }
 
 function routePattern(path: string) {
@@ -293,11 +314,17 @@ test.describe('Capability-driven frontend visibility', () => {
   });
 
   test('ticketing-only mode navigates ticketing CRUD entry points through visible UI actions', async ({
-    page,
+      page,
   }) => {
     await openShell(
       page,
-      { isTicketModuleAccess: true, isTicketSettingsFocal: true, isDesktop: true },
+      {
+        isTicketModuleAccess: true,
+        isTicketSettingsFocal: true,
+        isTicketReportsAccess: true,
+        isTicketReportsManage: true,
+        isDesktop: true,
+      },
       'ticketing_only',
     );
 
@@ -325,5 +352,91 @@ test.describe('Capability-driven frontend visibility', () => {
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page).toHaveURL(routePattern('/admin/settings'));
     await expect(page.getByText('Change Password', { exact: true })).toBeVisible();
+  });
+
+  test('shows only technician-scoped report tabs for Ticket Reports View', async ({ page }) => {
+    await openShell(page, { isTicketModuleAccess: true, isTicketReportsAccess: true }, 'ticketing_only');
+
+    await clickNavigationItem(page, 'Ticket Reports', '/operations/reports');
+
+    await expect(page.getByRole('tab', { name: 'Overview & Ratings' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Performance' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Issues' })).not.toBeVisible();
+    await expect(page.getByRole('tab', { name: 'SLA Insights' })).not.toBeVisible();
+    await expect(page.getByLabel('Technician')).not.toBeVisible();
+  });
+
+  test('shows every report tab only when Ticket Reports Manage is enabled', async ({ page }) => {
+    await openShell(
+      page,
+      { isTicketModuleAccess: true, isTicketReportsAccess: true, isTicketReportsManage: true },
+      'ticketing_only',
+    );
+
+    await clickNavigationItem(page, 'Ticket Reports', '/operations/reports');
+
+    await expect(page.getByRole('tab', { name: 'Overview & Ratings' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Issues' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'SLA Insights' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Performance' })).toBeVisible();
+    await expect(page.getByLabel('Technician')).toBeVisible();
+  });
+
+  test('keeps Units read-only when only Units Viewer is enabled', async ({ page }) => {
+    await openShell(page, { isUnitsAccess: true });
+
+    await clickNavigationItem(page, 'Units', '/admin/units');
+
+    await expect(page.getByRole('button', { name: 'Add Unit' })).not.toBeVisible();
+    await page.getByText('ICT Unit', { exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Add', exact: true })).not.toBeVisible();
+    await expect(page.getByRole('button', { name: 'Edit' })).not.toBeVisible();
+    await expect(page.getByRole('button', { name: 'Delete' })).not.toBeVisible();
+  });
+
+  test('shows the duplicate-unit API message in a snackbar', async ({ page }) => {
+    await openShell(page, { isUnitsAccess: true, isUnitsManage: true });
+    await page.route('**/api/units', async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({ statusCode: 409, message: 'Unit with this name already exists' }),
+        });
+        return;
+      }
+      await route.fallback();
+    });
+    await clickNavigationItem(page, 'Units', '/admin/units');
+
+    await page.getByRole('button', { name: 'Add Unit' }).click();
+    await page.getByLabel('Unit Name').fill('ICT Unit');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await expect(page.getByText('Unit with this name already exists', { exact: true })).toBeVisible();
+  });
+
+  test('prepopulates first-login profile values and self-service unit options', async ({ page }) => {
+    await openShell(page, {}, 'ticketing_only', true);
+
+    await expect(page.getByLabel('Staff ID')).toHaveValue('009001');
+    await expect(page.getByLabel('First Name')).toHaveValue('Capability');
+    await expect(page.getByLabel('Middle Name/Initial')).toHaveValue('Middle');
+    await expect(page.getByLabel('Last Name')).toHaveValue('Tester');
+    await expect(page.getByLabel('Phone Number')).toHaveValue('9123456789');
+    await expect(page.getByLabel('Sex')).toHaveText(/Male/);
+    await expect(page.getByLabel('Unit\/Section')).toHaveText(/ICT Unit/);
+    await expect(page.getByLabel('New Password')).toHaveValue('');
+    await expect(page.getByLabel('Confirm New Password')).toHaveValue('');
+  });
+
+  test('redirects an unauthorized direct URL and an unknown URL to Dashboard', async ({ page }) => {
+    await openShell(page);
+
+    await page.goto('/admin/units');
+    await expect(page).toHaveURL(routePattern('/dashboard'));
+
+    await page.goto('/not-a-real-route');
+    await expect(page).toHaveURL(routePattern('/dashboard'));
   });
 });

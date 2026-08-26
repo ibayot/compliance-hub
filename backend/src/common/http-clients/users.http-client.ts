@@ -32,6 +32,8 @@ export interface RoleCapabilityStub {
   isAllTickets: boolean;
   isTicketFocal: boolean;
   isTicketModuleAccess: boolean;
+  isTicketReportsAccess: boolean;
+  isTicketReportsManage: boolean;
   isKpiAccess: boolean;
   isKpiManage: boolean;
   isAttendanceAccess: boolean;

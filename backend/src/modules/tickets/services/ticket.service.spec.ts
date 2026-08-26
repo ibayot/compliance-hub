@@ -32,7 +32,22 @@ import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { EventBusService } from '../../../common/events/event-bus.service';
 import { SseService } from './sse.service';
 import { KeywordCheckEngine } from '../../metrics/engines/keyword-check.engine';
-import { deriveSatisfactionRating, roundRating } from './ticket.service';
+import {
+  deriveSatisfactionRating,
+  resolveTicketReportTechnicianId,
+  roundRating,
+} from './ticket.service';
+
+describe('Ticket Reports authorization scope', () => {
+  it('ignores a requested technician id for view-only users', () => {
+    expect(resolveTicketReportTechnicianId(false, 41, 99)).toBe(41);
+  });
+
+  it('allows a report manager to select a technician or all technicians', () => {
+    expect(resolveTicketReportTechnicianId(true, 41, 99)).toBe(99);
+    expect(resolveTicketReportTechnicianId(true, 41, undefined)).toBeUndefined();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Helpers

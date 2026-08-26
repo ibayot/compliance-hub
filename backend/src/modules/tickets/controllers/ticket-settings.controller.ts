@@ -296,7 +296,7 @@ export class TicketSettingsController {
 
   @Get('sla-insights')
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isTicketSettingsFocal')
+  @RequireCapability('isTicketReportsManage')
   async getSlaInsights(
     @Query('year') year?: string,
     @Query('month') month?: string,

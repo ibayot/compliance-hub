@@ -131,6 +131,10 @@ export class DutyService {
   }
 
   private async isCurrentOd(userId: number, date = this.today()): Promise<boolean> {
+    const activeCoverage = await this.coverageRepo.findOne({
+      where: { dutyDate: date, dutyType: DutyType.OD, assignedUserId: userId, status: DutyCoverageStatus.ACTIVE },
+    });
+    if (activeCoverage) return true;
     const logged = await this.assignmentRepo.exist({ where: { dutyDate: date, dutyType: DutyType.OD, userId } });
     if (logged) return true;
     const rotation = await this.getRotation(date, DutyType.OD);
@@ -275,10 +279,21 @@ export class DutyService {
         if (next) selectedUsers.add(next.userId);
       }
       const isOnDuty = assignedIsEligible;
+      const cardUserId = displayCoverage?.status === DutyCoverageStatus.INTERVENTION_REQUIRED
+        ? interventionCandidate?.userId ?? null
+        : displayCoverage?.assignedUserId ?? next?.userId ?? null;
+      const activeTicketUserId = displayCoverage?.status === DutyCoverageStatus.INTERVENTION_REQUIRED
+        ? cardUserId
+        : assignedIsEligible ? coverage?.assignedUserId ?? null : null;
+      const activeTicketCount = activeTicketUserId
+        ? await this.ticketRepo.count({
+          where: { assignedToId: activeTicketUserId, status: In(ACTIVE_TICKET_STATUSES) },
+        })
+        : 0;
       cards.push({
         dutyType,
         coverageId: displayCoverage?.id ?? null,
-        userId: displayCoverage?.status === DutyCoverageStatus.INTERVENTION_REQUIRED ? interventionCandidate?.userId ?? null : displayCoverage?.assignedUserId ?? next?.userId ?? null,
+        userId: cardUserId,
         name: isOnDuty ? `${assigned!.first_name} ${assigned!.last_name}`.trim() : interventionCandidate?.name ?? next?.name ?? 'No Eligible Technicians',
         daysSince: isOnDuty
           ? (assignedRotation?.daysSince === 9999 ? null : assignedRotation?.daysSince ?? null)
@@ -289,6 +304,7 @@ export class DutyService {
         isSubstitute: displayCoverage?.isSubstitute ?? false,
         coverageStatus: displayCoverage?.status ?? null,
         requiresReassignment: displayCoverage?.status === DutyCoverageStatus.INTERVENTION_REQUIRED,
+        activeTicketCount,
       });
     }
     return cards;
@@ -450,6 +466,9 @@ export class DutyService {
     if (id && !existing) throw new NotFoundException('Meeting reservation not found.');
     const venueType = this.assertDutyType(String(body.venueType ?? existing?.venueType), true);
     const meetingDate = String(body.meetingDate ?? existing?.meetingDate ?? '');
+    if (!access.admin && meetingDate < this.today()) {
+      throw new BadRequestException('The current OD can only add or edit meetings from today onwards.');
+    }
     const status = body.status ?? existing?.status ?? (meetingDate === this.today() ? DutyReservationStatus.CONFIRMED : DutyReservationStatus.SCHEDULED);
     const slot = this.meetingSlot(body.startTime ?? existing?.startTime, body.endTime ?? existing?.endTime);
     const sameDayReservations = await this.reservationRepo.find({ where: { meetingDate, venueType } });
@@ -468,7 +487,7 @@ export class DutyService {
 
   async deleteReservation(actor: Actor, id: string) {
     const access = await this.getAccess(actor);
-    if (!access.canSchedule) throw new ForbiddenException('Duty schedule access is required.');
+    if (!access.admin) throw new ForbiddenException('Only a Duty Administrator can delete meeting schedules.');
     const row = await this.reservationRepo.findOne({ where: { id } });
     if (!row) return;
     await this.reservationRepo.delete(id);
@@ -477,7 +496,19 @@ export class DutyService {
 
   async blockedTechnicianIds(date: string): Promise<number[]> {
     const rows = await this.coverageRepo.find({ where: { dutyDate: date, status: In([DutyCoverageStatus.ACTIVE, DutyCoverageStatus.INTERVENTION_REQUIRED]) } });
-    return rows.filter((x) => x.status === DutyCoverageStatus.ACTIVE && x.assignedUserId).map((x) => x.assignedUserId!);
+    const reservations = await this.reservationRepo.find({ where: { meetingDate: date } });
+    const scheduledDutyTypes = new Set(
+      reservations
+        .filter((reservation) => reservation.status !== DutyReservationStatus.CANCELLED)
+        .map((reservation) => reservation.venueType),
+    );
+    const isDutyActive = (dutyType: DutyType) => dutyType === DutyType.OD || scheduledDutyTypes.has(dutyType);
+    return rows
+      .filter((coverage) => isDutyActive(coverage.dutyType))
+      .map((coverage) => coverage.status === DutyCoverageStatus.ACTIVE
+        ? coverage.assignedUserId
+        : coverage.primaryUserId)
+      .filter((userId): userId is number => Boolean(userId));
   }
 
   private coverageCandidateUserId(coverage: DutyDailyCoverage): number | null {
@@ -498,7 +529,7 @@ export class DutyService {
     return this.isAttendanceEligible(coverage.assignedUserId!, coverage.dutyDate);
   }
 
-  async reconcileCoverage(date: string, type: DutyType) {
+  async reconcileCoverage(date: string, type: DutyType, excludedUserIds: number[] = []) {
     const reservations = await this.reservationRepo.find({ where: { meetingDate: date, venueType: type } });
     if (type !== DutyType.OD && !reservations.some((r) => r.status !== DutyReservationStatus.CANCELLED)) return null;
     const priorTypes = DUTY_PRIORITY.slice(0, DUTY_PRIORITY.indexOf(type));
@@ -556,7 +587,7 @@ export class DutyService {
       currentCoverage.status = DutyCoverageStatus.INTERVENTION_REQUIRED;
       currentCoverage = await this.coverageRepo.save(currentCoverage);
     }
-    if (currentCoverage && ![DutyCoverageStatus.INTERVENTION_REQUIRED, DutyCoverageStatus.CANCELLED].includes(currentCoverage.status)) {
+    if (currentCoverage?.status === DutyCoverageStatus.ACTIVE) {
       return currentCoverage;
     }
     const rotation = (await this.getRotation(date, type)).filter((r) => !r.excluded);
@@ -565,7 +596,9 @@ export class DutyService {
     const candidates = (await Promise.all(rotation.map(async (candidate) => ({
       candidate,
       eligible: await this.isAttendanceEligible(candidate.userId, date),
-    })))).filter((x) => x.eligible && !alreadyServing.has(x.candidate.userId)).map((x) => x.candidate);
+    })))).filter((x) => x.eligible
+      && !alreadyServing.has(x.candidate.userId)
+      && !excludedUserIds.includes(x.candidate.userId)).map((x) => x.candidate);
     // No present/on-time candidate means there is no duty coverage yet. This is
     // different from intervention_required, which means every eligible person
     // is blocked by active tickets and requires manual reassignment.
@@ -582,35 +615,22 @@ export class DutyService {
       .andWhere('t.status IN (:...statuses)', { statuses: ACTIVE_TICKET_STATUSES })
       .groupBy('t.assigned_to_id').getRawMany() : [];
     const activeCounts = new Map(counts.map((x) => [Number(x.userId), Number(x.count)]));
-    const selected = activeCounts.get(candidates[0].userId) ? null : candidates[0];
     let coverage = currentCoverage;
     coverage = this.coverageRepo.create({
       ...coverage,
       dutyDate: date,
       dutyType: type,
       primaryUserId: candidates[0].userId,
-      assignedUserId: selected?.userId ?? null,
-      isSubstitute: Boolean(selected && selected.userId !== candidates[0].userId),
+      assignedUserId: null,
+      isSubstitute: false,
       substitutionReason: null,
-      status: selected ? DutyCoverageStatus.ACTIVE : DutyCoverageStatus.INTERVENTION_REQUIRED,
+      status: DutyCoverageStatus.INTERVENTION_REQUIRED,
       previousAttendanceStatus: null,
       previousAttendanceNotes: null,
       attendanceOverridden: false,
       releasedAt: null,
     });
-    if (selected) {
-      const attendance = await this.attendanceRepo.findOne({ where: { userId: selected.userId, date } });
-      if (!attendance) throw new BadRequestException('The selected technician has no attendance record.');
-      coverage.previousAttendanceStatus = attendance.status;
-      coverage.previousAttendanceNotes = attendance.notes;
-      coverage.attendanceOverridden = true;
-      attendance.status = AttendanceStatus.OUT_OF_OFFICE;
-      attendance.notes = `${type} DUTY`;
-      attendance.isManualOverride = true;
-      await this.attendanceRepo.save(attendance);
-    }
     coverage = await this.coverageRepo.save(coverage);
-    this.sse.emitAttendanceUpdated();
     this.sse.emitDutyUpdated();
     return { ...coverage, activeTicketCounts: Object.fromEntries(activeCounts) };
   }
@@ -661,7 +681,7 @@ export class DutyService {
     const coverage = await this.coverageRepo.findOne({ where: { id } });
     if (!coverage) throw new NotFoundException('Duty coverage not found.');
     if (coverage.status !== DutyCoverageStatus.INTERVENTION_REQUIRED) {
-      throw new BadRequestException('Only a duty technician blocked by active tickets can be skipped.');
+      throw new BadRequestException('Only the current pending duty technician can be skipped.');
     }
     if (coverage.dutyDate !== this.today()) {
       throw new BadRequestException('Only the current day duty technician can be skipped.');
@@ -674,15 +694,14 @@ export class DutyService {
     const activeTickets = await this.ticketRepo.count({
       where: { assignedToId: userId, status: In(ACTIVE_TICKET_STATUSES) },
     });
-    if (activeTickets === 0) {
-      throw new BadRequestException('Skip is only for a technician who is keeping active tickets instead of taking the duty.');
-    }
     await this.saveException(actor, {
       exceptionDate: coverage.dutyDate,
       userId,
       dutyType: coverage.dutyType,
-      type: DutyExceptionType.DUE_TO_TA,
-      remarks: 'Technician chose to continue active tickets instead of taking the scheduled duty.',
+      type: activeTickets > 0 ? DutyExceptionType.DUE_TO_TA : DutyExceptionType.OTHER,
+      remarks: activeTickets > 0
+        ? 'Technician chose to continue active tickets instead of taking the scheduled duty.'
+        : 'Technician was manually skipped due to other work commitments.',
     });
     return { skippedUserId: userId, dashboard: await this.getDashboard(coverage.dutyDate) };
   }
@@ -691,10 +710,52 @@ export class DutyService {
     this.assertAdmin(actor);
     const coverage = await this.coverageRepo.findOne({ where: { id } });
     if (!coverage) throw new NotFoundException('Duty coverage not found.');
+    if (coverage.status !== DutyCoverageStatus.ACTIVE) {
+      throw new BadRequestException('Only active Duty coverage can be returned to Ticket Assignment.');
+    }
+    const activeTickets = coverage.assignedUserId
+      ? await this.ticketRepo.count({ where: { assignedToId: coverage.assignedUserId, status: In(ACTIVE_TICKET_STATUSES) } })
+      : 0;
+    if (activeTickets > 0) {
+      throw new BadRequestException('Reassign the active tickets before returning this technician to Ticket Assignment.');
+    }
+    const releasedUserId = coverage.assignedUserId;
     await this.restoreAttendance(coverage);
     coverage.status = DutyCoverageStatus.RELEASED;
     coverage.releasedAt = new Date();
     await this.coverageRepo.save(coverage);
+    try {
+      const replacement = await this.reconcileCoverage(
+        coverage.dutyDate,
+        coverage.dutyType,
+        releasedUserId ? [releasedUserId] : [],
+      );
+      if (!replacement || replacement.status !== DutyCoverageStatus.INTERVENTION_REQUIRED) {
+        throw new BadRequestException('No eligible replacement technician is available. The current OD remains active.');
+      }
+    } catch (error) {
+      // Returning an OD is a single business action: do not leave the current
+      // coverage released unless a replacement is available for activation.
+      coverage.status = DutyCoverageStatus.ACTIVE;
+      coverage.releasedAt = null;
+      if (releasedUserId) {
+        const attendance = await this.attendanceRepo.findOne({
+          where: { date: coverage.dutyDate, userId: releasedUserId },
+        });
+        if (attendance) {
+          attendance.status = AttendanceStatus.OUT_OF_OFFICE;
+          attendance.notes = `${coverage.dutyType} DUTY`;
+          attendance.isManualOverride = true;
+          await this.attendanceRepo.save(attendance);
+        }
+        await this.eventBus.publish('attendance.verified', { userId: releasedUserId });
+      }
+      await this.coverageRepo.save(coverage);
+      this.sse.emitAttendanceUpdated();
+      this.sse.emitDutyUpdated();
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException('Unable to prepare a replacement technician. The current OD remains active.');
+    }
     this.sse.emitDutyUpdated();
     return coverage;
   }

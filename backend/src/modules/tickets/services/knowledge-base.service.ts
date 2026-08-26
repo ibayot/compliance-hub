@@ -127,11 +127,17 @@ export class KnowledgeBaseService {
     const cleanDescription = (await this.stripSensitiveData(description)).trim();
     const cleanResolution = (await this.stripSensitiveData(resolutionNotes)).trim();
     const prompt = [
-      'Create a concise technical knowledge base article from this resolved support ticket.',
+      'Create a practical, human-readable technical knowledge base article from this resolved support ticket.',
       'Return only valid JSON with exactly these fields: title, content, tags.',
-      'The title must be specific and under 255 characters.',
-      'The content must contain clear sections named Problem and Resolution.',
-      'Rewrite the resolution notes into clear step-by-step instructions while preserving exact commands, paths, and values.',
+      'Use a specific root-cause or task-oriented title under 255 characters; do not copy a vague ticket subject unchanged.',
+      'The content must use this exact Markdown structure: **Problem:**, **Solution:**, and **Result:**.',
+      'Problem must explain the symptom and likely cause in one clear paragraph.',
+      'Solution must be a numbered list. Give every step a short bold action title followed by a clear instruction.',
+      'Result must state the expected outcome and how the reader can verify success.',
+      'Rewrite brief resolution notes into complete, understandable instructions, but never invent unsupported commands or technical facts.',
+      'Preserve every exact command, menu path, registry path, filename, and configuration value supplied by the ticket.',
+      'Generalize personal names, usernames, machine names, and office locations.',
+      'Tags must be a comma-separated list of 3 to 7 concise technical topics, not JSON arrays.',
       'Do not include personal names, email addresses, locations, credentials, or other sensitive data.',
       `Subject: ${cleanSubject}`,
       `Description: ${cleanDescription}`,
@@ -141,8 +147,9 @@ export class KnowledgeBaseService {
     const article = this.parseAiJson(responseText);
     const title = this.normalizeAiText(article.title, cleanSubject || 'Resolved Ticket Knowledge Base Article');
     const content = this.normalizeAiText(article.content, [
-      '## Problem', cleanDescription || 'A support issue was reported.', '',
-      '## Resolution', cleanResolution || 'The issue was resolved by the support team.',
+      '**Problem:**', cleanDescription || 'A support issue was reported.', '',
+      '**Solution:**', `1. ${cleanResolution || 'Apply the verified resolution provided by the support team.'}`, '',
+      '**Result:**', 'Confirm that the reported issue no longer occurs.',
     ].join('\n'));
     const tags = this.normalizeAiText(article.tags, 'ticket-resolution');
     return this.kbRepo.save(this.kbRepo.create({

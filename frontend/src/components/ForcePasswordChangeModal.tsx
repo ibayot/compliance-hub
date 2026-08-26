@@ -23,17 +23,17 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff, AutoFixHigh, Key, VpnKey } from '@mui/icons-material';
 import { usersApi } from '@/lib/api/users';
+import type { User } from '@/lib/types/auth';
 import { authApi } from '@/lib/api/auth';
-import { unitsApi, Unit } from '@/lib/api/units';
 import { useSnackbar } from 'notistack';
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  userId: number;
+  user: User;
 }
 
-export default function ForcePasswordChangeModal({ open, onClose, userId }: Props) {
+export default function ForcePasswordChangeModal({ open, onClose, user }: Props) {
   const { enqueueSnackbar } = useSnackbar();
 
   // Password fields
@@ -79,38 +79,32 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
   const [sex, setSex] = useState('');
   const [unitId, setUnitId] = useState<number | ''>('');
 
-  const [units, setUnits] = useState<Unit[]>([]);
+  const [units, setUnits] = useState<Array<{ id: number; name: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
-      unitsApi.listAll().then(setUnits).catch(console.error);
-
-      if (userId) {
-        usersApi.getUserById(userId).then(user => {
-          if (user) {
-            setStaffId(user.staffId || '');
-            setFirstName(user.firstName || '');
-            setMiddleName(user.middleName || '');
-            setLastName(user.lastName || '');
-            setPhoneNumber(user.phoneNumber || '');
-            setSex(user.sex || '');
-            if (user.units && user.units.length > 0) {
-              setUnitId(user.units[0].id);
-            }
-          }
-        }).catch(console.error);
-      }
+      setNewPassword('');
+      setConfirmPassword('');
+      setStaffId(user.staffId || '');
+      setFirstName(user.firstName || '');
+      setMiddleName(user.middleName || '');
+      setLastName(user.lastName || '');
+      setPhoneNumber(user.phoneNumber || '');
+      setSex(user.sex || '');
+      setUnitId(user.units?.[0]?.id ?? '');
+      usersApi.getProfileUnits().then(setUnits).catch(() => {
+        setUnits(user.units || []);
+        enqueueSnackbar('Unable to load the available units.', { variant: 'error' });
+      });
     }
-  }, [open, userId]);
+  }, [enqueueSnackbar, open, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId) return;
-
-    if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters long.');
+    if (newPassword.length < 12) {
+      setError('Password must be at least 12 characters long.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -126,7 +120,7 @@ export default function ForcePasswordChangeModal({ open, onClose, userId }: Prop
     setLoading(true);
     setError(null);
     try {
-      await usersApi.updateUser(userId, {
+      await usersApi.updateUser(user.id, {
         password: newPassword,
         staffId,
         firstName,

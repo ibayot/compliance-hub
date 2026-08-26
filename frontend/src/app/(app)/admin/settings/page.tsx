@@ -587,6 +587,8 @@ const CAPABILITY_CATEGORIES = [
       { key: 'isTicketSettingsFocal', label: 'Ticket Admin', description: 'Full ticket settings & reports access' },
       { key: 'isAllTickets', label: 'See All Tickets', description: 'View all tickets system-wide (not just own)' },
       { key: 'isTicketFocal', label: 'Assign Tickets', description: 'Manually assign/reassign tickets to technicians' },
+      { key: 'isTicketReportsAccess', label: 'Ticket Reports View', description: 'View own technician Overview, Ratings, and Performance' },
+      { key: 'isTicketReportsManage', label: 'Ticket Reports Manage', description: 'View all technicians, Issues, and SLA Insights' },
     ]
   },
   {

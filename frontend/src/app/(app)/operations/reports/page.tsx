@@ -103,8 +103,7 @@ const ESC_PIE_COLORS: Record<string, string> = {
 
 export default function TicketReportsPage() {
   const { user, myCap } = useAuth();
-  /** True for all staff with ticket settings admin access (DB-driven via is_ticket_settings_focal flag) */
-  const isTicketSettingsFocal = !!myCap?.isTicketSettingsFocal;
+  const canManageReports = !!myCap?.isTicketReportsManage;
 
   const [year, setYear] = useState<number>(CURRENT_YEAR);
   const [periodMode, setPeriodMode] = useState<PeriodMode>('month');
@@ -134,9 +133,13 @@ export default function TicketReportsPage() {
 
   const [issueCountsData, setIssueCountsData] = useState<any[]>([]);
 
+  useEffect(() => {
+    if (!canManageReports && (tab === 1 || tab === 2)) setTab(0);
+  }, [canManageReports, tab]);
+
   // Period-filtered technician dropdown
   useEffect(() => {
-    if (!isTicketSettingsFocal) return;
+    if (!canManageReports) return;
     const filters: Parameters<typeof ticketsApi.getReportTechnicians>[0] = { year };
     if (periodMode === 'month') filters.month = month;
     else if (periodMode === 'quarter') filters.quarter = quarter;
@@ -146,7 +149,7 @@ export default function TicketReportsPage() {
       .getReportTechnicians(filters)
       .then(setTechnicians)
       .catch(() => { });
-  }, [isTicketSettingsFocal, year, periodMode, month, quarter, semester, ticketType]);
+  }, [canManageReports, year, periodMode, month, quarter, semester, ticketType]);
 
   const fetchReports = useCallback(async (silent = false) => {
     if (!silent) {
@@ -159,7 +162,7 @@ export default function TicketReportsPage() {
       else if (periodMode === 'quarter') filters.quarter = quarter;
       else if (periodMode === 'semester') filters.semester = semester;
       // Privileged users: filter by chosen technician (optional); non-privileged: always filter to own id
-      const effectiveTechId = isTicketSettingsFocal
+      const effectiveTechId = canManageReports
         ? technicianId !== ''
           ? (technicianId as number)
           : undefined
@@ -169,7 +172,7 @@ export default function TicketReportsPage() {
       const data = await ticketsApi.getReports(filters);
       setResult(data);
       try {
-        if (isTicketSettingsFocal) {
+        if (canManageReports) {
           const issueData = await ticketsApi.getIssueCountsReport(filters);
           setIssueCountsData(issueData);
         } else {
@@ -234,7 +237,7 @@ export default function TicketReportsPage() {
     semester,
     technicianId,
     ticketType,
-    isTicketSettingsFocal,
+    canManageReports,
     user?.id,
   ]);
 
@@ -260,8 +263,8 @@ export default function TicketReportsPage() {
   }, [year, month, quarter, semester, periodMode]);
 
   useEffect(() => {
-    if (tab === 2) fetchSlaInsights();
-  }, [tab, fetchSlaInsights]);
+    if (canManageReports && tab === 2) fetchSlaInsights();
+  }, [canManageReports, tab, fetchSlaInsights]);
 
   // Derived data for Issues Tab
   const uniqueCategories = React.useMemo(() => {
@@ -369,7 +372,7 @@ export default function TicketReportsPage() {
     })) ?? [];
 
   // Individual view = specific technician selected (privileged) OR non-privileged user viewing own data
-  const isIndividualView = isTicketSettingsFocal ? !!technicianId : true;
+  const isIndividualView = canManageReports ? !!technicianId : true;
   const hasPerformanceData =
     slaPieData.length > 0 ||
     (result?.slaByType?.length ?? 0) > 0 ||
@@ -399,10 +402,10 @@ export default function TicketReportsPage() {
       </Box>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-          <Tab label="Overview & Ratings" />
-          <Tab label="Issues" />
-          <Tab label="SLA Insights" />
-          <Tab label="Performance" />
+          <Tab value={0} label="Overview & Ratings" />
+          {canManageReports && <Tab value={1} label="Issues" />}
+          {canManageReports && <Tab value={2} label="SLA Insights" />}
+          <Tab value={3} label="Performance" />
         </Tabs>
       </Box>
 
@@ -507,7 +510,7 @@ export default function TicketReportsPage() {
                     <MenuItem value="it_support">IT Support</MenuItem>
                     <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
                   </TextField>
-                  {isTicketSettingsFocal && (
+                  {canManageReports && (
                     <TextField
                       select
                       fullWidth
@@ -1638,7 +1641,7 @@ export default function TicketReportsPage() {
       )}
 
       {/* ── Tab 1: Issues ── */}
-      {tab === 1 && result && issueCountsData && (
+      {canManageReports && tab === 1 && result && issueCountsData && (
         <Box sx={{ mt: 2 }}>
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
             <Tabs value={issuesSubTab} onChange={(_, v) => setIssuesSubTab(v)}>
@@ -1799,7 +1802,7 @@ export default function TicketReportsPage() {
       )}
 
       {/* ── Tab 2: SLA Insights ── */}
-      {tab === 2 && (
+      {canManageReports && tab === 2 && (
         <Box sx={{ mt: 4 }}>
           <Typography variant="h6" fontWeight={600} mb={2}>
             SLA Recalibration Insights

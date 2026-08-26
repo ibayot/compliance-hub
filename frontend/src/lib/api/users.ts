@@ -98,6 +98,8 @@ export interface RoleCapabilityRecord {
   isAllTickets: boolean;
   isTicketFocal: boolean;
   isTicketModuleAccess: boolean;
+  isTicketReportsAccess: boolean;
+  isTicketReportsManage: boolean;
   isUserManagementAdmin?: boolean;
   isUserManagementView?: boolean;
   isSmtpSettingsAccess: boolean;
@@ -142,6 +144,8 @@ export interface UpdateRoleCapabilityPayload {
   isAllTickets?: boolean;
   isTicketFocal?: boolean;
   isTicketModuleAccess?: boolean;
+  isTicketReportsAccess?: boolean;
+  isTicketReportsManage?: boolean;
   isSmtpSettingsAccess?: boolean;
   isGlobalSettingsAccess?: boolean;
   isKpiAccess?: boolean;

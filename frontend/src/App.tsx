@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { Alert, Box, CircularProgress } from '@mui/material';
+import { Box, CircularProgress } from '@mui/material';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import type { RoleCapabilityRecord } from '@/lib/api/users';
@@ -66,16 +66,18 @@ function ProtectedDashboard({
   const isAllowed = hasCapability;
 
   if (!isAllowed) {
-    return (
-      <DashboardLayout>
-        <Box p={4}>
-          <Alert severity="warning">You do not have access to this feature.</Alert>
-        </Box>
-      </DashboardLayout>
-    );
+    return <Navigate to="/dashboard" replace state={{ deniedPath: location.pathname }} />;
   }
 
   return <DashboardLayout>{children}</DashboardLayout>;
+}
+
+function UnknownRouteRedirect() {
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) {
+    return <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh"><CircularProgress /></Box>;
+  }
+  return <Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />;
 }
 
 export default function App() {
@@ -136,7 +138,7 @@ export default function App() {
       <Route
         path="/operations/tickets"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isTicketModuleAccess">
             <TicketsPage />
           </ProtectedDashboard>
         }
@@ -144,7 +146,7 @@ export default function App() {
       <Route
         path="/operations/tickets/:id"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isTicketModuleAccess">
             <TicketDetailPage />
           </ProtectedDashboard>
         }
@@ -240,7 +242,7 @@ export default function App() {
       <Route
         path="/operations/reports"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isTicketReportsAccess">
             <TicketReportsPage />
           </ProtectedDashboard>
         }
@@ -248,7 +250,7 @@ export default function App() {
       <Route
         path="/operations/knowledge-base"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isTicketModuleAccess">
             <KnowledgeBasePage />
           </ProtectedDashboard>
         }
@@ -256,7 +258,7 @@ export default function App() {
       <Route
         path="/operations/duties"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability={['isDutyViewerAccess', 'isDutyAdminAccess']}>
             <DutiesPage />
           </ProtectedDashboard>
         }
@@ -270,7 +272,7 @@ export default function App() {
         }
       />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<UnknownRouteRedirect />} />
     </Routes>
   );
 }

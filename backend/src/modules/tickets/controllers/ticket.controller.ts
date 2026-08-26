@@ -202,7 +202,7 @@ export class TicketController {
 
   /** GET /tickets/reports — satisfaction reports (QA #11) */
   @Get('reports')
-  @RequireCapability('isTicketModuleAccess')
+  @RequireCapability('isTicketReportsAccess')
   async getTicketReports(
     @Query('year') year?: string,
     @Query('month') month?: string,
@@ -225,7 +225,7 @@ export class TicketController {
   }
 
   @Get('performance-metrics')
-  @RequireCapability('isTicketModuleAccess')
+  @RequireCapability('isTicketReportsAccess')
   async getPerformanceMetrics(
     @Query('year') year?: string,
     @Query('month') month?: string,
@@ -249,7 +249,7 @@ export class TicketController {
 
   /** GET /tickets/ratings-report — detailed ratings report (Tickets, Techs, Days/Weeks/Months/Quarters) */
   @Get('ratings-report')
-  @RequireCapability('isTicketModuleAccess')
+  @RequireCapability('isTicketReportsAccess')
   async getRatingsReport(
     @Query('year') year?: string,
     @Query('month') month?: string,
@@ -257,6 +257,7 @@ export class TicketController {
     @Query('semester') semester?: string,
     @Query('technicianId') technicianId?: string,
     @Query('ticketType') ticketType?: string,
+    @Request() req?: any,
   ) {
     return this.ticketService.getRatingsReport({
       year: year ? Number(year) : undefined,
@@ -265,12 +266,14 @@ export class TicketController {
       semester: semester ? Number(semester) : undefined,
       technicianId: technicianId ? Number(technicianId) : undefined,
       ticketType,
+      viewerId: req?.user?.id ?? req?.user?.userId,
+      viewerRole: req?.user?.role,
     });
   }
 
   /** GET /tickets/report-technicians — technicians who had tickets in a given period */
   @Get('report-technicians')
-  @RequireCapability('isTicketModuleAccess')
+  @RequireCapability('isTicketReportsManage')
   async getReportTechnicians(
     @Query('year') year?: string,
     @Query('month') month?: string,
@@ -537,8 +540,7 @@ export class TicketController {
 
   @Get('reports/issue-counts')
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isTicketSettingsFocal')
-  @RequireCapability('isTicketModuleAccess')
+  @RequireCapability('isTicketReportsManage')
   async getIssueCountsReport(
     @Query('year') year?: string,
     @Query('month') month?: string,
