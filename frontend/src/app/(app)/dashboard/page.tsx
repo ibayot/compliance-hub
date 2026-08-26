@@ -128,6 +128,8 @@ export default function DashboardPage() {
   const isFullDashboard = !!myCap?.isReportsAccess || !!myCap?.isReviewsAccess || !!myCap?.isTicketSettingsFocal;
   const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage;
   const isCybersecurityOfficer = !!myCap?.isIto;
+  const canViewSecurityIncidents = !!myCap?.isReportsAccess;
+  const canViewCybersecurityMetrics = !!myCap?.isIto;
   const canViewDuties = !!myCap?.isDutyViewerAccess || !!myCap?.isDutyAdminAccess;
 
   useEffect(() => {
@@ -213,8 +215,8 @@ export default function DashboardPage() {
         userDashStatsResult,
       ] = await Promise.allSettled([
         complianceEnabled ? documentsApi.listDocuments({ limit: 1000 }) : Promise.resolve({ data: [], total: 0 }),
-        complianceEnabled ? cybersecurityApi.getAll() : Promise.resolve(null),
-        complianceEnabled ? incidentsApi.getTodayStats() : Promise.resolve(null),
+        complianceEnabled && canViewCybersecurityMetrics ? cybersecurityApi.getAll() : Promise.resolve(null),
+        complianceEnabled && canViewSecurityIncidents ? incidentsApi.getTodayStats() : Promise.resolve(null),
         ticketingEnabled ? ticketsApi.getStatistics() : Promise.resolve(null),
         complianceEnabled ? kpiApi.dashboardSummary(periodYear, periodMonth) : Promise.resolve(null),
         ticketingEnabled ? ticketsApi.getDashboardStats() : Promise.resolve(null),
@@ -279,8 +281,8 @@ export default function DashboardPage() {
           userDashStatsResult,
         ] = await Promise.allSettled([
           complianceEnabled ? documentsApi.listDocuments({ limit: 1000 }) : Promise.resolve({ data: [], total: 0 }),
-          complianceEnabled ? cybersecurityApi.getAll() : Promise.resolve(null),
-          complianceEnabled ? incidentsApi.getTodayStats() : Promise.resolve(null),
+          complianceEnabled && canViewCybersecurityMetrics ? cybersecurityApi.getAll() : Promise.resolve(null),
+          complianceEnabled && canViewSecurityIncidents ? incidentsApi.getTodayStats() : Promise.resolve(null),
           ticketingEnabled ? ticketsApi.getStatistics() : Promise.resolve(null), // Fetch unfiltered stats for top cards
           complianceEnabled ? kpiApi.dashboardSummary(periodYear, periodMonth) : Promise.resolve(null),
           ticketingEnabled ? ticketsApi.getDashboardStats() : Promise.resolve(null),
@@ -842,7 +844,7 @@ export default function DashboardPage() {
           </Grid>
 
 
-          {isFullDashboard && appMode !== 'ticketing_only' && (
+          {canViewSecurityIncidents && appMode !== 'ticketing_only' && (
             <Grid item xs={12} md={6} lg={3}>
               <Card
                 sx={{

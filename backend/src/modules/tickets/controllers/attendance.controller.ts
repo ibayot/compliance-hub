@@ -145,7 +145,7 @@ export class AttendanceController {
 
   /** DELETE /attendance/:userId/:date */
   @Delete(':userId/:date')
-  @ApiTags('_test-only')
+  @ApiTags('test-only')
   @RequireCapability('isAttendanceManage')
   @HttpCode(HttpStatus.OK)
   async deleteAttendance(@Param('userId') userId: string, @Param('date') date: string, @Request() req: any) {
@@ -180,7 +180,7 @@ export class AttendanceController {
   }
 
   /** DELETE /attendance/all — super_admin only: clear all attendance records */
-  @ApiTags('_test-only')
+  @ApiTags('test-only')
   @Delete('all')
   @RequireCapability('isAttendanceManage')
   @HttpCode(HttpStatus.OK)

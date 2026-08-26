@@ -315,6 +315,7 @@ function DocTypesPanel({ unit }: { unit: Unit }) {
 
 // ---------- Main Units Page ----------
 export default function UnitsPage() {
+  const { enqueueSnackbar } = useSnackbar();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -353,15 +354,23 @@ export default function UnitsPage() {
   };
 
   const handleSave = async () => {
+    if (!name.trim()) {
+      enqueueSnackbar('Unit name is required.', { variant: 'warning' });
+      return;
+    }
     try {
       setSaving(true);
       if (editingUnit) {
         await unitsApi.updateUnit(editingUnit.id, { name, description });
+        enqueueSnackbar('Unit updated successfully.', { variant: 'success' });
       } else {
         await unitsApi.createUnit({ name, description });
+        enqueueSnackbar('Unit created successfully.', { variant: 'success' });
       }
       setOpen(false);
       await loadUnits();
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to save unit.', { variant: 'error' });
     } finally {
       setSaving(false);
     }

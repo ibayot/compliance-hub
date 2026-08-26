@@ -306,6 +306,42 @@ describe('DutyService', () => {
     )).rejects.toThrow('shared duty roster');
   });
 
+  it('rejects a duty log when the technician has an exception on that date', async () => {
+    const assignments = repo({ find: jest.fn().mockResolvedValue([]) });
+    const exceptions = repo({ findOne: jest.fn().mockResolvedValue({ id: 'exception-1' }) });
+    const service = makeService({ assignments, exceptions, caps: {
+      isDutyAdminAccess: jest.fn().mockReturnValue(true),
+      isDutyViewerAccess: jest.fn(),
+      isTechnician: jest.fn().mockReturnValue(true),
+    } });
+
+    await expect(service.saveAssignment(
+      { id: 99, role: 'admin' },
+      { dutyDate: '2026-08-20', userId: 1, dutyType: DutyType.OD },
+    )).rejects.toThrow('duty exception');
+  });
+
+  it('rejects an exception when the technician already has duty on that date', async () => {
+    const roster = repo({
+      find: jest.fn().mockResolvedValue([
+        { id: 'roster-1', userId: 1, dutyType: DutyType.OD, sortOrder: 0, isActive: true },
+      ]),
+    });
+    const assignments = repo({
+      findOne: jest.fn().mockResolvedValue({ id: 'assignment-1', dutyType: DutyType.OD }),
+    });
+    const service = makeService({ roster, assignments, caps: {
+      isDutyAdminAccess: jest.fn().mockReturnValue(true),
+      isDutyViewerAccess: jest.fn(),
+      isTechnician: jest.fn().mockReturnValue(true),
+    } });
+
+    await expect(service.saveException(
+      { id: 99, role: 'admin' },
+      { exceptionDate: '2026-08-20', userId: 1, type: DutyExceptionType.TRAVEL_ORDER },
+    )).rejects.toThrow('already has OD duty');
+  });
+
 });
 
 function chain(result: any) {

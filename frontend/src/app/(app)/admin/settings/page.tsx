@@ -913,6 +913,10 @@ function RoleManagementCard() {
   useSse(['GLOBAL_SETTINGS_UPDATED'], loadRoles);
 
   const handleCreate = async () => {
+    if (form.description.trim().length < 5) {
+      enqueueSnackbar('Description must be at least 5 characters.', { variant: 'warning' });
+      return;
+    }
     const codeVal = form.value.trim().toLowerCase().replace(/\s+/g, '_');
     if (!codeVal.match(/^[a-z0-9_]+$/)) {
       enqueueSnackbar('Role code must use lowercase letters, digits, and underscores only.', {
@@ -942,6 +946,10 @@ function RoleManagementCard() {
 
   const handleUpdate = async () => {
     if (!selected) return;
+    if (selected.description.trim().length < 5) {
+      enqueueSnackbar('Description must be at least 5 characters.', { variant: 'warning' });
+      return;
+    }
     try {
       setSaving(true);
       const originalValue = (selected as any)._originalValue ?? selected.value;
@@ -1141,7 +1149,7 @@ function RoleManagementCard() {
                 <Button
                   variant="contained"
                   onClick={handleUpdate}
-                  disabled={saving || !selected?.label || !selected?.description}
+                  disabled={saving || !selected?.label || selected.description.trim().length < 5}
                 >
                   {saving ? 'Saving...' : 'Save'}
                 </Button>
@@ -1199,7 +1207,7 @@ function RoleManagementCard() {
                 <Button
                   variant="contained"
                   onClick={handleCreate}
-                  disabled={saving || !form.value || !form.label || !form.description}
+                  disabled={saving || !form.value || !form.label || form.description.trim().length < 5}
                 >
                   {saving ? 'Saving...' : 'Create'}
                 </Button>

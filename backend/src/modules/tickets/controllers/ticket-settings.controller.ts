@@ -43,7 +43,7 @@ export class TicketSettingsController {
   ) {}
 
   /** POST /ticket-settings/email-test — send a test email to verify SMTP (global settings access) */
-  @ApiTags('_test-only')
+  @ApiTags('test-only')
   @Post('email-test')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isGlobalSettingsAccess')

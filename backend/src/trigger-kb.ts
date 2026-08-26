@@ -1,5 +1,4 @@
 process.env.DB_PORT = '3307';
-process.env.CEREBRAS_API_KEY = 'YOUR_CEREBRAS_API_KEY';
 process.env.GROQ_API_KEY = 'YOUR_GROQ_API_KEY';
 
 import { NestFactory } from '@nestjs/core';

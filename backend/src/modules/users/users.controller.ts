@@ -100,7 +100,9 @@ export class UsersController {
   }
 
   @Get()
-  // @Roles removed to allow any authenticated user to list users for ticket proxying
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketModuleAccess')
+  // Ticket-capable users need this list for the intended proxy-ticket requester picker.
   findAll() {
     return this.usersService.findAll();
   }

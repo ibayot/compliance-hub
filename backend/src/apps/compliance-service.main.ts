@@ -8,6 +8,7 @@ import { ComplianceServiceAppModule } from './compliance-service.module';
 import { DataSource } from 'typeorm';
 import { GlobalExceptionFilter } from '../shared/filters/global-exception.filter';
 import { docsAuthMiddleware } from '../common/middleware/docs-auth.middleware';
+import { BlankStringToNullPipe } from '../common/pipes/blank-string-to-null.pipe';
 
 async function bootstrap() {
   const app = await NestFactory.create(ComplianceServiceAppModule);
@@ -33,6 +34,7 @@ async function bootstrap() {
   );
 
   app.useGlobalPipes(
+    new BlankStringToNullPipe(),
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
@@ -159,6 +161,7 @@ async function bootstrap() {
     .addTag('incidents', 'IT incident management')
     .addTag('cybersecurity', 'Cybersecurity compliance records')
     .addTag('reviews', 'Document reviews and comparisons')
+    .addTag('test-only', 'Test and diagnostic endpoints; not part of normal workflows')
     .build();
   const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
   app.use('/api/docs', docsAuthMiddleware);

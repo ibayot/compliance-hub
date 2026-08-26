@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Unit } from './entities/unit.entity';
@@ -13,15 +13,28 @@ export class UnitsService {
   ) {}
 
   async create(createUnitDto: CreateUnitDto): Promise<Unit> {
+    const name = createUnitDto.name?.trim();
+    if (!name) throw new BadRequestException('Unit name is required');
+
     const existingUnit = await this.unitsRepository.findOne({
-      where: { name: createUnitDto.name },
+      where: { name },
     });
 
     if (existingUnit) {
+      if (!existingUnit.active) {
+        existingUnit.name = name;
+        existingUnit.description = createUnitDto.description?.trim() || null;
+        existingUnit.active = true;
+        return await this.unitsRepository.save(existingUnit);
+      }
       throw new ConflictException('Unit with this name already exists');
     }
 
-    const unit = this.unitsRepository.create(createUnitDto);
+    const unit = this.unitsRepository.create({
+      ...createUnitDto,
+      name,
+      description: createUnitDto.description?.trim() || null,
+    });
     return await this.unitsRepository.save(unit);
   }
 
@@ -43,7 +56,22 @@ export class UnitsService {
 
   async update(id: number, updateUnitDto: UpdateUnitDto): Promise<Unit> {
     const unit = await this.findOne(id);
-    Object.assign(unit, updateUnitDto);
+    const name = updateUnitDto.name?.trim();
+    if (updateUnitDto.name !== undefined) {
+      if (!name) throw new BadRequestException('Unit name is required');
+      const duplicate = await this.unitsRepository.findOne({ where: { name } });
+      if (duplicate && duplicate.id !== id) {
+        throw new ConflictException('Unit with this name already exists');
+      }
+    }
+
+    Object.assign(unit, {
+      ...updateUnitDto,
+      ...(updateUnitDto.name !== undefined ? { name } : {}),
+      ...(updateUnitDto.description !== undefined
+        ? { description: updateUnitDto.description?.trim() || null }
+        : {}),
+    });
     return await this.unitsRepository.save(unit);
   }
 

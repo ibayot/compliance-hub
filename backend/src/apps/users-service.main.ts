@@ -7,6 +7,7 @@ import { DataSource } from 'typeorm';
 import { UsersServiceAppModule } from './users-service.module';
 import { GlobalExceptionFilter } from '../shared/filters/global-exception.filter';
 import { docsAuthMiddleware } from '../common/middleware/docs-auth.middleware';
+import { BlankStringToNullPipe } from '../common/pipes/blank-string-to-null.pipe';
 
 async function bootstrap() {
   process.env.AUTH_ENABLE_TICKET_HOOKS = 'false';
@@ -24,6 +25,7 @@ async function bootstrap() {
     credentials: true,
   });
   app.useGlobalPipes(
+    new BlankStringToNullPipe(),
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
@@ -86,6 +88,7 @@ async function bootstrap() {
     .addTag('units', 'Organisational unit management')
     .addTag('role-capabilities', 'Role capability matrix administration')
     .addTag('audit-logs', 'System-wide audit logging and tracking')
+    .addTag('test-only', 'Test and diagnostic endpoints; not part of normal workflows')
     .addTag('_internal', 'Internal service-to-service communication')
     .build();
   const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);

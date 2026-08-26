@@ -5,6 +5,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { AppModule } from './app.module';
+import { BlankStringToNullPipe } from './common/pipes/blank-string-to-null.pipe';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -38,6 +39,7 @@ async function bootstrap() {
 
   // Global validation pipe
   app.useGlobalPipes(
+    new BlankStringToNullPipe(),
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
@@ -79,6 +81,7 @@ async function bootstrap() {
     .addTag('Units', 'Organizational units management')
     .addTag('Metrics', 'Compliance metrics and templates')
     .addTag('Reviews', 'Manual compliance reviews')
+    .addTag('test-only', 'Test and diagnostic endpoints; not part of normal workflows')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

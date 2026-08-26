@@ -101,8 +101,6 @@ services:
       - DB_BOOTSTRAP=false
       - REDIS_HOST=redis
       - USERS_SERVICE_URL=http://users-service:4101
-      - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY:-}
       - COMMENT_ATTACHMENT_STORAGE_ROOT=/app/uploads/comments
       - ESCALATION_STORAGE_ROOT=/app/uploads/escalations
       - SWAGGER_USERNAME=REPLACE_WITH_YOUR_SWAGGER_USERNAME

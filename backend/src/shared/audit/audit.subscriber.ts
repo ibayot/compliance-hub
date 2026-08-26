@@ -16,6 +16,14 @@ export class AuditVariableSubscriber implements EntitySubscriberInterface {
   constructor(private readonly dataSource: DataSource) {
     this.dataSource.subscribers.push(this);
   }
+
+  beforeInsert(event: InsertEvent<any>) {
+    normalizeNullableBlankStrings(event);
+  }
+
+  beforeUpdate(event: UpdateEvent<any>) {
+    normalizeNullableBlankStrings(event);
+  }
   async afterInsert(event: InsertEvent<any>) {
     await this.logAudit(event, 'INSERT');
   }
@@ -162,6 +170,25 @@ export class AuditVariableSubscriber implements EntitySubscriberInterface {
       );
     } catch (err) {
       console.error(`AuditSubscriber failed to write audit log for ${tableName}:`, err);
+    }
+  }
+}
+
+/**
+ * Normalize persistence-level entity saves as a backstop for non-HTTP writes.
+ * Required columns are deliberately left unchanged so the database/validation
+ * layer can reject invalid blank values instead of silently turning them null.
+ */
+export function normalizeNullableBlankStrings(event: InsertEvent<any> | UpdateEvent<any>): void {
+  if (!event.entity || !event.metadata) return;
+
+  for (const column of event.metadata.columns) {
+    if (!column.isNullable) continue;
+
+    const propertyName = column.propertyName;
+    const value = event.entity[propertyName];
+    if (typeof value === 'string' && value.trim() === '') {
+      event.entity[propertyName] = null;
     }
   }
 }

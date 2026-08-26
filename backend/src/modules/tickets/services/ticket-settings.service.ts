@@ -573,8 +573,8 @@ export class TicketSettingsService {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '_')
       .replace(/(^_|_$)/g, '');
-    const existing = await this.issueTypeRepo.findOne({ where: { key, isDeleted: false } });
-    if (existing) throw new BadRequestException(`Issue type key "${key}" already exists`);
+    const existing = await this.issueTypeRepo.findOne({ where: { key } });
+    if (existing && !existing.isDeleted) throw new BadRequestException(`Issue type key "${key}" already exists`);
 
     if (dto.slaHours !== undefined && dto.slaHours !== null) {
       if (dto.slaHours < 0 || dto.slaHours > 168) {
@@ -586,7 +586,7 @@ export class TicketSettingsService {
       await this.getCategoryById(dto.categoryId);
     }
 
-    const issueType = this.issueTypeRepo.create({
+    const issueType = existing ?? this.issueTypeRepo.create({
       key,
       name: dto.name.trim(),
       description: dto.description?.trim() || null,
@@ -599,6 +599,19 @@ export class TicketSettingsService {
       created_by: actorId,
       updated_by: actorId,
     });
+
+    if (existing) {
+      existing.key = key;
+      existing.name = dto.name.trim();
+      existing.description = dto.description?.trim() || null;
+      existing.isActive = dto.isActive ?? (dto.slaHours ?? null) !== null;
+      existing.isDeleted = false;
+      existing.category_id = dto.categoryId || null;
+      existing.slaHours = dto.slaHours ?? null;
+      existing.allowablePauseHours = dto.allowablePauseHours ?? 48;
+      existing.maxFreezeHours = dto.maxFreezeHours ?? null;
+      existing.updated_by = actorId;
+    }
 
     const saved = await this.issueTypeRepo.save(issueType);
     this.sseService.emitGlobalSettingsUpdated();
@@ -620,6 +633,10 @@ export class TicketSettingsService {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/(^_|_$)/g, '');
+      const duplicate = await this.issueTypeRepo.findOne({ where: { key: issueType.key } });
+      if (duplicate && duplicate.id !== issueType.id && !duplicate.isDeleted) {
+        throw new BadRequestException(`Issue type key "${issueType.key}" already exists`);
+      }
     }
     if (dto.description !== undefined) issueType.description = dto.description?.trim() || null;
     if (dto.slaHours !== undefined) {

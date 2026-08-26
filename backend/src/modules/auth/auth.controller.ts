@@ -6,7 +6,6 @@ import {
   UseGuards,
   UseInterceptors,
   ClassSerializerInterceptor,
-  Headers,
   Request,
   Res,
 } from '@nestjs/common';
@@ -19,7 +18,6 @@ import { GoogleLoginDto } from './dto/google-login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
-import { ApiHeader } from '@nestjs/swagger';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -37,21 +35,23 @@ export class AuthController {
   }
 
   @Post('login')
-  @ApiHeader({ name: 'x-device-token', required: false, description: 'Optional device token for push notifications' })
-  async login(@Body() loginDto: LoginDto, @Headers() headers: any, @Headers('x-client-platform') clientPlatform: string, @Res({ passthrough: true }) res: Response) {
-    const deviceToken = headers['x-device-token'];
+  async login(@Body() loginDto: LoginDto, @Request() req: any, @Res({ passthrough: true }) res: Response) {
+    const deviceToken = req.headers?.['x-device-token'];
+    const clientPlatform = req.headers?.['x-client-platform'];
     return this.completeBrowserAuth(await this.authService.login(loginDto, deviceToken), clientPlatform, res);
   }
 
 
   @Post('refresh')
-  async refresh(@Body('refreshToken') refreshToken: string, @Request() req: any, @Headers('x-client-platform') clientPlatform: string, @Res({ passthrough: true }) res: Response) {
+  async refresh(@Body('refreshToken') refreshToken: string, @Request() req: any, @Res({ passthrough: true }) res: Response) {
     const token = refreshToken || req.headers?.cookie?.split(';').map((value: string) => value.trim()).find((value: string) => value.startsWith('auth_refresh='))?.slice('auth_refresh='.length);
+    const clientPlatform = req.headers?.['x-client-platform'];
     return this.completeBrowserAuth(await this.authService.refresh(token), clientPlatform, res);
   }
 
   @Post('google-login')
-  async googleLogin(@Body() dto: GoogleLoginDto, @Headers('x-client-platform') clientPlatform: string, @Res({ passthrough: true }) res: Response) {
+  async googleLogin(@Body() dto: GoogleLoginDto, @Request() req: any, @Res({ passthrough: true }) res: Response) {
+    const clientPlatform = req.headers?.['x-client-platform'];
     return this.completeBrowserAuth(await this.authService.googleLogin(dto.idToken), clientPlatform, res);
   }
 
@@ -68,17 +68,16 @@ export class AuthController {
   }
 
   @Post('mfa/verify')
-  @ApiHeader({ name: 'x-device-token', required: false, description: 'Optional device token for push notifications' })
   async verifyMfaCode(
     @Body('tempToken') tempToken: string,
     @Body('code') code: string,
     @Body('rememberDevice') rememberDevice: boolean,
-      @Headers() headers: any,
-      @Headers('x-client-platform') clientPlatform: string,
+      @Request() req: any,
       @Res({ passthrough: true }) res: Response,
   ) {
-    const deviceToken = headers['x-device-token'];
-      return this.completeBrowserAuth(await this.authService.verifyMfaCode(tempToken, code, rememberDevice, deviceToken), clientPlatform, res);
+    const deviceToken = req.headers?.['x-device-token'];
+    const clientPlatform = req.headers?.['x-client-platform'];
+    return this.completeBrowserAuth(await this.authService.verifyMfaCode(tempToken, code, rememberDevice, deviceToken), clientPlatform, res);
   }
 
   @Post('logout')

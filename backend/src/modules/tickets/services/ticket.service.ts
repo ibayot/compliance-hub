@@ -1890,6 +1890,7 @@ export class TicketService implements OnModuleInit {
           saved.subject,
           saved.description,
           saved.resolutionNotes!,
+          saved.categoryId ?? undefined,
         )
         .then(async () => {
           // Successfully generated, clear the pending flag

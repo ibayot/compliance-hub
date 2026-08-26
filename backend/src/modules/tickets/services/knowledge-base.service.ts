@@ -11,7 +11,16 @@ import OpenAI from 'openai';
 export class KnowledgeBaseService {
   private readonly logger = new Logger(KnowledgeBaseService.name);
   private groqClient: OpenAI | null = null;
-  private cerebrasClient: OpenAI | null = null;
+  private readonly groqModel = 'openai/gpt-oss-120b';
+  private cloudflareAccountId: string | null = null;
+  private cloudflareApiToken: string | null = null;
+  // Model selection is maintained in code. If a model is unavailable, the next
+  // current candidate is tried without requiring a deployment-time setting change.
+  private readonly cloudflareModels = [
+    '@cf/meta/llama-3.1-8b-instruct',
+    '@cf/zai-org/glm-4.7-flash',
+    '@cf/google/gemma-4-26b-a4b-it',
+  ];
 
   constructor(
     @InjectRepository(KnowledgeArticle)
@@ -31,15 +40,12 @@ export class KnowledgeBaseService {
       this.logger.warn('GROQ_API_KEY is not set. Real-time KB suggestions will be disabled.');
     }
 
-    const cerebrasKey = this.configService.get<string>('CEREBRAS_API_KEY');
-    if (cerebrasKey) {
-      this.cerebrasClient = new OpenAI({
-        apiKey: cerebrasKey,
-        baseURL: 'https://api.cerebras.ai/v1',
-      });
-      this.logger.log('Cerebras Client initialized for KB Generation.');
+    this.cloudflareAccountId = this.configService.get<string>('CLOUDFLARE_ACCOUNT_ID')?.trim() || null;
+    this.cloudflareApiToken = this.configService.get<string>('CLOUDFLARE_API_TOKEN')?.trim() || null;
+    if (this.cloudflareAccountId && this.cloudflareApiToken) {
+      this.logger.log('Cloudflare Workers AI configured for KB generation.');
     } else {
-      this.logger.warn('CEREBRAS_API_KEY is not set. KB generation will be disabled.');
+      this.logger.warn('Cloudflare Workers AI is not configured.');
     }
   }
 
@@ -82,133 +88,102 @@ export class KnowledgeBaseService {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
   }
 
+  private normalizeAiText(value: unknown, fallback = ''): string {
+    let text = typeof value === 'string'
+      ? value
+      : value == null
+        ? fallback
+        : JSON.stringify(value);
+    text = text.trim();
+    const fenced = text.match(/^```(?:json|markdown|md|text)?\s*([\s\S]*?)\s*```$/i);
+    if (fenced) text = fenced[1].trim();
+    return text
+      .replace(/\\r\\n/g, '\n')
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\r')
+      .replace(/\\t/g, '\t')
+      .replace(/\\"/g, '"');
+  }
+
+  private parseAiJson(responseText: string): Record<string, any> {
+    const unfenced = responseText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const jsonStart = unfenced.indexOf('{');
+    const jsonEnd = unfenced.lastIndexOf('}');
+    if (jsonStart < 0 || jsonEnd <= jsonStart) throw new Error('AI provider returned no JSON result.');
+    return JSON.parse(unfenced.slice(jsonStart, jsonEnd + 1));
+  }
+
   async generateKbFromTicket(
     subject: string,
     description: string,
     resolutionNotes: string,
     categoryId?: string,
   ): Promise<KnowledgeArticle | null> {
-    if (!this.cerebrasClient) {
-      this.logger.warn('Cannot generate KB because Cerebras client is not configured.');
-      return null;
+    if (!this.cloudflareAccountId || !this.cloudflareApiToken) {
+      throw new Error('No AI provider was able to generate the Knowledge Base article.');
     }
 
-    try {
-      const cleanSubject = await this.stripSensitiveData(subject);
-      const cleanDesc = await this.stripSensitiveData(description);
-      const cleanNotes = await this.stripSensitiveData(resolutionNotes);
+    const cleanSubject = (await this.stripSensitiveData(subject)).trim();
+    const cleanDescription = (await this.stripSensitiveData(description)).trim();
+    const cleanResolution = (await this.stripSensitiveData(resolutionNotes)).trim();
+    const prompt = [
+      'Create a concise technical knowledge base article from this resolved support ticket.',
+      'Return only valid JSON with exactly these fields: title, content, tags.',
+      'The title must be specific and under 255 characters.',
+      'The content must contain clear sections named Problem and Resolution.',
+      'Rewrite the resolution notes into clear step-by-step instructions while preserving exact commands, paths, and values.',
+      'Do not include personal names, email addresses, locations, credentials, or other sensitive data.',
+      `Subject: ${cleanSubject}`,
+      `Description: ${cleanDescription}`,
+      `Resolution Notes: ${cleanResolution}`,
+    ].join('\n');
+    const responseText = await this.requestCloudflare(prompt);
+    const article = this.parseAiJson(responseText);
+    const title = this.normalizeAiText(article.title, cleanSubject || 'Resolved Ticket Knowledge Base Article');
+    const content = this.normalizeAiText(article.content, [
+      '## Problem', cleanDescription || 'A support issue was reported.', '',
+      '## Resolution', cleanResolution || 'The issue was resolved by the support team.',
+    ].join('\n'));
+    const tags = this.normalizeAiText(article.tags, 'ticket-resolution');
+    return this.kbRepo.save(this.kbRepo.create({
+      title: title.slice(0, 255),
+      content,
+      tags: tags.slice(0, 255),
+    }));
+  }
 
-      // Fetch all existing KBs to pass to the prompt for duplicate checking
-      // (If the KB grows huge, we'd need vector search, but for now we just fetch titles and IDs)
-      const existingKbs = await this.kbRepo.find({ select: ['id', 'title', 'content'] });
-      const kbListText = existingKbs
-        .map((kb) => `ID: ${kb.id}\nTitle: ${kb.title}\nContent: ${kb.content}\n---`)
-        .join('\n');
-
-      let issueContext = '';
-      if (categoryId) {
-        const issues = await this.issueRepo.find({ where: { category_id: categoryId, isActive: true } });
-        if (issues.length > 0) {
-          issueContext = `\nKnown Issues for this category:\n${issues.map((iss) => `- ID: ${iss.id} | Name: ${iss.name} | Desc: ${iss.description || ''}`).join('\n')}\nIf the resolution matches one of these specific issues, ensure the KB is focused on that single issue. Assess if the KB is an update of the single issue KB or a multiple-issue KB.`;
-        }
-      }
-
-      const prompt = `
-You are an expert IT Helpdesk Knowledge Base article generator.
-We have a resolved ticket with the following details:
-Subject: ${cleanSubject}
-Description: ${cleanDesc}
-Resolution Notes: ${cleanNotes}
-${issueContext}
-
-We want to add this to our Knowledge Base.
-However, we want to keep our KB clean and avoid duplicates.
-Here are the existing KB articles:
-${kbListText}
-
-Task:
-1. Determine if this new ticket addresses the exact same specific root problem/error as an existing KB article. (e.g., "Printer Paper Jam" and "Printer Ink Pad Error" are completely DIFFERENT problems and must NOT be merged. However, two different ways to solve a "Paper Jam" ARE the same problem and should be merged).
-2. If it IS the exact same problem AND the resolution steps are fundamentally the same (or very closely similar in nature), set action to "IGNORE".
-3. If it IS the exact same problem BUT the resolution steps offer a new or different alternative solution, set action to "UPDATE" and provide the existing ID and the new appended content.
-4. If it is NOT the exact same problem, set action to "CREATE" and provide a highly specific title, detailed content, and tags.
-5. Identify if the resolution aligns with any provided known issue. If yes, output its ID as 'matched_issue_id'. If it does not match ANY provided issues and represents a completely new issue type, output a concise 2-4 word name as 'suggested_new_issue_name' and a brief description as 'suggested_new_issue_description'.
-
-CRITICAL INSTRUCTION FOR CONTENT GENERATION:
-- For CREATE: Make the title highly specific to the actual root cause or error (e.g., "Resolving Printer Paper Jams" instead of just "Printer Issue"). Rewrite the resolution into a clear, easy-to-follow, step-by-step guide that ANY general user can understand. Explain the concepts simply, BUT you MUST retain any exact technical commands, file paths, or specific values (e.g., "ipconfig /flushdns", "8.8.8.8") that the user actually needs to type, click, or search for. Do not oversimplify essential actionable instructions.
-- For UPDATE: You MUST rewrite the NEW alternative solution into a clear, easy-to-follow format, retaining exact technical commands. The appended alternative solution MUST be formatted as a numbered list (1., 2., 3...) under a clear heading (e.g., "### Alternative Solution"). Do NOT output the original content. ONLY output the new formatted alternative solution.
-- GENERALIZATION: You MUST strip out any specific locations (e.g., "Floor 2", "HR Office", "Conference Room"), usernames, or specific machine names. A KB article must be universally applicable. A title should be "Resolving a Paper Jam in Tray 2", NOT "Resolving a Paper Jam on Floor 2". The content should never mention where the printer is located.
-`;
-
-      const response = await this.cerebrasClient.chat.completions.create({
-        model: 'gpt-oss-120b',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'kb_decision',
-            schema: {
-              type: 'object',
-              properties: {
-                action: {
-                  type: 'string',
-                  enum: ['CREATE', 'UPDATE', 'IGNORE']
-                },
-                title: { type: 'string', description: "Title for CREATE action, otherwise empty string" },
-                content: { type: 'string', description: "Content for CREATE action, otherwise empty string" },
-                tags: { type: 'string', description: "Tags for CREATE action, otherwise empty string" },
-                existing_id: { type: 'integer', description: "ID for UPDATE action, otherwise 0" },
-                appended_content: { type: 'string', description: "The new alternative solution for UPDATE action, otherwise empty string" },
-                matched_issue_id: { type: 'string', description: "The ID of the matched Known Issue, or null/empty if none match" },
-                suggested_new_issue_name: { type: 'string', description: "If no issue matches, provide a 2-4 word name for a new issue type" },
-                suggested_new_issue_description: { type: 'string', description: "If no issue matches, provide a brief description for the new issue type" }
-              },
-              required: ['action', 'title', 'content', 'tags', 'existing_id', 'appended_content']
-            }
-          }
-        }
+  private async requestCloudflare(prompt: string): Promise<string> {
+    let lastError: (Error & { status?: number }) | null = null;
+    for (const model of this.cloudflareModels) {
+      const modelPath = model.split('/').map((part) => encodeURIComponent(part).replace(/%40/g, '@')).join('/');
+      const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(this.cloudflareAccountId!)}/ai/run/${modelPath}`;
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.cloudflareApiToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt, max_tokens: 1200, temperature: 0.2 }),
       });
-
-      const responseText = response.choices[0]?.message?.content || '{}';
-      const parsed = JSON.parse(responseText);
-
-      // Handle Dynamic Issue Creation
-      if (categoryId && !parsed.matched_issue_id && parsed.suggested_new_issue_name && parsed.suggested_new_issue_name.trim() !== '') {
-         const newKey = parsed.suggested_new_issue_name.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Math.floor(Date.now() / 1000);
-          const newIssue = this.issueRepo.create({
-            key: newKey,
-            name: parsed.suggested_new_issue_name,
-            description: parsed.suggested_new_issue_description || 'Dynamically added from KB Generation',
-            category_id: categoryId,
-            isActive: true,
-            isDeleted: false
-          });
-         await this.issueRepo.save(newIssue);
-         this.logger.log(`Dynamically created new Issue Type: ${newIssue.name}`);
-      }
-
-      if (parsed.action === 'CREATE') {
-        const newKb = this.kbRepo.create({
-          title: parsed.title,
-          content: parsed.content,
-          tags: parsed.tags,
-        });
-        return this.kbRepo.save(newKb);
-      } else if (parsed.action === 'UPDATE' && parsed.existing_id) {
-        const existing = await this.kbRepo.findOne({ where: { id: parsed.existing_id } });
-        if (existing) {
-          existing.content = existing.content + '\n\n---\n\n' + parsed.appended_content;
-          return this.kbRepo.save(existing);
+      const payload: any = await response.json().catch(() => null);
+      if (!response.ok || payload?.success === false) {
+        const error = new Error(`Cloudflare Workers AI request failed with status ${response.status}`) as Error & { status?: number };
+        error.status = response.status;
+        lastError = error;
+        if ([400, 403, 404].includes(response.status) && model !== this.cloudflareModels[this.cloudflareModels.length - 1]) {
+          this.logger.warn(`Cloudflare Workers AI model unavailable (${response.status}); trying the next code-defined model.`);
+          continue;
         }
-      } else if (parsed.action === 'IGNORE') {
-        this.logger.log('KB Generation ignored - exact duplicate found.');
-        return null;
+        throw error;
       }
-      return null;
-    } catch (err: any) {
-      this.logger.error('Failed to generate KB article using Cerebras', err);
-      // Re-throw so the ticket service catches it and benches the KB
-      throw err;
+      const rawResponse = payload?.result?.response ?? payload?.result?.text ?? payload?.result;
+      const responseText = typeof rawResponse === 'string' ? rawResponse : JSON.stringify(rawResponse ?? '');
+      const jsonStart = responseText.indexOf('{');
+      const jsonEnd = responseText.lastIndexOf('}');
+      if (jsonStart < 0 || jsonEnd <= jsonStart) throw new Error('Cloudflare Workers AI returned no JSON article.');
+      return responseText.slice(jsonStart, jsonEnd + 1);
     }
+    throw lastError || new Error('Cloudflare Workers AI did not return a result.');
   }
 
   async getKnowledgeBaseArticles(): Promise<KnowledgeArticle[]> {
@@ -216,16 +191,8 @@ CRITICAL INSTRUCTION FOR CONTENT GENERATION:
   }
 
   async searchKnowledgeBase(query: string): Promise<KnowledgeArticle[]> {
-    if (!this.groqClient) {
-      // fallback to simple DB search if no Groq
-      return this.kbRepo
-        .createQueryBuilder('kb')
-        .where('kb.title LIKE :q OR kb.content LIKE :q OR kb.tags LIKE :q', { q: `%${query}%` })
-        .getMany();
-    }
-
-    // Semantic search using Groq
     try {
+      if (!this.groqClient) throw new Error('Groq is not configured');
       const allKbs = await this.getKnowledgeBaseArticles();
       const kbListText = allKbs
         .map((kb) => `ID: ${kb.id}\nTitle: ${kb.title}\nTags: ${kb.tags || 'None'}\nContent: ${kb.content}\n---`)
@@ -245,13 +212,13 @@ Output strictly JSON:
 `;
 
       const response = await this.groqClient.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
+        model: this.groqModel,
         messages: [{ role: 'user', content: prompt }],
         response_format: { type: 'json_object' }
       });
 
       const responseText = response.choices[0]?.message?.content || '{"ids": []}';
-      const parsed = JSON.parse(responseText);
+      const parsed = this.parseAiJson(responseText);
       const topIds = parsed.ids || [];
 
       if (!Array.isArray(topIds) || topIds.length === 0) {
@@ -266,13 +233,49 @@ Output strictly JSON:
       }
       return results;
     } catch (err) {
-      this.logger.error('Failed to semantic search KB using Groq', err);
-      // fallback to DB search
-      return this.kbRepo
-        .createQueryBuilder('kb')
-        .where('kb.title LIKE :q OR kb.content LIKE :q', { q: `%${query}%` })
-        .getMany();
+      this.logger.warn('Groq KB suggestion search failed; trying Cloudflare Workers AI.');
+      try {
+        return await this.searchWithCloudflare(query);
+      } catch (cloudflareError) {
+        this.logger.warn('Cloudflare KB suggestion search failed; using local search.');
+        return this.searchLocally(query);
+      }
     }
+  }
+
+  private async searchWithCloudflare(query: string): Promise<KnowledgeArticle[]> {
+    if (!this.cloudflareAccountId || !this.cloudflareApiToken) {
+      throw new Error('Cloudflare Workers AI is not configured');
+    }
+    const cleanQuery = (await this.stripSensitiveData(query)).trim();
+    const prompt = [
+      'Extract up to eight precise technical search keywords from this support issue.',
+      'Return only valid JSON in this format: {"keywords":["keyword one","keyword two"]}.',
+      'Do not include names, email addresses, locations, credentials, or other sensitive data.',
+      `Support issue: ${cleanQuery}`,
+    ].join('\n');
+    const parsed = this.parseAiJson(await this.requestCloudflare(prompt));
+    const keywords = Array.isArray(parsed.keywords)
+      ? parsed.keywords
+        .filter((keyword: unknown): keyword is string => typeof keyword === 'string' && keyword.trim() !== '')
+        .map((keyword) => this.normalizeAiText(keyword))
+        .filter((keyword) => keyword !== '')
+        .slice(0, 8)
+      : [];
+    return this.searchLocally(query, keywords);
+  }
+
+  private searchLocally(query: string, terms: string[] = []): Promise<KnowledgeArticle[]> {
+    const searchTerms = terms.length > 0 ? terms : [query];
+    const queryBuilder = this.kbRepo.createQueryBuilder('kb');
+    searchTerms.forEach((term, index) => {
+      const parameter = `q${index}`;
+      const clause = `kb.title LIKE :${parameter} OR kb.content LIKE :${parameter} OR kb.tags LIKE :${parameter}`;
+      const parameters = { [parameter]: `%${term}%` };
+      if (index === 0) queryBuilder.where(clause, parameters);
+      else queryBuilder.orWhere(clause, parameters);
+    });
+    return queryBuilder.getMany();
   }
 
   async rateArticle(id: number, isHelpful: boolean): Promise<KnowledgeArticle> {

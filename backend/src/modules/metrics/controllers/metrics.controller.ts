@@ -216,7 +216,8 @@ export class MetricsController {
 }
 
 @Controller('documents/:id/metrics')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, CapabilityGuard)
+@RequireCapability('isMetricsAccess')
 export class DocumentMetricsController {
   constructor(
     private metricsService: MetricsService,

@@ -344,6 +344,10 @@ export class DutyService {
     if (duplicate) {
       throw new BadRequestException(`This technician already has ${duplicate.dutyType} duty on ${dutyDate}. One technician cannot cover multiple duties on the same day.`);
     }
+    const exception = await this.exceptionRepo.findOne({ where: { exceptionDate: dutyDate, userId } });
+    if (exception) {
+      throw new BadRequestException(`This technician has a duty exception on ${dutyDate} and cannot be registered for duty.`);
+    }
     const row = this.assignmentRepo.create({ ...existing, ...body, dutyDate, userId, dutyType, createdById: existing?.createdById ?? actor.id });
     const saved = await this.assignmentRepo.save(row);
     this.sse.emitDutyUpdated();
@@ -376,6 +380,10 @@ export class DutyService {
     const registeredRoster = await this.sharedRosterMembers();
     if (!registeredRoster.some((member) => member.userId === userId)) {
       throw new BadRequestException('Duty exceptions can only be registered for technicians on the shared duty roster.');
+    }
+    const assignment = await this.assignmentRepo.findOne({ where: { dutyDate: exceptionDate, userId } });
+    if (assignment) {
+      throw new BadRequestException(`This technician already has ${assignment.dutyType} duty on ${exceptionDate} and cannot be excepted on the same day.`);
     }
     const dutyType = body.dutyType !== undefined
       ? (body.dutyType ? this.assertDutyType(String(body.dutyType)) : null)

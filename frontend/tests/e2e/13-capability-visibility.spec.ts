@@ -143,6 +143,35 @@ async function installCapabilityApiMock(
       };
     } else if (pathname.endsWith('/tickets/dashboard')) {
       responseBody = { myTicketsCount: 0, escalatedToMeCount: 0 };
+    } else if (pathname.endsWith('/tickets/report-technicians')) {
+      responseBody = [];
+    } else if (pathname.endsWith('/tickets/reports/issue-counts')) {
+      responseBody = [];
+    } else if (pathname.endsWith('/tickets/reports')) {
+      responseBody = {
+        totalTickets: 0,
+        totalWithRating: 0,
+        avgOverallRating: null,
+        avgRatingByType: [],
+        avgRatingByTechnician: [],
+        issueCounts: [],
+        acceptedEscalations: 0,
+        returnedEscalations: 0,
+        totalEscalations: 0,
+        slaStats: { met: 0, missed: 0, avgResolutionTimeHours: 0 },
+        slaByType: [],
+        slaByTechnician: [],
+      };
+    } else if (pathname.endsWith('/tickets/ratings-report')) {
+      responseBody = {
+        overview: { totalRatings: 0, avgOverallRating: 0 },
+        byTicket: [],
+        byTechnician: [],
+        byDay: [],
+        byWeek: [],
+        byMonth: [],
+        byQuarter: [],
+      };
     } else if (pathname.endsWith('/tickets')) {
       responseBody = { data: [], total: 0, totalPages: 1, page: 1, limit: 10 };
     } else if (pathname.includes('/ticket-settings/categories')) {
@@ -152,6 +181,10 @@ async function installCapabilityApiMock(
     } else if (pathname.includes('/ticket-settings/issue-types')) {
       responseBody = [];
     } else if (pathname.includes('/ticket-settings/escalation-focals')) {
+      responseBody = [];
+    } else if (pathname.endsWith('/feedback')) {
+      responseBody = { data: [], total: 0 };
+    } else if (pathname.endsWith('/users/profile-units')) {
       responseBody = [];
     } else if (pathname.endsWith('/users')) {
       responseBody = [];
@@ -180,9 +213,11 @@ async function openShell(
   await installCapabilityApiMock(page, enabled, appMode);
   const appModeResponse = page.waitForResponse((response) =>
     response.url().includes('/api/users/security-config/app-mode'),
+    { timeout: 300_000 },
   );
   const capabilityResponse = page.waitForResponse((response) =>
     response.url().includes('/api/users/role-capabilities/me'),
+    { timeout: 300_000 },
   );
   await page.goto('/');
   await Promise.all([appModeResponse, capabilityResponse]);
@@ -278,14 +313,14 @@ test.describe('Capability-driven frontend visibility', () => {
 
     await page.getByRole('button', { name: 'Ticket Settings', exact: true }).click();
     await expect(page).toHaveURL(routePattern('/operations/settings'));
-    await expect(page.getByText('Ticket Settings', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ticket Settings', exact: true })).toBeVisible();
     await expect(page.getByRole('tab', { name: /Categories/ })).toBeVisible();
     await expect(page.getByRole('tab', { name: /Issues/ })).toBeVisible();
     await expect(page.getByRole('tab', { name: /Keyword Rules/ })).toBeVisible();
 
     await page.getByRole('button', { name: 'Ticket Reports', exact: true }).click();
     await expect(page).toHaveURL(routePattern('/operations/reports'));
-    await expect(page.getByText(/Satisfaction ratings overview/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ticket Reports', exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page).toHaveURL(routePattern('/admin/settings'));

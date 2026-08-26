@@ -120,7 +120,7 @@ export default function App() {
       <Route
         path="/governance/incidents"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isReportsAccess">
             <IncidentsPage />
           </ProtectedDashboard>
         }

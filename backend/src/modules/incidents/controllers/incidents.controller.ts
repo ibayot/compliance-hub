@@ -1,13 +1,16 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { CapabilityGuard } from '../../../common/guards/capability.guard';
+import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { IncidentsService } from '../services/incidents.service';
 import { SnapshotService } from '../services/snapshot.service';
-import { Incident } from '../entities/incident.entity';
+import { CreateIncidentDto, UpdateIncidentDto } from '../dto/incident.dto';
 
 @ApiTags('incidents')
 @Controller('incidents')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, CapabilityGuard)
+@RequireCapability('isReportsAccess')
 export class IncidentsController {
   constructor(
     private readonly incidentsService: IncidentsService,
@@ -15,7 +18,7 @@ export class IncidentsController {
   ) {}
 
   @Post()
-  async create(@Body() createDto: Partial<Incident>) {
+  async create(@Body() createDto: CreateIncidentDto) {
     return await this.incidentsService.create(createDto);
   }
 
@@ -59,8 +62,11 @@ export class IncidentsController {
   }
 
   @Put(':id')
-  async update(@Param('id') id: number, @Body() updateDto: Partial<Incident>) {
-    return await this.incidentsService.update(id, updateDto);
+  async update(@Param('id') id: number, @Body() updateDto: UpdateIncidentDto) {
+    return await this.incidentsService.update(id, {
+      ...updateDto,
+      resolved_at: updateDto.resolved_at ? new Date(updateDto.resolved_at) : undefined,
+    });
   }
 
   @Delete(':id')
