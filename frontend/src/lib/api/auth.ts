@@ -60,7 +60,11 @@ export const authApi = {
   },
 
   getProfile: async (): Promise<User> => {
-    const response = await apiClient.get<User>('/auth/me');
+    // AuthProvider calls this during application bootstrap, including when a
+    // browser has no access token but may still have an HttpOnly session
+    // cookie. Bound that probe so a stalled API cannot leave every route on a
+    // permanent loading spinner.
+    const response = await apiClient.get<User>('/auth/me', { timeout: 15_000 });
     return response.data;
   },
 

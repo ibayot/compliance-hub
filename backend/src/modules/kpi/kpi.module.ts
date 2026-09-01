@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { KpiController } from './controllers/kpi.controller';
+import { ReportsController } from './controllers/reports.controller';
 import { KpiService } from './services/kpi.service';
 import { KpiMaster } from './entities/kpi-master.entity';
 import { KpiMonitoring } from './entities/kpi-monitoring.entity';
@@ -23,7 +24,7 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
     ]),
     HttpClientsModule,
   ],
-  controllers: [KpiController],
+  controllers: [KpiController, ReportsController],
   providers: [
     KpiService,
     { provide: RoleCapabilitiesService, useClass: RoleCapabilitiesHttpClient },

@@ -171,12 +171,28 @@ export default function KnowledgeBasePage() {
             <Box>
               {articles.map((art) => (
                 <Accordion key={art.id} sx={{ mb: 1 }}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', mr: 2 }}>
-                      <Typography fontWeight={600} sx={{ flexGrow: 1 }}>
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreIcon />}
+                    sx={{
+                      position: 'relative',
+                      flexDirection: { xs: 'column', sm: 'row' },
+                      alignItems: { xs: 'stretch', sm: 'center' },
+                      '& .MuiAccordionSummary-expandIconWrapper': {
+                        alignSelf: { xs: 'flex-end', sm: 'auto' },
+                        position: { xs: 'absolute', sm: 'static' },
+                        right: { xs: 8, sm: 'auto' },
+                        bottom: { xs: 8, sm: 'auto' },
+                      },
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'stretch', sm: 'center' }, width: '100%', mr: 2, gap: { xs: 1, sm: 0 }, minWidth: 0 }}>
+                      <Typography
+                        fontWeight={600}
+                        sx={{ flexGrow: 1, minWidth: 0, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                      >
                         {art.title}
                       </Typography>
-                      <Box mr={2} sx={{ display: 'flex', gap: 1 }}>
+                      <Box mr={{ xs: 0, sm: 2 }} sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center', pr: { xs: 4, sm: 0 } }}>
                         <Chip
                           size="small"
                           label={`${art.helpfulCount || 0} Helpful`}
@@ -189,21 +205,21 @@ export default function KnowledgeBasePage() {
                           color={(art.unhelpfulCount || 0) > 5 ? 'error' : 'default'}
                           variant="outlined"
                         />
+                        {isEditable && (
+                          <Tooltip title="Edit Article">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditDialog(art);
+                              }}
+                              sx={{ color: 'primary.main' }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       </Box>
-                      {isEditable && (
-                        <Tooltip title="Edit Article">
-                          <IconButton
-                            size="small"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEditDialog(art);
-                            }}
-                            sx={{ color: 'primary.main' }}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
                     </Box>
                   </AccordionSummary>
                   <AccordionDetails>
@@ -237,6 +253,7 @@ export default function KnowledgeBasePage() {
               value={editForm.title}
               onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
               fullWidth
+              inputProps={{ maxLength: 255 }}
             />
             <TextField
               label="Content *"

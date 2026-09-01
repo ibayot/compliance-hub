@@ -49,7 +49,7 @@ export class TicketCronService implements OnModuleInit {
     await this.processAutoUnpause();
     await this.processAutoUnfreeze();
     await this.processFrozenTicketsReminders();
-    await this.processPercentageAlerts();
+    await this.processPercentageAlerts();
   }
 
   @Cron('*/15 * * * *')
@@ -90,12 +90,12 @@ export class TicketCronService implements OnModuleInit {
 
     const currentMins = d.getMinutes();
     this.logger.log(`[DTR SYNC DEBUG] CurrentTime: ${currentTime} | Mode: ${config.scheduleMode} | Window: ${morningStart} - ${lateEnd}`);
-    
+
     // Check if in Morning window
     if (currentTime >= morningStart && currentTime <= morningEnd) {
       this.logger.log(`[DTR SYNC DEBUG] Inside Morning window. Syncing!`);
       return await this.attendanceService.syncAttendanceWithDTR();
-    } 
+    }
     // Check if in Late window (after morning end, before late end)
     else if (currentTime > morningEnd && currentTime <= lateEnd) {
       this.logger.log(`[DTR SYNC DEBUG] Inside Late window. Syncing!`);
@@ -131,9 +131,9 @@ export class TicketCronService implements OnModuleInit {
           'Daily Reminder: Frozen Tickets',
           `You have ${data.tickets.length} frozen ticket(s) waiting for third-party response.\n\n${ticketList}\n\nPlease follow up on them.`
         );
-        this.logger.log(`Sent daily frozen tickets email to ${data.email}`);
-      } catch (err) {
-        this.logger.error(`Failed to send frozen tickets email to ${data.email}`, err);
+        this.logger.log('Sent daily frozen tickets email.');
+      } catch (err: any) {
+        this.logger.error(`Failed to send frozen tickets email (${err?.code || 'unknown'}).`);
       }
     }
   }
@@ -191,15 +191,13 @@ export class TicketCronService implements OnModuleInit {
       const techId = overdueTicket.assignedToId;
       if (!techId || this.advancedOverdueTickets.has(overdueTicket.id)) continue;
 
-      const promoted = await this.ticketService.unpauseNextWaitingTicketAndSetInProgress(
+      const promoted = await this.ticketService.withAutoAssignmentLock(() => this.ticketService.unpauseNextWaitingTicketAndSetInProgress(
         techId,
         'cron_sla_breach_overflow',
-      );
+      ));
       if (promoted) {
         this.advancedOverdueTickets.add(overdueTicket.id);
-        this.logger.log(
-          `Cron: SLA breach on ticket ${overdueTicket.ticketNumber}; promoted the next queued ticket for technician #${techId} to IN_PROGRESS alongside the breached ticket.`,
-        );
+        this.logger.log('Cron: promoted a queued ticket after an SLA breach.');
       }
     }
   }
@@ -225,9 +223,9 @@ export class TicketCronService implements OnModuleInit {
           ticket.assignedToId || 1, // System fallback
           UserRole.SUPER_ADMIN,
         );
-        this.logger.log(`Auto-closed ticket ${ticket.ticketNumber}`);
+        this.logger.log('Auto-closed a resolved ticket.');
       } catch (err) {
-        this.logger.error(`Failed to auto-close ticket ${ticket.ticketNumber}`, err);
+        this.logger.error(`Failed to auto-close ticket (${err?.code || 'unknown'}).`);
       }
     }
   }
@@ -265,18 +263,9 @@ export class TicketCronService implements OnModuleInit {
             UserRole.SUPER_ADMIN,
           );
 
-          // Hardcoded email for testing as requested by user
-          this.emailService
-            .sendGenericEmail(
-              'mjdibay@dswd.gov.ph',
-              `Ticket Auto-Unpaused: ${ticket.ticketNumber}`,
-              `The ticket ${ticket.ticketNumber} has reached its maximum pause limit of ${ticket.issueTypeConfig?.allowablePauseHours ?? 48} hours and has been automatically reopened. The SLA clock has resumed.`,
-            )
-            .catch(() => {});
-
-          this.logger.log(`Auto-unpaused ticket ${ticket.ticketNumber}`);
+          this.logger.log('Auto-unpaused a ticket after its configured pause limit.');
         } catch (err) {
-          this.logger.error(`Failed to auto-unpause ticket ${ticket.ticketNumber}`, err);
+          this.logger.error(`Failed to auto-unpause ticket (${err?.code || 'unknown'}).`);
         }
       }
     }
@@ -292,7 +281,7 @@ export class TicketCronService implements OnModuleInit {
 
     for (const ticket of frozenTickets) {
       if (!ticket.slaPausedAt || !ticket.category) continue;
-      
+
       if (ticket.issueTypeConfig?.maxFreezeHours == null) continue; // null = unlimited
 
       const allowableMs = ticket.issueTypeConfig.maxFreezeHours * 60 * 60 * 1000;
@@ -317,9 +306,9 @@ export class TicketCronService implements OnModuleInit {
             UserRole.SUPER_ADMIN,
           );
 
-          this.logger.log(`Auto-unfrozen ticket ${ticket.ticketNumber}`);
+          this.logger.log('Auto-unfrozen a ticket after its configured freeze limit.');
         } catch (err) {
-          this.logger.error(`Failed to auto-unfreeze ticket ${ticket.ticketNumber}`, err);
+          this.logger.error(`Failed to auto-unfreeze ticket (${err?.code || 'unknown'}).`);
         }
       }
     }
@@ -343,12 +332,9 @@ export class TicketCronService implements OnModuleInit {
           UserRole.SUPER_ADMIN,
         );
         await this.ticketRepo.update(ticket.id, { hasUnreadTechnician: true, hasUnreadUser: false });
-        this.logger.log(`Sent daily reminder for frozen ticket ${ticket.ticketNumber}`);
+        this.logger.log('Sent a daily frozen-ticket reminder.');
       } catch (err) {
-        this.logger.error(
-          `Failed to send daily reminder for frozen ticket ${ticket.ticketNumber}`,
-          err,
-        );
+        this.logger.error(`Failed to send daily reminder for frozen ticket (${err?.code || 'unknown'}).`);
       }
     }
   }

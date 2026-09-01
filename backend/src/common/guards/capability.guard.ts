@@ -22,7 +22,7 @@ export class CapabilityGuard implements CanActivate {
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const required = this.reflector.getAllAndOverride<string>(CAPABILITY_KEY, [
+    const required = this.reflector.getAllAndOverride<string | string[]>(CAPABILITY_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
@@ -78,8 +78,11 @@ export class CapabilityGuard implements CanActivate {
       isMetricsDelete: (r) => this.roleCapSvc.isMetricsDelete(r),
     };
 
-    const checker = capabilityCheckers[required];
-    if (!checker) return false;
-    return checker(role);
+    const requirements = Array.isArray(required) ? required : [required];
+    if (requirements.length === 0) return false;
+    return requirements.some((capability) => {
+      const checker = capabilityCheckers[capability];
+      return !!checker && checker(role);
+    });
   }
 }

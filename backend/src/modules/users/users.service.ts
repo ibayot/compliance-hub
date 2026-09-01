@@ -225,70 +225,10 @@ export class UsersService {
 
   private buildCapabilitySeed(role: RoleDefinitionEntity) {
     const roleValue = role.value;
-    const isSuperAdmin = roleValue === UserRole.SUPER_ADMIN;
-    const isComplianceRole = roleValue === UserRole.COMPLIANCE_OFFICER;
-    const isSectionHead = roleValue === UserRole.SECTION_HEAD;
-    const isCyberRole = roleValue === UserRole.CYBERSEC || roleValue === UserRole.INFOSEC;
-    const focalRoleValues = new Set([
-      UserRole.LEAD_INFRA,
-      UserRole.SERVER_ADMIN,
-      UserRole.DB_ADMIN,
-      UserRole.NETWORK_ADMIN,
-      UserRole.PROJECT_MGR,
-      UserRole.DEV_LEAD,
-      UserRole.SQA_LEAD,
-      UserRole.RECORDS_OFFICER,
-      UserRole.HR_ID_OFFICER,
-    ]);
-    const isFocal = isSuperAdmin || focalRoleValues.has(roleValue as UserRole) || isComplianceRole || isSectionHead;
-    const isDesktop = roleValue === UserRole.DESKTOP_SR || roleValue === UserRole.DESKTOP_JR;
-    const isItSupport = roleValue === UserRole.IT_SUPPORT_SR || roleValue === UserRole.IT_SUPPORT_JR;
-    const isPantawidIct = roleValue === UserRole.PANTAWID_ICT;    const isTech = isDesktop || isItSupport || isPantawidIct;
-
-    return this.roleCapabilitiesRepository.create({
-      roleValue,
-      isFocal,
-      isDesktop,
-      isItSupport,
-      isPantawidIct,
-      isIto: isCyberRole,
-      isEscalationFocal:
-        isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
-      isTicketSettingsFocal:
-        isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
-      isGlobalSettingsAccess: isSuperAdmin || isSectionHead,
-      isAllTickets: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
-      isTicketFocal: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
-      isTicketModuleAccess: role.isSystem,
-      isTicketReportsAccess:
-        isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isTech,
-      isTicketReportsManage:
-        isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole
-        || roleValue === UserRole.DESKTOP_SR
-        || roleValue === UserRole.IT_SUPPORT_SR
-        || isPantawidIct,
-      isKpiAccess: isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal,
-      isKpiManage: isSuperAdmin || isSectionHead || isComplianceRole,
-      isAttendanceAccess:
-        isSuperAdmin || isSectionHead || isComplianceRole || isCyberRole || isFocal || isTech,
-      isAttendanceManage: isSuperAdmin || isSectionHead || isComplianceRole || isFocal || isTech,
-      isReportsAccess: isSuperAdmin || isComplianceRole,
-      isReviewsAccess: isSuperAdmin || isComplianceRole || isCyberRole,
-      isMovAccess: isSuperAdmin || isComplianceRole,
-      isDocumentsAccess: isSuperAdmin || isFocal || isTech,
-      isRepositoryAccess: isSuperAdmin || isFocal,
-      isIssuancesAccess: isSuperAdmin || isComplianceRole,
-      isDocumentsManage: isSuperAdmin || isFocal || isTech,
-      isUnitsAccess: isSuperAdmin,
-      isUnitsManage: isSuperAdmin,
-      isDocumentsDelete: isSuperAdmin || isComplianceRole,
-      isIssuancesManage: isSuperAdmin || isComplianceRole,
-      isMetricsDelete: isSuperAdmin,
-      isMetricsAccess: isSuperAdmin || isComplianceRole,
-      isDutyViewerAccess: isSuperAdmin,
-      isDutyAdminAccess: isSuperAdmin,
-      isAttendanceEligible: role.assignable && roleValue !== UserRole.USER && roleValue !== UserRole.SUPER_ADMIN,
-    });
+    // New role definitions are safe by default. Existing effective permissions
+    // come from the seeded/database capability row and are never inferred from
+    // a role name in application code.
+    return this.roleCapabilitiesRepository.create({ roleValue });
   }
 
   private async ensureRoleCapabilityRows() {
@@ -520,7 +460,7 @@ const previousValue = value;
   async findAll(): Promise<User[]> {
     const decorate = async (users: User[]): Promise<User[]> => {
       const capabilityRows = await this.roleCapabilitiesRepository.find({
-        select: ['roleValue', 'isAttendanceEligible', 'isDesktop', 'isItSupport', 'isPantawidIct'],
+        select: ['roleValue', 'isAttendanceEligible', 'isDesktop', 'isItSupport', 'isPantawidIct', 'isIssuancesManage', 'isDocumentsDelete', 'isUserManagementAdmin'],
       });
       const eligibleByRole = new Map(
         capabilityRows.map((row) => [row.roleValue, Boolean(row.isAttendanceEligible)]),
@@ -535,6 +475,9 @@ const previousValue = value;
         ...user,
         attendanceEligible: eligibleByRole.get(user.role) ?? false,
         technicianEligible: technicianByRole.get(user.role) ?? false,
+        isIssuancesManage: Boolean(capabilityRows.find((row) => row.roleValue === user.role)?.isIssuancesManage),
+        isDocumentsDelete: Boolean(capabilityRows.find((row) => row.roleValue === user.role)?.isDocumentsDelete),
+        isUserManagementAdmin: Boolean(capabilityRows.find((row) => row.roleValue === user.role)?.isUserManagementAdmin),
       })) as User[];
     };
 

@@ -71,7 +71,13 @@ import { UserRole } from '@/lib/types/auth';
 import { useSse } from '@/lib/utils/useSse';
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
-import { NativeBiometric } from '@capgo/capacitor-native-biometric';
+import {
+  deleteBiometricCredentials,
+  hasBiometricCredentials,
+  isBiometricAvailable,
+  saveBiometricCredentials,
+} from '@/lib/auth/biometric';
+import ResponsiveTable from '@/components/layout/ResponsiveTable';
 
 // --- Change Password Card ---------------------------------------------------
 
@@ -549,14 +555,14 @@ function GlobalSettingsCard() {
                     <Switch checked={config.isEmailNotificationsEnabled ?? true} onChange={(e) => setConfig((p: any) => ({ ...p, isEmailNotificationsEnabled: e.target.checked }))} />
                   </Box>
                   {config.isEmailNotificationsEnabled && (
-                    <TextField label="Test Override Email" value={config.emailTestOverride || ''} onChange={(e) => setConfig((p: any) => ({ ...p, emailTestOverride: e.target.value }))} fullWidth />
+                    <TextField label="Test Override Email" value={config.emailTestOverride || ''} onChange={(e) => setConfig((p: any) => ({ ...p, emailTestOverride: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
                   )}
-                  <TextField label="SMTP Host" value={config.smtpHost || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpHost: e.target.value }))} fullWidth />
+                  <TextField label="SMTP Host" value={config.smtpHost || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpHost: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
                   <TextField label="SMTP Port" type="number" value={config.smtpPort || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpPort: Number(e.target.value) }))} fullWidth />
-                  <TextField label="SMTP Username" value={config.smtpUser || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpUser: e.target.value }))} fullWidth />
-                  <TextField label="SMTP Password" type="password" value={config.smtpPass || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpPass: e.target.value }))} fullWidth />
-                  <TextField label="From Email Address" value={config.smtpFrom || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpFrom: e.target.value }))} fullWidth />
-                  <TextField label="From Name" value={config.smtpFromName || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpFromName: e.target.value }))} fullWidth />
+                  <TextField label="SMTP Username" value={config.smtpUser || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpUser: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
+                  <TextField label="SMTP Password" type="password" value={config.smtpPass || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpPass: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
+                  <TextField label="From Email Address" value={config.smtpFrom || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpFrom: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
+                  <TextField label="From Name" value={config.smtpFromName || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpFromName: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
                   <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
                     <Button variant="contained" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Global Settings'}</Button>
                     <TextField size="small" label="Test Recipient Email" value={smtpTestEmail} onChange={(e) => setSmtpTestEmail(e.target.value)} sx={{ flexGrow: 1, minWidth: 240 }} />
@@ -645,27 +651,6 @@ const CAPABILITY_CATEGORIES = [
 ];
 
 function CapabilityCategoryAccordion({ category, caps, saving, handleToggle, canEdit }: { category: any, caps: any[], saving: string | null, handleToggle: (role: string, field: any, val: boolean) => void, canEdit: boolean }) {
-  const tableContainerRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(true);
-
-  const handleTableScroll = useCallback(() => {
-    if (tableContainerRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = tableContainerRef.current;
-      setCanScrollLeft(scrollLeft > 0);
-      setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 1);
-    }
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(handleTableScroll, 100);
-    window.addEventListener('resize', handleTableScroll);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', handleTableScroll);
-    };
-  }, [handleTableScroll, caps]);
-
   return (
     <Accordion
       disableGutters
@@ -677,53 +662,17 @@ function CapabilityCategoryAccordion({ category, caps, saving, handleToggle, can
           {category.name}
         </Typography>
       </AccordionSummary>
-      <AccordionDetails sx={{ p: 0, position: 'relative' }}>
-        {canScrollLeft && (
-          <IconButton
-            size="small"
-            onClick={() => tableContainerRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
-            sx={{
-              position: 'absolute',
-              left: 250,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              zIndex: 102,
-              bgcolor: 'background.paper',
-              boxShadow: 1,
-              '&:hover': { bgcolor: 'background.default' },
-            }}
-          >
-            <ChevronLeftIcon />
-          </IconButton>
-        )}
-        {canScrollRight && (
-          <IconButton
-            size="small"
-            onClick={() => tableContainerRef.current?.scrollBy({ left: 300, behavior: 'smooth' })}
-            sx={{
-              position: 'absolute',
-              right: 8,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              zIndex: 102,
-              bgcolor: 'background.paper',
-              boxShadow: 1,
-              '&:hover': { bgcolor: 'background.default' },
-            }}
-          >
-            <ChevronRightIcon />
-          </IconButton>
-        )}
-        <TableContainer ref={tableContainerRef} onScroll={handleTableScroll}>
-          <Table size="small" sx={{ minWidth: 600 }}>
+      <AccordionDetails sx={{ p: 0 }}>
+        <ResponsiveTable minWidth={620} testId={`capability-category-${category.name}`}>
+          <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell
                   sx={{
                     fontWeight: 700,
-                    width: 250,
-                    minWidth: 250,
-                    maxWidth: 250,
+                    width: 160,
+                    minWidth: 160,
+                    maxWidth: 160,
                     position: 'sticky',
                     left: 0,
                     zIndex: 101,
@@ -758,9 +707,9 @@ function CapabilityCategoryAccordion({ category, caps, saving, handleToggle, can
                   >
                     <TableCell
                       sx={{
-                        width: 250,
-                        minWidth: 250,
-                        maxWidth: 250,
+                        width: 160,
+                        minWidth: 160,
+                        maxWidth: 160,
                         position: 'sticky',
                         left: 0,
                         zIndex: 100,
@@ -796,7 +745,7 @@ function CapabilityCategoryAccordion({ category, caps, saving, handleToggle, can
                 ))}
             </TableBody>
           </Table>
-        </TableContainer>
+        </ResponsiveTable>
       </AccordionDetails>
     </Accordion>
   );
@@ -1010,6 +959,7 @@ function RoleManagementCard() {
           </Typography>
         ) : (
           <>
+            <ResponsiveTable minWidth={620} testId="role-management-table">
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -1079,6 +1029,7 @@ function RoleManagementCard() {
                   ))}
               </TableBody>
             </Table>
+            </ResponsiveTable>
 
             <Dialog
               open={Boolean(selected)}
@@ -1102,6 +1053,7 @@ function RoleManagementCard() {
                     )
                   }
                   fullWidth
+                  inputProps={{ maxLength: 255 }}
                   disabled={Boolean(selected?.isSystem || selected?.is_system)}
                   helperText={
                     selected?.isSystem || selected?.is_system
@@ -1117,6 +1069,7 @@ function RoleManagementCard() {
                     setSelected((prev) => (prev ? { ...prev, label: e.target.value } : prev))
                   }
                   fullWidth
+                  inputProps={{ maxLength: 255 }}
                   sx={{ mb: 2 }}
                 />
                 <TextField
@@ -1171,6 +1124,7 @@ function RoleManagementCard() {
                     }))
                   }
                   fullWidth
+                  inputProps={{ maxLength: 255 }}
                   helperText="Lowercase letters, digits, and underscores. E.g. section_head"
                   sx={{ mb: 2 }}
                 />
@@ -1179,6 +1133,7 @@ function RoleManagementCard() {
                   value={form.label}
                   onChange={(e) => setForm((prev) => ({ ...prev, label: e.target.value }))}
                   fullWidth
+                  inputProps={{ maxLength: 255 }}
                   sx={{ mb: 2 }}
                 />
                 <TextField
@@ -1316,7 +1271,7 @@ function FocalUserManagementCard() {
 
     if (!isUserManagementAdmin && hasViewCap && u.role !== 'user') return false;
 
-    const isTargetAdmin = ['super_admin', 'section_head', 'compliance_officer'].includes(u.role);
+    const isTargetAdmin = u.role === 'super_admin' || u.isUserManagementAdmin === true;
     
     if (myCap?.isUserManagementRolesManage) return true;
     if (isUserManagementAdmin && isTargetAdmin) return false;
@@ -1701,42 +1656,41 @@ function FocalUserManagementCard() {
 
           return (
             <>
-              <Box position="relative">
-                {canScrollLeft && (
-                  <IconButton
-                    size="small"
-                    onClick={() => tableContainerRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
+              <Box sx={{ minWidth: 0 }}>
+                {(canScrollLeft || canScrollRight) && (
+                  <Box
+                    role="toolbar"
+                    aria-label="User table horizontal scroll controls"
                     sx={{
-                      position: 'absolute',
-                      left: 8,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      minHeight: 40,
+                      position: 'sticky',
+                      top: 0,
                       zIndex: 4,
                       bgcolor: 'background.paper',
-                      boxShadow: 3,
-                      '&:hover': { bgcolor: 'background.paper' }
+                      borderBottom: 1,
+                      borderColor: 'divider',
                     }}
+                  >
+                  <IconButton
+                    size="small"
+                    disabled={!canScrollLeft}
+                    aria-label="Scroll user table left"
+                    onClick={() => tableContainerRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
                   >
                     <ChevronLeftIcon />
                   </IconButton>
-                )}
-                {canScrollRight && (
                   <IconButton
                     size="small"
+                    disabled={!canScrollRight}
+                    aria-label="Scroll user table right"
                     onClick={() => tableContainerRef.current?.scrollBy({ left: 300, behavior: 'smooth' })}
-                    sx={{
-                      position: 'absolute',
-                      right: 8,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      zIndex: 4,
-                      bgcolor: 'background.paper',
-                      boxShadow: 3,
-                      '&:hover': { bgcolor: 'background.paper' }
-                    }}
                   >
                     <ChevronRightIcon />
                   </IconButton>
+                  </Box>
                 )}
                 <TableContainer ref={tableContainerRef} onScroll={handleTableScroll}>
                   <Table size="small" sx={{ minWidth: 800 }}>
@@ -2130,7 +2084,11 @@ function FocalUserManagementCard() {
 function MobileSettingsCard() {
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [enrollmentOpen, setEnrollmentOpen] = useState(false);
+  const [password, setPassword] = useState('');
   const { enqueueSnackbar } = useSnackbar();
+  const { user } = useAuth();
 
   useEffect(() => {
     const checkBio = async () => {
@@ -2139,8 +2097,11 @@ function MobileSettingsCard() {
         return;
       }
       try {
-        const { value } = await Preferences.get({ key: 'biometricEnabled' });
-        setEnabled(value === 'true');
+        const [{ value }, saved] = await Promise.all([
+          Preferences.get({ key: 'biometricEnabled' }),
+          hasBiometricCredentials(),
+        ]);
+        setEnabled(value === 'true' && saved);
       } catch (e) {
         console.error('Failed to get biometric pref', e);
       } finally {
@@ -2150,27 +2111,62 @@ function MobileSettingsCard() {
     checkBio();
   }, []);
 
-  const handleToggle = async (e: any) => {
+  const handleToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.checked;
-    setEnabled(newValue);
-    try {
-      if (newValue) {
-        const { isAvailable } = await NativeBiometric.isAvailable();
-        if (!isAvailable) {
-          enqueueSnackbar('Biometric authentication is not available on this device.', { variant: 'error' });
-          setEnabled(false);
-          return;
-        }
-        await Preferences.set({ key: 'biometricEnabled', value: 'true' });
-        enqueueSnackbar('Biometric login enabled. You can now use your fingerprint to log in.', { variant: 'success' });
-      } else {
+    if (!newValue) {
+      setSaving(true);
+      try {
+        await deleteBiometricCredentials();
         await Preferences.set({ key: 'biometricEnabled', value: 'false' });
+        setEnabled(false);
         enqueueSnackbar('Biometric login disabled.', { variant: 'info' });
+      } catch (err) {
+        console.error(err);
+        enqueueSnackbar('Failed to disable biometric login.', { variant: 'error' });
+      } finally {
+        setSaving(false);
       }
+      return;
+    }
+
+    if (user?.authProvider === 'google') {
+      enqueueSnackbar('Biometric login enrollment requires a local email and password account.', { variant: 'warning' });
+      return;
+    }
+
+    try {
+      if (!(await isBiometricAvailable())) {
+        enqueueSnackbar('Biometric authentication is not available on this device.', { variant: 'error' });
+        return;
+      }
+      setPassword('');
+      setEnrollmentOpen(true);
+    } catch (err) {
+      console.error(err);
+      enqueueSnackbar('Unable to check biometric authentication on this device.', { variant: 'error' });
+    }
+  };
+
+  const handleEnable = async () => {
+    if (!user?.email || !password) {
+      enqueueSnackbar('Enter your current password to enable biometric login.', { variant: 'warning' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await authApi.reauthenticate({ password });
+      await saveBiometricCredentials(user.email, password);
+      await Preferences.set({ key: 'biometricEnabled', value: 'true' });
+      setEnabled(true);
+      setPassword('');
+      setEnrollmentOpen(false);
+      enqueueSnackbar('Biometric login enabled on this device.', { variant: 'success' });
     } catch (err: any) {
       console.error(err);
-      enqueueSnackbar('Failed to set biometric preferences.', { variant: 'error' });
-      setEnabled(!newValue);
+      enqueueSnackbar(err?.response?.data?.message || 'Biometric enrollment was not completed.', { variant: 'error' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -2188,15 +2184,48 @@ function MobileSettingsCard() {
           label={
             <Box>
               <Typography variant="body1" component="span">
-                Biometric Login
+                Allow biometric login
               </Typography>
               <Typography variant="body2" color="text.secondary" display="block">
-                Use your fingerprint or Face ID to sign in automatically.
+                Use your fingerprint or Face ID instead of entering your password each time.
               </Typography>
             </Box>
           }
+          disabled={saving}
         />
       </CardContent>
+
+      <Dialog
+        open={enrollmentOpen}
+        onClose={() => !saving && setEnrollmentOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Enable biometric login</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Confirm your current password once. It will be protected by this device's secure biometric storage.
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            type="password"
+            label="Current password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !saving) handleEnable();
+            }}
+            autoComplete="current-password"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEnrollmentOpen(false)} disabled={saving}>Cancel</Button>
+          <Button onClick={handleEnable} variant="contained" disabled={saving || !password}>
+            {saving ? 'Enabling...' : 'Enable'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 }
@@ -2359,7 +2388,8 @@ export default function SettingsPage() {
           value={tabIndex} 
           onChange={handleTabChange} 
           variant="scrollable"
-          scrollButtons="auto"
+          scrollButtons
+          allowScrollButtonsMobile
           aria-label="settings tabs"
         >
           {renderedTabs.map((tab, index) => (

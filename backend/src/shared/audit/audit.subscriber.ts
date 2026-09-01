@@ -168,8 +168,8 @@ export class AuditVariableSubscriber implements EntitySubscriberInterface {
           sessionId,
         ],
       );
-    } catch (err) {
-      console.error(`AuditSubscriber failed to write audit log for ${tableName}:`, err);
+    } catch (err: any) {
+      console.error('AuditSubscriber failed to write audit log:', err?.code || 'unknown');
     }
   }
 }

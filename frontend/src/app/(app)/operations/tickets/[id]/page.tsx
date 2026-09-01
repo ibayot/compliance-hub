@@ -512,7 +512,7 @@ export default function TicketDetailPage() {
     try {
       const data = await ticketsApi.getTechnicians();
       const available = (data || []).filter(
-        (t: any) => !['absent', 'out_of_office', 'half_day'].includes(t.attendanceStatus ?? ''),
+        (t: any) => t.attendanceStatus === 'present',
       );
       setTechnicians(available);
     } catch {
@@ -709,7 +709,7 @@ export default function TicketDetailPage() {
       const allowedValues = new Set(focals.map((f) => String(f.userId)));
       setEscalationFocalUsers(
         mergedUsers.filter(
-          (t) => allowedValues.has(String(t.id)),
+          (t) => allowedValues.has(String(t.id)) && t.attendanceStatus === 'present',
         ),
       );
     } catch {

@@ -19,6 +19,9 @@ interface SsePayload {
 // --- SINGLETON STATE ---
 let masterEventSource: EventSource | null = null;
 let currentToken: string | null = null;
+let connectionGeneration = 0;
+let connectionAbortController: AbortController | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 type SseListener = {
   types: SseEventType[];
@@ -32,6 +35,8 @@ async function connectSse(token: string) {
     return;
   }
 
+  const generation = ++connectionGeneration;
+
   if (masterEventSource) {
     masterEventSource.onmessage = null;
     masterEventSource.onerror = null;
@@ -39,12 +44,32 @@ async function connectSse(token: string) {
     masterEventSource.close();
   }
 
+  connectionAbortController?.abort();
+  const abortController = new AbortController();
+  connectionAbortController = abortController;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
   currentToken = token;
   const ticketResponse = await fetch('/api/events/token', {
     headers: { Authorization: `Bearer ${token}` },
+    signal: abortController.signal,
   });
   if (!ticketResponse.ok) throw new Error('Unable to obtain SSE connection ticket.');
   const { token: ticket } = await ticketResponse.json();
+  // The component may have unmounted, logged out, or changed users while the
+  // connection ticket was loading. Do not create a listener-less EventSource
+  // from that stale async attempt.
+  if (
+    abortController.signal.aborted ||
+    generation !== connectionGeneration ||
+    currentToken !== token ||
+    activeListeners.size === 0
+  ) {
+    return;
+  }
   const source = new EventSource(`/api/events?ticket=${encodeURIComponent(ticket)}`);
   masterEventSource = source;
 
@@ -87,7 +112,9 @@ async function connectSse(token: string) {
     });
 
     if (source.readyState === 2) {
-      setTimeout(() => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
         if (masterEventSource === source && currentToken) {
           console.log('[SSE] Forcing reconnection after fatal closure...');
           void connectSse(currentToken).catch(() => undefined);
@@ -98,7 +125,16 @@ async function connectSse(token: string) {
 }
 
 function disconnectSse() {
+  // Invalidate any in-flight ticket request before closing the current stream.
+  connectionGeneration += 1;
+  connectionAbortController?.abort();
+  connectionAbortController = null;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   if (!masterEventSource) {
+    currentToken = null;
     return;
   }
 

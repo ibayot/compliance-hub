@@ -114,7 +114,7 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
         );
       }
     } catch (err: any) {
-      this.logger.warn(`RoleCapabilities HTTP cache reload failed (non-fatal): ${err?.message}`);
+      this.logger.warn('RoleCapabilities HTTP cache reload failed (non-fatal).');
     }
   }
 

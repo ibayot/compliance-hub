@@ -101,8 +101,7 @@ export class UsersController {
 
   @Get()
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isTicketModuleAccess')
-  // Ticket-capable users need this list for the intended proxy-ticket requester picker.
+  @RequireCapability(['isUserManagementView', 'isUserManagementAdmin'])
   findAll() {
     return this.usersService.findAll();
   }

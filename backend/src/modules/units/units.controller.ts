@@ -22,13 +22,13 @@ export class UnitsController {
   }
 
   @Get()
-  @RequireCapability('isUnitsAccess')
+  @RequireCapability(['isUnitsAccess', 'isUnitsManage'])
   findAll() {
     return this.unitsService.findAll();
   }
 
   @Get(':id')
-  @RequireCapability('isUnitsAccess')
+  @RequireCapability(['isUnitsAccess', 'isUnitsManage'])
   findOne(@Param('id') id: string) {
     return this.unitsService.findOne(+id);
   }

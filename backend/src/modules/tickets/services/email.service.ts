@@ -121,7 +121,7 @@ export class EmailService implements OnModuleInit {
           auth: pUser && pPass ? { user: pUser, pass: pPass } : undefined,
           tls: { rejectUnauthorized: false },
         });
-        this.logger.log(`Primary Email service initialized (SMTP: ${pHost}:${smtpPort})`);
+        this.logger.log('Primary email transport initialized.');
       } else {
         this.primaryTransporter = null;
       }
@@ -148,7 +148,7 @@ export class EmailService implements OnModuleInit {
           auth: fUser && fPass ? { user: fUser, pass: fPass } : undefined,
           tls: { rejectUnauthorized: false },
         });
-        this.logger.log(`Fallback Email service initialized (SMTP: ${fHost}:${smtpPort})`);
+        this.logger.log('Fallback email transport initialized.');
       } else {
         this.fallbackTransporter = null;
       }
@@ -160,14 +160,12 @@ export class EmailService implements OnModuleInit {
           try {
             await this.send(payload.to, payload.subject, payload.html || payload.text || '');
           } catch (error: any) {
-            this.logger.error(
-              `Failed to send event-triggered email to ${payload.to}: ${error.message}`,
-            );
+            this.logger.error('Failed to send event-triggered email.');
           }
         },
       );
     } catch (err: any) {
-      this.logger.error(`Failed to load SMTP config: ${err.message}`);
+      this.logger.error(`Failed to load SMTP config (${err?.code || 'unknown'}).`);
     }
   }
 
@@ -509,11 +507,11 @@ export class EmailService implements OnModuleInit {
       if (!transporter) throw new Error('No SMTP configured');
       const from = this.primaryTransporter ? this.primaryFromAddress : this.fallbackFromAddress;
       await transporter.sendMail({ from, to, subject, html });
-      this.logger.log(`[EMAIL-TEST] Test email sent to ${to}`);
-      return { sent: true, message: `Test email sent successfully to ${to}` };
+      this.logger.log('[EMAIL-TEST] Test email sent successfully.');
+      return { sent: true, message: 'Test email sent successfully.' };
     } catch (err: any) {
-      this.logger.error(`[EMAIL-TEST] Failed: ${err?.message}`);
-      return { sent: false, message: `SMTP error: ${err?.message}` };
+      this.logger.error('[EMAIL-TEST] SMTP delivery failed.');
+      return { sent: false, message: 'SMTP delivery failed. Please verify the saved configuration.' };
     }
   }
 
@@ -523,24 +521,24 @@ export class EmailService implements OnModuleInit {
 
   private async send(to: string, subject: string, html: string): Promise<void> {
     if (!this.emailEnabled) {
-      this.logger.log(`[EMAIL-DISABLED] Suppressed email to ${to}: ${subject} (.env flag)`);
+      this.logger.log('[EMAIL-DISABLED] Suppressed email because outbound email is disabled.');
       return;
     }
 
     const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });
     if (dbConfig && dbConfig.isEmailNotificationsEnabled === false) {
-      this.logger.log(`[EMAIL-DISABLED] Suppressed email to ${to}: ${subject} (DB flag)`);
+      this.logger.log('[EMAIL-DISABLED] Suppressed email because database email notifications are disabled.');
       return;
     }
 
     const override = dbConfig?.emailTestOverride || this.testOverrideTo;
     const effectiveTo = override ?? to;
     if (override && override !== to) {
-      this.logger.log(`[EMAIL-OVERRIDE] Redirecting from ${to} to ${override}`);
+      this.logger.log('[EMAIL-OVERRIDE] Email test override is active.');
     }
 
     if (!this.primaryTransporter && !this.fallbackTransporter) {
-      this.logger.log(`[EMAIL-LOG] To: ${effectiveTo} | Subject: ${subject}`);
+      this.logger.log('[EMAIL-LOG] Email delivery skipped because SMTP is unavailable.');
       return;
     }
 
@@ -577,9 +575,7 @@ export class EmailService implements OnModuleInit {
         html,
       });
 
-      this.logger.log(
-        `Email sent to ${effectiveTo}: ${subject} ${usedFallback ? '(Fallback)' : '(Primary)'}`,
-      );
+      this.logger.log(`Email sent using ${usedFallback ? 'fallback' : 'primary'} SMTP.`);
 
       if (!usedFallback && dbConfig) {
         dbConfig.primarySmtpSentToday = sentToday + 1;
@@ -592,7 +588,7 @@ export class EmailService implements OnModuleInit {
         );
       }
     } catch (err: any) {
-      this.logger.error(`Failed to send email to ${effectiveTo}: ${err?.message}`);
+      this.logger.error('Email delivery failed.');
     }
   }
 }

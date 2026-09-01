@@ -8,13 +8,15 @@ import { UsersServiceAppModule } from './users-service.module';
 import { GlobalExceptionFilter } from '../shared/filters/global-exception.filter';
 import { docsAuthMiddleware } from '../common/middleware/docs-auth.middleware';
 import { BlankStringToNullPipe } from '../common/pipes/blank-string-to-null.pipe';
+import { getAppVersion } from '../common/app-version';
+import { completeOpenApiDocument } from '../common/swagger/complete-openapi';
 
 async function bootstrap() {
   process.env.AUTH_ENABLE_TICKET_HOOKS = 'false';
 
   const app = await NestFactory.create(UsersServiceAppModule);
   const configService = app.get(ConfigService);
-  const serviceVersion = process.env.npm_package_version || '0.0.0';
+  const serviceVersion = getAppVersion();
 
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false, hsts: false }));
   app.enableCors({
@@ -43,35 +45,18 @@ async function bootstrap() {
     try {
       const ds = app.get(DataSource);
       await ds.query('SELECT 1');
-      const dbHost = process.env.DB_HOST || 'localhost';
-      const dbName =
-        process.env.USERS_DB_DATABASE || process.env.DB_DATABASE || 'compliance_hub_users';
-
-      // Verify role_capabilities table/view has data (cache won't be populated if empty)
-      const [roleCapsCheck] = await ds
-        .query('SELECT COUNT(*) as cnt FROM role_capabilities')
-        .catch(() => [{ cnt: 0 }]);
-      const roleCapsCount = Number(roleCapsCheck?.cnt ?? 0);
 
       res.json({
         status: 'ok',
         service: 'users',
         version: serviceVersion,
-        topology: {
-          runtime: 'single-vm-multi-container',
-          containerRole: 'users-service',
-          dbServer: dbHost,
-          dbName,
-          sharedDbServer: true,
-        },
-        checks: { db: true, role_capabilities_rows: roleCapsCount },
+        checks: { ready: true },
       });
     } catch (err: any) {
       res.status(503).json({
         status: 'error',
         service: 'users',
         reason: 'db_unreachable',
-        detail: err?.message,
       });
     }
   });
@@ -88,10 +73,9 @@ async function bootstrap() {
     .addTag('units', 'Organisational unit management')
     .addTag('role-capabilities', 'Role capability matrix administration')
     .addTag('audit-logs', 'System-wide audit logging and tracking')
-    .addTag('test-only', 'Test and diagnostic endpoints; not part of normal workflows')
     .addTag('_internal', 'Internal service-to-service communication')
     .build();
-  const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
+  const swaggerDoc = completeOpenApiDocument(SwaggerModule.createDocument(app, swaggerConfig));
   app.use('/api/docs', docsAuthMiddleware);
   app.use('/api/openapi.json', docsAuthMiddleware);
   SwaggerModule.setup('api/docs', app, swaggerDoc, {

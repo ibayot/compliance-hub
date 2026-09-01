@@ -9,11 +9,13 @@ import { DataSource } from 'typeorm';
 import { GlobalExceptionFilter } from '../shared/filters/global-exception.filter';
 import { docsAuthMiddleware } from '../common/middleware/docs-auth.middleware';
 import { BlankStringToNullPipe } from '../common/pipes/blank-string-to-null.pipe';
+import { getAppVersion } from '../common/app-version';
+import { completeOpenApiDocument } from '../common/swagger/complete-openapi';
 
 async function bootstrap() {
   const app = await NestFactory.create(ComplianceServiceAppModule);
   const configService = app.get(ConfigService);
-  const serviceVersion = process.env.npm_package_version || '0.0.0';
+  const serviceVersion = getAppVersion();
 
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false, hsts: false }));
   app.enableCors({
@@ -51,9 +53,6 @@ async function bootstrap() {
   http.get('/api/health/ready', async (_req: any, res: any) => {
     const checks: Record<string, boolean> = {};
     let dbOk = false;
-    const dbHost = process.env.DB_HOST || 'localhost';
-    const dbName =
-      process.env.COMPLIANCE_DB_DATABASE || process.env.DB_DATABASE || 'compliance_hub';
 
     try {
       const ds = app.get(DataSource);
@@ -76,7 +75,6 @@ async function bootstrap() {
         status: 'error',
         service: 'compliance',
         reason: 'db_unreachable',
-        detail: err?.message,
       });
     }
 
@@ -108,14 +106,7 @@ async function bootstrap() {
       status: allOk ? 'ok' : 'degraded',
       service: 'compliance',
       version: serviceVersion,
-      topology: {
-        runtime: 'single-vm-multi-container',
-        containerRole: 'compliance-service',
-        dbServer: dbHost,
-        dbName,
-        sharedDbServer: true,
-      },
-      checks,
+      checks: { ready: allOk },
     });
   });
 
@@ -156,14 +147,14 @@ async function bootstrap() {
     .addTag('document-types', 'Document type definitions')
     .addTag('issuances', 'ICT issuance reference management')
     .addTag('kpi', 'Key performance indicator tracking')
+    .addTag('reports', 'Consolidated compliance reporting')
     .addTag('mov', 'Means of verification records')
     .addTag('metrics', 'Compliance metrics and reporting')
     .addTag('incidents', 'IT incident management')
     .addTag('cybersecurity', 'Cybersecurity compliance records')
     .addTag('reviews', 'Document reviews and comparisons')
-    .addTag('test-only', 'Test and diagnostic endpoints; not part of normal workflows')
     .build();
-  const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
+  const swaggerDoc = completeOpenApiDocument(SwaggerModule.createDocument(app, swaggerConfig));
   app.use('/api/docs', docsAuthMiddleware);
   app.use('/api/openapi.json', docsAuthMiddleware);
   SwaggerModule.setup('api/docs', app, swaggerDoc, {

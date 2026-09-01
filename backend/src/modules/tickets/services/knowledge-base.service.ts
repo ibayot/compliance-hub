@@ -74,7 +74,7 @@ export class KnowledgeBaseService {
         }
       }
     } catch (err) {
-      this.logger.warn(`Failed to fetch users for PII scrubbing: ${err?.message}`);
+      this.logger.warn('Failed to fetch users for PII scrubbing.');
     }
 
     // Strip generic emails

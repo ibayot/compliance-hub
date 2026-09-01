@@ -11,9 +11,9 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   IconButton,
   Chip,
   TextField,
@@ -51,12 +51,14 @@ import {
 } from '@/app/api/references';
 import { feedbackApi, Feedback } from '@/lib/api/feedback';
 import { UserRole } from '@/lib/types/auth';
+import ResponsiveTable from '@/components/layout/ResponsiveTable';
 
 const TYPE_LABELS: Record<string, string> = {
   it_support: 'IT Support',
   desktop_support: 'Desktop Support',
   pantawid_ict_support: 'Pantawid ICT Support',
 };
+const PAGE_SIZE = 10;
 
 export default function TicketSettingsPage() {
   const { user, myCap } = useAuth();
@@ -66,6 +68,11 @@ export default function TicketSettingsPage() {
   const userFeedbackTabIndex = canManageGlobalSettings ? 5 : 4;
 
   const [tab, setTab] = useState(0);
+  const [categoryPage, setCategoryPage] = useState(0);
+  const [issuePage, setIssuePage] = useState(0);
+  const [rulePage, setRulePage] = useState(0);
+  const [focalPage, setFocalPage] = useState(0);
+  const [feedbackPage, setFeedbackPage] = useState(0);
 
   // — Categories —
   const [categories, setCategories] = useState<TicketCategory[]>([]);
@@ -605,6 +612,24 @@ export default function TicketSettingsPage() {
     (iss) => ruleForm.targetCategoryId && (iss.categoryId || iss.category_id) === ruleForm.targetCategoryId && !iss.isDeleted,
   );
 
+  const visibleCategories = categories.filter((c) => !c.isDeleted);
+  const visibleIssues = issues.filter((iss) => (
+    issueSearch.trim() === ''
+      || iss.name.toLowerCase().includes(issueSearch.toLowerCase())
+      || Boolean(iss.category?.name?.toLowerCase().includes(issueSearch.toLowerCase()))
+  ));
+  const visibleRules = rules.filter((rule) => {
+    const s = ruleSearch.trim().toLowerCase();
+    if (!s) return true;
+    const kws = rule.keywords || [rule.keyword];
+    const kwMatch = kws.some((k) => k.toLowerCase().includes(s));
+    const typeMatch = rule.targetTicketType && TYPE_LABELS[rule.targetTicketType]
+      && TYPE_LABELS[rule.targetTicketType].toLowerCase().includes(s);
+    const catMatch = (rule.targetCategory ?? rule.category)?.name?.toLowerCase().includes(s);
+    const issueMatch = rule.targetIssueType?.name?.toLowerCase().includes(s);
+    return Boolean(kwMatch || typeMatch || catMatch || issueMatch);
+  });
+
   return (
     <Box>
       <Typography variant="h4" fontWeight={700} mb={0.5}>
@@ -634,14 +659,14 @@ export default function TicketSettingsPage() {
         {/* ── Categories Tab ── */}
         {tab === 0 && (
           <CardContent>
-            <Box display="flex" justifyContent="space-between" mb={2}>
+            <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
               <TextField
                 placeholder="Search categories..."
                 size="small"
                 value={categorySearch}
-                onChange={(e) => setCategorySearch(e.target.value)}
+                onChange={(e) => { setCategorySearch(e.target.value); setCategoryPage(0); }}
                   inputProps={{ maxLength: 100 }}
-                sx={{ minWidth: 300 }}
+                sx={{ minWidth: { xs: 0, sm: 300 }, width: { xs: '100%', sm: 'auto' } }}
               />
               <Button
                 startIcon={<AddIcon />}
@@ -652,7 +677,7 @@ export default function TicketSettingsPage() {
                 Add Category
               </Button>
             </Box>
-            <TableContainer>
+            <ResponsiveTable minWidth={680}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
@@ -669,7 +694,7 @@ export default function TicketSettingsPage() {
                         <CircularProgress size={24} />
                       </TableCell>
                     </TableRow>
-                  ) : categories.filter((c) => !c.isDeleted).length === 0 ? (
+                  ) : visibleCategories.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} align="center">
                         <Typography color="text.secondary" py={2}>
@@ -678,17 +703,17 @@ export default function TicketSettingsPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    categories
+                    visibleCategories
                       .filter((c) => {
-                      if (c.isDeleted) return false;
-                      const s = categorySearch.trim().toLowerCase();
-                      if (!s) return true;
-                      if (c.name.toLowerCase().includes(s)) return true;
-                      if (c.isIt && "it support".includes(s)) return true;
-                      if (c.isDesktop && "desktop support".includes(s)) return true;
-                      if (c.isPantawid && "pantawid".includes(s)) return true;
-                      return false;
-                    })
+                        const s = categorySearch.trim().toLowerCase();
+                        if (!s) return true;
+                        if (c.name.toLowerCase().includes(s)) return true;
+                        if (c.isIt && "it support".includes(s)) return true;
+                        if (c.isDesktop && "desktop support".includes(s)) return true;
+                        if (c.isPantawid && "pantawid".includes(s)) return true;
+                        return false;
+                      })
+                      .slice(categoryPage * PAGE_SIZE, (categoryPage + 1) * PAGE_SIZE)
                       .map((cat) => (
                         <TableRow key={cat.id} hover>
                           <TableCell>
@@ -729,21 +754,32 @@ export default function TicketSettingsPage() {
                   )}
                 </TableBody>
               </Table>
-            </TableContainer>
+            </ResponsiveTable>
+            <TablePagination
+              component="div"
+              count={visibleCategories.filter((c) => {
+                const s = categorySearch.trim().toLowerCase();
+                return !s || c.name.toLowerCase().includes(s) || (c.isIt && 'it support'.includes(s)) || (c.isDesktop && 'desktop support'.includes(s)) || (c.isPantawid && 'pantawid'.includes(s));
+              }).length}
+              page={categoryPage}
+              onPageChange={(_, value) => setCategoryPage(value)}
+              rowsPerPage={PAGE_SIZE}
+              rowsPerPageOptions={[PAGE_SIZE]}
+            />
           </CardContent>
         )}
 
         {/* —— Issues Tab —— */}
         {tab === 1 && (
           <CardContent>
-            <Box display="flex" justifyContent="space-between" mb={2}>
+              <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
               <TextField
                 placeholder="Search issues..."
                 size="small"
                 value={issueSearch}
-                onChange={(e) => setIssueSearch(e.target.value)}
+                onChange={(e) => { setIssueSearch(e.target.value); setIssuePage(0); }}
                   inputProps={{ maxLength: 100 }}
-                sx={{ minWidth: 300 }}
+                sx={{ minWidth: { xs: 0, sm: 300 }, width: { xs: '100%', sm: 'auto' } }}
               />
               <Button
                 startIcon={<AddIcon />}
@@ -760,7 +796,7 @@ export default function TicketSettingsPage() {
                 <CircularProgress />
               </Box>
             ) : (
-              <TableContainer>
+              <ResponsiveTable minWidth={820}>
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ bgcolor: 'action.hover' }}>
@@ -777,8 +813,8 @@ export default function TicketSettingsPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {issues
-                        .filter((iss) => (issueSearch.trim() === "" || iss.name.toLowerCase().includes(issueSearch.toLowerCase()) || (iss.category && iss.category.name && iss.category.name.toLowerCase().includes(issueSearch.toLowerCase()))))
+                    {visibleIssues
+                        .slice(issuePage * PAGE_SIZE, (issuePage + 1) * PAGE_SIZE)
                         .map((iss) => (
                       <TableRow key={iss.id} hover>
                         <TableCell>{iss.category?.name || <Typography variant="caption" color="error">Unlinked</Typography>}</TableCell>
@@ -810,7 +846,7 @@ export default function TicketSettingsPage() {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {issues.length === 0 && (
+                    {visibleIssues.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>
                           No issues found.
@@ -819,7 +855,17 @@ export default function TicketSettingsPage() {
                     )}
                   </TableBody>
                 </Table>
-              </TableContainer>
+              </ResponsiveTable>
+            )}
+            {!issuesLoading && (
+              <TablePagination
+                component="div"
+                count={visibleIssues.length}
+                page={issuePage}
+                onPageChange={(_, value) => setIssuePage(value)}
+                rowsPerPage={PAGE_SIZE}
+                rowsPerPageOptions={[PAGE_SIZE]}
+              />
             )}
           </CardContent>
         )}
@@ -827,13 +873,13 @@ export default function TicketSettingsPage() {
         {/* ── Keyword Rules Tab ── */}
         {tab === 2 && (
           <CardContent>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
               <TextField
                 placeholder="Search rules..."
                 size="small"
                 value={ruleSearch}
-                onChange={(e) => setRuleSearch(e.target.value)}
-                sx={{ minWidth: 300, mr: 2 }}
+                onChange={(e) => { setRuleSearch(e.target.value); setRulePage(0); }}
+                sx={{ minWidth: { xs: 0, sm: 300 }, width: { xs: '100%', sm: 'auto' }, mr: { xs: 0, sm: 2 } }}
                 inputProps={{ maxLength: 100 }}
               />
               <Button
@@ -845,7 +891,7 @@ export default function TicketSettingsPage() {
                 Add Rule
               </Button>
             </Box>
-            <TableContainer>
+            <ResponsiveTable minWidth={820}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
@@ -864,7 +910,7 @@ export default function TicketSettingsPage() {
                         <CircularProgress size={24} />
                       </TableCell>
                     </TableRow>
-                  ) : rules.length === 0 ? (
+                  ) : visibleRules.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} align="center">
                         <Typography color="text.secondary" py={2}>
@@ -873,16 +919,9 @@ export default function TicketSettingsPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    rules.filter(rule => {
-                      const s = ruleSearch.trim().toLowerCase();
-                      if (!s) return true;
-                      const kws = rule.keywords || [rule.keyword];
-                      const kwMatch = kws.some(k => k.toLowerCase().includes(s));
-                      const typeMatch = rule.targetTicketType && TYPE_LABELS[rule.targetTicketType] && TYPE_LABELS[rule.targetTicketType].toLowerCase().includes(s);
-                      const catMatch = (rule.targetCategory ?? rule.category)?.name?.toLowerCase().includes(s);
-                      const issueMatch = rule.targetIssueType?.name?.toLowerCase().includes(s);
-                      return kwMatch || typeMatch || catMatch || issueMatch;
-                    }).map((rule) => (
+                    visibleRules
+                      .slice(rulePage * PAGE_SIZE, (rulePage + 1) * PAGE_SIZE)
+                      .map((rule) => (
                       <TableRow key={rule.id} hover sx={{ '& td, & th': { height: 'auto', py: 1, verticalAlign: 'middle' } }}>
                         <TableCell>
                           <Box display="flex" gap={0.5} flexWrap="wrap">
@@ -933,7 +972,17 @@ export default function TicketSettingsPage() {
                   )}
                 </TableBody>
               </Table>
-            </TableContainer>
+            </ResponsiveTable>
+            {!rulesLoading && (
+              <TablePagination
+                component="div"
+                count={visibleRules.length}
+                page={rulePage}
+                onPageChange={(_, value) => setRulePage(value)}
+                rowsPerPage={PAGE_SIZE}
+                rowsPerPageOptions={[PAGE_SIZE]}
+              />
+            )}
           </CardContent>
         )}
         {/* ── Escalation Focals Tab ── */}
@@ -952,7 +1001,7 @@ export default function TicketSettingsPage() {
                 Add Focal
               </Button>
             </Box>
-            <TableContainer>
+            <ResponsiveTable minWidth={560}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
@@ -978,7 +1027,9 @@ export default function TicketSettingsPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    focals.map((f) => (
+                    focals
+                      .slice(focalPage * PAGE_SIZE, (focalPage + 1) * PAGE_SIZE)
+                      .map((f) => (
                       <TableRow key={f.id} hover>
                         <TableCell>
                           <Chip
@@ -1005,7 +1056,17 @@ export default function TicketSettingsPage() {
                   )}
                 </TableBody>
               </Table>
-            </TableContainer>
+            </ResponsiveTable>
+            {!focalsLoading && (
+              <TablePagination
+                component="div"
+                count={focals.length}
+                page={focalPage}
+                onPageChange={(_, value) => setFocalPage(value)}
+                rowsPerPage={PAGE_SIZE}
+                rowsPerPageOptions={[PAGE_SIZE]}
+              />
+            )}
           </CardContent>
         )}
 
@@ -1292,7 +1353,7 @@ export default function TicketSettingsPage() {
                 select
                 size="small"
                 value={feedbackFilter}
-                onChange={(e) => setFeedbackFilter(e.target.value as any)}
+                onChange={(e) => { setFeedbackFilter(e.target.value as any); setFeedbackPage(0); }}
                 sx={{ width: 150 }}
               >
                 <MenuItem value="all">All</MenuItem>
@@ -1301,7 +1362,7 @@ export default function TicketSettingsPage() {
                 <MenuItem value="rejected">Rejected</MenuItem>
               </TextField>
             </Box>
-            <TableContainer>
+            <ResponsiveTable minWidth={680}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
@@ -1329,7 +1390,9 @@ export default function TicketSettingsPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    feedbacks.map((f) => (
+                    feedbacks
+                      .slice(feedbackPage * PAGE_SIZE, (feedbackPage + 1) * PAGE_SIZE)
+                      .map((f) => (
                       <TableRow key={f.id} hover>
                         <TableCell sx={{ whiteSpace: 'nowrap' }}>
                           {new Date(f.createdAt).toLocaleString()}
@@ -1391,7 +1454,17 @@ export default function TicketSettingsPage() {
                   )}
                 </TableBody>
               </Table>
-            </TableContainer>
+            </ResponsiveTable>
+            {!feedbackLoading && (
+              <TablePagination
+                component="div"
+                count={feedbacks.length}
+                page={feedbackPage}
+                onPageChange={(_, value) => setFeedbackPage(value)}
+                rowsPerPage={PAGE_SIZE}
+                rowsPerPageOptions={[PAGE_SIZE]}
+              />
+            )}
           </CardContent>
         )}
 

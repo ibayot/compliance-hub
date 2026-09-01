@@ -22,20 +22,10 @@ import { RequireCapability } from '../../../common/decorators/require-capability
 import {
   AttendanceService,
   SetAttendanceDto,
-  BulkSetAttendanceDto,
   SetOfficeDayDto,
-  BulkSetOfficeDaysDto,
 } from '../services/attendance.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 
-const STRICT_ATTENDANCE_MANAGE_ROLES: string[] = [];
-const STRICT_OFFICEDAY_MANAGE_ROLES: string[] = [];
-
-/** Roles that can manage technician attendance (set present/absent/etc.) */
-/** Role-only check for attendance mutation endpoints. */
-/** Role-only check for office-day mutation endpoints. */
-/** Roles that can manage office days (set/toggle office calendar) */
-/** Roles that can read attendance */
 function mapUser(u: any) {
   if (!u) return u;
   return {
@@ -73,17 +63,6 @@ export class AttendanceController {
     private readonly attendanceService: AttendanceService,
     private readonly roleCapSvc: RoleCapabilitiesService,
   ) {}
-
-  private ensureStrictRole(actualRole: string | undefined, allowed: string[], action: string) {
-    if (allowed.length === 0 && actualRole) {
-      if (this.roleCapSvc.isAttendanceManage(actualRole)) {
-        return;
-      }
-    }
-    if (!actualRole || !allowed.includes(actualRole)) {
-      throw new ForbiddenException(`Role '${actualRole || 'unknown'}' cannot ${action}.`);
-    }
-  }
 
   // ── Attendance ──────────────────────────────────────────────────────────
 
@@ -126,8 +105,6 @@ export class AttendanceController {
   @RequireCapability('isAttendanceManage')
   @HttpCode(HttpStatus.OK)
   async setAttendance(@Body() dto: SetAttendanceDto, @Request() req: any) {
-    this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
-    
     // Check if user is trying to set PRESENT manually
     if (dto.status === 'present' as any) {
       const systemStatus = this.attendanceService.getDtrSystemStatus();
@@ -145,48 +122,12 @@ export class AttendanceController {
 
   /** DELETE /attendance/:userId/:date */
   @Delete(':userId/:date')
-  @ApiTags('test-only')
   @RequireCapability('isAttendanceManage')
   @HttpCode(HttpStatus.OK)
   async deleteAttendance(@Param('userId') userId: string, @Param('date') date: string, @Request() req: any) {
-    this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
     return this.attendanceService.deleteAttendance(Number(userId), date);
   }
 
-  /** POST /attendance/bulk — set multiple attendance records */
-  @Post('bulk')
-  @RequireCapability('isAttendanceManage')
-  @HttpCode(HttpStatus.OK)
-  async bulkSetAttendance(@Body() dto: BulkSetAttendanceDto, @Request() req: any) {
-    this.ensureStrictRole(req.user?.role, STRICT_ATTENDANCE_MANAGE_ROLES, 'manage attendance');
-    
-    const hasPresent = dto.entries.some(e => e.status === 'present' as any);
-    if (hasPresent) {
-      const systemStatus = this.attendanceService.getDtrSystemStatus();
-      if (systemStatus.isOnline) {
-        throw new ForbiddenException('Cannot manually set PRESENT while DTR sync is online.');
-      }
-      if (!this.roleCapSvc.isAttendanceManage(req.user?.role)) {
-        throw new ForbiddenException('Only Attendance Admins can use the fallback PRESENT override.');
-      }
-    }
-
-    const records = await this.attendanceService.bulkSetAttendance(
-      dto,
-      req.user.id ?? req.user.userId,
-      req.user.role,
-    );
-    return records.map(mapAttendance);
-  }
-
-  /** DELETE /attendance/all — super_admin only: clear all attendance records */
-  @ApiTags('test-only')
-  @Delete('all')
-  @RequireCapability('isAttendanceManage')
-  @HttpCode(HttpStatus.OK)
-  async clearAllAttendance() {
-    return this.attendanceService.clearAllAttendance();
-  }
 
   /** GET /attendance/technicians?ticketType= — list technicians (for attendance management) */
   @Get('technicians')
@@ -220,18 +161,9 @@ export class AttendanceController {
   @RequireCapability('isAttendanceManage')
   @HttpCode(HttpStatus.OK)
   async setOfficeDay(@Body() dto: SetOfficeDayDto, @Request() req: any) {
-    this.ensureStrictRole(req.user?.role, STRICT_OFFICEDAY_MANAGE_ROLES, 'manage office days');
     return this.attendanceService.setOfficeDay(dto, req.user.id ?? req.user.userId);
   }
 
-  /** POST /attendance/office-days/bulk — set multiple office days */
-  @Post('office-days/bulk')
-  @RequireCapability('isAttendanceManage')
-  @HttpCode(HttpStatus.OK)
-  async bulkSetOfficeDays(@Body() dto: BulkSetOfficeDaysDto, @Request() req: any) {
-    this.ensureStrictRole(req.user?.role, STRICT_OFFICEDAY_MANAGE_ROLES, 'manage office days');
-    return this.attendanceService.bulkSetOfficeDays(dto, req.user.id ?? req.user.userId);
-  }
 
   /** GET /attendance/staff-logins?date=YYYY-MM-DD — staff login activity for a date */
   @Get('staff-logins')

@@ -29,7 +29,7 @@ export class MetricsProcessor {
 
       return { results, aggregate };
     } catch (error) {
-      this.logger.error(`Failed to compute metrics for version ${versionId}`, error.stack);
+      this.logger.error('Failed to compute metrics.');
       throw error;
     }
   }

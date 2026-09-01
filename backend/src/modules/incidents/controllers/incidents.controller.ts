@@ -18,21 +18,25 @@ export class IncidentsController {
   ) {}
 
   @Post()
+  @RequireCapability('isReportsAccess')
   async create(@Body() createDto: CreateIncidentDto) {
     return await this.incidentsService.create(createDto);
   }
 
   @Get()
+  @RequireCapability('isReportsAccess')
   async findAll() {
     return await this.incidentsService.findAll();
   }
 
   @Get('statistics')
+  @RequireCapability('isReportsAccess')
   async getStatistics() {
     return await this.incidentsService.getStatistics();
   }
 
   @Get('today-stats')
+  @RequireCapability('isReportsAccess')
   async getTodayStats() {
     const now = new Date();
     const startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 0, 0);
@@ -42,26 +46,31 @@ export class IncidentsController {
   }
 
   @Get('period-stats')
+  @RequireCapability('isReportsAccess')
   async getPeriodStats() {
     return await this.incidentsService.getPeriodStatistics();
   }
 
   @Get('snapshots/latest')
+  @RequireCapability('isReportsAccess')
   async getLatestSnapshot() {
     return await this.snapshotService.getLatestSnapshot();
   }
 
   @Get('snapshots/:date')
+  @RequireCapability('isReportsAccess')
   async getSnapshotsByDate(@Param('date') date: string) {
     return await this.snapshotService.getSnapshots(new Date(date));
   }
 
   @Get(':id')
+  @RequireCapability('isReportsAccess')
   async findOne(@Param('id') id: number) {
     return await this.incidentsService.findOne(id);
   }
 
   @Put(':id')
+  @RequireCapability('isReportsAccess')
   async update(@Param('id') id: number, @Body() updateDto: UpdateIncidentDto) {
     return await this.incidentsService.update(id, {
       ...updateDto,
@@ -70,6 +79,7 @@ export class IncidentsController {
   }
 
   @Delete(':id')
+  @RequireCapability('isReportsAccess')
   async delete(@Param('id') id: number) {
     await this.incidentsService.delete(id);
     return { message: 'Incident deleted successfully' };

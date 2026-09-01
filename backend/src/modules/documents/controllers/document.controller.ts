@@ -100,6 +100,7 @@ export class DocumentController {
    * GET /documents
    */
   @Get()
+  @RequireCapability(['isDocumentsAccess', 'isDocumentsManage'])
   async listDocuments(
     @Query('title') title?: string,
     @Query('unit_id') unit_id?: string,
@@ -128,6 +129,7 @@ export class DocumentController {
   }
 
   @Get('types')
+  @RequireCapability(['isDocumentsAccess', 'isDocumentsManage'])
   async listDocumentTypes() {
     return this.documentService.listDocumentTypes();
   }
@@ -206,6 +208,7 @@ export class DocumentController {
    * GET /documents/repository
    */
   @Get('repository')
+  @RequireCapability(['isRepositoryAccess', 'isDocumentsManage'])
   async getRepository(@CurrentUser() user: any) {
     return this.documentService.getRepository(user?.role, user?.id);
   }
@@ -215,6 +218,7 @@ export class DocumentController {
    * GET /documents/:id
    */
   @Get(':id')
+  @RequireCapability(['isDocumentsAccess', 'isDocumentsManage'])
   async getDocument(@Param('id') id: string): Promise<Document> {
     return this.documentService.getDocumentById(id);
   }
@@ -224,6 +228,7 @@ export class DocumentController {
    * GET /documents/:id/versions
    */
   @Get(':id/versions')
+  @RequireCapability(['isDocumentsAccess', 'isDocumentsManage'])
   async getVersionHistory(@Param('id') id: string) {
     return this.documentService.getVersionHistory(id);
   }
@@ -297,6 +302,7 @@ export class DocumentController {
    * GET /documents/:id/versions/:vid/download
    */
   @Get(':id/versions/:vid/download')
+  @RequireCapability(['isDocumentsAccess', 'isDocumentsManage'])
   async downloadVersion(
     @Param('vid') versionId: string,
     @CurrentUser() user: any,
@@ -318,6 +324,7 @@ export class DocumentController {
    * GET /documents/:id/versions/:vid/preview
    */
   @Get(':id/versions/:vid/preview')
+  @RequireCapability(['isDocumentsAccess', 'isDocumentsManage'])
   async getPreview(
     @Param('vid') versionId: string,
     @CurrentUser() user: any,

@@ -10,6 +10,7 @@ import { GlobalExceptionFilter } from '../shared/filters/global-exception.filter
 import * as swaggerUi from 'swagger-ui-express';
 import axios from 'axios';
 import { docsAuthMiddleware } from '../common/middleware/docs-auth.middleware';
+import { getAppVersion } from '../common/app-version';
 
 let vaptModeCache = process.env.VAPT_MODE === 'true';
 
@@ -33,8 +34,8 @@ async function pollVaptMode() {
       }
       vaptModeCache = newVapt;
     }
-  } catch (err) {
-    console.error('[GATEWAY] VAPT DB Poll Error:', err);
+  } catch (err: any) {
+    console.error('[GATEWAY] VAPT DB poll failed:', err?.code || 'unknown');
   } finally {
     if (connection) {
       await connection.end().catch(() => {});
@@ -354,6 +355,7 @@ async function bootstrap() {
       createServiceProxy(`${complianceServiceUrl}/api/cybersecurity`, 'compliance'),
     );
     app.use(`${prefix}/kpi`, createServiceProxy(`${complianceServiceUrl}/api/kpi`, 'compliance'));
+    app.use(`${prefix}/reports`, createServiceProxy(`${complianceServiceUrl}/api/reports`, 'compliance'));
     app.use(`${prefix}/mov`, createServiceProxy(`${complianceServiceUrl}/api/mov`, 'compliance'));
     app.use(
       `${prefix}/compliance/role-capabilities`,
@@ -371,16 +373,13 @@ async function bootstrap() {
       res.json({
         service: 'api-gateway',
         status: 'ok',
-        usersServiceUrl,
-        ticketingServiceUrl,
-        complianceServiceUrl,
         services: {
           users: usersAvailable,
           ticketing: ticketingAvailable,
           compliance: complianceAvailable,
         },
         strictMode,
-        version: process.env.npm_package_version || '0.0.0',
+        version: getAppVersion(),
         apiVersion: prefix === '/api/v1' ? 'v1' : 'legacy',
       });
     });
@@ -394,9 +393,6 @@ async function bootstrap() {
       res.status(503).json({
         message: 'Service currently unavailable for this endpoint in microservices mode.',
         path: req.path,
-        usersServiceUrl,
-        ticketingServiceUrl,
-        complianceServiceUrl,
       });
     });
 
@@ -404,9 +400,6 @@ async function bootstrap() {
       res.status(503).json({
         message: 'Service currently unavailable for this endpoint in microservices mode.',
         path: req.path,
-        usersServiceUrl,
-        ticketingServiceUrl,
-        complianceServiceUrl,
       });
     });
   }

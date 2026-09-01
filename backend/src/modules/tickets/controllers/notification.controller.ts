@@ -3,7 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { TicketNotification } from '../entities/ticket-notification.entity';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('notifications')
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
 export class NotificationController {

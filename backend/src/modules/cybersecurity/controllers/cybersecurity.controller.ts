@@ -17,16 +17,19 @@ export class CybersecurityController {
   constructor(private readonly cybersecurityService: CybersecurityService) {}
 
   @Get('metrics')
+  @RequireCapability('isIto')
   async getAllMetrics() {
     return await this.cybersecurityService.findAll();
   }
 
   @Get('metrics/:id')
+  @RequireCapability('isIto')
   async getMetric(@Param('id') id: number) {
     return await this.cybersecurityService.findOne(id);
   }
 
   @Post('metrics')
+  @RequireCapability('isIto')
   async createMetric(@Body() createDto: CreateCybersecurityMetricDto) {
     return await this.cybersecurityService.create({
       ...createDto,
@@ -35,6 +38,7 @@ export class CybersecurityController {
   }
 
   @Put('metrics/:id')
+  @RequireCapability('isIto')
   async updateMetric(@Param('id') id: number, @Body() updateDto: UpdateCybersecurityMetricDto) {
     return await this.cybersecurityService.update(id, {
       ...updateDto,
@@ -43,6 +47,7 @@ export class CybersecurityController {
   }
 
   @Delete('metrics/:id')
+  @RequireCapability('isIto')
   async deleteMetric(@Param('id') id: number) {
     await this.cybersecurityService.delete(id);
     return { message: 'Metric deleted successfully' };

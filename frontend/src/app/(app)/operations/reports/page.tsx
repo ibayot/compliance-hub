@@ -13,7 +13,7 @@ import {
   CircularProgress,
   Alert,
   Divider,
-  Table,
+  Table as MuiTable,
   TableHead,
   TableRow,
   TableCell,
@@ -42,6 +42,13 @@ import {
 import { ticketsApi, TicketReportResult, RatingsReportResult } from '@/app/api/references';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSse } from '@/lib/utils/useSse';
+import ResponsiveTable from '@/components/layout/ResponsiveTable';
+
+const Table = ({ children, ...props }: any) => (
+  <ResponsiveTable minWidth={680}>
+    <MuiTable {...props}>{children}</MuiTable>
+  </ResponsiveTable>
+);
 
 const TYPE_LABELS: Record<string, string> = {
   desktop_support: 'Desktop Support',
@@ -55,6 +62,7 @@ const RATING_COLOR = (avg: number): 'error' | 'warning' | 'success' | 'info' => 
   if (avg >= 2.5) return 'warning';
   return 'error';
 };
+const ISSUE_CHART_COLORS = ['#1976d2', '#ed6c02', '#2e7d32', '#9c27b0', '#00838f', '#c62828', '#6d4c41'];
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i);
@@ -326,10 +334,21 @@ export default function TicketReportsPage() {
       map[name] = (map[name] || 0) + Number(item.count);
     });
     return Object.keys(map)
-      .map(name => ({ name, count: map[name] }))
+      .map((name, index) => {
+        const [categoryName, ...issueParts] = name.split(' - ');
+        return {
+          name,
+          shortLabel: String(index + 1),
+          categoryName,
+          issueName: issueParts.join(' - '),
+          count: map[name],
+        };
+      })
       .filter(d => d.count > 0)
       .sort((a, b) => b.count - a.count);
   }, [issueCountsData]);
+
+  const allIssueCategories = Array.from(new Set(allIssuesAggregated.map((item) => item.categoryName)));
 
   const catBottomMargin = React.useMemo(() => {
     if (!categoryData.length) return 60;
@@ -401,7 +420,7 @@ export default function TicketReportsPage() {
         </Button>
       </Box>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+        <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
           <Tab value={0} label="Overview & Ratings" />
           {canManageReports && <Tab value={1} label="Issues" />}
           {canManageReports && <Tab value={2} label="SLA Insights" />}
@@ -1769,28 +1788,28 @@ export default function TicketReportsPage() {
                       <Typography color="text.secondary">No specific issues reported in this timeframe.</Typography>
                     </Box>
                   ) : (
-                    <ResponsiveContainer width="100%" height={Math.max(400, allIssuesAggregated.length * 40)}>
+                    <ResponsiveContainer width="100%" height={360}>
                       <BarChart
                         data={allIssuesAggregated}
-                        layout="vertical"
-                        margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
                       >
-                        <XAxis type="number" allowDecimals={false} tickCount={5} tick={{ fontSize: 11 }} />
-                        <YAxis
-                          type="category"
-                          dataKey="name"
-                          width={250}
-                          interval={0}
-                          tick={{ fontSize: 11 }}
+                        <XAxis dataKey="shortLabel" tick={{ fontSize: 11 }} label={{ value: 'Issue', position: 'insideBottom', offset: -15 }} />
+                        <YAxis allowDecimals={false} tickCount={5} />
+                        <Tooltip
+                          cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                          formatter={(value) => [value, 'Occurrences']}
+                          labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''}
                         />
-                        <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
                         <Legend verticalAlign="top" />
-                        <Bar
-                          dataKey="count"
-                          name="Occurrences"
-                          fill="#8884d8"
-                          radius={[0, 4, 4, 0]}
-                        />
+                        {allIssueCategories.map((category, index) => (
+                          <Bar
+                            key={category}
+                            dataKey={(entry: any) => entry.categoryName === category ? entry.count : 0}
+                            name={category}
+                            fill={ISSUE_CHART_COLORS[index % ISSUE_CHART_COLORS.length]}
+                            radius={[4, 4, 0, 0]}
+                          />
+                        ))}
                       </BarChart>
                     </ResponsiveContainer>
                   )}

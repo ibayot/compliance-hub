@@ -49,12 +49,6 @@ export class SetAttendanceDto {
   clockInTime?: string;
 }
 
-export class BulkSetAttendanceDto {
-  @IsNotEmpty()
-  @IsArray()
-  @ApiProperty()
-  entries: SetAttendanceDto[];
-}
 
 export class SetOfficeDayDto {
   @IsNotEmpty()
@@ -71,12 +65,6 @@ export class SetOfficeDayDto {
   notes?: string;
 }
 
-export class BulkSetOfficeDaysDto {
-  @IsNotEmpty()
-  @IsArray()
-  @ApiProperty()
-  entries: SetOfficeDayDto[];
-}
 
 export class TechnicianListItemDto {
   @IsNotEmpty()
@@ -107,7 +95,9 @@ export class TechnicianListItemDto {
 export class AttendanceService implements OnModuleInit {
   private readonly logger = new Logger(AttendanceService.name);
   private readonly excludedAttendanceEmails: string[] = [];
-  public isDtrViewOnline: boolean = true;
+  // Local Docker does not have the external DTR view. Staging/production omit
+  // this flag and continue to detect the real DTR connection automatically.
+  public isDtrViewOnline: boolean = process.env.DTR_VIEW_ENABLED?.trim().toLowerCase() !== 'false';
 
   constructor(
     @InjectRepository(TechAttendance)
@@ -247,12 +237,12 @@ export class AttendanceService implements OnModuleInit {
     ) {
       // Background execution: reassignment via event
       this.eventBus.publish('attendance.unavailable', { techId: dto.userId }).catch((err: any) => {
-        this.logger.error(`Failed to publish attendance unavailable event: ${err.message}`);
+        this.logger.error('Failed to publish attendance unavailable event.');
       });
     } else if (dto.status === AttendanceStatus.PRESENT) {
       // Force trigger ticket assignment logic when a technician is manually set to PRESENT
       this.eventBus.publish('attendance.verified', { userId: dto.userId }).catch((err: any) => {
-        this.logger.error(`Failed to publish attendance verified event: ${err.message}`);
+        this.logger.error('Failed to publish attendance verified event.');
       });
     }
 
@@ -273,18 +263,6 @@ export class AttendanceService implements OnModuleInit {
     return { message: 'Attendance deleted' };
   }
 
-  /** Bulk set attendance for multiple users */
-  async bulkSetAttendance(
-    dto: BulkSetAttendanceDto,
-    setById: number,
-    actorRole?: string,
-  ): Promise<TechAttendance[]> {
-    const results: TechAttendance[] = [];
-    for (const entry of dto.entries) {
-      results.push(await this.setAttendance(entry, setById, actorRole));
-    }
-    return results;
-  }
 
   /** Get technicians who are available (present or half_day) for a ticket type on a given date */
   async getAvailableTechnicians(ticketType: string, date: string): Promise<User[]> {
@@ -309,9 +287,7 @@ export class AttendanceService implements OnModuleInit {
         allTechs.push(u);
       }
     }
-    this.logger.log(
-      `[getAvailableTechnicians] ticketType=${ticketType}, date=${date}, roles=[${roles.join(',')}], allTechsCount=${allTechs.length}`,
-    );
+    this.logger.log(`[getAvailableTechnicians] available technician count: ${allTechs.length}.`);
 
     if (allTechs.length === 0) return [];
 
@@ -337,9 +313,7 @@ export class AttendanceService implements OnModuleInit {
    */
   async getPresentTechnicians(ticketType: string, date: string): Promise<User[]> {
     const available = await this.getAvailableTechnicians(ticketType, date);
-    this.logger.log(
-      `[getPresentTechnicians] ticketType=${ticketType}, date=${date}, availableCount=${available.length}`,
-    );
+    this.logger.log(`[getPresentTechnicians] available technician count: ${available.length}.`);
     if (available.length === 0) return [];
 
     const presentRows = await this.attendanceRepo.find({
@@ -349,9 +323,7 @@ export class AttendanceService implements OnModuleInit {
         userId: In(available.map((u) => u.id)),
       },
     });
-    this.logger.log(
-      `[getPresentTechnicians] presentRowsCount=${presentRows.length}, userIds=[${presentRows.map((r) => r.userId).join(',')}]`,
-    );
+    this.logger.log(`[getPresentTechnicians] present technician count: ${presentRows.length}.`);
     const presentIds = new Set<number>(presentRows.map((r) => r.userId));
     let presentTechs = available.filter((u) => presentIds.has(u.id));
 
@@ -384,7 +356,7 @@ export class AttendanceService implements OnModuleInit {
           const clockOutTime = new Date(clockInTime.getTime() + 11 * 3600 * 1000);
           isShiftActive = now <= clockOutTime;
           if (!isShiftActive) {
-            this.logger.log(`[getPresentTechnicians] Excluding user ${u.id}: CWW shift ended at ${clockOutTime.toISOString()}`);
+            this.logger.log('[getPresentTechnicians] Excluding technician after CWW shift ended.');
           }
         } else {
           // Standard schedule: Ticket assignment strictly stays between 8AM to 5PM (or config stdClockOutStr)
@@ -393,7 +365,7 @@ export class AttendanceService implements OnModuleInit {
           clockOutTime.setHours(hours, minutes, 0, 0);
           isShiftActive = now <= clockOutTime;
           if (!isShiftActive) {
-            this.logger.log(`[getPresentTechnicians] Excluding user ${u.id}: Standard shift ended at ${clockOutTime.toISOString()}`);
+            this.logger.log('[getPresentTechnicians] Excluding technician after standard shift ended.');
           }
         }
         
@@ -460,13 +432,26 @@ export class AttendanceService implements OnModuleInit {
       }
     }
 
-    return merged.map(u => ({
-      id: u.id,
-      email: u.email,
-      firstName: u.firstName,
-      lastName: u.lastName,
-      role: u.role,
-    }));
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+    const attendanceRows = merged.length
+      ? await this.attendanceRepo.find({ where: { date: today, userId: In(merged.map((u) => u.id)) } })
+      : [];
+    const attendanceMap = new Map<number, AttendanceStatus>(
+      attendanceRows.map((record) => [record.userId, record.status]),
+    );
+
+    return merged.map((u) => {
+      const attendanceStatus = attendanceMap.get(u.id) ?? null;
+      return {
+        id: u.id,
+        email: u.email,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        role: u.role,
+        attendanceStatus,
+        isUnavailable: attendanceStatus !== AttendanceStatus.PRESENT,
+      };
+    });
   }
 
   /** Get all staff who logged in on a specific date (for staff activity tab) */
@@ -488,95 +473,23 @@ export class AttendanceService implements OnModuleInit {
 
   /** Get all non-user, non-technician, non-super-admin staff — returns each user with their lastLogin (for monthly grid) */
   async getStaffLoginsMonthly(_startDate: string, _endDate: string): Promise<User[]> {
-    const EXCLUDED_ROLES = [
-      UserRole.SUPER_ADMIN,
-      UserRole.DESKTOP_SR,
-      UserRole.DESKTOP_JR,
-      UserRole.IT_SUPPORT_SR,
-      UserRole.IT_SUPPORT_JR,
-      UserRole.PANTAWID_ICT,
-      UserRole.USER,
-    ];
-
-    return this.userRepo
+    const technicianRoles = new Set([
+      ...this.roleCapSvc.getRolesWhere('isDesktop'),
+      ...this.roleCapSvc.getRolesWhere('isItSupport'),
+      ...this.roleCapSvc.getRolesWhere('isPantawidIct'),
+    ]);
+    const staff = await this.userRepo
       .createQueryBuilder('u')
       .where('u.active = :active', { active: true })
-      .andWhere('u.role NOT IN (:...excluded)', { excluded: EXCLUDED_ROLES })
       .orderBy('u.lastName', 'ASC')
       .addOrderBy('u.firstName', 'ASC')
       .getMany();
+    return staff.filter(
+      (user) => user.role !== UserRole.SUPER_ADMIN && user.role !== UserRole.USER && !technicianRoles.has(user.role),
+    );
   }
 
   // ── Office Days ─────────────────────────────────────────────────────────
-
-  // ── Auto-correct attendance on login ─────────────────────────────────
-
-  /**
-   * When a technician logs in, auto-mark them PRESENT for today.
-   * - If no attendance record exists yet → create one with PRESENT status.
-   * - If they are already marked ABSENT, OUT_OF_OFFICE, or HALF_DAY → correct to PRESENT.
-   * - If already PRESENT → no change.
-   * Non-technician roles are skipped so the table stays clean.
-   * Called from AuthService.login() / googleLogin() after recording the login timestamp.
-   */
-  async autoCorrectAbsentOnLogin(userId: number): Promise<void> {
-    // Skip only non-staff roles; all other roles (technicians, ITO staff, etc.) get auto-attendance
-    const EXCLUDED_FROM_ATTENDANCE = new Set<string>([UserRole.USER, UserRole.SUPER_ADMIN]);
-
-    const user = await this.userRepo.findOne({ where: { id: userId } });
-    if (!user) return;
-
-    if (EXCLUDED_FROM_ATTENDANCE.has(user.role as UserRole)) return;
-
-    // Use UTC+8 explicitly for day boundary comparisons
-    const _d = new Date();
-    _d.setHours(_d.getHours() + 8);
-    const today = `${_d.getUTCFullYear()}-${String(_d.getUTCMonth() + 1).padStart(2, '0')}-${String(_d.getUTCDate()).padStart(2, '0')}`;
-    const record = await this.attendanceRepo.findOne({ where: { userId, date: today } });
-
-    await auditContext.run(
-      { email: user.email, ipAddress: 'system-auto-login', sessionId: 'auto-login-event' },
-      async () => {
-        try {
-          if (!record) {
-            // No record for today — create a new PRESENT record
-            await this.attendanceRepo.save(
-              this.attendanceRepo.create({
-                userId,
-                date: today,
-                status: AttendanceStatus.PRESENT,
-                notes: 'Auto-marked present on login',
-                setById: null as any,
-              }),
-            );
-          } else if (
-            record.status === AttendanceStatus.ABSENT ||
-            record.status === AttendanceStatus.OUT_OF_OFFICE ||
-            record.status === AttendanceStatus.HALF_DAY
-          ) {
-            const prevStatus =
-              record.status === AttendanceStatus.ABSENT
-                ? 'absent'
-                : record.status === AttendanceStatus.OUT_OF_OFFICE
-                  ? 'OOO'
-                  : 'half-day';
-            record.status = AttendanceStatus.PRESENT;
-            record.notes =
-              (record.notes ? record.notes + ' | ' : '') +
-              `Auto-corrected: logged in while marked ${prevStatus}`;
-            await this.attendanceRepo.save(record);
-          }
-        } catch (err: any) {
-          if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
-            // Harmless race condition during rapid test logins
-            this.logger.debug(`Skipped duplicate attendance entry for user ${userId}`);
-          } else {
-            throw err;
-          }
-        }
-      },
-    );
-  }
 
   /** Get office days for a date range */
   async getOfficeDays(startDate: string, endDate: string): Promise<OfficeDay[]> {
@@ -622,22 +535,6 @@ export class AttendanceService implements OnModuleInit {
     return saved;
   }
 
-  /** Bulk set office days */
-  async bulkSetOfficeDays(dto: BulkSetOfficeDaysDto, setById: number): Promise<OfficeDay[]> {
-    const results: OfficeDay[] = [];
-    for (const entry of dto.entries) {
-      results.push(await this.setOfficeDay(entry, setById));
-    }
-    return results;
-  }
-
-  /** Delete all attendance records (admin reset — destructive) */
-  async clearAllAttendance(): Promise<{ deleted: number }> {
-    const result = await this.attendanceRepo.query('DELETE FROM attendance');
-    const deleted = result?.affectedRows ?? 0;
-    this.logger.warn(`[ADMIN] Cleared all attendance records (${deleted} rows deleted)`);
-    return { deleted };
-  }
 
   /** Check if a specific date is an office day. Default: weekdays are office days */
   async isOfficeDay(date: string): Promise<boolean> {
@@ -673,8 +570,6 @@ export class AttendanceService implements OnModuleInit {
   }
 
   async getMyShift(user: User): Promise<{ clockIn: Date | null; clockOut: Date | null; attendanceStatus: AttendanceStatus | null }> {
-    console.log('[getMyShift] Starting for user:', user.email);
-    
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
     
     const attendanceRecord = await this.attendanceRepo.findOne({
@@ -738,17 +633,19 @@ export class AttendanceService implements OnModuleInit {
 
   /** Background cron job to sync attendance from the DTR view for missing staff */
   async syncAttendanceWithDTR(): Promise<boolean> {
-    this.logger.log(`[DTR SYNC DBG] Entering syncAttendanceWithDTR...`);
+    if (process.env.DTR_VIEW_ENABLED?.trim().toLowerCase() === 'false') {
+      this.isDtrViewOnline = false;
+      return false;
+    }
+
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
     
     try {
       // 1. Get all assignable attendance roles
       const allRoles = this.roleCapSvc.getRolesWhere('isAttendanceEligible');
       if (allRoles.length === 0) {
-        this.logger.log(`[DTR SYNC DBG] Aborting: allRoles is empty!`);
         return false;
       }
-      this.logger.log(`[DTR SYNC DBG] allRoles count: ${allRoles.length}`);
 
       // 2. Get all active staff with these roles
       const allTechs = await this.userRepo.find({
@@ -756,20 +653,16 @@ export class AttendanceService implements OnModuleInit {
       });
       const validTechs = allTechs.filter(t => t.staffId); // Only those with a DTR staffId
       if (validTechs.length === 0) {
-        this.logger.log(`[DTR SYNC DBG] Aborting: validTechs (with staffId) is empty!`);
         return false;
       }
-      this.logger.log(`[DTR SYNC DBG] validTechs count: ${validTechs.length}`);
 
       // 3. Query DTR View for all valid staff
       const staffIds = validTechs.map(t => t.staffId);
-      this.logger.log(`[DTR SYNC DBG] Querying dtrViewRepo for workDate=${todayStr} with staffIds: ${staffIds.join(', ')}`);
-      
       const dtrRecords = await this.dtrViewRepo.find({
         where: { workDate: todayStr, empCode: In(staffIds) }
       });
       
-      this.logger.log(`[DTR SYNC DBG] dtrRecords fetched count: ${dtrRecords.length}`);
+      this.logger.log(`DTR attendance sync fetched ${dtrRecords.length} record(s)`);
 
       if (!this.isDtrViewOnline) {
         this.isDtrViewOnline = true; // Connection succeeded!
@@ -784,18 +677,14 @@ export class AttendanceService implements OnModuleInit {
       });
 
       // 5. Upsert the records
-      this.logger.log(`[DTR SYNC DBG] Starting to process ${dtrRecords.length} dtrRecords in loop...`);
       let savedCount = 0;
       for (const dtr of dtrRecords) {
-        this.logger.log(`[DTR SYNC DBG] Processing empCode=${dtr.empCode}, clockIn=${dtr.firstClockInTime}`);
         if (!dtr.firstClockInTime) {
-          this.logger.log(`[DTR SYNC DBG] -> Skipped: firstClockInTime is falsy.`);
           continue;
         }
 
         const tech = validTechs.find(t => String(t.staffId) === String(dtr.empCode));
         if (!tech) {
-          this.logger.log(`[DTR SYNC DBG] -> Skipped: No tech found matching staffId ${dtr.empCode}.`);
           continue;
         }
 
@@ -809,7 +698,6 @@ export class AttendanceService implements OnModuleInit {
               existingRecord.status = AttendanceStatus.PRESENT;
               existingRecord.notes = 'Marked present on sync.';
               await this.attendanceRepo.save(existingRecord);
-              this.logger.log(`[DTR SYNC DBG] -> Updated existing attendance for tech ${tech.email}`);
             } else {
               const newRecord = this.attendanceRepo.create({
                 userId: tech.id,
@@ -820,7 +708,6 @@ export class AttendanceService implements OnModuleInit {
                 notes: 'Marked present on sync.',
               });
               await this.attendanceRepo.save(newRecord);
-              this.logger.log(`[DTR SYNC DBG] -> Created NEW attendance for tech ${tech.email}`);
             }
           }
         );
@@ -830,7 +717,7 @@ export class AttendanceService implements OnModuleInit {
       }
       return savedCount > 0;
     } catch (err: any) {
-      this.logger.error(`Failed to sync DTR attendance: ${err.message}`);
+      this.logger.error(`DTR attendance synchronization failed (${err?.code || 'unknown'})`);
       if (this.isDtrViewOnline) {
         this.isDtrViewOnline = false; // Mark system as offline so Fallback UI kicks in
         this.sseService.emitSystemStatusChanged(false);

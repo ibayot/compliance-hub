@@ -50,7 +50,7 @@ export class RoleCapabilitiesService implements OnModuleInit {
       } catch (err: any) {
         // Keep startup non-fatal if an older staging database has not exposed
         // role_definitions to this service yet.
-        this.logger.warn(`Role definition synchronization skipped: ${err?.message}`);
+        this.logger.warn('Role definition synchronization skipped.');
       }
 
       const rows = await this.repo.find();

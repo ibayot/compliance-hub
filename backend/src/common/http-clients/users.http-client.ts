@@ -175,7 +175,7 @@ export class UsersHttpClient {
     maxRetries = 2,
   ): Promise<T | null> {
     if (this.circuit.isOpen()) {
-      this.logger.warn(`[CircuitBreaker:users] Circuit OPEN — skipping ${url}`);
+      this.logger.warn('[CircuitBreaker:users] Circuit OPEN — request skipped.');
       return null;
     }
 
@@ -193,13 +193,13 @@ export class UsersHttpClient {
         if (!isLastAttempt) {
           const delayMs = 200 * Math.pow(2, attempt); // 200ms, 400ms
           this.logger.warn(
-            `Inter-service GET ${url} failed (attempt ${attempt + 1}/${maxRetries + 1}): ${err?.message} — retrying in ${delayMs}ms`,
+            `Inter-service users request failed (attempt ${attempt + 1}/${maxRetries + 1}); retrying in ${delayMs}ms.`,
           );
           await new Promise((r) => setTimeout(r, delayMs));
         } else {
-          const reason = isAbort ? `timed out after ${timeoutMs}ms` : err?.message;
+          const reason = isAbort ? `timed out after ${timeoutMs}ms` : 'upstream request failure';
           this.logger.warn(
-            `Inter-service GET ${url} failed after ${maxRetries + 1} attempts: ${reason}`,
+            `Inter-service users request failed after ${maxRetries + 1} attempts: ${reason}.`,
           );
           this.circuit.recordFailure(this.logger, 'users');
         }

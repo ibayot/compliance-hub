@@ -31,6 +31,7 @@ export class ReportorialDocTypeController {
    * Returns all (or filtered by unitId) reportorial document types.
    */
   @Get()
+  @RequireCapability(['isDocumentsAccess', 'isDocumentTypesManage'])
   findAll(@Query('unitId') unitId?: string) {
     if (unitId) {
       return this.service.findByUnit(Number(unitId));
@@ -39,6 +40,7 @@ export class ReportorialDocTypeController {
   }
 
   @Get(':id')
+  @RequireCapability(['isDocumentsAccess', 'isDocumentTypesManage'])
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);
   }

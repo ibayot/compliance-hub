@@ -161,7 +161,7 @@ export class MetricsService {
         const result = await this.computeSingleMetric(version, document, metric);
         results.push(result);
       } catch (error) {
-        this.logger.error(`Failed to compute metric ${metric.id}: ${error.message}`, error.stack);
+        this.logger.error('Failed to compute a metric.');
         // Create error result
         const errorResult = this.metricResultRepo.create({
           version_id: versionId,

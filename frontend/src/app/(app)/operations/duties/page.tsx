@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, Grid, IconButton, InputLabel, MenuItem, Paper, Select, Stack, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, Tabs, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, Grid, IconButton, InputLabel, MenuItem, Paper, Select, Stack, Tab, Table, TableBody, TableCell, TableContainer as MuiTableContainer, TableHead, TablePagination, TableRow, Tabs, TextField, Typography } from '@mui/material';
 import { Add, Delete, Edit, Refresh, Star } from '@mui/icons-material';
 import { dutiesApi, DutyAccess, DutyType } from '@/lib/api/duties';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useSse } from '@/lib/utils/useSse';
 import { useSnackbar } from 'notistack';
 import { alpha, useTheme } from '@mui/material/styles';
+import ResponsiveTable from '@/components/layout/ResponsiveTable';
 
 const TYPES: DutyType[] = ['OD', 'ROC', 'CONFERENCE', 'OPCEN'];
 const VENUES = ['ROC', 'CONFERENCE', 'OPCEN'];
@@ -17,6 +18,9 @@ const isDutyStaff = (user: any) => user.active !== false && user.role !== 'super
 const formatType = (value: string) => String(value || '').replaceAll('_', ' ').toUpperCase();
 const userName = (users: UserRecord[], id: number) => { const u = users.find((x) => x.id === id); return u ? `${u.firstName} ${u.lastName}`.trim() : `User #${id}`; };
 const meetingSlot = (x: any) => !x.startTime && !x.endTime ? 'Whole Day' : Number(String(x.startTime).slice(0, 2)) < 12 ? 'AM' : 'PM';
+const TableContainer = ({ component, children, ...props }: any) => component
+  ? <MuiTableContainer component={component} {...props}>{children}</MuiTableContainer>
+  : <ResponsiveTable minWidth={620}>{children}</ResponsiveTable>;
 
 export default function DutiesPage() {
   const now = new Date();
@@ -150,7 +154,7 @@ export default function DutiesPage() {
   return <Box>
     <Stack direction={{ xs:'column', sm:'row' }} justifyContent="space-between" alignItems={{ xs:'flex-start', sm:'center' }} mb={3} spacing={2}><Box><Typography variant="h4" fontWeight={700} mb={0.5}>Duty Monitoring</Typography><Typography variant="body2" color="text.secondary">Rotation, coverage, exceptions, and meeting readiness.</Typography></Box><Button variant="outlined" startIcon={<Refresh />} onClick={() => load()}>Refresh</Button></Stack>
     {error && <Alert severity="error" sx={{ mb:2 }} onClose={() => setError('')}>{error}</Alert>}
-    <Card><Tabs value={tab} onChange={(_,v) => setTab(v)} variant="scrollable" sx={{ px:2, borderBottom:1, borderColor:'divider' }}>{tabs.map((x) => <Tab key={x} value={x} label={x === 'logs' ? 'Duty Log' : x} />)}</Tabs><CardContent>
+    <Card><Tabs value={tab} onChange={(_,v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ px:2, borderBottom:1, borderColor:'divider' }}>{tabs.map((x) => <Tab key={x} value={x} label={x === 'logs' ? 'Duty Log' : x} />)}</Tabs><CardContent>
 
     {tab === 'overview' && <Grid container spacing={2}>{data.dashboard.map((x:any) => <Grid item xs={12} sm={6} lg={3} key={x.dutyType}><Card sx={{ height:'100%', background: dutyGradient(x.dutyType === 'OD' ? 'warning' : 'info') }}><CardContent><Typography variant="overline">{x.dutyType === 'OD' ? 'OFFICER OF THE DAY':x.dutyType}</Typography><Typography variant="h6">{x.name}</Typography><Typography color="text.secondary">{x.isOnDuty ? 'On duty' : x.isNext ? 'Next eligible in rotation' : x.hasTechnician && x.daysSince == null ? 'No previous duty' : x.daysSince == null ? '' : `${x.daysSince} days since previous duty`}</Typography>{x.isSubstitute && <Chip sx={{ mt:1 }} label="Substitute" size="small" color="warning" />}{access?.admin && x.coverageStatus === 'active' && <Button size="small" sx={{mt:2}} onClick={()=>{ setReleaseTarget({ coverageId:x.coverageId, name:x.name, activeTicketCount:x.activeTicketCount || 0 }); setReleaseConfirmed(false); }}>Return to Ticket Assignment</Button>}{access?.admin && x.requiresReassignment && <Stack direction="row" spacing={1} mt={2}><Button size="small" color="warning" onClick={()=>open('coverage',{coverageId:x.coverageId,dutyType:x.dutyType,userId:x.userId,activeTicketCount:x.activeTicketCount||0})}>{x.activeTicketCount > 0 ? 'Activate After Reassignment' : 'Activate Duty'}</Button><Button size="small" color="error" variant="outlined" onClick={()=>openSkip({coverageId:x.coverageId,userId:x.userId,name:x.name,dutyType:x.dutyType,activeTicketCount:x.activeTicketCount||0})}>Skip</Button></Stack>}</CardContent></Card></Grid>)}</Grid>}
     {tab === 'map' && <><Stack direction="row" gap={2} mb={2}><TextField size="small" type="number" label="Year" value={year} onChange={(e) => setYear(+e.target.value)} /><TextField select size="small" label="Month" value={month} onChange={(e) => setMonth(+e.target.value)}>{MONTHS.map((label, index) => <MenuItem key={label} value={index + 1}>{label}</MenuItem>)}</TextField></Stack><Grid container spacing={1}>{days.map((d) => { const dayEvents = events(d); const visible = dayEvents.slice(0, 1); return <Grid item xs={12} sm={6} md={4} lg={12/7} key={d}><Paper variant="outlined" onClick={() => setSelectedDay(d)} sx={{ p:1.5, height:132, boxSizing:'border-box', overflow:'hidden', cursor:'pointer', bgcolor:d===TODAY()?'action.selected':undefined }}><Typography fontWeight={800}>{+d.slice(-2)}</Typography>{visible.map((x:any,i:number) => <Chip key={i} size="small" label={x.label} sx={{ m:.25, maxWidth:'100%', height:'auto', justifyContent:'flex-start', bgcolor:x.color, '& .MuiChip-label': { display:'block', whiteSpace:'normal', overflowWrap:'anywhere', py:.35 } }} />)}{dayEvents.length > 1 && <Chip size="small" label={`... +${dayEvents.length - 1}`} sx={{ m:.25 }} />}</Paper></Grid>; })}</Grid></>}

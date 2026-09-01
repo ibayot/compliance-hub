@@ -222,8 +222,8 @@ export default function DocumentsPage() {
       };
     }
 
-    const uploaderRole = document.uploader?.role;
-    if (uploaderRole === 'super_admin' || uploaderRole === 'compliance_officer') {
+    const uploaderCanHardDelete = document.uploader?.isDocumentsDelete === true;
+    if (uploaderCanHardDelete) {
       return {
         allowed: false,
         reason:
@@ -254,8 +254,8 @@ export default function DocumentsPage() {
       };
     }
 
-    const uploaderRole = document.uploader?.role;
-    if (uploaderRole !== 'super_admin' && uploaderRole !== 'compliance_officer') {
+    const uploaderCanHardDelete = document.uploader?.isDocumentsDelete === true;
+    if (!uploaderCanHardDelete) {
       return {
         allowed: false,
         reason: 'Hard delete is only enabled for documents uploaded by compliance/super admin.',
@@ -298,17 +298,27 @@ export default function DocumentsPage() {
         <Box
           sx={{
             display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
             justifyContent: 'space-between',
-            alignItems: 'center',
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: 1.5,
             mb: 3,
           }}
         >
           <Typography variant="h4">Documents</Typography>
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: 1,
+              width: { xs: '100%', sm: 'auto' },
+            }}
+          >
             <Button
               variant="outlined"
               startIcon={<FilterIcon />}
               onClick={() => setShowFilters(!showFilters)}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
               {showFilters ? 'Hide Filters' : 'Show Filters'}
             </Button>
@@ -316,6 +326,7 @@ export default function DocumentsPage() {
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => router.push('/governance/documents/upload')}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
               Upload Document
             </Button>

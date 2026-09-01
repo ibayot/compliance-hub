@@ -4,7 +4,7 @@ import { SseService } from '../services/sse.service';
 import { Observable } from 'rxjs';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 
-@ApiTags('Events')
+@ApiTags('events')
 @ApiBearerAuth()
 @Controller('events')
 export class SseController {

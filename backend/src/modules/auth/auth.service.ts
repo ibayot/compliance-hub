@@ -188,8 +188,8 @@ export class AuthService {
           text: `Your verification code is: ${code}. It expires in 15 minutes.`,
           html: htmlTemplate,
         })
-        .catch((e) => {
-          console.error('Failed to publish email.send event for MFA', e);
+        .catch((e: any) => {
+          console.error('Failed to publish email.send event for MFA:', e?.code || 'unknown');
         });
 
       return { mfaRequired: true, tempToken };
@@ -262,17 +262,13 @@ export class AuthService {
   }
 
   async validateUser(email: string, password: string): Promise<User | null> {
-    console.log('validateUser called for email:', email);
     const user = await this.usersService.findByEmail(email);
-    console.log('findByEmail returned:', user ? user.id : 'null');
 
     if (!user || !user.active) {
-      console.log('user is null or not active. active:', user?.active);
       return null;
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-    console.log('isPasswordValid:', isPasswordValid);
 
     if (!isPasswordValid) {
       return null;
@@ -621,8 +617,8 @@ export class AuthService {
         return { password: pwd };
       }
       return { password: fallbackPassword };
-    } catch (e) {
-      console.error('Groq password generation failed', e);
+    } catch (e: any) {
+      console.error('Groq password generation failed:', e?.response?.status || e?.code || 'unknown');
       return { password: fallbackPassword };
     }
   }
@@ -675,8 +671,8 @@ export class AuthService {
         return { password: pwd };
       }
       return { password: fallbackPassphrase };
-    } catch (e) {
-      console.error('Groq passphrase generation failed', e);
+    } catch (e: any) {
+      console.error('Groq passphrase generation failed:', e?.response?.status || e?.code || 'unknown');
       return { password: fallbackPassphrase };
     }
   }

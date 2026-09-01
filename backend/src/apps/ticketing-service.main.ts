@@ -9,11 +9,13 @@ import { TicketingServiceAppModule } from './ticketing-service.module';
 import { GlobalExceptionFilter } from '../shared/filters/global-exception.filter';
 import { docsAuthMiddleware } from '../common/middleware/docs-auth.middleware';
 import { BlankStringToNullPipe } from '../common/pipes/blank-string-to-null.pipe';
+import { getAppVersion } from '../common/app-version';
+import { completeOpenApiDocument } from '../common/swagger/complete-openapi';
 
 async function bootstrap() {
   const app = await NestFactory.create(TicketingServiceAppModule);
   const configService = app.get(ConfigService);
-  const serviceVersion = process.env.npm_package_version || '0.0.0';
+  const serviceVersion = getAppVersion();
 
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false, hsts: false }));
   app.enableCors({
@@ -52,43 +54,31 @@ async function bootstrap() {
     try {
       const ds = app.get(DataSource);
       await ds.query('SELECT 1');
-      const dbHost = process.env.DB_HOST || 'localhost';
-      const dbName =
-        process.env.TICKETING_DB_DATABASE || process.env.DB_DATABASE || 'compliance_hub_ticketing';
 
-      // Check that cross-DB views are accessible (critical dependency for ticketing queries)
-      const checks: Record<string, boolean> = { db: true };
+      const dependencyChecks: Record<string, boolean> = {};
       const viewChecks = ['users', 'units', 'role_definitions', 'role_capabilities'];
       for (const view of viewChecks) {
         try {
           await ds.query(`SELECT 1 FROM \`${view}\` LIMIT 1`);
-          checks[`view_${view}`] = true;
+          dependencyChecks[view] = true;
         } catch {
-          checks[`view_${view}`] = false;
+          dependencyChecks[view] = false;
         }
       }
 
-      const allViewsOk = viewChecks.every((v) => checks[`view_${v}`]);
+      const allViewsOk = viewChecks.every((v) => dependencyChecks[v]);
       const httpStatus = allViewsOk ? 200 : 207; // 207 Multi-Status: partial degradation
       res.status(httpStatus).json({
         status: allViewsOk ? 'ok' : 'degraded',
         service: 'ticketing',
         version: serviceVersion,
-        topology: {
-          runtime: 'single-vm-multi-container',
-          containerRole: 'ticketing-service',
-          dbServer: dbHost,
-          dbName,
-          sharedDbServer: true,
-        },
-        checks,
+        checks: { ready: allViewsOk },
       });
     } catch (err: any) {
       res.status(503).json({
         status: 'error',
         service: 'ticketing',
         reason: 'db_unreachable',
-        detail: err?.message,
       });
     }
   });
@@ -105,10 +95,11 @@ async function bootstrap() {
     .addTag('duties', 'Duty rosters, exceptions, and meeting schedules')
     .addTag('ticket-settings', 'Ticket routing rules and category management')
     .addTag('knowledge-base', 'Knowledge base and FAQs')
-    .addTag('Events', 'Server-sent events and live updates')
-    .addTag('test-only', 'Test and diagnostic endpoints; not part of normal workflows')
+    .addTag('notifications', 'Authenticated user notifications')
+    .addTag('events', 'Server-sent events and live updates')
+    .addTag('test-only', 'SMTP test email verification endpoint')
     .build();
-  const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
+  const swaggerDoc = completeOpenApiDocument(SwaggerModule.createDocument(app, swaggerConfig));
   app.use('/api/docs', docsAuthMiddleware);
   app.use('/api/openapi.json', docsAuthMiddleware);
   SwaggerModule.setup('api/docs', app, swaggerDoc, {

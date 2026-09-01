@@ -37,7 +37,7 @@ export class UnitsHttpClient {
       }
       return (await response.json()) as UnitStub[];
     } catch (error) {
-      this.logger.error(`Failed to fetch units: ${error}`);
+      this.logger.error('Failed to fetch units from users-service.');
       return [];
     }
   }
@@ -51,7 +51,7 @@ export class UnitsHttpClient {
       }
       return (await response.json()) as UnitStub;
     } catch (error) {
-      this.logger.error(`Failed to fetch unit ${id}: ${error}`);
+      this.logger.error('Failed to fetch a unit from users-service.');
       return null;
     }
   }

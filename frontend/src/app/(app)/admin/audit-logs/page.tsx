@@ -9,7 +9,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   Paper,
@@ -28,6 +27,7 @@ import {
 import { Visibility as ViewIcon } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { auditLogsApi } from '@/app/api/references';
+import ResponsiveTable from '@/components/layout/ResponsiveTable';
 
 function formatKey(key: string): string {
   // Convert snake_case or camelCase to Title Case
@@ -236,14 +236,14 @@ export default function AuditLogsPage() {
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Stack direction="row" spacing={2} flexWrap="wrap">
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap" alignItems={{ xs: 'stretch', sm: 'center' }}>
             <TextField
               select
               label="Action"
               value={filterAction}
               onChange={(e) => { setFilterAction(e.target.value); setPage(0); }}
               size="small"
-              sx={{ minWidth: 150 }}
+              sx={{ minWidth: { xs: 0, sm: 150 } }}
             >
               <MenuItem value="">All Actions</MenuItem>
               <MenuItem value="INSERT">INSERT</MenuItem>
@@ -257,7 +257,7 @@ export default function AuditLogsPage() {
               value={filterTable}
               onChange={(e) => { setFilterTable(e.target.value); setPage(0); }}
               size="small"
-              sx={{ minWidth: 200 }}
+              sx={{ minWidth: { xs: 0, sm: 200 } }}
             >
               <MenuItem value="">All Tables</MenuItem>
               {tables.map(t => (
@@ -272,7 +272,7 @@ export default function AuditLogsPage() {
         </CardContent>
       </Card>
 
-      <TableContainer component={Paper}>
+      <ResponsiveTable component={Paper} minWidth={900} testId="audit-log-table">
         <Table size="small">
           <TableHead sx={{ bgcolor: 'background.default' }}>
             <TableRow>
@@ -330,7 +330,7 @@ export default function AuditLogsPage() {
             setPage(0);
           }}
         />
-      </TableContainer>
+      </ResponsiveTable>
 
       <Dialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Audit Log Details</DialogTitle>

@@ -37,14 +37,14 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         'ER_WARN_DATA_OUT_OF_RANGE',
       ]);
       if (clientInputCodes.has(code)) {
-        this.logger.warn(`Invalid database input on ${request.method} ${request.url} (${code})`);
+        this.logger.warn(`Invalid database input (${code})`);
         return response.status(HttpStatus.BAD_REQUEST).json({
           statusCode: HttpStatus.BAD_REQUEST,
           message: 'Invalid input provided.',
           error: 'Bad Request',
         });
       }
-      this.logger.error(`Database failure on ${request.method} ${request.url} (${code || 'unknown'})`, exception.stack);
+      this.logger.error(`Database failure (${code || 'unknown'})`);
       return response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'A database error occurred. Please contact support.',
@@ -62,10 +62,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     // Unhandled unexpected exceptions
-    this.logger.error(
-      `Unhandled Exception on ${request.method} ${request.url}`,
-      exception instanceof Error ? exception.stack : String(exception),
-    );
+    this.logger.error(`Unhandled request exception (${request.method})`);
 
     return response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,

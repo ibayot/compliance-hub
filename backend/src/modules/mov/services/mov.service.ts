@@ -60,7 +60,7 @@ export class MovService implements OnModuleInit {
     try {
       await this.seedDefaultAssessmentArtifacts();
     } catch (err) {
-      this.logger.warn(`Startup seeding failed (non-fatal): ${err?.message}`);
+      this.logger.warn('Startup seeding failed (non-fatal).');
     }
   }
 

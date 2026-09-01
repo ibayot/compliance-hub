@@ -422,18 +422,13 @@ export class TicketController {
       escalatedToId: Number(body.escalatedToId),
       notes: body.notes,
     };
-    try {
-      return await this.ticketService.escalateTicket(
-        id,
-        dto,
-        proofFiles ?? [],
-        req.user.id ?? req.user.userId,
-        req.user.role,
-      );
-    } catch (e) {
-      console.error('Escalate error:', e);
-      throw e;
-    }
+    return this.ticketService.escalateTicket(
+      id,
+      dto,
+      proofFiles ?? [],
+      req.user.id ?? req.user.userId,
+      req.user.role,
+    );
   }
 
   /** PATCH /tickets/:id/escalation/:eid/accept */
@@ -532,6 +527,7 @@ export class TicketController {
   }
 
   @Post('technician-pause')
+  @RequireCapability('isTicketModuleAccess')
   async technicianPauseTickets(@Request() req: any) {
     const technicianId = req.user.id ?? req.user.userId;
     const count = await this.ticketService.pauseAllActiveTickets(technicianId);

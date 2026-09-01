@@ -9,7 +9,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   IconButton,
@@ -41,6 +40,7 @@ import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { attendanceApi, TechAttendance, OfficeDay, AttendanceStatus } from '@/app/api/references';
 import { useSse } from '@/lib/utils/useSse';
+import ResponsiveTable from '@/components/layout/ResponsiveTable';
 
 const STATUS_CONFIG: Record<
   AttendanceStatus,
@@ -383,8 +383,9 @@ export default function AttendancePage() {
 
   const canManage = canManageAttendance;
 
-  // Only show weekdays in the attendance grid
-  const weekdays = days.filter((d) => isWeekday(d));
+  // Attendance only shows declared office days. Weekdays default to office
+  // days, while weekends and explicitly declared off days stay hidden here.
+  const attendanceDays = days.filter(isOfficeDayForDate);
 
   return (
     <Box>
@@ -452,6 +453,8 @@ export default function AttendancePage() {
                     return (
                       <Box
                         key={dStr}
+                        data-testid={`office-day-${dStr}`}
+                        data-office-day={isOffice ? 'true' : 'false'}
                         onClick={
                           canManageOfficeDays && !isPastOrToday
                             ? () => toggleOfficeDay(d)
@@ -549,7 +552,7 @@ export default function AttendancePage() {
                 No staff found.
               </Typography>
             ) : (
-              <TableContainer sx={{ maxHeight: 500 }}>
+              <ResponsiveTable minWidth={560} maxHeight={500} testId="attendance-table">
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
@@ -564,7 +567,7 @@ export default function AttendancePage() {
                       >
                         Staff
                       </TableCell>
-                      {weekdays.map((d) => {
+                      {attendanceDays.map((d) => {
                         const isOffice = isOfficeDayForDate(d);
                         const isToday = formatDate(d) === formatDate(new Date());
                         return (
@@ -629,7 +632,7 @@ export default function AttendancePage() {
                               </Typography>
                             </Box>
                           </TableCell>
-                          {weekdays.map((d) => {
+                          {attendanceDays.map((d) => {
                             const dateStr = formatDate(d);
                             const rec = records.get(dateStr);
                             const status = rec?.status;
@@ -731,7 +734,7 @@ export default function AttendancePage() {
                     })}
                   </TableBody>
                 </Table>
-              </TableContainer>
+              </ResponsiveTable>
             )}
           </CardContent>
         )}

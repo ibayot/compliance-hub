@@ -27,6 +27,7 @@ export interface Document {
     username: string;
     email: string;
     role?: 'super_admin' | 'compliance_officer' | string;
+    isDocumentsDelete?: boolean;
   };
   versions?: DocumentVersion[];
   issuances?: Array<{ id: string; issuance_number: string; title: string }>;

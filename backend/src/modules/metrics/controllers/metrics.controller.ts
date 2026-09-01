@@ -215,6 +215,7 @@ export class MetricsController {
   }
 }
 
+@ApiTags('metrics')
 @Controller('documents/:id/metrics')
 @UseGuards(JwtAuthGuard, CapabilityGuard)
 @RequireCapability('isMetricsAccess')

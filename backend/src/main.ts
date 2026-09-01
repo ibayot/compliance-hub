@@ -81,7 +81,6 @@ async function bootstrap() {
     .addTag('Units', 'Organizational units management')
     .addTag('Metrics', 'Compliance metrics and templates')
     .addTag('Reviews', 'Manual compliance reviews')
-    .addTag('test-only', 'Test and diagnostic endpoints; not part of normal workflows')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

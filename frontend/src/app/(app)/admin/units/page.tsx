@@ -8,6 +8,7 @@ import {
   Box,
   Button,
   Chip,
+  Checkbox,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -22,7 +23,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   TextField,
@@ -45,6 +45,7 @@ import {
   computeExpectedFilename,
 } from '@/lib/api/document-types';
 import { useAuth } from '@/contexts/AuthContext';
+import ResponsiveTable from '@/components/layout/ResponsiveTable';
 
 const apiErrorMessage = (error: any, fallback: string) => {
   const message = error?.response?.data?.message;
@@ -177,6 +178,7 @@ function DocTypesPanel({ unit, canManage }: { unit: Unit; canManage: boolean }) 
           None yet.
         </Typography>
       ) : (
+        <ResponsiveTable minWidth={720} testId={`unit-${unit.id}-document-types`}>
         <Table size="small">
           <TableHead>
             <TableRow>
@@ -226,6 +228,7 @@ function DocTypesPanel({ unit, canManage }: { unit: Unit; canManage: boolean }) 
             ))}
           </TableBody>
         </Table>
+        </ResponsiveTable>
       )}
 
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
@@ -333,6 +336,8 @@ export default function UnitsPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [deleteConfirmUnit, setDeleteConfirmUnit] = useState<Unit | null>(null);
+  const [deleteUnitConfirmed, setDeleteUnitConfirmed] = useState(false);
 
   const loadUnits = async () => {
     try {
@@ -385,10 +390,18 @@ export default function UnitsPage() {
     }
   };
 
-  const handleDelete = async (unit: Unit) => {
+  const handleDelete = (unit: Unit) => {
+    setDeleteConfirmUnit(unit);
+    setDeleteUnitConfirmed(false);
+  };
+
+  const confirmDeleteUnit = async () => {
+    if (!deleteConfirmUnit) return;
     try {
-      await unitsApi.deleteUnit(unit.id);
+      await unitsApi.deleteUnit(deleteConfirmUnit.id);
       enqueueSnackbar('Unit deleted successfully.', { variant: 'success' });
+      setDeleteConfirmUnit(null);
+      setDeleteUnitConfirmed(false);
       await loadUnits();
     } catch (err: any) {
       enqueueSnackbar(apiErrorMessage(err, 'Failed to delete unit.'), { variant: 'error' });
@@ -451,7 +464,7 @@ export default function UnitsPage() {
                   </Box>}
                 </Box>
               </AccordionSummary>
-              <AccordionDetails>
+              <AccordionDetails sx={{ overflow: 'hidden' }}>
                 <DocTypesPanel unit={unit} canManage={canManageDocumentTypes} />
               </AccordionDetails>
             </Accordion>
@@ -474,7 +487,7 @@ export default function UnitsPage() {
             fullWidth
             value={name}
             onChange={(e) => setName(e.target.value)}
-            inputProps={{ maxLength: 100 }}
+            inputProps={{ maxLength: 255 }}
           />
           <TextField
             margin="dense"
@@ -491,6 +504,34 @@ export default function UnitsPage() {
           <Button onClick={() => setOpen(false)}>Cancel</Button>
           <Button onClick={handleSave} variant="contained" disabled={saving || !name.trim()}>
             {saving ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!deleteConfirmUnit} onClose={() => { setDeleteConfirmUnit(null); setDeleteUnitConfirmed(false); }} maxWidth="xs" fullWidth>
+        <DialogTitle>Confirm Unit Deletion</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Deleting <strong>{deleteConfirmUnit?.name}</strong> also removes its document-type configuration. This action cannot be undone.
+          </Typography>
+          <Box display="flex" alignItems="center" mt={2}>
+            <Checkbox
+              inputProps={{ 'aria-label': 'Confirm unit deletion' }}
+              checked={deleteUnitConfirmed}
+              onChange={(event) => setDeleteUnitConfirmed(event.target.checked)}
+            />
+            <Typography variant="body2">I confirm that I want to permanently delete this unit.</Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmUnit(null)}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={!deleteConfirmUnit || !deleteUnitConfirmed}
+            onClick={confirmDeleteUnit}
+          >
+            Delete Permanently
           </Button>
         </DialogActions>
       </Dialog>

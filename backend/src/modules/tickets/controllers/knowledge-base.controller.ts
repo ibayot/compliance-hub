@@ -7,11 +7,12 @@ import { KnowledgeBaseService } from '../services/knowledge-base.service';
 
 @ApiTags('knowledge-base')
 @Controller('knowledge-base')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, CapabilityGuard)
 export class KnowledgeBaseController {
   constructor(private readonly kbService: KnowledgeBaseService) {}
 
   @Get()
+  @RequireCapability('isTicketModuleAccess')
   async getArticles(@Query('q') query?: string) {
     if (query) {
       return this.kbService.searchKnowledgeBase(query);
@@ -20,6 +21,7 @@ export class KnowledgeBaseController {
   }
 
   @Post(':id/rate')
+  @RequireCapability('isTicketModuleAccess')
   @ApiBody({ schema: { type: 'object', properties: { isHelpful: { type: 'boolean' } }, required: ['isHelpful'] } })
   async rateArticle(@Param('id') id: string, @Body('isHelpful') isHelpful: boolean) {
     return this.kbService.rateArticle(Number(id), isHelpful);

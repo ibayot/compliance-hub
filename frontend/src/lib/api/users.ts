@@ -20,6 +20,9 @@ export interface UserRecord {
   attendanceEligible?: boolean;
   technicianEligible?: boolean;
   autoAssignmentEligible?: boolean;
+  isIssuancesManage?: boolean;
+  isDocumentsDelete?: boolean;
+  isUserManagementAdmin?: boolean;
   units?: any[];
 }
 
