@@ -34,6 +34,7 @@ import { SseService } from './sse.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { EventBusService } from '../../../common/events/event-bus.service';
 import { KnowledgeBaseService } from './knowledge-base.service';
+import { AttendanceStatus } from '../entities/tech-attendance.entity';
 
 // --- DTOs --------------------------------------------------------------------
 
@@ -241,6 +242,15 @@ export class ReturnEscalationDto {
 export const roundRating = (value: number): number =>
   Math.floor((value + Number.EPSILON) * 100) / 100;
 
+export const isTicketReopening = (
+  currentStatus: TicketStatus,
+  requestedStatus?: TicketStatus,
+): boolean => requestedStatus === TicketStatus.OPEN && currentStatus !== TicketStatus.OPEN;
+
+export const shouldInitializeSlaDeadline = (
+  slaDeadline: Date | null | undefined,
+): boolean => !slaDeadline;
+
 export const deriveSatisfactionRating = (
   likert: Array<number | string | 'NA'>,
 ): number | null => {
@@ -352,7 +362,7 @@ export class TicketService implements OnModuleInit {
       try {
         await this.runMigrations();
       } catch (err) {
-        this.logger.warn(`Ticket schema migration failed (non-fatal): ${err?.message}`);
+        this.logger.warn('Ticket schema migration failed (non-fatal).');
       }
     } else {
       this.logger.log('DB bootstrap disabled; skipping ticket startup migration/views/seed.');
@@ -361,7 +371,7 @@ export class TicketService implements OnModuleInit {
     if (this.eventBus) {
       this.eventBus.subscribe('office-day.changed', () => {
         this.recalculateActiveSlaDeadlines().catch((err) => {
-          this.logger.warn(`SLA deadline recalculation failed: ${err?.message}`);
+          this.logger.warn('SLA deadline recalculation failed.');
         });
       });
 
@@ -563,7 +573,7 @@ export class TicketService implements OnModuleInit {
       await this.eventRepo.save(event);
       if (emitUpdate) this.sseService.emitTicketUpdated(ticketId);
     } catch (err: any) {
-      this.logger.warn(`logEvent failed (non-fatal): ${err?.message}`);
+      this.logger.warn('logEvent failed (non-fatal).');
     }
   }
 
@@ -582,9 +592,9 @@ export class TicketService implements OnModuleInit {
       for (const notification of notifications) {
         this.sseService.emitNotificationCreated(notification.userId);
       }
-      this.logger.log(`Created ${notifications.length} notifications for ticket ${ticketId}`);
+      this.logger.log(`Created ${notifications.length} ticket notification(s).`);
     } catch (e) {
-      this.logger.error("Failed to send notification: " + e.message);
+      this.logger.error('Failed to send ticket notification.');
     }
   }
 
@@ -661,7 +671,36 @@ export class TicketService implements OnModuleInit {
 
   // --- Create (with Auto-Shift, Auto-Assign, Email) -------------------------
 
+  async withAutoAssignmentLock<T>(work: () => Promise<T>): Promise<T> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    const lockName = 'compliance_hub_ticket_auto_assignment';
+    let acquired = false;
+    await queryRunner.connect();
+    try {
+      const result = await queryRunner.query('SELECT GET_LOCK(?, 30) AS acquired', [lockName]);
+      acquired = Number(result?.[0]?.acquired) === 1;
+      if (!acquired) {
+        throw new BadRequestException('Automatic ticket assignment is busy. Please retry the ticket submission.');
+      }
+      return await work();
+    } finally {
+      if (acquired) await queryRunner.query('SELECT RELEASE_LOCK(?)', [lockName]).catch(() => undefined);
+      await queryRunner.release();
+  }
+  }
   async createTicket(
+    dto: CreateTicketDto,
+    callerId: number,
+    callerRole?: UserRole,
+    image?: Express.Multer.File,
+  ): Promise<
+    Ticket & { autoShifted?: boolean; autoAssigned?: boolean; noTechAvailable?: boolean }
+  > {
+    return this.withAutoAssignmentLock(() =>
+      this.createTicketInternal(dto, callerId, callerRole, image),
+    );
+  }
+  private async createTicketInternal(
     dto: CreateTicketDto,
     callerId: number,
     callerRole?: UserRole,
@@ -671,7 +710,17 @@ export class TicketService implements OnModuleInit {
   > {
     const requesterId = dto.requesterId ? dto.requesterId : callerId;
 
-    const requester = await this.usersHttpClient.getUserById(requesterId);
+    let requester = await this.usersHttpClient.getUserById(requesterId);
+    // A short users-service outage or an open circuit must not turn a valid
+    // requester into a false 400. The ticketing DB exposes a read-only users
+    // view; use it only as a bounded identity fallback.
+    if (!requester) {
+      const rows = await this.dataSource.query(
+        'SELECT id, email, first_name, last_name, middle_name, role, active FROM users WHERE id = ? AND active = 1 LIMIT 1',
+        [requesterId],
+      );
+      requester = rows?.[0] ?? null;
+    }
     if (!requester) throw new BadRequestException('Requester not found');
 
     // NOTE: Multiple concurrent tickets per requester are now allowed.
@@ -723,7 +772,7 @@ export class TicketService implements OnModuleInit {
         );
       }
     } catch (err: any) {
-      this.logger.warn('Auto-shift failed (non-fatal): ' + err?.message);
+      this.logger.warn('Auto-shift failed (non-fatal).');
     }
 
     if (!categoryId) {
@@ -863,7 +912,7 @@ export class TicketService implements OnModuleInit {
             isSlaWaiting = activeTicketsCount > 0 && !hasBreachedTicket;
 
             this.logger.log(
-              `Auto-assign resolved: original=${ticketType} -> assigned=${tType} to ${assignedTech.email} using ${assignmentStrategy} (isSlaWaiting: ${isSlaWaiting})`,
+              `Auto-assignment completed using ${assignmentStrategy}; SLA waiting: ${isSlaWaiting}.`,
             );
             break;
           }
@@ -875,7 +924,7 @@ export class TicketService implements OnModuleInit {
         this.logger.log('Auto-assign: no technician available across fallback chain');
       }
     } catch (err: any) {
-      this.logger.warn(`Auto-assign failed (non-fatal): ${err?.message}`);
+      this.logger.warn('Auto-assignment failed (non-fatal).');
     }
 
     // const ticketNumber = await this.generateTicketNumber();
@@ -970,7 +1019,7 @@ export class TicketService implements OnModuleInit {
         callerRole || UserRole.USER,
         image
       ).catch((err) => {
-        this.logger.error(`Failed to attach initial image for ticket ${saved.id}:`, err);
+        this.logger.error('Failed to attach initial ticket image.');
       });
     }
 
@@ -1337,17 +1386,13 @@ export class TicketService implements OnModuleInit {
     const acceptedEscalation =
       latestEscalation?.status === EscalationStatus.ACCEPTED ? latestEscalation : null;
 
-    // Guard: Only Ticket Settings Focals or Super Admins can revert a ticket back to OPEN status
-    if (dto.status === TicketStatus.OPEN && ticket.status !== TicketStatus.OPEN) {
-      const isAuthorizedToOpen =
-        actorRole === UserRole.SUPER_ADMIN ||
-        this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
-
-      if (!isAuthorizedToOpen) {
-        throw new ForbiddenException(
-          'Only Ticket Settings Focals or Super Admins can revert a ticket to OPEN status.',
-        );
-      }
+    // Reopening a ticket is not part of the supported workflow. Paused/frozen
+    // tickets resume through their configured finite limits, while resolved or
+    // closed tickets remain terminal.
+    if (isTicketReopening(ticket.status as TicketStatus, dto.status) && actorRole !== UserRole.SUPER_ADMIN) {
+      throw new BadRequestException(
+        'Reopening a ticket is not permitted. Paused or frozen tickets resume automatically according to their configured limits.',
+      );
     }
 
     // Regular users can only edit their own open tickets (subject/description)
@@ -1562,7 +1607,12 @@ export class TicketService implements OnModuleInit {
         [TicketStatus.CLOSED]: [],
         [TicketStatus.DUPLICATE]: [],
       };
-      const allowed = ALLOWED_TRANSITIONS[ticket.status as TicketStatus] ?? [];
+      const canManuallyReopen = actorRole === UserRole.SUPER_ADMIN;
+      const allowed = [...(ALLOWED_TRANSITIONS[ticket.status as TicketStatus] ?? [])];
+      if (!canManuallyReopen) {
+        const reopenIndex = allowed.indexOf(TicketStatus.OPEN);
+        if (reopenIndex >= 0) allowed.splice(reopenIndex, 1);
+      }
       if (!allowed.includes(dto.status as TicketStatus)) {
         throw new ForbiddenException(
           `Cannot transition ticket from '${ticket.status}' to '${dto.status}'. ` +
@@ -1730,7 +1780,7 @@ export class TicketService implements OnModuleInit {
           if (currentActiveTickets.length > 0) {
             await this.ticketRepo.save(currentActiveTickets);
             this.logger.log(
-              `Pushed back ${currentActiveTickets.length} active ticket(s) to queue for technician #${ticket.assignedToId} due to preemptive resume of ticket ${ticket.ticketNumber}`,
+              `Pushed back ${currentActiveTickets.length} active ticket(s) to queue due to preemptive resume.`,
             );
           }
         }
@@ -1903,7 +1953,7 @@ export class TicketService implements OnModuleInit {
           await this.ticketRepo.update(saved.id, { isKbGenerationPending: false });
         })
         .catch(async (err) => {
-          this.logger.warn(`Failed to auto-generate KB, benched for retry: ${err.message}`);
+          this.logger.warn('Failed to auto-generate KB; queued for retry.');
           await this.commentRepo.save(
             this.commentRepo.create({
               ticketId: saved.id,
@@ -1988,31 +2038,33 @@ export class TicketService implements OnModuleInit {
       ].includes(dto.status as TicketStatus) &&
       saved.assignedToId
     ) {
-      try {
-        const resolvedByTech = await this.usersHttpClient.getUserById(saved.assignedToId);
+      const assignedTechnicianId = saved.assignedToId;
+        await this.withAutoAssignmentLock(async () => {
+        try {
+        const resolvedByTech = await this.usersHttpClient.getUserById(assignedTechnicianId);
         const isSeniorTech = resolvedByTech && this.roleCapSvc.isSeniorTech(resolvedByTech.role);
 
         if (!isSeniorTech) {
           // Check technician is available today before assigning
           const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });            const presentTechs = await this.attendanceService.getAutoAssignmentTechnicians('all', today);
-            const isPresent = presentTechs.some((tech) => tech.id === saved.assignedToId);
+            const isPresent = presentTechs.some((tech) => tech.id === assignedTechnicianId);
 
           if (isPresent) {
             // Check if the technician is still busy with other tickets
             const busyCount = await this.ticketRepo.count({
               where: [
                 {
-                  assignedToId: saved.assignedToId,
+                  assignedToId: assignedTechnicianId,
                   status: TicketStatus.ASSIGNED,
                   isSlaWaiting: false,
                 },
-                { assignedToId: saved.assignedToId, status: TicketStatus.IN_PROGRESS },
+                { assignedToId: assignedTechnicianId, status: TicketStatus.IN_PROGRESS },
               ],
             });
 
             if (busyCount === 0) {
               const unpaused = await this.unpauseNextWaitingTicket(
-                saved.assignedToId,
+                assignedTechnicianId,
                 'auto_assigned',
               );
               if (unpaused) {
@@ -2023,17 +2075,17 @@ export class TicketService implements OnModuleInit {
                   .createQueryBuilder('t')
                   .where('t.status = :status', { status: TicketStatus.OPEN })
                   .andWhere('t.assignedToId IS NULL')
-                  .andWhere('t.requesterId != :assignedToId', { assignedToId: saved.assignedToId })
+                  .andWhere('t.requesterId != :assignedToId', { assignedToId: assignedTechnicianId })
                   .orderBy('t.createdAt', 'ASC')
                   .getOne();
                 if (nextTicket) {
                   const assignmentConfig = await this.configRepo.findOne({ where: { id: 1 } });
                   if (assignmentConfig?.assignmentStrategy === 'CAPPED_ROUND_ROBIN') {
-                    const weeklySlaLoad = await this.getWeeklySlaLoad(saved.assignedToId);
+                    const weeklySlaLoad = await this.getWeeklySlaLoad(assignedTechnicianId);
                     const weeklyCap = assignmentConfig.roundRobinCapHours || 80;
                     if (weeklySlaLoad >= weeklyCap) {
                       this.logger.log(
-                        `Auto-reassign on resolve: technician #${saved.assignedToId} reached weekly cap (${weeklySlaLoad}/${weeklyCap}).`,
+                        `Auto-reassign on resolve: technician reached the weekly cap (${weeklySlaLoad}/${weeklyCap}).`,
                       );
                       nextTicket = null;
                     }
@@ -2041,7 +2093,7 @@ export class TicketService implements OnModuleInit {
                 }
 
                 if (nextTicket) {
-                  nextTicket.assignedToId = saved.assignedToId;
+                  nextTicket.assignedToId = assignedTechnicianId;
                   nextTicket.status = TicketStatus.ASSIGNED;
                   nextTicket.lastAssignedAt = new Date();
 
@@ -2074,29 +2126,30 @@ export class TicketService implements OnModuleInit {
                   }).catch(() => { });
 
                   this.logger.log(
-                    `Auto-reassign on resolve: ticket ${nextTicket.ticketNumber} (${nextTicket.ticketType}) -> technician #${saved.assignedToId}`,
+                    'Auto-reassign on resolve assigned the next eligible ticket.',
                   );
                 } else {
                   this.logger.log(
-                    `Auto-reassign on resolve: no open unassigned tickets available for technician #${saved.assignedToId}`,
+                    'Auto-reassign on resolve found no eligible open ticket.',
                   );
                 }
               }
             } else {
               this.logger.log(
-                `Auto-reassign on resolve: technician #${saved.assignedToId} is still busy (has active tickets) — skipping unstacking/assigning`,
+                'Auto-reassign on resolve skipped because the technician remains busy.',
               );
             }
           } else {
             this.logger.log(
-              `Auto-reassign on resolve: technician #${saved.assignedToId} is absent today — skipping`,
+              'Auto-reassign on resolve skipped because the technician is unavailable today.',
             );
           }
         }
       } catch (err: any) {
-        this.logger.warn(`Auto-reassign on resolve failed (non-fatal): ${err?.message}`);
+        this.logger.warn('Auto-reassign on resolve failed (non-fatal).');
       }
-    }
+        });
+      }
 
     return saved;
   }
@@ -2193,9 +2246,9 @@ export class TicketService implements OnModuleInit {
       this.roleCapSvc.isFocal(actorRole as string);
 
     // Guard: lower-level techs can only escalate to focal-level technicians
-    const lowerLevelRoles: UserRole[] = [UserRole.DESKTOP_JR, UserRole.IT_SUPPORT_JR];
     if (
-      lowerLevelRoles.includes(actorRole) &&
+      this.roleCapSvc.isTechnician(actorRole as string) &&
+      !this.roleCapSvc.isFocal(actorRole as string) &&
       !this.roleCapSvc.isFocal(technician.role as string)
     ) {
       throw new ForbiddenException(
@@ -2230,11 +2283,9 @@ export class TicketService implements OnModuleInit {
 
     // Set SLA deadline if the ticket's category has an SLA configured
     if (ticket.issueTypeConfig?.slaHours) {
-      const isAuthorizedToResetSla =
-        this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
-        actorRole === UserRole.SUPER_ADMIN;
-
-      if (!ticket.slaDeadline || isAuthorizedToResetSla) {
+      // Assignment and reassignment must never reset an existing SLA deadline.
+      // A deadline may only be initialized when older data does not have one.
+      if (shouldInitializeSlaDeadline(ticket.slaDeadline)) {
         const slaConfig = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
         ticket.slaDeadline = slaConfig
           ? await this.calculateSlaDeadline(new Date(), ticket.issueTypeConfig.slaHours, slaConfig)
@@ -2317,7 +2368,7 @@ export class TicketService implements OnModuleInit {
     if (ticket.status === TicketStatus.ASSIGNED && ticket.assignedToId === viewerId && !ticket.isSlaWaiting) {
       if (!ticket.priority) {
         this.logger.log(
-          `Auto in_progress skipped: ticket ${ticket.ticketNumber} has no priority set.`,
+          'Auto in_progress skipped because the ticket has no priority set.',
         );
         return null; // Priority must be set first
       }
@@ -2326,7 +2377,7 @@ export class TicketService implements OnModuleInit {
       ticket.slaPausedAt = null;
       const saved = await this.ticketRepo.save(ticket);
       this.logger.log(
-        `Auto in_progress: ticket ${ticket.ticketNumber} viewed by technician #${viewerId}`,
+        'Auto in_progress completed after technician viewed the ticket.',
       );
       this.logEvent(saved.id, 'in_progress', viewerId, { via: 'view' }).catch(() => { });
       return saved;
@@ -3049,8 +3100,6 @@ export class TicketService implements OnModuleInit {
     const attendanceMap = new Map<number, string>(
       attendanceRows.map((r) => [Number(r.userId), String(r.status)]),
     );
-    const unavailableStatuses = new Set(['absent', 'out_of_office']);
-
     // Bulk fetch open ticket counts
     const openCountsRaw = await this.ticketRepo
       .createQueryBuilder('t')
@@ -3068,9 +3117,9 @@ export class TicketService implements OnModuleInit {
 
     const results = [];
     for (const tech of technicians) {
-      // Skip absent / out-of-office technicians — they cannot be assigned
+      // Manual assignment requires an explicit PRESENT attendance record.
       const attendanceStatus = attendanceMap.get(tech.id) ?? null;
-      const isUnavailable = attendanceStatus ? unavailableStatuses.has(attendanceStatus) : false;
+      const isUnavailable = attendanceStatus !== AttendanceStatus.PRESENT;
       if (isUnavailable) continue;
 
       results.push({
@@ -3120,6 +3169,10 @@ export class TicketService implements OnModuleInit {
    * This is fire-and-forget — called from AuthService after successful login.
    */
   async assignPendingTicketsOnLogin(techId: number): Promise<void> {
+    await this.withAutoAssignmentLock(() => this.assignPendingTicketsOnLoginInternal(techId));
+  }
+
+  private async assignPendingTicketsOnLoginInternal(techId: number): Promise<void> {
     try {
       const tech = await this.usersHttpClient.getUserById(techId);
       if (!tech) return;
@@ -3200,7 +3253,7 @@ export class TicketService implements OnModuleInit {
               return d;
             })();
           this.logger.log(
-            `[Login Auto-Assign] SLA deadline set to ${slaDeadlineOnAssign?.toISOString()} for ticket ${pending.ticketNumber}`,
+            '[Login Auto-Assign] SLA deadline set for an assigned ticket.',
           );
         }
       }
@@ -3234,10 +3287,10 @@ export class TicketService implements OnModuleInit {
         .catch(() => { });
 
       this.logger.log(
-        `[Login Auto-Assign] Ticket ${pending.ticketNumber} → ${tech.email} on login`,
+        '[Login Auto-Assign] Ticket assigned after technician login.',
       );
     } catch (err: any) {
-      this.logger.warn(`[Login Auto-Assign] Failed (non-fatal): ${err?.message}`);
+      this.logger.warn('[Login Auto-Assign] Failed (non-fatal).');
     }
   }
 
@@ -3246,6 +3299,10 @@ export class TicketService implements OnModuleInit {
    * Auto-reassigns their assigned tickets to other available technicians.
    */
   async reassignUnavailableTechnicianTickets(techId: number): Promise<void> {
+    await this.withAutoAssignmentLock(() => this.reassignUnavailableTechnicianTicketsInternal(techId));
+  }
+
+  private async reassignUnavailableTechnicianTicketsInternal(techId: number): Promise<void> {
     try {
       const tickets = await this.ticketRepo.find({
         where: { assignedToId: techId, status: TicketStatus.ASSIGNED },
@@ -3253,7 +3310,7 @@ export class TicketService implements OnModuleInit {
 
       for (const ticket of tickets) {
         this.logger.log(
-          `[Absence Reassign] Attempting to reassign ticket ${ticket.ticketNumber} from absent technician #${techId}`,
+          '[Absence Reassign] Attempting to reassign a ticket from an absent technician.',
         );
         // Nullify assignedTo so it acts like an open ticket for the auto assignment logic
         ticket.assignedToId = null as any;
@@ -3295,7 +3352,7 @@ export class TicketService implements OnModuleInit {
         }
       }
     } catch (err: any) {
-      this.logger.error(`[Absence Reassign] Failed for tech ${techId}: ${err?.message}`);
+      this.logger.error('[Absence Reassign] Failed.');
     }
   }
 
@@ -3330,14 +3387,11 @@ export class TicketService implements OnModuleInit {
       endDate = new Date(year, 11, 31, 23, 59, 59, 999);
     }
 
-    const techRoles = [
-      UserRole.DESKTOP_SR,
-      UserRole.IT_SUPPORT_SR,
-      UserRole.DESKTOP_JR,
-      UserRole.IT_SUPPORT_JR,
-      UserRole.PANTAWID_ICT,
-      ...this.roleCapSvc.getRolesWhere('isFocal').map((r) => r as UserRole),
-    ];
+    const techRoles = new Set([
+      ...this.roleCapSvc.getRolesWhere('isDesktop'),
+      ...this.roleCapSvc.getRolesWhere('isItSupport'),
+      ...this.roleCapSvc.getRolesWhere('isPantawidIct'),
+    ]);
 
     const qb = this.ticketRepo
       .createQueryBuilder('t')
@@ -3356,7 +3410,7 @@ export class TicketService implements OnModuleInit {
     const ids = rows.map((r) => Number(r.id)).filter(Boolean);
     const allUserRows = await this.usersHttpClient.getUsers();
     const users = allUserRows.filter(
-      (u: any) => u.role !== UserRole.SUPER_ADMIN && ids.includes(u.id) && techRoles.includes(u.role),
+      (u: any) => u.role !== UserRole.SUPER_ADMIN && ids.includes(u.id) && techRoles.has(u.role),
     );
 
     return users.map((u) => ({
@@ -3752,7 +3806,20 @@ export class TicketService implements OnModuleInit {
 
     // Verify target is a valid escalation focal for this ticket type
     const focals = await this.escalationFocalRepo.find();
-    const focal = await this.usersHttpClient.getUserById(dto.escalatedToId);
+    let focal = await this.usersHttpClient.getUserById(dto.escalatedToId);
+    // The users-service client is intentionally protected by a circuit
+    // breaker. During a burst of unrelated ticketing work it may temporarily
+    // return null even though the configured focal exists. The ticketing DB
+    // already exposes the read-only users view, so use it only as a bounded
+    // lookup fallback; the focal allow-list and attendance checks below still
+    // apply before an escalation is saved.
+    if (!focal) {
+      const rows = await this.dataSource.query(
+        'SELECT id, email, first_name, last_name, middle_name, role, active FROM users WHERE id = ? AND active = 1 LIMIT 1',
+        [dto.escalatedToId],
+      );
+      focal = rows?.[0] ?? null;
+    }
     if (!focal) throw new NotFoundException('Escalation target user not found.');
 
     const allowedUserIds = new Set<number>(
@@ -3770,8 +3837,14 @@ export class TicketService implements OnModuleInit {
 
     // QA #9: Verify that the selected focal is actually PRESENT today
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-    const presentFocals = await this.attendanceService.getPresentTechnicians('all', today);
-    const isPresent = presentFocals.some((t) => t.id === focal.id);
+    // Escalation focals are not necessarily ticket technicians (for example,
+    // a section head), so the technician-only availability query can never
+    // prove that they are present. Check the attendance record directly while
+    // retaining the explicit PRESENT requirement.
+    const presentAttendance = await this.attendanceService.getAttendanceForDate(today);
+    const isPresent = presentAttendance.some(
+      (record) => Number(record.userId) === Number(focal.id) && record.status === AttendanceStatus.PRESENT,
+    );
     if (!isPresent) {
       throw new BadRequestException(
         'The selected escalation focal is not currently marked as present or available today.',
@@ -4594,7 +4667,7 @@ export class TicketService implements OnModuleInit {
     }).catch(() => { });
 
     this.logger.log(
-      `Unstacked waiting ticket ${waitingTicket.ticketNumber} for technician #${techId}`,
+      'Unstacked a waiting ticket for a technician.',
     );
     return true;
   }
@@ -4691,7 +4764,7 @@ export class TicketService implements OnModuleInit {
     }).catch(() => { });
 
     this.logger.log(
-      `Unstacked waiting ticket ${waitingTicket.ticketNumber} and set to IN_PROGRESS for technician #${techId}`,
+      'Unstacked a waiting ticket and set it to IN_PROGRESS.',
     );
     return true;
   }
@@ -4724,14 +4797,12 @@ export class TicketService implements OnModuleInit {
         );
 
         await this.ticketRepo.update(ticket.id, { isKbGenerationPending: false });
-        this.logger.log(`Successfully recovered and generated KB for ticket ${ticket.ticketNumber}`);
+        this.logger.log('Successfully recovered and generated a KB entry.');
 
         // Wait 15 seconds between requests to avoid rate limits again
         await new Promise((resolve) => setTimeout(resolve, 15000));
       } catch (err) {
-        this.logger.warn(
-          `Retry failed for ticket ${ticket.ticketNumber}, keeping benched: ${err.message}`,
-        );
+        this.logger.warn('KB retry failed; keeping the generation queued.');
         // If it fails again (e.g. rate limit still active), just break out of the loop and try again next hour
         if (err.message.includes('429') || err.message.includes('503')) {
           this.logger.warn('API limit encountered during retry. Aborting current retry queue.');
@@ -4760,8 +4831,6 @@ export class TicketService implements OnModuleInit {
 
     const qb = this.ticketRepo
       .createQueryBuilder('ticket')
-      .leftJoinAndSelect('ticket.assignedTo', 'assignedTo')
-      
       .where("ticket.status != 'duplicate'");
 
     if (filters.year) qb.andWhere('YEAR(ticket.createdAt) = :year', { year: filters.year });
@@ -4775,6 +4844,8 @@ export class TicketService implements OnModuleInit {
     if (filters.ticketType) qb.andWhere('ticket.ticketType = :ticketType', { ticketType: filters.ticketType });
 
     const tickets = await qb.getMany();
+    const users = await this.usersHttpClient.getUsers();
+    const usersById = new Map(users.map((user) => [Number(user.id), user]));
 
     const avgResolutionByTechnician: any[] = [];
     const slaComplianceByMonthMap = new Map<string, { met: number; missed: number }>();
@@ -4816,10 +4887,11 @@ export class TicketService implements OnModuleInit {
         slaComplianceByMonthMap.get(monthLabel)!.met += 1;
       }
 
-      if (t.assignedToId && t.assignedTo) {
+      if (t.assignedToId) {
+        const assignedTo = usersById.get(Number(t.assignedToId));
         if (!techStats.has(t.assignedToId)) {
           techStats.set(t.assignedToId, {
-            techName: [t.assignedTo.first_name, t.assignedTo.last_name].filter(Boolean).join(' ') || t.assignedTo.email,
+            techName: assignedTo ? ([assignedTo.first_name, assignedTo.last_name].filter(Boolean).join(' ') || assignedTo.email) : `Technician ${t.assignedToId}`,
             totalHours: 0,
             resCount: 0,
             totalTickets: 0,

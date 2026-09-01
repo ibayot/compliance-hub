@@ -1,6 +1,6 @@
 # RICTMS Compliance Hub
 
-> **Current Version:** `v0.0.137` (Backend) / `v0.0.134` (Frontend)
+> **Current Version:** `v1.0.0`
 
 Compliance Hub is an internal document governance and compliance platform for government teams. It supports document intake and review workflows, ticketing and escalation, issuance mapping, KPI monitoring, and role-based operations across split microservices.
 
@@ -80,6 +80,26 @@ cd frontend
 npm install
 npm run dev
 ```
+
+## Android App (Hybrid WebView)
+
+The Android app is a Capacitor hybrid shell around the same responsive frontend. End users can sign in, submit and view tickets, follow ticket status, and rate resolved technicians without maintaining a separate Android UI implementation.
+
+From the `frontend/` directory:
+
+```bash
+npm run android:debug
+```
+
+The installable debug APK is generated at `frontend/android/app/build/outputs/apk/debug/app-debug.apk`. With the local Docker stack, the native API client targets the Android emulator host alias `10.0.2.2`.
+
+For a staging or production build, provide the deployed API base URL before building:
+
+```bash
+VITE_API_URL=https://your-deployed-host/api npm run android:release
+```
+
+The release APK must be signed with the organization’s Android keystore before distribution. Do not distribute the debug APK to end users. iOS packaging is intentionally deferred until the Android hybrid flow is accepted.
 
 ## Ticket SLA and Assignment Behavior
 

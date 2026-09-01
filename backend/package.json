@@ -1,6 +1,6 @@
 {
   "name": "rictms-backend",
-  "version": "0.0.141",
+  "version": "1.0.0",
   "description": "RICTMS Compliance Hub - Backend API",
   "author": "RICTMS Team",
   "private": true,
@@ -104,15 +104,15 @@
       "json",
       "ts"
     ],
-    "rootDir": "src",
+    "rootDir": ".",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "src/**/*.(t|j)s"
     ],
-    "coverageDirectory": "../coverage",
+    "coverageDirectory": "coverage",
     "testEnvironment": "node"
   }
 }

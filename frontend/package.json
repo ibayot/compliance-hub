@@ -1,13 +1,20 @@
 {
   "name": "rictms-frontend",
-  "version": "0.0.138",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --config=playwright.config.ts",
+    "test:e2e:old": "playwright test --config=playwright.old.config.ts",
+    "test:e2e:new": "playwright test --config=playwright.new.config.ts",
+    "test:e2e:visible": "playwright test --config=playwright.visible.config.ts",
+    "test:e2e:loop": "node scripts/run-e2e-loop.mjs",
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:debug": "node scripts/build-android.mjs debug",
+    "android:release": "node scripts/build-android.mjs release",
     "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,json,css,md}\""
   },
   "dependencies": {

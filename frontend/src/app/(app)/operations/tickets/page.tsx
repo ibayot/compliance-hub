@@ -728,7 +728,7 @@ export default function TicketsPage() {
     try {
       const techs = await ticketsApi.getTechnicians();
       const availableByAttendance = techs.filter(
-        (t) => !t.isUnavailable && !['absent', 'out_of_office', 'half_day'].includes(t.attendanceStatus ?? ''),
+        (t) => !t.isUnavailable && t.attendanceStatus === 'present',
       );
       setTechnicians(availableByAttendance);
       // Only pre-select current assignee if they're still in the available list
@@ -2025,7 +2025,10 @@ export default function TicketsPage() {
             })()}
 
             {user?.role !== 'user' && categories.length > 0 && issues.length > 0 && form.categoryId && (() => {
-              const filteredIssues = issues.filter((iss) => !iss.isDeleted && iss.categoryId === form.categoryId);
+              // Older ticket-settings responses serialize the foreign key as
+              // `category_id`; accept both shapes while the API contract is
+              // normalized so issue selection does not silently disappear.
+              const filteredIssues = issues.filter((iss) => !iss.isDeleted && (iss.categoryId ?? iss.category_id) === form.categoryId);
 
               if (filteredIssues.length === 0) return null;
 

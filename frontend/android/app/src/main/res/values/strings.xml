@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">ComplianceHub</string>
-    <string name="title_activity_main">ComplianceHub</string>
+    <string name="app_name">Compliance Hub</string>
+    <string name="title_activity_main">Compliance Hub</string>
     <string name="package_name">com.dswd.compliancehub</string>
     <string name="custom_url_scheme">com.dswd.compliancehub</string>
     <string name="server_client_id">YOUR_WEB_CLIENT_ID_HERE</string>

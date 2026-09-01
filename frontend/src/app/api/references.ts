@@ -1162,12 +1162,6 @@ export const attendanceApi = {
     const response = await apiClient.post(`/attendance`, data);
     return response.data;
   },
-  bulkSetAttendance: async (data: {
-    entries: { userId: number; date: string; status: AttendanceStatus; notes?: string }[];
-  }): Promise<TechAttendance[]> => {
-    const response = await apiClient.post(`/attendance/bulk`, data);
-    return response.data;
-  },
   getAvailableTechnicians: async (
     ticketType: string,
     date: string,
@@ -1211,12 +1205,6 @@ export const attendanceApi = {
     notes?: string;
   }): Promise<OfficeDay> => {
     const response = await apiClient.post(`/attendance/office-days`, data);
-    return response.data;
-  },
-  bulkSetOfficeDays: async (data: {
-    days: { date: string; isOfficeDay: boolean; notes?: string }[];
-  }): Promise<OfficeDay[]> => {
-    const response = await apiClient.post(`/attendance/office-days/bulk`, data);
     return response.data;
   },
 };

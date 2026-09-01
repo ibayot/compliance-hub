@@ -8,6 +8,7 @@ pnpm-debug.log*
 Dockerfile*
 coverage
 dist
+tsconfig.tsbuildinfo
 .env
 *.err
 storage/temp

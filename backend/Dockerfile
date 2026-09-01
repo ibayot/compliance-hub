@@ -22,7 +22,12 @@ RUN npm install
 # -------------------------------------
 FROM deps AS builder
 COPY . .
-RUN npm run build
+RUN rm -rf dist tsconfig.tsbuildinfo \
+    && npm run build \
+    && test -f dist/apps/users-service.main.js \
+    && test -f dist/apps/ticketing-service.main.js \
+    && test -f dist/apps/compliance-service.main.js \
+    && test -f dist/apps/gateway.main.js
 
 # -------------------------------------
 # 4. Production stage
