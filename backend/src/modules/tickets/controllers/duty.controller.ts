@@ -66,7 +66,7 @@ export class DutyController {
   @Get('roster') async roster(@Request() req: any) { await this.duty.assertRead(req.user); return this.duty.getRoster(); }
   @Post('roster') replaceRoster(@Request() req: any, @Body() dto: DutyRosterDto) { return this.duty.replaceRoster(req.user, dto.userIds); }
 
-  @Get('reservations') async reservations(@Request() req: any) { await this.duty.assertRead(req.user); return this.duty.listReservations(); }
+  @Get('reservations') async reservations(@Request() req: any, @Query('page') page = '1', @Query('limit') limit = '10') { await this.duty.assertRead(req.user); return this.duty.listReservations(Number(page), Number(limit)); }
   @Post('reservations') createReservation(@Request() req: any, @Body() dto: DutyReservationDto) { return this.duty.saveReservation(req.user, dto); }
   @Patch('reservations/:id') updateReservation(@Request() req: any, @Param('id') id: string, @Body() dto: Partial<DutyReservationDto>) { return this.duty.saveReservation(req.user, dto, id); }
   @Delete('reservations/:id') deleteReservation(@Request() req: any, @Param('id') id: string) { return this.duty.deleteReservation(req.user, id); }

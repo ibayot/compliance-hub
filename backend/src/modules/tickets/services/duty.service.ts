@@ -458,7 +458,15 @@ export class DutyService {
     return this.getRoster();
   }
 
-  async listReservations() { return this.reservationRepo.find({ order: { meetingDate: 'DESC', startTime: 'ASC' }, take: 500 }); }
+  async listReservations(page = 1, limit = 10) {
+    const pagination = this.normalizePagination(page, limit);
+    const [items, total] = await this.reservationRepo.findAndCount({
+      order: { meetingDate: 'DESC', startTime: 'ASC' },
+      skip: (pagination.page - 1) * pagination.limit,
+      take: pagination.limit,
+    });
+    return { items, total, ...pagination, totalPages: Math.ceil(total / pagination.limit) };
+  }
   async saveReservation(actor: Actor, body: Partial<DutyMeetingReservation>, id?: string) {
     const access = await this.getAccess(actor);
     if (!access.canSchedule) throw new ForbiddenException('Only a Duty Administrator or the current OD can manage meeting schedules.');

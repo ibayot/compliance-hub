@@ -17,7 +17,7 @@ export const dutiesApi = {
   deleteException: async (id: string) => apiClient.delete(`/duties/exceptions/${id}`),
   roster: async () => (await apiClient.get('/duties/roster')).data,
   replaceRoster: async (userIds: number[]) => (await apiClient.post('/duties/roster', { userIds })).data,
-  reservations: async () => (await apiClient.get('/duties/reservations')).data,
+  reservations: async (page = 1, limit = 10) => (await apiClient.get('/duties/reservations', { params: { page, limit } })).data,
   saveReservation: async (payload: any, id?: string) => (await (id ? apiClient.patch(`/duties/reservations/${id}`, payload) : apiClient.post('/duties/reservations', payload))).data,
   deleteReservation: async (id: string) => apiClient.delete(`/duties/reservations/${id}`),
   releaseCoverage: async (id: string) => (await apiClient.post(`/duties/coverages/${id}/release`)).data,
