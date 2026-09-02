@@ -255,7 +255,7 @@ export class UsersService {
    * extracted to backend/database/migrations/v0.0.50-service-ddl-extraction.sql.
    */
   private async ensureUnitsView(): Promise<void> {
-    const complianceDb = process.env.COMPLIANCE_DB_DATABASE || 'compliance_hub';
+    const complianceDb = process.env.COMPLIANCE_DB_DATABASE || '02_db_compliance_hub_prod';
     await this.usersRepository.manager.connection
       .query(`CREATE OR REPLACE VIEW units AS SELECT * FROM \`${complianceDb}\`.units`)
       .catch(() => undefined);

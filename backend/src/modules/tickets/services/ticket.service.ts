@@ -396,15 +396,21 @@ export class TicketService implements OnModuleInit {
         process.env.USERS_DB_DATABASE ||
         (await this.resolveExistingSchemaName(
           qr,
-          ['02_db_stg_compliance_hub_users', 'compliance_hub_users', 'ricms_users', 'rictms_users'],
-          'compliance_hub_users',
+          [
+            '02_db_compliance_hub_users_prod',
+            '02_db_stg_compliance_hub_users',
+            'compliance_hub_users',
+            'ricms_users',
+            'rictms_users',
+          ],
+          '02_db_compliance_hub_users_prod',
         ));
       const complianceDb =
         process.env.COMPLIANCE_DB_DATABASE ||
         (await this.resolveExistingSchemaName(
           qr,
-          ['compliance_hub', 'ricms_compliance', 'rictms_compliance'],
-          'compliance_hub',
+          ['02_db_compliance_hub_prod', '02_db_stg_compliance_hub', 'compliance_hub', 'ricms_compliance', 'rictms_compliance'],
+          '02_db_compliance_hub_prod',
         ));
 
       // Schema DDL has been extracted to versioned migration files.

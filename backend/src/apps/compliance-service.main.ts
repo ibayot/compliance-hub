@@ -114,7 +114,7 @@ async function bootstrap() {
   if (String(process.env.DB_BOOTSTRAP ?? 'false').toLowerCase() === 'true') {
     try {
       const dataSource = app.get(DataSource);
-      const usersDb = process.env.USERS_DB_DATABASE || 'compliance_hub_users';
+      const usersDb = process.env.USERS_DB_DATABASE || '02_db_compliance_hub_users_prod';
       const conn = dataSource.createQueryRunner();
       await conn.connect();
       try {

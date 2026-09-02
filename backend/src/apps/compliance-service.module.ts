@@ -53,7 +53,7 @@ import { AuditVariableSubscriber } from '../shared/audit/audit.subscriber';
         port: configService.get('DB_PORT'),
         username: configService.get('DB_USERNAME'),
         password: configService.get('DB_PASSWORD'),
-        database: configService.get('COMPLIANCE_DB_DATABASE') || 'compliance_hub',
+        database: configService.get('COMPLIANCE_DB_DATABASE') || '02_db_compliance_hub_prod',
         timezone: '+08:00',
         autoLoadEntities: true,
         synchronize: configService.get<boolean>('DB_SYNCHRONIZE'),

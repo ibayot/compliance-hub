@@ -3,8 +3,8 @@ import { DataSource } from 'typeorm';
 import { redactAuditJson } from '../../../shared/audit/audit-redaction';
 
 const AUDITED_DATABASES = [
-  '02_db_stg_compliance_hub_ticketing',
-  '02_db_stg_compliance_hub_users',
+  process.env.TICKETING_DB_DATABASE || '02_db_compliance_hub_ticketing_prod',
+  process.env.USERS_DB_DATABASE || '02_db_compliance_hub_users_prod',
 ] as const;
 
 const AUDITED_DATABASE_PREDICATE = 'database_name IN (?, ?)';

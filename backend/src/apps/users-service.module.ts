@@ -43,7 +43,7 @@ import { AuditVariableSubscriber } from '../shared/audit/audit.subscriber';
         database:
           configService.get('USERS_DB_DATABASE') ||
           configService.get('DB_DATABASE') ||
-          'compliance_hub',
+          '02_db_compliance_hub_users_prod',
         timezone: '+08:00',
         autoLoadEntities: true,
         synchronize: false,

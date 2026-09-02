@@ -22,7 +22,10 @@ async function pollVaptMode() {
       port: Number(process.env.DB_PORT) || 3306,
       user: process.env.DB_USERNAME || 'root',
       password: process.env.DB_PASSWORD || 'root',
-      database: process.env.USERS_DB_DATABASE || process.env.DB_DATABASE || 'compliance_hub',
+      database:
+        process.env.USERS_DB_DATABASE ||
+        process.env.DB_DATABASE ||
+        '02_db_compliance_hub_users_prod',
     });
     
     const [rows]: any = await connection.execute('SELECT vapt_mode FROM security_config WHERE id = 1 LIMIT 1');

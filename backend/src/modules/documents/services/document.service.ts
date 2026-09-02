@@ -410,7 +410,7 @@ export class DocumentService implements OnModuleInit {
 
     // v0.0.31: Ensure role_capabilities VIEW exists in this DB (failsafe for pre-migration deploy)
     try {
-      const usersDb = process.env.USERS_DB_DATABASE || 'compliance_hub_users';
+      const usersDb = process.env.USERS_DB_DATABASE || '02_db_compliance_hub_users_prod';
       await this.dataSource.query(
         `CREATE OR REPLACE VIEW role_capabilities AS SELECT * FROM \`${usersDb}\`.role_capabilities`,
       );
