@@ -119,3 +119,13 @@ frontend/test-results/**/*.png
 !MASTER-CONTEXT.md
 !AGENTS.md
 docker-compose.staging.yml
+
+# Tests and Playwright runner files are local-only and must not be committed.
+**/*.spec.ts
+**/*.spec.tsx
+**/*.test.ts
+**/*.test.tsx
+frontend/tests/
+frontend/playwright*.ts
+frontend/scripts/run-e2e-loop.mjs
+frontend/scripts/run-visible-e2e-loop.ps1
