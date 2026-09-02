@@ -41,6 +41,10 @@ Thumbs.db
 
 # Large or generated project artifacts
 storage/
+database-backups-*/
+databases/
+database/
+db-init/*.sql
 temp/
 uploads/
 scratch/
@@ -51,17 +55,11 @@ backend/src/database/seed-data.sql
 
 # Keep Codex context aligned with repository-local ignore policy
 *.sql
-!db-init/20260820-duty-monitoring.sql
-!db-init/20260820-duty-constraints.sql
-!db-init/20260824-ticket-settings-duty-fixes.sql
-!db-init/20260824-capability-authority-expansion.sql
-!db-init/20260824-capability-refactor-complete.sql
-!db-init/20260824-duty-monitoring.sql
-!db-init/20260825-ticketing-ui-crud.sql
-!db-init/20260825-remove-user-ticket-flags.sql
-!db-init/20260825-update-user-views-after-flag-removal.sql
-!db-init/20260825-users-auth-columns.sql
-!db-init/20260825-auto-assignment-eligibility.sql
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.bak
 *.png
 *.md
 !AGENTS.md
@@ -80,14 +78,9 @@ backend/src/database/seed-data.sql
 *fix*
 *restore*
 *seed*
-!db-init/20260824-ticket-settings-duty-fixes.sql
-!db-init/20260824-capability-authority-expansion.sql
-!db-init/20260824-capability-refactor-complete.sql
-!db-init/20260824-duty-monitoring.sql
-!db-init/20260825-ticketing-ui-crud.sql
-!db-init/20260825-remove-user-ticket-flags.sql
 !scripts/
 !scripts/**/*
+scripts/*.sql
 Compliance_Hub_Postman_Collection.json
 
 # Disposable test-only folders
@@ -97,6 +90,16 @@ frontend/tests/*
 !frontend/tests/e2e/
 frontend/tests/e2e/*
 !frontend/tests/e2e/13-capability-visibility.spec.ts
+!frontend/tests/e2e/v1-ticketing-ui.spec.ts
+!frontend/tests/e2e/v1-helpers.ts
+!frontend/tests/e2e/v1-ticketing-admin-crud.spec.ts
+!frontend/tests/e2e/v1-ticketing-duties-crud.spec.ts
+!frontend/tests/e2e/v1-ticketing-lifecycle.spec.ts
+!frontend/tests/e2e/v1-ticketing-capabilities.spec.ts
+!frontend/tests/e2e/v1-ticketing-feedback.spec.ts
+!frontend/tests/e2e/v1-ticketing-reports.spec.ts
+!frontend/tests/e2e/v1-ticketing-escalation.spec.ts
+!frontend/tests/e2e/v1-ticketing-account-settings.spec.ts
 backend/test/
 
 # Logs

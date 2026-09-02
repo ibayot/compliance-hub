@@ -41,6 +41,10 @@ Thumbs.db
 
 # Large or generated project artifacts
 storage/
+database-backups-*/
+databases/
+database/
+db-init/*.sql
 temp/
 uploads/
 scratch/
@@ -51,6 +55,11 @@ backend/src/database/seed-data.sql
 
 # Keep Codex context aligned with repository-local ignore policy
 *.sql
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.bak
 *.png
 *.md
 !AGENTS.md
@@ -71,11 +80,21 @@ backend/src/database/seed-data.sql
 *seed*
 !scripts/
 !scripts/**/*
+scripts/*.sql
 Compliance_Hub_Postman_Collection.json
 
 # Disposable test-only folders
 frontend/tests/
 backend/test/
+
+# Tests and Playwright runner files are local-only.
+**/*.spec.ts
+**/*.spec.tsx
+**/*.test.ts
+**/*.test.tsx
+frontend/playwright*.ts
+frontend/scripts/run-e2e-loop.mjs
+frontend/scripts/run-visible-e2e-loop.ps1
 
 # Logs
 npm-debug.log*
