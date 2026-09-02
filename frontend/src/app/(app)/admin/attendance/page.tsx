@@ -225,6 +225,22 @@ export default function AttendancePage() {
     }
   }, [tab, isRICTMSStaff, startDate, endDate]);
 
+  // Re-read the synchronized attendance data once per minute. The backend
+  // reads the DTR VIEW on the same cadence; this keeps the visible table in
+  // sync even when no SSE event is emitted.
+  useEffect(() => {
+    const refresh = window.setInterval(() => {
+      fetchSystemStatus();
+      if (tab === 1) {
+        silentRefreshTab1();
+      } else if (isRICTMSStaff && tab === 0) {
+        silentRefreshTab0Attendance();
+      }
+    }, 60_000);
+
+    return () => window.clearInterval(refresh);
+  }, [tab, isRICTMSStaff, fetchSystemStatus, silentRefreshTab1, silentRefreshTab0Attendance]);
+
   // Office day map: date → OfficeDay
   const odMap = useMemo(() => {
     const m = new Map<string, OfficeDay>();

@@ -2262,15 +2262,34 @@ function ProfilePreferencesCard() {
 
   const handleSave = async () => {
     if (!user) return;
+    const phoneNumber = form.phoneNumber.replace(/\D/g, '').slice(0, 10);
+    const fieldsBeingCleared = [
+      !phoneNumber && user.phoneNumber ? 'Phone Number' : null,
+      !form.sex.trim() && user.sex ? 'Sex' : null,
+      form.unitId === '' && (user.units?.length ?? 0) > 0 ? 'Unit/Section' : null,
+      !form.position.trim() && user.position ? 'Position' : null,
+      !form.positionFull.trim() && user.positionFull ? 'Position Full' : null,
+      !form.designation.trim() && user.designation ? 'Designation' : null,
+    ].filter((field): field is string => Boolean(field));
+
+    if (
+      fieldsBeingCleared.length > 0 &&
+      !window.confirm(
+        `The following fields are blank: ${fieldsBeingCleared.join(', ')}.\n\nSaving them as blank will remove their existing data. Do you want to continue?`,
+      )
+    ) {
+      return;
+    }
+
     try {
       setSaving(true);
       await usersApi.updateUser(user.id, {
-        phoneNumber: form.phoneNumber.replace(/\D/g, '').slice(0, 10),
-        sex: form.sex || undefined,
+        phoneNumber: phoneNumber || null,
+        sex: form.sex || null,
         unitIds: form.unitId === '' ? [] : [Number(form.unitId)],
-        position: form.position.trim() || undefined,
-        positionFull: form.positionFull.trim() || undefined,
-        designation: form.designation.trim() || undefined,
+        position: form.position.trim() || null,
+        positionFull: form.positionFull.trim() || null,
+        designation: form.designation.trim() || null,
       });
       enqueueSnackbar('Profile information updated successfully.', { variant: 'success' });
     } catch (err: any) {

@@ -60,9 +60,7 @@ export class TicketController {
     @Request() req: any,
     @UploadedFile() image?: Express.Multer.File,
   ) {
-    if (image && !image.mimetype.startsWith('image/')) {
-      throw new BadRequestException('Only picture attachments (images) are allowed.');
-    }
+    if (image) this.ticketService.validateImageUpload(image);
     const callerId = req.user.id ?? req.user.userId;
     const callerRole = req.user.role as UserRole;
     return this.ticketService.createTicket(dto, callerId, callerRole, image);
@@ -350,9 +348,7 @@ export class TicketController {
     @Request() req: any,
     @UploadedFile() attachment?: Express.Multer.File,
   ) {
-    if (attachment && !attachment.mimetype.startsWith('image/')) {
-      throw new BadRequestException('Only picture attachments (images) are allowed.');
-    }
+    if (attachment) this.ticketService.validateImageUpload(attachment);
     return this.ticketService.addComment(
       ticketId,
       dto,

@@ -86,6 +86,16 @@ import { PRIORITY_COLOR, STATUS_COLOR, TICKET_TYPE_LABELS } from '@/lib/utils/ti
 
 import { unitsApi } from '@/lib/api/units';
 
+const ALLOWED_IMAGE_FILE_ACCEPT =
+  '.jpg,.jpeg,.png,.heic,.heif,.webp,image/jpeg,image/png,image/heic,image/heif,image/webp';
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp']);
+const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp']);
+const isAllowedImageFile = (file: File) => {
+  const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
+  const mime = file.type.toLowerCase();
+  return ALLOWED_IMAGE_EXTENSIONS.has(extension) && (!mime || ALLOWED_IMAGE_MIME_TYPES.has(mime));
+};
+
 const populatedFieldSx = (populated: boolean) =>
   populated
     ? {
@@ -2169,10 +2179,10 @@ export default function TicketsPage() {
                 <input
                   type="file"
                   hidden
-                  accept="image/*"
+                  accept={ALLOWED_IMAGE_FILE_ACCEPT}
                   onChange={(e) => {
                     const files = Array.from(e.target.files ?? []);
-                    const validFiles = files.filter((f) => f.type.startsWith('image/'));
+                    const validFiles = files.filter(isAllowedImageFile);
                     if (validFiles.length > 0) {
                       setSelectedImage(validFiles[0]);
                     }
@@ -2381,12 +2391,12 @@ export default function TicketsPage() {
                 type="file"
                 hidden
                 multiple
-                accept="image/*"
+                accept={ALLOWED_IMAGE_FILE_ACCEPT}
                 onChange={(e) => {
                   const files = Array.from(e.target.files ?? []);
-                  const validFiles = files.filter((f) => f.type.startsWith('image/'));
+                  const validFiles = files.filter(isAllowedImageFile);
                   if (validFiles.length !== files.length) {
-                    enqueueSnackbar('Only image files are allowed for proof photos.', {
+                      enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed for proof photos.', {
                       variant: 'error',
                     });
                   }

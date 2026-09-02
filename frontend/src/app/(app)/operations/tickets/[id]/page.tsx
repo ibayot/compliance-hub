@@ -71,6 +71,16 @@ import {
 
 import { unitsApi } from '@/lib/api/units';
 
+const ALLOWED_IMAGE_FILE_ACCEPT =
+  '.jpg,.jpeg,.png,.heic,.heif,.webp,image/jpeg,image/png,image/heic,image/heif,image/webp';
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp']);
+const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp']);
+const isAllowedImageFile = (file: File) => {
+  const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
+  const mime = file.type.toLowerCase();
+  return ALLOWED_IMAGE_EXTENSIONS.has(extension) && (!mime || ALLOWED_IMAGE_MIME_TYPES.has(mime));
+};
+
 const STATUS_OPTS = [
   { value: 'open', label: 'Open' },
   { value: 'assigned', label: 'Assigned' },
@@ -1864,11 +1874,17 @@ export default function TicketDetailPage() {
                   <input
                     type="file"
                     hidden
-                    accept="image/*"
+                    accept={ALLOWED_IMAGE_FILE_ACCEPT}
                     onChange={(e) => {
-                      if (e.target.files && e.target.files.length > 0) {
-                        setCommentAttachment(e.target.files[0]);
+                      const file = e.target.files?.[0];
+                      if (file && isAllowedImageFile(file)) {
+                        setCommentAttachment(file);
+                      } else if (file) {
+                        enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed.', {
+                          variant: 'error',
+                        });
                       }
+                      e.target.value = '';
                     }}
                   />
                 </Button>
@@ -2081,12 +2097,12 @@ export default function TicketDetailPage() {
                 type="file"
                 hidden
                 multiple
-                accept="image/jpeg,image/png,image/webp"
+                accept={ALLOWED_IMAGE_FILE_ACCEPT}
                 onChange={(e) => {
                   const files = Array.from(e.target.files ?? []);
-                  const validFiles = files.filter((f) => f.type === 'image/jpeg' || f.type === 'image/png' || f.type === 'image/webp');
+                  const validFiles = files.filter(isAllowedImageFile);
                   if (validFiles.length !== files.length) {
-                    enqueueSnackbar('Only JPEG, PNG, and WebP image files are allowed.', {
+                    enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed.', {
                       variant: 'error',
                     });
                   }
@@ -2179,12 +2195,12 @@ export default function TicketDetailPage() {
                 type="file"
                 hidden
                 multiple
-                accept="image/jpeg,image/png,image/webp"
+                accept={ALLOWED_IMAGE_FILE_ACCEPT}
                 onChange={(e) => {
                   const files = Array.from(e.target.files ?? []);
-                  const validFiles = files.filter((f) => f.type === 'image/jpeg' || f.type === 'image/png' || f.type === 'image/webp');
+                  const validFiles = files.filter(isAllowedImageFile);
                   if (validFiles.length !== files.length) {
-                    enqueueSnackbar('Only JPEG, PNG, and WebP image files are allowed.', {
+                    enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed.', {
                       variant: 'error',
                     });
                   }

@@ -61,11 +61,11 @@ export interface UpdateUserPayload {
   middleName?: string;
   lastName?: string;
   suffix?: string;
-  phoneNumber?: string;
-  sex?: string;
-  position?: string;
-  positionFull?: string;
-  designation?: string;
+  phoneNumber?: string | null;
+  sex?: string | null;
+  position?: string | null;
+  positionFull?: string | null;
+  designation?: string | null;
 
   role?: UserRole;
   active?: boolean;

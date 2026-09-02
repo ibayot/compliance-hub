@@ -53,6 +53,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types/auth';
 import { useSse } from '@/lib/utils/useSse';
 
+const ALLOWED_IMAGE_FILE_ACCEPT =
+  '.jpg,.jpeg,.png,.heic,.heif,.webp,image/jpeg,image/png,image/heic,image/heif,image/webp';
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp']);
+const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp']);
+const isAllowedImageFile = (file: File) => {
+  const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
+  const mime = file.type.toLowerCase();
+  return ALLOWED_IMAGE_EXTENSIONS.has(extension) && (!mime || ALLOWED_IMAGE_MIME_TYPES.has(mime));
+};
+
 type RegisterType = 'legal' | 'standards' | 'internal';
 
 const PLAN_COLORS = [
@@ -820,6 +830,10 @@ export default function MovBuilderPage() {
     // Always reset so the same file can be re-selected after clearing
     e.target.value = '';
     if (!file) return;
+    if (!isAllowedImageFile(file)) {
+      enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed.', { variant: 'error' });
+      return;
+    }
     try {
       const compressed = await compressImageToBase64(file);
       if (target === 1) setHeaderImage1(compressed);
@@ -1156,7 +1170,7 @@ export default function MovBuilderPage() {
                       Header Image 1
                       <input
                         type="file"
-                        accept="image/*"
+                        accept={ALLOWED_IMAGE_FILE_ACCEPT}
                         hidden
                         onChange={(e) => handleImageUpload(e, 1)}
                       />
@@ -1191,7 +1205,7 @@ export default function MovBuilderPage() {
                       Header Image 2
                       <input
                         type="file"
-                        accept="image/*"
+                        accept={ALLOWED_IMAGE_FILE_ACCEPT}
                         hidden
                         onChange={(e) => handleImageUpload(e, 2)}
                       />
