@@ -124,8 +124,12 @@ export default function DashboardPage() {
   const isTechnicianAny = !!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct;
   const isLowerLevelTech = (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
   const isComplianceOfficer = !!myCap?.isReportsAccess;
+  const canViewDocuments = !!myCap?.isDocumentsAccess;
   // Full dashboard: super_admin or CO; generic staff (focal, etc.) see doc cards + KPI only
   const isFullDashboard = !!myCap?.isReportsAccess || !!myCap?.isReviewsAccess || !!myCap?.isTicketSettingsFocal;
+  // Ticketing-capable non-technicians without full-dashboard capabilities use the requester view.
+  const isRequesterDashboard =
+    isRegularUser || (!!myCap?.isTicketModuleAccess && !isTechnicianAny && !isFullDashboard);
   const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage;
   const isCybersecurityOfficer = !!myCap?.isIto;
   const canViewSecurityIncidents = !!myCap?.isReportsAccess;
@@ -194,7 +198,7 @@ export default function DashboardPage() {
     if (!isRegularUser && myCap === null) return;
 
     try {
-      if (isRegularUser && ticketingEnabled) {
+      if (isRequesterDashboard && ticketingEnabled) {
         try {
           const dashStats = await ticketsApi.getDashboardStats();
           setUserTicketStats(dashStats);
@@ -214,12 +218,12 @@ export default function DashboardPage() {
         kpiSummaryResult,
         userDashStatsResult,
       ] = await Promise.allSettled([
-        complianceEnabled ? documentsApi.listDocuments({ limit: 1000 }) : Promise.resolve({ data: [], total: 0 }),
+        complianceEnabled && canViewDocuments ? documentsApi.listDocuments({ limit: 1000 }) : Promise.resolve({ data: [], total: 0 }),
         complianceEnabled && canViewCybersecurityMetrics ? cybersecurityApi.getAll() : Promise.resolve(null),
         complianceEnabled && canViewSecurityIncidents ? incidentsApi.getTodayStats() : Promise.resolve(null),
-        ticketingEnabled ? ticketsApi.getStatistics() : Promise.resolve(null),
+        ticketingEnabled && isComplianceOfficer ? ticketsApi.getStatistics() : Promise.resolve(null),
         complianceEnabled ? kpiApi.dashboardSummary(periodYear, periodMonth) : Promise.resolve(null),
-        ticketingEnabled ? ticketsApi.getDashboardStats() : Promise.resolve(null),
+        ticketingEnabled && !!myCap?.isTicketModuleAccess ? ticketsApi.getDashboardStats() : Promise.resolve(null),
       ]);
 
       const docs = docsResponse.status === 'fulfilled' ? docsResponse.value.data : [];
@@ -242,7 +246,7 @@ export default function DashboardPage() {
     } catch (err) {
       console.error('Failed to silently fetch dashboard data:', err);
     }
-  }, [user, myCap, isRegularUser, isTechnicianAny, isFullDashboard, periodYear, periodMonth, appMode, ticketingEnabled, complianceEnabled]);
+  }, [user, myCap, isRegularUser, isRequesterDashboard, isTechnicianAny, isFullDashboard, periodYear, periodMonth, appMode, ticketingEnabled, complianceEnabled, canViewDocuments, isComplianceOfficer]);
 
   useSse(['TICKET_UPDATED', 'INCIDENT_SNAPSHOT_CREATED'], silentFetchDashboardData);
 
@@ -257,7 +261,7 @@ export default function DashboardPage() {
         setLoading(true);
 
         // For regular users — only fetch ticket dashboard stats
-        if (isRegularUser && ticketingEnabled) {
+        if (isRequesterDashboard && ticketingEnabled) {
           try {
             const dashStats = await ticketsApi.getDashboardStats();
             setUserTicketStats(dashStats);
@@ -280,12 +284,12 @@ export default function DashboardPage() {
           kpiSummaryResult,
           userDashStatsResult,
         ] = await Promise.allSettled([
-          complianceEnabled ? documentsApi.listDocuments({ limit: 1000 }) : Promise.resolve({ data: [], total: 0 }),
+          complianceEnabled && canViewDocuments ? documentsApi.listDocuments({ limit: 1000 }) : Promise.resolve({ data: [], total: 0 }),
           complianceEnabled && canViewCybersecurityMetrics ? cybersecurityApi.getAll() : Promise.resolve(null),
           complianceEnabled && canViewSecurityIncidents ? incidentsApi.getTodayStats() : Promise.resolve(null),
-          ticketingEnabled ? ticketsApi.getStatistics() : Promise.resolve(null), // Fetch unfiltered stats for top cards
+          ticketingEnabled && isComplianceOfficer ? ticketsApi.getStatistics() : Promise.resolve(null), // Fetch unfiltered stats for top cards
           complianceEnabled ? kpiApi.dashboardSummary(periodYear, periodMonth) : Promise.resolve(null),
-          ticketingEnabled ? ticketsApi.getDashboardStats() : Promise.resolve(null),
+          ticketingEnabled && !!myCap?.isTicketModuleAccess ? ticketsApi.getDashboardStats() : Promise.resolve(null),
         ]);
 
         const docs = docsResponse.status === 'fulfilled' ? docsResponse.value.data : [];
@@ -328,11 +332,11 @@ export default function DashboardPage() {
     };
 
     fetchDashboardData();
-  }, [user?.id, myCap, isRegularUser, isTechnicianAny, isFullDashboard, periodYear, periodMonth, appMode, ticketingEnabled, complianceEnabled]);
+  }, [user?.id, myCap, isRegularUser, isRequesterDashboard, isTechnicianAny, isFullDashboard, periodYear, periodMonth, appMode, ticketingEnabled, complianceEnabled, canViewDocuments, isComplianceOfficer]);
 
   // Fetch IT Help Desk Overview stats when filters change
   useEffect(() => {
-    if (appMode === 'loading' || !isFullDashboard || !ticketingEnabled) return;
+    if (appMode === 'loading' || !isFullDashboard || !ticketingEnabled || !isComplianceOfficer) return;
     setItStatsLoading(true);
     const filters: any = {};
     if (itStatsMode === 'year') {
@@ -358,16 +362,16 @@ export default function DashboardPage() {
       .finally(() => {
         setItStatsLoading(false);
       });
-  }, [appMode, isFullDashboard, ticketingEnabled, itStatsMode, itStatsYear, itStatsSemester, itStatsQuarter, itStatsMonth]);
+  }, [appMode, isFullDashboard, ticketingEnabled, isComplianceOfficer, itStatsMode, itStatsYear, itStatsSemester, itStatsQuarter, itStatsMonth]);
 
   useEffect(() => {
-    if (!isRegularUser) return;
+    if (!isRequesterDashboard) return;
     const pendingCount = userTicketStats?.pendingSatisfactionTickets?.length ?? 0;
     // Suppress the reminder if the user is forced to change their password
     if (pendingCount > 0 && !user?.requiresPasswordChange) {
       setPendingSatReminderOpen(true);
     }
-  }, [isRegularUser, userTicketStats, user?.requiresPasswordChange]);
+  }, [isRequesterDashboard, userTicketStats, user?.requiresPasswordChange]);
 
   // Fetch monthly assigned-ticket stats for technicians whenever period changes
   useEffect(() => {
@@ -393,7 +397,7 @@ export default function DashboardPage() {
   // ─────────────────────────────────────────────
   // Regular User Dashboard
   // ─────────────────────────────────────────────
-  if (isRegularUser) {
+  if (isRequesterDashboard) {
     const s = userTicketStats;
     const fillRate = s?.satisfactionFillRate ?? 0;
     const pendingCount = s?.pendingSatisfactionTickets?.length ?? 0;
@@ -787,7 +791,7 @@ export default function DashboardPage() {
       )}
 
       {/* Main Stats — hidden for all technicians */}
-      {!isTechnicianAny && (
+      {!isTechnicianAny && complianceEnabled && canViewDocuments && (
         <Grid container spacing={3} mb={4}>
           <Grid item xs={12} md={6} lg={3}>
             <Card>
@@ -1000,7 +1004,7 @@ export default function DashboardPage() {
       )}
 
       {/* IT Help Desk Metrics */}
-      {isFullDashboard && ticketMetrics && appMode !== 'compliance_only' && (
+      {isFullDashboard && isComplianceOfficer && ticketMetrics && appMode !== 'compliance_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
@@ -1562,7 +1566,7 @@ export default function DashboardPage() {
       )}
 
       {/* Staff / Technician Quick Actions */}
-      {!isRegularUser && (
+      {!isRequesterDashboard && (
         <Grid container spacing={3} mb={4}>
           <Grid item xs={12} md={4}>
             <Card>

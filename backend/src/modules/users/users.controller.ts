@@ -99,6 +99,14 @@ export class UsersController {
     return this.usersService.searchEmails(q);
   }
 
+  /** Returns safe active-user options for ticket proxy creation. */
+  @Get('ticket-requesters')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isTicketModuleAccess')
+  getTicketRequesters() {
+    return this.usersService.findTicketRequesters();
+  }
+
   @Get()
   @UseGuards(CapabilityGuard)
   @RequireCapability(['isUserManagementView', 'isUserManagementAdmin'])

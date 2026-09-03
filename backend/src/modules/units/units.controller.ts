@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { UnitsService } from './units.service';
 import { CreateUnitDto } from './dto/create-unit.dto';
@@ -23,8 +23,11 @@ export class UnitsController {
 
   @Get()
   @RequireCapability(['isUnitsAccess', 'isUnitsManage'])
-  findAll() {
-    return this.unitsService.findAll();
+  findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.unitsService.findAll(
+      page === undefined ? undefined : Number(page),
+      limit === undefined ? undefined : Number(limit),
+    );
   }
 
   @Get(':id')

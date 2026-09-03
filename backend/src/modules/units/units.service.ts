@@ -41,10 +41,29 @@ export class UnitsService {
     return await this.unitsRepository.save(unit);
   }
 
-  async findAll(): Promise<Unit[]> {
-    return await this.unitsRepository.find({
-      where: { active: true },
+  async findAll(
+    page?: number,
+    limit?: number,
+  ): Promise<Unit[] | { data: Unit[]; total: number; page: number; limit: number }> {
+    const where = { active: true };
+    const order = { name: 'ASC' as const };
+
+    // Preserve the existing array response for dropdowns and other callers
+    // that intentionally request the complete active-unit list.
+    if (page === undefined && limit === undefined) {
+      return await this.unitsRepository.find({ where, order });
+    }
+
+    const safePage = Number.isFinite(page) ? Math.max(1, Math.floor(page as number)) : 1;
+    const safeLimit = Number.isFinite(limit) ? Math.min(100, Math.max(1, Math.floor(limit as number))) : 25;
+    const [data, total] = await this.unitsRepository.findAndCount({
+      where,
+      order,
+      skip: (safePage - 1) * safeLimit,
+      take: safeLimit,
     });
+
+    return { data, total, page: safePage, limit: safeLimit };
   }
 
   async findOne(id: number): Promise<Unit> {

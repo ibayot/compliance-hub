@@ -201,6 +201,11 @@ export const usersApi = {
     return response.data;
   },
 
+  listTicketRequesters: async (): Promise<UserRecord[]> => {
+    const response = await apiClient.get('/users/ticket-requesters');
+    return response.data;
+  },
+
   getUserById: async (id: number): Promise<UserRecord> => {
     const response = await apiClient.get(`/users/${id}`);
     return response.data;

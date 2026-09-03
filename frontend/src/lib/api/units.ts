@@ -40,7 +40,13 @@ export const unitsApi = {
    */
   listUnits: async (params?: ListUnitsParams): Promise<ListUnitsResponse> => {
     const response = await apiClient.get('/units', { params });
-    const data = response.data as Unit[];
+    const responseData = response.data as Unit[] | ListUnitsResponse;
+
+    if (!Array.isArray(responseData)) {
+      return responseData;
+    }
+
+    const data = responseData;
 
     return {
       data,

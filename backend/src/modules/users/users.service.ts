@@ -536,6 +536,30 @@ const previousValue = value;
     }
   }
 
+  /**
+   * Returns only the fields needed by the ticket proxy requester selector.
+   * This deliberately does not expose the full user-management payload.
+   */
+  async findTicketRequesters(): Promise<
+    Array<Pick<User, 'id' | 'email' | 'firstName' | 'lastName' | 'role' | 'active'>>
+  > {
+    const users = await this.usersRepository.find({
+      where: { active: true },
+      order: { lastName: 'ASC', firstName: 'ASC', email: 'ASC' },
+    });
+
+    return users
+      .filter((user) => user.role !== UserRole.SUPER_ADMIN)
+      .map(({ id, email, firstName, lastName, role, active }) => ({
+        id,
+        email,
+        firstName,
+        lastName,
+        role,
+        active,
+      }));
+  }
+
   /** Look up a role definition by value string. */
   async findRoleDefinition(value: string): Promise<RoleDefinitionEntity | null> {
     return this.roleDefinitionsRepository.findOne({ where: { value } });

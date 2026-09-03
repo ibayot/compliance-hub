@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Accordion,
   AccordionDetails,
@@ -29,6 +29,7 @@ import {
   TextField,
   Tooltip,
   Typography,
+  TablePagination,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import {
@@ -60,7 +61,7 @@ const FREQ_LABELS: Record<SubmissionFrequency, string> = {
 };
 
 // ---------- Reportorial Doc Types panel per unit ----------
-function DocTypesPanel({ unit, canManage }: { unit: Unit; canManage: boolean }) {
+function DocTypesPanel({ unit, canView, canManage }: { unit: Unit; canView: boolean; canManage: boolean }) {
   const { enqueueSnackbar } = useSnackbar();
   const [docTypes, setDocTypes] = useState<ReportorialDocType[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,7 +77,8 @@ function DocTypesPanel({ unit, canManage }: { unit: Unit; canManage: boolean }) 
     submission_frequency: 'monthly' as SubmissionFrequency,
   });
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (!canView) return;
     setLoading(true);
     try {
       const data = await docTypesApi.byUnit(unit.id);
@@ -84,13 +86,12 @@ function DocTypesPanel({ unit, canManage }: { unit: Unit; canManage: boolean }) 
     } finally {
       setLoading(false);
     }
-  };
+  }, [canView, unit.id]);
 
   // Load document types automatically when the accordion panel mounts (expands).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const openCreate = () => {
     setEditing(null);
@@ -328,10 +329,14 @@ export default function UnitsPage() {
   const { enqueueSnackbar } = useSnackbar();
   const { myCap } = useAuth();
   const canManageUnits = !!myCap?.isUnitsManage;
+  const canViewDocumentTypes = !!myCap?.isDocumentsAccess || !!myCap?.isDocumentTypesManage;
   const canManageDocumentTypes = !!myCap?.isDocumentTypesManage;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [units, setUnits] = useState<Unit[]>([]);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [totalUnits, setTotalUnits] = useState(0);
   const [open, setOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
   const [name, setName] = useState('');
@@ -341,19 +346,24 @@ export default function UnitsPage() {
   const [deleteConfirmUnit, setDeleteConfirmUnit] = useState<Unit | null>(null);
   const [deleteUnitConfirmed, setDeleteUnitConfirmed] = useState(false);
 
-  const loadUnits = async () => {
+  const loadUnits = useCallback(async (targetPage = page, targetRowsPerPage = rowsPerPage) => {
     try {
       setLoading(true);
-      const data = await unitsApi.listAll();
-      setUnits(data);
+      const response = await unitsApi.listUnits({ page: targetPage + 1, limit: targetRowsPerPage });
+      if (response.data.length === 0 && targetPage > 0) {
+        setPage(targetPage - 1);
+        return;
+      }
+      setUnits(response.data);
+      setTotalUnits(response.total);
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, rowsPerPage]);
 
   useEffect(() => {
-    loadUnits();
-  }, []);
+    loadUnits(page, rowsPerPage);
+  }, [loadUnits, page, rowsPerPage]);
 
   const handleCreate = () => {
     setEditingUnit(null);
@@ -475,7 +485,13 @@ export default function UnitsPage() {
                 </Box>
               </AccordionSummary>
               <AccordionDetails sx={{ overflow: 'hidden' }}>
-                <DocTypesPanel unit={unit} canManage={canManageDocumentTypes} />
+                {canViewDocumentTypes ? (
+                  <DocTypesPanel unit={unit} canView={canViewDocumentTypes} canManage={canManageDocumentTypes} />
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    You do not have access to reportorial document types.
+                  </Typography>
+                )}
               </AccordionDetails>
             </Accordion>
           ))}
@@ -484,6 +500,18 @@ export default function UnitsPage() {
               <Typography color="text.secondary">No units found. Add your first unit.</Typography>
             </Paper>
           )}
+          <TablePagination
+            component="div"
+            count={totalUnits}
+            page={page}
+            onPageChange={(_, nextPage) => setPage(nextPage)}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(event) => {
+              setRowsPerPage(Number(event.target.value));
+              setPage(0);
+            }}
+            rowsPerPageOptions={[10, 25, 50]}
+          />
         </Box>
       )}
 
