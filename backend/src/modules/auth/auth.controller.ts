@@ -37,11 +37,11 @@ export class AuthController {
   ) {}
 
   private accessCookieName(): string {
-    return this.configService.get<string>('AUTH_ACCESS_COOKIE_NAME') || 'auth_access';
+    return this.configService.get<string>('AUTH_ACCESS_COOKIE_NAME') as string;
   }
 
   private refreshCookieName(): string {
-    return this.configService.get<string>('AUTH_REFRESH_COOKIE_NAME') || 'auth_refresh';
+    return this.configService.get<string>('AUTH_REFRESH_COOKIE_NAME') as string;
   }
 
   private completeBrowserAuth(result: any, clientPlatform: string | undefined, res: Response) {

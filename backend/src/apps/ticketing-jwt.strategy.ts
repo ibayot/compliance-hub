@@ -13,7 +13,7 @@ function getCookieValue(cookieHeader: string | undefined, cookieName: string): s
 @Injectable()
 export class TicketingJwtStrategy extends PassportStrategy(Strategy) {
   constructor(configService: ConfigService) {
-    const accessCookieName = configService.get<string>('AUTH_ACCESS_COOKIE_NAME') || 'auth_access';
+    const accessCookieName = configService.get<string>('AUTH_ACCESS_COOKIE_NAME') as string;
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         ExtractJwt.fromAuthHeaderAsBearerToken(),

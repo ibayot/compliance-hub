@@ -23,7 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     @InjectRepository(TokenBlacklist)
     private readonly tokenBlacklistRepo: Repository<TokenBlacklist>,
   ) {
-    const accessCookieName = configService.get<string>('AUTH_ACCESS_COOKIE_NAME') || 'auth_access';
+    const accessCookieName = configService.get<string>('AUTH_ACCESS_COOKIE_NAME') as string;
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         ExtractJwt.fromAuthHeaderAsBearerToken(),
