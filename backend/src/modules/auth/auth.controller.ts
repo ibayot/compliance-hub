@@ -18,18 +18,37 @@ import { GoogleLoginDto } from './dto/google-login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
+import { ConfigService } from '@nestjs/config';
+function getCookieValue(cookieHeader: string | undefined, cookieName: string): string | null {
+  return cookieHeader
+    ?.split(';')
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(`${cookieName}=`))
+    ?.slice(cookieName.length + 1) ?? null;
+}
 
 @ApiTags('auth')
 @Controller('auth')
 @UseInterceptors(ClassSerializerInterceptor)
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  private accessCookieName(): string {
+    return this.configService.get<string>('AUTH_ACCESS_COOKIE_NAME') || 'auth_access';
+  }
+
+  private refreshCookieName(): string {
+    return this.configService.get<string>('AUTH_REFRESH_COOKIE_NAME') || 'auth_refresh';
+  }
 
   private completeBrowserAuth(result: any, clientPlatform: string | undefined, res: Response) {
     if (clientPlatform !== 'browser' || !result?.accessToken || !result?.refreshToken) return result;
     const options = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/' };
-    res.cookie('auth_access', result.accessToken, options);
-    res.cookie('auth_refresh', result.refreshToken, { ...options, path: '/api/auth' });
+    res.cookie(this.accessCookieName(), result.accessToken, options);
+    res.cookie(this.refreshCookieName(), result.refreshToken, { ...options, path: '/api/auth' });
     const { accessToken, refreshToken, ...safeResult } = result;
     return safeResult;
   }
@@ -44,7 +63,7 @@ export class AuthController {
 
   @Post('refresh')
   async refresh(@Body('refreshToken') refreshToken: string, @Request() req: any, @Res({ passthrough: true }) res: Response) {
-    const token = refreshToken || req.headers?.cookie?.split(';').map((value: string) => value.trim()).find((value: string) => value.startsWith('auth_refresh='))?.slice('auth_refresh='.length);
+    const token = refreshToken || getCookieValue(req.headers?.cookie, this.refreshCookieName()) || '';
     const clientPlatform = req.headers?.['x-client-platform'];
     return this.completeBrowserAuth(await this.authService.refresh(token), clientPlatform, res);
   }
@@ -85,14 +104,10 @@ export class AuthController {
   async logout(@Request() req: any, @Res({ passthrough: true }) res: Response) {
     const authHeader: string = req.headers?.authorization || '';
     const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    const cookieToken = String(req.headers?.cookie || '')
-      .split(';')
-      .map((part: string) => part.trim())
-      .find((part: string) => part.startsWith('auth_access='))
-      ?.slice('auth_access='.length) || '';
+    const cookieToken = getCookieValue(req.headers?.cookie, this.accessCookieName()) || '';
     const result = await this.authService.logout(bearerToken || cookieToken);
-    res.clearCookie('auth_access', { path: '/' });
-    res.clearCookie('auth_refresh', { path: '/api/auth' });
+    res.clearCookie(this.accessCookieName(), { path: '/' });
+    res.clearCookie(this.refreshCookieName(), { path: '/api/auth' });
     return result;
   }
 

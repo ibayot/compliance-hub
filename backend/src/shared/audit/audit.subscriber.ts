@@ -9,6 +9,13 @@ import {
 import { Injectable } from '@nestjs/common';
 import { auditContext } from './audit.context';
 import { redactAuditValue } from './audit-redaction';
+function getAuditLogTableName(): string {
+  const databaseName = process.env.AUDIT_DB_DATABASE?.trim();
+  if (!databaseName || !/^[A-Za-z0-9_]+$/.test(databaseName)) {
+    throw new Error('AUDIT_DB_DATABASE must be set to a valid database name');
+  }
+  return `\`${databaseName}\`.\`audit_log\``;
+}
 
 @Injectable()
 @EventSubscriber()
@@ -151,7 +158,7 @@ export class AuditVariableSubscriber implements EntitySubscriberInterface {
 
     try {
       await event.manager.query(
-        `INSERT INTO 02_db_audit_stg.audit_log 
+        `INSERT INTO ${getAuditLogTableName()}
           (user_email, action, database_name, table_name, operation_type, row_id, description, old_values, new_values, ip_address, session_id)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [

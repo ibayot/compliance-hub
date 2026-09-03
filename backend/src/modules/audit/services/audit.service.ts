@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { redactAuditJson } from '../../../shared/audit/audit-redaction';
+function getAuditLogTableName(): string {
+  const databaseName = process.env.AUDIT_DB_DATABASE?.trim();
+  if (!databaseName || !/^[A-Za-z0-9_]+$/.test(databaseName)) {
+    throw new Error('AUDIT_DB_DATABASE must be set to a valid database name');
+  }
+  return `\`${databaseName}\`.\`audit_log\``;
+}
 
 const AUDITED_DATABASES = [
   process.env.TICKETING_DB_DATABASE || '02_db_compliance_hub_ticketing_prod',
@@ -42,13 +49,13 @@ export class AuditService {
         ip_address as "ipAddress", 
         session_id as "sessionId", 
         timestamp as "createdAt"
-      FROM 02_db_audit_stg.audit_log
+      FROM ${getAuditLogTableName()}
       WHERE ${AUDITED_DATABASE_PREDICATE}
     `;
 
     const countSqlBase = `
       SELECT COUNT(*) as total
-      FROM 02_db_audit_stg.audit_log
+      FROM ${getAuditLogTableName()}
       WHERE ${AUDITED_DATABASE_PREDICATE}
     `;
 
@@ -110,7 +117,7 @@ export class AuditService {
   async getAuditedTables() {
     const sql = `
       SELECT DISTINCT table_name as "tableName"
-      FROM 02_db_audit_stg.audit_log
+      FROM ${getAuditLogTableName()}
       WHERE ${AUDITED_DATABASE_PREDICATE}
       ORDER BY table_name ASC
     `;

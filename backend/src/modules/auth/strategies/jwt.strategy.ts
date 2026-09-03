@@ -7,6 +7,13 @@ import { UsersService } from '../../users/users.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TokenBlacklist } from '../entities/token-blacklist.entity';
+function getCookieValue(cookieHeader: string | undefined, cookieName: string): string | null {
+  return cookieHeader
+    ?.split(';')
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(`${cookieName}=`))
+    ?.slice(cookieName.length + 1) ?? null;
+}
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -16,10 +23,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     @InjectRepository(TokenBlacklist)
     private readonly tokenBlacklistRepo: Repository<TokenBlacklist>,
   ) {
+    const accessCookieName = configService.get<string>('AUTH_ACCESS_COOKIE_NAME') || 'auth_access';
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         ExtractJwt.fromAuthHeaderAsBearerToken(),
-        (request: any) => request?.headers?.cookie?.split(';').map((value: string) => value.trim()).find((value: string) => value.startsWith('auth_access='))?.slice('auth_access='.length),
+        (request: any) => getCookieValue(request?.headers?.cookie, accessCookieName),
         ExtractJwt.fromUrlQueryParameter('token'),
       ]),
       ignoreExpiration: false,

@@ -2,14 +2,22 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+function getCookieValue(cookieHeader: string | undefined, cookieName: string): string | null {
+  return cookieHeader
+    ?.split(';')
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(`${cookieName}=`))
+    ?.slice(cookieName.length + 1) ?? null;
+}
 
 @Injectable()
 export class ComplianceJwtStrategy extends PassportStrategy(Strategy) {
   constructor(configService: ConfigService) {
+    const accessCookieName = configService.get<string>('AUTH_ACCESS_COOKIE_NAME') || 'auth_access';
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         ExtractJwt.fromAuthHeaderAsBearerToken(),
-        (request: any) => request?.headers?.cookie?.split(';').map((value: string) => value.trim()).find((value: string) => value.startsWith('auth_access='))?.slice('auth_access='.length),
+        (request: any) => getCookieValue(request?.headers?.cookie, accessCookieName),
       ]),
       ignoreExpiration: false,
       secretOrKey: configService.get('JWT_SECRET'),

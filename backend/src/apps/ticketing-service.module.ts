@@ -29,6 +29,9 @@ import { AuditVariableSubscriber } from '../shared/audit/audit.subscriber';
         DB_SYNCHRONIZE: Joi.boolean().default(false),
         JWT_SECRET: Joi.string().min(16).required(),
         CORS_ORIGIN: Joi.string().required(),
+        AUDIT_DB_DATABASE: Joi.string().pattern(/^[A-Za-z0-9_]+$/).required(),
+        AUTH_ACCESS_COOKIE_NAME: Joi.string().pattern(/^[A-Za-z0-9_-]+$/).default('auth_access'),
+        AUTH_REFRESH_COOKIE_NAME: Joi.string().pattern(/^[A-Za-z0-9_-]+$/).default('auth_refresh'),
       }),
     }),
     TypeOrmModule.forRootAsync({

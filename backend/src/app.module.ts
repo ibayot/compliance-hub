@@ -50,6 +50,9 @@ import { AuditVariableSubscriber } from './shared/audit/audit.subscriber';
         RATE_LIMIT_WINDOW_MS: Joi.number().default(15 * 60 * 1000),
         RATE_LIMIT_MAX_REQUESTS: Joi.number().default(1000),
         DB_LOGGING: Joi.boolean().default(false),
+        AUDIT_DB_DATABASE: Joi.string().pattern(/^[A-Za-z0-9_]+$/).required(),
+        AUTH_ACCESS_COOKIE_NAME: Joi.string().pattern(/^[A-Za-z0-9_-]+$/).default('auth_access'),
+        AUTH_REFRESH_COOKIE_NAME: Joi.string().pattern(/^[A-Za-z0-9_-]+$/).default('auth_refresh'),
       }),
     }),
 
