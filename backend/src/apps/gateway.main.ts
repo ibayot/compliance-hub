@@ -12,7 +12,8 @@ import axios from 'axios';
 import { docsAuthMiddleware } from '../common/middleware/docs-auth.middleware';
 import { getAppVersion } from '../common/app-version';
 
-let vaptModeCache = process.env.VAPT_MODE === 'true';
+const vaptConfigPollingEnabled = String(process.env.VAPT_CONFIG_POLLING_ENABLED || '').trim().toLowerCase() === 'true';
+let vaptModeCache = vaptConfigPollingEnabled && process.env.VAPT_MODE === 'true';
 
 async function pollVaptMode() {
   let connection;
@@ -46,7 +47,9 @@ async function pollVaptMode() {
   }
 }
 
-setInterval(pollVaptMode, 5000);
+if (vaptConfigPollingEnabled) {
+  setInterval(pollVaptMode, 5000);
+}
 
 const SERVICE_DOMAINS: Record<string, string[]> = {
   users: ['/api/auth', '/api/users', '/api/units', '/api/audit-logs'],

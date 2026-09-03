@@ -22,6 +22,8 @@ ARG VITE_GOOGLE_CLIENT_ID
 ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 ARG VITE_PROFILE_IMAGE_URL
 ENV VITE_PROFILE_IMAGE_URL=$VITE_PROFILE_IMAGE_URL
+ARG VITE_VAPT_SETTINGS_ENABLED=false
+ENV VITE_VAPT_SETTINGS_ENABLED=$VITE_VAPT_SETTINGS_ENABLED
 # We need environment variables to be passed at build time for the frontend,
 # but since it's a runtime gateway, we can also point it locally or to the domain.
 RUN npm run build

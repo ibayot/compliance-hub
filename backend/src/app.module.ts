@@ -75,7 +75,7 @@ import { AuditVariableSubscriber } from './shared/audit/audit.subscriber';
           database: configService.get('DB_DATABASE'),
           autoLoadEntities: true,
           synchronize: isDevelopment && Boolean(synchronizeFromEnv),
-          logging: true, // HARDCODED TO TRUE FOR DEBUGGING
+          logging: Boolean(configService.get<boolean>('DB_LOGGING')),
         };
       },
     }),

@@ -302,6 +302,7 @@ function SecuritySettingsCard() {
   const [saving, setSaving] = useState(false);
 
   const canManage = Boolean(myCap?.isSecuritySettingsAccess) || Boolean(myCap?.isTicketSettingsFocal);
+  const vaptSettingsEnabled = String(import.meta.env.VITE_VAPT_SETTINGS_ENABLED || '').trim().toLowerCase() === 'true';
 
   useEffect(() => {
     if (canManage) {
@@ -325,7 +326,9 @@ function SecuritySettingsCard() {
     }
     setSaving(true);
     try {
-      await usersApi.updateSecurityConfig({ defaultPassword, mfaTestMode, vaptMode, appMode } as any);
+      const payload: Record<string, unknown> = { defaultPassword, mfaTestMode, appMode };
+      if (vaptSettingsEnabled) payload.vaptMode = vaptMode;
+      await usersApi.updateSecurityConfig(payload as any);
       enqueueSnackbar('Security settings updated successfully', { variant: 'success' });
       setTimeout(() => window.location.reload(), 1000);
     } catch (err: any) {
@@ -371,7 +374,8 @@ function SecuritySettingsCard() {
                 label="Enable MFA Test Mode"
               />
             </Grid>
-            <Grid item xs={12} md={4}>
+            {vaptSettingsEnabled && (
+<Grid item xs={12} md={4}>
               <FormControlLabel
                 control={
                   <Checkbox
@@ -383,6 +387,7 @@ function SecuritySettingsCard() {
                 label="Enable VAPT Mode (Skip DDoS & shorter JWT)"
               />
             </Grid>
+            )}
             <Grid item xs={12} md={4}>
               <FormControl fullWidth size="small">
                 <InputLabel>App Mode</InputLabel>
