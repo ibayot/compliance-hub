@@ -14,4 +14,8 @@ export class CreateUnitDto {
   @IsBoolean()
   @IsOptional()
   active?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  hasReportorialRequirements?: boolean;
 }

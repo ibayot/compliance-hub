@@ -67,6 +67,7 @@ import { authApi } from '@/lib/api/auth';
 import { ticketSettingsApi } from '@/app/api/references';
 import { usersApi, RoleDefinition, RoleCapabilityRecord } from '@/lib/api/users';
 import { unitsApi, Unit } from '@/lib/api/units';
+import { isReportorialUnit, unitsForUserRole } from '@/lib/utils/unit-visibility';
 import { UserRole } from '@/lib/types/auth';
 import { useSse } from '@/lib/utils/useSse';
 import { Capacitor } from '@capacitor/core';
@@ -1259,6 +1260,11 @@ function FocalUserManagementCard() {
     return roles.filter((r) => r.value === 'user');
   }, [roles, isUserManagementAdmin]);
 
+  const selectableUnits = useMemo(
+    () => unitsForUserRole(units, editUser?.role),
+    [units, editUser?.role],
+  );
+
   const canModifyUser = useCallback((u: any) => {
     // No one can modify Super Admin except Super Admin
     if (u.role === 'super_admin' && !isSuperAdmin) return false;
@@ -1375,6 +1381,10 @@ function FocalUserManagementCard() {
 
   const handleEditSave = async () => {
     if (!editUser) return;
+    if (editUser.id === currentUser?.id && editUser.unitIds?.length !== 1) {
+      enqueueSnackbar('A unit is required before saving your profile.', { variant: 'warning' });
+      return;
+    }
     try {
       setEditing(true);
       await usersApi.updateUser(editUser.id, {
@@ -1983,9 +1993,18 @@ function FocalUserManagementCard() {
                   <Select
                     value={editUser?.role || ''}
                     label="Role"
-                    onChange={(e) =>
-                      setEditUser((prev: any) => ({ ...prev, role: e.target.value as UserRole }))
-                    }
+                    onChange={(e) => {
+                      const nextRole = e.target.value as UserRole;
+                      setEditUser((prev: any) => {
+                        const currentUnit = units.find((unit) => unit.id === prev?.unitIds?.[0]);
+                        const keepsUnit = currentUnit && isReportorialUnit(currentUnit) === (nextRole !== UserRole.USER);
+                        return {
+                          ...prev,
+                          role: nextRole,
+                          unitIds: keepsUnit ? [currentUnit.id] : [],
+                        };
+                      });
+                    }}
                   >
                     {assignableRoles.map((r) => (
                       <MenuItem key={r.value} value={r.value}>
@@ -2013,7 +2032,7 @@ function FocalUserManagementCard() {
                     <MenuItem value="">
                       <em>None</em>
                     </MenuItem>
-                    {units.map((unit) => (
+                    {selectableUnits.map((unit) => (
                       <MenuItem key={unit.id} value={unit.id}>
                         {unit.name}
                       </MenuItem>
@@ -2234,7 +2253,7 @@ function MobileSettingsCard() {
 function ProfilePreferencesCard() {
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
-  const [units, setUnits] = useState<{ id: number; name: string }[]>([]);
+  const [units, setUnits] = useState<{ id: number; name: string; hasReportorialRequirements?: boolean }[]>([]);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     phoneNumber: '',
@@ -2263,10 +2282,14 @@ function ProfilePreferencesCard() {
   const handleSave = async () => {
     if (!user) return;
     const phoneNumber = form.phoneNumber.replace(/\D/g, '').slice(0, 10);
+    if (form.unitId === '') {
+      enqueueSnackbar('A unit is required before saving your profile.', { variant: 'warning' });
+      return;
+    }
+
     const fieldsBeingCleared = [
       !phoneNumber && user.phoneNumber ? 'Phone Number' : null,
       !form.sex.trim() && user.sex ? 'Sex' : null,
-      form.unitId === '' && (user.units?.length ?? 0) > 0 ? 'Unit/Section' : null,
       !form.position.trim() && user.position ? 'Position' : null,
       !form.positionFull.trim() && user.positionFull ? 'Position Full' : null,
       !form.designation.trim() && user.designation ? 'Designation' : null,
@@ -2286,7 +2309,7 @@ function ProfilePreferencesCard() {
       await usersApi.updateUser(user.id, {
         phoneNumber: phoneNumber || null,
         sex: form.sex || null,
-        unitIds: form.unitId === '' ? [] : [Number(form.unitId)],
+        unitIds: [Number(form.unitId)],
         position: form.position.trim() || null,
         positionFull: form.positionFull.trim() || null,
         designation: form.designation.trim() || null,
@@ -2298,6 +2321,8 @@ function ProfilePreferencesCard() {
       setSaving(false);
     }
   };
+
+  const availableUnits = unitsForUserRole(units, user?.role);
 
   return (
     <Card elevation={2}>
@@ -2330,11 +2355,11 @@ function ProfilePreferencesCard() {
             </FormControl>
           </Grid>
           <Grid item xs={12} md={4}>
-            <FormControl fullWidth>
+            <FormControl fullWidth required>
               <InputLabel>Unit/Section</InputLabel>
               <Select value={form.unitId} label="Unit/Section" onChange={(e) => setForm((prev) => ({ ...prev, unitId: e.target.value as number | '' }))}>
-                <MenuItem value=""><em>None</em></MenuItem>
-                {units.map((unit) => <MenuItem key={unit.id} value={unit.id}>{unit.name}</MenuItem>)}
+                <MenuItem value=""><em>Select a unit</em></MenuItem>
+                {availableUnits.map((unit) => <MenuItem key={unit.id} value={unit.id}>{unit.name}</MenuItem>)}
               </Select>
             </FormControl>
           </Grid>

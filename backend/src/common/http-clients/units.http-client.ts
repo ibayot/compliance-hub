@@ -4,6 +4,7 @@ export interface UnitStub {
   id: number;
   name: string;
   code?: string | null;
+  hasReportorialRequirements?: boolean;
 }
 
 @Injectable()

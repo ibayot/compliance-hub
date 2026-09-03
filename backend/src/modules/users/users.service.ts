@@ -369,6 +369,44 @@ const previousValue = value;
     return normalized ? normalized : null;
   }
 
+  private async resolveUnitSelection(
+    unitIds: unknown,
+    role: string,
+    required: boolean,
+  ): Promise<Unit[]> {
+    if (!Array.isArray(unitIds)) {
+      throw new BadRequestException('Unit selection must contain one unit.');
+    }
+    if (unitIds.length > 1) {
+      throw new BadRequestException('A user can be assigned to only one unit.');
+    }
+    if (required && unitIds.length !== 1) {
+      throw new BadRequestException('A unit is required before saving this profile.');
+    }
+    if (unitIds.length === 0) return [];
+    if (unitIds.some((id) => !Number.isInteger(id))) {
+      throw new BadRequestException('The selected unit is invalid.');
+    }
+
+    const units = await this.unitsRepository.find({
+      where: { id: In(unitIds as number[]), active: true },
+    });
+    if (units.length !== 1) {
+      throw new BadRequestException('The selected unit is not available.');
+    }
+
+    const requiresReportorialUnit = role !== UserRole.USER;
+    if (Boolean(units[0].hasReportorialRequirements) !== requiresReportorialUnit) {
+      throw new BadRequestException(
+        requiresReportorialUnit
+          ? 'RICTMS users can only be assigned to reportorial units.'
+          : 'Regular users can only be assigned to regular requester units.',
+      );
+    }
+
+    return units;
+  }
+
   async create(createUserDto: CreateUserDto): Promise<User> {
     // Check if user already exists
     const existingUser = await this.usersRepository.findOne({
@@ -397,9 +435,11 @@ const previousValue = value;
           existingUser.autoAssignmentEligible = createUserDto.autoAssignmentEligible;
 
         if (createUserDto.unitIds !== undefined) {
-          existingUser.units = await this.unitsRepository.find({
-            where: { id: In(createUserDto.unitIds) },
-          });
+          existingUser.units = await this.resolveUnitSelection(
+            createUserDto.unitIds,
+            existingUser.role,
+            false,
+          );
         }
         return this.usersRepository.save(existingUser);
       }
@@ -426,12 +466,11 @@ const previousValue = value;
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Get units if provided
+    // Get one appropriately classified unit if provided. A new account may
+    // remain unitless until the user completes the forced profile step.
     let units: Unit[] = [];
-    if (createUserDto.unitIds && createUserDto.unitIds.length > 0) {
-      units = await this.unitsRepository.find({
-        where: { id: In(createUserDto.unitIds) },
-      });
+    if (createUserDto.unitIds !== undefined) {
+      units = await this.resolveUnitSelection(createUserDto.unitIds, createUserDto.role, false);
     }
 
     const user = this.usersRepository.create({
@@ -614,9 +653,12 @@ const previousValue = value;
   }
 
   /** Units available for self-service profile selection. This is not the Units administration endpoint. */
-  async getProfileUnits(): Promise<Unit[]> {
+  async getProfileUnits(role: string): Promise<Unit[]> {
     return this.unitsRepository.find({
-      where: { active: true },
+      where: {
+        active: true,
+        hasReportorialRequirements: role !== UserRole.USER,
+      },
       order: { name: 'ASC' },
     });
   }
@@ -764,9 +806,14 @@ const previousValue = value;
     await this.usersRepository.save(user);
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
+  async update(
+    id: number,
+    updateUserDto: UpdateUserDto,
+    options: { requireUnit?: boolean } = {},
+  ): Promise<User> {
     const user = await this.findOne(id);
     const dto = updateUserDto as any;
+    const targetRole = dto.role ?? user.role;
 
     // Update basic fields
     if (dto.email) user.email = dto.email;
@@ -799,10 +846,24 @@ const previousValue = value;
       user.passwordHash = await bcrypt.hash(dto.password, 10);
     }
 
-    if (dto.unitIds) {
-      user.units = await this.unitsRepository.find({
-        where: { id: In(dto.unitIds) },
-      });
+    if (dto.unitIds !== undefined) {
+      user.units = await this.resolveUnitSelection(dto.unitIds, targetRole, Boolean(options.requireUnit));
+    } else if (options.requireUnit) {
+      user.units = await this.resolveUnitSelection(
+        user.units?.map((unit) => unit.id) || [],
+        targetRole,
+        true,
+      );
+    } else if (dto.role !== undefined && user.units?.length) {
+      // A role change must not leave an already-assigned user in the wrong
+      // unit category. The administrator can submit the new role and unit together.
+      user.units = await this.resolveUnitSelection(
+        user.units.map((unit) => unit.id),
+        targetRole,
+        false,
+      );
+    } else if ((user.units?.length || 0) > 1) {
+      throw new BadRequestException('A user can be assigned to only one unit.');
     }
 
     return await this.usersRepository.save(user);

@@ -15,6 +15,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  FormControlLabel,
   IconButton,
   InputLabel,
   MenuItem,
@@ -335,6 +336,7 @@ export default function UnitsPage() {
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [hasReportorialRequirements, setHasReportorialRequirements] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [deleteConfirmUnit, setDeleteConfirmUnit] = useState<Unit | null>(null);
   const [deleteUnitConfirmed, setDeleteUnitConfirmed] = useState(false);
@@ -357,6 +359,7 @@ export default function UnitsPage() {
     setEditingUnit(null);
     setName('');
     setDescription('');
+    setHasReportorialRequirements(false);
     setOpen(true);
   };
 
@@ -364,6 +367,7 @@ export default function UnitsPage() {
     setEditingUnit(unit);
     setName(unit.name);
     setDescription(unit.description || '');
+    setHasReportorialRequirements(Boolean(unit.hasReportorialRequirements));
     setOpen(true);
   };
 
@@ -375,10 +379,10 @@ export default function UnitsPage() {
     try {
       setSaving(true);
       if (editingUnit) {
-        await unitsApi.updateUnit(editingUnit.id, { name, description });
+        await unitsApi.updateUnit(editingUnit.id, { name, description, hasReportorialRequirements });
         enqueueSnackbar('Unit updated successfully.', { variant: 'success' });
       } else {
-        await unitsApi.createUnit({ name, description });
+        await unitsApi.createUnit({ name, description, hasReportorialRequirements });
         enqueueSnackbar('Unit created successfully.', { variant: 'success' });
       }
       setOpen(false);
@@ -449,6 +453,12 @@ export default function UnitsPage() {
                         {unit.description}
                       </Typography>
                     )}
+                    <Chip
+                      size="small"
+                      color={unit.hasReportorialRequirements ? 'primary' : 'default'}
+                      label={unit.hasReportorialRequirements ? 'RICTMS / Reportorial' : 'Regular / Requester'}
+                      sx={{ mt: 0.5 }}
+                    />
                   </Box>
                   {canManageUnits && <Box onClick={(e) => e.stopPropagation()} display="flex" gap={1}>
                     <Tooltip title="Edit unit">
@@ -498,6 +508,15 @@ export default function UnitsPage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             inputProps={{ maxLength: 255 }}
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={hasReportorialRequirements}
+                onChange={(e) => setHasReportorialRequirements(e.target.checked)}
+              />
+            }
+            label="RICTMS/reportorial unit (visible only to RICTMS users)"
           />
         </DialogContent>
         <DialogActions>

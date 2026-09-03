@@ -15,6 +15,9 @@ export class Unit {
   @Column({ default: true })
   active: boolean;
 
+  @Column({ name: 'has_reportorial_requirements', type: 'boolean', default: false })
+  hasReportorialRequirements: boolean;
+
   @ManyToMany(() => User, (user) => user.units)
   users: User[];
 

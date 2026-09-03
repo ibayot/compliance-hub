@@ -79,7 +79,11 @@ export class AuthService {
         positionFull: user.positionFull,
         designation: user.designation,
         role: user.role,
-        units: user.units?.map((u) => ({ id: u.id, name: u.name })) || [],
+        units: user.units?.map((u) => ({
+        id: u.id,
+        name: u.name,
+        hasReportorialRequirements: u.hasReportorialRequirements,
+      })) || [],
       },
     };
   }
@@ -516,7 +520,11 @@ export class AuthService {
       authProvider: user.authProvider,
       role: user.role,
       requiresPasswordChange,
-      units: user.units?.map((u) => ({ id: u.id, name: u.name })) || [],
+      units: user.units?.map((u) => ({
+        id: u.id,
+        name: u.name,
+        hasReportorialRequirements: u.hasReportorialRequirements,
+      })) || [],
     };
   }
 

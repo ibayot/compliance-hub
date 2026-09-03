@@ -5,6 +5,7 @@ import {
   IsString,
   MinLength,
   IsArray,
+  ArrayMaxSize,
   IsNumber,
   IsBoolean,
 
@@ -72,6 +73,7 @@ export class CreateUserDto {
   role: string;
 
   @IsArray()
+  @ArrayMaxSize(1, { message: 'A user can be assigned to only one unit.' })
   @IsNumber({}, { each: true })
   @IsOptional()
   unitIds?: number[];

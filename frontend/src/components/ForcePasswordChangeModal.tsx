@@ -26,6 +26,7 @@ import { usersApi } from '@/lib/api/users';
 import type { User } from '@/lib/types/auth';
 import { authApi } from '@/lib/api/auth';
 import { useSnackbar } from 'notistack';
+import { unitsForUserRole } from '@/lib/utils/unit-visibility';
 
 interface Props {
   open: boolean;
@@ -79,9 +80,10 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
   const [sex, setSex] = useState('');
   const [unitId, setUnitId] = useState<number | ''>('');
 
-  const [units, setUnits] = useState<Array<{ id: number; name: string }>>([]);
+  const [units, setUnits] = useState<Array<{ id: number; name: string; hasReportorialRequirements?: boolean }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const availableUnits = unitsForUserRole(units, user.role);
 
   useEffect(() => {
     if (open) {
@@ -306,7 +308,7 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
                   label="Unit/Section"
                   onChange={(e) => setUnitId(e.target.value as number)}
                 >
-                  {units.map((unit) => (
+                  {availableUnits.map((unit) => (
                     <MenuItem key={unit.id} value={unit.id}>
                       {unit.name}
                     </MenuItem>

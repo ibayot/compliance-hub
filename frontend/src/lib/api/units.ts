@@ -5,6 +5,7 @@ export interface Unit {
   name: string;
   description?: string;
   active?: boolean;
+  hasReportorialRequirements?: boolean;
   created_at: string;
   updated_at?: string;
 }
@@ -12,11 +13,13 @@ export interface Unit {
 export interface CreateUnitRequest {
   name: string;
   description?: string;
+  hasReportorialRequirements?: boolean;
 }
 
 export interface UpdateUnitRequest {
   name?: string;
   description?: string;
+  hasReportorialRequirements?: boolean;
 }
 
 export interface ListUnitsParams {

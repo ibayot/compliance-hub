@@ -25,6 +25,9 @@ export class UnitsService {
         existingUnit.name = name;
         existingUnit.description = createUnitDto.description?.trim() || null;
         existingUnit.active = true;
+        if (createUnitDto.hasReportorialRequirements !== undefined) {
+          existingUnit.hasReportorialRequirements = createUnitDto.hasReportorialRequirements;
+        }
         return await this.unitsRepository.save(existingUnit);
       }
       throw new ConflictException('Unit with this name already exists');

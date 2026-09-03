@@ -158,8 +158,8 @@ export class UsersController {
   }
 
   @Get('profile-units')
-  getProfileUnits() {
-    return this.usersService.getProfileUnits();
+  getProfileUnits(@Request() req: any) {
+    return this.usersService.getProfileUnits(req.user.role);
   }
 
   // ── Generic user :id routes — kept AFTER static capability routes ──
@@ -215,7 +215,7 @@ export class UsersController {
       throw new ForbiddenException('You cannot disable your own account.');
     }
 
-    return this.usersService.update(parsedId, updateUserDto);
+    return this.usersService.update(parsedId, updateUserDto, { requireUnit: isSelf });
   }
 
   @Post(':id/reset-password')

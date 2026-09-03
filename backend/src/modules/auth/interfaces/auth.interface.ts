@@ -24,6 +24,6 @@ export interface AuthResponse {
     positionFull?: string;
     designation?: string;
     role: string;
-    units: { id: number; name: string }[];
+    units: { id: number; name: string; hasReportorialRequirements?: boolean }[];
   };
 }

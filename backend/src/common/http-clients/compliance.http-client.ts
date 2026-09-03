@@ -5,6 +5,7 @@ export interface UnitStub {
   name: string;
   code?: string | null;
   parent_id?: number | null;
+  hasReportorialRequirements?: boolean;
 }
 
 /** Circuit breaker states for inter-service calls. */

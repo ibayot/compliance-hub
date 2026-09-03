@@ -47,6 +47,7 @@ export interface Unit {
   id: number;
   name: string;
   description?: string;
+  hasReportorialRequirements?: boolean;
 }
 
 export interface LoginCredentials {

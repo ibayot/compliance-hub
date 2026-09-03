@@ -206,7 +206,7 @@ export const usersApi = {
     return response.data;
   },
 
-  getProfileUnits: async (): Promise<{ id: number; name: string }[]> => {
+  getProfileUnits: async (): Promise<Array<{ id: number; name: string; hasReportorialRequirements?: boolean }>> => {
     const response = await apiClient.get('/users/profile-units');
     return response.data;
   },
