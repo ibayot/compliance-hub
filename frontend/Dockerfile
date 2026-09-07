@@ -87,6 +87,19 @@ server { \
     location = /api/docs { \
         return 301 /api/docs/; \
     } \
+    location /api/events { \
+        proxy_pass http://gateway:4000/api/events; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
+        proxy_set_header X-Forwarded-Proto $scheme; \
+        proxy_http_version 1.1; \
+        proxy_set_header Connection ""; \
+        proxy_buffering off; \
+        proxy_cache off; \
+        proxy_read_timeout 1h; \
+        proxy_send_timeout 1h; \
+    } \
     location /api/ { \
         proxy_pass http://gateway:4000/api/; \
         proxy_set_header Host $host; \

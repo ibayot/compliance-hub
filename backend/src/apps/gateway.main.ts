@@ -67,12 +67,16 @@ const SERVICE_DOMAINS: Record<string, string[]> = {
   ],
 };
 
-function createServiceProxy(target: string, service: string) {
+function createServiceProxy(target: string, service: string, options: { streaming?: boolean } = {}) {
+  const streaming = options.streaming === true;
+
   return createProxyMiddleware({
     target,
     changeOrigin: true,
-    proxyTimeout: 30_000,
-    timeout: 31_000,
+    // SSE connections are intentionally long-lived. A normal API timeout
+    // would close the stream before later ticket events can reach the browser.
+    proxyTimeout: streaming ? 60 * 60 * 1000 : 30_000,
+    timeout: streaming ? 60 * 60 * 1000 : 31_000,
     on: {
       proxyReq: (proxyReq, req: Request) => {
         // Propagate correlation ID to downstream service
@@ -81,6 +85,11 @@ function createServiceProxy(target: string, service: string) {
       },
       proxyRes: (proxyRes, _req, res: Response) => {
         res.setHeader('x-served-by', service);
+        if (streaming) {
+          res.setHeader('Cache-Control', 'no-cache, no-transform');
+          res.setHeader('X-Accel-Buffering', 'no');
+          res.setHeader('Connection', 'keep-alive');
+        }
       },
       error: (_err, req, res) => {
         const response = res as Response;
@@ -309,7 +318,7 @@ async function bootstrap() {
     );
     app.use(
       `${prefix}/events`,
-      createServiceProxy(`${ticketingServiceUrl}/api/events`, 'ticketing'),
+      createServiceProxy(`${ticketingServiceUrl}/api/events`, 'ticketing', { streaming: true }),
     );
     app.use(
       `${prefix}/notifications`,
