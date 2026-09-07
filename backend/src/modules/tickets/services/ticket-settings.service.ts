@@ -3,7 +3,7 @@ import { IsString, IsNumber, IsBoolean, IsEnum, IsOptional, IsNotEmpty, IsArray,
 
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Not, Repository, In } from 'typeorm';
 import { TicketCategoryConfig } from '../entities/ticket-category.entity';
 import { TicketKeywordRule } from '../entities/ticket-keyword-rule.entity';
 import { TicketIssueType } from '../entities/ticket-issue-type.entity';
@@ -627,16 +627,25 @@ export class TicketSettingsService {
 
     if (dto.name !== undefined) {
       if (!dto.name.trim()) throw new BadRequestException('Issue type name is required');
-      issueType.name = dto.name.trim();
-      issueType.key = dto.name
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/(^_|_$)/g, '');
-      const duplicate = await this.issueTypeRepo.findOne({ where: { key: issueType.key } });
-      if (duplicate && duplicate.id !== issueType.id && !duplicate.isDeleted) {
-        throw new BadRequestException(`Issue type key "${issueType.key}" already exists`);
+      const nextName = dto.name.trim();
+      // The key is generated when an issue is created. Saving an unchanged
+      // display name (for example, while editing only SLA settings) must not
+      // regenerate an existing key that may legitimately differ from the
+      // normalized name because older records can share the same name.
+      if (nextName !== issueType.name) {
+        const nextKey = nextName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/(^_|_$)/g, '');
+        const duplicate = await this.issueTypeRepo.findOne({
+          where: { key: nextKey, isDeleted: false, id: Not(issueType.id) },
+        });
+        if (duplicate) {
+          throw new BadRequestException(`Issue type key "${nextKey}" already exists`);
+        }
+        issueType.key = nextKey;
       }
+      issueType.name = nextName;
     }
     if (dto.description !== undefined) issueType.description = dto.description?.trim() || null;
     if (dto.slaHours !== undefined) {
