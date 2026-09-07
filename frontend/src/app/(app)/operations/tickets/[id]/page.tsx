@@ -760,7 +760,12 @@ export default function TicketDetailPage() {
       enqueueSnackbar('Sex is required.', { variant: 'warning' });
       return;
     }
-    if (csatForm.contactNumber && !/^\d{10}$/.test(csatForm.contactNumber)) {
+    const contactNumber = csatForm.contactNumber?.trim() ?? '';
+    if (!contactNumber) {
+      enqueueSnackbar('Contact number is required.', { variant: 'warning' });
+      return;
+    }
+    if (!/^\d{10}$/.test(contactNumber)) {
       enqueueSnackbar('Contact number must contain exactly 10 digits.', { variant: 'warning' });
       return;
     }

@@ -250,7 +250,7 @@ export interface CsatFormData {
   clientMiddleInitial?: string;
   clientLastName: string;
   suffix?: string;
-  religion: string;
+  religion?: string;
   age?: number;
   sex: string;
   contactNumber?: string;

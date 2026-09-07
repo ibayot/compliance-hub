@@ -993,12 +993,17 @@ export class TicketService implements OnModuleInit {
     const saved = await this.ticketRepo.save(ticket);
     const persisted = await this.ticketRepo.findOneByOrFail({ id: saved.id });
 
+    // Refresh open ticket pages immediately after the ticket is persisted.
+    // The event-log writes below are intentionally fire-and-forget and must not
+    // be the mechanism that drives the UI refresh.
+    this.sseService.emitTicketUpdated(saved.id);
+
     // Log creation event
     this.logEvent(saved.id, 'created', callerId, {
       ticketNumber: persisted.ticketNumber,
       ticketType: persisted.ticketType,
       status: persisted.status,
-    }).catch(() => { });
+    }, false).catch(() => { });
 
     if (assignedToId && assignedTech) {
       this.logEvent(saved.id, 'auto_assigned', null, {
@@ -2546,9 +2551,11 @@ export class TicketService implements OnModuleInit {
       if (!form.clientFirstName?.trim() || !form.clientLastName?.trim()) {
         throw new BadRequestException('Client first and last name are required.');
       }
-      if (!form.religion?.trim()) throw new BadRequestException('Religion is required.');
       if (!form.sex) throw new BadRequestException('Sex is required.');
-      if (form.contactNumber && !/^\d{10}$/.test(form.contactNumber)) {
+      if (!form.contactNumber?.trim()) {
+        throw new BadRequestException('Contact number is required.');
+      }
+      if (!/^\d{10}$/.test(form.contactNumber)) {
         throw new BadRequestException('Contact number must contain exactly 10 digits.');
       }
       if (form.age !== undefined && (!Number.isInteger(form.age) || form.age < 0 || form.age > 120)) {
@@ -2582,8 +2589,10 @@ export class TicketService implements OnModuleInit {
     ticket.satisfactionSubmittedAt = new Date();
     ticket.status = TicketStatus.CLOSED;
     const saved = await this.ticketRepo.save(ticket);
-    this.logEvent(saved.id, 'closed', requesterId).catch(() => { });
-    this.logEvent(saved.id, 'rated', requesterId, { rating: saved.satisfactionRating }).catch(
+    // Rating changes the ticket shown on every open ticket page.
+    this.sseService.emitTicketUpdated(saved.id);
+    this.logEvent(saved.id, 'closed', requesterId, undefined, false).catch(() => { });
+    this.logEvent(saved.id, 'rated', requesterId, { rating: saved.satisfactionRating }, false).catch(
       () => { },
     );
 
