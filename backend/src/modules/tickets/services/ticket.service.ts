@@ -4185,6 +4185,7 @@ export class TicketService implements OnModuleInit {
       t.slaPausedAt = now;
     }
     await this.ticketRepo.save(tickets);
+    tickets.forEach((ticket) => this.sseService.emitTicketUpdated(ticket.id));
     return tickets.length;
   }
 
@@ -4202,6 +4203,7 @@ export class TicketService implements OnModuleInit {
     });
 
     let resumedCount = 0;
+    const resumedTicketIds: string[] = [];
     const now = new Date();
 
     for (const t of tickets) {
@@ -4234,11 +4236,13 @@ export class TicketService implements OnModuleInit {
         }
         t.slaPausedAt = null;
         resumedCount++;
+        resumedTicketIds.push(t.id);
       }
     }
 
     if (resumedCount > 0) {
       await this.ticketRepo.save(tickets);
+      resumedTicketIds.forEach((ticketId) => this.sseService.emitTicketUpdated(ticketId));
     }
     return resumedCount;
   }
@@ -4851,6 +4855,7 @@ export class TicketService implements OnModuleInit {
         );
 
         await this.ticketRepo.update(ticket.id, { isKbGenerationPending: false });
+        this.sseService.emitTicketUpdated(ticket.id);
         this.logger.log('Successfully recovered and generated a KB entry.');
 
         // Wait 15 seconds between requests to avoid rate limits again

@@ -5,6 +5,7 @@ import { useLocation } from 'react-router-dom';
 import { Alert, Box, CircularProgress, Paper, Toolbar, Typography } from '@mui/material';
 import Sidebar from './Sidebar';
 import AppBar from './AppBar';
+import EnvironmentOverlay from './EnvironmentOverlay';
 import { SidebarProvider } from '@/contexts/SidebarContext';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { PageTitleProvider } from '@/contexts/PageTitleContext';
@@ -52,6 +53,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      <EnvironmentOverlay />
       {/* App Bar */}
       <AppBar onMenuClick={handleDrawerToggle} />
 

@@ -81,6 +81,14 @@ Search for the keyword `TODO` inside the `docker-compose.staging.yml` file to fi
 | `SMTP_PASS` | Your Google App Password to enable outbound emails. |
 | `GOOGLE_CALLBACK_URL` | The exact URL pointing to your Gateway server + callback path. E.g., `http://192.168.1.100:4000/api/auth/google/callback` |
 
+For the frontend environment marker, add this under the `frontend.build.args` section:
+
+```yaml
+VITE_APP_ENV: staging
+```
+
+Use `VITE_APP_ENV: production` in the production compose file. The local compose file already defaults this value to `local`. The marker is visible only for local and staging builds; production has no marker.
+
 Important networking note:
 - `DB_HOST` must be a reachable IP address or DNS hostname of Server B from Server A.
 - Do not use `localhost` or `127.0.0.1` for `DB_HOST` in this staging setup, because containers on Server A would try to connect to themselves.
