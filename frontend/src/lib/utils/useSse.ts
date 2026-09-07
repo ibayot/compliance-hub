@@ -22,6 +22,8 @@ let currentToken: string | null = null;
 let connectionGeneration = 0;
 let connectionAbortController: AbortController | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let connectionPromise: Promise<void> | null = null;
+let connectionPromiseToken: string | null = null;
 
 type SseListener = {
   types: SseEventType[];
@@ -29,11 +31,25 @@ type SseListener = {
 };
 const activeListeners = new Set<SseListener>();
 
-async function connectSse(token: string) {
-  // Mark the token before awaiting the ticket request so mounted pages share one request.
-  if (currentToken === token) {
-    return;
-  }
+function scheduleReconnect(token: string) {
+  if (activeListeners.size === 0 || reconnectTimer) return;
+
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    if (activeListeners.size > 0) {
+      void connectSse(token, true).catch(() => undefined);
+    }
+  }, 5000);
+}
+
+async function connectSse(token: string, force = false) {
+  const hasLiveConnection =
+    currentToken === token &&
+    masterEventSource !== null &&
+    masterEventSource.readyState !== EventSource.CLOSED;
+
+  if (!force && hasLiveConnection) return;
+  if (!force && connectionPromise && connectionPromiseToken === token) return connectionPromise;
 
   const generation = ++connectionGeneration;
 
@@ -53,75 +69,92 @@ async function connectSse(token: string) {
   }
 
   currentToken = token;
-  const ticketResponse = await fetch('/api/events/token', {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: abortController.signal,
-  });
-  if (!ticketResponse.ok) throw new Error('Unable to obtain SSE connection ticket.');
-  const { token: ticket } = await ticketResponse.json();
-  // The component may have unmounted, logged out, or changed users while the
-  // connection ticket was loading. Do not create a listener-less EventSource
-  // from that stale async attempt.
-  if (
-    abortController.signal.aborted ||
-    generation !== connectionGeneration ||
-    currentToken !== token ||
-    activeListeners.size === 0
-  ) {
-    return;
-  }
-  const source = new EventSource(`/api/events?ticket=${encodeURIComponent(ticket)}`);
-  masterEventSource = source;
-
-  source.onopen = () => {
-    console.log('[SSE] Connected', new Date().toISOString());
-  };
-
-  source.onmessage = (event) => {
-    let data: SsePayload;
-
-    try {
-      data = JSON.parse(event.data);
-    } catch (err) {
-      console.error('[SSE] Invalid message:', event.data, err);
+  const attempt = (async () => {
+    const ticketResponse = await fetch('/api/events/token', {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: abortController.signal,
+    });
+    if (!ticketResponse.ok) throw new Error('Unable to obtain SSE connection ticket.');
+    const { token: ticket } = await ticketResponse.json();
+    // The component may have unmounted, logged out, or changed users while the
+    // connection ticket was loading. Do not create a listener-less EventSource
+    // from that stale async attempt.
+    if (
+      abortController.signal.aborted ||
+      generation !== connectionGeneration ||
+      currentToken !== token ||
+      activeListeners.size === 0
+    ) {
       return;
     }
+    const source = new EventSource(`/api/events?ticket=${encodeURIComponent(ticket)}`);
+    masterEventSource = source;
 
-    if (data.type === 'HEARTBEAT') {
-      return;
-    }
+    source.onopen = () => {
+      console.log('[SSE] Connected', new Date().toISOString());
+    };
 
-    console.log('[SSE RECEIVE]', new Date().toISOString(), data.type);
-
-    for (const listener of [...activeListeners]) {
-      if (!listener.types.includes(data.type)) {
-        continue;
-      }
+    source.onmessage = (event) => {
+      let data: SsePayload;
 
       try {
-        listener.callback(data.payload);
+        data = JSON.parse(event.data);
       } catch (err) {
-        console.error(`[SSE] Listener failed for ${data.type}:`, err);
+        console.error('[SSE] Invalid message:', event.data, err);
+        return;
       }
-    }
-  };
 
-  source.onerror = () => {
-    console.warn('[SSE] Connection error', new Date().toISOString(), {
-      readyState: source.readyState,
-    });
+      if (data.type === 'HEARTBEAT') {
+        return;
+      }
 
-    if (source.readyState === 2) {
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      reconnectTimer = setTimeout(() => {
-        reconnectTimer = null;
-        if (masterEventSource === source && currentToken) {
-          console.log('[SSE] Forcing reconnection after fatal closure...');
-          void connectSse(currentToken).catch(() => undefined);
+      console.log('[SSE RECEIVE]', new Date().toISOString(), data.type);
+
+      for (const listener of [...activeListeners]) {
+        if (!listener.types.includes(data.type)) {
+          continue;
         }
-      }, 5000);
+
+        try {
+          listener.callback(data.payload);
+        } catch (err) {
+          console.error(`[SSE] Listener failed for ${data.type}:`, err);
+        }
+      }
+    };
+
+    source.onerror = () => {
+      console.warn('[SSE] Connection error', new Date().toISOString(), {
+        readyState: source.readyState,
+      });
+
+      if (source.readyState === EventSource.CLOSED && masterEventSource === source) {
+        masterEventSource = null;
+        currentToken = null;
+        scheduleReconnect(token);
+      }
+    };
+  })();
+
+  connectionPromise = attempt;
+  connectionPromiseToken = token;
+
+  try {
+    await attempt;
+  } catch (error) {
+    if (generation === connectionGeneration && currentToken === token) {
+      currentToken = null;
+      connectionAbortController = null;
+      masterEventSource = null;
+      scheduleReconnect(token);
     }
-  };
+    throw error;
+  } finally {
+    if (connectionPromise === attempt) {
+      connectionPromise = null;
+      connectionPromiseToken = null;
+    }
+  }
 }
 
 function disconnectSse() {
