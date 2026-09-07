@@ -817,10 +817,18 @@ export class TicketSettingsService {
       this.usersHttpClient.getRoleCapabilities(),
       this.usersHttpClient.getUsers(),
     ]);
+    let roleLabels = new Map<string, string>();
+    try {
+      const roleDefinitions = await this.roleDefRepo.find();
+      roleLabels = new Map(roleDefinitions.map((role) => [role.value, role.label]));
+    } catch {
+      // The users-service capability response remains sufficient for filtering;
+      // fall back to the role code only if display labels cannot be read.
+    }
     const roleMap = new Map(
       capabilityRows
         .filter((row) => row.roleValue !== UserRole.SUPER_ADMIN && row.isEscalationFocal)
-        .map((row) => [row.roleValue, row.label || row.roleValue]),
+        .map((row) => [row.roleValue, roleLabels.get(row.roleValue) || row.label || row.roleValue]),
     );
 
     const focalUsers = serviceUsers.filter(

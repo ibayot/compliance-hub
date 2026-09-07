@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.4] - 2026-09-07 - Settings and Ticket Rating QA Fixes
+
+### Added
+- Added Support Type filtering for Categories.
+- Added Category filtering for Issues.
+- Added Category, Issue, and Support Type filtering for Keyword Rules.
+- Added Ticket Type filtering for Escalation Focals.
+
+### Changed
+- Escalation focal users now show the configured role display name.
+- Improved the small-screen layout of Ticket Settings filters.
+- Updated Issues table labels to Max Pause Hours and Max Freeze Hours without changing database columns.
+- Made Technician Name in ticket ratings read-only, black, and italic.
+
+### Fixed
+- Religion is no longer required in ticket-rating validation.
+- Contact Number is validated as a required 10-digit value.
+- Ticket comments now return the commenter name immediately and refresh other open ticket screens through SSE.
+
 ## [1.0.3] - 2026-09-07 - QA Fixes and AI Reliability
 
 ### Added

@@ -892,7 +892,12 @@ export default function TicketsPage() {
       enqueueSnackbar('Sex is required.', { variant: 'warning' });
       return;
     }
-    if (csatForm.contactNumber && !/^\d{10}$/.test(csatForm.contactNumber)) {
+    const contactNumber = csatForm.contactNumber?.trim() ?? '';
+    if (!contactNumber) {
+      enqueueSnackbar('Contact number is required.', { variant: 'warning' });
+      return;
+    }
+    if (!/^\d{10}$/.test(contactNumber)) {
       enqueueSnackbar('Contact number must contain exactly 10 digits.', { variant: 'warning' });
       return;
     }
@@ -2555,7 +2560,7 @@ export default function TicketsPage() {
                 <TextField label="Religion"
                   value={csatForm.religion ?? ''}
                   onChange={(e) => setCsatForm((f) => ({ ...f, religion: e.target.value }))}
-                  sx={{ flex: 1, ...populatedFieldSx(!!user?.phoneNumber) }}
+                  sx={{ flex: 1 }}
                 />
                 <TextField inputProps={{ maxLength: 255 }}
                   select
@@ -2570,7 +2575,7 @@ export default function TicketsPage() {
                   <MenuItem value="Other">Other</MenuItem>
                   <MenuItem value="Prefer Not to Say">Prefer Not to Say</MenuItem>
                 </TextField>
-                <TextField label="Contact Number"
+              <TextField label="Contact Number *"
                   disabled={!!user?.phoneNumber}
                   value={csatForm.contactNumber ?? ''}
                   onChange={(e) => {
@@ -2588,8 +2593,16 @@ export default function TicketsPage() {
               <TextField label="Technician Name"
                 value={csatForm.technicianName}
                 InputProps={{ readOnly: true }}
-                disabled
-              sx={populatedFieldSx(true)}
+                inputProps={{ tabIndex: -1 }}
+                fullWidth
+                sx={{
+                  '& .MuiInputBase-input': {
+                    color: 'text.primary',
+                    fontStyle: 'italic',
+                    cursor: 'default',
+                  },
+                  '& .MuiInputLabel-root': { color: 'text.primary' },
+                }}
               />
 
               <Typography variant="subtitle2" fontWeight={700} mt={1}>

@@ -181,10 +181,10 @@ export class CsatFormData {
   @IsString()
   @ApiPropertyOptional()
   suffix?: string;
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  @ApiProperty()
-  religion: string;
+  @ApiPropertyOptional()
+  religion?: string;
   @IsOptional()
   @IsNumber()
   @ApiPropertyOptional()
@@ -193,10 +193,10 @@ export class CsatFormData {
   @IsString()
   @ApiProperty()
   sex: string;
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  @ApiPropertyOptional()
-  contactNumber?: string;
+  @ApiProperty()
+  contactNumber: string;
   @IsNotEmpty()
   @IsString()
   @ApiProperty()

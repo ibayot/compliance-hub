@@ -697,15 +697,15 @@ export default function TicketSettingsPage() {
         {/* ── Categories Tab ── */}
         {tab === 0 && (
           <CardContent>
-            <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
-              <Box display="flex" gap={1} flexWrap="wrap" flex={1}>
+            <Box display="flex" width="100%" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
+              <Box display="flex" width="100%" gap={1} flexWrap="wrap" flex={1}>
                 <TextField
                   placeholder="Search categories..."
                   size="small"
                   value={categorySearch}
                   onChange={(e) => { setCategorySearch(e.target.value); setCategoryPage(0); }}
                   inputProps={{ maxLength: 100 }}
-                  sx={{ minWidth: { xs: 0, sm: 300 }, flex: 1 }}
+                  sx={{ minWidth: { xs: '100%', sm: 300 }, flex: { xs: '1 1 100%', sm: 1 } }}
                 />
                 <TextField
                   select
@@ -713,7 +713,7 @@ export default function TicketSettingsPage() {
                   label="Status"
                   value={categoryStatusFilter}
                   onChange={(e) => { setCategoryStatusFilter(e.target.value as typeof categoryStatusFilter); setCategoryPage(0); }}
-                  sx={{ minWidth: 130 }}
+                  sx={{ minWidth: { xs: '100%', sm: 130 } }}
                 >
                   <MenuItem value="all">All</MenuItem>
                   <MenuItem value="active">Active</MenuItem>
@@ -725,7 +725,7 @@ export default function TicketSettingsPage() {
                   label="Support Type"
                   value={categorySupportTypeFilter}
                   onChange={(e) => { setCategorySupportTypeFilter(e.target.value); setCategoryPage(0); }}
-                  sx={{ minWidth: 170 }}
+                  sx={{ minWidth: { xs: '100%', sm: 170 } }}
                 >
                   <MenuItem value="all">All Support Types</MenuItem>
                   {Object.entries(TYPE_LABELS).map(([value, label]) => (
@@ -738,6 +738,7 @@ export default function TicketSettingsPage() {
                 variant="contained"
                 size="small"
                 onClick={() => openCatDialog()}
+                sx={{ alignSelf: { xs: 'stretch', sm: 'auto' }, whiteSpace: 'nowrap' }}
               >
                 Add Category
               </Button>
@@ -826,15 +827,15 @@ export default function TicketSettingsPage() {
         {/* —— Issues Tab —— */}
         {tab === 1 && (
           <CardContent>
-              <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
-              <Box display="flex" gap={1} flexWrap="wrap" flex={1}>
+              <Box display="flex" width="100%" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
+              <Box display="flex" width="100%" gap={1} flexWrap="wrap" flex={1}>
                 <TextField
                   placeholder="Search issues..."
                   size="small"
                   value={issueSearch}
                   onChange={(e) => { setIssueSearch(e.target.value); setIssuePage(0); }}
                   inputProps={{ maxLength: 100 }}
-                  sx={{ minWidth: { xs: 0, sm: 300 }, flex: 1 }}
+                  sx={{ minWidth: { xs: '100%', sm: 300 }, flex: { xs: '1 1 100%', sm: 1 } }}
                 />
                 <TextField
                   select
@@ -842,7 +843,7 @@ export default function TicketSettingsPage() {
                   label="Status"
                   value={issueStatusFilter}
                   onChange={(e) => { setIssueStatusFilter(e.target.value as typeof issueStatusFilter); setIssuePage(0); }}
-                  sx={{ minWidth: 130 }}
+                  sx={{ minWidth: { xs: '100%', sm: 130 } }}
                 >
                   <MenuItem value="all">All</MenuItem>
                   <MenuItem value="active">Active</MenuItem>
@@ -854,7 +855,7 @@ export default function TicketSettingsPage() {
                   label="Category"
                   value={issueCategoryFilter}
                   onChange={(e) => { setIssueCategoryFilter(e.target.value); setIssuePage(0); }}
-                  sx={{ minWidth: 170 }}
+                  sx={{ minWidth: { xs: '100%', sm: 170 } }}
                 >
                   <MenuItem value="all">All Categories</MenuItem>
                   {categories.filter((c) => !c.isDeleted).map((category) => (
@@ -867,6 +868,7 @@ export default function TicketSettingsPage() {
                 variant="contained"
                 size="small"
                 onClick={() => openIssueDialog()}
+                sx={{ alignSelf: { xs: 'stretch', sm: 'auto' }, whiteSpace: 'nowrap' }}
               >
                 Add Issue
               </Button>
@@ -955,14 +957,14 @@ export default function TicketSettingsPage() {
         {/* ── Keyword Rules Tab ── */}
         {tab === 2 && (
           <CardContent>
-            <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
-              <Box display="flex" gap={1} flexWrap="wrap" flex={1}>
+            <Box display="flex" width="100%" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
+              <Box display="flex" width="100%" gap={1} flexWrap="wrap" flex={1}>
                 <TextField
                   placeholder="Search rules..."
                   size="small"
                   value={ruleSearch}
                   onChange={(e) => { setRuleSearch(e.target.value); setRulePage(0); }}
-                  sx={{ minWidth: { xs: 0, sm: 300 }, flex: 1 }}
+                  sx={{ minWidth: { xs: '100%', sm: 300 }, flex: { xs: '1 1 100%', sm: 1 } }}
                   inputProps={{ maxLength: 100 }}
                 />
                 <TextField
@@ -971,7 +973,7 @@ export default function TicketSettingsPage() {
                   label="Status"
                   value={ruleStatusFilter}
                   onChange={(e) => { setRuleStatusFilter(e.target.value as typeof ruleStatusFilter); setRulePage(0); }}
-                  sx={{ minWidth: 130 }}
+                  sx={{ minWidth: { xs: '100%', sm: 130 } }}
                 >
                   <MenuItem value="all">All</MenuItem>
                   <MenuItem value="active">Active</MenuItem>
@@ -983,7 +985,7 @@ export default function TicketSettingsPage() {
                   label="Category"
                   value={ruleCategoryFilter}
                   onChange={(e) => { setRuleCategoryFilter(e.target.value); setRulePage(0); }}
-                  sx={{ minWidth: 170 }}
+                  sx={{ minWidth: { xs: '100%', sm: 170 } }}
                 >
                   <MenuItem value="all">All Categories</MenuItem>
                   {categories.filter((c) => !c.isDeleted).map((category) => (
@@ -1022,6 +1024,7 @@ export default function TicketSettingsPage() {
                 variant="contained"
                 size="small"
                 onClick={() => openRuleDialog()}
+                sx={{ alignSelf: { xs: 'stretch', sm: 'auto' }, whiteSpace: 'nowrap' }}
               >
                 Add Rule
               </Button>
