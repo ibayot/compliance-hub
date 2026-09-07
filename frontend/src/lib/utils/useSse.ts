@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { useAuth, tokenStore } from '@/contexts/AuthContext';
 
 export type SseEventType =
@@ -18,12 +19,12 @@ interface SsePayload {
 
 // --- SINGLETON STATE ---
 let masterEventSource: EventSource | null = null;
-let currentToken: string | null = null;
+let currentAuthKey: string | null = null;
 let connectionGeneration = 0;
 let connectionAbortController: AbortController | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let connectionPromise: Promise<void> | null = null;
-let connectionPromiseToken: string | null = null;
+let connectionPromiseAuthKey: string | null = null;
 
 type SseListener = {
   types: SseEventType[];
@@ -31,25 +32,25 @@ type SseListener = {
 };
 const activeListeners = new Set<SseListener>();
 
-function scheduleReconnect(token: string) {
+function scheduleReconnect(authKey: string, accessToken?: string) {
   if (activeListeners.size === 0 || reconnectTimer) return;
 
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     if (activeListeners.size > 0) {
-      void connectSse(token, true).catch(() => undefined);
+      void connectSse(authKey, accessToken, true).catch(() => undefined);
     }
   }, 5000);
 }
 
-async function connectSse(token: string, force = false) {
+async function connectSse(authKey: string, accessToken?: string, force = false) {
   const hasLiveConnection =
-    currentToken === token &&
+    currentAuthKey === authKey &&
     masterEventSource !== null &&
     masterEventSource.readyState !== EventSource.CLOSED;
 
   if (!force && hasLiveConnection) return;
-  if (!force && connectionPromise && connectionPromiseToken === token) return connectionPromise;
+  if (!force && connectionPromise && connectionPromiseAuthKey === authKey) return connectionPromise;
 
   const generation = ++connectionGeneration;
 
@@ -68,10 +69,11 @@ async function connectSse(token: string, force = false) {
     reconnectTimer = null;
   }
 
-  currentToken = token;
+  currentAuthKey = authKey;
   const attempt = (async () => {
     const ticketResponse = await fetch('/api/events/token', {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       signal: abortController.signal,
     });
     if (!ticketResponse.ok) throw new Error('Unable to obtain SSE connection ticket.');
@@ -82,7 +84,7 @@ async function connectSse(token: string, force = false) {
     if (
       abortController.signal.aborted ||
       generation !== connectionGeneration ||
-      currentToken !== token ||
+      currentAuthKey !== authKey ||
       activeListeners.size === 0
     ) {
       return;
@@ -130,29 +132,29 @@ async function connectSse(token: string, force = false) {
 
       if (source.readyState === EventSource.CLOSED && masterEventSource === source) {
         masterEventSource = null;
-        currentToken = null;
-        scheduleReconnect(token);
+        currentAuthKey = null;
+        scheduleReconnect(authKey, accessToken);
       }
     };
   })();
 
   connectionPromise = attempt;
-  connectionPromiseToken = token;
+  connectionPromiseAuthKey = authKey;
 
   try {
     await attempt;
   } catch (error) {
-    if (generation === connectionGeneration && currentToken === token) {
-      currentToken = null;
+    if (generation === connectionGeneration && currentAuthKey === authKey) {
+      currentAuthKey = null;
       connectionAbortController = null;
       masterEventSource = null;
-      scheduleReconnect(token);
+      scheduleReconnect(authKey, accessToken);
     }
     throw error;
   } finally {
     if (connectionPromise === attempt) {
       connectionPromise = null;
-      connectionPromiseToken = null;
+      connectionPromiseAuthKey = null;
     }
   }
 }
@@ -167,7 +169,7 @@ function disconnectSse() {
     reconnectTimer = null;
   }
   if (!masterEventSource) {
-    currentToken = null;
+    currentAuthKey = null;
     return;
   }
 
@@ -176,7 +178,7 @@ function disconnectSse() {
   masterEventSource.onopen = null;
   masterEventSource.close();
   masterEventSource = null;
-  currentToken = null;
+  currentAuthKey = null;
 }
 
 // Global listener for token refresh
@@ -185,7 +187,12 @@ if (typeof window !== 'undefined') {
       const newToken = e.detail;
       // If we have active listeners, immediately reconnect with new token
       if (activeListeners.size > 0 && newToken) {
-        void connectSse(newToken).catch(() => undefined);
+        const isNative = Capacitor.isNativePlatform();
+        void connectSse(
+          isNative ? `native:${newToken}` : 'browser-cookie',
+          isNative ? newToken : undefined,
+          true,
+        ).catch(() => undefined);
       } else if (!newToken) {
         // Logout, forced reauthentication, and account lockout all clear the token.
         // Close the shared stream immediately instead of waiting for EventSource retry.
@@ -211,8 +218,12 @@ export function useSse(eventTypes: SseEventType[], callback: (payload?: any) => 
       return;
     }
 
-    const token = tokenStore.get('accessToken');
-    if (!token) return;
+    const accessToken = tokenStore.get('accessToken');
+    const isNative = Capacitor.isNativePlatform();
+    // Browser sessions are authenticated by HttpOnly cookies, so a hard refresh
+    // or a newly opened window can be authenticated even though its in-memory
+    // token store is empty. Native clients still authenticate with a bearer token.
+    if (isNative && !accessToken) return;
 
     // Register this component's listener
     const listener: SseListener = {
@@ -221,7 +232,10 @@ export function useSse(eventTypes: SseEventType[], callback: (payload?: any) => 
     };
 
     activeListeners.add(listener);
-    void connectSse(token).catch(() => undefined);
+    void connectSse(
+      isNative ? `native:${accessToken}` : 'browser-cookie',
+      isNative ? accessToken! : undefined,
+    ).catch(() => undefined);
 
     return () => {
       activeListeners.delete(listener);
