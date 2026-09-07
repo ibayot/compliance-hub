@@ -217,7 +217,6 @@ export class UsersService {
       return;
     }
 
-    this.ensureUnitsView().catch(() => undefined);
     this.ensureRoleDefinitions()
       .then(() => this.ensureRoleCapabilityRows())
       .catch(() => undefined);
@@ -245,20 +244,6 @@ export class UsersService {
         missing.map((role) => this.buildCapabilitySeed(role)),
       );
     }
-  }
-
-  /**
-   * Ensures the cross-DB `units` VIEW exists in the users database.
-   *
-   * This VIEW is required so that the User TypeORM entity can JOIN to
-   * units stored in compliance_hub. All DDL column migrations have been
-   * extracted to backend/database/migrations/v0.0.50-service-ddl-extraction.sql.
-   */
-  private async ensureUnitsView(): Promise<void> {
-    const complianceDb = process.env.COMPLIANCE_DB_DATABASE || '02_db_compliance_hub_prod';
-    await this.usersRepository.manager.connection
-      .query(`CREATE OR REPLACE VIEW units AS SELECT * FROM \`${complianceDb}\`.units`)
-      .catch(() => undefined);
   }
 
   private async ensureRoleDefinitions() {

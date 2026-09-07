@@ -23,10 +23,11 @@ export class UnitsController {
 
   @Get()
   @RequireCapability(['isUnitsAccess', 'isUnitsManage'])
-  findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
+  findAll(@Query('page') page?: string, @Query('limit') limit?: string, @Query('search') search?: string) {
     return this.unitsService.findAll(
       page === undefined ? undefined : Number(page),
       limit === undefined ? undefined : Number(limit),
+      search,
     );
   }
 

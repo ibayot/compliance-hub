@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Like, Repository } from 'typeorm';
 import { Unit } from './entities/unit.entity';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
@@ -44,12 +44,20 @@ export class UnitsService {
   async findAll(
     page?: number,
     limit?: number,
+    search?: string,
   ): Promise<Unit[] | { data: Unit[]; total: number; page: number; limit: number }> {
-    const where = { active: true };
+    const trimmedSearch = search?.trim();
+    const where = trimmedSearch
+      ? [
+          { active: true, name: Like(`%${trimmedSearch}%`) },
+          { active: true, description: Like(`%${trimmedSearch}%`) },
+        ]
+      : { active: true };
     const order = { name: 'ASC' as const };
 
     // Preserve the existing array response for dropdowns and other callers
-    // that intentionally request the complete active-unit list.
+    // that intentionally request the complete active-unit list. Search still
+    // filters that complete list when explicitly supplied.
     if (page === undefined && limit === undefined) {
       return await this.unitsRepository.find({ where, order });
     }

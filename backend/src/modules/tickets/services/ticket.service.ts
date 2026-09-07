@@ -405,14 +405,6 @@ export class TicketService implements OnModuleInit {
           ],
           '02_db_compliance_hub_users_prod',
         ));
-      const complianceDb =
-        process.env.COMPLIANCE_DB_DATABASE ||
-        (await this.resolveExistingSchemaName(
-          qr,
-          ['02_db_compliance_hub_prod', '02_db_stg_compliance_hub', 'compliance_hub', 'ricms_compliance', 'rictms_compliance'],
-          '02_db_compliance_hub_prod',
-        ));
-
       // Schema DDL has been extracted to versioned migration files.
       // See backend/database/migrations/v0.0.50-service-ddl-extraction.sql.
 
@@ -435,7 +427,7 @@ export class TicketService implements OnModuleInit {
       await qr.query('DROP VIEW IF EXISTS units').catch(() => undefined);
       await qr.query('DROP TABLE IF EXISTS units').catch(() => undefined);
       await qr
-        .query(`CREATE VIEW units AS SELECT * FROM \`${complianceDb}\`.units`)
+        .query(`CREATE VIEW units AS SELECT * FROM \`${usersDb}\`.units`)
         .catch(() => undefined);
 
       await qr.query('DROP VIEW IF EXISTS role_definitions').catch(() => undefined);

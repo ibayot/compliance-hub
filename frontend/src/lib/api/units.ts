@@ -25,6 +25,7 @@ export interface UpdateUnitRequest {
 export interface ListUnitsParams {
   page?: number;
   limit?: number;
+  search?: string;
 }
 
 export interface ListUnitsResponse {

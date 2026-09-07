@@ -60,8 +60,8 @@ async function bootstrap() {
       dbOk = true;
       checks.db = true;
 
-      // Check cross-DB views (users, role_definitions)
-      const viewChecks = ['users', 'role_definitions'];
+      // Check cross-DB views (users, units, role_definitions)
+      const viewChecks = ['users', 'units', 'role_definitions'];
       for (const view of viewChecks) {
         try {
           await ds.query(`SELECT 1 FROM \`${view}\` LIMIT 1`);
@@ -125,6 +125,9 @@ async function bootstrap() {
           .query(
             `CREATE OR REPLACE VIEW role_definitions AS SELECT * FROM \`${usersDb}\`.role_definitions`,
           )
+          .catch(() => undefined);
+        await conn
+          .query(`CREATE OR REPLACE VIEW units AS SELECT * FROM \`${usersDb}\`.units`)
           .catch(() => undefined);
       } finally {
         await conn.release();

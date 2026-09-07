@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.2] - 2026-09-07 - Access, Units, Environment, and Duty Updates
+
+### Added
+- Added pagination and search to the Units management page.
+- Added reportorial-unit classification so RICTMS and regular users receive the correct unit choices in profile and forced password change forms.
+- Added Compliance-side health checks and startup setup for the Units VIEW sourced from the Users database.
+
+### Changed
+- Units are now owned by the Users database as a table; Ticketing and Compliance use Views sourced from that table.
+- RICTMS users can access the requester-facing ticket dashboard needed for escalated tickets, while access remains capability-controlled.
+- Environment-specific VAPT controls now allow dynamic checks only where enabled, keeping production VAPT behavior disabled by configuration.
+- Staging and production authentication cookies are isolated so signing in to one environment no longer logs the other environment out in the same browser.
+- Audit database selection is environment-controlled through `AUDIT_DB_DATABASE`.
+- Duty meeting tables now include pagination and clear empty-table messages.
+
+### Fixed
+- Corrected unit lookup paths so unit dropdowns can read the Users database unit table through the expected service Views.
+- Corrected RICTMS dashboard and ticketing access responses that could return `403` for valid capability assignments.
+- Prevented Units-only viewers from making unnecessary document-type requests.
+- Preserved single-unit assignment rules when changing a user role or unit.
+- Profile settings now load existing values and warn before a blank save removes stored data.
+- Forced password change now requires the required profile details, including one unit assignment.
+
 ## [Unreleased] - 2026-08-20 - Duty Monitoring, Ticketing, SLA, Assignment and SSE Updates
 
 ### Added

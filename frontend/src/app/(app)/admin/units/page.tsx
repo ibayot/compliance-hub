@@ -337,6 +337,8 @@ export default function UnitsPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalUnits, setTotalUnits] = useState(0);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
   const [name, setName] = useState('');
@@ -349,7 +351,11 @@ export default function UnitsPage() {
   const loadUnits = useCallback(async (targetPage = page, targetRowsPerPage = rowsPerPage) => {
     try {
       setLoading(true);
-      const response = await unitsApi.listUnits({ page: targetPage + 1, limit: targetRowsPerPage });
+      const response = await unitsApi.listUnits({
+        page: targetPage + 1,
+        limit: targetRowsPerPage,
+        search: search || undefined,
+      });
       if (response.data.length === 0 && targetPage > 0) {
         setPage(targetPage - 1);
         return;
@@ -359,11 +365,19 @@ export default function UnitsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, rowsPerPage]);
+  }, [page, rowsPerPage, search]);
 
   useEffect(() => {
     loadUnits(page, rowsPerPage);
   }, [loadUnits, page, rowsPerPage]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(0);
+      setSearch(searchInput.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
   const handleCreate = () => {
     setEditingUnit(null);
@@ -444,6 +458,15 @@ export default function UnitsPage() {
         </Box>
       ) : (
         <Box>
+          <TextField
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            label="Search units"
+            placeholder="Search by unit name or description"
+            fullWidth
+            size="small"
+            sx={{ mb: 2 }}
+          />
           {units.map((unit) => (
             <Accordion
               key={unit.id}
