@@ -1,4 +1,4 @@
-import { Box } from '@mui/material';
+import { Box, useTheme } from '@mui/material';
 
 type VisibleEnvironment = 'LOCAL' | 'STAGING';
 
@@ -13,9 +13,17 @@ function getVisibleEnvironment(): VisibleEnvironment | null {
 
 export default function EnvironmentOverlay() {
   const environment = getVisibleEnvironment();
+  const theme = useTheme();
   if (!environment) return null;
 
   const isLocal = environment === 'LOCAL';
+  const isDarkMode = theme.palette.mode === 'dark';
+  const foregroundColor = isLocal
+    ? isDarkMode ? '#90caf9' : '#0d47a1'
+    : isDarkMode ? '#ffcc80' : '#8a3f00';
+  const backgroundColor = isLocal
+    ? isDarkMode ? 'rgba(13, 71, 161, 0.42)' : 'rgba(227, 242, 253, 0.96)'
+    : isDarkMode ? 'rgba(230, 81, 0, 0.42)' : 'rgba(255, 243, 224, 0.96)';
 
   return (
     <Box
@@ -25,17 +33,18 @@ export default function EnvironmentOverlay() {
         left: '50%',
         bottom: 10,
         zIndex: 1400,
-        px: 1.25,
-        py: 0.25,
-        border: '1px solid',
-        borderColor: isLocal ? 'rgba(25, 118, 210, 0.65)' : 'rgba(237, 108, 2, 0.7)',
+        px: 2,
+        py: 0.6,
+        border: '2px solid',
+        borderColor: foregroundColor,
         borderRadius: 1,
-        color: isLocal ? 'rgba(25, 118, 210, 0.78)' : 'rgba(180, 83, 9, 0.82)',
-        bgcolor: isLocal ? 'rgba(227, 242, 253, 0.72)' : 'rgba(255, 243, 224, 0.78)',
-        fontSize: '0.64rem',
-        fontWeight: 700,
-        letterSpacing: '0.14em',
-        lineHeight: 1.4,
+        color: foregroundColor,
+        bgcolor: backgroundColor,
+        fontSize: '0.82rem',
+        fontWeight: 800,
+        letterSpacing: '0.18em',
+        lineHeight: 1.5,
+        whiteSpace: 'nowrap',
         pointerEvents: 'none',
         transform: 'translateX(-50%) rotate(-3deg)',
         userSelect: 'none',
