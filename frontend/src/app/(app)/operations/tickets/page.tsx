@@ -191,6 +191,7 @@ export default function TicketsPage() {
   const ticketRequestRef = useRef(0);
   const TICKETS_PAGE_SIZE = 25;
   const [newDialogOpen, setNewDialogOpen] = useState(false);
+  const [requestedForConfirmOpen, setRequestedForConfirmOpen] = useState(false);
   const [form, setForm] = useState<CreateTicketDto>({
     subject: '',
     description: '',
@@ -644,9 +645,14 @@ export default function TicketsPage() {
     }
   };
 
-  const handleSubmitTicket = async () => {
+  const handleSubmitTicket = async (confirmedForSelf = false) => {
     if (!form.subject.trim() || !form.description.trim()) {
       enqueueSnackbar('Subject and description are required.', { variant: 'warning' });
+      return;
+    }
+
+    if (isTechnician && form.requesterId == null && !confirmedForSelf) {
+      setRequestedForConfirmOpen(true);
       return;
     }
 
@@ -2252,8 +2258,34 @@ export default function TicketsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setNewDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSubmitTicket} variant="contained" disabled={submitting}>
+          <Button onClick={() => handleSubmitTicket()} variant="contained" disabled={submitting}>
             {submitting ? 'Submitting…' : 'Submit Ticket'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={requestedForConfirmOpen}
+        onClose={() => setRequestedForConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Requested For is blank</DialogTitle>
+        <DialogContent>
+          <Typography>
+            No Requested For user was selected. Do you want to submit this ticket for yourself?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRequestedForConfirmOpen(false)}>No</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setRequestedForConfirmOpen(false);
+              handleSubmitTicket(true);
+            }}
+          >
+            Yes, submit for me
           </Button>
         </DialogActions>
       </Dialog>
