@@ -36,8 +36,19 @@ import {
   Grid,
   Checkbox,
   FormGroup,
+  InputAdornment,
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, ExpandMore as ExpandMoreIcon, WarningAmber as WarningIcon, ErrorOutline as ErrorIcon, CheckCircleOutline as CheckIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  ExpandMore as ExpandMoreIcon,
+  WarningAmber as WarningIcon,
+  ErrorOutline as ErrorIcon,
+  CheckCircleOutline as CheckIcon,
+  Search as SearchIcon,
+  FilterAltOff as ClearFiltersIcon,
+} from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -59,6 +70,84 @@ const TYPE_LABELS: Record<string, string> = {
   pantawid_ict_support: 'Pantawid ICT Support',
 };
 const PAGE_SIZE = 10;
+
+const SEARCH_FIELD_SX = {
+  flex: { xs: '1 1 100%', sm: '2 1 300px' },
+  minWidth: 0,
+} as const;
+
+const FILTER_FIELD_SX = {
+  flex: { xs: '1 1 100%', sm: '1 1 180px' },
+  minWidth: 0,
+} as const;
+
+interface SettingsFilterPanelProps {
+  description: string;
+  actionLabel: string;
+  onAction: () => void;
+  hasActiveFilters: boolean;
+  onClear: () => void;
+  children: React.ReactNode;
+}
+
+function SettingsFilterPanel({
+  description,
+  actionLabel,
+  onAction,
+  hasActiveFilters,
+  onClear,
+  children,
+}: SettingsFilterPanelProps) {
+  return (
+    <Box
+      sx={{
+        mb: 2,
+        p: { xs: 1.5, sm: 2 },
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 2,
+        bgcolor: 'action.hover',
+      }}
+    >
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        alignItems={{ xs: 'stretch', sm: 'center' }}
+        justifyContent="space-between"
+        gap={1.25}
+        mb={1.5}
+      >
+        <Typography variant="body2" color="text.secondary">
+          {description}
+        </Typography>
+        <Stack direction="row" gap={1} sx={{ flexShrink: 0 }}>
+          {hasActiveFilters && (
+            <Button
+              variant="text"
+              size="small"
+              startIcon={<ClearFiltersIcon />}
+              onClick={onClear}
+              sx={{ flex: { xs: 1, sm: 'none' }, whiteSpace: 'nowrap' }}
+            >
+              Clear filters
+            </Button>
+          )}
+          <Button
+            startIcon={<AddIcon />}
+            variant="contained"
+            size="small"
+            onClick={onAction}
+            sx={{ flex: { xs: 1, sm: 'none' }, whiteSpace: 'nowrap' }}
+          >
+            {actionLabel}
+          </Button>
+        </Stack>
+      </Stack>
+      <Box display="flex" width="100%" gap={1.25} flexWrap="wrap">
+        {children}
+      </Box>
+    </Box>
+  );
+}
 
 export default function TicketSettingsPage() {
   const { user, myCap } = useAuth();
@@ -697,52 +786,59 @@ export default function TicketSettingsPage() {
         {/* ── Categories Tab ── */}
         {tab === 0 && (
           <CardContent>
-            <Box display="flex" width="100%" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
-              <Box display="flex" width="100%" gap={1} flexWrap="wrap" flex={1}>
-                <TextField
-                  placeholder="Search categories..."
-                  size="small"
-                  value={categorySearch}
-                  onChange={(e) => { setCategorySearch(e.target.value); setCategoryPage(0); }}
-                  inputProps={{ maxLength: 100 }}
-                  sx={{ minWidth: { xs: '100%', sm: 300 }, flex: { xs: '1 1 100%', sm: 1 } }}
-                />
-                <TextField
-                  select
-                  size="small"
-                  label="Status"
-                  value={categoryStatusFilter}
-                  onChange={(e) => { setCategoryStatusFilter(e.target.value as typeof categoryStatusFilter); setCategoryPage(0); }}
-                  sx={{ minWidth: { xs: '100%', sm: 130 } }}
-                >
-                  <MenuItem value="all">All</MenuItem>
-                  <MenuItem value="active">Active</MenuItem>
-                  <MenuItem value="inactive">Inactive</MenuItem>
-                </TextField>
-                <TextField
-                  select
-                  size="small"
-                  label="Support Type"
-                  value={categorySupportTypeFilter}
-                  onChange={(e) => { setCategorySupportTypeFilter(e.target.value); setCategoryPage(0); }}
-                  sx={{ minWidth: { xs: '100%', sm: 170 } }}
-                >
-                  <MenuItem value="all">All Support Types</MenuItem>
-                  {Object.entries(TYPE_LABELS).map(([value, label]) => (
-                    <MenuItem key={value} value={value}>{label}</MenuItem>
-                  ))}
-                </TextField>
-              </Box>
-              <Button
-                startIcon={<AddIcon />}
-                variant="contained"
+            <SettingsFilterPanel
+              description="Search and narrow the category list."
+              actionLabel="Add Category"
+              onAction={() => openCatDialog()}
+              hasActiveFilters={Boolean(categorySearch || categoryStatusFilter !== 'all' || categorySupportTypeFilter !== 'all')}
+              onClear={() => {
+                setCategorySearch('');
+                setCategoryStatusFilter('all');
+                setCategorySupportTypeFilter('all');
+                setCategoryPage(0);
+              }}
+            >
+              <TextField
+                placeholder="Search categories..."
                 size="small"
-                onClick={() => openCatDialog()}
-                sx={{ alignSelf: { xs: 'stretch', sm: 'auto' }, whiteSpace: 'nowrap' }}
+                value={categorySearch}
+                onChange={(e) => { setCategorySearch(e.target.value); setCategoryPage(0); }}
+                inputProps={{ maxLength: 100, 'aria-label': 'Search categories' }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={SEARCH_FIELD_SX}
+              />
+              <TextField
+                select
+                size="small"
+                label="Status"
+                value={categoryStatusFilter}
+                onChange={(e) => { setCategoryStatusFilter(e.target.value as typeof categoryStatusFilter); setCategoryPage(0); }}
+                sx={FILTER_FIELD_SX}
               >
-                Add Category
-              </Button>
-            </Box>
+                <MenuItem value="all">All Statuses</MenuItem>
+                <MenuItem value="active">Active</MenuItem>
+                <MenuItem value="inactive">Inactive</MenuItem>
+              </TextField>
+              <TextField
+                select
+                size="small"
+                label="Support Type"
+                value={categorySupportTypeFilter}
+                onChange={(e) => { setCategorySupportTypeFilter(e.target.value); setCategoryPage(0); }}
+                sx={FILTER_FIELD_SX}
+              >
+                <MenuItem value="all">All Support Types</MenuItem>
+                {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                  <MenuItem key={value} value={value}>{label}</MenuItem>
+                ))}
+              </TextField>
+            </SettingsFilterPanel>
             <ResponsiveTable minWidth={680}>
               <Table size="small">
                 <TableHead>
@@ -827,52 +923,59 @@ export default function TicketSettingsPage() {
         {/* —— Issues Tab —— */}
         {tab === 1 && (
           <CardContent>
-              <Box display="flex" width="100%" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
-              <Box display="flex" width="100%" gap={1} flexWrap="wrap" flex={1}>
-                <TextField
-                  placeholder="Search issues..."
-                  size="small"
-                  value={issueSearch}
-                  onChange={(e) => { setIssueSearch(e.target.value); setIssuePage(0); }}
-                  inputProps={{ maxLength: 100 }}
-                  sx={{ minWidth: { xs: '100%', sm: 300 }, flex: { xs: '1 1 100%', sm: 1 } }}
-                />
-                <TextField
-                  select
-                  size="small"
-                  label="Status"
-                  value={issueStatusFilter}
-                  onChange={(e) => { setIssueStatusFilter(e.target.value as typeof issueStatusFilter); setIssuePage(0); }}
-                  sx={{ minWidth: { xs: '100%', sm: 130 } }}
-                >
-                  <MenuItem value="all">All</MenuItem>
-                  <MenuItem value="active">Active</MenuItem>
-                  <MenuItem value="inactive">Inactive</MenuItem>
-                </TextField>
-                <TextField
-                  select
-                  size="small"
-                  label="Category"
-                  value={issueCategoryFilter}
-                  onChange={(e) => { setIssueCategoryFilter(e.target.value); setIssuePage(0); }}
-                  sx={{ minWidth: { xs: '100%', sm: 170 } }}
-                >
-                  <MenuItem value="all">All Categories</MenuItem>
-                  {categories.filter((c) => !c.isDeleted).map((category) => (
-                    <MenuItem key={category.id} value={category.id}>{category.name}</MenuItem>
-                  ))}
-                </TextField>
-              </Box>
-              <Button
-                startIcon={<AddIcon />}
-                variant="contained"
+            <SettingsFilterPanel
+              description="Search and narrow the issue list."
+              actionLabel="Add Issue"
+              onAction={() => openIssueDialog()}
+              hasActiveFilters={Boolean(issueSearch || issueStatusFilter !== 'all' || issueCategoryFilter !== 'all')}
+              onClear={() => {
+                setIssueSearch('');
+                setIssueStatusFilter('all');
+                setIssueCategoryFilter('all');
+                setIssuePage(0);
+              }}
+            >
+              <TextField
+                placeholder="Search issues..."
                 size="small"
-                onClick={() => openIssueDialog()}
-                sx={{ alignSelf: { xs: 'stretch', sm: 'auto' }, whiteSpace: 'nowrap' }}
+                value={issueSearch}
+                onChange={(e) => { setIssueSearch(e.target.value); setIssuePage(0); }}
+                inputProps={{ maxLength: 100, 'aria-label': 'Search issues' }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={SEARCH_FIELD_SX}
+              />
+              <TextField
+                select
+                size="small"
+                label="Status"
+                value={issueStatusFilter}
+                onChange={(e) => { setIssueStatusFilter(e.target.value as typeof issueStatusFilter); setIssuePage(0); }}
+                sx={FILTER_FIELD_SX}
               >
-                Add Issue
-              </Button>
-            </Box>
+                <MenuItem value="all">All Statuses</MenuItem>
+                <MenuItem value="active">Active</MenuItem>
+                <MenuItem value="inactive">Inactive</MenuItem>
+              </TextField>
+              <TextField
+                select
+                size="small"
+                label="Category"
+                value={issueCategoryFilter}
+                onChange={(e) => { setIssueCategoryFilter(e.target.value); setIssuePage(0); }}
+                sx={FILTER_FIELD_SX}
+              >
+                <MenuItem value="all">All Categories</MenuItem>
+                {categories.filter((c) => !c.isDeleted).map((category) => (
+                  <MenuItem key={category.id} value={category.id}>{category.name}</MenuItem>
+                ))}
+              </TextField>
+            </SettingsFilterPanel>
 
             {issuesLoading ? (
               <Box display="flex" justifyContent="center" p={4}>
@@ -957,78 +1060,93 @@ export default function TicketSettingsPage() {
         {/* ── Keyword Rules Tab ── */}
         {tab === 2 && (
           <CardContent>
-            <Box display="flex" width="100%" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
-              <Box display="flex" width="100%" gap={1} flexWrap="wrap" flex={1}>
-                <TextField
-                  placeholder="Search rules..."
-                  size="small"
-                  value={ruleSearch}
-                  onChange={(e) => { setRuleSearch(e.target.value); setRulePage(0); }}
-                  sx={{ minWidth: { xs: '100%', sm: 300 }, flex: { xs: '1 1 100%', sm: 1 } }}
-                  inputProps={{ maxLength: 100 }}
-                />
-                <TextField
-                  select
-                  size="small"
-                  label="Status"
-                  value={ruleStatusFilter}
-                  onChange={(e) => { setRuleStatusFilter(e.target.value as typeof ruleStatusFilter); setRulePage(0); }}
-                  sx={{ minWidth: { xs: '100%', sm: 130 } }}
-                >
-                  <MenuItem value="all">All</MenuItem>
-                  <MenuItem value="active">Active</MenuItem>
-                  <MenuItem value="inactive">Inactive</MenuItem>
-                </TextField>
-                <TextField
-                  select
-                  size="small"
-                  label="Category"
-                  value={ruleCategoryFilter}
-                  onChange={(e) => { setRuleCategoryFilter(e.target.value); setRulePage(0); }}
-                  sx={{ minWidth: { xs: '100%', sm: 170 } }}
-                >
-                  <MenuItem value="all">All Categories</MenuItem>
-                  {categories.filter((c) => !c.isDeleted).map((category) => (
-                    <MenuItem key={category.id} value={category.id}>{category.name}</MenuItem>
-                  ))}
-                </TextField>
-                <TextField
-                  select
-                  size="small"
-                  label="Issue"
-                  value={ruleIssueFilter}
-                  onChange={(e) => { setRuleIssueFilter(e.target.value); setRulePage(0); }}
-                  sx={{ minWidth: 170 }}
-                >
-                  <MenuItem value="all">All Issues</MenuItem>
-                  {issues.filter((iss) => !iss.isDeleted).map((issue) => (
-                    <MenuItem key={issue.id} value={issue.id}>{issue.name}</MenuItem>
-                  ))}
-                </TextField>
-                <TextField
-                  select
-                  size="small"
-                  label="Support Type"
-                  value={ruleSupportTypeFilter}
-                  onChange={(e) => { setRuleSupportTypeFilter(e.target.value); setRulePage(0); }}
-                  sx={{ minWidth: 170 }}
-                >
-                  <MenuItem value="all">All Support Types</MenuItem>
-                  {Object.entries(TYPE_LABELS).map(([value, label]) => (
-                    <MenuItem key={value} value={value}>{label}</MenuItem>
-                  ))}
-                </TextField>
-              </Box>
-              <Button
-                startIcon={<AddIcon />}
-                variant="contained"
+            <SettingsFilterPanel
+              description="Search and narrow the keyword-rule list."
+              actionLabel="Add Rule"
+              onAction={() => openRuleDialog()}
+              hasActiveFilters={Boolean(
+                ruleSearch
+                || ruleStatusFilter !== 'all'
+                || ruleCategoryFilter !== 'all'
+                || ruleIssueFilter !== 'all'
+                || ruleSupportTypeFilter !== 'all'
+              )}
+              onClear={() => {
+                setRuleSearch('');
+                setRuleStatusFilter('all');
+                setRuleCategoryFilter('all');
+                setRuleIssueFilter('all');
+                setRuleSupportTypeFilter('all');
+                setRulePage(0);
+              }}
+            >
+              <TextField
+                placeholder="Search rules..."
                 size="small"
-                onClick={() => openRuleDialog()}
-                sx={{ alignSelf: { xs: 'stretch', sm: 'auto' }, whiteSpace: 'nowrap' }}
+                value={ruleSearch}
+                onChange={(e) => { setRuleSearch(e.target.value); setRulePage(0); }}
+                inputProps={{ maxLength: 100, 'aria-label': 'Search keyword rules' }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={SEARCH_FIELD_SX}
+              />
+              <TextField
+                select
+                size="small"
+                label="Status"
+                value={ruleStatusFilter}
+                onChange={(e) => { setRuleStatusFilter(e.target.value as typeof ruleStatusFilter); setRulePage(0); }}
+                sx={FILTER_FIELD_SX}
               >
-                Add Rule
-              </Button>
-            </Box>
+                <MenuItem value="all">All Statuses</MenuItem>
+                <MenuItem value="active">Active</MenuItem>
+                <MenuItem value="inactive">Inactive</MenuItem>
+              </TextField>
+              <TextField
+                select
+                size="small"
+                label="Category"
+                value={ruleCategoryFilter}
+                onChange={(e) => { setRuleCategoryFilter(e.target.value); setRulePage(0); }}
+                sx={FILTER_FIELD_SX}
+              >
+                <MenuItem value="all">All Categories</MenuItem>
+                {categories.filter((c) => !c.isDeleted).map((category) => (
+                  <MenuItem key={category.id} value={category.id}>{category.name}</MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                size="small"
+                label="Issue"
+                value={ruleIssueFilter}
+                onChange={(e) => { setRuleIssueFilter(e.target.value); setRulePage(0); }}
+                sx={FILTER_FIELD_SX}
+              >
+                <MenuItem value="all">All Issues</MenuItem>
+                {issues.filter((iss) => !iss.isDeleted).map((issue) => (
+                  <MenuItem key={issue.id} value={issue.id}>{issue.name}</MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                size="small"
+                label="Support Type"
+                value={ruleSupportTypeFilter}
+                onChange={(e) => { setRuleSupportTypeFilter(e.target.value); setRulePage(0); }}
+                sx={FILTER_FIELD_SX}
+              >
+                <MenuItem value="all">All Support Types</MenuItem>
+                {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                  <MenuItem key={value} value={value}>{label}</MenuItem>
+                ))}
+              </TextField>
+            </SettingsFilterPanel>
             <ResponsiveTable minWidth={820}>
               <Table size="small">
                 <TableHead>
@@ -1126,34 +1244,30 @@ export default function TicketSettingsPage() {
         {/* ── Escalation Focals Tab ── */}
         {tab === 3 && (
           <CardContent>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-              <Typography variant="body2" color="text.secondary">
-                Configure which roles act as escalation focal points per ticket type.
-              </Typography>
-              <Button
-                startIcon={<AddIcon />}
-                variant="contained"
-                size="small"
-                onClick={openFocalDialog}
-              >
-                Add Focal
-              </Button>
-            </Box>
-            <Box display="flex" gap={1} flexWrap="wrap" mb={2}>
+            <SettingsFilterPanel
+              description="Configure and filter escalation focal points by ticket type."
+              actionLabel="Add Focal"
+              onAction={openFocalDialog}
+              hasActiveFilters={focalTicketTypeFilter !== 'all'}
+              onClear={() => {
+                setFocalTicketTypeFilter('all');
+                setFocalPage(0);
+              }}
+            >
               <TextField
                 select
                 size="small"
                 label="Ticket Type"
                 value={focalTicketTypeFilter}
                 onChange={(e) => { setFocalTicketTypeFilter(e.target.value); setFocalPage(0); }}
-                sx={{ minWidth: 190 }}
+                sx={FILTER_FIELD_SX}
               >
                 <MenuItem value="all">All Ticket Types</MenuItem>
                 {Object.entries(TYPE_LABELS).map(([value, label]) => (
                   <MenuItem key={value} value={value}>{label}</MenuItem>
                 ))}
               </TextField>
-            </Box>
+            </SettingsFilterPanel>
             <ResponsiveTable minWidth={560}>
               <Table size="small">
                 <TableHead>
