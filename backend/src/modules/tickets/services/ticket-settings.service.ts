@@ -14,6 +14,7 @@ import { UserRole } from '../../shared/entities';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { Ticket } from '../entities/ticket.entity';
 import { SseService } from './sse.service';
+import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -310,6 +311,7 @@ export class TicketSettingsService {
     private readonly ticketRepo: Repository<Ticket>,
     private readonly roleCapSvc: RoleCapabilitiesService,
     private readonly sseService: SseService,
+    private readonly usersHttpClient: UsersHttpClient,
   ) {}
 
   // ── Categories ──────────────────────────────────────────────────────────
@@ -808,19 +810,22 @@ export class TicketSettingsService {
   }
 
   async listAvailableEscalationUsers(): Promise<{ value: string; label: string }[]> {
-    await this.roleCapSvc.reload();
-    const rows = await this.roleDefRepo.find();
-    const focalRoles = rows.filter(
-      (r) => r.value !== UserRole.SUPER_ADMIN && this.roleCapSvc.isEscalationFocal(r.value),
+    // Users and role capabilities are owned by users-service. Reading both from
+    // that source avoids a stale/missing ticketing-side view and keeps this list
+    // aligned with the capability checkbox in Role Management.
+    const [capabilityRows, serviceUsers] = await Promise.all([
+      this.usersHttpClient.getRoleCapabilities(),
+      this.usersHttpClient.getUsers(),
+    ]);
+    const roleMap = new Map(
+      capabilityRows
+        .filter((row) => row.roleValue !== UserRole.SUPER_ADMIN && row.isEscalationFocal)
+        .map((row) => [row.roleValue, row.label || row.roleValue]),
     );
-    const roleMap = new Map(focalRoles.map((r) => [r.value, r.label]));
 
-    // Fetch users with focal roles
-    const users = await this.categoryRepo.manager.query(
-      `SELECT id, first_name, last_name, email, role FROM users WHERE active = 1`,
+    const focalUsers = serviceUsers.filter(
+      (user) => user.active !== false && roleMap.has(user.role),
     );
-
-    const focalUsers = users.filter((u: any) => roleMap.has(u.role));
 
     return focalUsers.map((u: any) => {
       const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email;

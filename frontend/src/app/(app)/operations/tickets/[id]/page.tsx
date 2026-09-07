@@ -1779,7 +1779,9 @@ export default function TicketDetailPage() {
                         <Box display="flex" alignItems="center" gap={1}>
                           <Typography variant="body2" fontWeight={600}>
                             {c.user
-                              ? `${c.user.firstName} ${c.user.lastName}`
+                              ? ([c.user.firstName ?? c.user.first_name, c.user.lastName ?? c.user.last_name]
+                                .filter(Boolean)
+                                .join(' ') || c.user.email || `User #${c.userId}`)
                               : `User #${c.userId}`}
                           </Typography>
                           {(() => {

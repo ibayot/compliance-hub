@@ -884,8 +884,8 @@ function RoleManagementCard() {
       enqueueSnackbar('Role code must be at least 2 characters.', { variant: 'warning' });
       return;
     }
-    if (!form.label.trim()) {
-      enqueueSnackbar('Role label is required.', { variant: 'warning' });
+    if (form.label.trim().length < 2) {
+      enqueueSnackbar('Role label must be at least 2 characters.', { variant: 'warning' });
       return;
     }
     if (form.description.trim().length < 5) {
@@ -932,8 +932,8 @@ function RoleManagementCard() {
       enqueueSnackbar('Role code must use lowercase letters, digits, and underscores only.', { variant: 'warning' });
       return;
     }
-    if (!selected.label.trim()) {
-      enqueueSnackbar('Role label is required.', { variant: 'warning' });
+    if (selected.label.trim().length < 2) {
+      enqueueSnackbar('Role label must be at least 2 characters.', { variant: 'warning' });
       return;
     }
     if (selected.description.trim().length < 5) {
@@ -1092,12 +1092,12 @@ function RoleManagementCard() {
                     )
                   }
                   fullWidth
-                  inputProps={{ maxLength: 255 }}
+                  inputProps={{ minLength: 2, maxLength: 60 }}
                   disabled={Boolean(selected?.isSystem || selected?.is_system)}
                   helperText={
                     selected?.isSystem || selected?.is_system
                       ? 'System role codes are fixed'
-                      : 'Custom role \u2014 code can be renamed'
+                      : 'Minimum 2 characters; lowercase letters, digits, and underscores.'
                   }
                   sx={{ mb: 2 }}
                 />
@@ -1108,7 +1108,8 @@ function RoleManagementCard() {
                     setSelected((prev) => (prev ? { ...prev, label: e.target.value } : prev))
                   }
                   fullWidth
-                  inputProps={{ maxLength: 255 }}
+                  inputProps={{ minLength: 2, maxLength: 120 }}
+                  helperText="Minimum 2 characters."
                   sx={{ mb: 2 }}
                 />
                 <TextField
@@ -1120,6 +1121,8 @@ function RoleManagementCard() {
                   fullWidth
                   multiline
                   minRows={3}
+                  inputProps={{ minLength: 5, maxLength: 1000 }}
+                  helperText="Minimum 5 characters."
                   sx={{ mb: 2 }}
                 />
                 <FormControlLabel
@@ -1143,7 +1146,7 @@ function RoleManagementCard() {
                 <Button
                   variant="contained"
                   onClick={handleUpdate}
-                  disabled={saving || !selected?.label || selected.description.trim().length < 5}
+                  disabled={saving || (selected?.label?.trim().length ?? 0) < 2 || (selected?.description?.trim().length ?? 0) < 5}
                 >
                   {saving ? 'Saving...' : 'Save'}
                 </Button>
@@ -1163,8 +1166,8 @@ function RoleManagementCard() {
                     }))
                   }
                   fullWidth
-                  inputProps={{ maxLength: 255 }}
-                  helperText="Lowercase letters, digits, and underscores. E.g. section_head"
+                  inputProps={{ minLength: 2, maxLength: 60 }}
+                  helperText="Minimum 2 characters; lowercase letters, digits, and underscores. E.g. section_head"
                   sx={{ mb: 2 }}
                 />
                 <TextField
@@ -1172,7 +1175,8 @@ function RoleManagementCard() {
                   value={form.label}
                   onChange={(e) => setForm((prev) => ({ ...prev, label: e.target.value }))}
                   fullWidth
-                  inputProps={{ maxLength: 255 }}
+                  inputProps={{ minLength: 2, maxLength: 120 }}
+                  helperText="Minimum 2 characters."
                   sx={{ mb: 2 }}
                 />
                 <TextField
@@ -1182,6 +1186,8 @@ function RoleManagementCard() {
                   fullWidth
                   multiline
                   minRows={3}
+                  inputProps={{ minLength: 5, maxLength: 1000 }}
+                  helperText="Minimum 5 characters."
                   sx={{ mb: 2 }}
                 />
                 <FormControlLabel
@@ -1203,7 +1209,7 @@ function RoleManagementCard() {
                 <Button
                   variant="contained"
                   onClick={handleCreate}
-                  disabled={saving || !form.value || !form.label || form.description.trim().length < 5}
+                  disabled={saving || form.value.trim().length < 2 || form.label.trim().length < 2 || form.description.trim().length < 5}
                 >
                   {saving ? 'Saving...' : 'Create'}
                 </Button>

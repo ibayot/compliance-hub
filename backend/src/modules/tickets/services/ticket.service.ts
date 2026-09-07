@@ -2462,6 +2462,19 @@ export class TicketService implements OnModuleInit {
 
     const savedComment = await this.commentRepo.save(comment);
 
+    // Return the same user shape used by ticket reads so the newly-added
+    // comment can display the commenter immediately instead of User #<id>.
+    const commenter = await this.usersHttpClient.getUserById(actorId);
+    if (commenter) {
+      savedComment.user = {
+        id: commenter.id,
+        email: commenter.email,
+        first_name: commenter.first_name,
+        last_name: commenter.last_name,
+        role: commenter.role,
+      };
+    }
+
     if (actorRole === UserRole.USER) {
       ticket.hasUnreadTechnician = true;
       await this.ticketRepo.update(ticket.id, { hasUnreadTechnician: true });
@@ -2473,7 +2486,10 @@ export class TicketService implements OnModuleInit {
     this.logEvent(ticket.id, 'comment_added', actorId, {
       isInternal,
       hasAttachment: !!attachment,
-    }).catch(() => { });
+    }, false).catch(() => { });
+    // Comment insertion changes the ticket view for every open ticket screen.
+    // Emit explicitly instead of relying on the asynchronous event-log write.
+    this.sseService.emitTicketUpdated(ticket.id);
 
     // In-app notification
     const notifyUsers: number[] = [];

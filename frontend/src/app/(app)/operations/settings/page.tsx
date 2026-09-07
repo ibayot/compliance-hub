@@ -88,6 +88,7 @@ export default function TicketSettingsPage() {
   }>({ name: '', isIt: false, isDesktop: false, isPantawid: false, isActive: true });
   const [categorySearch, setCategorySearch] = useState('');
   const [categoryStatusFilter, setCategoryStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [categorySupportTypeFilter, setCategorySupportTypeFilter] = useState('all');
   const [catSubmitting, setCatSubmitting] = useState(false);
   const [deleteCatId, setDeleteCatId] = useState<string | null>(null);
 
@@ -108,6 +109,9 @@ export default function TicketSettingsPage() {
   const [ruleSubmitting, setRuleSubmitting] = useState(false);
   const [ruleSearch, setRuleSearch] = useState("");
   const [ruleStatusFilter, setRuleStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [ruleCategoryFilter, setRuleCategoryFilter] = useState('all');
+  const [ruleIssueFilter, setRuleIssueFilter] = useState('all');
+  const [ruleSupportTypeFilter, setRuleSupportTypeFilter] = useState('all');
 
   // — Specific Issues —
   const [issues, setIssues] = useState<TicketIssueType[]>([]);
@@ -134,6 +138,7 @@ export default function TicketSettingsPage() {
   });
   const [issueSearch, setIssueSearch] = useState('');
   const [issueStatusFilter, setIssueStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [issueCategoryFilter, setIssueCategoryFilter] = useState('all');
   const [issueSubmitting, setIssueSubmitting] = useState(false);
 
   // — Escalation Focals —
@@ -146,6 +151,7 @@ export default function TicketSettingsPage() {
     ticketType: 'all',
     userId: '',
   });
+  const [focalTicketTypeFilter, setFocalTicketTypeFilter] = useState('all');
   const [focalSubmitting, setFocalSubmitting] = useState(false);
 
   const fetchFocals = useCallback(async () => {
@@ -293,8 +299,13 @@ export default function TicketSettingsPage() {
     try {
       const users = await ticketSettingsApi.getAvailableEscalationUsers();
       setAvailableUsers(users);
-    } catch {
+    } catch (err: any) {
       setAvailableUsers([]);
+      const message = err?.response?.data?.message;
+      enqueueSnackbar(
+        Array.isArray(message) ? message.join(' ') : message || 'Failed to load escalation focal users.',
+        { variant: 'error' },
+      );
     }
     setFocalForm({ ticketType: 'all', userId: '' });
     setFocalDialogOpen(true);
@@ -563,7 +574,7 @@ export default function TicketSettingsPage() {
     const parsedPause = issueForm.allowablePauseHours ? Number(issueForm.allowablePauseHours) : 48;
     const parsedFreeze = issueForm.maxFreezeHours ? Number(issueForm.maxFreezeHours) : null;
     if (parsedPause < 0 || parsedPause > 168) {
-      enqueueSnackbar('Allowable Pause Hours must be between 0 and 168', { variant: 'warning' });
+      enqueueSnackbar('Max Pause Hours must be between 0 and 168', { variant: 'warning' });
       return;
     }
 
@@ -620,9 +631,22 @@ export default function TicketSettingsPage() {
   const visibleCategories = categories.filter((c) => (
     !c.isDeleted
       && (categoryStatusFilter === 'all' || (categoryStatusFilter === 'active' ? c.isActive : !c.isActive))
+      && (categorySupportTypeFilter === 'all'
+        || (categorySupportTypeFilter === 'it_support' && c.isIt)
+        || (categorySupportTypeFilter === 'desktop_support' && c.isDesktop)
+        || (categorySupportTypeFilter === 'pantawid_ict_support' && c.isPantawid))
   ));
+  const searchableCategories = visibleCategories.filter((c) => {
+    const s = categorySearch.trim().toLowerCase();
+    if (!s) return true;
+    return c.name.toLowerCase().includes(s)
+      || (c.isIt && 'it support'.includes(s))
+      || (c.isDesktop && 'desktop support'.includes(s))
+      || (c.isPantawid && 'pantawid ict support'.includes(s));
+  });
   const visibleIssues = issues.filter((iss) => (
     (issueStatusFilter === 'all' || (issueStatusFilter === 'active' ? iss.isActive : !iss.isActive))
+      && (issueCategoryFilter === 'all' || String(iss.categoryId ?? iss.category_id ?? '') === issueCategoryFilter)
       && (issueSearch.trim() === ''
       || iss.name.toLowerCase().includes(issueSearch.toLowerCase())
       || Boolean(iss.category?.name?.toLowerCase().includes(issueSearch.toLowerCase()))
@@ -630,6 +654,9 @@ export default function TicketSettingsPage() {
   ));
   const visibleRules = rules.filter((rule) => {
     if (ruleStatusFilter !== 'all' && (ruleStatusFilter === 'active') !== rule.isActive) return false;
+    if (ruleSupportTypeFilter !== 'all' && rule.targetTicketType !== ruleSupportTypeFilter) return false;
+    if (ruleCategoryFilter !== 'all' && String(rule.targetCategoryId ?? '') !== ruleCategoryFilter) return false;
+    if (ruleIssueFilter !== 'all' && String(rule.targetIssueTypeId ?? '') !== ruleIssueFilter) return false;
     const s = ruleSearch.trim().toLowerCase();
     if (!s) return true;
     const kws = rule.keywords || [rule.keyword];
@@ -692,6 +719,19 @@ export default function TicketSettingsPage() {
                   <MenuItem value="active">Active</MenuItem>
                   <MenuItem value="inactive">Inactive</MenuItem>
                 </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Support Type"
+                  value={categorySupportTypeFilter}
+                  onChange={(e) => { setCategorySupportTypeFilter(e.target.value); setCategoryPage(0); }}
+                  sx={{ minWidth: 170 }}
+                >
+                  <MenuItem value="all">All Support Types</MenuItem>
+                  {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                    <MenuItem key={value} value={value}>{label}</MenuItem>
+                  ))}
+                </TextField>
               </Box>
               <Button
                 startIcon={<AddIcon />}
@@ -729,15 +769,7 @@ export default function TicketSettingsPage() {
                     </TableRow>
                   ) : (
                     visibleCategories
-                      .filter((c) => {
-                        const s = categorySearch.trim().toLowerCase();
-                        if (!s) return true;
-                        if (c.name.toLowerCase().includes(s)) return true;
-                        if (c.isIt && "it support".includes(s)) return true;
-                        if (c.isDesktop && "desktop support".includes(s)) return true;
-                        if (c.isPantawid && "pantawid".includes(s)) return true;
-                        return false;
-                      })
+                       .filter((c) => searchableCategories.includes(c))
                       .slice(categoryPage * PAGE_SIZE, (categoryPage + 1) * PAGE_SIZE)
                       .map((cat) => (
                         <TableRow key={cat.id} hover>
@@ -782,10 +814,7 @@ export default function TicketSettingsPage() {
             </ResponsiveTable>
             <TablePagination
               component="div"
-              count={visibleCategories.filter((c) => {
-                const s = categorySearch.trim().toLowerCase();
-                return !s || c.name.toLowerCase().includes(s) || (c.isIt && 'it support'.includes(s)) || (c.isDesktop && 'desktop support'.includes(s)) || (c.isPantawid && 'pantawid'.includes(s));
-              }).length}
+              count={searchableCategories.length}
               page={categoryPage}
               onPageChange={(_, value) => setCategoryPage(value)}
               rowsPerPage={PAGE_SIZE}
@@ -819,6 +848,19 @@ export default function TicketSettingsPage() {
                   <MenuItem value="active">Active</MenuItem>
                   <MenuItem value="inactive">Inactive</MenuItem>
                 </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Category"
+                  value={issueCategoryFilter}
+                  onChange={(e) => { setIssueCategoryFilter(e.target.value); setIssuePage(0); }}
+                  sx={{ minWidth: 170 }}
+                >
+                  <MenuItem value="all">All Categories</MenuItem>
+                  {categories.filter((c) => !c.isDeleted).map((category) => (
+                    <MenuItem key={category.id} value={category.id}>{category.name}</MenuItem>
+                  ))}
+                </TextField>
               </Box>
               <Button
                 startIcon={<AddIcon />}
@@ -846,7 +888,8 @@ export default function TicketSettingsPage() {
                           <strong>SLA Time Limit</strong>
                         </Tooltip>
                       </TableCell>
-                      <TableCell><strong>Allowable Pause Hours</strong></TableCell>
+                      <TableCell><strong>Max Pause Hours</strong></TableCell>
+                      <TableCell><strong>Max Freeze Hours</strong></TableCell>
                       <TableCell><strong>Status</strong></TableCell>
                       <TableCell align="right"><strong>Actions</strong></TableCell>
                     </TableRow>
@@ -887,7 +930,7 @@ export default function TicketSettingsPage() {
                     ))}
                     {visibleIssues.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                        <TableCell colSpan={7} align="center" sx={{ py: 3, color: 'text.secondary' }}>
                           No issues found.
                         </TableCell>
                       </TableRow>
@@ -933,6 +976,45 @@ export default function TicketSettingsPage() {
                   <MenuItem value="all">All</MenuItem>
                   <MenuItem value="active">Active</MenuItem>
                   <MenuItem value="inactive">Inactive</MenuItem>
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Category"
+                  value={ruleCategoryFilter}
+                  onChange={(e) => { setRuleCategoryFilter(e.target.value); setRulePage(0); }}
+                  sx={{ minWidth: 170 }}
+                >
+                  <MenuItem value="all">All Categories</MenuItem>
+                  {categories.filter((c) => !c.isDeleted).map((category) => (
+                    <MenuItem key={category.id} value={category.id}>{category.name}</MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Issue"
+                  value={ruleIssueFilter}
+                  onChange={(e) => { setRuleIssueFilter(e.target.value); setRulePage(0); }}
+                  sx={{ minWidth: 170 }}
+                >
+                  <MenuItem value="all">All Issues</MenuItem>
+                  {issues.filter((iss) => !iss.isDeleted).map((issue) => (
+                    <MenuItem key={issue.id} value={issue.id}>{issue.name}</MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Support Type"
+                  value={ruleSupportTypeFilter}
+                  onChange={(e) => { setRuleSupportTypeFilter(e.target.value); setRulePage(0); }}
+                  sx={{ minWidth: 170 }}
+                >
+                  <MenuItem value="all">All Support Types</MenuItem>
+                  {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                    <MenuItem key={value} value={value}>{label}</MenuItem>
+                  ))}
                 </TextField>
               </Box>
               <Button
@@ -1054,6 +1136,21 @@ export default function TicketSettingsPage() {
                 Add Focal
               </Button>
             </Box>
+            <Box display="flex" gap={1} flexWrap="wrap" mb={2}>
+              <TextField
+                select
+                size="small"
+                label="Ticket Type"
+                value={focalTicketTypeFilter}
+                onChange={(e) => { setFocalTicketTypeFilter(e.target.value); setFocalPage(0); }}
+                sx={{ minWidth: 190 }}
+              >
+                <MenuItem value="all">All Ticket Types</MenuItem>
+                {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                  <MenuItem key={value} value={value}>{label}</MenuItem>
+                ))}
+              </TextField>
+            </Box>
             <ResponsiveTable minWidth={560}>
               <Table size="small">
                 <TableHead>
@@ -1071,7 +1168,7 @@ export default function TicketSettingsPage() {
                         <CircularProgress size={24} />
                       </TableCell>
                     </TableRow>
-                  ) : focals.length === 0 ? (
+                  ) : focals.filter((f) => focalTicketTypeFilter === 'all' || f.ticketType === focalTicketTypeFilter).length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={4} align="center">
                         <Typography color="text.secondary" py={2}>
@@ -1080,7 +1177,7 @@ export default function TicketSettingsPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    focals
+                    focals.filter((f) => focalTicketTypeFilter === 'all' || f.ticketType === focalTicketTypeFilter)
                       .slice(focalPage * PAGE_SIZE, (focalPage + 1) * PAGE_SIZE)
                       .map((f) => (
                       <TableRow key={f.id} hover>
@@ -1113,7 +1210,7 @@ export default function TicketSettingsPage() {
             {!focalsLoading && (
               <TablePagination
                 component="div"
-                count={focals.length}
+                count={focals.filter((f) => focalTicketTypeFilter === 'all' || f.ticketType === focalTicketTypeFilter).length}
                 page={focalPage}
                 onPageChange={(_, value) => setFocalPage(value)}
                 rowsPerPage={PAGE_SIZE}
@@ -1580,7 +1677,7 @@ export default function TicketSettingsPage() {
               helperText="Optional. Enter hours > 0."
             />
             <TextField
-              label="Allowable Pause Hours *"
+              label="Max Pause Hours *"
                 type="text"
                 inputMode="numeric"
                 inputProps={{ min: 0, max: 120, maxLength: 3 }}
