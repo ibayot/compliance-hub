@@ -808,6 +808,7 @@ export class TicketSettingsService {
   }
 
   async listAvailableEscalationUsers(): Promise<{ value: string; label: string }[]> {
+    await this.roleCapSvc.reload();
     const rows = await this.roleDefRepo.find();
     const focalRoles = rows.filter(
       (r) => r.value !== UserRole.SUPER_ADMIN && this.roleCapSvc.isEscalationFocal(r.value),

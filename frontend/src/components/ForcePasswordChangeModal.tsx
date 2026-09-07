@@ -34,6 +34,25 @@ interface Props {
   user: User;
 }
 
+function getPasswordValidationError(password: string): string | null {
+  const missingRules: string[] = [];
+
+  if (password.length < 12) missingRules.push('at least 12 characters');
+  if (!/[A-Z]/.test(password)) missingRules.push('at least 1 uppercase letter');
+  if (!/[a-z]/.test(password)) missingRules.push('at least 1 lowercase letter');
+  if (!/\d/.test(password)) missingRules.push('at least 1 number');
+  if (!/[@$!%*?&_\-#]/.test(password)) {
+    missingRules.push('at least 1 special character (@$!%*?&_-#)');
+  }
+  if (password.includes('/') || password.includes('\\')) {
+    return 'Password cannot contain a forward slash (/) or backslash (\\).';
+  }
+
+  return missingRules.length > 0
+    ? `Password must include ${missingRules.join(', ')}.`
+    : null;
+}
+
 export default function ForcePasswordChangeModal({ open, onClose, user }: Props) {
   const { enqueueSnackbar } = useSnackbar();
 
@@ -42,6 +61,7 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
@@ -65,6 +85,7 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
       setNewPassword(result.password);
       setConfirmPassword(result.password);
       setShowPassword(true);
+      setShowConfirmPassword(true);
       enqueueSnackbar('Password generated successfully', { variant: 'success' });
     } catch (err: any) {
       enqueueSnackbar('Failed to generate password', { variant: 'error' });
@@ -105,8 +126,9 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 12) {
-      setError('Password must be at least 12 characters long.');
+    const passwordError = getPasswordValidationError(newPassword);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -118,10 +140,23 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
       setError('Please fill in all required profile fields, including Staff ID.');
       return;
     }
+    if (!/^\d{6}$/.test(staffId)) {
+      setError('Staff ID must contain exactly 6 digits.');
+      return;
+    }
+    if (!/^\d{10}$/.test(phoneNumber)) {
+      setError('Phone number must contain exactly 10 digits.');
+      return;
+    }
 
     setLoading(true);
     setError(null);
     try {
+      const staffIdResult = await usersApi.validateStaffId(staffId);
+      if (!staffIdResult.valid) {
+        setError('The Staff ID is not valid. Please check the Staff ID and try again.');
+        return;
+      }
       await usersApi.updateUser(user.id, {
         password: newPassword,
         staffId,
@@ -187,27 +222,43 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
                 required
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                InputProps={{
+                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
                       <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
                         {showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
                     </InputAdornment>
-                  ),
-                }}
-              />
+                   ),
+                 }}
+                 sx={{ '& input::-ms-reveal, & input::-ms-clear': { display: 'none' } }}
+               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 margin="dense"
                 label="Confirm New Password"
-                type={showPassword ? 'text' : 'password'}
+                 type={showConfirmPassword ? 'text' : 'password'}
                 fullWidth
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
+                 required
+                 value={confirmPassword}
+                 onChange={(e) => setConfirmPassword(e.target.value)}
+                 autoComplete="new-password"
+                 InputProps={{
+                   endAdornment: (
+                     <InputAdornment position="end">
+                       <IconButton
+                         aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                         onClick={() => setShowConfirmPassword((value) => !value)}
+                         edge="end"
+                       >
+                         {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
+                       </IconButton>
+                     </InputAdornment>
+                   ),
+                 }}
+                 sx={{ '& input::-ms-reveal, & input::-ms-clear': { display: 'none' } }}
+               />
             </Grid>
           </Grid>
 

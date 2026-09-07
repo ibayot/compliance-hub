@@ -892,6 +892,10 @@ export default function TicketsPage() {
       enqueueSnackbar('Sex is required.', { variant: 'warning' });
       return;
     }
+    if (csatForm.contactNumber && !/^\d{10}$/.test(csatForm.contactNumber)) {
+      enqueueSnackbar('Contact number must contain exactly 10 digits.', { variant: 'warning' });
+      return;
+    }
     const ratedItems = csatForm.likert.filter((_, i) => ![3, 5, 8].includes(i));
     if (ratedItems.some((v) => v === 0)) {
       enqueueSnackbar('Please rate all applicable items.', { variant: 'warning' });
@@ -904,7 +908,9 @@ export default function TicketsPage() {
       setSatDialogOpen(false);
       fetchTickets();
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to submit', { variant: 'error' });
+      const rawMessage = err?.response?.data?.message;
+      const message = Array.isArray(rawMessage) ? rawMessage.join(' ') : rawMessage;
+      enqueueSnackbar(message || 'Failed to submit', { variant: 'error' });
     } finally {
       setCsatSubmitting(false);
     }

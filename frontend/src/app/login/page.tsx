@@ -11,13 +11,15 @@ import {
   Container,
   Divider,
   Alert,
+  InputAdornment,
+  IconButton,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { CredentialResponse, GoogleLogin } from '@react-oauth/google';
 import { useSnackbar } from 'notistack';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Fingerprint as FingerprintIcon } from '@mui/icons-material';
+import { Fingerprint as FingerprintIcon, Visibility, VisibilityOff } from '@mui/icons-material';
 import {
   getBiometricCredentials,
   hasBiometricCredentials,
@@ -28,6 +30,7 @@ import {
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [biometricLoading, setBiometricLoading] = useState(false);
   const [biometricChecked, setBiometricChecked] = useState(false);
@@ -211,15 +214,28 @@ export default function LoginPage() {
 
               <TextField
                 label="Password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 variant="outlined"
                 fullWidth
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                sx={{ mb: 3 }}
                 autoComplete="current-password"
                 InputLabelProps={{ shrink: true }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        onClick={() => setShowPassword((value) => !value)}
+                        edge="end"
+                      >
+                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ mb: 3, '& input::-ms-reveal, & input::-ms-clear': { display: 'none' } }}
               />
 
               <Button type="submit" variant="contained" fullWidth size="large" disabled={loading}>

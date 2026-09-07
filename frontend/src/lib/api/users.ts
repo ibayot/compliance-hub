@@ -216,6 +216,11 @@ export const usersApi = {
     return response.data;
   },
 
+  validateStaffId: async (staffId: string): Promise<{ valid: boolean }> => {
+    const response = await apiClient.get('/users/validate-staff-id', { params: { staffId } });
+    return response.data;
+  },
+
   create: async (payload: CreateUserPayload): Promise<UserRecord> => {
     const response = await apiClient.post('/users', payload);
     return response.data;

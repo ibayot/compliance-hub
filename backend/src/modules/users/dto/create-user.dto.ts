@@ -26,6 +26,16 @@ export class CreateUserDto {
   })
   @IsString()
   @IsOptional()
+  @MinLength(12, { message: 'Password must be at least 12 characters long.' })
+  @Matches(/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&_\-#])/, {
+    message: 'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character (@$!%*?&_-#).',
+  })
+  @NotContains('/', {
+    message: 'Password cannot contain a forward slash (/).',
+  })
+  @NotContains('\\', {
+    message: 'Password cannot contain a backslash (\\).',
+  })
   password?: string;
 
   @IsString()
@@ -46,6 +56,9 @@ export class CreateUserDto {
 
   @IsString()
   @IsOptional()
+  @Matches(/^\d{10}$/, {
+    message: 'Phone number must contain exactly 10 digits.',
+  })
   phoneNumber?: string;
 
   @IsString()

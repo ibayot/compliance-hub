@@ -91,7 +91,7 @@ function isWeekday(d: Date): boolean {
 }
 
 export default function AttendancePage() {
-  const { user, myCap } = useAuth();
+  const { user, myCap, isSessionLocked, requiresPasswordChange } = useAuth();
   /** All RICTMS staff (everyone except regular users) sees their own attendance in the calendar */
   const isRICTMSStaff = user?.role !== 'user';
   const { enqueueSnackbar } = useSnackbar();
@@ -230,6 +230,7 @@ export default function AttendancePage() {
   // sync even when no SSE event is emitted.
   useEffect(() => {
     const refresh = window.setInterval(() => {
+      if (isSessionLocked || requiresPasswordChange) return;
       fetchSystemStatus();
       if (tab === 1) {
         silentRefreshTab1();
@@ -239,7 +240,7 @@ export default function AttendancePage() {
     }, 60_000);
 
     return () => window.clearInterval(refresh);
-  }, [tab, isRICTMSStaff, fetchSystemStatus, silentRefreshTab1, silentRefreshTab0Attendance]);
+  }, [tab, isRICTMSStaff, isSessionLocked, requiresPasswordChange, fetchSystemStatus, silentRefreshTab1, silentRefreshTab0Attendance]);
 
   // Office day map: date → OfficeDay
   const odMap = useMemo(() => {

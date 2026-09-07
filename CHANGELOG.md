@@ -1,9 +1,27 @@
 # RICTMS Compliance Hub - Changelog
-# RICTMS Compliance Hub - Changelog
 
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [1.0.3] - 2026-09-07 - QA Fixes and AI Reliability
+
+### Added
+- Added staff ID validation through the `vw_staff_id_list` source during forced password completion.
+- Added password visibility controls on login and both forced-password fields.
+- Added status filters for categories, issues, and keyword rules.
+
+### Changed
+- Forced password completion now pauses heartbeat, SSE, and attendance refresh activity until the modal is completed.
+- The inactivity lock now uses an absolute deadline so the 15-minute timer remains accurate when the browser is in the background.
+- Ticket-rating validation now identifies invalid fields and values through clear snackbars.
+- Escalation focal candidates now refresh role capabilities before being listed.
+- Cloudflare Workers AI now discovers current non-deprecated text-generation models, ranks suitable models, retries alternatives, and uses current fallback models for Knowledge Base generation and suggestions.
+
+### Fixed
+- Enforced exactly 10 digits for phone numbers and the required password complexity rules.
+- Kept inactive issues visible in the management list while preserving active-only issue selection for ticket creation.
+- Improved role-definition validation messages so the invalid input and reason are shown.
 
 ## [1.0.2] - 2026-09-07 - Access, Units, Environment, and Duty Updates
 

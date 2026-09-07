@@ -170,6 +170,11 @@ export class UsersController {
     return this.usersService.getProfileUnits(req.user.role);
   }
 
+  @Get('validate-staff-id')
+  validateStaffId(@Query('staffId') staffId: string) {
+    return this.usersService.validateStaffId(staffId);
+  }
+
   // ── Generic user :id routes — kept AFTER static capability routes ──
 
   @Get(':id')

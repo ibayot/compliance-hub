@@ -869,12 +869,29 @@ function RoleManagementCard() {
   }, [loadRoles]);
   useSse(['GLOBAL_SETTINGS_UPDATED'], loadRoles);
 
+  const roleErrorMessage = (error: any, fallback: string) => {
+    const raw = error?.response?.data?.message;
+    return Array.isArray(raw) ? raw.join(' ') : raw || fallback;
+  };
+
   const handleCreate = async () => {
+    const codeVal = form.value.trim().toLowerCase().replace(/\s+/g, '_');
+    if (!codeVal) {
+      enqueueSnackbar('Role code is required.', { variant: 'warning' });
+      return;
+    }
+    if (codeVal.length < 2) {
+      enqueueSnackbar('Role code must be at least 2 characters.', { variant: 'warning' });
+      return;
+    }
+    if (!form.label.trim()) {
+      enqueueSnackbar('Role label is required.', { variant: 'warning' });
+      return;
+    }
     if (form.description.trim().length < 5) {
       enqueueSnackbar('Description must be at least 5 characters.', { variant: 'warning' });
       return;
     }
-    const codeVal = form.value.trim().toLowerCase().replace(/\s+/g, '_');
     if (!codeVal.match(/^[a-z0-9_]+$/)) {
       enqueueSnackbar('Role code must use lowercase letters, digits, and underscores only.', {
         variant: 'error',
@@ -893,7 +910,7 @@ function RoleManagementCard() {
       setForm({ value: '', label: '', description: '', assignable: true });
       await loadRoles();
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to create role definition.', {
+      enqueueSnackbar(roleErrorMessage(err, 'Failed to create role definition.'), {
         variant: 'error',
       });
     } finally {
@@ -903,6 +920,22 @@ function RoleManagementCard() {
 
   const handleUpdate = async () => {
     if (!selected) return;
+    if (!selected.value.trim()) {
+      enqueueSnackbar('Role code is required.', { variant: 'warning' });
+      return;
+    }
+    if (selected.value.trim().length < 2) {
+      enqueueSnackbar('Role code must be at least 2 characters.', { variant: 'warning' });
+      return;
+    }
+    if (!/^[a-z0-9_]+$/.test(selected.value.trim())) {
+      enqueueSnackbar('Role code must use lowercase letters, digits, and underscores only.', { variant: 'warning' });
+      return;
+    }
+    if (!selected.label.trim()) {
+      enqueueSnackbar('Role label is required.', { variant: 'warning' });
+      return;
+    }
     if (selected.description.trim().length < 5) {
       enqueueSnackbar('Description must be at least 5 characters.', { variant: 'warning' });
       return;
@@ -920,7 +953,7 @@ function RoleManagementCard() {
       setSelected(null);
       await loadRoles();
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to update role definition.', {
+      enqueueSnackbar(roleErrorMessage(err, 'Failed to update role definition.'), {
         variant: 'error',
       });
     } finally {

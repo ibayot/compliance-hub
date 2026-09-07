@@ -961,9 +961,13 @@ export const ticketSettingsApi = {
   },
 
   // Issue Types
-  getIssueTypes: async (categoryId?: string): Promise<TicketIssueType[]> => {
-    const params = categoryId ? `?categoryId=${categoryId}` : '';
-    const response = await apiClient.get(`/ticket-settings/issue-types${params}`);
+  getIssueTypes: async (categoryId?: string, activeOnly?: boolean): Promise<TicketIssueType[]> => {
+    const params = new URLSearchParams();
+    if (categoryId) params.append('categoryId', categoryId);
+    if (activeOnly === true) params.append('activeOnly', 'true');
+    if (activeOnly === false) params.append('activeOnly', 'false');
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const response = await apiClient.get(`/ticket-settings/issue-types${qs}`);
     return response.data;
   },
   createIssueType: async (data: {

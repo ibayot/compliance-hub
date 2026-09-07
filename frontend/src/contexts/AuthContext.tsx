@@ -68,6 +68,7 @@ interface AuthContextType {
   loginWithGoogle: (idToken: string, redirectTo?: string) => Promise<void>;
   logout: () => Promise<void>;
   isSessionLocked: boolean;
+  requiresPasswordChange: boolean;
   unlockSession: (password: string) => Promise<void>;
   isAuthenticated: boolean;
   requiresMfa: boolean;
@@ -88,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inactivityDeadlineRef = useRef<number | null>(null);
   const navigate = useNavigate();
 
   
@@ -103,18 +105,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(inactivityTimerRef.current);
       inactivityTimerRef.current = null;
     }
+    inactivityDeadlineRef.current = null;
   }, []);
 
   const scheduleInactivityLock = useCallback(() => {
     clearInactivityTimer();
-    if (!user || isSessionLocked) return;
-    inactivityTimerRef.current = setTimeout(() => {
+    if (!user || isSessionLocked || requiresPasswordChange) return;
+
+    const lock = () => {
       sessionStorage.setItem('isSessionLocked', 'true');
       setIsSessionLocked(true);
       setUnlockPassword('');
       setUnlockError(null);
-    }, INACTIVITY_TIMEOUT_MS);
-  }, [clearInactivityTimer, isSessionLocked, user]);
+      inactivityDeadlineRef.current = null;
+    };
+
+    const deadline = Date.now() + INACTIVITY_TIMEOUT_MS;
+    inactivityDeadlineRef.current = deadline;
+    const checkDeadline = () => {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        lock();
+        return;
+      }
+      inactivityTimerRef.current = setTimeout(checkDeadline, Math.min(remaining, 60_000));
+    };
+    checkDeadline();
+  }, [clearInactivityTimer, isSessionLocked, requiresPasswordChange, user]);
 
   const unlockSession = useCallback(
     async (password: string) => {
@@ -206,13 +223,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [enqueueSnackbar, logout]);
 
   useEffect(() => {
-    if (!user || loading) {
+    if (!user || loading || requiresPasswordChange) {
       clearInactivityTimer();
       return;
     }
 
     const activityHandler = () => {
-      if (!isSessionLocked) {
+      if (!isSessionLocked && !requiresPasswordChange) {
+        scheduleInactivityLock();
+      }
+    };
+
+    const visibilityHandler = () => {
+      if (document.visibilityState !== 'visible' || isSessionLocked || requiresPasswordChange) return;
+      if (inactivityDeadlineRef.current && Date.now() >= inactivityDeadlineRef.current) {
+        clearInactivityTimer();
+        sessionStorage.setItem('isSessionLocked', 'true');
+        setIsSessionLocked(true);
+        setUnlockPassword('');
+        setUnlockError(null);
+      } else {
         scheduleInactivityLock();
       }
     };
@@ -227,13 +257,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     events.forEach((eventName) =>
       window.addEventListener(eventName, activityHandler, { passive: true }),
     );
+    document.addEventListener('visibilitychange', visibilityHandler);
     scheduleInactivityLock();
 
     return () => {
       events.forEach((eventName) => window.removeEventListener(eventName, activityHandler));
+      document.removeEventListener('visibilitychange', visibilityHandler);
       clearInactivityTimer();
     };
-  }, [clearInactivityTimer, isSessionLocked, loading, scheduleInactivityLock, user]);
+  }, [clearInactivityTimer, isSessionLocked, loading, requiresPasswordChange, scheduleInactivityLock, user]);
 
   // ── Heartbeat: verify session every 60 s while logged in ─────────────────
   // If the account is deactivated server-side, getProfile() returns 401 →
@@ -241,7 +273,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // deactivated users → tokens are cleared and the user is redirected to
   // /login?reason=session_expired automatically.
   useEffect(() => {
-    if (!user) return;
+    if (!user || requiresPasswordChange || isSessionLocked) return;
 
     const id = setInterval(async () => {
       try {
@@ -276,7 +308,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 60_000); // 60 s
 
     return () => clearInterval(id);
-  }, [user, enqueueSnackbar, logout]);
+  }, [user, enqueueSnackbar, isSessionLocked, requiresPasswordChange, logout]);
 
   const login = async (email: string, password: string, redirectTo?: string) => {
     const response = await authApi.login({ email, password });
@@ -404,9 +436,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           loading,
           login,
           loginWithGoogle,
-          logout,
-          isSessionLocked,
-          unlockSession,
+           logout,
+           isSessionLocked,
+           requiresPasswordChange,
+           unlockSession,
           isAuthenticated: !!user,
           requiresMfa,
           setRequiresMfa,

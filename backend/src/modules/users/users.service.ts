@@ -672,6 +672,29 @@ const previousValue = value;
     });
   }
 
+  async validateStaffId(staffId: string): Promise<{ valid: boolean }> {
+    const normalized = String(staffId ?? '').trim();
+    if (!/^\d{6}$/.test(normalized)) {
+      return { valid: false };
+    }
+
+    try {
+      const rows = await this.usersRepository.query(
+        'SELECT staff_id FROM vw_staff_id_list WHERE staff_id = ? LIMIT 1',
+        [normalized],
+      );
+      return { valid: rows.length > 0 };
+    } catch (error: any) {
+      const message = String(error?.message || '').toLowerCase();
+      if (message.includes('vw_staff_id_list') && message.includes("doesn't exist")) {
+        throw new BadRequestException(
+          'Staff ID validation is not available. Please contact the system administrator.',
+        );
+      }
+      throw error;
+    }
+  }
+
   /** Autocomplete: find registered emails that start with (or contain) a query string */
   async searchEmails(
     query: string,

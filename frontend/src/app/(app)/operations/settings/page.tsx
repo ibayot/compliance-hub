@@ -87,6 +87,7 @@ export default function TicketSettingsPage() {
     isActive: boolean;
   }>({ name: '', isIt: false, isDesktop: false, isPantawid: false, isActive: true });
   const [categorySearch, setCategorySearch] = useState('');
+  const [categoryStatusFilter, setCategoryStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [catSubmitting, setCatSubmitting] = useState(false);
   const [deleteCatId, setDeleteCatId] = useState<string | null>(null);
 
@@ -106,6 +107,7 @@ export default function TicketSettingsPage() {
   const [keywordInput, setKeywordInput] = useState('');
   const [ruleSubmitting, setRuleSubmitting] = useState(false);
   const [ruleSearch, setRuleSearch] = useState("");
+  const [ruleStatusFilter, setRuleStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   // — Specific Issues —
   const [issues, setIssues] = useState<TicketIssueType[]>([]);
@@ -131,6 +133,7 @@ export default function TicketSettingsPage() {
     maxFreezeHours: '',
   });
   const [issueSearch, setIssueSearch] = useState('');
+  const [issueStatusFilter, setIssueStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [issueSubmitting, setIssueSubmitting] = useState(false);
 
   // — Escalation Focals —
@@ -359,7 +362,9 @@ export default function TicketSettingsPage() {
   const fetchIssues = useCallback(async () => {
     try {
       setIssuesLoading(true);
-      setIssues(await ticketSettingsApi.getIssueTypes());
+      // The settings table manages both active and inactive issues. Deleted
+      // issues remain excluded by the API, while inactive issues stay visible.
+      setIssues(await ticketSettingsApi.getIssueTypes(undefined, false));
     } catch {
       enqueueSnackbar('Failed to load issue types', { variant: 'error' });
     } finally {
@@ -612,13 +617,19 @@ export default function TicketSettingsPage() {
     (iss) => ruleForm.targetCategoryId && (iss.categoryId || iss.category_id) === ruleForm.targetCategoryId && !iss.isDeleted,
   );
 
-  const visibleCategories = categories.filter((c) => !c.isDeleted);
+  const visibleCategories = categories.filter((c) => (
+    !c.isDeleted
+      && (categoryStatusFilter === 'all' || (categoryStatusFilter === 'active' ? c.isActive : !c.isActive))
+  ));
   const visibleIssues = issues.filter((iss) => (
-    issueSearch.trim() === ''
+    (issueStatusFilter === 'all' || (issueStatusFilter === 'active' ? iss.isActive : !iss.isActive))
+      && (issueSearch.trim() === ''
       || iss.name.toLowerCase().includes(issueSearch.toLowerCase())
       || Boolean(iss.category?.name?.toLowerCase().includes(issueSearch.toLowerCase()))
+      )
   ));
   const visibleRules = rules.filter((rule) => {
+    if (ruleStatusFilter !== 'all' && (ruleStatusFilter === 'active') !== rule.isActive) return false;
     const s = ruleSearch.trim().toLowerCase();
     if (!s) return true;
     const kws = rule.keywords || [rule.keyword];
@@ -660,14 +671,28 @@ export default function TicketSettingsPage() {
         {tab === 0 && (
           <CardContent>
             <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
-              <TextField
-                placeholder="Search categories..."
-                size="small"
-                value={categorySearch}
-                onChange={(e) => { setCategorySearch(e.target.value); setCategoryPage(0); }}
+              <Box display="flex" gap={1} flexWrap="wrap" flex={1}>
+                <TextField
+                  placeholder="Search categories..."
+                  size="small"
+                  value={categorySearch}
+                  onChange={(e) => { setCategorySearch(e.target.value); setCategoryPage(0); }}
                   inputProps={{ maxLength: 100 }}
-                sx={{ minWidth: { xs: 0, sm: 300 }, width: { xs: '100%', sm: 'auto' } }}
-              />
+                  sx={{ minWidth: { xs: 0, sm: 300 }, flex: 1 }}
+                />
+                <TextField
+                  select
+                  size="small"
+                  label="Status"
+                  value={categoryStatusFilter}
+                  onChange={(e) => { setCategoryStatusFilter(e.target.value as typeof categoryStatusFilter); setCategoryPage(0); }}
+                  sx={{ minWidth: 130 }}
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="active">Active</MenuItem>
+                  <MenuItem value="inactive">Inactive</MenuItem>
+                </TextField>
+              </Box>
               <Button
                 startIcon={<AddIcon />}
                 variant="contained"
@@ -773,14 +798,28 @@ export default function TicketSettingsPage() {
         {tab === 1 && (
           <CardContent>
               <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
-              <TextField
-                placeholder="Search issues..."
-                size="small"
-                value={issueSearch}
-                onChange={(e) => { setIssueSearch(e.target.value); setIssuePage(0); }}
+              <Box display="flex" gap={1} flexWrap="wrap" flex={1}>
+                <TextField
+                  placeholder="Search issues..."
+                  size="small"
+                  value={issueSearch}
+                  onChange={(e) => { setIssueSearch(e.target.value); setIssuePage(0); }}
                   inputProps={{ maxLength: 100 }}
-                sx={{ minWidth: { xs: 0, sm: 300 }, width: { xs: '100%', sm: 'auto' } }}
-              />
+                  sx={{ minWidth: { xs: 0, sm: 300 }, flex: 1 }}
+                />
+                <TextField
+                  select
+                  size="small"
+                  label="Status"
+                  value={issueStatusFilter}
+                  onChange={(e) => { setIssueStatusFilter(e.target.value as typeof issueStatusFilter); setIssuePage(0); }}
+                  sx={{ minWidth: 130 }}
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="active">Active</MenuItem>
+                  <MenuItem value="inactive">Inactive</MenuItem>
+                </TextField>
+              </Box>
               <Button
                 startIcon={<AddIcon />}
                 variant="contained"
@@ -874,14 +913,28 @@ export default function TicketSettingsPage() {
         {tab === 2 && (
           <CardContent>
             <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={1.5} justifyContent="space-between" mb={2}>
-              <TextField
-                placeholder="Search rules..."
-                size="small"
-                value={ruleSearch}
-                onChange={(e) => { setRuleSearch(e.target.value); setRulePage(0); }}
-                sx={{ minWidth: { xs: 0, sm: 300 }, width: { xs: '100%', sm: 'auto' }, mr: { xs: 0, sm: 2 } }}
-                inputProps={{ maxLength: 100 }}
-              />
+              <Box display="flex" gap={1} flexWrap="wrap" flex={1}>
+                <TextField
+                  placeholder="Search rules..."
+                  size="small"
+                  value={ruleSearch}
+                  onChange={(e) => { setRuleSearch(e.target.value); setRulePage(0); }}
+                  sx={{ minWidth: { xs: 0, sm: 300 }, flex: 1 }}
+                  inputProps={{ maxLength: 100 }}
+                />
+                <TextField
+                  select
+                  size="small"
+                  label="Status"
+                  value={ruleStatusFilter}
+                  onChange={(e) => { setRuleStatusFilter(e.target.value as typeof ruleStatusFilter); setRulePage(0); }}
+                  sx={{ minWidth: 130 }}
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="active">Active</MenuItem>
+                  <MenuItem value="inactive">Inactive</MenuItem>
+                </TextField>
+              </Box>
               <Button
                 startIcon={<AddIcon />}
                 variant="contained"

@@ -2524,12 +2524,26 @@ export class TicketService implements OnModuleInit {
         );
       }
       if (!form.unitSection?.trim()) throw new BadRequestException('Unit/Section is required.');
+      if (!form.dateOfTransaction?.trim()) {
+        throw new BadRequestException('Date of transaction is required.');
+      }
       if (!form.clientFirstName?.trim() || !form.clientLastName?.trim()) {
         throw new BadRequestException('Client first and last name are required.');
       }
+      if (!form.religion?.trim()) throw new BadRequestException('Religion is required.');
       if (!form.sex) throw new BadRequestException('Sex is required.');
+      if (form.contactNumber && !/^\d{10}$/.test(form.contactNumber)) {
+        throw new BadRequestException('Contact number must contain exactly 10 digits.');
+      }
+      if (form.age !== undefined && (!Number.isInteger(form.age) || form.age < 0 || form.age > 120)) {
+        throw new BadRequestException('Age must be a whole number between 0 and 120.');
+      }
+      if (!form.technicianName?.trim()) throw new BadRequestException('Technician name is required.');
       if (!form.likert || form.likert.length !== 9) {
         throw new BadRequestException('All 9 service quality items must be answered.');
+      }
+      if (form.likert.some((value) => value !== 'NA' && (!Number.isInteger(value) || value < 1 || value > 5))) {
+        throw new BadRequestException('Each service quality rating must be 1 to 5 or NA.');
       }
 
       // Compute satisfactionRating as the average of all answered (numeric) Likert items.

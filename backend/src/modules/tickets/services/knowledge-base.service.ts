@@ -14,12 +14,15 @@ export class KnowledgeBaseService {
   private readonly groqModel = 'openai/gpt-oss-120b';
   private cloudflareAccountId: string | null = null;
   private cloudflareApiToken: string | null = null;
-  // Model selection is maintained in code. If a model is unavailable, the next
-  // current candidate is tried without requiring a deployment-time setting change.
-  private readonly cloudflareModels = [
-    '@cf/meta/llama-3.1-8b-instruct',
+  private cloudflareModels: string[] = [];
+  private cloudflareModelsFetchedAt = 0;
+  private readonly cloudflareModelCacheMs = 10 * 60 * 1000;
+  private readonly cloudflareFallbackModels = [
+    '@cf/openai/gpt-oss-120b',
     '@cf/zai-org/glm-4.7-flash',
     '@cf/google/gemma-4-26b-a4b-it',
+    '@cf/meta/llama-4-scout-17b-16e-instruct',
+    '@cf/openai/gpt-oss-20b',
   ];
 
   constructor(
@@ -160,37 +163,104 @@ export class KnowledgeBaseService {
   }
 
   private async requestCloudflare(prompt: string): Promise<string> {
+    const models = this.cloudflareModels.length > 0
+      ? [...this.cloudflareModels]
+      : [...this.cloudflareFallbackModels];
     let lastError: (Error & { status?: number }) | null = null;
-    for (const model of this.cloudflareModels) {
+    let discoveryAttempted = false;
+    for (let index = 0; ; index += 1) {
+      if (index >= models.length) {
+        if (discoveryAttempted) break;
+        discoveryAttempted = true;
+        const discovered = await this.getCloudflareModels();
+        for (const model of discovered) {
+          if (!models.includes(model)) models.push(model);
+        }
+        continue;
+      }
+
+      const model = models[index];
       const modelPath = model.split('/').map((part) => encodeURIComponent(part).replace(/%40/g, '@')).join('/');
       const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(this.cloudflareAccountId!)}/ai/run/${modelPath}`;
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.cloudflareApiToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ prompt, max_tokens: 1200, temperature: 0.2 }),
+        });
+        const payload: any = await response.json().catch(() => null);
+        if (!response.ok || payload?.success === false) {
+          const providerMessage = payload?.errors?.map((item: any) => item?.message || item?.code).filter(Boolean).join('; ');
+          const error = new Error(
+            `Cloudflare Workers AI request failed for ${model} (${response.status})${providerMessage ? `: ${providerMessage}` : ''}`,
+          ) as Error & { status?: number };
+          error.status = response.status;
+          lastError = error;
+          this.logger.warn(error.message);
+          continue;
+        }
+        const rawResponse = payload?.result?.response ?? payload?.result?.text ?? payload?.result;
+        const responseText = typeof rawResponse === 'string' ? rawResponse : JSON.stringify(rawResponse ?? '');
+        const jsonStart = responseText.indexOf('{');
+        const jsonEnd = responseText.lastIndexOf('}');
+        if (jsonStart < 0 || jsonEnd <= jsonStart) {
+          lastError = new Error(`Cloudflare Workers AI model ${model} returned no JSON result.`);
+          continue;
+        }
+        return responseText.slice(jsonStart, jsonEnd + 1);
+      } catch (error: any) {
+        lastError = error;
+        this.logger.warn(`Cloudflare Workers AI model ${model} failed: ${error?.message || 'unknown error'}`);
+      }
+    }
+    throw lastError || new Error('Cloudflare Workers AI did not return a result.');
+  }
+
+  private async getCloudflareModels(): Promise<string[]> {
+    const now = Date.now();
+    if (this.cloudflareModels.length > 0 && now - this.cloudflareModelsFetchedAt < this.cloudflareModelCacheMs) {
+      return this.cloudflareModels;
+    }
+
+    try {
+      const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(this.cloudflareAccountId!)}/ai/models/search?task=Text%20Generation&hide_experimental=true&include_deprecated=false&per_page=100`;
       const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.cloudflareApiToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt, max_tokens: 1200, temperature: 0.2 }),
+        headers: { Authorization: `Bearer ${this.cloudflareApiToken}` },
       });
       const payload: any = await response.json().catch(() => null);
       if (!response.ok || payload?.success === false) {
-        const error = new Error(`Cloudflare Workers AI request failed with status ${response.status}`) as Error & { status?: number };
-        error.status = response.status;
-        lastError = error;
-        if ([400, 403, 404].includes(response.status) && model !== this.cloudflareModels[this.cloudflareModels.length - 1]) {
-          this.logger.warn(`Cloudflare Workers AI model unavailable (${response.status}); trying the next code-defined model.`);
-          continue;
-        }
-        throw error;
+        throw new Error(`Cloudflare model catalog request failed with status ${response.status}`);
       }
-      const rawResponse = payload?.result?.response ?? payload?.result?.text ?? payload?.result;
-      const responseText = typeof rawResponse === 'string' ? rawResponse : JSON.stringify(rawResponse ?? '');
-      const jsonStart = responseText.indexOf('{');
-      const jsonEnd = responseText.lastIndexOf('}');
-      if (jsonStart < 0 || jsonEnd <= jsonStart) throw new Error('Cloudflare Workers AI returned no JSON article.');
-      return responseText.slice(jsonStart, jsonEnd + 1);
+
+      const discovered = (Array.isArray(payload?.result) ? payload.result : Array.isArray(payload?.data) ? payload.data : [])
+        .map((model: any) => model?.model_id || model?.modelId || model?.model_name || model?.name || model?.id)
+        .filter((model: unknown): model is string => typeof model === 'string' && model.trim().length > 0)
+        .map((model: string) => model.trim())
+        .map((model: string) => model.startsWith('@') ? model : `@cf/${model}`) as string[];
+
+      const preferredOrder = ['gpt-oss-120b', 'llama-4-scout', 'glm-4.7-flash', 'gemma-4', 'llama-3.1-8b', 'gpt-oss-20b'];
+      const ranked: string[] = [...new Set(discovered)].sort((a: string, b: string) => {
+        const rank = (model: string) => {
+          const index = preferredOrder.findIndex((preferred) => model.includes(preferred));
+          return index < 0 ? preferredOrder.length : index;
+        };
+        return rank(a) - rank(b);
+      });
+
+      if (ranked.length > 0) {
+        this.cloudflareModels = ranked;
+        this.cloudflareModelsFetchedAt = now;
+        this.logger.log(`Cloudflare Workers AI discovered ${ranked.length} usable text-generation models.`);
+        return ranked;
+      }
+      throw new Error('Cloudflare model catalog returned no text-generation models.');
+    } catch (error: any) {
+      this.logger.warn(`Cloudflare model discovery failed: ${error?.message || 'unknown error'}.`);
+      return [];
     }
-    throw lastError || new Error('Cloudflare Workers AI did not return a result.');
   }
 
   async getKnowledgeBaseArticles(): Promise<KnowledgeArticle[]> {

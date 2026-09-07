@@ -165,7 +165,7 @@ if (typeof window !== 'undefined') {
  * useSse (Hardened Singleton Version)
  */
 export function useSse(eventTypes: SseEventType[], callback: (payload?: any) => void) {
-  const { isSessionLocked, user } = useAuth();
+  const { isSessionLocked, requiresPasswordChange, user } = useAuth();
   
   const callbackRef = useRef(callback);
   callbackRef.current = callback; // Update synchronously during render
@@ -174,7 +174,7 @@ export function useSse(eventTypes: SseEventType[], callback: (payload?: any) => 
   const typesString = [...new Set(eventTypes)].sort().join(',');
 
   useEffect(() => {
-    if (!user || isSessionLocked || !typesString) {
+    if (!user || isSessionLocked || requiresPasswordChange || !typesString) {
       return;
     }
 
@@ -197,5 +197,5 @@ export function useSse(eventTypes: SseEventType[], callback: (payload?: any) => 
         disconnectSse();
       }
     };
-  }, [isSessionLocked, user?.id, typesString]);
+  }, [isSessionLocked, requiresPasswordChange, user?.id, typesString]);
 }
