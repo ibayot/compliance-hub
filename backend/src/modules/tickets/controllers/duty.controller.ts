@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsArray, IsDateString, IsEnum, IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { DutyExceptionType, DutyReservationStatus, DutyType } from '../entities/duty.entity';
@@ -23,6 +23,13 @@ class DutyExceptionDto {
 
 class DutyRosterDto {
   @IsArray() @Type(() => Number) userIds: number[];
+  @IsOptional() @IsArray() @Type(() => Number) odOnlyUserIds?: number[];
+  @IsOptional() @IsBoolean() odOverrideEnabled?: boolean;
+}
+
+class DutyMeetingRelieversDto {
+  @IsArray() @ArrayMinSize(1) @Type(() => Number) userIds: number[];
+  @IsString() @MinLength(3) @MaxLength(2000) reason: string;
 }
 
 class DutyReservationDto {
@@ -64,12 +71,21 @@ export class DutyController {
   @Delete('exceptions/:id') deleteException(@Request() req: any, @Param('id') id: string) { return this.duty.deleteException(req.user, id); }
 
   @Get('roster') async roster(@Request() req: any) { await this.duty.assertRead(req.user); return this.duty.getRoster(); }
-  @Post('roster') replaceRoster(@Request() req: any, @Body() dto: DutyRosterDto) { return this.duty.replaceRoster(req.user, dto.userIds); }
+  @Get('roster-config') async rosterConfig(@Request() req: any) { await this.duty.assertRead(req.user); return this.duty.getRosterConfig(); }
+  @Post('roster') replaceRoster(@Request() req: any, @Body() dto: DutyRosterDto) {
+    return this.duty.replaceRoster(req.user, dto.userIds, dto.odOnlyUserIds, dto.odOverrideEnabled);
+  }
 
   @Get('reservations') async reservations(@Request() req: any, @Query('page') page = '1', @Query('limit') limit = '10') { await this.duty.assertRead(req.user); return this.duty.listReservations(Number(page), Number(limit)); }
   @Post('reservations') createReservation(@Request() req: any, @Body() dto: DutyReservationDto) { return this.duty.saveReservation(req.user, dto); }
   @Patch('reservations/:id') updateReservation(@Request() req: any, @Param('id') id: string, @Body() dto: Partial<DutyReservationDto>) { return this.duty.saveReservation(req.user, dto, id); }
   @Delete('reservations/:id') deleteReservation(@Request() req: any, @Param('id') id: string) { return this.duty.deleteReservation(req.user, id); }
+  @Post('reservations/:id/relievers') saveRelievers(@Request() req: any, @Param('id') id: string, @Body() dto: DutyMeetingRelieversDto) {
+    return this.duty.replaceMeetingRelievers(req.user, id, dto.userIds, dto.reason);
+  }
+  @Delete('reservations/:id/relievers') clearRelievers(@Request() req: any, @Param('id') id: string) {
+    return this.duty.clearMeetingRelievers(req.user, id);
+  }
   @Post('coverages/:id/release') release(@Request() req: any, @Param('id') id: string) { return this.duty.releaseCoverage(req.user, id); }
   @Post('coverages/:id/activate') activate(@Request() req: any, @Param('id') id: string, @Body('userId') userId: number) { return this.duty.activateCoverage(req.user, id, Number(userId)); }
   @Post('coverages/:id/skip') skip(@Request() req: any, @Param('id') id: string, @Body('userId') userId: number) { return this.duty.skipCoverage(req.user, id, Number(userId)); }

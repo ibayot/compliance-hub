@@ -16,10 +16,16 @@ export const dutiesApi = {
   saveException: async (payload: any, id?: string) => (await (id ? apiClient.patch(`/duties/exceptions/${id}`, payload) : apiClient.post('/duties/exceptions', payload))).data,
   deleteException: async (id: string) => apiClient.delete(`/duties/exceptions/${id}`),
   roster: async () => (await apiClient.get('/duties/roster')).data,
-  replaceRoster: async (userIds: number[]) => (await apiClient.post('/duties/roster', { userIds })).data,
+  rosterConfig: async () => (await apiClient.get('/duties/roster-config')).data,
+  replaceRoster: async (userIds: number[], odOnlyUserIds: number[], odOverrideEnabled: boolean) =>
+    (await apiClient.post('/duties/roster', { userIds, odOnlyUserIds, odOverrideEnabled })).data,
   reservations: async (page = 1, limit = 10) => (await apiClient.get('/duties/reservations', { params: { page, limit } })).data,
   saveReservation: async (payload: any, id?: string) => (await (id ? apiClient.patch(`/duties/reservations/${id}`, payload) : apiClient.post('/duties/reservations', payload))).data,
   deleteReservation: async (id: string) => apiClient.delete(`/duties/reservations/${id}`),
+  saveMeetingRelievers: async (reservationId: string, userIds: number[], reason: string) =>
+    (await apiClient.post(`/duties/reservations/${reservationId}/relievers`, { userIds, reason })).data,
+  clearMeetingRelievers: async (reservationId: string) =>
+    apiClient.delete(`/duties/reservations/${reservationId}/relievers`),
   releaseCoverage: async (id: string) => (await apiClient.post(`/duties/coverages/${id}/release`)).data,
   activateCoverage: async (id: string, userId: number) => (await apiClient.post(`/duties/coverages/${id}/activate`, { userId })).data,
   skipCoverage: async (id: string, userId: number) => (await apiClient.post(`/duties/coverages/${id}/skip`, { userId })).data,

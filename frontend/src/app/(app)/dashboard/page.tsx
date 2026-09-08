@@ -127,9 +127,9 @@ export default function DashboardPage() {
   const canViewDocuments = !!myCap?.isDocumentsAccess;
   // Full dashboard: super_admin or CO; generic staff (focal, etc.) see doc cards + KPI only
   const isFullDashboard = !!myCap?.isReportsAccess || !!myCap?.isReviewsAccess || !!myCap?.isTicketSettingsFocal;
-  // Ticketing-capable non-technicians without full-dashboard capabilities use the requester view.
-  const isRequesterDashboard =
-    isRegularUser || (!!myCap?.isTicketModuleAccess && !isTechnicianAny && !isFullDashboard);
+  // Regular accounts keep the focused requester dashboard. Every staff role uses
+  // the staff dashboard and also receives its own requester ticket summary below.
+  const isRequesterDashboard = isRegularUser;
   const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage;
   const isCybersecurityOfficer = !!myCap?.isIto;
   const canViewSecurityIncidents = !!myCap?.isReportsAccess;
@@ -208,7 +208,13 @@ export default function DashboardPage() {
         return;
       }
 
-      if (isTechnicianAny && !isFullDashboard) return;
+      if (isTechnicianAny && !isFullDashboard) {
+        if (ticketingEnabled) {
+          const dashStats = await ticketsApi.getDashboardStats();
+          setUserTicketStats(dashStats);
+        }
+        return;
+      }
 
       const [
         docsResponse,
@@ -223,7 +229,7 @@ export default function DashboardPage() {
         complianceEnabled && canViewSecurityIncidents ? incidentsApi.getTodayStats() : Promise.resolve(null),
         ticketingEnabled && isComplianceOfficer ? ticketsApi.getStatistics() : Promise.resolve(null),
         complianceEnabled ? kpiApi.dashboardSummary(periodYear, periodMonth) : Promise.resolve(null),
-        ticketingEnabled && !!myCap?.isTicketModuleAccess ? ticketsApi.getDashboardStats() : Promise.resolve(null),
+        ticketingEnabled ? ticketsApi.getDashboardStats() : Promise.resolve(null),
       ]);
 
       const docs = docsResponse.status === 'fulfilled' ? docsResponse.value.data : [];
@@ -273,7 +279,13 @@ export default function DashboardPage() {
 
         // Technicians: tech stats are loaded by the dedicated useEffect above — no extra data needed
         // BUT if they are also full dashboard users, they need the extra data!
-        if (isTechnicianAny && !isFullDashboard) return;
+        if (isTechnicianAny && !isFullDashboard) {
+          if (ticketingEnabled) {
+            const dashStats = await ticketsApi.getDashboardStats();
+            setUserTicketStats(dashStats);
+          }
+          return;
+        }
 
         // Staff / admin: full dashboard
         const [
@@ -289,7 +301,7 @@ export default function DashboardPage() {
           complianceEnabled && canViewSecurityIncidents ? incidentsApi.getTodayStats() : Promise.resolve(null),
           ticketingEnabled && isComplianceOfficer ? ticketsApi.getStatistics() : Promise.resolve(null), // Fetch unfiltered stats for top cards
           complianceEnabled ? kpiApi.dashboardSummary(periodYear, periodMonth) : Promise.resolve(null),
-          ticketingEnabled && !!myCap?.isTicketModuleAccess ? ticketsApi.getDashboardStats() : Promise.resolve(null),
+          ticketingEnabled ? ticketsApi.getDashboardStats() : Promise.resolve(null),
         ]);
 
         const docs = docsResponse.status === 'fulfilled' ? docsResponse.value.data : [];
@@ -593,6 +605,48 @@ export default function DashboardPage() {
           Welcome back, {user?.firstName || user?.email}!
         </Typography>
       </Box>
+
+      {ticketingEnabled && (
+        <Box mb={4}>
+          <Box display="flex" alignItems="center" justifyContent="space-between" gap={2} mb={2}>
+            <Box>
+              <Typography variant="h6">My Tickets</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Tickets you submitted as a requester
+              </Typography>
+            </Box>
+            <Button
+              variant="outlined"
+              startIcon={<TicketIcon />}
+              onClick={() => router.push('/operations/tickets')}
+            >
+              View My Tickets
+            </Button>
+          </Box>
+          <Grid container spacing={2}>
+            {[
+              { label: 'Open', value: userTicketStats?.open ?? 0, icon: <TicketIcon color="warning" />, color: 'warning.main' },
+              { label: 'In Progress', value: userTicketStats?.inProgress ?? 0, icon: <PendingIcon color="info" />, color: 'info.main' },
+              { label: 'Resolved', value: userTicketStats?.resolved ?? 0, icon: <ResolvedIcon color="success" />, color: 'success.main' },
+              { label: 'Closed', value: userTicketStats?.closed ?? 0, icon: <ClosedIcon color="action" />, color: 'text.secondary' },
+            ].map((item) => (
+              <Grid item xs={6} sm={3} key={item.label}>
+                <Card sx={{ height: '100%' }}>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    {item.icon}
+                    <Typography variant="h5" color={item.color} mt={0.5}>
+                      {item.value}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {item.label}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+      )}
 
       {canViewDuties && (
         <Card sx={{ mb: 4 }}>
@@ -1424,7 +1478,7 @@ export default function DashboardPage() {
               <Box>
                 <Typography variant="h6">KPI Overview</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {!!myCap?.isReportsAccess
+                  {myCap?.isReportsAccess
                     ? 'Consolidated KPI visibility across all units.'
                     : 'KPI visibility scoped to your assigned unit(s).'}
                 </Typography>

@@ -70,4 +70,7 @@ export class TicketingConfig {
 
   @Column({ name: 'email_test_override', type: 'varchar', length: 100, nullable: true })
   emailTestOverride: string | null;
+
+  @Column({ name: 'od_override_enabled', type: 'boolean', default: false })
+  odOverrideEnabled: boolean;
 }

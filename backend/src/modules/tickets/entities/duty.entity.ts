@@ -49,6 +49,8 @@ export class DutyRosterMembership {
   @Column({ name: 'duty_type', type: 'varchar', length: 20, default: DutyType.OD }) dutyType: DutyType;
   @Column({ name: 'sort_order', type: 'int', default: 0 }) sortOrder: number;
   @Column({ name: 'is_active', type: 'boolean', default: true }) isActive: boolean;
+  /** When OD Override is enabled, these members serve OD only. */
+  @Column({ name: 'od_only', type: 'boolean', default: false }) odOnly: boolean;
   @CreateDateColumn({ name: 'created_at' }) createdAt: Date;
   @UpdateDateColumn({ name: 'updated_at' }) updatedAt: Date;
 }
@@ -92,6 +94,18 @@ export class DutyMeetingReservation {
   @Column({ type: 'varchar', length: 255, nullable: true }) purpose: string | null;
   @Column({ type: 'text', nullable: true }) remarks: string | null;
   @Column({ type: 'varchar', length: 20, default: DutyReservationStatus.SCHEDULED }) status: DutyReservationStatus;
+  @Column({ name: 'created_by_id', type: 'int' }) createdById: number;
+  @CreateDateColumn({ name: 'created_at' }) createdAt: Date;
+  @UpdateDateColumn({ name: 'updated_at' }) updatedAt: Date;
+}
+
+@Entity('duty_meeting_relievers')
+@Unique(['reservationId', 'userId'])
+export class DutyMeetingReliever {
+  @PrimaryGeneratedColumn('uuid') id: string;
+  @Column({ name: 'reservation_id', type: 'varchar', length: 36 }) reservationId: string;
+  @Column({ name: 'user_id', type: 'int' }) userId: number;
+  @Column({ type: 'text' }) reason: string;
   @Column({ name: 'created_by_id', type: 'int' }) createdById: number;
   @CreateDateColumn({ name: 'created_at' }) createdAt: Date;
   @UpdateDateColumn({ name: 'updated_at' }) updatedAt: Date;

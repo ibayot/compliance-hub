@@ -17,6 +17,7 @@ import {
   DutyDailyCoverage,
   DutyException,
   DutyExceptionType,
+  DutyMeetingReliever,
   DutyMeetingReservation,
   DutyReservationStatus,
   DutyRosterMembership,
@@ -42,6 +43,7 @@ export class DutyService {
     @InjectRepository(DutyAssignment) private readonly assignmentRepo: Repository<DutyAssignment>,
     @InjectRepository(DutyException) private readonly exceptionRepo: Repository<DutyException>,
     @InjectRepository(DutyMeetingReservation) private readonly reservationRepo: Repository<DutyMeetingReservation>,
+    @InjectRepository(DutyMeetingReliever) private readonly relieverRepo: Repository<DutyMeetingReliever>,
     @InjectRepository(DutyDailyCoverage) private readonly coverageRepo: Repository<DutyDailyCoverage>,
     @InjectRepository(TechAttendance) private readonly attendanceRepo: Repository<TechAttendance>,
     @InjectRepository(Ticket) private readonly ticketRepo: Repository<Ticket>,
@@ -61,6 +63,26 @@ export class DutyService {
       throw new BadRequestException(`Invalid duty type: ${value}`);
     }
     return value as DutyType;
+  }
+
+  private async isOdOverrideEnabled(): Promise<boolean> {
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    return config?.odOverrideEnabled === true;
+  }
+
+  private async relieversForReservationIds(reservationIds: string[]): Promise<DutyMeetingReliever[]> {
+    if (reservationIds.length === 0) return [];
+    return this.relieverRepo.find({ where: { reservationId: In(reservationIds) } });
+  }
+
+  private async activeMeetingRelieversForDate(date: string): Promise<{
+    reservations: DutyMeetingReservation[];
+    relievers: DutyMeetingReliever[];
+  }> {
+    const reservations = (await this.reservationRepo.find({ where: { meetingDate: date } }))
+      .filter((reservation) => reservation.status !== DutyReservationStatus.CANCELLED);
+    const relievers = await this.relieversForReservationIds(reservations.map((reservation) => reservation.id));
+    return { reservations, relievers };
   }
 
   private isAdmin(actor: Actor): boolean {
@@ -189,9 +211,16 @@ export class DutyService {
   }
 
   async getRotation(date = this.today(), type?: DutyType) {
-    const sharedRoster = await this.sharedRosterMembers();
+    const [sharedRoster, odOverrideEnabled, meetingOverrides] = await Promise.all([
+      this.sharedRosterMembers(),
+      this.isOdOverrideEnabled(),
+      this.activeMeetingRelieversForDate(date),
+    ]);
+    const managementOverrideUsers = new Set(meetingOverrides.relievers.map((reliever) => reliever.userId));
     const roster = (type ? [type] : DUTY_PRIORITY).flatMap((dutyType) =>
-      sharedRoster.map((member) => ({ ...member, id: `${member.id}:${dutyType}`, dutyType })),
+      sharedRoster
+        .filter((member) => !odOverrideEnabled || (dutyType === DutyType.OD ? member.odOnly : !member.odOnly))
+        .map((member) => ({ ...member, id: `${member.id}:${dutyType}`, dutyType })),
     );
     const exceptions = await this.exceptionRepo.find({ where: { exceptionDate: date } });
     const excluded = new Set(exceptions.map((e) => e.userId));
@@ -213,7 +242,7 @@ export class DutyService {
         name: user ? `${user.first_name} ${user.last_name}`.trim() : `User #${member.userId}`,
         lastAssigned: last?.dutyDate ?? null,
         daysSince,
-        excluded: exceptions.some((exception) =>
+        excluded: managementOverrideUsers.has(member.userId) || exceptions.some((exception) =>
           exception.userId === member.userId
           && (!exception.dutyType || exception.dutyType === member.dutyType),
         ),
@@ -236,12 +265,66 @@ export class DutyService {
   }
 
   async getDashboard(date = this.today()) {
-    const rotation = await this.getRotation(date);
-    const coverages = await this.coverageRepo.find({ where: { dutyDate: date } });
-    const users = await this.usersById();
+    const [rotation, coverages, users, meetingOverrides] = await Promise.all([
+      this.getRotation(date),
+      this.coverageRepo.find({ where: { dutyDate: date } }),
+      this.usersById(),
+      this.activeMeetingRelieversForDate(date),
+    ]);
+    const reservationById = new Map(meetingOverrides.reservations.map((reservation) => [reservation.id, reservation]));
+    const overridesByType = new Map<DutyType, DutyMeetingReliever[]>();
+    for (const reliever of meetingOverrides.relievers) {
+      const dutyType = reservationById.get(reliever.reservationId)?.venueType;
+      if (!dutyType) continue;
+      const rows = overridesByType.get(dutyType) ?? [];
+      rows.push(reliever);
+      overridesByType.set(dutyType, rows);
+    }
     const selectedUsers = new Set<number>();
     const cards = [];
     for (const dutyType of DUTY_PRIORITY) {
+      const overrideRows = dutyType === DutyType.OD ? [] : (overridesByType.get(dutyType) ?? []);
+      if (overrideRows.length > 0) {
+        const uniqueUserIds = [...new Set(overrideRows.map((row) => row.userId))];
+        uniqueUserIds.forEach((userId) => selectedUsers.add(userId));
+        const readiness = await Promise.all(uniqueUserIds.map(async (userId) => ({
+          userId,
+          attendanceEligible: await this.isAttendanceEligible(userId, date),
+          activeTicketCount: await this.ticketRepo.count({
+            where: { assignedToId: userId, status: In(ACTIVE_TICKET_STATUSES) },
+          }),
+        })));
+        const unavailableCount = readiness.filter((row) => !row.attendanceEligible).length;
+        const activeTicketCount = readiness.reduce((total, row) => total + row.activeTicketCount, 0);
+        const managementOverrideIssue = unavailableCount > 0
+          ? `${unavailableCount} selected reliever${unavailableCount === 1 ? '' : 's'} do not have eligible PRESENT attendance.`
+          : activeTicketCount > 0
+            ? `Reassign ${activeTicketCount} active ticket${activeTicketCount === 1 ? '' : 's'} before the reliever coverage can proceed.`
+            : null;
+        const names = uniqueUserIds.map((userId) => {
+          const user = users.get(userId);
+          return user ? `${user.first_name} ${user.last_name}`.trim() : `User #${userId}`;
+        });
+        cards.push({
+          dutyType,
+          coverageId: null,
+          userId: uniqueUserIds[0] ?? null,
+          userIds: uniqueUserIds,
+          name: names.join(', '),
+          daysSince: null,
+          isOnDuty: !managementOverrideIssue,
+          isNext: false,
+          hasTechnician: true,
+          isSubstitute: false,
+          isImmediateReliever: true,
+          immediateRelieverReason: overrideRows[0].reason,
+          coverageStatus: managementOverrideIssue ? DutyCoverageStatus.INTERVENTION_REQUIRED : 'management_override',
+          requiresReassignment: false,
+          activeTicketCount,
+          managementOverrideIssue,
+        });
+        continue;
+      }
       const coverage = coverages.find((c) => c.dutyType === dutyType && c.status !== DutyCoverageStatus.CANCELLED);
       const assigned = coverage?.assignedUserId ? users.get(coverage.assignedUserId) : null;
       const assignedRotation = coverage?.assignedUserId ? rotation.find((r) => r.userId === coverage.assignedUserId && r.dutyType === dutyType) : null;
@@ -321,11 +404,18 @@ export class DutyService {
       this.coverageRepo.createQueryBuilder('x').where(between('x.duty_date'), { start, end }).getMany(),
       this.usersById(),
     ]);
+    const relievers = await this.relieversForReservationIds(reservations.map((reservation) => reservation.id));
     const name = (id: number | null) => id && users.get(id) ? `${users.get(id)!.first_name} ${users.get(id)!.last_name}`.trim() : null;
+    const reservationRelievers = (reservationId: string) => relievers
+      .filter((reliever) => reliever.reservationId === reservationId)
+      .map((reliever) => ({ ...reliever, name: name(reliever.userId) ?? `User #${reliever.userId}` }));
     return {
       assignments: assignments.map((x) => ({ ...x, name: name(x.userId) })),
       exceptions: exceptions.map((x) => ({ ...x, name: name(x.userId) })),
-      reservations,
+      reservations: reservations.map((reservation) => ({
+        ...reservation,
+        relievers: reservationRelievers(reservation.id),
+      })),
       coverages: coverages.map((x) => ({ ...x, name: name(x.assignedUserId) })),
     };
   }
@@ -433,14 +523,41 @@ export class DutyService {
         id: member.id,
         userId: member.userId,
         sortOrder: member.sortOrder,
+        odOnly: member.odOnly === true,
         name: user ? `${user.first_name} ${user.last_name}`.trim() : `User #${member.userId}`,
       };
     });
   }
 
-  async replaceRoster(actor: Actor, userIds: number[]) {
+  async getRosterConfig() {
+    return { odOverrideEnabled: await this.isOdOverrideEnabled() };
+  }
+
+  async replaceRoster(
+    actor: Actor,
+    userIds: number[],
+    odOnlyUserIds?: number[],
+    odOverrideEnabled?: boolean,
+  ) {
     this.assertAdmin(actor);
     const selectedUserIds = Array.from(new Set((userIds || []).map(Number).filter((id) => Number.isInteger(id) && id > 0)));
+    const existingMembers = await this.sharedRosterMembers();
+    const selectedOdOnlyIds = new Set(
+      (odOnlyUserIds ?? existingMembers.filter((member) => member.odOnly).map((member) => member.userId))
+        .map(Number)
+        .filter((id) => Number.isInteger(id) && id > 0),
+    );
+    if ([...selectedOdOnlyIds].some((id) => !selectedUserIds.includes(id))) {
+      throw new BadRequestException('Every OD-only technician must also be included in the shared duty roster.');
+    }
+    const currentOverrideEnabled = await this.isOdOverrideEnabled();
+    const nextOverrideEnabled = odOverrideEnabled ?? currentOverrideEnabled;
+    if (nextOverrideEnabled && selectedOdOnlyIds.size === 0) {
+      throw new BadRequestException('Select at least one OD-only technician before enabling OD Override.');
+    }
+    if (nextOverrideEnabled && selectedUserIds.every((id) => selectedOdOnlyIds.has(id))) {
+      throw new BadRequestException('Select at least one non-OD technician for ROC, Conference, and OpCen duties.');
+    }
     const users = await this.usersById();
     for (const userId of selectedUserIds) {
       const user = users.get(userId);
@@ -451,8 +568,23 @@ export class DutyService {
     await this.rosterRepo.update({ isActive: true }, { isActive: false });
     for (let i = 0; i < selectedUserIds.length; i++) {
       let row = await this.rosterRepo.findOne({ where: { dutyType: DutyType.OD, userId: selectedUserIds[i] } });
-      row = this.rosterRepo.create({ ...row, dutyType: DutyType.OD, userId: selectedUserIds[i], sortOrder: i, isActive: true });
+      row = this.rosterRepo.create({
+        ...row,
+        dutyType: DutyType.OD,
+        userId: selectedUserIds[i],
+        sortOrder: i,
+        isActive: true,
+        odOnly: selectedOdOnlyIds.has(selectedUserIds[i]),
+      });
       await this.rosterRepo.save(row);
+    }
+    if (odOverrideEnabled !== undefined) {
+      const existingConfig = await this.configRepo.findOne({ where: { id: 1 } });
+      await this.configRepo.save(this.configRepo.create({
+        ...existingConfig,
+        id: 1,
+        odOverrideEnabled: nextOverrideEnabled,
+      }));
     }
     this.sse.emitDutyUpdated();
     return this.getRoster();
@@ -465,7 +597,27 @@ export class DutyService {
       skip: (pagination.page - 1) * pagination.limit,
       take: pagination.limit,
     });
-    return { items, total, ...pagination, totalPages: Math.ceil(total / pagination.limit) };
+    const [relievers, users] = await Promise.all([
+      this.relieversForReservationIds(items.map((item) => item.id)),
+      this.usersById(),
+    ]);
+    return {
+      items: items.map((item) => ({
+        ...item,
+        relievers: relievers
+          .filter((reliever) => reliever.reservationId === item.id)
+          .map((reliever) => {
+            const user = users.get(reliever.userId);
+            return {
+              ...reliever,
+              name: user ? `${user.first_name} ${user.last_name}`.trim() : `User #${reliever.userId}`,
+            };
+          }),
+      })),
+      total,
+      ...pagination,
+      totalPages: Math.ceil(total / pagination.limit),
+    };
   }
   async saveReservation(actor: Actor, body: Partial<DutyMeetingReservation>, id?: string) {
     const access = await this.getAccess(actor);
@@ -488,9 +640,126 @@ export class DutyService {
       }
     }
     const saved = await this.reservationRepo.save(this.reservationRepo.create({ ...existing, ...body, venueType, meetingDate, status, createdById: existing?.createdById ?? actor.id }));
+    if (existing && (existing.meetingDate !== meetingDate || existing.venueType !== venueType)) {
+      await this.relieverRepo.delete({ reservationId: saved.id });
+    }
     if (meetingDate === this.today() && status !== DutyReservationStatus.CANCELLED) await this.reconcileToday();
     this.sse.emitDutyUpdated();
     return saved;
+  }
+
+  async replaceMeetingRelievers(actor: Actor, reservationId: string, userIds: number[], reason: string) {
+    this.assertAdmin(actor);
+    const reservation = await this.reservationRepo.findOne({ where: { id: reservationId } });
+    if (!reservation) throw new NotFoundException('Meeting reservation not found.');
+    if (reservation.status === DutyReservationStatus.CANCELLED || reservation.status === DutyReservationStatus.COMPLETED) {
+      throw new BadRequestException('Immediate relievers can only be assigned to scheduled or confirmed meetings.');
+    }
+    if (reservation.meetingDate < this.today()) {
+      throw new BadRequestException('Immediate relievers cannot be assigned to a past meeting.');
+    }
+
+    const normalizedReason = String(reason || '').trim();
+    if (normalizedReason.length < 3) {
+      throw new BadRequestException('A reason of at least 3 characters is required for an immediate reliever.');
+    }
+    const selectedUserIds = [...new Set((userIds || []).map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+    if (selectedUserIds.length === 0) {
+      throw new BadRequestException('Select at least one immediate reliever.');
+    }
+
+    const roster = await this.sharedRosterMembers();
+    const rosterByUserId = new Map(roster.map((member) => [member.userId, member]));
+    const odOverrideEnabled = await this.isOdOverrideEnabled();
+    for (const userId of selectedUserIds) {
+      const member = rosterByUserId.get(userId);
+      if (!member) throw new BadRequestException('Immediate relievers must be active technicians on the shared duty roster.');
+      if (odOverrideEnabled && member.odOnly) {
+        throw new BadRequestException('An OD-only technician cannot be assigned as a meeting reliever while OD Override is enabled.');
+      }
+    }
+
+    const [sameDayCoverages, sameDayReservations] = await Promise.all([
+      this.coverageRepo.find({
+        where: {
+          dutyDate: reservation.meetingDate,
+          status: In([DutyCoverageStatus.ACTIVE, DutyCoverageStatus.INTERVENTION_REQUIRED]),
+        },
+      }),
+      this.reservationRepo.find({ where: { meetingDate: reservation.meetingDate } }),
+    ]);
+    for (const coverage of sameDayCoverages) {
+      const coveredUserId = this.coverageCandidateUserId(coverage);
+      if (
+        coveredUserId
+        && selectedUserIds.includes(coveredUserId)
+        && coverage.dutyType !== reservation.venueType
+      ) {
+        throw new BadRequestException(`A selected technician is already assigned to ${coverage.dutyType} duty on that date.`);
+      }
+    }
+    const otherReservations = sameDayReservations.filter((row) => row.id !== reservationId && row.status !== DutyReservationStatus.CANCELLED);
+    const otherRelievers = await this.relieversForReservationIds(otherReservations.map((row) => row.id));
+    const otherReservationById = new Map(otherReservations.map((row) => [row.id, row]));
+    for (const reliever of otherRelievers) {
+      const otherVenue = otherReservationById.get(reliever.reservationId)?.venueType;
+      if (selectedUserIds.includes(reliever.userId) && otherVenue && otherVenue !== reservation.venueType) {
+        throw new BadRequestException(`A selected technician is already an immediate reliever for ${otherVenue} on that date.`);
+      }
+    }
+
+    if (reservation.meetingDate === this.today()) {
+      for (const userId of selectedUserIds) {
+        if (!(await this.isAttendanceEligible(userId, reservation.meetingDate))) {
+          throw new BadRequestException('Every immediate reliever must have eligible PRESENT attendance today.');
+        }
+        const activeTickets = await this.ticketRepo.count({
+          where: { assignedToId: userId, status: In(ACTIVE_TICKET_STATUSES) },
+        });
+        if (activeTickets > 0) {
+          throw new BadRequestException('Reassign each immediate reliever’s active tickets before saving the management override.');
+        }
+      }
+    }
+
+    await this.relieverRepo.delete({ reservationId });
+    await this.relieverRepo.save(selectedUserIds.map((userId) => this.relieverRepo.create({
+      reservationId,
+      userId,
+      reason: normalizedReason,
+      createdById: actor.id,
+    })));
+    if (reservation.meetingDate === this.today()) {
+      await this.reconcileCoverage(reservation.meetingDate, reservation.venueType);
+    }
+    this.sse.emitDutyUpdated();
+    return this.listMeetingRelievers(reservationId);
+  }
+
+  async listMeetingRelievers(reservationId: string) {
+    const [rows, users] = await Promise.all([
+      this.relieverRepo.find({ where: { reservationId } }),
+      this.usersById(),
+    ]);
+    return rows.map((row) => {
+      const user = users.get(row.userId);
+      return {
+        ...row,
+        name: user ? `${user.first_name} ${user.last_name}`.trim() : `User #${row.userId}`,
+      };
+    });
+  }
+
+  async clearMeetingRelievers(actor: Actor, reservationId: string) {
+    this.assertAdmin(actor);
+    const reservation = await this.reservationRepo.findOne({ where: { id: reservationId } });
+    if (!reservation) throw new NotFoundException('Meeting reservation not found.');
+    await this.relieverRepo.delete({ reservationId });
+    if (reservation.meetingDate === this.today() && reservation.status !== DutyReservationStatus.CANCELLED) {
+      await this.reconcileCoverage(reservation.meetingDate, reservation.venueType);
+    }
+    this.sse.emitDutyUpdated();
+    return { cleared: true };
   }
 
   async deleteReservation(actor: Actor, id: string) {
@@ -498,25 +767,32 @@ export class DutyService {
     if (!access.admin) throw new ForbiddenException('Only a Duty Administrator can delete meeting schedules.');
     const row = await this.reservationRepo.findOne({ where: { id } });
     if (!row) return;
+    await this.relieverRepo.delete({ reservationId: id });
     await this.reservationRepo.delete(id);
     this.sse.emitDutyUpdated();
   }
 
   async blockedTechnicianIds(date: string): Promise<number[]> {
     const rows = await this.coverageRepo.find({ where: { dutyDate: date, status: In([DutyCoverageStatus.ACTIVE, DutyCoverageStatus.INTERVENTION_REQUIRED]) } });
-    const reservations = await this.reservationRepo.find({ where: { meetingDate: date } });
+    const { reservations, relievers } = await this.activeMeetingRelieversForDate(date);
     const scheduledDutyTypes = new Set(
       reservations
-        .filter((reservation) => reservation.status !== DutyReservationStatus.CANCELLED)
         .map((reservation) => reservation.venueType),
     );
+    const reservationById = new Map(reservations.map((reservation) => [reservation.id, reservation]));
+    const overriddenDutyTypes = new Set(
+      relievers
+        .map((reliever) => reservationById.get(reliever.reservationId)?.venueType)
+        .filter((dutyType): dutyType is DutyType => Boolean(dutyType)),
+    );
     const isDutyActive = (dutyType: DutyType) => dutyType === DutyType.OD || scheduledDutyTypes.has(dutyType);
-    return rows
-      .filter((coverage) => isDutyActive(coverage.dutyType))
+    const coverageUserIds = rows
+      .filter((coverage) => isDutyActive(coverage.dutyType) && !overriddenDutyTypes.has(coverage.dutyType))
       .map((coverage) => coverage.status === DutyCoverageStatus.ACTIVE
         ? coverage.assignedUserId
         : coverage.primaryUserId)
       .filter((userId): userId is number => Boolean(userId));
+    return [...new Set([...coverageUserIds, ...relievers.map((reliever) => reliever.userId)])];
   }
 
   private coverageCandidateUserId(coverage: DutyDailyCoverage): number | null {
@@ -556,6 +832,23 @@ export class DutyService {
       if (userId) reservedByPriorDuty.set(userId, coverage);
     }
     let currentCoverage = await this.coverageRepo.findOne({ where: { dutyDate: date, dutyType: type } });
+    if (type !== DutyType.OD) {
+      const activeReservations = reservations.filter((reservation) => reservation.status !== DutyReservationStatus.CANCELLED);
+      const relievers = await this.relieversForReservationIds(activeReservations.map((reservation) => reservation.id));
+      if (relievers.length > 0) {
+        if (currentCoverage?.attendanceOverridden) await this.restoreAttendance(currentCoverage);
+        if (currentCoverage) {
+          currentCoverage.status = DutyCoverageStatus.CANCELLED;
+          currentCoverage.assignedUserId = null;
+          currentCoverage.isSubstitute = false;
+          currentCoverage.substitutionReason = 'Replaced by a management-requested immediate reliever.';
+          currentCoverage.attendanceOverridden = false;
+          await this.coverageRepo.save(currentCoverage);
+        }
+        this.sse.emitDutyUpdated();
+        return null;
+      }
+    }
     const currentCandidateId = currentCoverage ? this.coverageCandidateUserId(currentCoverage) : null;
     if (currentCoverage && currentCandidateId && reservedByPriorDuty.has(currentCandidateId)) {
       const priorCoverage = reservedByPriorDuty.get(currentCandidateId)!;
@@ -841,6 +1134,30 @@ export class DutyService {
     const now = this.currentTimeMinutes();
     const workdayEnd = this.timeToMinutes(config?.scheduleMode === 'CWW' ? config?.cwwClockoutEnd : config?.officeClockout);
     if (now < workdayEnd) return;
+    const meetingOverrides = await this.activeMeetingRelieversForDate(date);
+    const reservationById = new Map(meetingOverrides.reservations.map((reservation) => [reservation.id, reservation]));
+    for (const reliever of meetingOverrides.relievers) {
+      const reservation = reservationById.get(reliever.reservationId);
+      if (!reservation || ![DutyReservationStatus.CONFIRMED, DutyReservationStatus.COMPLETED].includes(reservation.status)) continue;
+      if (!(await this.isAttendanceEligible(reliever.userId, date))) continue;
+      const activeTickets = await this.ticketRepo.count({
+        where: { assignedToId: reliever.userId, status: In(ACTIVE_TICKET_STATUSES) },
+      });
+      if (activeTickets > 0) continue;
+      const exists = await this.assignmentRepo.exist({
+        where: { dutyDate: date, dutyType: reservation.venueType, userId: reliever.userId },
+      });
+      if (!exists) {
+        await this.assignmentRepo.save(this.assignmentRepo.create({
+          dutyDate: date,
+          dutyType: reservation.venueType,
+          userId: reliever.userId,
+          remarks: `Immediate reliever: ${reliever.reason}`,
+          source: 'management_override',
+          createdById: reliever.createdById,
+        }));
+      }
+    }
     const coverages = await this.coverageRepo.find({ where: { dutyDate: date, status: In([DutyCoverageStatus.ACTIVE, DutyCoverageStatus.RELEASED]) } });
     for (const coverage of coverages) {
       const reservations = await this.reservationRepo.find({ where: { meetingDate: date, venueType: coverage.dutyType } });

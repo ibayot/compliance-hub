@@ -35,7 +35,7 @@ import { RoleCapabilitiesHttpClient } from '../../common/http-clients/role-capab
 import { HttpClientsModule } from '../../common/http-clients/http-clients.module';
 import { EventBusModule } from '../../common/events/event-bus.module';
 import { CapabilityGuard } from '../../common/guards/capability.guard';
-import { DutyAssignment, DutyDailyCoverage, DutyException, DutyMeetingReservation, DutyRosterMembership } from './entities/duty.entity';
+import { DutyAssignment, DutyDailyCoverage, DutyException, DutyMeetingReliever, DutyMeetingReservation, DutyRosterMembership } from './entities/duty.entity';
 import { DutyService } from './services/duty.service';
 import { DutyController } from './controllers/duty.controller';
 
@@ -63,6 +63,7 @@ import { DutyController } from './controllers/duty.controller';
       DutyAssignment,
       DutyDailyCoverage,
       DutyException,
+      DutyMeetingReliever,
       DutyMeetingReservation,
       DutyRosterMembership,
       // RoleCapability removed: now loaded via RoleCapabilitiesHttpClient → users-service HTTP API

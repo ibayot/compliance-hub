@@ -21,6 +21,7 @@ export class RoleCapabilitiesService implements OnModuleInit {
   private readonly logger = new Logger(RoleCapabilitiesService.name);
   private readonly cache = new Map<string, RoleCapability>();
   private readonly roleOrder = new Map<string, number>();
+  private readonly roleLabels = new Map<string, string>();
 
   constructor(
     @InjectRepository(RoleCapability)
@@ -56,7 +57,11 @@ export class RoleCapabilitiesService implements OnModuleInit {
       const rows = await this.repo.find();
       this.cache.clear();
       this.roleOrder.clear();
-      roleDefinitions.forEach((role, index) => this.roleOrder.set(role.value, index));
+      this.roleLabels.clear();
+      roleDefinitions.forEach((role, index) => {
+        this.roleOrder.set(role.value, index);
+        this.roleLabels.set(role.value, role.label || role.value);
+      });
       for (const row of rows) {
         this.cache.set(row.roleValue, row);
       }
@@ -349,12 +354,15 @@ export class RoleCapabilitiesService implements OnModuleInit {
   // ── Admin CRUD ─────────────────────────────────────────────────────────────
 
   /** Return all capability rows in role-definition order, served from cache. */
-  findAll(): RoleCapability[] {
+  findAll(): Array<RoleCapability & { label: string }> {
     return [...this.cache.values()].sort((a, b) => {
       const aOrder = this.roleOrder.get(a.roleValue) ?? Number.MAX_SAFE_INTEGER;
       const bOrder = this.roleOrder.get(b.roleValue) ?? Number.MAX_SAFE_INTEGER;
       return aOrder - bOrder || a.roleValue.localeCompare(b.roleValue);
-    });
+    }).map((row) => ({
+      ...row,
+      label: this.roleLabels.get(row.roleValue) || row.roleValue,
+    }));
   }
 
   /** Return the capability row for a single role from cache (undefined if not found). */

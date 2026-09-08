@@ -18,8 +18,9 @@ import {
   InputAdornment,
   IconButton,
   Box,
-  Tooltip,
   Menu,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import { Visibility, VisibilityOff, AutoFixHigh, Key, VpnKey } from '@mui/icons-material';
 import { usersApi } from '@/lib/api/users';
@@ -104,6 +105,7 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
   const [units, setUnits] = useState<Array<{ id: number; name: string; hasReportorialRequirements?: boolean }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [privacyNoticeAccepted, setPrivacyNoticeAccepted] = useState(false);
   const availableUnits = unitsForUserRole(units, user.role);
 
   useEffect(() => {
@@ -117,6 +119,7 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
       setPhoneNumber(user.phoneNumber || '');
       setSex(user.sex || '');
       setUnitId(user.units?.[0]?.id ?? '');
+      setPrivacyNoticeAccepted(false);
       usersApi.getProfileUnits().then(setUnits).catch(() => {
         setUnits(user.units || []);
         enqueueSnackbar('Unable to load the available units.', { variant: 'error' });
@@ -146,6 +149,10 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
     }
     if (!/^\d{10}$/.test(phoneNumber)) {
       setError('Phone number must contain exactly 10 digits.');
+      return;
+    }
+    if (!privacyNoticeAccepted) {
+      setError('Please read and acknowledge the privacy notice before saving.');
       return;
     }
 
@@ -368,6 +375,33 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
               </FormControl>
             </Grid>
           </Grid>
+
+          <Alert severity="info" sx={{ mt: 3 }}>
+            <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+              Privacy Notice
+            </Typography>
+            <Typography variant="body2">
+              The personal information collected here will be used only to verify your identity,
+              secure your account, complete your profile, and provide Compliance Hub services. It
+              will not be used to harm, discriminate against, or unfairly disadvantage you, and
+              will be handled according to applicable DSWD privacy and security policies.
+            </Typography>
+          </Alert>
+          <FormControlLabel
+            sx={{ mt: 1, alignItems: 'flex-start' }}
+            control={
+              <Checkbox
+                checked={privacyNoticeAccepted}
+                onChange={(event) => setPrivacyNoticeAccepted(event.target.checked)}
+              />
+            }
+            label={
+              <Typography variant="body2" sx={{ pt: 1 }}>
+                I have read and understood the privacy notice and acknowledge that my information
+                will be used for the purposes stated above.
+              </Typography>
+            }
+          />
         </DialogContent>
         <DialogActions sx={{ p: 2, pt: 0 }}>
           <Button
@@ -375,7 +409,7 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
             variant="contained"
             color="primary"
             fullWidth
-            disabled={loading || !newPassword || !confirmPassword || !staffId || !firstName || !lastName || !phoneNumber || !sex || unitId === ''}
+            disabled={loading || !newPassword || !confirmPassword || !staffId || !firstName || !lastName || !phoneNumber || !sex || unitId === '' || !privacyNoticeAccepted}
           >
             {loading ? 'Saving Profile...' : 'Save Profile & Password'}
           </Button>

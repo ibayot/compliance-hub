@@ -177,7 +177,6 @@ export class TicketController {
 
   /** GET /tickets/dashboard */
   @Get('dashboard')
-  @RequireCapability('isTicketModuleAccess')
   async getDashboardStats(@Request() req: any) {
     return this.ticketService.getUserDashboardStats(req.user.id ?? req.user.userId);
   }
