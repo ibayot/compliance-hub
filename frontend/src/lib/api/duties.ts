@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { UserRecord } from './users';
 
 export type DutyType = 'OD' | 'ROC' | 'OPCEN' | 'CONFERENCE';
 export type DutyAccess = { viewer: boolean; admin: boolean; canSchedule: boolean; currentOd: boolean };
@@ -8,6 +9,7 @@ export const dutiesApi = {
   dashboard: async (date?: string) => (await apiClient.get('/duties/dashboard', { params: { date } })).data,
   rotation: async (date?: string) => (await apiClient.get('/duties/rotation', { params: { date } })).data,
   map: async (year: number, month: number) => (await apiClient.get('/duties/map', { params: { year, month } })).data,
+  staff: async (): Promise<UserRecord[]> => (await apiClient.get('/duties/staff')).data,
   reconcile: async () => (await apiClient.post('/duties/reconcile')).data,
   logs: async (page = 1, limit = 10) => (await apiClient.get('/duties/logs', { params: { page, limit } })).data,
   saveLog: async (payload: any, id?: string) => (await (id ? apiClient.patch(`/duties/logs/${id}`, payload) : apiClient.post('/duties/logs', payload))).data,

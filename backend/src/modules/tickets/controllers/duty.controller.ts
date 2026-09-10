@@ -52,6 +52,7 @@ export class DutyController {
   @Get('dashboard') async dashboard(@Request() req: any, @Query('date') date?: string) { await this.duty.assertRead(req.user); return this.duty.getDashboard(date); }
   @Get('rotation') async rotation(@Request() req: any, @Query('date') date?: string) { await this.duty.assertRead(req.user); return this.duty.getRotation(date); }
   @Get('map') async map(@Request() req: any, @Query('year') year: string, @Query('month') month: string) { await this.duty.assertRead(req.user); return this.duty.getMap(Number(year), Number(month)); }
+  @Get('staff') staff(@Request() req: any) { return this.duty.getStaffOptions(req.user); }
   @Post('reconcile') reconcile(@Request() req: any) { return this.duty.reconcile(req.user); }
 
   @Get('logs') async logs(@Request() req: any, @Query('page') page = '1', @Query('limit') limit = '10') {

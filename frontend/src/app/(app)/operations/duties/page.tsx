@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Paper, Select, Stack, Switch, Tab, Table, TableBody, TableCell, TableContainer as MuiTableContainer, TableHead, TablePagination, TableRow, Tabs, TextField, Typography } from '@mui/material';
 import { Add, Delete, Edit, GroupAdd, Refresh, Star } from '@mui/icons-material';
 import { dutiesApi, DutyAccess, DutyType } from '@/lib/api/duties';
-import { usersApi, UserRecord } from '@/lib/api/users';
+import type { UserRecord } from '@/lib/api/users';
 import { useSse } from '@/lib/utils/useSse';
 import { useSnackbar } from 'notistack';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -64,7 +64,7 @@ export default function DutiesPage() {
         dutiesApi.dashboard(), dutiesApi.rotation(), dutiesApi.map(year, month),
         a.admin ? dutiesApi.logs(logsPage + 1, PAGE_SIZE) : EMPTY_PAGE,
         a.admin ? dutiesApi.exceptions(exceptionsPage + 1, PAGE_SIZE) : EMPTY_PAGE,
-        a.admin || a.canSchedule ? dutiesApi.reservations(reservationsPage + 1, PAGE_SIZE) : EMPTY_PAGE, a.admin ? usersApi.list() : [],
+        a.admin || a.canSchedule ? dutiesApi.reservations(reservationsPage + 1, PAGE_SIZE) : EMPTY_PAGE, a.admin ? dutiesApi.staff() : [],
         a.admin ? dutiesApi.roster() : [],
         a.admin ? dutiesApi.rosterConfig() : { odOverrideEnabled: false },
       ]);
