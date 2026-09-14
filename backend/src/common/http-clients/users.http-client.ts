@@ -47,6 +47,7 @@ export interface RoleCapabilityStub {
   isMetricsAccess: boolean;
   isDutyViewerAccess: boolean;
   isDutyAdminAccess: boolean;
+  isTicketResolutionTimeOverride: boolean;
   isAttendanceEligible: boolean;
   isAuditAccess: boolean;
   isUnitsAccess: boolean;

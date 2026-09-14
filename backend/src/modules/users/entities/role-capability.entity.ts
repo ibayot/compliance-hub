@@ -182,6 +182,10 @@ export class RoleCapability {
   @Column({ name: 'is_duty_admin_access', type: 'tinyint', width: 1, default: 0 })
   isDutyAdminAccess: boolean;
 
+  /** True for roles allowed to approve a documented ticket resolution-time correction. */
+  @Column({ name: 'is_ticket_resolution_time_override', type: 'tinyint', width: 1, default: 0 })
+  isTicketResolutionTimeOverride: boolean;
+
   /** True for accounts eligible to appear in attendance views. */
   @Column({ name: 'is_attendance_eligible', type: 'tinyint', width: 1, default: 0 })
   isAttendanceEligible: boolean;

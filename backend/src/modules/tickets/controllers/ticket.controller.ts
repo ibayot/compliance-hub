@@ -298,6 +298,35 @@ export class TicketController {
     );
   }
 
+  /** POST /tickets/:id/resolution-time-override */
+  @Post(':id/resolution-time-override')
+  @RequireCapability('isTicketResolutionTimeOverride')
+  @UseInterceptors(FilesInterceptor('proofFiles', 10, { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async overrideResolutionTime(
+    @Param('id') id: string,
+    @Body() body: { verifiedResolvedAt?: string; reason?: string },
+    @UploadedFiles() proofFiles: Express.Multer.File[],
+    @Request() req: any,
+  ) {
+    return this.ticketService.overrideResolutionTime(
+      id,
+      body,
+      proofFiles ?? [],
+      req.user.id ?? req.user.userId,
+      req.user.role,
+    );
+  }
+
+  @Get(':id/resolution-time-overrides')
+  @RequireCapability('isTicketModuleAccess')
+  async getResolutionTimeOverrides(@Param('id') id: string, @Request() req: any) {
+    return this.ticketService.getResolutionTimeOverrides(
+      id,
+      req.user.id ?? req.user.userId,
+      req.user.role,
+    );
+  }
+
   /** PATCH /tickets/:id */
   @Patch(':id')
   @RequireCapability('isTicketModuleAccess')
@@ -467,6 +496,31 @@ export class TicketController {
       proofFiles ?? [],
       req.user.id ?? req.user.userId,
     );
+  }
+
+  /** GET /tickets/resolution-time-proof/:ticketId/:overrideId/:filename */
+  @Get('resolution-time-proof/:ticketId/:overrideId/:filename')
+  @RequireCapability('isTicketModuleAccess')
+  async serveResolutionTimeProof(
+    @Param('ticketId') ticketId: string,
+    @Param('overrideId') overrideId: string,
+    @Param('filename') filename: string,
+    @Request() req: any,
+    @Res() res: Response,
+  ) {
+    const { root, safeFilename } = await this.ticketService.ensureResolutionOverrideProofReadable(
+      ticketId,
+      overrideId,
+      filename,
+      req.user.id ?? req.user.userId,
+      req.user.role,
+    );
+    const filePath = path.join(root, safeFilename);
+    if (!fs.existsSync(filePath)) throw new NotFoundException('Resolution proof image not found.');
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.sendFile(filePath);
   }
 
   /** GET /tickets/proof/:ticketId/:filename — serve escalation proof photo */

@@ -206,13 +206,13 @@ export class TicketCronService implements OnModuleInit {
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
-    const staleResolvedTickets = await this.ticketRepo.find({
-      where: {
-        status: TicketStatus.RESOLVED,
-        resolvedAt: LessThan(threeDaysAgo),
-      },
-      // relations: ['assignedTo'] - removed for decoupling
-    });
+    const staleResolvedTickets = await this.ticketRepo
+      .createQueryBuilder('ticket')
+      .where('ticket.status = :status', { status: TicketStatus.RESOLVED })
+      .andWhere('COALESCE(ticket.resolutionTimeOverride, ticket.resolvedAt) < :threeDaysAgo', {
+        threeDaysAgo,
+      })
+      .getMany();
     await this.ticketService.enrichTicketsWithUsers(staleResolvedTickets);
 
     for (const ticket of staleResolvedTickets) {

@@ -120,6 +120,10 @@ export class Ticket {
   @Column({ name: 'resolved_at', type: 'datetime', nullable: true })
   resolvedAt: Date | null;
 
+  /** Approved effective resolution time; resolvedAt remains the immutable system timestamp. */
+  @Column({ name: 'resolution_time_override', type: 'datetime', nullable: true })
+  resolutionTimeOverride: Date | null;
+
   /** If status=duplicate, points to the original ticket that this duplicates */
   @Column({ name: 'duplicate_of_id', type: 'varchar', length: 36, nullable: true })
   duplicateOfId: string | null;

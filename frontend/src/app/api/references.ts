@@ -182,6 +182,9 @@ export interface Ticket {
   assignedTo?: { id: number; email: string; firstName?: string; lastName?: string } | null;
   resolutionNotes?: string | null;
   resolvedAt?: string | null;
+  resolutionTimeOverride?: string | null;
+  effectiveResolvedAt?: string | null;
+  resolutionTimeOverrides?: TicketResolutionTimeOverride[];
   satisfactionRating?: number | null;
   satisfactionComment?: string | null;
   satisfactionSubmittedAt?: string | null;
@@ -198,6 +201,19 @@ export interface Ticket {
   hasUnreadTechnician?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TicketResolutionTimeOverride {
+  id: string;
+  ticketId: string;
+  recordedResolvedAt: string;
+  previousEffectiveResolvedAt?: string | null;
+  verifiedResolvedAt: string;
+  reason: string;
+  proofFiles: string[];
+  createdById: number;
+  createdByName?: string;
+  createdAt: string;
 }
 
 export interface TicketComment {
@@ -649,6 +665,16 @@ export const ticketsApi = {
       formData.append('attachment', attachment);
     }
     const response = await apiClient.post(`/tickets/${ticketId}/comments`, formData);
+    return response.data;
+  },
+
+  overrideResolutionTime: async (id: string, data: FormData): Promise<Ticket> => {
+    const response = await apiClient.post(`/tickets/${id}/resolution-time-override`, data);
+    return response.data;
+  },
+
+  getResolutionTimeOverrides: async (id: string): Promise<TicketResolutionTimeOverride[]> => {
+    const response = await apiClient.get(`/tickets/${id}/resolution-time-overrides`);
     return response.data;
   },
 

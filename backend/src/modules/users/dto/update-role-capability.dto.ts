@@ -136,6 +136,10 @@ export class UpdateRoleCapabilityDto {
 
   @IsOptional()
   @IsBoolean()
+  isTicketResolutionTimeOverride?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   isAttendanceEligible?: boolean;
 
   @IsOptional()

@@ -9,6 +9,7 @@ import { TechAttendance } from './entities/tech-attendance.entity';
 import { OfficeDay } from './entities/office-day.entity';
 import { TicketEvent } from './entities/ticket-event.entity';
 import { TicketEscalation } from './entities/ticket-escalation.entity';
+import { TicketResolutionTimeOverride } from './entities/ticket-resolution-time-override.entity';
 import { EscalationFocalConfig } from './entities/escalation-focal-config.entity';
 import { TicketingConfig } from './entities/ticketing-config.entity';
 import { KnowledgeArticle } from './entities/knowledge-article.entity';
@@ -51,6 +52,7 @@ import { DutyController } from './controllers/duty.controller';
       OfficeDay,
       TicketEvent,
       TicketEscalation,
+      TicketResolutionTimeOverride,
       EscalationFocalConfig,
       TicketingConfig,
       KnowledgeArticle,

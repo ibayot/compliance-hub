@@ -21,6 +21,7 @@ import { TicketComment } from '../entities/ticket-comment.entity';
 import { TicketIssueType } from '../entities/ticket-issue-type.entity';
 import { TicketEvent } from '../entities/ticket-event.entity';
 import { TicketEscalation, EscalationStatus } from '../entities/ticket-escalation.entity';
+import { TicketResolutionTimeOverride } from '../entities/ticket-resolution-time-override.entity';
 import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { TicketStatusJustification } from '../entities/ticket-status-justification.entity';
@@ -251,6 +252,13 @@ export const shouldInitializeSlaDeadline = (
   slaDeadline: Date | null | undefined,
 ): boolean => !slaDeadline;
 
+export const getEffectiveResolvedAt = (
+  ticket: Pick<Ticket, 'resolvedAt' | 'resolutionTimeOverride'>,
+): Date | null => {
+  const value = ticket.resolutionTimeOverride ?? ticket.resolvedAt;
+  return value ? new Date(value) : null;
+};
+
 export const deriveSatisfactionRating = (
   likert: Array<number | string | 'NA'>,
 ): number | null => {
@@ -287,6 +295,8 @@ export class TicketService implements OnModuleInit {
     private readonly issueTypeRepo: Repository<TicketIssueType>,
     @InjectRepository(TicketEscalation)
     private readonly escalationRepo: Repository<TicketEscalation>,
+    @InjectRepository(TicketResolutionTimeOverride)
+    private readonly resolutionOverrideRepo: Repository<TicketResolutionTimeOverride>,
     @InjectRepository(TicketingConfig)
     private readonly configRepo: Repository<TicketingConfig>,
     @InjectRepository(TicketStatusJustification)
@@ -967,6 +977,7 @@ export class TicketService implements OnModuleInit {
       resolutionSteps: null,
       resolutionDate: null,
       resolvedAt: null,
+      resolutionTimeOverride: null,
       satisfactionRating: null,
       satisfactionComment: null,
       satisfactionSubmittedAt: null,
@@ -1251,13 +1262,16 @@ export class TicketService implements OnModuleInit {
             : deadline.getTime() - new Date(t.createdAt).getTime();
           const fortyPercentSlaMs = originalSlaMs * 0.4;
 
-          if (now > deadline) {
+          const effectiveResolvedAt = getEffectiveResolvedAt(t);
+          const comparisonTime = effectiveResolvedAt ?? now;
+          if (comparisonTime > deadline) {
             isOverdue = true;
-          } else if (deadline.getTime() - now.getTime() <= fortyPercentSlaMs) {
+          } else if (!effectiveResolvedAt && deadline.getTime() - now.getTime() <= fortyPercentSlaMs) {
             isNearingSLA = true;
           }
         }
         return Object.assign(t, {
+          effectiveResolvedAt: getEffectiveResolvedAt(t),
           assignedTechAbsent: t.assignedToId ? absentIds.has(t.assignedToId) : false,
           isOverdue,
           isNearingSLA,
@@ -1297,6 +1311,7 @@ export class TicketService implements OnModuleInit {
     if (!ticket) throw new NotFoundException('Ticket not found');
     await this.enrichTicketsWithUsers([ticket]);
     await this.assertTicketReadAccess(ticket, viewerId, viewerRole);
+    const resolutionTimeOverrides = await this.getResolutionTimeOverrideHistory(ticket.id);
 
     // IN_PROGRESS tickets are active; repair legacy rows that still carry the queue flag.
     if (ticket.status === TicketStatus.IN_PROGRESS && ticket.isSlaWaiting) {
@@ -1359,17 +1374,166 @@ export class TicketService implements OnModuleInit {
         : deadline.getTime() - new Date(ticket.createdAt).getTime();
       const fortyPercentSlaMs = originalSlaMs * 0.4;
 
-      if (now > deadline) {
+      const effectiveResolvedAt = getEffectiveResolvedAt(ticket);
+      const comparisonTime = effectiveResolvedAt ?? now;
+      if (comparisonTime > deadline) {
         isOverdue = true;
-      } else if (deadline.getTime() - now.getTime() <= fortyPercentSlaMs) {
+      } else if (!effectiveResolvedAt && deadline.getTime() - now.getTime() <= fortyPercentSlaMs) {
         isNearingSLA = true;
       }
     }
-    return Object.assign(ticket, { isOverdue, isNearingSLA });
+    return Object.assign(ticket, {
+      effectiveResolvedAt: getEffectiveResolvedAt(ticket),
+      resolutionTimeOverrides,
+      isOverdue,
+      isNearingSLA,
+    });
   }
 
   private commentAttachmentStorageRoot(): string {
     return process.env.COMMENT_ATTACHMENT_STORAGE_ROOT || './uploads/comments';
+  }
+
+  private resolutionOverrideStorageRoot(): string {
+    return process.env.RESOLUTION_OVERRIDE_STORAGE_ROOT || './uploads/resolution-overrides';
+  }
+
+  private async getResolutionTimeOverrideHistory(ticketId: string) {
+    const rows = await this.resolutionOverrideRepo.find({
+      where: { ticketId },
+      order: { createdAt: 'DESC' },
+    });
+    if (rows.length === 0) return rows;
+    const users = await this.usersHttpClient.getUsers();
+    const names = new Map(users.map((user) => [
+      user.id,
+      [user.first_name, user.last_name].filter(Boolean).join(' ') || user.email,
+    ]));
+    return rows.map((row) => Object.assign(row, {
+      createdByName: names.get(row.createdById) ?? `User #${row.createdById}`,
+    }));
+  }
+
+  async overrideResolutionTime(
+    ticketId: string,
+    body: { verifiedResolvedAt?: string; reason?: string },
+    proofFiles: Express.Multer.File[],
+    actorId: number,
+    actorRole: UserRole,
+  ): Promise<Ticket> {
+    if (!this.roleCapSvc.isTicketResolutionTimeOverride(actorRole as string)) {
+      throw new ForbiddenException('Ticket Resolution Time Override capability is required.');
+    }
+    const ticket = await this.getTicketById(ticketId, actorRole, actorId);
+    if (![TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(ticket.status)) {
+      throw new BadRequestException('Only resolved or closed tickets can have their resolution time corrected.');
+    }
+    if (!ticket.resolvedAt) {
+      throw new BadRequestException('This ticket does not have a recorded resolution time.');
+    }
+
+    const reason = String(body.reason ?? '').trim();
+    if (reason.length < 10) {
+      throw new BadRequestException('Reason must contain at least 10 characters.');
+    }
+    if (!proofFiles?.length) {
+      throw new BadRequestException('At least one proof image with a visible timestamp is required.');
+    }
+    for (const file of proofFiles) this.validateImageUpload(file);
+
+    const verifiedResolvedAt = new Date(String(body.verifiedResolvedAt ?? ''));
+    if (Number.isNaN(verifiedResolvedAt.getTime())) {
+      throw new BadRequestException('Enter a valid verified completion date and time.');
+    }
+    const recordedResolvedAt = new Date(ticket.resolvedAt);
+    const createdAt = new Date(ticket.createdAt);
+    const now = new Date();
+    if (verifiedResolvedAt < createdAt) {
+      throw new BadRequestException('Verified completion time cannot be before the ticket was created.');
+    }
+    if (verifiedResolvedAt > recordedResolvedAt) {
+      throw new BadRequestException('Verified completion time cannot be later than the recorded resolution time.');
+    }
+    if (verifiedResolvedAt > now) {
+      throw new BadRequestException('Verified completion time cannot be in the future.');
+    }
+
+    const overrideId = randomUUID();
+    const safeTicketId = path.basename(ticketId);
+    const dir = path.join(this.resolutionOverrideStorageRoot(), safeTicketId);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const savedFullPaths: string[] = [];
+    const savedPaths: string[] = [];
+    let databaseCommitted = false;
+    try {
+      for (const file of proofFiles) {
+        const filename = this.createSafeImageFilename(file);
+        const fullPath = path.join(dir, filename);
+        fs.writeFileSync(fullPath, file.buffer);
+        savedFullPaths.push(fullPath);
+        savedPaths.push(`resolution-time-overrides/${safeTicketId}/${filename}`);
+      }
+
+      const previousEffectiveResolvedAt = getEffectiveResolvedAt(ticket);
+      await this.dataSource.transaction(async (manager) => {
+        const override = manager.create(TicketResolutionTimeOverride, {
+          id: overrideId,
+          ticketId,
+          recordedResolvedAt,
+          previousEffectiveResolvedAt,
+          verifiedResolvedAt,
+          reason,
+          proofFiles: savedPaths,
+          createdById: actorId,
+        });
+        await manager.save(TicketResolutionTimeOverride, override);
+        await manager.update(Ticket, { id: ticketId }, { resolutionTimeOverride: verifiedResolvedAt });
+      });
+      databaseCommitted = true;
+
+      await this.logEvent(ticketId, 'resolution_time_overridden', actorId, {
+        overrideId,
+        recordedResolvedAt: recordedResolvedAt.toISOString(),
+        previousEffectiveResolvedAt: previousEffectiveResolvedAt?.toISOString() ?? null,
+        verifiedResolvedAt: verifiedResolvedAt.toISOString(),
+        reason,
+        proofCount: savedPaths.length,
+      });
+      return this.getTicketById(ticketId, actorRole, actorId);
+    } catch (error) {
+      if (!databaseCommitted) {
+        for (const fullPath of savedFullPaths) {
+          try { if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath); } catch { /* best-effort cleanup */ }
+        }
+      }
+      throw error;
+    }
+  }
+
+  async getResolutionTimeOverrides(ticketId: string, viewerId?: number, viewerRole?: UserRole) {
+    await this.getTicketById(ticketId, viewerRole, viewerId);
+    return this.getResolutionTimeOverrideHistory(ticketId);
+  }
+
+  async ensureResolutionOverrideProofReadable(
+    ticketId: string,
+    overrideId: string,
+    filename: string,
+    viewerId?: number,
+    viewerRole?: UserRole,
+  ): Promise<{ root: string; safeFilename: string }> {
+    await this.getTicketById(ticketId, viewerRole, viewerId);
+    const override = await this.resolutionOverrideRepo.findOne({ where: { id: overrideId, ticketId } });
+    if (!override) throw new NotFoundException('Resolution-time override record not found.');
+    const safeFilename = path.basename(filename);
+    const isReferenced = (override.proofFiles ?? []).some(
+      (proofPath) => path.basename(String(proofPath)) === safeFilename,
+    );
+    if (!isReferenced) throw new NotFoundException('Resolution proof image not found.');
+    return {
+      root: path.resolve(this.resolutionOverrideStorageRoot(), path.basename(ticketId)),
+      safeFilename,
+    };
   }
 
   // --- Update --------------------------------------------------------------
@@ -2981,10 +3145,11 @@ export class TicketService implements OnModuleInit {
         if (deadline >= startOfDay && deadline <= endOfDay) dueToday++;
       }
 
+      const effectiveResolvedAt = getEffectiveResolvedAt(t);
       if (
         (t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) &&
-        t.resolvedAt &&
-        deadline < t.resolvedAt
+        effectiveResolvedAt &&
+        deadline < effectiveResolvedAt
       ) {
         breachedResolved++;
       }
@@ -3689,8 +3854,9 @@ export class TicketService implements OnModuleInit {
 
     for (const t of tickets) {
       if (t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) {
-        if (t.resolvedAt) {
-          const resolvedAt = new Date(t.resolvedAt);
+        const effectiveResolvedAt = getEffectiveResolvedAt(t);
+        if (effectiveResolvedAt) {
+          const resolvedAt = effectiveResolvedAt;
           const createdAt = new Date(t.createdAt);
           const hours = (resolvedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
 
@@ -4933,8 +5099,9 @@ export class TicketService implements OnModuleInit {
 
       let missed = false;
       if (t.slaDeadline) {
-        if (t.resolvedAt) {
-          missed = t.resolvedAt > t.slaDeadline;
+        const effectiveResolvedAt = getEffectiveResolvedAt(t);
+        if (effectiveResolvedAt) {
+          missed = effectiveResolvedAt > t.slaDeadline;
         } else {
           missed = new Date() > t.slaDeadline;
         }
@@ -4965,8 +5132,9 @@ export class TicketService implements OnModuleInit {
           stat.escalatedCount += 1;
         }
 
-        if (isResolvedOrClosed && t.resolvedAt) {
-          const ms = t.resolvedAt.getTime() - t.createdAt.getTime();
+        const effectiveResolvedAt = getEffectiveResolvedAt(t);
+        if (isResolvedOrClosed && effectiveResolvedAt) {
+          const ms = effectiveResolvedAt.getTime() - t.createdAt.getTime();
           stat.totalHours += ms / (1000 * 60 * 60);
           stat.resCount += 1;
         }

@@ -81,6 +81,9 @@ const isAllowedImageFile = (file: File) => {
   return ALLOWED_IMAGE_EXTENSIONS.has(extension) && (!mime || ALLOWED_IMAGE_MIME_TYPES.has(mime));
 };
 
+const effectiveResolvedAt = (ticket: Ticket) =>
+  ticket.effectiveResolvedAt || ticket.resolutionTimeOverride || ticket.resolvedAt || null;
+
 const STATUS_OPTS = [
   { value: 'open', label: 'Open' },
   { value: 'assigned', label: 'Assigned' },
@@ -173,7 +176,8 @@ function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'ove
   const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
   if (isTerminal) {
     const deadline = new Date(ticket.slaDeadline).getTime();
-    const resolvedTime = ticket.resolvedAt ? new Date(ticket.resolvedAt).getTime() : Date.now();
+    const resolvedValue = effectiveResolvedAt(ticket);
+    const resolvedTime = resolvedValue ? new Date(resolvedValue).getTime() : Date.now();
     return resolvedTime <= deadline ? 'met' : 'overdue';
   }
   if (ticket.isOverdue) return 'overdue';
@@ -1115,8 +1119,8 @@ export default function TicketDetailPage() {
                       sex: user?.sex || '',
                       contactNumber: user?.phoneNumber || '',
                       technicianName: assignedName,
-                      dateOfTransaction: ticket.resolvedAt
-                        ? new Date(ticket.resolvedAt).toISOString().split('T')[0]
+                      dateOfTransaction: effectiveResolvedAt(ticket)
+                        ? new Date(effectiveResolvedAt(ticket) as string).toISOString().split('T')[0]
                         : new Date().toISOString().split('T')[0],
                       likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
                     });
@@ -1508,11 +1512,24 @@ export default function TicketDetailPage() {
                 {ticket.resolvedAt && (
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Resolved
+                      {ticket.resolutionTimeOverride ? 'Recorded Resolution Time' : 'Resolved'}
                     </Typography>
                     <Typography variant="body2">
                       {new Date(ticket.resolvedAt).toLocaleString()}
                     </Typography>
+                  </Box>
+                )}
+                {ticket.resolutionTimeOverride && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Verified Completion Time
+                    </Typography>
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                      <Typography variant="body2" fontWeight={600}>
+                        {new Date(ticket.resolutionTimeOverride).toLocaleString()}
+                      </Typography>
+                      <Chip size="small" label="Adjusted" color="secondary" variant="outlined" />
+                    </Stack>
                   </Box>
                 )}
                 {ticket.slaDeadline && (!ticket.isSlaWaiting || ticket.status === 'in_progress') && (
@@ -1525,8 +1542,8 @@ export default function TicketDetailPage() {
                       <Typography
                         variant="body2"
                         color={
-                          ticket.resolvedAt
-                            ? new Date(ticket.resolvedAt) > new Date(ticket.slaDeadline)
+                          effectiveResolvedAt(ticket)
+                            ? new Date(effectiveResolvedAt(ticket) as string) > new Date(ticket.slaDeadline)
                               ? 'error.main'
                               : 'success.main'
                             : new Date() > new Date(ticket.slaDeadline)
@@ -1537,7 +1554,7 @@ export default function TicketDetailPage() {
                         {new Date(ticket.slaDeadline).toLocaleString()}
                       </Typography>
                     </Box>
-                    {!ticket.resolvedAt && new Date() < new Date(ticket.slaDeadline) && (
+                    {!effectiveResolvedAt(ticket) && new Date() < new Date(ticket.slaDeadline) && (
                       <Box mt={1}>
                         <SlaCountdownTimer 
                           targetDate={ticket.slaDeadline} 
@@ -1546,7 +1563,7 @@ export default function TicketDetailPage() {
                         />
                       </Box>
                     )}
-                    {ticket.resolvedAt && (
+                    {effectiveResolvedAt(ticket) && (
                       <Box>
                         <Typography variant="caption" color="text.secondary">
                           Resolution Time vs SLA
@@ -1554,15 +1571,15 @@ export default function TicketDetailPage() {
                         <Typography
                           variant="body2"
                           color={
-                            new Date(ticket.resolvedAt) > new Date(ticket.slaDeadline)
+                            new Date(effectiveResolvedAt(ticket) as string) > new Date(ticket.slaDeadline)
                               ? 'error.main'
                               : 'success.main'
                           }
                           fontWeight={600}
                         >
-                          {new Date(ticket.resolvedAt) > new Date(ticket.slaDeadline)
+                          {new Date(effectiveResolvedAt(ticket) as string) > new Date(ticket.slaDeadline)
                             ? `Missed SLA by ${Math.round(
-                              (new Date(ticket.resolvedAt).getTime() -
+                              (new Date(effectiveResolvedAt(ticket) as string).getTime() -
                                 new Date(ticket.slaDeadline).getTime()) /
                               (1000 * 60 * 60)
                             )} hr(s)`
@@ -1570,7 +1587,7 @@ export default function TicketDetailPage() {
                         </Typography>
                       </Box>
                     )}
-                    {!ticket.resolvedAt && new Date() > new Date(ticket.slaDeadline) && (
+                    {!effectiveResolvedAt(ticket) && new Date() > new Date(ticket.slaDeadline) && (
                       <Box mt={1}>
                         <Typography variant="caption" color="text.secondary">
                           Elapsed time after SLA Deadline
@@ -1759,6 +1776,66 @@ export default function TicketDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {ticket.resolutionTimeOverrides && ticket.resolutionTimeOverrides.length > 0 && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+              Resolution Time Correction History ({ticket.resolutionTimeOverrides.length})
+            </Typography>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              The original system resolution time is retained. SLA calculations use the latest verified completion time.
+            </Alert>
+            <Stack spacing={2}>
+              {ticket.resolutionTimeOverrides.map((correction, index) => (
+                <Box key={correction.id} p={1.5} bgcolor="action.hover" borderRadius={1}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Recorded Resolution</Typography>
+                      <Typography variant="body2">
+                        {new Date(correction.recordedResolvedAt).toLocaleString()}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Verified Completion</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {new Date(correction.verifiedResolvedAt).toLocaleString()}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Approved By</Typography>
+                      <Typography variant="body2">{correction.createdByName || `User #${correction.createdById}`}</Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Correction Recorded</Typography>
+                      <Typography variant="body2">{new Date(correction.createdAt).toLocaleString()}</Typography>
+                    </Box>
+                  </Stack>
+                  <Typography variant="body2" mt={1}>
+                    <strong>Reason:</strong> {correction.reason}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                    Proof image{correction.proofFiles.length === 1 ? '' : 's'}
+                  </Typography>
+                  <Box mt={0.5} display="flex" flexWrap="wrap" gap={1}>
+                    {correction.proofFiles.map((filePath, proofIndex) => {
+                      const filename = filePath.split('/').pop() || filePath;
+                      return (
+                        <AuthImage
+                          key={`${correction.id}-${proofIndex}`}
+                          url={`/tickets/resolution-time-proof/${ticket.id}/${correction.id}/${encodeURIComponent(filename)}`}
+                          alt={`Resolution-time proof ${index + 1}.${proofIndex + 1}`}
+                          style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 4 }}
+                        />
+                      );
+                    })}
+                  </Box>
+                </Box>
+              ))}
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Comments ── */}
       <Card sx={{ mb: 3 }}>
@@ -1949,6 +2026,7 @@ export default function TicketDetailPage() {
                   escalation_returned: 'Escalation Returned',
                   satisfaction_submitted: 'Satisfaction Submitted',
                   rated: 'Rated',
+                  resolution_time_overridden: 'Resolution Time Corrected',
                 };
                 const label = EVENT_LABELS[ev.eventType] ?? ev.eventType.replace(/_/g, ' ');
                 const actorLine = ev.actorName
@@ -1997,6 +2075,16 @@ export default function TicketDetailPage() {
                       {ev.meta?.justification && (
                         <Typography variant="caption" color="text.secondary" display="block" sx={{ fontStyle: 'italic' }}>
                           Justification: {ev.meta.justification}
+                        </Typography>
+                      )}
+                      {ev.eventType === 'resolution_time_overridden' && ev.meta?.verifiedResolvedAt && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Verified completion: {new Date(String(ev.meta.verifiedResolvedAt)).toLocaleString()}
+                        </Typography>
+                      )}
+                      {ev.eventType === 'resolution_time_overridden' && ev.meta?.reason && (
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ fontStyle: 'italic' }}>
+                          Reason: {String(ev.meta.reason)}
                         </Typography>
                       )}
                       <Typography variant="caption" color="text.disabled" display="block">

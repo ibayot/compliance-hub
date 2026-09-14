@@ -966,22 +966,22 @@ export class TicketSettingsService {
       .addSelect('tc.name', 'categoryName')
       .addSelect('ti.slaHours', 'configuredSlaHours')
       .addSelect('COUNT(t.id)', 'resolvedTicketsCount')
-      .addSelect('AVG(TIMESTAMPDIFF(SECOND, t.createdAt, t.resolvedAt)) / 3600', 'avgResolutionHours')
+      .addSelect('AVG(TIMESTAMPDIFF(SECOND, t.createdAt, COALESCE(t.resolutionTimeOverride, t.resolvedAt))) / 3600', 'avgResolutionHours')
       .where("LOWER(t.status) IN ('resolved', 'closed')")
       .andWhere('ti.slaHours IS NOT NULL')
       .andWhere('ti.slaHours > 0')
       .groupBy('ti.id');
 
     if (filters.year || filters.month || filters.quarter || filters.semester) {
-      if (filters.year) qb.andWhere('YEAR(t.resolvedAt) = :year', { year: filters.year });
-      if (filters.month) qb.andWhere('MONTH(t.resolvedAt) = :month', { month: filters.month });
-      if (filters.quarter) qb.andWhere('QUARTER(t.resolvedAt) = :quarter', { quarter: filters.quarter });
+      if (filters.year) qb.andWhere('YEAR(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) = :year', { year: filters.year });
+      if (filters.month) qb.andWhere('MONTH(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) = :month', { month: filters.month });
+      if (filters.quarter) qb.andWhere('QUARTER(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) = :quarter', { quarter: filters.quarter });
       if (filters.semester) {
-        if (filters.semester === 1) qb.andWhere('MONTH(t.resolvedAt) BETWEEN 1 AND 6');
-        else qb.andWhere('MONTH(t.resolvedAt) BETWEEN 7 AND 12');
+        if (filters.semester === 1) qb.andWhere('MONTH(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) BETWEEN 1 AND 6');
+        else qb.andWhere('MONTH(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) BETWEEN 7 AND 12');
       }
     } else {
-      qb.andWhere('t.resolvedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)');
+      qb.andWhere('COALESCE(t.resolutionTimeOverride, t.resolvedAt) >= DATE_SUB(NOW(), INTERVAL 30 DAY)');
     }
 
     const insights = await qb.getRawMany();

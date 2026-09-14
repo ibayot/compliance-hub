@@ -270,6 +270,10 @@ export class RoleCapabilitiesService implements OnModuleInit {
     return !!this.get(role)?.isDutyAdminAccess;
   }
 
+  isTicketResolutionTimeOverride(role: string): boolean {
+    return !!this.get(role)?.isTicketResolutionTimeOverride;
+  }
+
   isAttendanceEligible(role: string): boolean {
     return !!this.get(role)?.isAttendanceEligible;
   }
@@ -322,6 +326,7 @@ export class RoleCapabilitiesService implements OnModuleInit {
       | 'isUserManagementView'
       | 'isDutyViewerAccess'
       | 'isDutyAdminAccess'
+      | 'isTicketResolutionTimeOverride'
       | 'isAttendanceEligible'
       | 'isAuditAccess'
       | 'isUnitsAccess'

@@ -66,6 +66,7 @@ export class CapabilityGuard implements CanActivate {
       isUserManagementView: (r) => this.roleCapSvc.isUserManagementView(r),
       isDutyViewerAccess: (r) => this.roleCapSvc.isDutyViewerAccess(r),
       isDutyAdminAccess: (r) => this.roleCapSvc.isDutyAdminAccess(r),
+      isTicketResolutionTimeOverride: (r) => this.roleCapSvc.isTicketResolutionTimeOverride(r),
       isAuditAccess: (r) => this.roleCapSvc.isAuditAccess(r),
       isUnitsAccess: (r) => this.roleCapSvc.isUnitsAccess(r),
       isUnitsManage: (r) => this.roleCapSvc.isUnitsManage(r),
