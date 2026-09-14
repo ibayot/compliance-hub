@@ -2444,7 +2444,14 @@ export class TicketService implements OnModuleInit {
 
     ticket.assignedToId = dto.assignedToId;
     ticket.lastAssignedAt = new Date();
-    if (ticket.status === TicketStatus.OPEN) {
+    // The first active ticket assigned to a staff member starts immediately.
+    // Keep the existing queue behavior when that staff member already has work.
+    if (
+      busyCount === 0 &&
+      [TicketStatus.OPEN, TicketStatus.ASSIGNED].includes(ticket.status as TicketStatus)
+    ) {
+      ticket.status = TicketStatus.IN_PROGRESS;
+    } else if (ticket.status === TicketStatus.OPEN) {
       ticket.status = TicketStatus.ASSIGNED;
     }
 
@@ -3606,12 +3613,6 @@ export class TicketService implements OnModuleInit {
       endDate = new Date(year, 11, 31, 23, 59, 59, 999);
     }
 
-    const techRoles = new Set([
-      ...this.roleCapSvc.getRolesWhere('isDesktop'),
-      ...this.roleCapSvc.getRolesWhere('isItSupport'),
-      ...this.roleCapSvc.getRolesWhere('isPantawidIct'),
-    ]);
-
     const qb = this.ticketRepo
       .createQueryBuilder('t')
       .select('DISTINCT t.assignedToId', 'id')
@@ -3629,7 +3630,7 @@ export class TicketService implements OnModuleInit {
     const ids = rows.map((r) => Number(r.id)).filter(Boolean);
     const allUserRows = await this.usersHttpClient.getUsers();
     const users = allUserRows.filter(
-      (u: any) => u.role !== UserRole.SUPER_ADMIN && ids.includes(u.id) && techRoles.has(u.role),
+      (u: any) => u.role !== UserRole.SUPER_ADMIN && ids.includes(Number(u.id)),
     );
 
     return users.map((u) => ({

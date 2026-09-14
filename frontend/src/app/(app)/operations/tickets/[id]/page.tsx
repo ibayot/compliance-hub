@@ -61,6 +61,7 @@ import {
   SentimentVeryDissatisfied,
   NavigateBefore,
   NavigateNext,
+  EditCalendar as ResolutionTimeIcon,
 } from '@mui/icons-material';
 import { apiClient } from '@/lib/api/client';
 import {
@@ -180,6 +181,9 @@ function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'ove
     const resolvedTime = resolvedValue ? new Date(resolvedValue).getTime() : Date.now();
     return resolvedTime <= deadline ? 'met' : 'overdue';
   }
+  // Re-evaluate locally while this page remains open. The server-provided
+  // flags reflect the last fetch and do not change merely because time passed.
+  if (Date.now() >= new Date(ticket.slaDeadline).getTime()) return 'overdue';
   if (ticket.isOverdue) return 'overdue';
   if (ticket.isNearingSLA) return 'nearing_sla';
   return 'on_track';
@@ -202,6 +206,7 @@ export default function TicketDetailPage() {
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
+  const [, setSlaClock] = useState(Date.now());
   const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [issues, setIssues] = useState<TicketIssueType[]>([]);
@@ -271,6 +276,20 @@ export default function TicketDetailPage() {
   const [photoModalSrcs, setPhotoModalSrcs] = useState<string[]>([]);
   const [photoModalIdx, setPhotoModalIdx] = useState(0);
 
+  // Keep the SLA badge current without polling the server.
+  useEffect(() => {
+    const timer = window.setInterval(() => setSlaClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // Resolution-time correction (the list and detail views use the same API).
+  const [resolutionOverrideDialogOpen, setResolutionOverrideDialogOpen] = useState(false);
+  const [resolutionOverrideTime, setResolutionOverrideTime] = useState('');
+  const [resolutionOverrideReason, setResolutionOverrideReason] = useState('');
+  const [resolutionOverrideFiles, setResolutionOverrideFiles] = useState<File[]>([]);
+  const [resolutionOverrideConfirmed, setResolutionOverrideConfirmed] = useState(false);
+  const [savingResolutionOverride, setSavingResolutionOverride] = useState(false);
+
   // Satisfaction dialog
   const [satDialogOpen, setSatDialogOpen] = useState(false);
   const [csatForm, setCsatForm] = useState<CsatFormData>({
@@ -311,6 +330,7 @@ export default function TicketDetailPage() {
   const isAdmin = !!myCap?.isTicketSettingsFocal || !!myCap?.isTicketFocal;
   const canAssignByCapability = !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
   const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isAllTickets;
+  const canOverrideResolutionTime = !!myCap?.isTicketResolutionTimeOverride;
   const canPriority = canStaff;
   const isComplianceOfficer = !!myCap?.isReportsAccess;
   const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage;
@@ -531,6 +551,66 @@ export default function TicketDetailPage() {
       setTechnicians(available);
     } catch {
       /* restricted */
+    }
+  };
+
+  const toDateTimeLocalValue = (value?: string | null) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const offset = date.getTimezoneOffset() * 60_000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+  };
+
+  const openResolutionOverrideDialog = () => {
+    if (!ticket) return;
+    setResolutionOverrideTime(toDateTimeLocalValue(effectiveResolvedAt(ticket)));
+    setResolutionOverrideReason('');
+    setResolutionOverrideFiles([]);
+    setResolutionOverrideConfirmed(false);
+    setResolutionOverrideDialogOpen(true);
+  };
+
+  const closeResolutionOverrideDialog = () => {
+    setResolutionOverrideDialogOpen(false);
+    setResolutionOverrideTime('');
+    setResolutionOverrideReason('');
+    setResolutionOverrideFiles([]);
+    setResolutionOverrideConfirmed(false);
+  };
+
+  const submitResolutionOverride = async () => {
+    if (!ticket) return;
+    if (!resolutionOverrideTime) {
+      enqueueSnackbar('Enter the verified completion date and time.', { variant: 'error' });
+      return;
+    }
+    if (resolutionOverrideReason.trim().length < 10) {
+      enqueueSnackbar('Reason must contain at least 10 characters.', { variant: 'error' });
+      return;
+    }
+    if (resolutionOverrideFiles.length === 0) {
+      enqueueSnackbar('Upload at least one proof image with a visible timestamp.', { variant: 'error' });
+      return;
+    }
+    if (!resolutionOverrideConfirmed) {
+      enqueueSnackbar('Confirm that the proof supports the verified completion time.', { variant: 'error' });
+      return;
+    }
+    try {
+      setSavingResolutionOverride(true);
+      const formData = new FormData();
+      formData.append('verifiedResolvedAt', new Date(resolutionOverrideTime).toISOString());
+      formData.append('reason', resolutionOverrideReason.trim());
+      resolutionOverrideFiles.forEach((file) => formData.append('proofFiles', file));
+      await ticketsApi.overrideResolutionTime(ticket.id, formData);
+      enqueueSnackbar('Verified resolution time saved. SLA results were recalculated.', { variant: 'success' });
+      closeResolutionOverrideDialog();
+      await Promise.all([fetchTicket(), fetchEvents()]);
+    } catch (error: any) {
+      enqueueSnackbar(error?.response?.data?.message || 'Unable to correct the resolution time.', { variant: 'error' });
+    } finally {
+      setSavingResolutionOverride(false);
     }
   };
 
@@ -1136,6 +1216,17 @@ export default function TicketDetailPage() {
                   }}
                 >
                   Rate Resolution
+                </Button>
+              )}
+              {canOverrideResolutionTime && ['resolved', 'closed'].includes(ticket.status) && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  color="secondary"
+                  startIcon={<ResolutionTimeIcon />}
+                  onClick={openResolutionOverrideDialog}
+                >
+                  Correct Resolution Time
                 </Button>
               )}
             </Box>
@@ -2661,6 +2752,103 @@ export default function TicketDetailPage() {
           )}
         </DialogActions>
       </Dialog>
+      {/* ── Correct Resolution Time Dialog ── */}
+      <Dialog
+        open={resolutionOverrideDialogOpen}
+        onClose={closeResolutionOverrideDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Correct Resolution Time</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Alert severity="warning">
+              The recorded system resolution time will remain unchanged. The verified time will be used for SLA displays and reports.
+            </Alert>
+            <Typography variant="body2">
+              Ticket: <strong>{ticket.ticketNumber}</strong>
+            </Typography>
+            <TextField
+              label="Recorded system resolution time"
+              value={ticket.resolvedAt ? new Date(ticket.resolvedAt).toLocaleString() : ''}
+              disabled
+              fullWidth
+            />
+            <TextField
+              label="Verified completion date and time"
+              type="datetime-local"
+              value={resolutionOverrideTime}
+              onChange={(event) => setResolutionOverrideTime(event.target.value)}
+              inputProps={{
+                min: toDateTimeLocalValue(ticket.createdAt),
+                max: toDateTimeLocalValue(ticket.resolvedAt),
+              }}
+              InputLabelProps={{ shrink: true }}
+              required
+              fullWidth
+            />
+            <TextField
+              label="Reason for correction"
+              value={resolutionOverrideReason}
+              onChange={(event) => setResolutionOverrideReason(event.target.value)}
+              helperText="Required, minimum 10 characters. Explain why the recorded time differs from the actual completion time."
+              inputProps={{ maxLength: 2000 }}
+              multiline
+              minRows={3}
+              required
+              fullWidth
+            />
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+                Proof image with visible timestamp (required, max 10 files, 10 MB each)
+              </Typography>
+              <Button component="label" variant="outlined" startIcon={<UploadIcon />}>
+                Upload Proof Image(s)
+                <input
+                  type="file"
+                  hidden
+                  multiple
+                  accept={ALLOWED_IMAGE_FILE_ACCEPT}
+                  onChange={(event) => {
+                    const selected = Array.from(event.target.files ?? []).slice(0, 10);
+                    const valid = selected.filter(isAllowedImageFile);
+                    if (valid.length !== selected.length) {
+                      enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed.', { variant: 'error' });
+                    }
+                    setResolutionOverrideFiles(valid);
+                  }}
+                />
+              </Button>
+              {resolutionOverrideFiles.length > 0 && (
+                <Typography variant="caption" display="block" mt={0.5}>
+                  {resolutionOverrideFiles.length} proof image(s) selected
+                </Typography>
+              )}
+            </Box>
+            <FormControlLabel
+              control={(
+                <Checkbox
+                  checked={resolutionOverrideConfirmed}
+                  onChange={(event) => setResolutionOverrideConfirmed(event.target.checked)}
+                />
+              )}
+              label="I confirm that the attached proof visibly supports the verified completion time."
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeResolutionOverrideDialog} disabled={savingResolutionOverride}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={submitResolutionOverride}
+            disabled={savingResolutionOverride}
+          >
+            {savingResolutionOverride ? 'Saving…' : 'Save Correction'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* ── Photo Lightbox Modal ── */}
       <Dialog
         open={photoModalOpen}

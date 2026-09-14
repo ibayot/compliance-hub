@@ -133,6 +133,10 @@ function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'ove
     const resolvedTime = resolvedValue ? new Date(resolvedValue).getTime() : Date.now();
     return resolvedTime <= deadline ? 'met' : 'overdue';
   }
+  // The API flags are calculated when the ticket is fetched. Re-check the
+  // deadline locally so an open page cannot keep showing "Nearing SLA" after
+  // the deadline has passed.
+  if (Date.now() >= new Date(ticket.slaDeadline).getTime()) return 'overdue';
   if (ticket.isOverdue) return 'overdue';
   if (ticket.isNearingSLA) return 'nearing_sla';
   return 'on_track';
@@ -155,6 +159,12 @@ export default function TicketsPage() {
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [, setSlaClock] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setSlaClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
