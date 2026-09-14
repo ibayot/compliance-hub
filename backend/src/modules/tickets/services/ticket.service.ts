@@ -3326,13 +3326,20 @@ export class TicketService implements OnModuleInit {
     const attendanceMap = new Map<number, string>(
       attendanceRows.map((r) => [Number(r.userId), String(r.status)]),
     );
-    // Bulk fetch open ticket counts
+    // Bulk fetch active ticket counts. Resolved, closed, and duplicate tickets
+    // no longer represent active workload for reassignment.
     const openCountsRaw = await this.ticketRepo
       .createQueryBuilder('t')
       .select('t.assignedToId', 'techId')
       .addSelect('COUNT(t.id)', 'count')
-      .where('t.status NOT IN (:...closed)', {
-        closed: [TicketStatus.CLOSED, TicketStatus.DUPLICATE],
+      .where('t.status IN (:...activeStatuses)', {
+        activeStatuses: [
+          TicketStatus.OPEN,
+          TicketStatus.ASSIGNED,
+          TicketStatus.IN_PROGRESS,
+          TicketStatus.FREEZE,
+          TicketStatus.PAUSE,
+        ],
       })
       .andWhere('t.assignedToId IS NOT NULL')
       .groupBy('t.assignedToId')

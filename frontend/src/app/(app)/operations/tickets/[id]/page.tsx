@@ -2201,7 +2201,7 @@ export default function TicketDetailPage() {
         <DialogContent>
           <Autocomplete
             options={technicians.filter((t) => t.id !== ticket?.assignedToId)}
-            getOptionLabel={(t) => `${t.firstName} ${t.lastName} (${t.openCount} open)`}
+              getOptionLabel={(t) => `${t.firstName} ${t.lastName} (${t.openCount} Active)`}
             value={technicians.find((t) => t.id === assignToId) ?? null}
             onChange={(_, newValue) => setAssignToId(newValue ? Number(newValue.id) : '')}
             isOptionEqualToValue={(option, value) => option.id === value.id}
