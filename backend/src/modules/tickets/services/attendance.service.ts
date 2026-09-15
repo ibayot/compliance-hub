@@ -98,6 +98,7 @@ export class AttendanceService implements OnModuleInit {
   // Local Docker does not have the external DTR view. Staging/production omit
   // this flag and continue to detect the real DTR connection automatically.
   public isDtrViewOnline: boolean = process.env.DTR_VIEW_ENABLED?.trim().toLowerCase() !== 'false';
+  private lastSuccessfulDtrSyncDate: string | null = null;
 
   constructor(
     @InjectRepository(TechAttendance)
@@ -627,8 +628,56 @@ export class AttendanceService implements OnModuleInit {
     }
   }
 
-  getDtrSystemStatus(): { isOnline: boolean } {
-    return { isOnline: this.isDtrViewOnline };
+  getDtrSystemStatus(): { isOnline: boolean; lastSuccessfulSyncDate: string | null } {
+    return {
+      isOnline: this.isDtrViewOnline,
+      lastSuccessfulSyncDate: this.lastSuccessfulDtrSyncDate,
+    };
+  }
+
+  async markMissingAttendanceAsAbsent(date: string): Promise<number> {
+    if (
+      !this.isDtrViewOnline ||
+      this.lastSuccessfulDtrSyncDate !== date ||
+      !(await this.isOfficeDay(date))
+    ) {
+      return 0;
+    }
+
+    const attendanceRoles = this.roleCapSvc.getRolesWhere('isAttendanceEligible');
+    if (attendanceRoles.length === 0) return 0;
+
+    const staff = await this.userRepo.find({
+      where: { active: true, role: In(attendanceRoles) },
+    });
+    const staffWithDtrIdentity = staff.filter((user) => Boolean(user.staffId));
+    if (staffWithDtrIdentity.length === 0) return 0;
+
+    const existing = await this.attendanceRepo.find({
+      where: {
+        date,
+        userId: In(staffWithDtrIdentity.map((user) => user.id)),
+      },
+    });
+    const recordedUserIds = new Set(existing.map((record) => Number(record.userId)));
+    const missing = staffWithDtrIdentity.filter(
+      (user) => !recordedUserIds.has(Number(user.id)),
+    );
+    if (missing.length === 0) return 0;
+
+    const records = missing.map((user) =>
+      this.attendanceRepo.create({
+        userId: user.id,
+        date,
+        status: AttendanceStatus.ABSENT,
+        clockInTime: null,
+        isManualOverride: false,
+        setById: null,
+        notes: 'No DTR clock-in recorded by the configured end of the workday.',
+      }),
+    );
+    await this.attendanceRepo.save(records);
+    return records.length;
   }
 
   /** Background cron job to sync attendance from the DTR view for missing staff */
@@ -661,6 +710,7 @@ export class AttendanceService implements OnModuleInit {
       const dtrRecords = await this.dtrViewRepo.find({
         where: { workDate: todayStr, empCode: In(staffIds) }
       });
+      this.lastSuccessfulDtrSyncDate = todayStr;
       
       this.logger.log(`DTR attendance sync fetched ${dtrRecords.length} record(s)`);
 

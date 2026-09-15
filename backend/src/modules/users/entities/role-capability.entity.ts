@@ -186,6 +186,10 @@ export class RoleCapability {
   @Column({ name: 'is_ticket_resolution_time_override', type: 'tinyint', width: 1, default: 0 })
   isTicketResolutionTimeOverride: boolean;
 
+  /** True for roles allowed to correct the Requested For person on an existing ticket. */
+  @Column({ name: 'is_ticket_requester_correction', type: 'tinyint', width: 1, default: 0 })
+  isTicketRequesterCorrection: boolean;
+
   /** True for accounts eligible to appear in attendance views. */
   @Column({ name: 'is_attendance_eligible', type: 'tinyint', width: 1, default: 0 })
   isAttendanceEligible: boolean;

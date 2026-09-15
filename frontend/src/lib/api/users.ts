@@ -124,6 +124,7 @@ export interface RoleCapabilityRecord {
   isDutyViewerAccess: boolean;
   isDutyAdminAccess: boolean;
   isTicketResolutionTimeOverride: boolean;
+  isTicketRequesterCorrection: boolean;
   isAuditAccess: boolean;
   isUnitsAccess: boolean;
   isUnitsManage: boolean;
@@ -169,6 +170,7 @@ export interface UpdateRoleCapabilityPayload {
   isDutyViewerAccess?: boolean;
   isDutyAdminAccess?: boolean;
   isTicketResolutionTimeOverride?: boolean;
+  isTicketRequesterCorrection?: boolean;
   isAuditAccess?: boolean;
   isUnitsAccess?: boolean;
   isUnitsManage?: boolean;

@@ -71,6 +71,7 @@ import {
 } from '@/lib/utils/ticket-colors';
 
 import { unitsApi } from '@/lib/api/units';
+import { usersApi, UserRecord } from '@/lib/api/users';
 
 const ALLOWED_IMAGE_FILE_ACCEPT =
   '.jpg,.jpeg,.png,.heic,.heif,.webp,image/jpeg,image/png,image/heic,image/heif,image/webp';
@@ -172,8 +173,8 @@ function SlaCountdownTimer({ targetDate, isNearingSLA, isOverdue }: { targetDate
   return <Typography variant="body2" color={`${color}.main`} fontWeight={600}>{timeLeft}</Typography>;
 }
 
-function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | null {
-  if (!ticket.slaDeadline || (ticket.isSlaWaiting && ticket.status !== 'in_progress')) return null;
+function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | 'paused' | null {
+  if (!ticket.slaDeadline) return null;
   const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
   if (isTerminal) {
     const deadline = new Date(ticket.slaDeadline).getTime();
@@ -181,6 +182,8 @@ function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'ove
     const resolvedTime = resolvedValue ? new Date(resolvedValue).getTime() : Date.now();
     return resolvedTime <= deadline ? 'met' : 'overdue';
   }
+  if (ticket.slaPaused) return 'paused';
+  if (ticket.isSlaWaiting && ticket.status !== 'in_progress') return null;
   // Re-evaluate locally while this page remains open. The server-provided
   // flags reflect the last fetch and do not change merely because time passed.
   if (Date.now() >= new Date(ticket.slaDeadline).getTime()) return 'overdue';
@@ -195,6 +198,7 @@ const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'war
   on_track: { label: 'On Track', color: 'info' },
   nearing_sla: { label: 'Nearing SLA', color: 'warning' },
   overdue: { label: 'Overdue', color: 'error' },
+  paused: { label: 'SLA Paused', color: 'info' },
 };
 
 export default function TicketDetailPage() {
@@ -246,6 +250,17 @@ export default function TicketDetailPage() {
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [assignToId, setAssignToId] = useState<number | ''>('');
   const [isEscalateMode, setIsEscalateMode] = useState(false);
+  const [assignmentSnapshot, setAssignmentSnapshot] = useState<{
+    updatedAt: string;
+    assignedToId: number | null;
+    status: Ticket['status'];
+  } | null>(null);
+
+  const [requesterDialogOpen, setRequesterDialogOpen] = useState(false);
+  const [requesterOptions, setRequesterOptions] = useState<UserRecord[]>([]);
+  const [correctedRequesterId, setCorrectedRequesterId] = useState<number | ''>('');
+  const [requesterSnapshotUpdatedAt, setRequesterSnapshotUpdatedAt] = useState('');
+  const [savingRequesterCorrection, setSavingRequesterCorrection] = useState(false);
 
   // Dedicated Escalate dialog
   const [escalateDialogOpen, setEscalateDialogOpen] = useState(false);
@@ -331,6 +346,7 @@ export default function TicketDetailPage() {
   const canAssignByCapability = !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
   const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isAllTickets;
   const canOverrideResolutionTime = !!myCap?.isTicketResolutionTimeOverride;
+  const canCorrectRequester = !!myCap?.isTicketRequesterCorrection;
   const canPriority = canStaff;
   const isComplianceOfficer = !!myCap?.isReportsAccess;
   const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage;
@@ -696,9 +712,13 @@ export default function TicketDetailPage() {
   };
 
   const handleAssign = async () => {
-    if (!assignToId) return;
+    if (!assignToId || !assignmentSnapshot) return;
     try {
-      await ticketsApi.assign(ticketId, Number(assignToId));
+      await ticketsApi.assign(ticketId, Number(assignToId), {
+        expectedUpdatedAt: assignmentSnapshot.updatedAt,
+        expectedAssignedToId: assignmentSnapshot.assignedToId,
+        expectedStatus: assignmentSnapshot.status,
+      });
       setAssignDialogOpen(false);
       fetchTicket();
       fetchEvents();
@@ -707,6 +727,45 @@ export default function TicketDetailPage() {
       enqueueSnackbar(err.response?.data?.message || 'Failed to assign ticket', {
         variant: 'error',
       });
+    }
+  };
+
+  const openRequesterCorrection = async () => {
+    if (!ticket) return;
+    setRequesterSnapshotUpdatedAt(ticket.updatedAt);
+    setCorrectedRequesterId('');
+    try {
+      const users = await usersApi.listTicketRequesters();
+      setRequesterOptions(
+        users.filter((candidate) => candidate.active && candidate.id !== ticket.requesterId),
+      );
+      setRequesterDialogOpen(true);
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to load requester options.', {
+        variant: 'error',
+      });
+    }
+  };
+
+  const handleRequesterCorrection = async () => {
+    if (!correctedRequesterId || !requesterSnapshotUpdatedAt) return;
+    setSavingRequesterCorrection(true);
+    try {
+      const updated = await ticketsApi.correctRequester(
+        ticketId,
+        Number(correctedRequesterId),
+        requesterSnapshotUpdatedAt,
+      );
+      setTicket(updated);
+      setRequesterDialogOpen(false);
+      await fetchEvents();
+      enqueueSnackbar('Requested For was corrected.', { variant: 'success' });
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to correct Requested For.', {
+        variant: 'error',
+      });
+    } finally {
+      setSavingRequesterCorrection(false);
     }
   };
 
@@ -1146,6 +1205,11 @@ export default function TicketDetailPage() {
                     onClick={async () => {
                       setIsEscalateMode(false);
                       setAssignToId('');
+                      setAssignmentSnapshot({
+                        updatedAt: ticket.updatedAt,
+                        assignedToId: ticket.assignedToId ?? null,
+                        status: ticket.status,
+                      });
                       await fetchTechnicians();
                       // Pre-select current assignee only if still available
                       setAssignDialogOpen(true);
@@ -1553,11 +1617,18 @@ export default function TicketDetailPage() {
                       ? 'Requested For'
                       : 'Requested By'}
                   </Typography>
-                  <Typography variant="body2">
-                    {(ticket as any).requester
-                      ? `${(ticket as any).requester.firstName} ${(ticket as any).requester.lastName}`
-                      : `User #${ticket.requesterId}`}
-                  </Typography>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="body2">
+                      {(ticket as any).requester
+                        ? `${(ticket as any).requester.firstName} ${(ticket as any).requester.lastName}`
+                        : `User #${ticket.requesterId}`}
+                    </Typography>
+                    {canCorrectRequester && (
+                      <Button size="small" onClick={openRequesterCorrection}>
+                        Correct
+                      </Button>
+                    )}
+                  </Stack>
                 </Box>
                 {(ticket as any).createdById &&
                   (ticket as any).createdById !== ticket.requesterId && (
@@ -1628,7 +1699,7 @@ export default function TicketDetailPage() {
                     <Divider sx={{ my: 1 }} />
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        SLA Deadline
+                        {ticket.slaPaused ? 'Projected SLA Deadline' : 'SLA Deadline'}
                       </Typography>
                       <Typography
                         variant="body2"
@@ -1637,7 +1708,7 @@ export default function TicketDetailPage() {
                             ? new Date(effectiveResolvedAt(ticket) as string) > new Date(ticket.slaDeadline)
                               ? 'error.main'
                               : 'success.main'
-                            : new Date() > new Date(ticket.slaDeadline)
+                            : !ticket.slaPaused && new Date() > new Date(ticket.slaDeadline)
                               ? 'error.main'
                               : 'text.primary'
                         }
@@ -1645,7 +1716,15 @@ export default function TicketDetailPage() {
                         {new Date(ticket.slaDeadline).toLocaleString()}
                       </Typography>
                     </Box>
-                    {!effectiveResolvedAt(ticket) && new Date() < new Date(ticket.slaDeadline) && (
+                    {ticket.slaPaused && (
+                      <Alert severity="info" sx={{ mt: 1 }}>
+                        SLA timing is paused.
+                        {ticket.slaResumeAt
+                          ? ` It will resume by ${new Date(ticket.slaResumeAt).toLocaleString()}${ticket.slaResumeCanBeEarly ? ', or earlier when the assigned staff member clocks in during the allowed CWW window' : ''}.`
+                          : ' It will resume when ticket timing is enabled again.'}
+                      </Alert>
+                    )}
+                    {!ticket.slaPaused && !effectiveResolvedAt(ticket) && new Date() < new Date(ticket.slaDeadline) && (
                       <Box mt={1}>
                         <SlaCountdownTimer 
                           targetDate={ticket.slaDeadline} 
@@ -1678,7 +1757,7 @@ export default function TicketDetailPage() {
                         </Typography>
                       </Box>
                     )}
-                    {!effectiveResolvedAt(ticket) && new Date() > new Date(ticket.slaDeadline) && (
+                    {!ticket.slaPaused && !effectiveResolvedAt(ticket) && new Date() > new Date(ticket.slaDeadline) && (
                       <Box mt={1}>
                         <Typography variant="caption" color="text.secondary">
                           Elapsed time after SLA Deadline
@@ -2118,6 +2197,7 @@ export default function TicketDetailPage() {
                   satisfaction_submitted: 'Satisfaction Submitted',
                   rated: 'Rated',
                   resolution_time_overridden: 'Resolution Time Corrected',
+                  requester_corrected: 'Requested For Corrected',
                 };
                 const label = EVENT_LABELS[ev.eventType] ?? ev.eventType.replace(/_/g, ' ');
                 const actorLine = ev.actorName
@@ -2166,6 +2246,11 @@ export default function TicketDetailPage() {
                       {ev.meta?.justification && (
                         <Typography variant="caption" color="text.secondary" display="block" sx={{ fontStyle: 'italic' }}>
                           Justification: {ev.meta.justification}
+                        </Typography>
+                      )}
+                      {ev.eventType === 'requester_corrected' && ev.meta?.requesterName && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          → {String(ev.meta.requesterName)}
                         </Typography>
                       )}
                       {ev.eventType === 'resolution_time_overridden' && ev.meta?.verifiedResolvedAt && (
@@ -2228,6 +2313,47 @@ export default function TicketDetailPage() {
             disabled={!assignToId}
           >
             {isEscalateMode ? 'Escalate' : 'Assign'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={requesterDialogOpen}
+        onClose={() => !savingRequesterCorrection && setRequesterDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Correct Requested For</DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2, mt: 0.5 }}>
+            This changes the ticket owner. The original staff member remains recorded as Filed By.
+          </Alert>
+          <Autocomplete
+            options={requesterOptions}
+            getOptionLabel={(option) =>
+              `${option.firstName ?? ''} ${option.lastName ?? ''}`.trim() || option.email
+            }
+            value={requesterOptions.find((option) => option.id === correctedRequesterId) ?? null}
+            onChange={(_, option) => setCorrectedRequesterId(option?.id ?? '')}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            renderInput={(params) => (
+              <TextField {...params} label="Requested For" required />
+            )}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setRequesterDialogOpen(false)}
+            disabled={savingRequesterCorrection}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleRequesterCorrection}
+            disabled={!correctedRequesterId || savingRequesterCorrection}
+          >
+            {savingRequesterCorrection ? 'Saving…' : 'Save Correction'}
           </Button>
         </DialogActions>
       </Dialog>

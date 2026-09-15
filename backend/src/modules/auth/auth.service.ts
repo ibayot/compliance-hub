@@ -6,9 +6,6 @@ import * as crypto from 'crypto';
 import axios from 'axios';
 import { OAuth2Client, TokenPayload as GoogleTokenPayload } from 'google-auth-library';
 import { UsersService } from '../users/users.service';
-import { AttendanceService } from '../tickets/services/attendance.service';
-import { TicketService } from '../tickets/services/ticket.service';
-import { TicketSettingsService } from '../tickets/services/ticket-settings.service';
 import { EmailService } from '../tickets/services/email.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload, AuthResponse } from './interfaces/auth.interface';
@@ -31,9 +28,6 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly eventBus: EventBusService,
     private readonly securityConfigService: SecurityConfigService,
-    @Optional() private readonly attendanceService?: AttendanceService,
-    @Optional() private readonly ticketService?: TicketService,
-    @Optional() private readonly ticketSettingsService?: TicketSettingsService,
     @Optional() private readonly emailService?: EmailService,
   ) {}
 
@@ -400,41 +394,9 @@ export class AuthService {
     return authResponse;
   }
 
-  private async handleAutoResume(user: User) {
-    if (!this.ticketSettingsService || !this.ticketService) return;
-
-    try {
-      const config = await this.ticketSettingsService.getGlobalConfig();
-      if (!config || config.isFlagCeremonyPaused) return;
-
-      const now = new Date();
-      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`;
-
-      let shouldResume = false;
-      if (config.scheduleMode === 'OFFICE_HOURS') {
-        if (currentTime >= config.officeClockin && currentTime < config.officeClockout) {
-          shouldResume = true;
-        }
-      } else if (config.scheduleMode === 'CWW') {
-        if (currentTime >= config.cwwClockinStart && currentTime < config.cwwClockoutStart) {
-          shouldResume = true;
-        }
-      }
-
-      if (shouldResume) {
-        await this.ticketService.resumeAllActiveTickets(user.id);
-      }
-    } catch (e) {
-      // Ignore errors so login doesn't fail
-    }
-  }
-
   async generateTokens(
     user: User,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    // Attempt auto-resume
-    this.handleAutoResume(user).catch(() => {});
-
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,

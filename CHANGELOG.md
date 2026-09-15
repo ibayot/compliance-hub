@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.5] - 2026-09-15 - Attendance-Aware SLA and Ticket Correction Controls
+
+### Added
+- Added the Ticket Requester Correction role capability so authorized staff can correct the Requested For person while preserving the original ticket creator and an audit timeline entry.
+- Added attendance warnings for Ticket Administrators when absent, late, or not-yet-clocked-in RICTMS staff still have active assigned tickets, with safe manual or automatic reassignment choices.
+- Added end-of-day absence recording only after the DTR source has completed a successful same-day read on an office day.
+
+### Changed
+- Paused SLA timers now resume from an actual eligible CWW clock-in or the configured schedule threshold. Signing in to the application no longer resumes a ticket SLA.
+- Attendance processing now limits per-minute SLA work to paused tickets and reuses the current settings snapshot to reduce database load.
+- Ticket and attendance SSE refreshes are coalesced so bursts of related events update open screens without repeating the same requests unnecessarily.
+
+### Fixed
+- Tickets that were already overdue before an attendance pause remain visibly overdue instead of being presented as SLA Paused.
+- Manual and automatic reassignment now use assignment snapshots and a shared database lock to prevent one administrator from overwriting a newer assignment made by another administrator.
+- Missing DTR data is no longer treated as absence when the DTR source is unavailable or the date is a configured non-office day.
+
+### Deployment Note
+- Before deploying this release, add the `is_ticket_requester_correction` boolean column to the Users database `role_capabilities` table. The environment-specific SQL remains local and excluded from Git.
+
 ## [1.0.4] - 2026-09-07 - Settings and Ticket Rating QA Fixes
 
 ### Added

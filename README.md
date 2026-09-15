@@ -1,6 +1,6 @@
 # RICTMS Compliance Hub
 
-> **Current Version:** `v1.0.0`
+> **Current Version:** `v1.0.5`
 
 Compliance Hub is an internal document governance and compliance platform for government teams. It supports document intake and review workflows, ticketing and escalation, issuance mapping, KPI monitoring, and role-based operations across split microservices.
 
@@ -25,6 +25,7 @@ Release-by-release history is maintained in `CHANGELOG.md`.
 - Split microservices architecture (`users-service`, `ticketing-service`, `compliance-service`, `api-gateway`)
 - Document upload, review, approval, and repository flows
 - Ticket lifecycle with escalation, assignment, and reporting
+- Capability-controlled correction of a ticket's Requested For person, with timeline tracking
 - Duty Monitoring with rotation tracking, duty logs, exceptions, meeting coverage, and a monthly map
 - SLA timers based on issue-type configuration, including live overdue tracking
 - Keyword-based category and issue selection with selected-support-type tie-breaking
@@ -112,6 +113,11 @@ The release APK must be signed with the organization’s Android keystore before
 - The cap check currently compares the technician's existing weekly load with the cap before assignment. It does not yet reject a ticket when `existing weekly load + incoming ticket SLA` would exceed the cap; treat the configured cap as a selection threshold rather than a strict maximum until that rule is tightened.
 - A newly assigned ticket starts `IN_PROGRESS` when the selected technician has no active ticket or has a breached active ticket. Otherwise, it is placed in the technician's waiting queue.
 - Manual assignment requires an explicit `PRESENT` attendance record. Absent, out-of-office, half-day, and missing attendance records are rejected.
+- Signing in does not resume a paused ticket SLA. Under CWW, the timer resumes from an eligible DTR clock-in (never earlier than the configured clock-in start) or from the configured CWW clock-in end when no earlier record exists. Under Standard Office Hours, it resumes from the configured clock-in time.
+- A ticket that was already overdue before it was paused remains overdue and is not presented as SLA Paused.
+- On office days, missing DTR attendance is recorded as absent only after a successful same-day DTR read and the configured workday end. DTR outages and non-office days do not create false absence records.
+- Ticket Administrators are warned when absent, late, or not-yet-clocked-in RICTMS staff retain active tickets. Manual and automatic reassignment use current assignment snapshots so a stale screen cannot overwrite a newer reassignment.
+- The Ticket Requester Correction role capability allows an authorized user to change Requested For without changing the original creator. Existing environments must add `is_ticket_requester_correction` to the Users database `role_capabilities` table before starting this release.
 - When an active ticket breaches its SLA, the next queued ticket for the same technician is promoted to `IN_PROGRESS` alongside the breached ticket.
 - Automatic queue promotion is checked by the ticket cron every minute. The browser timer changes immediately, while queue promotion may take up to one minute.
 - The SSE browser URL uses a short-lived encrypted connection ticket rather than the JWT. SSE remains compatible with the HTTP/1.1 deployment and sends heartbeat events to keep connections alive.

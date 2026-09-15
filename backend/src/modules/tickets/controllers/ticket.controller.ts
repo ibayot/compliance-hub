@@ -32,6 +32,7 @@ import {
   CreateTicketDto,
   UpdateTicketDto,
   AssignTicketDto,
+  CorrectTicketRequesterDto,
   AddCommentDto,
   SubmitSatisfactionDto,
   EscalateTicketDto,
@@ -285,6 +286,43 @@ export class TicketController {
       semester: semester ? Number(semester) : undefined,
       ticketType,
     });
+  }
+
+  /** GET /tickets/attendance-assignment-alerts — active work owned by unavailable staff */
+  @Get('attendance-assignment-alerts')
+  @RequireCapability(['isTicketFocal', 'isTicketSettingsFocal'])
+  async getAttendanceAssignmentAlerts() {
+    return this.ticketService.getAttendanceAssignmentAlerts();
+  }
+
+  /** POST /tickets/attendance-assignment-alerts/:userId/auto-reassign */
+  @Post('attendance-assignment-alerts/:userId/auto-reassign')
+  @RequireCapability(['isTicketFocal', 'isTicketSettingsFocal'])
+  async autoReassignAttendanceAlertTickets(
+    @Param('userId') userId: string,
+    @Request() req: any,
+  ) {
+    return this.ticketService.autoReassignAttendanceAlertTickets(
+      Number(userId),
+      req.user.id ?? req.user.userId,
+      req.user.role,
+    );
+  }
+
+  /** PATCH /tickets/:id/requester — correct the Requested For person */
+  @Patch(':id/requester')
+  @RequireCapability('isTicketRequesterCorrection')
+  async correctTicketRequester(
+    @Param('id') id: string,
+    @Body() dto: CorrectTicketRequesterDto,
+    @Request() req: any,
+  ) {
+    return this.ticketService.correctTicketRequester(
+      id,
+      dto,
+      req.user.id ?? req.user.userId,
+      req.user.role,
+    );
   }
 
   /** GET /tickets/:id */

@@ -7,12 +7,13 @@ import {
   NotFoundException,
   Logger,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, DataSource, QueryRunner, Repository, Not, In, LessThan, MoreThanOrEqual } from 'typeorm';
+import { Brackets, DataSource, QueryRunner, Repository, Not, In, IsNull, LessThan, MoreThanOrEqual } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
@@ -134,6 +135,51 @@ export class AssignTicketDto {
   @IsNumber()
   @ApiProperty()
   assignedToId: number;
+
+  @IsOptional()
+  @IsString()
+  @ApiPropertyOptional()
+  expectedUpdatedAt?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @ApiPropertyOptional({ nullable: true })
+  expectedAssignedToId?: number | null;
+
+  @IsOptional()
+  @IsEnum(TicketStatus)
+  @ApiPropertyOptional()
+  expectedStatus?: TicketStatus;
+}
+
+export class CorrectTicketRequesterDto {
+  @IsNotEmpty()
+  @IsNumber()
+  @ApiProperty()
+  requesterId: number;
+
+  @IsNotEmpty()
+  @IsString()
+  @ApiProperty()
+  expectedUpdatedAt: string;
+}
+
+export type AttendanceAssignmentState = 'absent' | 'late' | 'no_attendance';
+
+export interface AttendanceAssignmentAlert {
+  userId: number;
+  staffName: string;
+  role: string;
+  attendanceState: AttendanceAssignmentState;
+  attendanceLabel: string;
+  clockInTime: string | null;
+  tickets: Array<{
+    id: string;
+    ticketNumber: string;
+    subject: string;
+    status: TicketStatus;
+    slaDeadline: Date | null;
+  }>;
 }
 
 export class AddCommentDto {
@@ -336,6 +382,166 @@ export class TicketService implements OnModuleInit {
     return weekStart;
   }
 
+  private getManilaDateString(value = new Date()): string {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(value);
+  }
+
+  private getManilaTimeString(value = new Date()): string {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Manila',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(value);
+  }
+
+  private createManilaDate(date: string, time: string): Date {
+    const normalizedTime = /^\d{2}:\d{2}:\d{2}$/.test(time)
+      ? time
+      : /^\d{2}:\d{2}$/.test(time)
+        ? `${time}:00`
+        : '08:00:00';
+    return new Date(`${date}T${normalizedTime}+08:00`);
+  }
+
+  private addManilaDays(date: string, days: number): string {
+    const current = new Date(`${date}T00:00:00+08:00`);
+    current.setUTCDate(current.getUTCDate() + days);
+    return this.getManilaDateString(current);
+  }
+
+  private async getScheduledSlaResumeAt(
+    config: TicketingConfig,
+    now = new Date(),
+  ): Promise<Date | null> {
+    if (config.isFlagCeremonyPaused) return null;
+
+    const resumeTime = config.scheduleMode === 'CWW'
+      ? config.cwwClockinEnd
+      : config.officeClockin;
+    const clockoutTime = config.scheduleMode === 'CWW'
+      ? config.cwwClockoutEnd
+      : config.officeClockout;
+    const today = this.getManilaDateString(now);
+    const currentTime = this.getManilaTimeString(now);
+    const todayIsOfficeDay = await this.attendanceService.isOfficeDay(today);
+
+    if (todayIsOfficeDay && currentTime < clockoutTime) {
+      return this.createManilaDate(today, resumeTime);
+    }
+
+    for (let dayOffset = 1; dayOffset <= 14; dayOffset++) {
+      const date = this.addManilaDays(today, dayOffset);
+      if (await this.attendanceService.isOfficeDay(date)) {
+        return this.createManilaDate(date, resumeTime);
+      }
+    }
+    return null;
+  }
+
+  private async projectTicketSlaState(
+    ticket: Ticket,
+    config: TicketingConfig | null,
+    now: Date,
+    scheduledResumeAt?: Date | null,
+  ): Promise<{
+    isOverdue: boolean;
+    isNearingSLA: boolean;
+    slaPaused: boolean;
+    slaResumeAt: Date | null;
+    slaResumeCanBeEarly: boolean;
+  }> {
+    let isOverdue = false;
+    let isNearingSLA = false;
+    const breachedBeforeSchedulePause = Boolean(
+      ticket.slaPausedAt &&
+      ticket.slaDeadline &&
+      new Date(ticket.slaDeadline).getTime() <= new Date(ticket.slaPausedAt).getTime(),
+    );
+    const isSchedulePaused = Boolean(
+      ticket.slaPausedAt &&
+      !ticket.isSlaWaiting &&
+      !breachedBeforeSchedulePause &&
+      [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(ticket.status as TicketStatus),
+    );
+    const slaResumeAt = isSchedulePaused && config
+      ? scheduledResumeAt !== undefined
+        ? scheduledResumeAt
+        : await this.getScheduledSlaResumeAt(config, now)
+      : null;
+    const slaResumeCanBeEarly = Boolean(
+      isSchedulePaused && config?.scheduleMode === 'CWW',
+    );
+
+    if (!ticket.slaDeadline) {
+      return {
+        isOverdue,
+        isNearingSLA,
+        slaPaused: isSchedulePaused,
+        slaResumeAt,
+        slaResumeCanBeEarly,
+      };
+    }
+
+    let deadline = new Date(ticket.slaDeadline);
+    const shouldProjectPause = Boolean(
+      ticket.slaPausedAt &&
+      ticket.issueTypeConfig?.slaHours &&
+      config &&
+      (ticket.isSlaWaiting || isSchedulePaused),
+    );
+
+    if (shouldProjectPause && config && ticket.slaPausedAt && ticket.issueTypeConfig?.slaHours) {
+      const projectionAt = isSchedulePaused && slaResumeAt ? slaResumeAt : now;
+      const pausedBusinessSeconds = await this.calculateBusinessSeconds(
+        new Date(ticket.slaPausedAt),
+        projectionAt,
+        config,
+      );
+      const accumulatedPauseSeconds =
+        (ticket.accumulatedPauseSeconds || 0) + pausedBusinessSeconds;
+      const totalBusinessSeconds = await this.calculateBusinessSeconds(
+        new Date(ticket.createdAt),
+        projectionAt,
+        config,
+      );
+      const consumedHours = Math.max(0, totalBusinessSeconds - accumulatedPauseSeconds) / 3600;
+      const remainingHours = Math.max(0, ticket.issueTypeConfig.slaHours - consumedHours);
+      deadline = await this.calculateSlaDeadline(projectionAt, remainingHours, config);
+      ticket.slaDeadline = deadline;
+    }
+
+    const effectiveResolvedAt = getEffectiveResolvedAt(ticket);
+    if (!isSchedulePaused && !ticket.isSlaWaiting) {
+      const originalSlaMs = ticket.issueTypeConfig?.slaHours
+        ? ticket.issueTypeConfig.slaHours * 3600 * 1000
+        : deadline.getTime() - new Date(ticket.createdAt).getTime();
+      const comparisonTime = effectiveResolvedAt ?? now;
+      if (comparisonTime > deadline) {
+        isOverdue = true;
+      } else if (
+        !effectiveResolvedAt &&
+        deadline.getTime() - now.getTime() <= originalSlaMs * 0.4
+      ) {
+        isNearingSLA = true;
+      }
+    }
+
+    return {
+      isOverdue,
+      isNearingSLA,
+      slaPaused: isSchedulePaused,
+      slaResumeAt,
+      slaResumeCanBeEarly,
+    };
+  }
+
   private async hasBreachedActiveTicket(technicianId: number): Promise<boolean> {
     const now = Date.now();
     const activeTickets = (await this.ticketRepo.find({
@@ -347,7 +553,10 @@ export class TicketService implements OnModuleInit {
     })) || [];
 
     return activeTickets.some(
-      (ticket) => ticket.slaDeadline && new Date(ticket.slaDeadline).getTime() < now,
+      (ticket) =>
+        !ticket.slaPausedAt &&
+        ticket.slaDeadline &&
+        new Date(ticket.slaDeadline).getTime() < now,
     );
   }
   private async getWeeklySlaLoad(technicianId: number): Promise<number> {
@@ -385,11 +594,9 @@ export class TicketService implements OnModuleInit {
         });
       });
 
-      this.eventBus.subscribe('attendance.unavailable', (payload: any) => {
-        if (payload?.techId) {
-          this.reassignUnavailableTechnicianTickets(payload.techId).catch(() => { });
-        }
-      });
+      // Attendance changes no longer reassign tickets automatically. Ticket
+      // administrators review a grouped warning and choose automatic or
+      // manual reassignment explicitly.
       this.eventBus.subscribe('attendance.verified', (payload: any) => {
         if (payload?.userId) {
           this.assignPendingTicketsOnLogin(payload.userId).catch(() => { });
@@ -1216,6 +1423,12 @@ export class TicketService implements OnModuleInit {
 
     const now = new Date();
     const config = await this.configRepo.findOne({ where: { id: 1 } });
+    const hasSchedulePausedTickets = tickets.some(
+      (ticket) => ticket.slaPausedAt && !ticket.isSlaWaiting,
+    );
+    const scheduledResumeAt = config && hasSchedulePausedTickets
+      ? await this.getScheduledSlaResumeAt(config, now)
+      : null;
     const withAvailability = await Promise.all(
       tickets.map(async (t) => {
         if (t.status === TicketStatus.IN_PROGRESS && t.isSlaWaiting) {
@@ -1228,53 +1441,16 @@ export class TicketService implements OnModuleInit {
             new Date(t.lastAssignedAt || t.createdAt),
           );
         }
-        let isOverdue = false;
-        let isNearingSLA = false;
-        if (t.slaDeadline) {
-          let deadline = new Date(t.slaDeadline);
-
-          // Dynamically project deadline if ticket is currently paused in the queue
-          if (t.isSlaWaiting && t.slaPausedAt && t.issueTypeConfig?.slaHours && config) {
-            const businessSecondsElapsed = await this.calculateBusinessSeconds(
-              new Date(t.slaPausedAt),
-              now,
-              config as TicketingConfig
-            );
-            const accumulatedPauseSeconds = (t.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
-            const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
-              new Date(t.createdAt),
-              now,
-              config as TicketingConfig
-            );
-            const activeBusinessSeconds = Math.max(0, totalBusinessSecondsSinceCreation - accumulatedPauseSeconds);
-            const consumedSlaHours = activeBusinessSeconds / 3600;
-            const remainingHours = Math.max(0, t.issueTypeConfig.slaHours - consumedSlaHours);
-            deadline = await this.calculateSlaDeadline(
-              now,
-              remainingHours,
-              config as TicketingConfig
-            );
-            t.slaDeadline = deadline; // Output true projected deadline in API
-          }
-
-          const originalSlaMs = t.issueTypeConfig?.slaHours
-            ? t.issueTypeConfig.slaHours * 3600 * 1000
-            : deadline.getTime() - new Date(t.createdAt).getTime();
-          const fortyPercentSlaMs = originalSlaMs * 0.4;
-
-          const effectiveResolvedAt = getEffectiveResolvedAt(t);
-          const comparisonTime = effectiveResolvedAt ?? now;
-          if (comparisonTime > deadline) {
-            isOverdue = true;
-          } else if (!effectiveResolvedAt && deadline.getTime() - now.getTime() <= fortyPercentSlaMs) {
-            isNearingSLA = true;
-          }
-        }
+        const slaState = await this.projectTicketSlaState(
+          t,
+          config,
+          now,
+          scheduledResumeAt,
+        );
         return Object.assign(t, {
           effectiveResolvedAt: getEffectiveResolvedAt(t),
           assignedTechAbsent: t.assignedToId ? absentIds.has(t.assignedToId) : false,
-          isOverdue,
-          isNearingSLA,
+          ...slaState,
         });
       })
     );
@@ -1335,58 +1511,13 @@ export class TicketService implements OnModuleInit {
       (ticket as any).comments = ticket.comments.filter((c: any) => !c.isInternal);
     }
 
-    // Add SLA indicators
-    let isOverdue = false;
-    let isNearingSLA = false;
-    if (ticket.slaDeadline) {
-      const now = new Date();
-      let deadline = new Date(ticket.slaDeadline);
-
-      // Dynamically project deadline if ticket is currently paused in the queue
-      if (ticket.isSlaWaiting && ticket.slaPausedAt && ticket.issueTypeConfig?.slaHours) {
-        const config = await this.configRepo.findOne({ where: { id: 1 } });
-        if (config) {
-          const businessSecondsElapsed = await this.calculateBusinessSeconds(
-            new Date(ticket.slaPausedAt),
-            now,
-            config as TicketingConfig
-          );
-          const accumulatedPauseSeconds = (ticket.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
-          const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
-            new Date(ticket.createdAt),
-            now,
-            config as TicketingConfig
-          );
-          const activeBusinessSeconds = Math.max(0, totalBusinessSecondsSinceCreation - accumulatedPauseSeconds);
-          const consumedSlaHours = activeBusinessSeconds / 3600;
-          const remainingHours = Math.max(0, ticket.issueTypeConfig.slaHours - consumedSlaHours);
-          deadline = await this.calculateSlaDeadline(
-            now,
-            remainingHours,
-            config as TicketingConfig
-          );
-          ticket.slaDeadline = deadline; // Output true projected deadline in API
-        }
-      }
-
-      const originalSlaMs = ticket.issueTypeConfig?.slaHours
-        ? ticket.issueTypeConfig.slaHours * 3600 * 1000
-        : deadline.getTime() - new Date(ticket.createdAt).getTime();
-      const fortyPercentSlaMs = originalSlaMs * 0.4;
-
-      const effectiveResolvedAt = getEffectiveResolvedAt(ticket);
-      const comparisonTime = effectiveResolvedAt ?? now;
-      if (comparisonTime > deadline) {
-        isOverdue = true;
-      } else if (!effectiveResolvedAt && deadline.getTime() - now.getTime() <= fortyPercentSlaMs) {
-        isNearingSLA = true;
-      }
-    }
+    // Add SLA indicators, including schedule-paused display information.
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    const slaState = await this.projectTicketSlaState(ticket, config, new Date());
     return Object.assign(ticket, {
       effectiveResolvedAt: getEffectiveResolvedAt(ticket),
       resolutionTimeOverrides,
-      isOverdue,
-      isNearingSLA,
+      ...slaState,
     });
   }
 
@@ -1396,6 +1527,58 @@ export class TicketService implements OnModuleInit {
 
   private resolutionOverrideStorageRoot(): string {
     return process.env.RESOLUTION_OVERRIDE_STORAGE_ROOT || './uploads/resolution-overrides';
+  }
+
+  async correctTicketRequester(
+    ticketId: string,
+    dto: CorrectTicketRequesterDto,
+    actorId: number,
+    actorRole: UserRole,
+  ): Promise<Ticket> {
+    if (!this.roleCapSvc.isTicketRequesterCorrection(actorRole as string)) {
+      throw new ForbiddenException('Ticket Requester Correction capability is required.');
+    }
+
+    const requester = await this.usersHttpClient.getUserById(dto.requesterId);
+    if (!requester || requester.active === false) {
+      throw new BadRequestException('The selected requester does not exist or is inactive.');
+    }
+    if (requester.role === UserRole.SUPER_ADMIN) {
+      throw new BadRequestException('Super Admin accounts cannot be selected as ticket requesters.');
+    }
+
+    const saved = await this.withAutoAssignmentLock(async () => {
+      const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
+      if (!ticket) throw new NotFoundException('Ticket not found');
+      if (new Date(dto.expectedUpdatedAt).getTime() !== new Date(ticket.updatedAt).getTime()) {
+        throw new ConflictException(
+          'This ticket changed after you opened the requester window. Refresh the ticket, review the latest details, and try again.',
+        );
+      }
+      if (Number(ticket.requesterId) === Number(dto.requesterId)) {
+        throw new BadRequestException('The selected person is already the ticket requester.');
+      }
+
+      const previousRequesterId = ticket.requesterId;
+      ticket.requesterId = Number(dto.requesterId);
+      const updated = await this.ticketRepo.save(ticket);
+      await this.logEvent(updated.id, 'requester_corrected', actorId, {
+        previousRequesterId,
+        requesterId: requester.id,
+        requesterName:
+          [requester.first_name, requester.last_name].filter(Boolean).join(' ') || requester.email,
+      });
+      return updated;
+    });
+
+    this.sendNotification(
+      [requester.id],
+      saved.id,
+      'requester_corrected',
+      `You were selected as the requester for ticket ${saved.ticketNumber}.`,
+    ).catch(() => undefined);
+    this.sseService.emitTicketUpdated(saved.id);
+    return this.getTicketById(saved.id, actorRole, actorId);
   }
 
   private async getResolutionTimeOverrideHistory(ticketId: string) {
@@ -2327,6 +2510,17 @@ export class TicketService implements OnModuleInit {
     actorRole: UserRole,
     actorId?: number,
   ): Promise<Ticket> {
+    return this.withAutoAssignmentLock(() =>
+      this.assignTicketInternal(id, dto, actorRole, actorId),
+    );
+  }
+
+  private async assignTicketInternal(
+    id: string,
+    dto: AssignTicketDto,
+    actorRole: UserRole,
+    actorId?: number,
+  ): Promise<Ticket> {
     if (
       !this.roleCapSvc.isTicketFocal(actorRole as string) &&
       !this.roleCapSvc.isTicketSettingsFocal(actorRole as string) &&
@@ -2339,6 +2533,7 @@ export class TicketService implements OnModuleInit {
     }
 
     const ticket = await this.getTicketById(id, actorRole, actorId);
+    this.assertAssignmentSnapshot(ticket, dto);
     const latestEscalation = await this.escalationRepo.findOne({
       where: { ticketId: id },
       order: { createdAt: 'DESC' },
@@ -2441,6 +2636,7 @@ export class TicketService implements OnModuleInit {
       }
     }
     const previousAssigneeId = ticket.assignedToId;
+    const wasSchedulePaused = Boolean(ticket.slaPausedAt && !ticket.isSlaWaiting);
 
     ticket.assignedToId = dto.assignedToId;
     ticket.lastAssignedAt = new Date();
@@ -2475,7 +2671,10 @@ export class TicketService implements OnModuleInit {
         if (!ticket.slaPausedAt) ticket.slaPausedAt = new Date();
       } else {
         ticket.isSlaWaiting = false;
-        ticket.slaPausedAt = null;
+        // Reassignment must not silently restart a ticket that is paused by the
+        // work schedule. The minute scheduler resumes it at the proper boundary
+        // (or at the assignee's eligible CWW clock-in).
+        ticket.slaPausedAt = wasSchedulePaused ? ticket.slaPausedAt : null;
       }
     }
 
@@ -2524,6 +2723,28 @@ export class TicketService implements OnModuleInit {
       .catch(() => { });
 
     return assigned;
+  }
+
+  private assertAssignmentSnapshot(ticket: Ticket, dto: AssignTicketDto): void {
+    const expectedAssigneeProvided = Object.prototype.hasOwnProperty.call(
+      dto,
+      'expectedAssignedToId',
+    );
+    const expectedAssignee = dto.expectedAssignedToId == null
+      ? null
+      : Number(dto.expectedAssignedToId);
+    const currentAssignee = ticket.assignedToId == null ? null : Number(ticket.assignedToId);
+    const ticketChanged = Boolean(
+      (dto.expectedUpdatedAt &&
+        new Date(dto.expectedUpdatedAt).getTime() !== new Date(ticket.updatedAt).getTime()) ||
+      (dto.expectedStatus && dto.expectedStatus !== ticket.status) ||
+      (expectedAssigneeProvided && expectedAssignee !== currentAssignee),
+    );
+    if (ticketChanged) {
+      throw new ConflictException(
+        'This ticket changed after you opened the assignment window. Refresh the ticket, review the latest details, and try again.',
+      );
+    }
   }
 
   /** Mark ticket as In Progress when the assigned technician opens the detail view */
@@ -3130,7 +3351,14 @@ export class TicketService implements OnModuleInit {
 
     const tickets = await qb.getMany();
     await this.enrichTicketsWithUsers(tickets);
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
     const now = new Date();
+    const hasSchedulePausedTickets = tickets.some(
+      (ticket) => ticket.slaPausedAt && !ticket.isSlaWaiting,
+    );
+    const scheduledResumeAt = config && hasSchedulePausedTickets
+      ? await this.getScheduledSlaResumeAt(config, now)
+      : null;
     const startOfDay = new Date(now);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(now);
@@ -3144,12 +3372,18 @@ export class TicketService implements OnModuleInit {
     for (const t of tickets) {
       if (!t.slaDeadline) continue;
 
+      const slaState = await this.projectTicketSlaState(
+        t,
+        config,
+        now,
+        scheduledResumeAt,
+      );
       const deadline = new Date(t.slaDeadline);
       const isActive = activeStatuses.includes(t.status as TicketStatus);
       if (isActive) {
         activeWithSla++;
-        if (deadline < now) overdueActive++;
-        if (deadline >= startOfDay && deadline <= endOfDay) dueToday++;
+        if (!slaState.slaPaused && !t.isSlaWaiting && deadline < now) overdueActive++;
+        if (!slaState.slaPaused && deadline >= startOfDay && deadline <= endOfDay) dueToday++;
       }
 
       const effectiveResolvedAt = getEffectiveResolvedAt(t);
@@ -3586,6 +3820,209 @@ export class TicketService implements OnModuleInit {
     } catch (err: any) {
       this.logger.error('[Absence Reassign] Failed.');
     }
+  }
+
+  async getAttendanceAssignmentAlerts(now = new Date()): Promise<AttendanceAssignmentAlert[]> {
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    if (!config) return [];
+    const today = this.getManilaDateString(now);
+    if (!(await this.attendanceService.isOfficeDay(today))) return [];
+
+    const dtrStatus = this.attendanceService.getDtrSystemStatus();
+    const hasCurrentDtrData = Boolean(
+      dtrStatus.isOnline && dtrStatus.lastSuccessfulSyncDate === today,
+    );
+
+    const tickets = await this.ticketRepo.find({
+      where: [
+        { status: TicketStatus.ASSIGNED },
+        { status: TicketStatus.IN_PROGRESS },
+      ],
+      order: { createdAt: 'ASC' },
+    });
+    const assignedUserIds = [...new Set(
+      tickets.map((ticket) => Number(ticket.assignedToId)).filter(Boolean),
+    )];
+    if (assignedUserIds.length === 0) return [];
+
+    const users = await this.usersHttpClient.getUsers();
+    const usersById = new Map(users.map((user) => [Number(user.id), user]));
+    const currentTime = this.getManilaTimeString(now);
+    const attendanceRows = await this.dataSource
+      .createQueryBuilder()
+      .select('ta.user_id', 'userId')
+      .addSelect('ta.status', 'status')
+      .addSelect('ta.clock_in_time', 'clockInTime')
+      .addSelect('ta.is_manual_override', 'isManualOverride')
+      .from('attendance', 'ta')
+      .where('ta.date = :today', { today })
+      .andWhere('ta.user_id IN (:...assignedUserIds)', { assignedUserIds })
+      .getRawMany();
+    const attendanceByUser = new Map(
+      attendanceRows.map((row) => [Number(row.userId), row]),
+    );
+
+    const expectedClockIn = config.scheduleMode === 'CWW'
+      ? config.cwwClockinEnd
+      : config.officeClockin;
+    const workdayEnd = config.scheduleMode === 'CWW'
+      ? config.cwwClockoutEnd
+      : config.officeClockout;
+    const expectedClockInAt = this.createManilaDate(today, expectedClockIn);
+    const alerts: AttendanceAssignmentAlert[] = [];
+
+    for (const userId of assignedUserIds) {
+      const user = usersById.get(userId);
+      if (!user || user.role === UserRole.USER || user.role === UserRole.SUPER_ADMIN) continue;
+
+      const attendance = attendanceByUser.get(userId);
+      let attendanceState: AttendanceAssignmentState | null = null;
+      if (
+        attendance?.status === AttendanceStatus.ABSENT ||
+        attendance?.status === AttendanceStatus.OUT_OF_OFFICE
+      ) {
+        attendanceState = 'absent';
+      } else if (
+        attendance?.clockInTime &&
+        new Date(attendance.clockInTime).getTime() > expectedClockInAt.getTime()
+      ) {
+        attendanceState = 'late';
+      } else if (!attendance && hasCurrentDtrData && currentTime >= expectedClockIn) {
+        attendanceState = currentTime >= workdayEnd ? 'absent' : 'no_attendance';
+      }
+      if (!attendanceState) continue;
+
+      const affectedTickets = tickets
+        .filter((ticket) => Number(ticket.assignedToId) === userId)
+        .map((ticket) => ({
+          id: ticket.id,
+          ticketNumber: ticket.ticketNumber,
+          subject: ticket.subject,
+          status: ticket.status,
+          slaDeadline: ticket.slaDeadline,
+        }));
+      if (affectedTickets.length === 0) continue;
+
+      const attendanceLabel = attendanceState === 'no_attendance'
+        ? 'No Attendance'
+        : attendanceState === 'late'
+          ? 'Late'
+          : 'Absent';
+      alerts.push({
+        userId,
+        staffName:
+          [user.first_name, user.last_name].filter(Boolean).join(' ') || user.email,
+        role: user.role,
+        attendanceState,
+        attendanceLabel,
+        clockInTime: attendance?.clockInTime
+          ? new Date(attendance.clockInTime).toISOString()
+          : null,
+        tickets: affectedTickets,
+      });
+    }
+
+    return alerts.sort((a, b) => a.staffName.localeCompare(b.staffName));
+  }
+
+  async autoReassignAttendanceAlertTickets(
+    userId: number,
+    actorId: number,
+    actorRole: UserRole,
+  ): Promise<{ reassigned: number; remaining: number; messages: string[] }> {
+    if (
+      !this.roleCapSvc.isTicketFocal(actorRole as string) &&
+      !this.roleCapSvc.isTicketSettingsFocal(actorRole as string)
+    ) {
+      throw new ForbiddenException('Ticket administration capability is required.');
+    }
+
+    return this.withAutoAssignmentLock(() =>
+      this.autoReassignAttendanceAlertTicketsInternal(userId, actorId, actorRole),
+    );
+  }
+
+  private async autoReassignAttendanceAlertTicketsInternal(
+    userId: number,
+    actorId: number,
+    actorRole: UserRole,
+  ): Promise<{ reassigned: number; remaining: number; messages: string[] }> {
+
+    const alert = (await this.getAttendanceAssignmentAlerts()).find(
+      (entry) => entry.userId === Number(userId),
+    );
+    if (!alert) return { reassigned: 0, remaining: 0, messages: [] };
+
+    const today = this.getManilaDateString();
+    let reassigned = 0;
+    const messages: string[] = [];
+    for (const affected of alert.tickets) {
+      const ticket = await this.ticketRepo.findOne({ where: { id: affected.id } });
+      if (
+        !ticket ||
+        Number(ticket.assignedToId) !== Number(userId) ||
+        ![TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(ticket.status as TicketStatus)
+      ) {
+        continue;
+      }
+
+      const available = await this.attendanceService.getAutoAssignmentTechnicians(
+        ticket.ticketType,
+        today,
+      );
+      let selectedUserId: number | null = null;
+      for (const candidate of available) {
+        if (
+          Number(candidate.id) === Number(userId) ||
+          Number(candidate.id) === Number(ticket.requesterId) ||
+          Number(candidate.id) === Number(ticket.createdById) ||
+          this.roleCapSvc.isSeniorTech(candidate.role)
+        ) {
+          continue;
+        }
+        const activeCount = await this.ticketRepo.count({
+          where: [
+            { assignedToId: candidate.id, status: TicketStatus.ASSIGNED },
+            { assignedToId: candidate.id, status: TicketStatus.IN_PROGRESS },
+            { assignedToId: candidate.id, status: TicketStatus.PAUSE },
+          ],
+        });
+        if (activeCount === 0) {
+          selectedUserId = candidate.id;
+          break;
+        }
+      }
+
+      if (!selectedUserId) {
+        messages.push(`${ticket.ticketNumber}: no available staff member with zero active tickets.`);
+        continue;
+      }
+
+      try {
+        await this.assignTicketInternal(
+          ticket.id,
+          {
+            assignedToId: selectedUserId,
+            expectedUpdatedAt: ticket.updatedAt.toISOString(),
+            expectedAssignedToId: userId,
+            expectedStatus: ticket.status,
+          },
+          actorRole,
+          actorId,
+        );
+        reassigned++;
+      } catch (error: any) {
+        messages.push(`${ticket.ticketNumber}: ${error?.message || 'automatic reassignment failed'}`);
+      }
+    }
+
+    const remaining = await this.ticketRepo.count({
+      where: [
+        { assignedToId: userId, status: TicketStatus.ASSIGNED },
+        { assignedToId: userId, status: TicketStatus.IN_PROGRESS },
+      ],
+    });
+    return { reassigned, remaining, messages };
   }
 
   // --- Report Technicians (period-filtered for dropdown) -----------------
@@ -4337,12 +4774,134 @@ export class TicketService implements OnModuleInit {
 
   // --- SLA Pause / Resume ---
 
+  private async applySlaResume(
+    ticket: Ticket,
+    resumeAt: Date,
+    config: TicketingConfig,
+  ): Promise<boolean> {
+    if (!ticket.slaPausedAt) return false;
+    const pausedAt = new Date(ticket.slaPausedAt);
+
+    // A work-schedule pause must never erase a breach that already happened.
+    // Clear the schedule marker on resume, but preserve the original deadline.
+    if (
+      ticket.slaDeadline &&
+      new Date(ticket.slaDeadline).getTime() <= pausedAt.getTime()
+    ) {
+      ticket.slaPausedAt = null;
+      return true;
+    }
+
+    const effectiveResumeAt = new Date(
+      Math.max(pausedAt.getTime(), resumeAt.getTime()),
+    );
+    const pausedBusinessSeconds = await this.calculateBusinessSeconds(
+      pausedAt,
+      effectiveResumeAt,
+      config,
+    );
+    ticket.accumulatedPauseSeconds =
+      (ticket.accumulatedPauseSeconds || 0) + pausedBusinessSeconds;
+
+    if (ticket.slaDeadline && ticket.issueTypeConfig?.slaHours) {
+      const totalBusinessSeconds = await this.calculateBusinessSeconds(
+        new Date(ticket.createdAt),
+        effectiveResumeAt,
+        config,
+      );
+      const consumedHours = Math.max(
+        0,
+        totalBusinessSeconds - ticket.accumulatedPauseSeconds,
+      ) / 3600;
+      const remainingHours = Math.max(0, ticket.issueTypeConfig.slaHours - consumedHours);
+      ticket.slaDeadline = await this.calculateSlaDeadline(
+        effectiveResumeAt,
+        remainingHours,
+        config,
+      );
+    }
+
+    ticket.slaPausedAt = null;
+    return true;
+  }
+
+  async resumeCwwPresentTechnicianTickets(now = new Date()): Promise<number> {
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    if (!config || config.scheduleMode !== 'CWW' || config.isFlagCeremonyPaused) return 0;
+
+    const today = this.getManilaDateString(now);
+    const currentTime = this.getManilaTimeString(now);
+    if (
+      currentTime < config.cwwClockinStart ||
+      currentTime >= config.cwwClockinEnd ||
+      !(await this.attendanceService.isOfficeDay(today))
+    ) {
+      return 0;
+    }
+
+    const attendanceRows = await this.dataSource
+      .createQueryBuilder()
+      .select('ta.user_id', 'userId')
+      .addSelect('ta.clock_in_time', 'clockInTime')
+      .addSelect('ta.is_manual_override', 'isManualOverride')
+      .from('attendance', 'ta')
+      .where('ta.date = :today', { today })
+      .andWhere("ta.status IN ('present', 'half_day')")
+      .getRawMany();
+
+    const start = this.createManilaDate(today, config.cwwClockinStart);
+    const end = this.createManilaDate(today, config.cwwClockinEnd);
+    const resumeAtByUser = new Map<number, Date>();
+    for (const row of attendanceRows) {
+      const recorded = row.clockInTime ? new Date(row.clockInTime) : now;
+      resumeAtByUser.set(Number(row.userId), new Date(
+        Math.max(start.getTime(), Math.min(recorded.getTime(), end.getTime())),
+      ));
+    }
+    const technicianIds = [...resumeAtByUser.keys()];
+    if (technicianIds.length === 0) return 0;
+
+    const tickets = await this.ticketRepo.find({
+      where: [
+        {
+          assignedToId: In(technicianIds),
+          status: TicketStatus.ASSIGNED,
+          isSlaWaiting: false,
+          slaPausedAt: Not(IsNull()),
+        },
+        {
+          assignedToId: In(technicianIds),
+          status: TicketStatus.IN_PROGRESS,
+          isSlaWaiting: false,
+          slaPausedAt: Not(IsNull()),
+        },
+      ],
+      relations: ['category', 'issueTypeConfig'],
+    });
+
+    const resumedTickets: Ticket[] = [];
+    for (const ticket of tickets) {
+      const resumeAt = ticket.assignedToId
+        ? resumeAtByUser.get(Number(ticket.assignedToId))
+        : undefined;
+      if (resumeAt && await this.applySlaResume(ticket, resumeAt, config)) {
+        resumedTickets.push(ticket);
+      }
+    }
+    if (resumedTickets.length > 0) {
+      await this.ticketRepo.save(resumedTickets);
+      resumedTickets.forEach((ticket) => this.sseService.emitTicketUpdated(ticket.id));
+    }
+    return resumedTickets.length;
+  }
+
   async pauseAllActiveTickets(technicianId?: number): Promise<number> {
     const qb = this.ticketRepo
       .createQueryBuilder('t')
       .where('t.status IN (:...statuses)', {
-        statuses: [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE],
+        statuses: [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS],
       })
+      .andWhere('t.isSlaWaiting = :isWaiting', { isWaiting: false })
       .andWhere('t.slaPausedAt IS NULL');
 
     if (technicianId) {
@@ -4362,9 +4921,11 @@ export class TicketService implements OnModuleInit {
     return tickets.length;
   }
 
-  async resumeAllActiveTickets(technicianId?: number): Promise<number> {
+  async resumeAllActiveTickets(technicianId?: number, resumeAt = new Date()): Promise<number> {
     const whereClause: any = {
-      status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE]),
+      status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS]),
+      isSlaWaiting: false,
+      slaPausedAt: Not(IsNull()),
     };
     if (technicianId) {
       whereClause.assignedToId = technicianId;
@@ -4377,37 +4938,11 @@ export class TicketService implements OnModuleInit {
 
     let resumedCount = 0;
     const resumedTicketIds: string[] = [];
-    const now = new Date();
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    if (!config) return 0;
 
     for (const t of tickets) {
-      if (t.slaPausedAt) {
-        const config = await this.configRepo.findOne({ where: { id: 1 } });
-        const businessSecondsElapsed = await this.calculateBusinessSeconds(
-          t.slaPausedAt,
-          now,
-          config as TicketingConfig,
-        );
-        t.accumulatedPauseSeconds = (t.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
-
-        if (t.slaDeadline && t.issueTypeConfig?.slaHours) {
-          const totalBusinessSecondsSinceCreation = await this.calculateBusinessSeconds(
-            new Date(t.createdAt),
-            now,
-            config as TicketingConfig,
-          );
-          const activeBusinessSeconds = Math.max(
-            0,
-            totalBusinessSecondsSinceCreation - t.accumulatedPauseSeconds,
-          );
-          const consumedSlaHours = activeBusinessSeconds / 3600;
-          const remainingHours = Math.max(0, t.issueTypeConfig.slaHours - consumedSlaHours);
-          t.slaDeadline = await this.calculateSlaDeadline(
-            now,
-            remainingHours,
-            config as TicketingConfig,
-          );
-        }
-        t.slaPausedAt = null;
+      if (await this.applySlaResume(t, resumeAt, config)) {
         resumedCount++;
         resumedTicketIds.push(t.id);
       }

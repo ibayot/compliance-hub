@@ -651,6 +651,7 @@ const CAPABILITY_CATEGORIES = [
       { key: 'isDutyViewerAccess', label: 'Duty Viewer', description: 'View Duty dashboard cards and monthly Duty map' },
       { key: 'isDutyAdminAccess', label: 'Duty Administrator', description: 'Manage duty rosters, logs, exceptions, meetings, and attendance release' },
       { key: 'isTicketResolutionTimeOverride', label: 'Ticket Resolution Time Override', description: 'Correct the effective resolution time of resolved or closed tickets using required proof' },
+      { key: 'isTicketRequesterCorrection', label: 'Ticket Requester Correction', description: 'Correct the Requested For person on an existing ticket' },
       { key: 'isSecuritySettingsAccess', label: 'Security Settings Admin', description: 'Manage the default password in Security Settings' },
       { key: 'isSmtpSettingsAccess', label: 'SMTP Admin', description: 'Manage SMTP credentials in Settings' },
     ]

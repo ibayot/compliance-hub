@@ -43,6 +43,7 @@ export type CapabilityKey =
   | 'isDutyViewerAccess'
   | 'isDutyAdminAccess'
   | 'isTicketResolutionTimeOverride'
+  | 'isTicketRequesterCorrection'
   | 'isAttendanceEligible'
   | 'isAuditAccess'
   | 'isUnitsAccess'
@@ -249,6 +250,10 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
 
   isTicketResolutionTimeOverride(role: string): boolean {
     return !!this.get(role)?.isTicketResolutionTimeOverride;
+  }
+
+  isTicketRequesterCorrection(role: string): boolean {
+    return !!this.get(role)?.isTicketRequesterCorrection;
   }
 
   isAttendanceEligible(role: string): boolean {

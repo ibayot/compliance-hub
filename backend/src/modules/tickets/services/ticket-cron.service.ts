@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, In } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Ticket, TicketStatus } from '../entities/ticket.entity';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { TicketService } from './ticket.service';
@@ -15,6 +15,8 @@ export class TicketCronService implements OnModuleInit {
   private readonly logger = new Logger(TicketCronService.name);
   // Prevent one overdue ticket from promoting the queue repeatedly every minute.
   private readonly advancedOverdueTickets = new Set<string>();
+  private readonly finalizedAbsenceDates = new Set<string>();
+  private readonly absenceFinalizationAttempts = new Map<string, number>();
 
   onModuleInit() {
     this.logger.log('TicketCronService initialized and ready for cron jobs.');
@@ -34,12 +36,21 @@ export class TicketCronService implements OnModuleInit {
   @Cron(CronExpression.EVERY_MINUTE)
   async handleScheduleTasks() {
     this.logger.log('Running minute cron tasks...');
-    await this.processSlaSchedules();
-    await this.processOverdueTicketsUnpauseNext();
-    const dtrSynced = await this.processDtrSyncs();
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    if (!config) {
+      this.logger.error('[Minute Tasks] No global ticketing config found.');
+      return;
+    }
+
+    const dtrSynced = await this.processDtrSyncs(config);
     if (dtrSynced) {
       this.sseService.emitAttendanceUpdated();
     }
+    await this.processEndOfDayAbsences(config);
+    // Attendance must be current before the CWW resume decision is made.
+    await this.processSlaSchedules(config);
+    // Never promote queued work using a stale, pre-resume SLA deadline.
+    await this.processOverdueTicketsUnpauseNext();
   }
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -64,13 +75,8 @@ export class TicketCronService implements OnModuleInit {
     return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:00`;
   }
 
-  private async processDtrSyncs() {
+  private async processDtrSyncs(config: TicketingConfig) {
     this.logger.log(`[DTR SYNC DEBUG] Starting processDtrSyncs...`);
-    const config = await this.configRepo.findOne({ where: { id: 1 } });
-    if (!config) {
-      this.logger.error(`[DTR SYNC DEBUG] No global config found! Aborting.`);
-      return false;
-    }
 
     // Derive current time in Manila timezone (UTC+8) for schedule boundary comparison
     const now = new Date();
@@ -138,44 +144,89 @@ export class TicketCronService implements OnModuleInit {
     }
   }
 
-  private async processSlaSchedules() {
-    const config = await this.configRepo.findOne({ where: { id: 1 } });
-    if (!config || config.isFlagCeremonyPaused) return;
+  private async processSlaSchedules(config: TicketingConfig) {
+    if (config.isFlagCeremonyPaused) return;
 
     const now = new Date();
-    // Use padStart for safe HH:mm:ss comparison
-    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`;
+    const manilaNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+    const today = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    const currentTime = `${String(manilaNow.getHours()).padStart(2, '0')}:${String(manilaNow.getMinutes()).padStart(2, '0')}:00`;
+    const isOfficeDay = await this.attendanceService.isOfficeDay(today);
+
+    if (!isOfficeDay) {
+      await this.ticketService.pauseAllActiveTickets();
+      return;
+    }
 
     if (config.scheduleMode === 'OFFICE_HOURS') {
-      if (currentTime === config.officeClockin) {
-        await this.ticketService.resumeAllActiveTickets();
-      } else if (currentTime === config.officeClockout) {
+      if (currentTime >= config.officeClockin && currentTime < config.officeClockout) {
+        const resumeAt = new Date(`${today}T${config.officeClockin}+08:00`);
+        await this.ticketService.resumeAllActiveTickets(undefined, resumeAt);
+      } else {
         await this.ticketService.pauseAllActiveTickets();
       }
     } else if (config.scheduleMode === 'CWW') {
-      if (currentTime === config.cwwClockinEnd) {
-        await this.ticketService.resumeAllActiveTickets();
-      } else if (currentTime === config.cwwClockoutEnd) {
+      if (currentTime >= config.cwwClockinStart && currentTime < config.cwwClockinEnd) {
+        await this.ticketService.resumeCwwPresentTechnicianTickets(now);
+      } else if (currentTime >= config.cwwClockinEnd && currentTime < config.cwwClockoutEnd) {
+        const resumeAt = new Date(`${today}T${config.cwwClockinEnd}+08:00`);
+        await this.ticketService.resumeAllActiveTickets(undefined, resumeAt);
+      } else {
         await this.ticketService.pauseAllActiveTickets();
       }
     }
   }
 
+  private async processEndOfDayAbsences(config: TicketingConfig): Promise<void> {
+    const now = new Date();
+    const today = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    const manilaNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+    const currentTime = `${String(manilaNow.getHours()).padStart(2, '0')}:${String(manilaNow.getMinutes()).padStart(2, '0')}:00`;
+    const workdayEnd = config.scheduleMode === 'CWW'
+      ? config.cwwClockoutEnd
+      : config.officeClockout;
+
+    if (
+      currentTime < workdayEnd ||
+      this.finalizedAbsenceDates.has(today) ||
+      !(await this.attendanceService.isOfficeDay(today))
+    ) {
+      return;
+    }
+
+    let dtrStatus = this.attendanceService.getDtrSystemStatus();
+    if (!dtrStatus.isOnline || dtrStatus.lastSuccessfulSyncDate !== today) {
+      const lastAttempt = this.absenceFinalizationAttempts.get(today) ?? 0;
+      if (now.getTime() - lastAttempt < 5 * 60 * 1000) return;
+      this.absenceFinalizationAttempts.set(today, now.getTime());
+      await this.attendanceService.syncAttendanceWithDTR();
+      dtrStatus = this.attendanceService.getDtrSystemStatus();
+    }
+
+    if (!dtrStatus.isOnline || dtrStatus.lastSuccessfulSyncDate !== today) return;
+
+    const saved = await this.attendanceService.markMissingAttendanceAsAbsent(today);
+    this.finalizedAbsenceDates.add(today);
+    this.absenceFinalizationAttempts.delete(today);
+    for (const date of this.finalizedAbsenceDates) {
+      if (date !== today) this.finalizedAbsenceDates.delete(date);
+    }
+    if (saved > 0) {
+      this.logger.log(`Recorded ${saved} end-of-day absence(s) after a healthy DTR sync.`);
+      this.sseService.emitAttendanceUpdated();
+    }
+  }
+
   private async processOverdueTicketsUnpauseNext() {
-    const overdueActiveTickets = await this.ticketRepo.find({
-      where: [
-        {
-          status: TicketStatus.ASSIGNED,
-          isSlaWaiting: false,
-          slaDeadline: LessThan(new Date()),
-        },
-        {
-          // IN_PROGRESS is authoritative even if an old row has a stale queue flag.
-          status: TicketStatus.IN_PROGRESS,
-          slaDeadline: LessThan(new Date()),
-        },
-      ],
-    });
+    const overdueActiveTickets = await this.ticketRepo
+      .createQueryBuilder('ticket')
+      .where('ticket.status IN (:...statuses)', {
+        statuses: [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS],
+      })
+      .andWhere('ticket.isSlaWaiting = :isWaiting', { isWaiting: false })
+      .andWhere('(ticket.slaPausedAt IS NULL OR ticket.slaDeadline <= ticket.slaPausedAt)')
+      .andWhere('ticket.slaDeadline < :now', { now: new Date() })
+      .getMany();
 
     if (overdueActiveTickets.length > 0) {
       this.logger.log(`Cron check: found ${overdueActiveTickets.length} overdue active tickets.`);
@@ -345,10 +396,20 @@ export class TicketCronService implements OnModuleInit {
       relations: ['category'],
     });
 
-    const now = new Date().getTime();
-
     for (const ticket of activeTickets) {
-      if (!ticket.slaDeadline || !ticket.issueTypeConfig || !ticket.createdAt || !ticket.issueTypeConfig.slaHours)
+      const isPausedBeforeBreach = Boolean(
+        ticket.slaPausedAt &&
+        ticket.slaDeadline &&
+        ticket.slaDeadline.getTime() > ticket.slaPausedAt.getTime(),
+      );
+      if (
+        isPausedBeforeBreach ||
+        ticket.isSlaWaiting ||
+        !ticket.slaDeadline ||
+        !ticket.issueTypeConfig ||
+        !ticket.createdAt ||
+        !ticket.issueTypeConfig.slaHours
+      )
         continue;
 
       const config = await this.configRepo.findOne({ where: { id: 1 } });

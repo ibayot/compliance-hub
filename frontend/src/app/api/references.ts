@@ -190,6 +190,10 @@ export interface Ticket {
   satisfactionSubmittedAt?: string | null;
   satisfactionFormData?: string | null;
   slaDeadline?: string | null;
+  slaPausedAt?: string | null;
+  slaPaused?: boolean;
+  slaResumeAt?: string | null;
+  slaResumeCanBeEarly?: boolean;
   assignedTechAbsent?: boolean;
   /** UUID of the original ticket when status = 'duplicate' */
   duplicateOfId?: string | null;
@@ -227,6 +231,28 @@ export interface TicketComment {
   user?: { id: number; email: string; firstName?: string; lastName?: string; role?: string };
 }
 
+export interface AttendanceAssignmentAlert {
+  userId: number;
+  staffName: string;
+  role: string;
+  attendanceState: 'absent' | 'late' | 'no_attendance';
+  attendanceLabel: string;
+  clockInTime: string | null;
+  tickets: Array<{
+    id: string;
+    ticketNumber: string;
+    subject: string;
+    status: TicketStatus;
+    slaDeadline: string | null;
+  }>;
+}
+
+export interface AttendanceAutoReassignResult {
+  reassigned: number;
+  remaining: number;
+  messages: string[];
+}
+
 export interface CreateTicketDto {
   subject: string;
   description: string;
@@ -256,6 +282,9 @@ export interface UpdateTicketDto {
 
 export interface AssignTicketDto {
   assignedToId: number;
+  expectedUpdatedAt?: string;
+  expectedAssignedToId?: number | null;
+  expectedStatus?: TicketStatus;
 }
 
 export interface CsatFormData {
@@ -631,6 +660,20 @@ export const ticketsApi = {
     const response = await apiClient.get(`/tickets?${params}`);
     return response.data;
   },
+
+  getAttendanceAssignmentAlerts: async (): Promise<AttendanceAssignmentAlert[]> => {
+    const response = await apiClient.get('/tickets/attendance-assignment-alerts');
+    return response.data;
+  },
+
+  autoReassignAttendanceAlertTickets: async (
+    userId: number,
+  ): Promise<AttendanceAutoReassignResult> => {
+    const response = await apiClient.post(
+      `/tickets/attendance-assignment-alerts/${userId}/auto-reassign`,
+    );
+    return response.data;
+  },
   getById: async (id: string): Promise<Ticket> => {
     const response = await apiClient.get(`/tickets/${id}`);
     return response.data;
@@ -647,8 +690,27 @@ export const ticketsApi = {
     return response.data;
   },
 
-  assign: async (id: string, assignedToId: number): Promise<Ticket> => {
-    const response = await apiClient.patch(`/tickets/${id}/assign`, { assignedToId });
+  assign: async (
+    id: string,
+    assignedToId: number,
+    expected?: Pick<AssignTicketDto, 'expectedUpdatedAt' | 'expectedAssignedToId' | 'expectedStatus'>,
+  ): Promise<Ticket> => {
+    const response = await apiClient.patch(`/tickets/${id}/assign`, {
+      assignedToId,
+      ...expected,
+    });
+    return response.data;
+  },
+
+  correctRequester: async (
+    id: string,
+    requesterId: number,
+    expectedUpdatedAt: string,
+  ): Promise<Ticket> => {
+    const response = await apiClient.patch(`/tickets/${id}/requester`, {
+      requesterId,
+      expectedUpdatedAt,
+    });
     return response.data;
   },
 

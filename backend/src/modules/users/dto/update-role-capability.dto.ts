@@ -140,6 +140,10 @@ export class UpdateRoleCapabilityDto {
 
   @IsOptional()
   @IsBoolean()
+  isTicketRequesterCorrection?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   isAttendanceEligible?: boolean;
 
   @IsOptional()

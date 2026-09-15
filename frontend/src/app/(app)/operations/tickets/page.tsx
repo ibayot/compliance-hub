@@ -124,8 +124,8 @@ const toDateTimeLocalValue = (value?: string | null) => {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 };
 
-function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | null {
-  if (!ticket.slaDeadline || (ticket.isSlaWaiting && ticket.status !== 'in_progress')) return null;
+function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | 'paused' | null {
+  if (!ticket.slaDeadline) return null;
   const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
   if (isTerminal) {
     const deadline = new Date(ticket.slaDeadline).getTime();
@@ -133,6 +133,8 @@ function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'ove
     const resolvedTime = resolvedValue ? new Date(resolvedValue).getTime() : Date.now();
     return resolvedTime <= deadline ? 'met' : 'overdue';
   }
+  if (ticket.slaPaused) return 'paused';
+  if (ticket.isSlaWaiting && ticket.status !== 'in_progress') return null;
   // The API flags are calculated when the ticket is fetched. Re-check the
   // deadline locally so an open page cannot keep showing "Nearing SLA" after
   // the deadline has passed.
@@ -148,6 +150,7 @@ const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'war
   on_track: { label: 'On Track', color: 'info' },
   nearing_sla: { label: 'Nearing SLA', color: 'warning' },
   overdue: { label: 'Overdue', color: 'error' },
+  paused: { label: 'SLA Paused', color: 'info' },
 };
 
 export default function TicketsPage() {
@@ -211,6 +214,7 @@ export default function TicketsPage() {
   const [totalTickets, setTotalTickets] = useState(0);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const ticketRequestRef = useRef(0);
+  const ticketSseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const TICKETS_PAGE_SIZE = 25;
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [requestedForConfirmOpen, setRequestedForConfirmOpen] = useState(false);
@@ -642,7 +646,17 @@ export default function TicketsPage() {
     isFocalTech,
     user?.id,
   ]);
-  useSse(['TICKET_UPDATED', 'SYSTEM_STATUS_CHANGED'], silentFetchTickets);
+  useSse(['TICKET_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
+    if (ticketSseTimerRef.current) clearTimeout(ticketSseTimerRef.current);
+    ticketSseTimerRef.current = setTimeout(() => {
+      ticketSseTimerRef.current = null;
+      void silentFetchTickets();
+    }, 750);
+  });
+
+  useEffect(() => () => {
+    if (ticketSseTimerRef.current) clearTimeout(ticketSseTimerRef.current);
+  }, []);
 
   useEffect(() => {
     // Load the restricted requester list for ticket proxy creation.
@@ -890,7 +904,11 @@ export default function TicketsPage() {
   const handleAssign = async () => {
     if (!assigningTicket || !selectedTechId) return;
     try {
-      await ticketsApi.assign(assigningTicket.id, Number(selectedTechId));
+      await ticketsApi.assign(assigningTicket.id, Number(selectedTechId), {
+        expectedUpdatedAt: assigningTicket.updatedAt,
+        expectedAssignedToId: assigningTicket.assignedToId ?? null,
+        expectedStatus: assigningTicket.status,
+      });
       enqueueSnackbar('Ticket assigned.', { variant: 'success' });
       setAssignDialogOpen(false);
       await silentFetchTickets();
