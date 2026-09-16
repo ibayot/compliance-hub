@@ -717,6 +717,23 @@ export const ticketsApi = {
     return response.data;
   },
 
+  getAssigneeCorrectionOptions: async (): Promise<TechnicianOption[]> => {
+    const response = await apiClient.get('/tickets/assignee-correction-options');
+    return response.data;
+  },
+
+  correctAssignee: async (
+    id: string,
+    assignedToId: number,
+    expectedUpdatedAt: string,
+  ): Promise<Ticket> => {
+    const response = await apiClient.patch(`/tickets/${id}/assignee-correction`, {
+      assignedToId,
+      expectedUpdatedAt,
+    });
+    return response.data;
+  },
+
   addComment: async (
     ticketId: string,
     comment: string,

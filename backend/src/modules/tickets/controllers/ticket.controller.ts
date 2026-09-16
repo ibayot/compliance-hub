@@ -33,6 +33,7 @@ import {
   UpdateTicketDto,
   AssignTicketDto,
   CorrectTicketRequesterDto,
+  CorrectTicketAssigneeDto,
   AddCommentDto,
   SubmitSatisfactionDto,
   EscalateTicketDto,
@@ -167,6 +168,13 @@ export class TicketController {
   @RequireCapability('isTicketModuleAccess')
   async getTechnicians() {
     return this.ticketService.getTechnicianAvailability();
+  }
+
+  /** GET /tickets/assignee-correction-options — active RICTMS staff for factual corrections */
+  @Get('assignee-correction-options')
+  @RequireCapability('isTicketRequesterCorrection')
+  async getAssigneeCorrectionOptions() {
+    return this.ticketService.getAssigneeCorrectionOptions();
   }
 
   /** GET /tickets/general-overview-stats?year=&month= */
@@ -325,6 +333,22 @@ export class TicketController {
     @Request() req: any,
   ) {
     return this.ticketService.correctTicketRequester(
+      id,
+      dto,
+      req.user.id ?? req.user.userId,
+      req.user.role,
+    );
+  }
+
+  /** PATCH /tickets/:id/assignee-correction — correct the Assigned To record without reassignment side effects */
+  @Patch(':id/assignee-correction')
+  @RequireCapability('isTicketRequesterCorrection')
+  async correctTicketAssignee(
+    @Param('id') id: string,
+    @Body() dto: CorrectTicketAssigneeDto,
+    @Request() req: any,
+  ) {
+    return this.ticketService.correctTicketAssignee(
       id,
       dto,
       req.user.id ?? req.user.userId,

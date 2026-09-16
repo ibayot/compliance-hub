@@ -171,6 +171,18 @@ export class CorrectTicketRequesterDto {
   expectedUpdatedAt: string;
 }
 
+export class CorrectTicketAssigneeDto {
+  @IsNotEmpty()
+  @IsNumber()
+  @ApiProperty()
+  assignedToId: number;
+
+  @IsNotEmpty()
+  @IsString()
+  @ApiProperty()
+  expectedUpdatedAt: string;
+}
+
 export type AttendanceAssignmentState = 'absent' | 'assumed_late';
 export type ActiveTicketSlaState = 'overdue' | 'nearing_sla' | 'on_track';
 
@@ -1704,6 +1716,146 @@ export class TicketService implements OnModuleInit {
         `The requester for ticket ${saved.ticketNumber} was corrected.`,
       ).catch(() => undefined);
     }
+    this.sseService.emitTicketUpdated(saved.id);
+    return this.getTicketById(saved.id, actorRole, actorId);
+  }
+
+  async getAssigneeCorrectionOptions(): Promise<
+    Array<{
+      id: number;
+      email: string;
+      firstName: string;
+      lastName: string;
+      role: string;
+    }>
+  > {
+    const users = await this.usersHttpClient.getUsers();
+    return users
+      .filter(
+        (user) =>
+          user.active !== false && this.isDirectAssignableRictmsStaff(user.role),
+      )
+      .map((user) => ({
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        role: user.role,
+      }))
+      .sort((a, b) => {
+        const lastNameOrder = (a.lastName || '').localeCompare(b.lastName || '');
+        return lastNameOrder || (a.firstName || '').localeCompare(b.firstName || '');
+      });
+  }
+
+  async correctTicketAssignee(
+    ticketId: string,
+    dto: CorrectTicketAssigneeDto,
+    actorId: number,
+    actorRole: UserRole,
+  ): Promise<Ticket> {
+    if (!this.roleCapSvc.isTicketRequesterCorrection(actorRole as string)) {
+      throw new ForbiddenException('Ticket Record Correction capability is required.');
+    }
+
+    const assignee = await this.usersHttpClient.getUserById(dto.assignedToId);
+    if (
+      !assignee ||
+      assignee.active === false ||
+      !this.isDirectAssignableRictmsStaff(assignee.role)
+    ) {
+      throw new BadRequestException(
+        'The selected account is not an active RICTMS staff account.',
+      );
+    }
+
+    let previousAssigneeId: number | null = null;
+    const saved = await this.withAutoAssignmentLock(async () => {
+      const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
+      if (!ticket) throw new NotFoundException('Ticket not found');
+      if (new Date(dto.expectedUpdatedAt).getTime() !== new Date(ticket.updatedAt).getTime()) {
+        throw new ConflictException(
+          'This ticket changed after you opened the correction window. Refresh the ticket, review the latest details, and try again.',
+        );
+      }
+      if (!ticket.assignedToId) {
+        throw new BadRequestException(
+          'This ticket has no assigned staff member. Use Assign Ticket instead.',
+        );
+      }
+      if (Number(ticket.assignedToId) === Number(dto.assignedToId)) {
+        throw new BadRequestException('The selected person is already assigned to this ticket.');
+      }
+      if (
+        Number(dto.assignedToId) === Number(ticket.requesterId) ||
+        Number(dto.assignedToId) === Number(ticket.createdById)
+      ) {
+        throw new ForbiddenException(
+          'A ticket cannot be assigned to the person who requested or reported it.',
+        );
+      }
+
+      previousAssigneeId = ticket.assignedToId;
+      ticket.assignedToId = Number(dto.assignedToId);
+      return this.ticketRepo.save(ticket);
+    });
+
+    const previousAssignee = previousAssigneeId
+      ? await this.usersHttpClient.getUserById(previousAssigneeId)
+      : null;
+    await this.logEvent(
+      saved.id,
+      'assignee_corrected',
+      actorId,
+      {
+        previousAssigneeId,
+        previousAssigneeName: previousAssignee
+          ? [previousAssignee.first_name, previousAssignee.last_name].filter(Boolean).join(' ') ||
+            previousAssignee.email
+          : previousAssigneeId
+            ? `Staff #${previousAssigneeId}`
+            : null,
+        assigneeId: assignee.id,
+        assigneeName:
+          [assignee.first_name, assignee.last_name].filter(Boolean).join(' ') || assignee.email,
+      },
+      false,
+    );
+
+    const notifications = new Map<number, string>();
+    if (Number(assignee.id) !== Number(actorId)) {
+      notifications.set(
+        Number(assignee.id),
+        `The Assigned To record for ticket ${saved.ticketNumber} was corrected to you.`,
+      );
+    }
+    if (
+      previousAssigneeId &&
+      Number(previousAssigneeId) !== Number(actorId) &&
+      Number(previousAssigneeId) !== Number(assignee.id)
+    ) {
+      notifications.set(
+        Number(previousAssigneeId),
+        `You were removed from the Assigned To record for ticket ${saved.ticketNumber}.`,
+      );
+    }
+    if (
+      saved.requesterId &&
+      Number(saved.requesterId) !== Number(actorId) &&
+      Number(saved.requesterId) !== Number(assignee.id) &&
+      Number(saved.requesterId) !== Number(previousAssigneeId)
+    ) {
+      notifications.set(
+        Number(saved.requesterId),
+        `The Assigned To record for ticket ${saved.ticketNumber} was corrected.`,
+      );
+    }
+    for (const [userId, message] of notifications) {
+      this.sendNotification([userId], saved.id, 'assignee_corrected', message).catch(
+        () => undefined,
+      );
+    }
+
     this.sseService.emitTicketUpdated(saved.id);
     return this.getTicketById(saved.id, actorRole, actorId);
   }

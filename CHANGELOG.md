@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.8] - 2026-09-16 - Ticket Assignee Record Correction
+
+### Added
+- Added an authorized Assigned To correction action for tickets whose recorded assignee is incorrect or whose physical transfer was not recorded in the application.
+- Added an Assigned To Corrected timeline entry and in-app notifications for the corrected assignee, previous assignee, and requester where applicable.
+
+### Changed
+- Renamed the displayed Ticket Requester Correction permission to Ticket Record Correction because it now covers both Requested For and Assigned To corrections.
+
+### Fixed
+- Assignee record corrections use conflict protection and update live ticket screens without changing ticket status, SLA timing, resolution data, or assignment timestamps.
+
 ## [1.0.7] - 2026-09-16 - SLA Dashboard and Attendance Alert Refinements
 
 ### Added

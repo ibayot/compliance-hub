@@ -1,6 +1,6 @@
 # RICTMS Compliance Hub
 
-> **Current Version:** `v1.0.5`
+> **Current Version:** `v1.0.8`
 
 Compliance Hub is an internal document governance and compliance platform for government teams. It supports document intake and review workflows, ticketing and escalation, issuance mapping, KPI monitoring, and role-based operations across split microservices.
 

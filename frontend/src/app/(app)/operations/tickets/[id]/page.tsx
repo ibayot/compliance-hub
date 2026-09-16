@@ -262,6 +262,12 @@ export default function TicketDetailPage() {
   const [requesterSnapshotUpdatedAt, setRequesterSnapshotUpdatedAt] = useState('');
   const [savingRequesterCorrection, setSavingRequesterCorrection] = useState(false);
 
+  const [assigneeCorrectionDialogOpen, setAssigneeCorrectionDialogOpen] = useState(false);
+  const [assigneeCorrectionOptions, setAssigneeCorrectionOptions] = useState<TechnicianOption[]>([]);
+  const [correctedAssigneeId, setCorrectedAssigneeId] = useState<number | ''>('');
+  const [assigneeSnapshotUpdatedAt, setAssigneeSnapshotUpdatedAt] = useState('');
+  const [savingAssigneeCorrection, setSavingAssigneeCorrection] = useState(false);
+
   // Dedicated Escalate dialog
   const [escalateDialogOpen, setEscalateDialogOpen] = useState(false);
   const [escalateToId, setEscalateToId] = useState<number | ''>('');
@@ -346,7 +352,7 @@ export default function TicketDetailPage() {
   const canAssignByCapability = !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
   const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isAllTickets;
   const canOverrideResolutionTime = !!myCap?.isTicketResolutionTimeOverride;
-  const canCorrectRequester = !!myCap?.isTicketRequesterCorrection;
+  const canCorrectTicketRecord = !!myCap?.isTicketRequesterCorrection;
   const canPriority = canStaff;
   const isComplianceOfficer = !!myCap?.isReportsAccess;
   const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage;
@@ -766,6 +772,45 @@ export default function TicketDetailPage() {
       });
     } finally {
       setSavingRequesterCorrection(false);
+    }
+  };
+
+  const openAssigneeCorrection = async () => {
+    if (!ticket?.assignedToId) return;
+    setAssigneeSnapshotUpdatedAt(ticket.updatedAt);
+    setCorrectedAssigneeId('');
+    try {
+      const users = await ticketsApi.getAssigneeCorrectionOptions();
+      setAssigneeCorrectionOptions(
+        users.filter((candidate) => Number(candidate.id) !== Number(ticket.assignedToId)),
+      );
+      setAssigneeCorrectionDialogOpen(true);
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to load assignee options.', {
+        variant: 'error',
+      });
+    }
+  };
+
+  const handleAssigneeCorrection = async () => {
+    if (!correctedAssigneeId || !assigneeSnapshotUpdatedAt) return;
+    setSavingAssigneeCorrection(true);
+    try {
+      const updated = await ticketsApi.correctAssignee(
+        ticketId,
+        Number(correctedAssigneeId),
+        assigneeSnapshotUpdatedAt,
+      );
+      setTicket(updated);
+      setAssigneeCorrectionDialogOpen(false);
+      await fetchEvents();
+      enqueueSnackbar('Assigned To was corrected.', { variant: 'success' });
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to correct Assigned To.', {
+        variant: 'error',
+      });
+    } finally {
+      setSavingAssigneeCorrection(false);
     }
   };
 
@@ -1623,7 +1668,7 @@ export default function TicketDetailPage() {
                         ? `${(ticket as any).requester.firstName} ${(ticket as any).requester.lastName}`
                         : `User #${ticket.requesterId}`}
                     </Typography>
-                    {canCorrectRequester && (
+                    {canCorrectTicketRecord && (
                       <Button size="small" onClick={openRequesterCorrection}>
                         Correct
                       </Button>
@@ -1656,11 +1701,18 @@ export default function TicketDetailPage() {
                     <Typography variant="caption" color="text.secondary">
                       Assigned To
                     </Typography>
-                    <Typography variant="body2">
-                      {(ticket as any).assignedTo
-                        ? `${(ticket as any).assignedTo.firstName} ${(ticket as any).assignedTo.lastName}`
-                        : `User #${ticket.assignedToId}`}
-                    </Typography>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography variant="body2">
+                        {(ticket as any).assignedTo
+                          ? `${(ticket as any).assignedTo.firstName} ${(ticket as any).assignedTo.lastName}`
+                          : `User #${ticket.assignedToId}`}
+                      </Typography>
+                      {canCorrectTicketRecord && (
+                        <Button size="small" onClick={openAssigneeCorrection}>
+                          Correct
+                        </Button>
+                      )}
+                    </Stack>
                   </Box>
                 )}
                 <Box>
@@ -2198,6 +2250,7 @@ export default function TicketDetailPage() {
                   rated: 'Rated',
                   resolution_time_overridden: 'Resolution Time Corrected',
                   requester_corrected: 'Requested For Corrected',
+                  assignee_corrected: 'Assigned To Corrected',
                 };
                 const label = EVENT_LABELS[ev.eventType] ?? ev.eventType.replace(/_/g, ' ');
                 const actorLine = ev.actorName
@@ -2251,6 +2304,14 @@ export default function TicketDetailPage() {
                       {ev.eventType === 'requester_corrected' && ev.meta?.requesterName && (
                         <Typography variant="caption" color="text.secondary" display="block">
                           → {String(ev.meta.requesterName)}
+                        </Typography>
+                      )}
+                      {ev.eventType === 'assignee_corrected' && ev.meta?.assigneeName && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {ev.meta.previousAssigneeName
+                            ? `${String(ev.meta.previousAssigneeName)} → `
+                            : ''}
+                          {String(ev.meta.assigneeName)}
                         </Typography>
                       )}
                       {ev.eventType === 'resolution_time_overridden' && ev.meta?.verifiedResolvedAt && (
@@ -2354,6 +2415,48 @@ export default function TicketDetailPage() {
             disabled={!correctedRequesterId || savingRequesterCorrection}
           >
             {savingRequesterCorrection ? 'Saving…' : 'Save Correction'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={assigneeCorrectionDialogOpen}
+        onClose={() => !savingAssigneeCorrection && setAssigneeCorrectionDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Correct Assigned To</DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2, mt: 0.5 }}>
+            This corrects the responsible staff record only. It does not change the ticket status,
+            SLA timer, resolution time, or assignment timestamp.
+          </Alert>
+          <Autocomplete
+            options={assigneeCorrectionOptions}
+            getOptionLabel={(option) =>
+              `${option.firstName ?? ''} ${option.lastName ?? ''}`.trim() || option.email
+            }
+            value={
+              assigneeCorrectionOptions.find((option) => option.id === correctedAssigneeId) ?? null
+            }
+            onChange={(_, option) => setCorrectedAssigneeId(option?.id ?? '')}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            renderInput={(params) => <TextField {...params} label="Correct Assigned To" required />}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setAssigneeCorrectionDialogOpen(false)}
+            disabled={savingAssigneeCorrection}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleAssigneeCorrection}
+            disabled={!correctedAssigneeId || savingAssigneeCorrection}
+          >
+            {savingAssigneeCorrection ? 'Saving…' : 'Save Correction'}
           </Button>
         </DialogActions>
       </Dialog>
