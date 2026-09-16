@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - Assignee record corrections use conflict protection and update live ticket screens without changing ticket status, SLA timing, resolution data, or assignment timestamps.
+- Ticket Record Correction holders can correct Assigned To only on tickets they neither requested nor filed; eligible assignees may still include the requester, filer, or correcting staff member.
 
 ## [1.0.7] - 2026-09-16 - SLA Dashboard and Attendance Alert Refinements
 

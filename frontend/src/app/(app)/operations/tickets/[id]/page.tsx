@@ -353,6 +353,11 @@ export default function TicketDetailPage() {
   const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isAllTickets;
   const canOverrideResolutionTime = !!myCap?.isTicketResolutionTimeOverride;
   const canCorrectTicketRecord = !!myCap?.isTicketRequesterCorrection;
+  const canCorrectAssignee =
+    canCorrectTicketRecord &&
+    !!ticket &&
+    Number(user?.id) !== Number(ticket.requesterId) &&
+    Number(user?.id) !== Number(ticket.createdById);
   const canPriority = canStaff;
   const isComplianceOfficer = !!myCap?.isReportsAccess;
   const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage;
@@ -1707,7 +1712,7 @@ export default function TicketDetailPage() {
                           ? `${(ticket as any).assignedTo.firstName} ${(ticket as any).assignedTo.lastName}`
                           : `User #${ticket.assignedToId}`}
                       </Typography>
-                      {canCorrectTicketRecord && (
+                      {canCorrectAssignee && (
                         <Button size="small" onClick={openAssigneeCorrection}>
                           Correct
                         </Button>

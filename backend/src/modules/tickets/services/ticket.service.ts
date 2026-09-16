@@ -1758,6 +1758,17 @@ export class TicketService implements OnModuleInit {
       throw new ForbiddenException('Ticket Record Correction capability is required.');
     }
 
+    const authorizationTicket = await this.ticketRepo.findOne({ where: { id: ticketId } });
+    if (!authorizationTicket) throw new NotFoundException('Ticket not found');
+    if (
+      Number(actorId) === Number(authorizationTicket.requesterId) ||
+      Number(actorId) === Number(authorizationTicket.createdById)
+    ) {
+      throw new ForbiddenException(
+        'You cannot correct Assigned To for a ticket you requested or filed.',
+      );
+    }
+
     const assignee = await this.usersHttpClient.getUserById(dto.assignedToId);
     if (
       !assignee ||
@@ -1783,16 +1794,16 @@ export class TicketService implements OnModuleInit {
           'This ticket has no assigned staff member. Use Assign Ticket instead.',
         );
       }
-      if (Number(ticket.assignedToId) === Number(dto.assignedToId)) {
-        throw new BadRequestException('The selected person is already assigned to this ticket.');
-      }
       if (
-        Number(dto.assignedToId) === Number(ticket.requesterId) ||
-        Number(dto.assignedToId) === Number(ticket.createdById)
+        Number(actorId) === Number(ticket.requesterId) ||
+        Number(actorId) === Number(ticket.createdById)
       ) {
         throw new ForbiddenException(
-          'A ticket cannot be assigned to the person who requested or reported it.',
+          'You cannot correct Assigned To for a ticket you requested or filed.',
         );
+      }
+      if (Number(ticket.assignedToId) === Number(dto.assignedToId)) {
+        throw new BadRequestException('The selected person is already assigned to this ticket.');
       }
 
       previousAssigneeId = ticket.assignedToId;
