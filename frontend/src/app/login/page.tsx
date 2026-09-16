@@ -69,6 +69,11 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || !/^\S+@\S+\.\S{2,}$/.test(normalizedEmail)) {
+      enqueueSnackbar('Invalid email or password.', { variant: 'error' });
+      return;
+    }
     if (password.length < 12) {
       enqueueSnackbar('Password must be at least 12 characters long.', { variant: 'error' });
       return;
@@ -81,12 +86,15 @@ export default function LoginPage() {
       console.error("LOGIN ERROR:", err);
 
       const responseData = err?.response?.data;
-      const serverMessage = typeof responseData === 'string' ? responseData : responseData?.message;
+      const rawServerMessage = typeof responseData === 'string' ? responseData : responseData?.message;
+      const serverMessage = typeof rawServerMessage === 'string' && rawServerMessage.trim()
+        ? rawServerMessage
+        : '';
       const msg =
         serverMessage ||
         (err?.message === 'Network Error' || !err?.response
           ? 'Cannot connect to server. Please make sure backend API is running on port 4000.'
-          : 'Invalid credentials. Please try again.');
+          : 'Invalid email or password.');
       enqueueSnackbar(msg, { variant: 'error' });
     } finally {
       setLoading(false);
@@ -198,7 +206,7 @@ export default function LoginPage() {
               </Alert>
             )}
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} noValidate>
               <TextField
                 label="Email"
                 type="email"

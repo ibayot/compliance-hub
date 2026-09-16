@@ -263,6 +263,7 @@ export interface CreateTicketDto {
   issueType?: string;
   /** Staff only: override the requester (for walk-ins / phone calls) */
   requesterId?: number;
+  assignedToId?: number;
 }
 
 export interface UpdateTicketDto {

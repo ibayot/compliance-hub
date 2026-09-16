@@ -1,14 +1,17 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, IsNull, Not } from 'typeorm';
 import { Ticket, TicketStatus } from '../entities/ticket.entity';
+import { TicketEvent } from '../entities/ticket-event.entity';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { TicketService } from './ticket.service';
 import { EmailService } from './email.service';
 import { AttendanceService } from './attendance.service';
 import { SseService } from './sse.service';
 import { UserRole } from '../../shared/entities';
+import { NotificationService } from './notification.service';
+import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 
 @Injectable()
 export class TicketCronService implements OnModuleInit {
@@ -27,10 +30,14 @@ export class TicketCronService implements OnModuleInit {
     private readonly ticketRepo: Repository<Ticket>,
     @InjectRepository(TicketingConfig)
     private readonly configRepo: Repository<TicketingConfig>,
+    @InjectRepository(TicketEvent)
+    private readonly eventRepo: Repository<TicketEvent>,
     private readonly ticketService: TicketService,
     private readonly emailService: EmailService,
     private readonly attendanceService: AttendanceService,
     private readonly sseService: SseService,
+    private readonly notificationService: NotificationService,
+    private readonly roleCapabilities: RoleCapabilitiesService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -59,7 +66,6 @@ export class TicketCronService implements OnModuleInit {
     await this.processAutoClosure();
     await this.processAutoUnpause();
     await this.processAutoUnfreeze();
-    await this.processFrozenTicketsReminders();
     await this.processPercentageAlerts();
   }
 
@@ -142,6 +148,14 @@ export class TicketCronService implements OnModuleInit {
         this.logger.error(`Failed to send frozen tickets email (${err?.code || 'unknown'}).`);
       }
     }
+    for (const ticket of frozenTickets) {
+      if (!ticket.assignedToId) continue;
+      await this.notificationService.create([ticket.assignedToId], {
+        ticketId: ticket.id,
+        eventType: 'frozen_ticket_reminder',
+        message: `Ticket ${ticket.ticketNumber} is still frozen and requires follow-up.`,
+      });
+    }
   }
 
   private async processSlaSchedules(config: TicketingConfig) {
@@ -214,6 +228,14 @@ export class TicketCronService implements OnModuleInit {
     if (saved > 0) {
       this.logger.log(`Recorded ${saved} end-of-day absence(s) after a healthy DTR sync.`);
       this.sseService.emitAttendanceUpdated();
+      await this.notificationService.createForRoles(
+        this.roleCapabilities.getRolesWhere('isTicketSettingsFocal'),
+        {
+          targetPath: '/operations/tickets',
+          eventType: 'attendance_absence_report',
+          message: `${saved} staff attendance record(s) were marked absent after the workday ended. Review any active ticket assignments.`,
+        },
+      );
     }
   }
 
@@ -273,6 +295,7 @@ export class TicketCronService implements OnModuleInit {
           { status: TicketStatus.CLOSED },
           ticket.assignedToId || 1, // System fallback
           UserRole.SUPER_ADMIN,
+          { automaticClosure: true },
         );
         this.logger.log('Auto-closed a resolved ticket.');
       } catch (err) {
@@ -365,36 +388,17 @@ export class TicketCronService implements OnModuleInit {
     }
   }
 
-  private async processFrozenTicketsReminders() {
-    const frozenTickets = await this.ticketRepo.find({
-      where: { status: TicketStatus.FREEZE },
-    });
-
-    for (const ticket of frozenTickets) {
-      try {
-        await this.ticketService.addComment(
-          ticket.id,
-          {
-            content:
-              'System Alert (Daily Reminder): This ticket is currently frozen waiting for third-party response. Ticket Admins, please follow up.',
-            isInternal: true,
-          },
-          1,
-          UserRole.SUPER_ADMIN,
-        );
-        await this.ticketRepo.update(ticket.id, { hasUnreadTechnician: true, hasUnreadUser: false });
-        this.logger.log('Sent a daily frozen-ticket reminder.');
-      } catch (err) {
-        this.logger.error(`Failed to send daily reminder for frozen ticket (${err?.code || 'unknown'}).`);
-      }
-    }
-  }
-
   private async processPercentageAlerts() {
     const activeTickets = await this.ticketRepo.find({
-      where: { status: In([TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS]) },
-      relations: ['category'],
+      where: {
+        status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS]),
+        assignedToId: Not(IsNull()),
+      } as any,
+      relations: ['category', 'issueTypeConfig'],
     });
+    await this.ticketService.enrichTicketsWithUsers(activeTickets);
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    if (!config) return;
 
     for (const ticket of activeTickets) {
       const isPausedBeforeBreach = Boolean(
@@ -412,44 +416,55 @@ export class TicketCronService implements OnModuleInit {
       )
         continue;
 
-      const config = await this.configRepo.findOne({ where: { id: 1 } });
-      if (!config) continue;
+      const now = new Date();
+      const totalSlaSeconds = ticket.issueTypeConfig.slaHours * 60 * 60;
+      // The persisted deadline is the authoritative SLA clock: it already
+      // includes assignment timing, office-hour boundaries, and extensions
+      // applied when a paused clock resumes.
+      const elapsedSeconds = now <= ticket.slaDeadline
+        ? Math.max(
+            0,
+            totalSlaSeconds - await this.ticketService.calculateBusinessSecondsForSla(
+              now,
+              ticket.slaDeadline,
+              config,
+            ),
+          )
+        : totalSlaSeconds + await this.ticketService.calculateBusinessSecondsForSla(
+            ticket.slaDeadline,
+            now,
+            config,
+          );
+      const percentage = (elapsedSeconds / totalSlaSeconds) * 100;
 
-      const businessSeconds = await this.ticketService.calculateBusinessSecondsForSla(
-        ticket.createdAt,
-        new Date(),
-        config,
-      );
-      const elapsedSeconds = Math.max(
-        0,
-        businessSeconds - (ticket.accumulatedPauseSeconds || 0),
-      );
-      const percentage =
-        (elapsedSeconds / (ticket.issueTypeConfig.slaHours * 60 * 60)) * 100;
+      for (const threshold of [75, 100, 150]) {
+        if (percentage < threshold || !ticket.assignedToId || !ticket.assignedTo?.email) continue;
+        const eventType = `sla_alert_${threshold}`;
+        const alreadySent = await this.eventRepo.findOne({
+          where: { ticketId: ticket.id, eventType },
+        });
+        if (alreadySent) continue;
 
-      // Ensure we don't spam emails by tracking alert state (would need a DB column in a real scenario,
-      // but for MVP we just log if no DB column exists, or we could just use ticketEvent logs to check if sent).
-      // Here we just fire it. A robust system would check if it was already sent.
-      if (percentage >= 150) {
-        if (ticket.assignedTo?.email) {
-          this.emailService
-            .sendGenericEmail(
-              ticket.assignedTo.email,
-              `Ticket 150% Overdue Alert: ${ticket.ticketNumber}`,
-              `The ticket ${ticket.ticketNumber} is 150% overdue its SLA. Please resolve this immediately.`,
-            )
-            .catch(() => {});
-        }
-      } else if (percentage >= 75) {
-        if (ticket.assignedTo?.email) {
-          this.emailService
-            .sendGenericEmail(
-              ticket.assignedTo.email,
-              `Ticket 75% SLA Warning: ${ticket.ticketNumber}`,
-              `The ticket ${ticket.ticketNumber} has reached 75% of its SLA time limit. Please address it soon to avoid a breach.`,
-            )
-            .catch(() => {});
-        }
+        const label = threshold === 75 ? 'SLA Warning' : 'SLA Alert';
+        const message = threshold === 75
+          ? `Ticket ${ticket.ticketNumber} has reached 75% of its SLA time limit.`
+          : `Ticket ${ticket.ticketNumber} has reached ${threshold}% of its SLA time limit.`;
+        await this.emailService.sendGenericEmail(
+          ticket.assignedTo.email,
+          `Ticket ${threshold}% ${label}: ${ticket.ticketNumber}`,
+          `${message} Please address it as soon as possible.`,
+        );
+        await this.notificationService.create([ticket.assignedToId], {
+          ticketId: ticket.id,
+          eventType,
+          message,
+        });
+        await this.eventRepo.save(this.eventRepo.create({
+          ticketId: ticket.id,
+          actorId: null,
+          eventType,
+          meta: JSON.stringify({ threshold, percentage }),
+        }));
       }
     }
   }

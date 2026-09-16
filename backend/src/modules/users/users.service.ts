@@ -525,13 +525,37 @@ const previousValue = value;
    * Returns only the fields needed by the ticket proxy requester selector.
    * This deliberately does not expose the full user-management payload.
    */
-  async findTicketRequesters(): Promise<
+  async findTicketRequesters(currentUserId: number, currentRole: string): Promise<
     Array<Pick<User, 'id' | 'email' | 'firstName' | 'lastName' | 'role' | 'active'>>
   > {
-    const users = await this.usersRepository.find({
-      where: { active: true },
-      order: { lastName: 'ASC', firstName: 'ASC', email: 'ASC' },
-    });
+    let users: User[];
+    if (currentRole === UserRole.USER) {
+      const currentUser = await this.usersRepository.findOne({
+        where: { id: currentUserId, active: true },
+        relations: ['units'],
+      });
+      const unitId = currentUser?.units?.[0]?.id;
+      if (!unitId) return [];
+
+      users = await this.usersRepository
+        .createQueryBuilder('user')
+        .innerJoin('user.units', 'unit', 'unit.id = :unitId', { unitId })
+        .where('user.active = :active', { active: true })
+        .andWhere('user.id != :currentUserId', { currentUserId })
+        .orderBy('user.lastName', 'ASC')
+        .addOrderBy('user.firstName', 'ASC')
+        .addOrderBy('user.email', 'ASC')
+        .getMany();
+    } else {
+      users = await this.usersRepository
+        .createQueryBuilder('user')
+        .where('user.active = :active', { active: true })
+        .andWhere('user.id != :currentUserId', { currentUserId })
+        .orderBy('user.lastName', 'ASC')
+        .addOrderBy('user.firstName', 'ASC')
+        .addOrderBy('user.email', 'ASC')
+        .getMany();
+    }
 
     return users
       .filter((user) => user.role !== UserRole.SUPER_ADMIN)

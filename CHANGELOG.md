@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.6] - 2026-09-16 - Ticket Notifications, Assignment and Login Feedback
+
+### Added
+- Added shared in-app notifications for ticket, attendance, duty, escalation, and settings events, with links to the relevant screen.
+- Added Ticket Administrator assignment during ticket creation while preserving automatic assignment for other roles.
+- Added unit-limited proxy requester selection for regular users and broader requester access for RICTMS staff.
+
+### Changed
+- Expanded ticket email and in-app notifications for assignment, reassignment, resolution, closure, rating, comments, escalations, SLA alerts, and requester corrections.
+- Reduced repeated DTR and SLA processing work by skipping unchanged attendance records and limiting percentage checks to active assigned tickets.
+- Login validation failures now consistently show the existing `Invalid email or password.` snackbar message, including backend validation-array responses.
+
+### Fixed
+- Ticket notification destinations now open the appropriate ticketing, dashboard, or duty page instead of relying on ticket IDs alone.
+- Malformed email input no longer fails silently through native browser form validation.
+
 ## [1.0.5] - 2026-09-15 - Attendance-Aware SLA and Ticket Correction Controls
 
 ### Added

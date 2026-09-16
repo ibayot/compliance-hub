@@ -8,8 +8,11 @@ export class TicketNotification {
   @Column({ name: 'user_id', type: 'int' })
   userId: number;
 
-  @Column({ name: 'ticket_id', type: 'varchar', length: 36 })
-  ticketId: string;
+  @Column({ name: 'ticket_id', type: 'varchar', length: 36, nullable: true })
+  ticketId: string | null;
+
+  @Column({ name: 'target_path', type: 'varchar', length: 255, nullable: true })
+  targetPath: string | null;
 
   @Column({ name: 'event_type', type: 'varchar', length: 50 })
   eventType: string;

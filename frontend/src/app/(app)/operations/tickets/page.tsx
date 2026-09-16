@@ -305,6 +305,7 @@ export default function TicketsPage() {
   const canViewEscalatedQueue = !!myCap?.isEscalationFocal;
   // DB-driven: is_ticket_focal column — who can manually assign/reassign tickets
   const canAssign = !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
+  const isTicketAdmin = !!myCap?.isTicketSettingsFocal;
   const canOverrideResolutionTime = !!myCap?.isTicketResolutionTimeOverride;
   // Matrix-driven escalation eligibility:
   // show action for technician tracks plus ticket admin/assign/all-ticket capabilities.
@@ -456,6 +457,14 @@ export default function TicketsPage() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (!newDialogOpen || !isTicketAdmin) return;
+    ticketsApi
+      .getTechnicians()
+      .then((rows) => setTechnicians(rows.filter((row) => row.attendanceStatus === 'present' && !row.isUnavailable)))
+      .catch(() => setTechnicians([]));
+  }, [newDialogOpen, isTicketAdmin]);
 
   const tabFilteredTickets = canManageAll
     ? ([frontendFilteredTickets, activeTickets, pausedTickets, doneTickets, frozenTickets, duplicateTickets, proxyCreatedTickets][
@@ -771,6 +780,7 @@ export default function TicketsPage() {
         if (form.issueType) formData.append('issueType', form.issueType);
         if (form.issueTypeId) formData.append('issueTypeId', form.issueTypeId);
         if (form.requesterId) formData.append('requesterId', form.requesterId.toString());
+        if (form.assignedToId) formData.append('assignedToId', form.assignedToId.toString());
         formData.append('image', selectedImage);
         payload = formData;
       } else {
@@ -2365,6 +2375,29 @@ export default function TicketsPage() {
               clearOnEscape
               fullWidth
             />
+            {isTicketAdmin && (
+              <TextField
+                select
+                label="Assignment"
+                value={form.assignedToId ?? ''}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    assignedToId: e.target.value ? Number(e.target.value) : undefined,
+                  })
+                }
+                helperText="Leave on Automatic Assignment to use the configured routing rules."
+                fullWidth
+              >
+                <MenuItem value="">Automatic Assignment</MenuItem>
+                {technicians.map((technician) => (
+                  <MenuItem key={technician.id} value={technician.id}>
+                    {[technician.firstName, technician.lastName].filter(Boolean).join(' ') || technician.email}
+                    {` (${technician.openCount ?? 0} Active)`}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             {(canManageAll || isTechnician) && (
               <TextField inputProps={{ maxLength: 255 }}
                 select
@@ -2570,7 +2603,7 @@ export default function TicketsPage() {
             </Typography>
             <Autocomplete
               options={technicians}
-              getOptionLabel={(t) => `${t.firstName} ${t.lastName} (${t.openCount} open)`}
+              getOptionLabel={(t) => `${t.firstName} ${t.lastName} (${t.openCount} Active)`}
               value={technicians.find((t) => String(t.id) === selectedTechId) ?? null}
               onChange={(_, newValue) => setSelectedTechId(newValue ? String(newValue.id) : '')}
               isOptionEqualToValue={(option, value) => option.id === value.id}

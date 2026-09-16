@@ -39,6 +39,7 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
 import { DutyAssignment, DutyDailyCoverage, DutyException, DutyMeetingReliever, DutyMeetingReservation, DutyRosterMembership } from './entities/duty.entity';
 import { DutyService } from './services/duty.service';
 import { DutyController } from './controllers/duty.controller';
+import { NotificationService } from './services/notification.service';
 
 @Module({
   imports: [
@@ -96,6 +97,7 @@ import { DutyController } from './controllers/duty.controller';
     { provide: RoleCapabilitiesService, useClass: RoleCapabilitiesHttpClient },
     CapabilityGuard,
     DutyService,
+    NotificationService,
   ],
   exports: [
     TicketService,
@@ -105,6 +107,7 @@ import { DutyController } from './controllers/duty.controller';
     RoleCapabilitiesService,
     KnowledgeBaseService,
     DutyService,
+    NotificationService,
   ],
 })
 export class TicketsModule {

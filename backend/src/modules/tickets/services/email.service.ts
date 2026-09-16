@@ -50,8 +50,16 @@ export interface TicketClosedOrRatedEmailData {
   subject: string;
   technicianName: string;
   technicianEmail: string;
-  action: 'closed' | 'rated';
+  action: 'closed' | 'rated' | 'auto_closed';
   rating?: number | null;
+}
+
+export interface TicketRequesterCorrectedEmailData {
+  ticketId: string;
+  ticketNumber: string;
+  subject: string;
+  requesterName: string;
+  requesterEmail: string;
 }
 
 @Injectable()
@@ -172,7 +180,7 @@ export class EmailService implements OnModuleInit {
   async sendTicketCreatedEmail(data: TicketEmailData): Promise<void> {
     const typeLabel = data.ticketType === 'desktop_support' ? 'Desktop Support' : 'IT Support';
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — ${data.subject}`;
-    const ticketUrl = `${this.frontendUrl}/dashboard/tickets/${data.ticketId}`;
+    const ticketUrl = `${this.frontendUrl}/operations/tickets/${data.ticketId}`;
 
     let assignedLine = '';
     if (data.assignedToName) {
@@ -252,7 +260,7 @@ export class EmailService implements OnModuleInit {
           : 'IT Support';
 
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Assigned to You — ${data.subject}`;
-    const ticketUrl = `${this.frontendUrl}/dashboard/tickets/${data.ticketId}`;
+    const ticketUrl = `${this.frontendUrl}/operations/tickets/${data.ticketId}`;
 
     const html = `
 <!DOCTYPE html>
@@ -292,7 +300,7 @@ export class EmailService implements OnModuleInit {
 
   async sendTicketResolvedEmailToRequester(data: TicketResolvedEmailData): Promise<void> {
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Ticket Resolved — Action Required`;
-    const ticketUrl = `${this.frontendUrl}/dashboard/tickets/${data.ticketId}`;
+    const ticketUrl = `${this.frontendUrl}/operations/tickets/${data.ticketId}`;
     const html = `
 <!DOCTYPE html>
 <html>
@@ -340,12 +348,31 @@ export class EmailService implements OnModuleInit {
     await this.send(data.requesterEmail, subject, html);
   }
 
+  async sendTicketRequesterCorrectedEmail(data: TicketRequesterCorrectedEmailData): Promise<void> {
+    const ticketUrl = `${this.frontendUrl}/operations/tickets/${data.ticketId}`;
+    const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Request Assigned to You`;
+    const html = `
+      <div style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;">
+        <h2>Compliance Hub Ticket Request</h2>
+        <p>Hello <strong>${data.requesterName}</strong>,</p>
+        <p>You were selected as the requester for ticket <strong>${data.ticketNumber}</strong>.</p>
+        <p><strong>Subject:</strong> ${data.subject}</p>
+        <p><a href="${ticketUrl}">View Ticket</a></p>
+        <p style="font-size:12px;color:#888;">This is an automated email from Compliance Hub. Please do not reply.</p>
+      </div>`;
+    await this.send(data.requesterEmail, subject, html);
+  }
+
   async sendTicketClosedOrRatedEmailToTechnician(
     data: TicketClosedOrRatedEmailData,
   ): Promise<void> {
-    const actionLabel = data.action === 'rated' ? 'Rated by Requester' : 'Closed by Requester';
+    const actionLabel = data.action === 'rated'
+      ? 'Rated by Requester'
+      : data.action === 'auto_closed'
+        ? 'Automatically Closed by the System'
+        : 'Closed by Requester';
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — ${actionLabel}`;
-    const ticketUrl = `${this.frontendUrl}/dashboard/tickets/${data.ticketId}`;
+    const ticketUrl = `${this.frontendUrl}/operations/tickets/${data.ticketId}`;
     const ratingLine =
       data.action === 'rated' && data.rating
         ? `<tr><td style="padding:6px 12px;font-weight:600;color:#555;">Rating</td><td style="padding:6px 12px;">${data.rating}/5</td></tr>`

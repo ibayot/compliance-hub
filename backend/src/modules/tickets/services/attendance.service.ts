@@ -18,7 +18,10 @@ import { DtrView } from '../entities/dtr-view.entity';
 import { User, UserRole } from '../../shared/entities';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
-import { EventBusService } from '../../../common/events/event-bus.service';
+import {
+  APP_NOTIFICATION_REQUESTED_EVENT,
+  EventBusService,
+} from '../../../common/events/event-bus.service';
 import { SseService } from './sse.service';
 import { auditContext } from '../../../shared/audit/audit.context';
 import { DutyService } from './duty.service';
@@ -230,6 +233,12 @@ export class AttendanceService implements OnModuleInit {
     }
 
     const savedRecord = await this.attendanceRepo.save(record);
+    void this.eventBus.publish(APP_NOTIFICATION_REQUESTED_EVENT, {
+      userIds: [dto.userId],
+      targetPath: '/dashboard',
+      eventType: 'attendance_updated',
+      message: `Your attendance for ${dto.date} was updated to ${dto.status.replace(/_/g, ' ')}.`,
+    });
 
     if (
       dto.status === AttendanceStatus.ABSENT ||
@@ -677,6 +686,14 @@ export class AttendanceService implements OnModuleInit {
       }),
     );
     await this.attendanceRepo.save(records);
+    for (const record of records) {
+      void this.eventBus.publish(APP_NOTIFICATION_REQUESTED_EVENT, {
+        userIds: [record.userId],
+        targetPath: '/dashboard',
+        eventType: 'attendance_updated',
+        message: `Your attendance for ${date} was marked absent because no DTR clock-in was recorded by the end of the workday.`,
+      });
+    }
     return records.length;
   }
 
@@ -740,6 +757,11 @@ export class AttendanceService implements OnModuleInit {
 
         const existingRecord = existingAttendance.find(a => a.userId === tech.id);
         
+        const clockInChanged = !existingRecord?.clockInTime ||
+          existingRecord.clockInTime.getTime() !== dtr.firstClockInTime.getTime();
+        const statusChanged = existingRecord?.status !== AttendanceStatus.PRESENT;
+        if (existingRecord && !clockInChanged && !statusChanged) continue;
+
         await auditContext.run(
           { email: 'system@dswd.gov.ph', ipAddress: 'DTR-Cron', sessionId: 'dtr-sync' },
           async () => {
@@ -762,6 +784,12 @@ export class AttendanceService implements OnModuleInit {
           }
         );
         savedCount++;
+        void this.eventBus.publish(APP_NOTIFICATION_REQUESTED_EVENT, {
+          userIds: [tech.id],
+          targetPath: '/dashboard',
+          eventType: 'attendance_updated',
+          message: `Your attendance for ${todayStr} was updated from the DTR clock-in record.`,
+        });
         
         // Trigger assignment
       }

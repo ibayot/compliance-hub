@@ -15,6 +15,7 @@ import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { Ticket } from '../entities/ticket.entity';
 import { SseService } from './sse.service';
 import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
+import { NotificationService } from './notification.service';
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -312,6 +313,7 @@ export class TicketSettingsService {
     private readonly roleCapSvc: RoleCapabilitiesService,
     private readonly sseService: SseService,
     private readonly usersHttpClient: UsersHttpClient,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // ── Categories ──────────────────────────────────────────────────────────
@@ -895,6 +897,11 @@ export class TicketSettingsService {
     });
     const saved = await this.escalationFocalRepo.save(config);
     this.sseService.emitGlobalSettingsUpdated();
+    await this.notificationService.create([userId], {
+      targetPath: '/operations/tickets',
+      eventType: 'escalation_focal_selected',
+      message: `You were selected as an escalation focal for ${dto.ticketType.replace(/_/g, ' ')} tickets.`,
+    });
     return saved;
   }
 
@@ -904,6 +911,11 @@ export class TicketSettingsService {
     if (!config) throw new NotFoundException(`Escalation focal config ${id} not found`);
     await this.escalationFocalRepo.remove(config);
     this.sseService.emitGlobalSettingsUpdated();
+    await this.notificationService.create([config.userId], {
+      targetPath: '/operations/tickets',
+      eventType: 'escalation_focal_removed',
+      message: `You were removed as an escalation focal for ${config.ticketType.replace(/_/g, ' ')} tickets.`,
+    });
   }
 
   // ── Global Config ───────────────────────────────────────────────────────

@@ -3,10 +3,20 @@ import { ConfigService } from '@nestjs/config';
 import * as IORedis from 'ioredis';
 
 export const CAPABILITIES_UPDATED_EVENT = 'capabilities.updated';
+export const APP_NOTIFICATION_REQUESTED_EVENT = 'app.notification.requested';
 
 export interface CapabilitiesUpdatedPayload {
   role: string;
   updatedAt: string;
+}
+
+export interface AppNotificationRequestedPayload {
+  userIds?: number[];
+  role?: string;
+  ticketId?: string | null;
+  targetPath?: string | null;
+  eventType: string;
+  message: string;
 }
 
 /**

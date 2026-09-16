@@ -26,7 +26,6 @@ import { TicketResolutionTimeOverride } from '../entities/ticket-resolution-time
 import { EscalationFocalConfig } from '../entities/escalation-focal-config.entity';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { TicketStatusJustification } from '../entities/ticket-status-justification.entity';
-import { TicketNotification } from '../entities/ticket-notification.entity';
 import { UserRole } from '../../shared/entities';
 import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
 import { TicketSettingsService } from './ticket-settings.service';
@@ -37,6 +36,7 @@ import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { EventBusService } from '../../../common/events/event-bus.service';
 import { KnowledgeBaseService } from './knowledge-base.service';
 import { AttendanceStatus } from '../entities/tech-attendance.entity';
+import { NotificationService } from './notification.service';
 
 // --- DTOs --------------------------------------------------------------------
 
@@ -67,6 +67,11 @@ export class CreateTicketDto {
   @IsNumber()
   @ApiPropertyOptional()
   requesterId?: number;
+  /** Ticket Admin only: bypass automatic routing and assign during creation. */
+  @IsOptional()
+  @IsNumber()
+  @ApiPropertyOptional()
+  assignedToId?: number;
   /** Optional issue type reference from ticket_issue_types */
   @IsOptional()
   @IsString()
@@ -350,8 +355,6 @@ export class TicketService implements OnModuleInit {
     private readonly usersHttpClient: UsersHttpClient,
     @InjectRepository(TicketEvent)
     private readonly eventRepo: Repository<TicketEvent>,
-    @InjectRepository(TicketNotification)
-    private readonly notificationRepo: Repository<TicketNotification>,
     @InjectRepository(EscalationFocalConfig)
     private readonly escalationFocalRepo: Repository<EscalationFocalConfig>,
     private readonly dataSource: DataSource,
@@ -361,6 +364,7 @@ export class TicketService implements OnModuleInit {
     private readonly roleCapSvc: RoleCapabilitiesService,
     private readonly kbService: KnowledgeBaseService,
     private readonly sseService: SseService,
+    private readonly notificationService: NotificationService,
     @Optional() private readonly eventBus?: EventBusService,
   ) { }
 
@@ -795,19 +799,8 @@ export class TicketService implements OnModuleInit {
   /** Return all events for a ticket, ordered chronologically, with actor info */
 
   async sendNotification(userIds: number[], ticketId: string, eventType: string, message: string) {
-    if (!userIds || userIds.length === 0) return;
     try {
-      const notifications = userIds.map(userId => this.notificationRepo.create({
-        userId,
-        ticketId,
-        eventType,
-        message,
-      }));
-      await this.notificationRepo.save(notifications);
-      for (const notification of notifications) {
-        this.sseService.emitNotificationCreated(notification.userId);
-      }
-      this.logger.log(`Created ${notifications.length} ticket notification(s).`);
+      await this.notificationService.create(userIds, { ticketId, eventType, message });
     } catch (e) {
       this.logger.error('Failed to send ticket notification.');
     }
@@ -937,6 +930,7 @@ export class TicketService implements OnModuleInit {
       requester = rows?.[0] ?? null;
     }
     if (!requester) throw new BadRequestException('Requester not found');
+    await this.assertProxyRequesterAllowed(callerId, callerRole, requester);
 
     // NOTE: Multiple concurrent tickets per requester are now allowed.
     // The unclosed-ticket restriction was removed per business rule change.
@@ -1001,7 +995,41 @@ export class TicketService implements OnModuleInit {
     let isSlaWaiting = false;
     let shouldStartInProgress = false;
 
-    try {
+    if (dto.assignedToId != null) {
+      if (!callerRole || !this.roleCapSvc.isTicketSettingsFocal(callerRole as string)) {
+        throw new ForbiddenException('Only Ticket Administrators can assign a technician during ticket creation.');
+      }
+      if (Number(dto.assignedToId) === Number(requesterId) || Number(dto.assignedToId) === Number(callerId)) {
+        throw new ForbiddenException('A ticket cannot be assigned to the person who requested or reported it.');
+      }
+
+      assignedTech = await this.usersHttpClient.getUserById(Number(dto.assignedToId));
+      if (!assignedTech || assignedTech.active === false) {
+        throw new BadRequestException('The selected technician does not exist or is inactive.');
+      }
+      if (!this.roleCapSvc.isTechnician(assignedTech.role as string)) {
+        throw new BadRequestException('The selected account is not configured as a technician.');
+      }
+
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+      const attendance = await this.attendanceService.getAttendanceForDate(today);
+      const selectedAttendance = attendance.find((row) => Number(row.userId) === Number(dto.assignedToId));
+      if (!selectedAttendance || selectedAttendance.status !== AttendanceStatus.PRESENT) {
+        throw new BadRequestException('Cannot assign a ticket to a technician who is not explicitly marked present.');
+      }
+
+      assignedToId = Number(dto.assignedToId);
+      const activeTicketsCount = await this.ticketRepo.count({
+        where: [
+          { assignedToId, status: TicketStatus.ASSIGNED },
+          { assignedToId, status: TicketStatus.IN_PROGRESS },
+          { assignedToId, status: TicketStatus.PAUSE },
+        ],
+      });
+      const hasBreachedTicket = await this.hasBreachedActiveTicket(assignedToId);
+      shouldStartInProgress = activeTicketsCount === 0 || hasBreachedTicket;
+      isSlaWaiting = activeTicketsCount > 0 && !hasBreachedTicket;
+    } else try {
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
       const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
 
@@ -1230,6 +1258,44 @@ export class TicketService implements OnModuleInit {
           [assignedTech.first_name, assignedTech.lastName].filter(Boolean).join(' ') ||
           assignedTech.email,
       }).catch(() => { });
+    }
+
+    const requesterName =
+      [requester.first_name, requester.last_name].filter(Boolean).join(' ') || requester.email;
+    const assignedToName = assignedTech
+      ? [assignedTech.first_name, assignedTech.last_name].filter(Boolean).join(' ') || assignedTech.email
+      : undefined;
+    this.emailService.sendTicketCreatedEmail({
+      ticketId: persisted.id,
+      ticketNumber: persisted.ticketNumber,
+      subject: persisted.subject,
+      description: persisted.description,
+      ticketType: persisted.ticketType,
+      priority: persisted.priority,
+      status: persisted.status,
+      requesterName,
+      requesterEmail: requester.email,
+      assignedToName,
+      assignedToEmail: assignedTech?.email,
+      createdAt: persisted.createdAt.toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
+      noTechAvailable,
+    }).catch(() => undefined);
+
+    if (assignedToId) {
+      this.sendNotification(
+        [requesterId],
+        persisted.id,
+        'ticket_assigned',
+        `Ticket ${persisted.ticketNumber} was assigned to ${assignedToName}.`,
+      ).catch(() => undefined);
+      if (dto.assignedToId == null) {
+        this.sendNotification(
+          [assignedToId],
+          persisted.id,
+          'auto_assigned',
+          `Ticket ${persisted.ticketNumber} was automatically assigned to you.`,
+        ).catch(() => undefined);
+      }
     }
 
     if (image) {
@@ -1546,6 +1612,7 @@ export class TicketService implements OnModuleInit {
     if (requester.role === UserRole.SUPER_ADMIN) {
       throw new BadRequestException('Super Admin accounts cannot be selected as ticket requesters.');
     }
+    await this.assertProxyRequesterAllowed(actorId, actorRole, requester);
 
     const saved = await this.withAutoAssignmentLock(async () => {
       const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
@@ -1577,8 +1644,42 @@ export class TicketService implements OnModuleInit {
       'requester_corrected',
       `You were selected as the requester for ticket ${saved.ticketNumber}.`,
     ).catch(() => undefined);
+    this.emailService.sendTicketRequesterCorrectedEmail({
+      ticketId: saved.id,
+      ticketNumber: saved.ticketNumber,
+      subject: saved.subject,
+      requesterName:
+        [requester.first_name, requester.last_name].filter(Boolean).join(' ') || requester.email,
+      requesterEmail: requester.email,
+    }).catch(() => undefined);
+    if (saved.assignedToId && Number(saved.assignedToId) !== Number(actorId)) {
+      this.sendNotification(
+        [saved.assignedToId],
+        saved.id,
+        'requester_corrected',
+        `The requester for ticket ${saved.ticketNumber} was corrected.`,
+      ).catch(() => undefined);
+    }
     this.sseService.emitTicketUpdated(saved.id);
     return this.getTicketById(saved.id, actorRole, actorId);
+  }
+
+  private async assertProxyRequesterAllowed(
+    actorId: number,
+    actorRole: UserRole | undefined,
+    requester: { id: number; units?: any[] },
+  ): Promise<void> {
+    if (Number(requester.id) === Number(actorId) || actorRole !== UserRole.USER) return;
+
+    const actor = await this.usersHttpClient.getUserById(actorId);
+    if (!actor) {
+      throw new BadRequestException('Your unit could not be verified. Please retry the request.');
+    }
+    const actorUnitId = Number(actor.units?.[0]?.id);
+    const requesterUnitIds = new Set((requester.units ?? []).map((unit: any) => Number(unit.id)));
+    if (!actorUnitId || !requesterUnitIds.has(actorUnitId)) {
+      throw new ForbiddenException('Regular users may submit proxy requests only for staff in their own unit.');
+    }
   }
 
   private async getResolutionTimeOverrideHistory(ticketId: string) {
@@ -1682,6 +1783,14 @@ export class TicketService implements OnModuleInit {
         reason,
         proofCount: savedPaths.length,
       });
+      if (ticket.assignedToId && Number(ticket.assignedToId) !== Number(actorId)) {
+        this.sendNotification(
+          [ticket.assignedToId],
+          ticketId,
+          'resolution_time_overridden',
+          `The verified resolution time for ticket ${ticket.ticketNumber} was corrected.`,
+        ).catch(() => undefined);
+      }
       return this.getTicketById(ticketId, actorRole, actorId);
     } catch (error) {
       if (!databaseCommitted) {
@@ -1726,6 +1835,7 @@ export class TicketService implements OnModuleInit {
     dto: UpdateTicketDto,
     actorId: number,
     actorRole: UserRole,
+    options: { automaticClosure?: boolean } = {},
   ): Promise<Ticket> {
     const ticket = await this.getTicketById(id, actorRole, actorId);
     const originalStatusForLogging = ticket.status as TicketStatus;
@@ -1778,6 +1888,14 @@ export class TicketService implements OnModuleInit {
               action: 'closed',
             })
             .catch(() => { });
+        }
+        if (ticket.assignedToId && ticket.assignedToId !== actorId) {
+          this.sendNotification(
+            [ticket.assignedToId],
+            savedClosed.id,
+            'ticket_closed',
+            `Ticket ${savedClosed.ticketNumber} was closed by the requester.`,
+          ).catch(() => undefined);
         }
         return savedClosed;
       }
@@ -2331,14 +2449,23 @@ export class TicketService implements OnModuleInit {
       }
 
       // In-app notification
-      const notifyUsers = [];
-      if (ticket.requesterId && ticket.requesterId !== actorId) notifyUsers.push(ticket.requesterId);
-      if (ticket.assignedToId && ticket.assignedToId !== actorId) notifyUsers.push(ticket.assignedToId);
+      const notifyUsers: number[] = [];
+      if (
+        dto.status !== TicketStatus.CLOSED &&
+        ticket.requesterId &&
+        ticket.requesterId !== actorId
+      ) notifyUsers.push(ticket.requesterId);
+      if (
+        ticket.assignedToId &&
+        (options.automaticClosure || ticket.assignedToId !== actorId)
+      ) notifyUsers.push(ticket.assignedToId);
       this.sendNotification(
         notifyUsers,
         saved.id,
         'status_changed',
-        `Ticket ${saved.ticketNumber} status changed to ${dto.status}`,
+        options.automaticClosure
+          ? `Ticket ${saved.ticketNumber} was automatically closed by the system after three days.`
+          : `Ticket ${saved.ticketNumber} status changed to ${dto.status}`,
       ).catch(() => {});
 
       if (dto.status === TicketStatus.RESOLVED && ticket.requester?.email) {
@@ -2371,7 +2498,7 @@ export class TicketService implements OnModuleInit {
                 .filter(Boolean)
                 .join(' ') || ticket.assignedTo.email,
             technicianEmail: ticket.assignedTo.email,
-            action: 'closed',
+            action: options.automaticClosure ? 'auto_closed' : 'closed',
           })
           .catch(() => { });
       }
@@ -2474,6 +2601,31 @@ export class TicketService implements OnModuleInit {
                         .filter(Boolean)
                         .join(' ') || resolvedByTech!.email,
                   }).catch(() => { });
+                  this.emailService.sendTicketAssignedEmail({
+                    ticketId: nextTicket.id,
+                    ticketNumber: nextTicket.ticketNumber,
+                    subject: nextTicket.subject,
+                    ticketType: nextTicket.ticketType,
+                    priority: nextTicket.priority,
+                    status: nextTicket.status,
+                    technicianName:
+                      [resolvedByTech!.first_name, resolvedByTech!.last_name]
+                        .filter(Boolean)
+                        .join(' ') || resolvedByTech!.email,
+                    technicianEmail: resolvedByTech!.email,
+                  }).catch(() => undefined);
+                  this.sendNotification(
+                    [assignedTechnicianId],
+                    nextTicket.id,
+                    'auto_assigned',
+                    `Ticket ${nextTicket.ticketNumber} was automatically assigned to you.`,
+                  ).catch(() => undefined);
+                  this.sendNotification(
+                    [nextTicket.requesterId],
+                    nextTicket.id,
+                    'ticket_assigned',
+                    `Ticket ${nextTicket.ticketNumber} was assigned to a technician.`,
+                  ).catch(() => undefined);
 
                   this.logger.log(
                     'Auto-reassign on resolve assigned the next eligible ticket.',
@@ -2689,13 +2841,24 @@ export class TicketService implements OnModuleInit {
       previousAssignee: previousAssigneeId !== dto.assignedToId ? previousAssigneeId : undefined,
     }).catch(() => { });
 
-    // Send in-app notification for manual assignment/reassignment
-    this.sendNotification(
-      [dto.assignedToId],
-      assigned.id,
-      eventType,
-      `Ticket ${assigned.ticketNumber} has been ${eventType === 'manually_reassigned' ? 'reassigned' : 'assigned'} to you`
-    ).catch(() => { });
+    // Technician manual assignments are email-only; direct assignments to
+    // other RICTMS staff also receive an in-app notification.
+    if (!this.roleCapSvc.isTechnician(technician.role as string)) {
+      this.sendNotification(
+        [dto.assignedToId],
+        assigned.id,
+        eventType,
+        `Ticket ${assigned.ticketNumber} has been ${eventType === 'manually_reassigned' ? 'reassigned' : 'assigned'} to you`,
+      ).catch(() => { });
+    }
+    if (assigned.requesterId && assigned.requesterId !== actorId) {
+      this.sendNotification(
+        [assigned.requesterId],
+        assigned.id,
+        'ticket_assigned',
+        `Ticket ${assigned.ticketNumber} was assigned to ${[technician.first_name, technician.last_name].filter(Boolean).join(' ') || technician.email}.`,
+      ).catch(() => undefined);
+    }
 
     if (previousAssigneeId && previousAssigneeId !== dto.assignedToId) {
       this.sendNotification(
@@ -3002,6 +3165,14 @@ export class TicketService implements OnModuleInit {
           rating: saved.satisfactionRating,
         })
         .catch(() => { });
+    }
+    if (ticket.assignedToId && ticket.assignedToId !== requesterId) {
+      this.sendNotification(
+        [ticket.assignedToId],
+        saved.id,
+        'ticket_rated',
+        `The requester submitted a rating for ticket ${saved.ticketNumber}.`,
+      ).catch(() => undefined);
     }
 
     return saved;
@@ -3751,6 +3922,18 @@ export class TicketService implements OnModuleInit {
           assignedToEmail: tech.email,
         } as any)
         .catch(() => { });
+      this.sendNotification(
+        [techId],
+        pending.id,
+        'auto_assigned',
+        `Ticket ${pending.ticketNumber} was assigned to you after your attendance was recorded.`,
+      ).catch(() => undefined);
+      this.sendNotification(
+        [pending.requesterId],
+        pending.id,
+        'ticket_assigned',
+        `Ticket ${pending.ticketNumber} was assigned to a technician.`,
+      ).catch(() => undefined);
 
       this.logger.log(
         '[Login Auto-Assign] Ticket assigned after technician login.',
@@ -4553,6 +4736,14 @@ export class TicketService implements OnModuleInit {
       'escalation_received',
       `You received an escalation request for ticket ${ticket.ticketNumber}`,
     ).catch(() => {});
+    if (ticket.requesterId && ticket.requesterId !== actorId && ticket.requesterId !== dto.escalatedToId) {
+      this.sendNotification(
+        [ticket.requesterId],
+        ticketId,
+        'ticket_escalated',
+        `Escalation activity was recorded for ticket ${ticket.ticketNumber}.`,
+      ).catch(() => undefined);
+    }
 
     return saved;
   }
@@ -4614,6 +4805,14 @@ export class TicketService implements OnModuleInit {
         `Ticket ${ticket.ticketNumber} has been reassigned to another staff member due to an accepted escalation.`
       ).catch(() => { });
     }
+    if (ticket?.requesterId && ticket.requesterId !== actorId) {
+      this.sendNotification(
+        [ticket.requesterId],
+        ticketId,
+        'escalation_accepted',
+        `The escalation for ticket ${ticket.ticketNumber} was accepted.`,
+      ).catch(() => undefined);
+    }
 
     return escalation;
   }
@@ -4651,6 +4850,15 @@ export class TicketService implements OnModuleInit {
       'escalation_declined',
       `Your escalation request was declined`,
     ).catch(() => {});
+    const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
+    if (ticket?.requesterId && ticket.requesterId !== actorId) {
+      this.sendNotification(
+        [ticket.requesterId],
+        ticketId,
+        'escalation_returned',
+        `The escalation for ticket ${ticket.ticketNumber} was returned.`,
+      ).catch(() => undefined);
+    }
     return this.escalationRepo.save(escalation);
   }
 

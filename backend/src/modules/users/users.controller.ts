@@ -30,7 +30,11 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CapabilityGuard } from '../../common/guards/capability.guard';
 import { RequireCapability } from '../../common/decorators/require-capability.decorator';
 import { UserRole } from './entities/user.entity';
-import { EventBusService, CAPABILITIES_UPDATED_EVENT } from '../../common/events/event-bus.service';
+import {
+  APP_NOTIFICATION_REQUESTED_EVENT,
+  EventBusService,
+  CAPABILITIES_UPDATED_EVENT,
+} from '../../common/events/event-bus.service';
 
 @ApiTags('users')
 @Controller('users')
@@ -103,8 +107,9 @@ export class UsersController {
   @Get('ticket-requesters')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isTicketModuleAccess')
-  getTicketRequesters() {
-    return this.usersService.findTicketRequesters();
+  getTicketRequesters(@Request() req: any) {
+    const userId = Number(req.user.id ?? req.user.userId);
+    return this.usersService.findTicketRequesters(userId, req.user.role);
   }
 
   @Get()
@@ -161,6 +166,12 @@ export class UsersController {
     void this.eventBus.publish(CAPABILITIES_UPDATED_EVENT, {
       role: roleValue,
       updatedAt: new Date().toISOString(),
+    });
+    void this.eventBus.publish(APP_NOTIFICATION_REQUESTED_EVENT, {
+      role: roleValue,
+      targetPath: '/dashboard',
+      eventType: 'role_capabilities_updated',
+      message: 'The capabilities for your role were updated. Your available modules and actions may have changed.',
     });
     return result;
   }
@@ -228,7 +239,17 @@ export class UsersController {
       throw new ForbiddenException('You cannot disable your own account.');
     }
 
-    return this.usersService.update(parsedId, updateUserDto, { requireUnit: isSelf });
+    const previousRole = targetUser.role;
+    const updated = await this.usersService.update(parsedId, updateUserDto, { requireUnit: isSelf });
+    if (updateUserDto.role && updateUserDto.role !== previousRole) {
+      void this.eventBus.publish(APP_NOTIFICATION_REQUESTED_EVENT, {
+        userIds: [parsedId],
+        targetPath: '/dashboard',
+        eventType: 'user_role_updated',
+        message: 'Your assigned role was updated. Your available modules and actions may have changed.',
+      });
+    }
+    return updated;
   }
 
   @Post(':id/reset-password')

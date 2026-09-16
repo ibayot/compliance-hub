@@ -198,9 +198,11 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
     setNotifAnchorEl(null);
   };
 
-  const handleNotifClick = (ticketId: string) => {
+  const handleNotifClick = (notification: any) => {
     handleNotifClose();
-    router.push(`/operations/tickets/${ticketId}`);
+    const target = notification.targetPath ||
+      (notification.ticketId ? `/operations/tickets/${notification.ticketId}` : null);
+    if (target) router.push(target);
   };
 
   // Generate breadcrumbs from pathname
@@ -426,7 +428,7 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
               notifications.map((notif) => (
                 <MenuItem
                   key={notif.id}
-                  onClick={() => handleNotifClick(notif.ticketId)}
+                  onClick={() => handleNotifClick(notif)}
                   sx={{
                     whiteSpace: 'normal',
                     bgcolor: notif.isRead ? 'transparent' : 'action.hover',

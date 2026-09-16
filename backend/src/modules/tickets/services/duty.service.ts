@@ -8,7 +8,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Cron } from '@nestjs/schedule';
 import { In, Repository } from 'typeorm';
 import { UsersHttpClient, UserStub } from '../../../common/http-clients/users.http-client';
-import { EventBusService } from '../../../common/events/event-bus.service';
+import {
+  APP_NOTIFICATION_REQUESTED_EVENT,
+  EventBusService,
+} from '../../../common/events/event-bus.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { UserRole } from '../../shared/entities';
 import {
@@ -56,6 +59,17 @@ export class DutyService {
 
   private today(): string {
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+  }
+
+  private notifyDutyUsers(userIds: number[], message: string): void {
+    const ids = [...new Set(userIds.map(Number).filter(Number.isInteger))];
+    if (ids.length === 0) return;
+    void this.eventBus.publish(APP_NOTIFICATION_REQUESTED_EVENT, {
+      userIds: ids,
+      targetPath: '/operations/duties',
+      eventType: 'duty_updated',
+      message,
+    });
   }
 
   private assertDutyType(value: string, meetingsOnly = false): DutyType {
@@ -478,6 +492,10 @@ export class DutyService {
     const row = this.assignmentRepo.create({ ...existing, ...body, dutyDate, userId, dutyType, createdById: existing?.createdById ?? actor.id });
     const saved = await this.assignmentRepo.save(row);
     this.sse.emitDutyUpdated();
+    this.notifyDutyUsers(
+      [userId, ...(existing?.userId && existing.userId !== userId ? [existing.userId] : [])],
+      `Your ${dutyType} duty assignment for ${dutyDate} was updated.`,
+    );
     return saved;
   }
 
@@ -487,6 +505,7 @@ export class DutyService {
     if (!existing) throw new NotFoundException('Duty log entry not found. It may have already been deleted.');
     await this.assignmentRepo.delete(id);
     this.sse.emitDutyUpdated();
+    this.notifyDutyUsers([existing.userId], `Your ${existing.dutyType} duty assignment for ${existing.dutyDate} was removed.`);
   }
 
   async listExceptions(page = 1, limit = 10) {
@@ -525,6 +544,7 @@ export class DutyService {
     const saved = await this.exceptionRepo.save(this.exceptionRepo.create({ ...existing, ...body, exceptionDate, userId, dutyType, createdById: existing?.createdById ?? actor.id }));
     if (exceptionDate === this.today()) await this.reconcileToday();
     this.sse.emitDutyUpdated();
+    this.notifyDutyUsers([userId], `Your duty exception for ${exceptionDate} was updated.`);
     return saved;
   }
   async deleteException(actor: Actor, id: string) {
@@ -534,6 +554,7 @@ export class DutyService {
     await this.exceptionRepo.delete(id);
     if (existing?.exceptionDate === this.today()) await this.reconcileToday();
     this.sse.emitDutyUpdated();
+    this.notifyDutyUsers([existing.userId], `Your duty exception for ${existing.exceptionDate} was removed.`);
   }
 
   async getRoster() {
@@ -608,6 +629,10 @@ export class DutyService {
       }));
     }
     this.sse.emitDutyUpdated();
+    this.notifyDutyUsers(
+      [...selectedUserIds, ...existingMembers.map((member) => member.userId)],
+      'The shared duty roster was updated. Review your current duty schedule.',
+    );
     return this.getRoster();
   }
 
@@ -743,6 +768,7 @@ export class DutyService {
       }
     }
 
+    const previousRelievers = await this.relieverRepo.find({ where: { reservationId } });
     await this.relieverRepo.delete({ reservationId });
     await this.relieverRepo.save(selectedUserIds.map((userId) => this.relieverRepo.create({
       reservationId,
@@ -754,6 +780,10 @@ export class DutyService {
       await this.reconcileCoverage(reservation.meetingDate, reservation.venueType);
     }
     this.sse.emitDutyUpdated();
+    this.notifyDutyUsers(
+      [...selectedUserIds, ...previousRelievers.map((row) => row.userId)],
+      `Immediate reliever assignments for ${reservation.venueType} on ${reservation.meetingDate} were updated.`,
+    );
     return this.listMeetingRelievers(reservationId);
   }
 
@@ -775,11 +805,16 @@ export class DutyService {
     this.assertAdmin(actor);
     const reservation = await this.reservationRepo.findOne({ where: { id: reservationId } });
     if (!reservation) throw new NotFoundException('Meeting reservation not found.');
+    const previousRelievers = await this.relieverRepo.find({ where: { reservationId } });
     await this.relieverRepo.delete({ reservationId });
     if (reservation.meetingDate === this.today() && reservation.status !== DutyReservationStatus.CANCELLED) {
       await this.reconcileCoverage(reservation.meetingDate, reservation.venueType);
     }
     this.sse.emitDutyUpdated();
+    this.notifyDutyUsers(
+      previousRelievers.map((row) => row.userId),
+      `Immediate reliever assignments for ${reservation.venueType} on ${reservation.meetingDate} were cleared.`,
+    );
     return { cleared: true };
   }
 
