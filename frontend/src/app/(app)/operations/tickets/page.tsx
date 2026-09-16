@@ -807,7 +807,9 @@ export default function TicketsPage() {
       setPendingSatCount(0);
       fetchTickets();
     } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to submit ticket', {
+      const rawMessage = err?.response?.data?.message;
+      const message = Array.isArray(rawMessage) ? rawMessage.join(' ') : rawMessage;
+      enqueueSnackbar(message || 'Failed to submit ticket', {
         variant: 'error',
       });
     } finally {

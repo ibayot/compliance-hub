@@ -64,11 +64,13 @@ export class CreateTicketDto {
   categoryId?: string;
   /** Staff only: override the requester (for walk-ins / phone calls) */
   @IsOptional()
+  @Transform(({ value }) => (value === '' || value === undefined || value === null ? value : Number(value)))
   @IsNumber()
   @ApiPropertyOptional()
   requesterId?: number;
   /** Ticket Admin only: bypass automatic routing and assign during creation. */
   @IsOptional()
+  @Transform(({ value }) => (value === '' || value === undefined || value === null ? value : Number(value)))
   @IsNumber()
   @ApiPropertyOptional()
   assignedToId?: number;
@@ -844,6 +846,10 @@ export class TicketService implements OnModuleInit {
     return this.roleCapSvc.isAllTickets(role);
   }
 
+  private isDirectAssignableRictmsStaff(role?: string): boolean {
+    return Boolean(role) && role !== UserRole.USER && role !== UserRole.SUPER_ADMIN;
+  }
+
   private canViewEscalatedQueue(role?: string): boolean {
     if (!role) return false;
     return this.roleCapSvc.isEscalationFocal(role);
@@ -1007,8 +1013,8 @@ export class TicketService implements OnModuleInit {
       if (!assignedTech || assignedTech.active === false) {
         throw new BadRequestException('The selected technician does not exist or is inactive.');
       }
-      if (!this.roleCapSvc.isTechnician(assignedTech.role as string)) {
-        throw new BadRequestException('The selected account is not configured as a technician.');
+      if (!this.isDirectAssignableRictmsStaff(assignedTech.role as string)) {
+        throw new BadRequestException('The selected account is not an active RICTMS staff account.');
       }
 
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
@@ -3713,10 +3719,12 @@ export class TicketService implements OnModuleInit {
       isUnavailable: boolean;
     }>
   > {
-    // Fetch all active users except standard 'USER' role
+    // Direct assignment includes every active RICTMS staff member except regular
+    // users and the system super-admin account. Automatic routing remains
+    // capability-specific and is handled separately by the creation flow.
     const allTechUsers = await this.usersHttpClient.getUsers();
     const technicians = allTechUsers.filter(
-      (u: any) => u.role !== UserRole.SUPER_ADMIN && this.roleCapSvc.isAttendanceEligible(u.role),
+      (u: any) => u.active !== false && this.isDirectAssignableRictmsStaff(u.role),
     );
 
     // Read attendance for today so assignment UI can hide unavailable technicians.
