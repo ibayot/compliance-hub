@@ -235,7 +235,7 @@ export interface AttendanceAssignmentAlert {
   userId: number;
   staffName: string;
   role: string;
-  attendanceState: 'absent' | 'late' | 'no_attendance';
+  attendanceState: 'absent' | 'assumed_late';
   attendanceLabel: string;
   clockInTime: string | null;
   tickets: Array<{
@@ -641,6 +641,7 @@ export const ticketsApi = {
     quarter?: string;
     semester?: string;
     search?: string;
+    slaState?: 'overdue' | 'nearing_sla' | 'on_track';
     page?: number;
     limit?: number;
   }): Promise<PaginatedTickets> => {
@@ -656,6 +657,7 @@ export const ticketsApi = {
     if (filters?.quarter) params.append('quarter', filters.quarter);
     if (filters?.semester) params.append('semester', filters.semester);
     if (filters?.search?.trim()) params.append('search', filters.search.trim());
+    if (filters?.slaState) params.append('slaState', filters.slaState);
     params.append('page', String(filters?.page ?? 1));
     params.append('limit', String(filters?.limit ?? 25));
     const response = await apiClient.get(`/tickets?${params}`);
@@ -746,13 +748,13 @@ export const ticketsApi = {
     return response.data;
   },
 
-  getSlaSummary: async (): Promise<{ breached: number; nearing: number; onTrack: number }> => {
+  getSlaSummary: async (): Promise<{ overdue: number; nearing: number; onTrack: number }> => {
     const response = await apiClient.get(`/tickets/sla/summary`);
     const data = response.data;
     return {
-      breached: data.overdueActive || 0,
-      nearing: data.dueToday || 0,
-      onTrack: Math.max(0, (data.activeWithSla || 0) - (data.overdueActive || 0) - (data.dueToday || 0))
+      overdue: data.overdueActive || 0,
+      nearing: data.nearingActive || 0,
+      onTrack: data.onTrackActive || 0,
     };
   },
 

@@ -37,6 +37,7 @@ import {
   SubmitSatisfactionDto,
   EscalateTicketDto,
   ReturnEscalationDto,
+  ActiveTicketSlaState,
 } from '../services/ticket.service';
 import { TicketStatus, TicketType } from '../entities/ticket.entity';
 import { TicketSettingsService } from '../services/ticket-settings.service';
@@ -103,12 +104,17 @@ export class TicketController {
     @Query('quarter') quarter?: string,
     @Query('semester') semester?: string,
     @Query('search') search?: string,
+    @Query('slaState') slaState?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: 'asc' | 'desc',
     @Request() req?: any,
   ) {
+    const allowedSlaStates = new Set<ActiveTicketSlaState>(['overdue', 'nearing_sla', 'on_track']);
+    if (slaState && !allowedSlaStates.has(slaState as ActiveTicketSlaState)) {
+      throw new BadRequestException('SLA filter must be Overdue, Nearing SLA, or On Track.');
+    }
     const viewerId = req?.user?.id ?? req?.user?.userId;
     const showEscalatedToMe = escalatedToMe === 'true' || escalatedToMe === '1';
     return this.ticketService.getTickets({
@@ -122,6 +128,7 @@ export class TicketController {
       quarter: quarter ? Number(quarter) : undefined,
       semester: semester ? Number(semester) : undefined,
       search,
+      slaState: slaState as ActiveTicketSlaState | undefined,
       viewerId,
       viewerRole: req?.user?.role,
       page: page ? Number(page) : undefined,
@@ -131,7 +138,7 @@ export class TicketController {
     });
   }
 
-  /** GET /tickets/sla/summary — aggregate SLA breach and due metrics */
+  /** GET /tickets/sla/summary — active Overdue, Nearing SLA, and On Track metrics */
   @Get('sla/summary')
   @RequireCapability('isTicketModuleAccess')
   async getSlaSummary(@Request() req: any) {

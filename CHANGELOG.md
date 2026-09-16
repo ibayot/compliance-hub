@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.7] - 2026-09-16 - SLA Dashboard and Attendance Alert Refinements
+
+### Added
+- Made the Active Tickets SLA Dashboard cards clickable and linked each card to the matching ticket list.
+- Added a server-side SLA filter for Overdue, Nearing SLA, and On Track tickets before pagination.
+
+### Changed
+- Standardized active SLA wording and calculations to Overdue, Nearing SLA, and On Track regardless of calendar date.
+- Nearing SLA now uses the existing final-40-percent warning threshold instead of a due-today calculation.
+- Missing DTR after the configured clock-in threshold is now shown as Assumed Late.
+- Expanded Ticket Administrator direct assignment to all active, present RICTMS staff while keeping regular users and system accounts excluded.
+
+### Fixed
+- Staff who have already clocked in no longer trigger the attendance reassignment popup merely because their clock-in was late.
+- Dashboard SLA totals and filtered ticket results now use the same mutually exclusive definitions.
+- Ticket creation with an image now accepts Requested For and Assigned To identifiers correctly and displays readable validation snackbars.
+
 ## [1.0.6] - 2026-09-16 - Ticket Notifications, Assignment and Login Feedback
 
 ### Added

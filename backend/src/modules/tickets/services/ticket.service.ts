@@ -13,7 +13,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, DataSource, QueryRunner, Repository, Not, In, IsNull, LessThan, MoreThanOrEqual } from 'typeorm';
+import { Brackets, DataSource, QueryRunner, Repository, SelectQueryBuilder, Not, In, IsNull, LessThan, MoreThanOrEqual } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
@@ -171,7 +171,8 @@ export class CorrectTicketRequesterDto {
   expectedUpdatedAt: string;
 }
 
-export type AttendanceAssignmentState = 'absent' | 'late' | 'no_attendance';
+export type AttendanceAssignmentState = 'absent' | 'assumed_late';
+export type ActiveTicketSlaState = 'overdue' | 'nearing_sla' | 'on_track';
 
 export interface AttendanceAssignmentAlert {
   userId: number;
@@ -855,6 +856,38 @@ export class TicketService implements OnModuleInit {
     return this.roleCapSvc.isEscalationFocal(role);
   }
 
+  private applyActiveTicketSlaFilter(
+    qb: SelectQueryBuilder<Ticket>,
+    slaState?: ActiveTicketSlaState,
+  ): void {
+    if (!slaState) return;
+
+    const activeStatuses = [
+      TicketStatus.OPEN,
+      TicketStatus.ASSIGNED,
+      TicketStatus.IN_PROGRESS,
+    ];
+    const totalSlaSeconds =
+      'COALESCE(issueTypeConfig.slaHours * 3600, TIMESTAMPDIFF(SECOND, t.createdAt, t.slaDeadline))';
+    const remainingSlaSeconds = 'TIMESTAMPDIFF(SECOND, :slaNow, t.slaDeadline)';
+
+    qb.andWhere('t.status IN (:...slaActiveStatuses)', { slaActiveStatuses: activeStatuses })
+      .andWhere('t.slaDeadline IS NOT NULL')
+      .andWhere('t.slaPausedAt IS NULL')
+      .andWhere('COALESCE(t.isSlaWaiting, 0) = 0')
+      .setParameter('slaNow', new Date());
+
+    if (slaState === 'overdue') {
+      qb.andWhere('t.slaDeadline <= :slaNow');
+    } else if (slaState === 'nearing_sla') {
+      qb.andWhere('t.slaDeadline > :slaNow')
+        .andWhere(`${remainingSlaSeconds} <= (${totalSlaSeconds}) * 0.4`);
+    } else {
+      qb.andWhere('t.slaDeadline > :slaNow')
+        .andWhere(`${remainingSlaSeconds} > (${totalSlaSeconds}) * 0.4`);
+    }
+  }
+
   private async canAccessTicketByEscalation(ticketId: string, viewerId?: number): Promise<boolean> {
     if (!viewerId) return false;
 
@@ -1343,6 +1376,7 @@ export class TicketService implements OnModuleInit {
     quarter?: number;
     semester?: number;
     search?: string;
+    slaState?: ActiveTicketSlaState;
   }): Promise<
     | Ticket[]
     | {
@@ -1456,6 +1490,10 @@ export class TicketService implements OnModuleInit {
         qb.andWhere('EXTRACT(MONTH FROM t.createdAt) > 6');
       }
     }
+
+    // Apply SLA state before pagination so card totals and ticket pages use
+    // the same mutually exclusive definitions regardless of calendar date.
+    this.applyActiveTicketSlaFilter(qb, filters.slaState);
 
     const page = filters.page && filters.page > 0 ? Math.floor(filters.page) : undefined;
     const limit =
@@ -3505,7 +3543,8 @@ export class TicketService implements OnModuleInit {
     totalWithSla: number;
     activeWithSla: number;
     overdueActive: number;
-    dueToday: number;
+    nearingActive: number;
+    onTrackActive: number;
     breachedResolved: number;
     complianceRate: number;
   }> {
@@ -3513,7 +3552,6 @@ export class TicketService implements OnModuleInit {
       TicketStatus.OPEN,
       TicketStatus.ASSIGNED,
       TicketStatus.IN_PROGRESS,
-      TicketStatus.FREEZE,
     ];
 
     const qb = this.ticketRepo.createQueryBuilder('t')
@@ -3536,14 +3574,10 @@ export class TicketService implements OnModuleInit {
     const scheduledResumeAt = config && hasSchedulePausedTickets
       ? await this.getScheduledSlaResumeAt(config, now)
       : null;
-    const startOfDay = new Date(now);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
-
     let activeWithSla = 0;
     let overdueActive = 0;
-    let dueToday = 0;
+    let nearingActive = 0;
+    let onTrackActive = 0;
     let breachedResolved = 0;
 
     for (const t of tickets) {
@@ -3555,14 +3589,15 @@ export class TicketService implements OnModuleInit {
         now,
         scheduledResumeAt,
       );
-      const deadline = new Date(t.slaDeadline);
       const isActive = activeStatuses.includes(t.status as TicketStatus);
-      if (isActive) {
+      if (isActive && !slaState.slaPaused && !t.isSlaWaiting) {
         activeWithSla++;
-        if (!slaState.slaPaused && !t.isSlaWaiting && deadline < now) overdueActive++;
-        if (!slaState.slaPaused && deadline >= startOfDay && deadline <= endOfDay) dueToday++;
+        if (slaState.isOverdue) overdueActive++;
+        else if (slaState.isNearingSLA) nearingActive++;
+        else onTrackActive++;
       }
 
+      const deadline = new Date(t.slaDeadline);
       const effectiveResolvedAt = getEffectiveResolvedAt(t);
       if (
         (t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED) &&
@@ -3582,7 +3617,8 @@ export class TicketService implements OnModuleInit {
       totalWithSla: tickets.length,
       activeWithSla,
       overdueActive,
-      dueToday,
+      nearingActive,
+      onTrackActive,
       breachedResolved,
       complianceRate,
     };
@@ -4059,7 +4095,6 @@ export class TicketService implements OnModuleInit {
     const workdayEnd = config.scheduleMode === 'CWW'
       ? config.cwwClockoutEnd
       : config.officeClockout;
-    const expectedClockInAt = this.createManilaDate(today, expectedClockIn);
     const alerts: AttendanceAssignmentAlert[] = [];
 
     for (const userId of assignedUserIds) {
@@ -4073,13 +4108,8 @@ export class TicketService implements OnModuleInit {
         attendance?.status === AttendanceStatus.OUT_OF_OFFICE
       ) {
         attendanceState = 'absent';
-      } else if (
-        attendance?.clockInTime &&
-        new Date(attendance.clockInTime).getTime() > expectedClockInAt.getTime()
-      ) {
-        attendanceState = 'late';
       } else if (!attendance && hasCurrentDtrData && currentTime >= expectedClockIn) {
-        attendanceState = currentTime >= workdayEnd ? 'absent' : 'no_attendance';
+        attendanceState = currentTime >= workdayEnd ? 'absent' : 'assumed_late';
       }
       if (!attendanceState) continue;
 
@@ -4094,11 +4124,7 @@ export class TicketService implements OnModuleInit {
         }));
       if (affectedTickets.length === 0) continue;
 
-      const attendanceLabel = attendanceState === 'no_attendance'
-        ? 'No Attendance'
-        : attendanceState === 'late'
-          ? 'Late'
-          : 'Absent';
+      const attendanceLabel = attendanceState === 'assumed_late' ? 'Assumed Late' : 'Absent';
       alerts.push({
         userId,
         staffName:

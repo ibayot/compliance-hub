@@ -10,6 +10,7 @@ import {
   Grid,
   Button,
   Card,
+  CardActionArea,
   CardContent,
   CircularProgress,
   Chip,
@@ -146,7 +147,7 @@ export default function DashboardPage() {
   });
 
   const [globalConfig, setGlobalConfig] = useState<any>(null);
-  const [slaSummary, setSlaSummary] = useState<{ breached: number; nearing: number; onTrack: number } | null>(null);
+  const [slaSummary, setSlaSummary] = useState<{ overdue: number; nearing: number; onTrack: number } | null>(null);
 
   useEffect(() => {
     if (myCap?.isTicketSettingsFocal) {
@@ -1324,18 +1325,22 @@ export default function DashboardPage() {
                     overflow: 'hidden',
                   }}
                 >
-                  
-                  <CardContent sx={{ position: 'relative', zIndex: 1 }}>
-                    <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-                      <ErrorIcon color={isDark ? 'error' : 'error'} />
-                      <Typography color={isDark ? 'error.light' : 'error.dark'} variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
-                        Breached / Overdue
+                  <CardActionArea
+                    onClick={() => router.push('/operations/tickets?sla=overdue')}
+                    aria-label={`View ${slaSummary.overdue} overdue active tickets`}
+                  >
+                    <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                      <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                        <ErrorIcon color="error" />
+                        <Typography color={isDark ? 'error.light' : 'error.dark'} variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
+                          Overdue
+                        </Typography>
+                      </Stack>
+                      <Typography variant="h2" color={isDark ? 'error.light' : 'error.dark'} fontWeight={800}>
+                        {slaSummary.overdue}
                       </Typography>
-                    </Stack>
-                    <Typography variant="h2" color={isDark ? 'error.light' : 'error.dark'} fontWeight={800}>
-                      {slaSummary.breached}
-                    </Typography>
-                  </CardContent>
+                    </CardContent>
+                  </CardActionArea>
                 </Card>
               </Grid>
 
@@ -1351,18 +1356,22 @@ export default function DashboardPage() {
                     overflow: 'hidden',
                   }}
                 >
-                  
-                  <CardContent sx={{ position: 'relative', zIndex: 1 }}>
-                    <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-                      <WarningIcon color={isDark ? 'warning' : 'warning'} />
-                      <Typography color={isDark ? 'warning.light' : 'warning.dark'} variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
-                        Nearing Breach
+                  <CardActionArea
+                    onClick={() => router.push('/operations/tickets?sla=nearing_sla')}
+                    aria-label={`View ${slaSummary.nearing} active tickets nearing SLA`}
+                  >
+                    <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                      <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                        <WarningIcon color="warning" />
+                        <Typography color={isDark ? 'warning.light' : 'warning.dark'} variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
+                          Nearing SLA
+                        </Typography>
+                      </Stack>
+                      <Typography variant="h2" color={isDark ? 'warning.light' : 'warning.dark'} fontWeight={800}>
+                        {slaSummary.nearing}
                       </Typography>
-                    </Stack>
-                    <Typography variant="h2" color={isDark ? 'warning.light' : 'warning.dark'} fontWeight={800}>
-                      {slaSummary.nearing}
-                    </Typography>
-                  </CardContent>
+                    </CardContent>
+                  </CardActionArea>
                 </Card>
               </Grid>
 
@@ -1378,18 +1387,22 @@ export default function DashboardPage() {
                     overflow: 'hidden',
                   }}
                 >
-                  
-                  <CardContent sx={{ position: 'relative', zIndex: 1 }}>
-                    <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-                      <CompliantIcon color={isDark ? 'success' : 'success'} />
-                      <Typography color={isDark ? 'success.light' : 'success.dark'} variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
-                        On Track
+                  <CardActionArea
+                    onClick={() => router.push('/operations/tickets?sla=on_track')}
+                    aria-label={`View ${slaSummary.onTrack} active tickets on track`}
+                  >
+                    <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                      <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                        <CompliantIcon color="success" />
+                        <Typography color={isDark ? 'success.light' : 'success.dark'} variant="subtitle2" fontWeight={600} textTransform="uppercase" letterSpacing={1}>
+                          On Track
+                        </Typography>
+                      </Stack>
+                      <Typography variant="h2" color={isDark ? 'success.light' : 'success.dark'} fontWeight={800}>
+                        {slaSummary.onTrack}
                       </Typography>
-                    </Stack>
-                    <Typography variant="h2" color={isDark ? 'success.light' : 'success.dark'} fontWeight={800}>
-                      {slaSummary.onTrack}
-                    </Typography>
-                  </CardContent>
+                    </CardContent>
+                  </CardActionArea>
                 </Card>
               </Grid>
             </Grid>

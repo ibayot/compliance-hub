@@ -171,6 +171,7 @@ export default function TicketsPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
+  const [filterSla, setFilterSla] = useState<'' | 'overdue' | 'nearing_sla' | 'on_track'>('');
 
   const now = new Date();
   const currentMonth = (now.getMonth() + 1).toString();
@@ -455,6 +456,17 @@ export default function TicketsPage() {
       if (params.get('filter') === 'pending_satisfaction') {
         setUserTab(2);
       }
+      const sla = params.get('sla');
+      if (sla === 'overdue' || sla === 'nearing_sla' || sla === 'on_track') {
+        setFilterSla(sla);
+        // Dashboard SLA cards represent every active ticket, not only tickets
+        // created during the ticket page's default current-month period.
+        setFilterYear('');
+        setFilterMonth('');
+        setFilterQuarter('');
+        setFilterSemester('');
+        setFilterPeriodMode('year');
+      }
     }
   }, []);
 
@@ -507,7 +519,7 @@ export default function TicketsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [filterStatus, filterType, filterPriority, filterYear, filterMonth, filterQuarter, filterSemester, searchQuery, showMyTickets, showEscalatedToMe]);
+  }, [filterStatus, filterType, filterPriority, filterSla, filterYear, filterMonth, filterQuarter, filterSemester, searchQuery, showMyTickets, showEscalatedToMe]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setSearchQuery(searchDraft.trim()), 300);
@@ -526,6 +538,7 @@ export default function TicketsPage() {
         month: filterMonth || undefined,
         quarter: filterQuarter || undefined,
         semester: filterSemester || undefined,
+        slaState: filterSla || undefined,
         // assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
         assignedToId: showMyTickets && !showEscalatedToMe ? user?.id : undefined,
         escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
@@ -557,6 +570,7 @@ export default function TicketsPage() {
     filterStatus,
     filterType,
     filterPriority,
+    filterSla,
     filterYear,
     filterMonth,
     filterQuarter,
@@ -617,6 +631,7 @@ export default function TicketsPage() {
         month: filterMonth || undefined,
         quarter: filterQuarter || undefined,
         semester: filterSemester || undefined,
+        slaState: filterSla || undefined,
         // assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
         assignedToId: showMyTickets && !showEscalatedToMe ? user?.id : undefined,
         escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
@@ -641,6 +656,7 @@ export default function TicketsPage() {
     filterStatus,
     filterType,
     filterPriority,
+    filterSla,
     filterYear,
     filterMonth,
     filterQuarter,
@@ -1257,6 +1273,18 @@ export default function TicketsPage() {
                   </TextField>
                   <TextField
                     select
+                    label="SLA"
+                    value={filterSla}
+                    onChange={(e) => setFilterSla(e.target.value as typeof filterSla)}
+                    size="small"
+                  >
+                    <MenuItem value="">All SLA States</MenuItem>
+                    <MenuItem value="overdue">Overdue</MenuItem>
+                    <MenuItem value="nearing_sla">Nearing SLA</MenuItem>
+                    <MenuItem value="on_track">On Track</MenuItem>
+                  </TextField>
+                  <TextField
+                    select
                     label="Year"
                     value={filterYear}
                     onChange={(e) => setFilterYear(e.target.value)}
@@ -1358,6 +1386,7 @@ export default function TicketsPage() {
                       setFilterStatus('');
                       setFilterType('');
                       setFilterPriority('');
+                      setFilterSla('');
                       setFilterYear(new Date().getFullYear().toString());
                       setFilterMonth((new Date().getMonth() + 1).toString());
                       setFilterQuarter('');
