@@ -139,6 +139,7 @@ export class AttendanceService implements OnModuleInit {
       desktop_support: withoutSuperAdmin(this.roleCapSvc.getRolesWhere('isDesktop')),
       it_support: withoutSuperAdmin(this.roleCapSvc.getRolesWhere('isItSupport')),
       pantawid_ict_support: withoutSuperAdmin(this.roleCapSvc.getRolesWhere('isPantawidIct')),
+      specialized_concerns: withoutSuperAdmin(this.roleCapSvc.getRolesWhere('isSpecializedSupport')),
       ito: withoutSuperAdmin(this.roleCapSvc.getRolesWhere('isIto')),
       all: withoutSuperAdmin(this.roleCapSvc.getRolesWhere('isAttendanceEligible')),
     };

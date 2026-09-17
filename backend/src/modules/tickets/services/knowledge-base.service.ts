@@ -60,16 +60,24 @@ export class KnowledgeBaseService {
     // Fetch all users to scrub their names and emails
     try {
       const users = await this.kbRepo.manager.query(
-        'SELECT first_name, last_name, email FROM users',
+        'SELECT first_name, middle_name, last_name, suffix, email FROM users',
       );
       for (const user of users) {
         if (user.first_name && user.first_name.length > 2) {
           const fnRegex = new RegExp(`\\b${this.escapeRegExp(user.first_name)}\\b`, 'gi');
           clean = clean.replace(fnRegex, '[NAME_REMOVED]');
         }
+        if (user.middle_name && user.middle_name.length > 2) {
+          const mnRegex = new RegExp(`\b${this.escapeRegExp(user.middle_name)}\b`, 'gi');
+          clean = clean.replace(mnRegex, '[NAME_REMOVED]');
+        }
         if (user.last_name && user.last_name.length > 2) {
           const lnRegex = new RegExp(`\\b${this.escapeRegExp(user.last_name)}\\b`, 'gi');
           clean = clean.replace(lnRegex, '[NAME_REMOVED]');
+        }
+        if (user.suffix && user.suffix.length > 1) {
+          const suffixRegex = new RegExp(`\b${this.escapeRegExp(user.suffix)}\b`, 'gi');
+          clean = clean.replace(suffixRegex, '[NAME_REMOVED]');
         }
         if (user.email && user.email.length > 5) {
           const emRegex = new RegExp(this.escapeRegExp(user.email), 'gi');

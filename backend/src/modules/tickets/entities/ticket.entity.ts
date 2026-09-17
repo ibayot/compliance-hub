@@ -17,6 +17,7 @@ export enum TicketType {
   DESKTOP_SUPPORT = 'desktop_support',
   IT_SUPPORT = 'it_support',
   PANTAWID_ICT_SUPPORT = 'pantawid_ict_support',
+  SPECIALIZED_CONCERNS = 'specialized_concerns',
 }
 
 export enum TicketStatus {

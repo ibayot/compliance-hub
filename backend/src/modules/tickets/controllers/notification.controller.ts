@@ -14,6 +14,21 @@ export class NotificationController {
     private readonly notificationRepo: Repository<TicketNotification>,
   ) {}
 
+  @Get('summary')
+  async getMyNotificationSummary(@Request() req: any) {
+    const userId = req.user.id ?? req.user.userId;
+    return this.notificationRepo.manager.transaction('REPEATABLE READ', async (manager) => {
+      const notificationRepo = manager.getRepository(TicketNotification);
+      const notifications = await notificationRepo.find({
+        where: { userId },
+        order: { isRead: 'ASC', createdAt: 'DESC' },
+        take: 20,
+      });
+      const unreadCount = await notificationRepo.count({ where: { userId, isRead: false } });
+      return { notifications, unreadCount };
+    });
+  }
+
   @Get('mine')
   async getMyNotifications(@Request() req: any) {
     const userId = req.user.id ?? req.user.userId;

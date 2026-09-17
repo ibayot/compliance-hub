@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
   Accordion,
+  Alert,
   AccordionSummary,
   AccordionDetails,
   Autocomplete,
@@ -68,6 +69,7 @@ import { ticketSettingsApi } from '@/app/api/references';
 import { usersApi, RoleDefinition, RoleCapabilityRecord } from '@/lib/api/users';
 import { unitsApi, Unit } from '@/lib/api/units';
 import { isReportorialUnit, unitsForUserRole } from '@/lib/utils/unit-visibility';
+import { formatPersonName } from '@/lib/utils/person-name';
 import { UserRole } from '@/lib/types/auth';
 import { useSse } from '@/lib/utils/useSse';
 import { Capacitor } from '@capacitor/core';
@@ -298,10 +300,12 @@ function SecuritySettingsCard() {
   const [mfaTestMode, setMfaTestMode] = useState(false);
   const [vaptMode, setVaptMode] = useState(false);
   const [appMode, setAppMode] = useState('full');
+  const [googleSignInEnabled, setGoogleSignInEnabled] = useState(true);
+  const [allowedEmailDomains, setAllowedEmailDomains] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const canManage = Boolean(myCap?.isSecuritySettingsAccess) || Boolean(myCap?.isTicketSettingsFocal);
+  const canManage = Boolean(myCap?.isSecuritySettingsAccess);
   const vaptSettingsEnabled = String(import.meta.env.VITE_VAPT_SETTINGS_ENABLED || '').trim().toLowerCase() === 'true';
 
   useEffect(() => {
@@ -311,6 +315,10 @@ function SecuritySettingsCard() {
         setMfaTestMode(Boolean((config as any).mfaTestMode));
         setVaptMode(Boolean((config as any).vaptMode));
         setAppMode((config as any).appMode || 'full');
+        setGoogleSignInEnabled((config as any).googleSignInEnabled !== false);
+        setAllowedEmailDomains(Array.isArray((config as any).allowedEmailDomains)
+          ? (config as any).allowedEmailDomains.join(', ')
+          : 'dswd.gov.ph, gmail.com, yahoo.com, yahoomail.com, hotmail.com, rocketmail.com, outlook.com, icloud.com, aol.com');
         setLoading(false);
       }).catch(err => {
         enqueueSnackbar('Failed to load security config', { variant: 'error' });
@@ -326,7 +334,21 @@ function SecuritySettingsCard() {
     }
     setSaving(true);
     try {
-      const payload: Record<string, unknown> = { defaultPassword, mfaTestMode, appMode };
+      const domains = [...new Set(allowedEmailDomains
+        .split(/[\s,;]+/)
+        .map((domain) => domain.trim().toLowerCase().replace(/^@+/, ''))
+        .filter(Boolean))];
+      if (domains.length === 0) {
+        enqueueSnackbar('At least one allowed email domain is required', { variant: 'error' });
+        return;
+      }
+      const payload: Record<string, unknown> = {
+        defaultPassword,
+        mfaTestMode,
+        appMode,
+        googleSignInEnabled,
+        allowedEmailDomains: domains,
+      };
       if (vaptSettingsEnabled) payload.vaptMode = vaptMode;
       await usersApi.updateSecurityConfig(payload as any);
       enqueueSnackbar('Security settings updated successfully', { variant: 'success' });
@@ -388,6 +410,29 @@ function SecuritySettingsCard() {
               />
             </Grid>
             )}
+            <Grid item xs={12} md={4}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={googleSignInEnabled}
+                    onChange={(e) => setGoogleSignInEnabled(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label="Show Google Sign-In"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                multiline
+                minRows={2}
+                label="Allowed Email Domains"
+                value={allowedEmailDomains}
+                onChange={(e) => setAllowedEmailDomains(e.target.value)}
+                helperText="Separate domains with commas, spaces, or semicolons. Do not include the @ symbol."
+              />
+            </Grid>
             <Grid item xs={12} md={4}>
               <FormControl fullWidth size="small">
                 <InputLabel>App Mode</InputLabel>
@@ -594,6 +639,7 @@ const CAPABILITY_CATEGORIES = [
       { key: 'isDesktop', label: 'Desktop', description: 'Handle desktop/hardware support tickets' },
       { key: 'isItSupport', label: 'IT Support', description: 'Handle IT/software support tickets' },
       { key: 'isPantawidIct', label: 'Pantawid ICT', description: 'Handle Pantawid ICT support tickets' },
+      { key: 'isSpecializedSupport', label: 'Specialized', description: 'May be manually assigned Specialized Concerns tickets' },
       { key: 'isIto', label: 'ITO Staff', description: 'Non-technician ITO professional staff group' },
       { key: 'isEscalationFocal', label: 'Escalation', description: 'Can receive escalated tickets' },
       { key: 'isTicketSettingsFocal', label: 'Ticket Admin', description: 'Full ticket settings & reports access' },
@@ -1273,6 +1319,8 @@ function FocalUserManagementCard() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [creating, setCreating] = useState(false);
+  const [userListLoading, setUserListLoading] = useState(true);
+  const [userListError, setUserListError] = useState<string | null>(null);
   const [editUser, setEditUser] = useState<any | null>(null);
   const [resetUser, setResetUser] = useState<any | null>(null);
   const [resetting, setResetting] = useState(false);
@@ -1333,7 +1381,7 @@ function FocalUserManagementCard() {
 
   // Email autocomplete suggestions
   const [emailSuggestions, setEmailSuggestions] = useState<
-    { id: number; email: string; firstName?: string; lastName?: string }[]
+    { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string }[]
   >([]);
   const [emailInputValue, setEmailInputValue] = useState('');
   const [isExistingEmail, setIsExistingEmail] = useState(false);
@@ -1355,22 +1403,26 @@ function FocalUserManagementCard() {
   }, [emailInputValue]);
 
   const reload = useCallback(async () => {
-    try {
-      const [users, roleList, unitList, securityConfig] = await Promise.all([
-        usersApi.list(),
-        usersApi.getRoles(),
-        unitsApi.listAll(),
-        usersApi.getSecurityConfig().catch(() => ({ defaultPassword: 'Changeme123!' })),
-      ]);
-      setRoles(roleList);
-      setUnits(unitList);
-      // Show ALL users — not filtered by assignable flag
-      setFocalUsers(users);
-      if (securityConfig?.defaultPassword) {
-        setDefaultPassword(securityConfig.defaultPassword);
-      }
-    } catch {
-      /* non-blocking */
+    setUserListLoading(true);
+    const [usersResult, rolesResult, unitsResult, securityResult] = await Promise.allSettled([
+      usersApi.list(),
+      usersApi.getRoles(),
+      unitsApi.listAll(),
+      usersApi.getSecurityConfig(),
+    ]);
+
+    if (usersResult.status === 'fulfilled') {
+      setFocalUsers(usersResult.value);
+      setUserListError(null);
+    } else {
+      setUserListError('Unable to load the user list. Please retry.');
+    }
+    setUserListLoading(false);
+
+    if (rolesResult.status === 'fulfilled') setRoles(rolesResult.value);
+    if (unitsResult.status === 'fulfilled') setUnits(unitsResult.value);
+    if (securityResult.status === 'fulfilled' && securityResult.value?.defaultPassword) {
+      setDefaultPassword(securityResult.value.defaultPassword);
     }
   }, []);
 
@@ -1518,6 +1570,16 @@ function FocalUserManagementCard() {
         }
       />
       <CardContent>
+        {userListError && (
+          <Alert
+            severity="error"
+            action={<Button color="inherit" size="small" onClick={() => void reload()}>Retry</Button>}
+            sx={{ mb: 2 }}
+          >
+            {userListError}
+          </Alert>
+        )}
+        {userListLoading && <Typography color="text.secondary" sx={{ mb: 2 }}>Loading users...</Typography>}
         {/* Create user dialog */}
         <Dialog
           open={createDialogOpen}
@@ -1545,7 +1607,14 @@ function FocalUserManagementCard() {
                   required
                   label="Role"
                   value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
+                  onChange={(e) => {
+                    const role = e.target.value as UserRole;
+                    setForm({
+                      ...form,
+                      role,
+                      autoAssignmentEligible: role === UserRole.USER ? false : form.autoAssignmentEligible,
+                    });
+                  }}
                   fullWidth
                 >
                   {assignableRoles.map((r) => (
@@ -1555,20 +1624,22 @@ function FocalUserManagementCard() {
                   ))}
                 </TextField>
               </Grid>
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={form.autoAssignmentEligible}
-                      onChange={(e) => setForm({ ...form, autoAssignmentEligible: e.target.checked })}
-                    />
-                  }
-                  label="Eligible for automatic ticket assignment"
-                />
-                <Typography variant="caption" display="block" color="text.secondary">
-                  Disable this for a technician who should remain manually assignable but not receive automatic tickets.
-                </Typography>
-              </Grid>
+              {form.role !== UserRole.USER && (
+                <Grid item xs={12}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={form.autoAssignmentEligible}
+                        onChange={(e) => setForm({ ...form, autoAssignmentEligible: e.target.checked })}
+                      />
+                    }
+                    label="Eligible for automatic ticket assignment"
+                  />
+                  <Typography variant="caption" display="block" color="text.secondary">
+                    Disable this for staff who should remain manually assignable but not receive automatic tickets.
+                  </Typography>
+                </Grid>
+              )}
               <Grid item xs={12} md={3}>
                 <TextField
                   required
@@ -2086,25 +2157,27 @@ function FocalUserManagementCard() {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={editUser?.autoAssignmentEligible !== false}
-                      onChange={(e) =>
-                        setEditUser((prev: any) => ({
-                          ...prev,
-                          autoAssignmentEligible: e.target.checked,
-                        }))
-                      }
-                    />
-                  }
-                  label="Eligible for automatic ticket assignment"
-                />
-                <Typography variant="caption" display="block" color="text.secondary">
-                  Turn this off to keep the technician available for manual assignment while excluding them from automatic routing.
-                </Typography>
-              </Grid>
+              {editUser?.role !== UserRole.USER && (
+                <Grid item xs={12}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={editUser?.autoAssignmentEligible !== false}
+                        onChange={(e) =>
+                          setEditUser((prev: any) => ({
+                            ...prev,
+                            autoAssignmentEligible: e.target.checked,
+                          }))
+                        }
+                      />
+                    }
+                    label="Eligible for automatic ticket assignment"
+                  />
+                  <Typography variant="caption" display="block" color="text.secondary">
+                    Turn this off to keep the staff member manually assignable while excluding them from automatic routing.
+                  </Typography>
+                </Grid>
+              )}
             </Grid>
           </DialogContent>
           <DialogActions>
@@ -2509,7 +2582,7 @@ export default function SettingsPage() {
               </Avatar>
               
               <Typography variant="h5" fontWeight="bold" gutterBottom>
-                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || '—'}
+                {formatPersonName(user, '—')}
               </Typography>
               
               <Typography variant="body1" color="text.secondary" gutterBottom>

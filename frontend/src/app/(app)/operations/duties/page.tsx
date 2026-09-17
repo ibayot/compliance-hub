@@ -3,6 +3,7 @@ import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress
 import { Add, Delete, Edit, GroupAdd, Refresh, Star } from '@mui/icons-material';
 import { dutiesApi, DutyAccess, DutyType } from '@/lib/api/duties';
 import type { UserRecord } from '@/lib/api/users';
+import { formatPersonName } from '@/lib/utils/person-name';
 import { useSse } from '@/lib/utils/useSse';
 import { useSnackbar } from 'notistack';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -16,7 +17,7 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const TODAY = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
 const isDutyStaff = (user: any) => user.active !== false && user.role !== 'super_admin' && user.role !== 'user' && user.technicianEligible === true;
 const formatType = (value: string) => String(value || '').replaceAll('_', ' ').toUpperCase();
-const userName = (users: UserRecord[], id: number) => { const u = users.find((x) => x.id === id); return u ? `${u.firstName} ${u.lastName}`.trim() : `User #${id}`; };
+const userName = (users: UserRecord[], id: number) => { const u = users.find((x) => x.id === id); return u ? formatPersonName(u, `User #${id}`) : `User #${id}`; };
 const meetingSlot = (x: any) => !x.startTime && !x.endTime ? 'Whole Day' : Number(String(x.startTime).slice(0, 2)) < 12 ? 'AM' : 'PM';
 const TableContainer = ({ component, children, ...props }: any) => component
   ? <MuiTableContainer component={component} {...props}>{children}</MuiTableContainer>

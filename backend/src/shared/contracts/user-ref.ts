@@ -4,6 +4,7 @@ export interface UserRef {
   first_name: string;
   last_name: string;
   middle_name?: string | null;
+  suffix?: string | null;
   role: string;
   staff_id?: string | null;
 

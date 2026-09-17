@@ -6,6 +6,7 @@ export interface UserStub {
   first_name: string;
   last_name: string;
   middle_name?: string | null;
+  suffix?: string | null;
   role: string;
   active?: boolean;
   attendanceEligible?: boolean;
@@ -24,6 +25,7 @@ export interface RoleCapabilityStub {
   isDesktop: boolean;
   isItSupport: boolean;
   isPantawidIct: boolean;
+  isSpecializedSupport: boolean;
   isEscalationFocal: boolean;
   isTicketSettingsFocal: boolean;
   isSmtpSettingsAccess: boolean;

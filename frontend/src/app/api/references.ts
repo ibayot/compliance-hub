@@ -82,7 +82,7 @@ export interface CreateIssuanceDto {
   is_active?: boolean;
 }
 
-export type TicketType = 'desktop_support' | 'it_support' | 'pantawid_ict_support';
+export type TicketType = 'desktop_support' | 'it_support' | 'pantawid_ict_support' | 'specialized_concerns';
 export type TicketStatus =
   | 'open'
   | 'assigned'
@@ -108,7 +108,9 @@ interface AttendanceTechnicianRecord {
   id: number;
   email: string;
   firstName: string;
+  middleName?: string | null;
   lastName: string;
+  suffix?: string | null;
   role: string;
   openCount: number;
   attendanceStatus?: AttendanceStatus | null;
@@ -175,11 +177,11 @@ export interface Ticket {
   issueTypeId?: string | null;
   issueType?: TicketIssueType | null;
   requesterId: number;
-  requester?: { id: number; email: string; firstName?: string; lastName?: string };
+  requester?: { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string };
   createdById?: number | null;
-  createdBy?: { id: number; email: string; firstName?: string; lastName?: string } | null;
+  createdBy?: { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string } | null;
   assignedToId?: number | null;
-  assignedTo?: { id: number; email: string; firstName?: string; lastName?: string } | null;
+  assignedTo?: { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string } | null;
   resolutionNotes?: string | null;
   resolvedAt?: string | null;
   resolutionTimeOverride?: string | null;
@@ -228,7 +230,7 @@ export interface TicketComment {
   isInternal: boolean;
   createdAt: string;
   attachmentPath?: string | null;
-  user?: { id: number; email: string; firstName?: string; lastName?: string; role?: string };
+  user?: { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string; role?: string };
 }
 
 export interface AttendanceAssignmentAlert {
@@ -316,7 +318,9 @@ export interface TechnicianOption {
   id: number;
   email: string;
   firstName: string;
+  middleName?: string | null;
   lastName: string;
+  suffix?: string | null;
   role: string;
   openCount: number;
   attendanceStatus?: AttendanceStatus | null;
@@ -435,8 +439,8 @@ export interface TicketEscalation {
   ticketId: string;
   escalatedById: number;
   escalatedToId: number;
-  escalatedBy?: { id: number; firstName?: string; lastName?: string; email: string };
-  escalatedTo?: { id: number; firstName?: string; lastName?: string; email: string };
+  escalatedBy?: { id: number; firstName?: string; middleName?: string; lastName?: string; suffix?: string; email: string };
+  escalatedTo?: { id: number; firstName?: string; middleName?: string; lastName?: string; suffix?: string; email: string };
   ticket?: Ticket;
   status: EscalationStatus;
   notes?: string | null;
@@ -463,6 +467,7 @@ export interface TicketCategory {
   isIt: boolean;
   isDesktop: boolean;
   isPantawid: boolean;
+  isSpecialized: boolean;
   slaHours?: number | null;
   isActive: boolean;
   isDeleted: boolean;
@@ -509,7 +514,7 @@ export type AttendanceStatus = 'present' | 'absent' | 'half_day' | 'out_of_offic
 export interface TechAttendance {
   id: string;
   userId: number;
-  user?: { id: number; email: string; firstName?: string; lastName?: string; role?: string };
+  user?: { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string; role?: string };
   date: string;
   status: AttendanceStatus;
   notes?: string;
@@ -806,8 +811,9 @@ export const ticketsApi = {
     return response.data;
   },
 
-  getTechnicians: async (): Promise<TechnicianOption[]> => {
-    const response = await apiClient.get(`/tickets/technicians`);
+  getTechnicians: async (ticketType?: TicketType): Promise<TechnicianOption[]> => {
+    const params = ticketType ? `?ticketType=${encodeURIComponent(ticketType)}` : '';
+    const response = await apiClient.get(`/tickets/technicians${params}`);
     return response.data;
   },
 
@@ -913,7 +919,7 @@ export const ticketsApi = {
     quarter?: number;
     semester?: number;
     ticketType?: string;
-  }): Promise<Array<{ id: number; firstName: string; lastName: string; role: string }>> => {
+  }): Promise<Array<{ id: number; firstName: string; middleName?: string; lastName: string; suffix?: string; role: string }>> => {
     const params = new URLSearchParams();
     if (filters?.year) params.append('year', String(filters.year));
     if (filters?.month) params.append('month', String(filters.month));
@@ -1015,6 +1021,7 @@ export const ticketSettingsApi = {
     isIt?: boolean;
     isDesktop?: boolean;
     isPantawid?: boolean;
+    isSpecialized?: boolean;
     slaHours?: number | null;
     isActive?: boolean;
   }): Promise<TicketCategory> => {
@@ -1023,7 +1030,7 @@ export const ticketSettingsApi = {
   },
   updateCategory: async (
     id: string,
-    data: Partial<{ name: string; isIt: boolean; isDesktop: boolean; isPantawid: boolean; slaHours: number | null; isActive: boolean }>,
+    data: Partial<{ name: string; isIt: boolean; isDesktop: boolean; isPantawid: boolean; isSpecialized: boolean; slaHours: number | null; isActive: boolean }>,
   ): Promise<TicketCategory> => {
     const response = await apiClient.patch(`/ticket-settings/categories/${id}`, data);
     return response.data;
@@ -1322,6 +1329,10 @@ export const attendanceApi = {
 };
 
 export const notificationsApi = {
+  getSummary: async (): Promise<{ notifications: any[]; unreadCount: number }> => {
+    const response = await apiClient.get('/notifications/summary');
+    return response.data;
+  },
   getUnreadCount: async (): Promise<{ count: number }> => {
     const response = await apiClient.get('/notifications/unread-count');
     return response.data;

@@ -118,7 +118,9 @@ export interface DocumentAssignment {
     id: number;
     email: string;
     firstName?: string;
+    middleName?: string;
     lastName?: string;
+    suffix?: string;
   };
   unit?: {
     id: number;

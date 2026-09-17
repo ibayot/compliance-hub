@@ -27,7 +27,14 @@ export class SecurityConfigController {
   @Put()
   @RequireCapability('isSecuritySettingsAccess')
   async updateConfig(
-    @Body() body: { defaultPassword?: string; mfaTestMode?: boolean; vaptMode?: boolean; appMode?: string },
+    @Body() body: {
+      defaultPassword?: string;
+      mfaTestMode?: boolean;
+      vaptMode?: boolean;
+      appMode?: string;
+      googleSignInEnabled?: boolean;
+      allowedEmailDomains?: string[];
+    },
   ): Promise<SecurityConfig> {
     return this.securityConfigService.updateConfig(body);
   }

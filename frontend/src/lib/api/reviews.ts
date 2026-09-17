@@ -19,7 +19,9 @@ export interface ManualReview {
     id: number;
     email: string;
     first_name?: string;
+    middle_name?: string;
     last_name?: string;
+    suffix?: string;
   };
 }
 

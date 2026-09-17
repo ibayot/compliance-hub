@@ -18,6 +18,7 @@ import {
   Warning as WarningIcon,
 } from '@mui/icons-material';
 import { ManualReview, ReviewDecision } from '@/app/api/reviews';
+import { formatPersonName } from '@/lib/utils/person-name';
 
 interface ReviewDisplayProps {
   review: ManualReview;
@@ -63,7 +64,7 @@ export default function ReviewDisplay({ review }: ReviewDisplayProps) {
           <Typography variant="caption" color="text.secondary">
             Reviewed by:{' '}
             {review.reviewer
-              ? `${review.reviewer.firstName} ${review.reviewer.lastName}`
+              ? formatPersonName(review.reviewer, 'Unknown')
               : 'Unknown'}
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block">

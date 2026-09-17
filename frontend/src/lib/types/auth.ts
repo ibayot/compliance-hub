@@ -41,6 +41,7 @@ export enum UserRole {
   DESKTOP_JR = 'desktop_jr',
   IT_SUPPORT_JR = 'it_support_jr',
   PANTAWID_ICT = 'pantawid_ict',
+  PANTAWID_ICT_LEAD = 'pantawid_ict_lead',
 }
 
 export interface Unit {

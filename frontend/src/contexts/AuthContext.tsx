@@ -88,9 +88,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [unlockPassword, setUnlockPassword] = useState('');
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
+  const [googleSignInEnabled, setGoogleSignInEnabled] = useState(false);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inactivityDeadlineRef = useRef<number | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    authApi.getPublicConfig()
+      .then((config) => setGoogleSignInEnabled(config.googleSignInEnabled !== false))
+      .catch(() => setGoogleSignInEnabled(false));
+  }, [isSessionLocked]);
 
   
   const saveTokensToPreferences = async (accessToken: string, refreshToken: string) => {
@@ -472,15 +479,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               autoFocus
               sx={{ mb: 2 }}
             />
-            <Divider sx={{ width: '100%', mb: 2 }}>OR</Divider>
-            <GoogleLogin
-              onSuccess={handleGoogleUnlock}
-              onError={() => setUnlockError('Google sign-in failed')}
-              useOneTap={false}
-              theme="outline"
-              size="large"
-              locale="en"
-            />
+            {googleSignInEnabled && (
+              <>
+                <Divider sx={{ width: '100%', mb: 2 }}>OR</Divider>
+                <GoogleLogin
+                  onSuccess={handleGoogleUnlock}
+                  onError={() => setUnlockError('Google sign-in failed')}
+                  useOneTap={false}
+                  theme="outline"
+                  size="large"
+                  locale="en"
+                />
+              </>
+            )}
           </Box>
           {unlockError && (
             <Box mt={2}>

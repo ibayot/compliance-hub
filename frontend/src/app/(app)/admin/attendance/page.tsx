@@ -38,6 +38,7 @@ import {
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatPersonName } from '@/lib/utils/person-name';
 import { attendanceApi, TechAttendance, OfficeDay, AttendanceStatus } from '@/app/api/references';
 import { useSse } from '@/lib/utils/useSse';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
@@ -641,7 +642,7 @@ export default function AttendancePage() {
                           >
                             <Box sx={{ position: 'relative', zIndex: 1 }}>
                               <Typography variant="body2" noWrap>
-                                {[tech.firstName, tech.lastName].filter(Boolean).join(' ') ||
+                                {formatPersonName(tech) ||
                                   tech.email}
                               </Typography>
                               <Typography variant="caption" color="text.secondary" noWrap>

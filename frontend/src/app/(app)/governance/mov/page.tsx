@@ -50,6 +50,7 @@ import { useSnackbar } from 'notistack';
 import { movApi, MovArtifact } from '@/app/api/mov';
 import { kpiApi } from '@/lib/api/kpi';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatPersonName } from '@/lib/utils/person-name';
 import { UserRole } from '@/lib/types/auth';
 import { useSse } from '@/lib/utils/useSse';
 
@@ -244,7 +245,7 @@ export default function MovBuilderPage() {
   // Uses a separate effect so it doesn't interfere with loadData / preset loading.
   useEffect(() => {
     if (!user) return;
-    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
+    const fullName = formatPersonName(user);
     if (fullName && !preparedByName) setPreparedByName(fullName);
     if (user.position && !preparedByPosition) setPreparedByPosition(user.position);
     if (user.designation && !preparedByDesignation) setPreparedByDesignation(user.designation);

@@ -24,6 +24,10 @@ export class UpdateRoleCapabilityDto {
 
   @IsOptional()
   @IsBoolean()
+  isSpecializedSupport?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   isIto?: boolean;
 
   @IsOptional()

@@ -27,6 +27,7 @@ export const TICKET_TYPE_LABELS: Record<TicketType, string> = {
   desktop_support: 'Desktop Support',
   it_support: 'IT Support',
   pantawid_ict_support: 'Pantawid ICT Support',
+  specialized_concerns: 'Specialized Concerns',
 };
 
 export function formatTicketStatus(status: string): string {

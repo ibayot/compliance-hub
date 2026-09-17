@@ -16,4 +16,10 @@ export class SecurityConfig {
 
   @Column({ name: 'app_mode', default: 'full' })
   appMode: string;
+
+  @Column({ name: 'google_sign_in_enabled', default: true })
+  googleSignInEnabled: boolean;
+
+  @Column({ name: 'allowed_email_domains', type: 'simple-json', nullable: true })
+  allowedEmailDomains: string[] | null;
 }

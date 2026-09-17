@@ -25,7 +25,7 @@ export class RoleCapability {
   /**
    * True for roles with compliance document access and focal-equivalent permissions.
    * Covers: all named ITO staff, compliance_officer, cybersec, infosec, section_head,
-   *         desktop_sr, it_support_sr, pantawid_ict (elevated via Sub-Q).
+   *         desktop_sr, it_support_sr, and pantawid_ict_lead (elevated via capability configuration).
    */
   @Column({ name: 'is_focal', type: 'tinyint', width: 1, default: 0 })
   isFocal: boolean;
@@ -42,10 +42,14 @@ export class RoleCapability {
   @Column({ name: 'is_pantawid_ict', type: 'tinyint', width: 1, default: 0 })
   isPantawidIct: boolean;
 
+  /** True for roles that may be manually assigned Specialized Concerns tickets. */
+  @Column({ name: 'is_specialized_support', type: 'tinyint', width: 1, default: 0 })
+  isSpecializedSupport: boolean;
+
   /**
    * True for non-technician ITO professional staff.
    * Used for attendance group segregation (the "ITO Staff" grid row group).
-   * Does NOT include desktop_sr/it_support_sr/pantawid_ict — those have their own tech group.
+   * Does NOT include desktop_sr/it_support_sr/pantawid roles — those have their own tech group.
    */
   @Column({ name: 'is_ito', type: 'tinyint', width: 1, default: 0 })
   isIto: boolean;
@@ -60,7 +64,7 @@ export class RoleCapability {
   /**
    * True for roles that have full ticket-settings management access and full ticket-reports view.
    * Roles without this flag see only their own assigned tickets and simplified pie charts.
-   * Includes: super_admin, section_head, compliance_officer, cybersec, infosec, desktop_sr, it_support_sr, pantawid_ict.
+   * Includes: super_admin, section_head, compliance_officer, cybersec, infosec, desktop_sr, it_support_sr, pantawid_ict_lead.
    */
   @Column({ name: 'is_ticket_settings_focal', type: 'tinyint', width: 1, default: 0 })
   isTicketSettingsFocal: boolean;
@@ -89,7 +93,7 @@ export class RoleCapability {
   /**
    * True for roles that can see ALL tickets in the system (not restricted to own-submitted/assigned).
    * Replaces the derived canSeeAllTickets() logic — now DB-configurable per role.
-   * Includes: super_admin, section_head, compliance_officer, cybersec, infosec, desktop_sr, it_support_sr, pantawid_ict.
+   * Includes: super_admin, section_head, compliance_officer, cybersec, infosec, desktop_sr, it_support_sr, pantawid_ict_lead.
    */
   @Column({ name: 'is_all_tickets', type: 'tinyint', width: 1, default: 0 })
   isAllTickets: boolean;
@@ -97,7 +101,7 @@ export class RoleCapability {
   /**
    * True for roles that can manually assign/reassign tickets to any technician.
    * Replaces the derived canAssignTickets() logic — now DB-configurable per role.
-   * Includes: super_admin, section_head, compliance_officer, cybersec, infosec, desktop_sr, it_support_sr, pantawid_ict.
+   * Includes: super_admin, section_head, compliance_officer, cybersec, infosec, desktop_sr, it_support_sr, pantawid_ict_lead.
    */
   @Column({ name: 'is_ticket_focal', type: 'tinyint', width: 1, default: 0 })
   isTicketFocal: boolean;

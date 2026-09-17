@@ -17,6 +17,7 @@ import { CreateKpiMasterDto, UpdateKpiMasterDto } from '../dto/kpi-master.dto';
 import { UpdateKpiMonitoringDto, UpsertKpiMonitoringDto } from '../dto/kpi-monitoring.dto';
 import { UpsertKpiScoringRuleDto, UpsertKpiThresholdDto } from '../dto/kpi-lookups.dto';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
+import { formatPersonName } from '../../../shared/utils/person-name';
 
 interface AuthUser {
   id: number;
@@ -276,7 +277,7 @@ export class KpiService {
     row.enteredByUserId = actor?.id ?? null;
     row.enteredByStaffId = actor?.staff_id ?? null;
     row.enteredByName =
-      [actor?.first_name, actor?.last_name].filter(Boolean).join(' ') || actor?.email || null;
+      formatPersonName(actor) || null;
     row.status = dto.status ?? KpiMonitoringStatus.DRAFT;
 
     if (kpiMaster.type === KpiType.YES_NO && ![0, 1].includes(Number(row.actualValue))) {
@@ -309,7 +310,7 @@ export class KpiService {
     row.enteredByUserId = actor?.id ?? null;
     row.enteredByStaffId = actor?.staff_id ?? null;
     row.enteredByName =
-      [actor?.first_name, actor?.last_name].filter(Boolean).join(' ') || actor?.email || null;
+      formatPersonName(actor) || null;
 
     return this.kpiMonitoringRepo.save(row);
   }

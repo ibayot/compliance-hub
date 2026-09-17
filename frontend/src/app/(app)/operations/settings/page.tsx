@@ -62,12 +62,14 @@ import {
 } from '@/app/api/references';
 import { feedbackApi, Feedback } from '@/lib/api/feedback';
 import { UserRole } from '@/lib/types/auth';
+import { formatPersonName } from '@/lib/utils/person-name';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
 
 const TYPE_LABELS: Record<string, string> = {
   it_support: 'IT Support',
   desktop_support: 'Desktop Support',
   pantawid_ict_support: 'Pantawid ICT Support',
+  specialized_concerns: 'Specialized Concerns',
 };
 const PAGE_SIZE = 10;
 
@@ -173,8 +175,9 @@ export default function TicketSettingsPage() {
     isIt: boolean;
     isDesktop: boolean;
     isPantawid: boolean;
+    isSpecialized: boolean;
     isActive: boolean;
-  }>({ name: '', isIt: false, isDesktop: false, isPantawid: false, isActive: true });
+  }>({ name: '', isIt: false, isDesktop: false, isPantawid: false, isSpecialized: false, isActive: true });
   const [categorySearch, setCategorySearch] = useState('');
   const [categoryStatusFilter, setCategoryStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [categorySupportTypeFilter, setCategorySupportTypeFilter] = useState('all');
@@ -491,11 +494,12 @@ export default function TicketSettingsPage() {
         isIt: cat.isIt,
         isDesktop: cat.isDesktop,
         isPantawid: cat.isPantawid,
+        isSpecialized: cat.isSpecialized,
         isActive: cat.isActive,
       });
     } else {
       setEditCat(null);
-      setCatForm({ name: '', isIt: false, isDesktop: false, isPantawid: false, isActive: true });
+      setCatForm({ name: '', isIt: false, isDesktop: false, isPantawid: false, isSpecialized: false, isActive: true });
     }
     setCatDialogOpen(true);
   };
@@ -512,6 +516,7 @@ export default function TicketSettingsPage() {
         isIt: catForm.isIt,
         isDesktop: catForm.isDesktop,
         isPantawid: catForm.isPantawid,
+        isSpecialized: catForm.isSpecialized,
         isActive: catForm.isActive,
       };
 
@@ -709,6 +714,7 @@ export default function TicketSettingsPage() {
       if (ruleForm.targetTicketType === 'it_support') return c.isIt;
       if (ruleForm.targetTicketType === 'desktop_support') return c.isDesktop;
       if (ruleForm.targetTicketType === 'pantawid_ict_support') return c.isPantawid;
+      if (ruleForm.targetTicketType === 'specialized_concerns') return c.isSpecialized;
       return false;
     }
   );
@@ -723,7 +729,8 @@ export default function TicketSettingsPage() {
       && (categorySupportTypeFilter === 'all'
         || (categorySupportTypeFilter === 'it_support' && c.isIt)
         || (categorySupportTypeFilter === 'desktop_support' && c.isDesktop)
-        || (categorySupportTypeFilter === 'pantawid_ict_support' && c.isPantawid))
+        || (categorySupportTypeFilter === 'pantawid_ict_support' && c.isPantawid)
+        || (categorySupportTypeFilter === 'specialized_concerns' && c.isSpecialized))
   ));
   const searchableCategories = visibleCategories.filter((c) => {
     const s = categorySearch.trim().toLowerCase();
@@ -731,7 +738,8 @@ export default function TicketSettingsPage() {
     return c.name.toLowerCase().includes(s)
       || (c.isIt && 'it support'.includes(s))
       || (c.isDesktop && 'desktop support'.includes(s))
-      || (c.isPantawid && 'pantawid ict support'.includes(s));
+      || (c.isPantawid && 'pantawid ict support'.includes(s))
+      || (c.isSpecialized && 'specialized concerns'.includes(s));
   });
   const visibleIssues = issues.filter((iss) => (
     (issueStatusFilter === 'all' || (issueStatusFilter === 'active' ? iss.isActive : !iss.isActive))
@@ -878,6 +886,7 @@ export default function TicketSettingsPage() {
                               {cat.isIt && <Chip size="small" label="IT Support" variant="outlined" />}
                               {cat.isDesktop && <Chip size="small" label="Desktop Support" variant="outlined" />}
                               {cat.isPantawid && <Chip size="small" label="Pantawid ICT Support" variant="outlined" />}
+                              {cat.isSpecialized && <Chip size="small" label="Specialized Concerns" variant="outlined" />}
                             </Box>
                           </TableCell>
                           <TableCell>
@@ -1669,8 +1678,7 @@ export default function TicketSettingsPage() {
                         </TableCell>
                         <TableCell>
                           {f.submitter
-                            ? `${f.submitter.firstName || ''} ${f.submitter.lastName || ''}`.trim() ||
-                            f.submitter.email
+                            ? formatPersonName(f.submitter, f.submitter.email)
                             : 'Anonymous'}
                         </TableCell>
                         <TableCell>
@@ -1688,8 +1696,7 @@ export default function TicketSettingsPage() {
                         </TableCell>
                         <TableCell>
                           {f.actedBy
-                            ? `${f.actedBy.firstName || ''} ${f.actedBy.lastName || ''}`.trim() ||
-                            f.actedBy.email
+                            ? formatPersonName(f.actedBy, f.actedBy.email)
                             : '—'}
                         </TableCell>
                         <TableCell align="right">
@@ -1863,6 +1870,7 @@ export default function TicketSettingsPage() {
               <MenuItem value="it_support">IT Support</MenuItem>
               <MenuItem value="desktop_support">Desktop Support</MenuItem>
               <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
+              <MenuItem value="specialized_concerns">Specialized Concerns</MenuItem>
             </TextField>
             <TextField
               select
@@ -1937,6 +1945,15 @@ export default function TicketSettingsPage() {
                   />
                 }
                 label="Pantawid ICT Support"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={catForm.isSpecialized}
+                    onChange={(e) => setCatForm({ ...catForm, isSpecialized: e.target.checked })}
+                  />
+                }
+                label="Specialized Concerns"
               />
             </FormGroup>
             <FormControlLabel
@@ -2019,6 +2036,7 @@ export default function TicketSettingsPage() {
               <MenuItem value="it_support">IT Support</MenuItem>
               <MenuItem value="desktop_support">Desktop Support</MenuItem>
               <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
+              <MenuItem value="specialized_concerns">Specialized Concerns</MenuItem>
             </TextField>
             <TextField
               select

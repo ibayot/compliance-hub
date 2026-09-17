@@ -42,6 +42,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSidebar } from '@/contexts/SidebarContext';
 import type { RoleCapabilityRecord } from '@/lib/api/users';
 import { usersApi } from '@/lib/api/users';
+import { formatPersonName } from '@/lib/utils/person-name';
 import { useState, useEffect } from 'react';
 
 interface SidebarProps {
@@ -375,7 +376,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       {!isCollapsed && (
         <Box sx={{ px: 3, py: 2, bgcolor: 'background.default' }}>
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {user?.firstName} {user?.lastName}
+            {formatPersonName(user, '—')}
           </Typography>
           <Typography variant="caption" color="text.secondary">
             {user?.role.replace('_', ' ').toUpperCase()}

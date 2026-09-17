@@ -16,13 +16,17 @@ export interface Incident {
   reported_by?: {
     id: number;
     first_name: string;
+    middle_name?: string;
     last_name: string;
+    suffix?: string;
     email: string;
   };
   assigned_to?: {
     id: number;
     first_name: string;
+    middle_name?: string;
     last_name: string;
+    suffix?: string;
     email: string;
   };
 }

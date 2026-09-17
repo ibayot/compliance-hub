@@ -166,8 +166,8 @@ export class TicketController {
   /** GET /tickets/technicians */
   @Get('technicians')
   @RequireCapability('isTicketModuleAccess')
-  async getTechnicians() {
-    return this.ticketService.getTechnicianAvailability();
+  async getTechnicians(@Query('ticketType') ticketType?: string) {
+    return this.ticketService.getTechnicianAvailability(ticketType);
   }
 
   /** GET /tickets/assignee-correction-options — active RICTMS staff for factual corrections */

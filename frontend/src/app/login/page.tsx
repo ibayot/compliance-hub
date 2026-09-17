@@ -19,6 +19,7 @@ import { CredentialResponse, GoogleLogin } from '@react-oauth/google';
 import { useSnackbar } from 'notistack';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { authApi } from '@/lib/api/auth';
 import { Fingerprint as FingerprintIcon, Visibility, VisibilityOff } from '@mui/icons-material';
 import {
   getBiometricCredentials,
@@ -36,12 +37,19 @@ export default function LoginPage() {
   const [biometricChecked, setBiometricChecked] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricSaved, setBiometricSaved] = useState(false);
+  const [googleSignInEnabled, setGoogleSignInEnabled] = useState(false);
   const { login, loginWithGoogle } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const { search } = useLocation();
   const reason = new URLSearchParams(search).get('reason');
   const redirect = new URLSearchParams(search).get('redirect');
   const hasGoogleClient = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim().length > 0;
+
+  useEffect(() => {
+    authApi.getPublicConfig()
+      .then((config) => setGoogleSignInEnabled(config.googleSignInEnabled !== false))
+      .catch(() => setGoogleSignInEnabled(false));
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -283,7 +291,7 @@ export default function LoginPage() {
                 </>
               )}
 
-              {hasGoogleClient && (
+              {hasGoogleClient && googleSignInEnabled && (
                 <>
                   <Divider sx={{ my: 2 }}>or</Divider>
                   <Box display="flex" justifyContent="center">

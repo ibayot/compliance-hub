@@ -178,7 +178,14 @@ export class EmailService implements OnModuleInit {
   }
 
   async sendTicketCreatedEmail(data: TicketEmailData): Promise<void> {
-    const typeLabel = data.ticketType === 'desktop_support' ? 'Desktop Support' : 'IT Support';
+    const typeLabel =
+      data.ticketType === 'desktop_support'
+        ? 'Desktop Support'
+        : data.ticketType === 'pantawid_ict_support'
+          ? 'Pantawid ICT Support'
+          : data.ticketType === 'specialized_concerns'
+            ? 'Specialized Concerns'
+            : 'IT Support';
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — ${data.subject}`;
     const ticketUrl = `${this.frontendUrl}/operations/tickets/${data.ticketId}`;
 
@@ -257,7 +264,9 @@ export class EmailService implements OnModuleInit {
         ? 'Desktop Support'
         : data.ticketType === 'pantawid_ict_support'
           ? 'Pantawid ICT Support'
-          : 'IT Support';
+          : data.ticketType === 'specialized_concerns'
+            ? 'Specialized Concerns'
+            : 'IT Support';
 
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Assigned to You — ${data.subject}`;
     const ticketUrl = `${this.frontendUrl}/operations/tickets/${data.ticketId}`;

@@ -123,6 +123,7 @@ export default function DashboardPage() {
 
   const isRegularUser = user?.role === 'user';
   const isTechnicianAny = !!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct;
+  const canViewAssignedTickets = !isRegularUser && !!myCap?.isTicketModuleAccess;
   const isLowerLevelTech = (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
   const isComplianceOfficer = !!myCap?.isReportsAccess;
   const canViewDocuments = !!myCap?.isDocumentsAccess;
@@ -388,14 +389,14 @@ export default function DashboardPage() {
 
   // Fetch monthly assigned-ticket stats for technicians whenever period changes
   useEffect(() => {
-    if (appMode === 'loading' || !isTechnicianAny || !user?.id || !ticketingEnabled) return;
+    if (appMode === 'loading' || !canViewAssignedTickets || !user?.id || !ticketingEnabled) return;
     setTechStatsLoading(true);
     ticketsApi
       .getAssignedStats(techStatsYear, techStatsMonth)
       .then((data) => setTechAssignedStats(data))
       .catch(() => { })
       .finally(() => setTechStatsLoading(false));
-  }, [appMode, isTechnicianAny, user?.id, ticketingEnabled, techStatsYear, techStatsMonth]);
+  }, [appMode, canViewAssignedTickets, user?.id, ticketingEnabled, techStatsYear, techStatsMonth]);
 
 
 
@@ -676,7 +677,7 @@ export default function DashboardPage() {
       )}
 
       {/* Technician Personal Assignment Stats */}
-      {isTechnicianAny && appMode !== 'compliance_only' && (
+      {canViewAssignedTickets && appMode !== 'compliance_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box
@@ -697,6 +698,13 @@ export default function DashboardPage() {
                 </Box>
               </Box>
               <Stack direction="row" spacing={1}>
+                <Button
+                  variant="outlined"
+                  startIcon={<TicketIcon />}
+                  onClick={() => router.push('/operations/tickets?assignedToMe=1')}
+                >
+                  View Assigned Tickets
+                </Button>
                 <TextField
                   select
                   size="small"

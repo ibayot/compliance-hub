@@ -16,6 +16,7 @@ import { Ticket } from '../entities/ticket.entity';
 import { SseService } from './sse.service';
 import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
 import { NotificationService } from './notification.service';
+import { formatPersonName } from '../../../shared/utils/person-name';
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -36,6 +37,10 @@ export class CreateCategoryDto {
   @IsBoolean()
   @ApiPropertyOptional()
   isPantawid?: boolean;
+  @IsOptional()
+  @IsBoolean()
+  @ApiPropertyOptional()
+  isSpecialized?: boolean;
   @IsOptional()
   @IsString()
   @ApiPropertyOptional()
@@ -63,6 +68,10 @@ export class UpdateCategoryDto {
   @IsBoolean()
   @ApiPropertyOptional()
   isPantawid?: boolean;
+  @IsOptional()
+  @IsBoolean()
+  @ApiPropertyOptional()
+  isSpecialized?: boolean;
   @IsOptional()
   @IsString()
   @ApiPropertyOptional()
@@ -323,6 +332,7 @@ export class TicketSettingsService {
     if (ticketType === 'it_support') qb.andWhere('c.isIt = true');
     else if (ticketType === 'desktop_support') qb.andWhere('c.isDesktop = true');
     else if (ticketType === 'pantawid_ict_support') qb.andWhere('c.isPantawid = true');
+    else if (ticketType === 'specialized_concerns') qb.andWhere('c.isSpecialized = true');
     return qb.orderBy('c.name', 'ASC').getMany();
   }
 
@@ -331,6 +341,7 @@ export class TicketSettingsService {
     if (ticketType === 'it_support') qb.andWhere('c.isIt = true');
     else if (ticketType === 'desktop_support') qb.andWhere('c.isDesktop = true');
     else if (ticketType === 'pantawid_ict_support') qb.andWhere('c.isPantawid = true');
+    else if (ticketType === 'specialized_concerns') qb.andWhere('c.isSpecialized = true');
     return qb.orderBy('c.name', 'ASC').getMany();
   }
 
@@ -342,7 +353,7 @@ export class TicketSettingsService {
 
   async createCategory(dto: CreateCategoryDto, actorId: number): Promise<TicketCategoryConfig> {
     if (!dto.name?.trim()) throw new BadRequestException('Category name is required');
-    if (!dto.isIt && !dto.isDesktop && !dto.isPantawid) {
+    if (!dto.isIt && !dto.isDesktop && !dto.isPantawid && !dto.isSpecialized) {
       throw new BadRequestException('At least one support type must be selected');
     }
 
@@ -362,6 +373,7 @@ export class TicketSettingsService {
       softDeleted.isIt = !!dto.isIt;
       softDeleted.isDesktop = !!dto.isDesktop;
       softDeleted.isPantawid = !!dto.isPantawid;
+      softDeleted.isSpecialized = !!dto.isSpecialized;
       softDeleted.description = dto.description?.trim() || null;
       softDeleted.isActive = true;
       softDeleted.isDeleted = false;
@@ -378,6 +390,7 @@ export class TicketSettingsService {
       isIt: !!dto.isIt,
       isDesktop: !!dto.isDesktop,
       isPantawid: !!dto.isPantawid,
+      isSpecialized: !!dto.isSpecialized,
       description: dto.description?.trim() || null,
       isActive: dto.isActive ?? true,
       isDeleted: false,
@@ -404,16 +417,18 @@ export class TicketSettingsService {
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/(^_|_$)/g, '');
     }
-    if (dto.isIt !== undefined || dto.isDesktop !== undefined || dto.isPantawid !== undefined) {
+    if (dto.isIt !== undefined || dto.isDesktop !== undefined || dto.isPantawid !== undefined || dto.isSpecialized !== undefined) {
       const isIt = dto.isIt !== undefined ? dto.isIt : cat.isIt;
       const isDesktop = dto.isDesktop !== undefined ? dto.isDesktop : cat.isDesktop;
       const isPantawid = dto.isPantawid !== undefined ? dto.isPantawid : cat.isPantawid;
-      if (!isIt && !isDesktop && !isPantawid) {
+      const isSpecialized = dto.isSpecialized !== undefined ? dto.isSpecialized : cat.isSpecialized;
+      if (!isIt && !isDesktop && !isPantawid && !isSpecialized) {
         throw new BadRequestException('At least one support type must be selected');
       }
       if (dto.isIt !== undefined) cat.isIt = dto.isIt;
       if (dto.isDesktop !== undefined) cat.isDesktop = dto.isDesktop;
       if (dto.isPantawid !== undefined) cat.isPantawid = dto.isPantawid;
+      if (dto.isSpecialized !== undefined) cat.isSpecialized = dto.isSpecialized;
     }
     if (dto.description !== undefined) cat.description = dto.description?.trim() || null;
 
@@ -460,9 +475,9 @@ export class TicketSettingsService {
           : [];
 
     if (kwList.length === 0) throw new BadRequestException('At least one keyword is required');
-    if (!['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.targetTicketType)) {
+    if (!['desktop_support', 'it_support', 'pantawid_ict_support', 'specialized_concerns'].includes(dto.targetTicketType)) {
       throw new BadRequestException(
-        'targetTicketType must be desktop_support, it_support, or pantawid_ict_support',
+        'targetTicketType must be desktop_support, it_support, pantawid_ict_support, or specialized_concerns',
       );
     }
     if (!dto.targetCategoryId) {
@@ -499,10 +514,10 @@ export class TicketSettingsService {
     }
     if (dto.targetTicketType !== undefined) {
       if (
-        !['desktop_support', 'it_support', 'pantawid_ict_support'].includes(dto.targetTicketType)
+        !['desktop_support', 'it_support', 'pantawid_ict_support', 'specialized_concerns'].includes(dto.targetTicketType)
       ) {
         throw new BadRequestException(
-          'targetTicketType must be desktop_support, it_support, or pantawid_ict_support',
+          'targetTicketType must be desktop_support, it_support, pantawid_ict_support, or specialized_concerns',
         );
       }
       rule.targetTicketType = dto.targetTicketType;
@@ -838,7 +853,7 @@ export class TicketSettingsService {
     );
 
     return focalUsers.map((u: any) => {
-      const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email;
+      const name = formatPersonName(u, u.email);
       return {
         value: String(u.id),
         label: `${name} - ${roleMap.get(u.role)}`,
@@ -851,7 +866,7 @@ export class TicketSettingsService {
     dto: CreateEscalationFocalDto,
     actorId: number,
   ): Promise<EscalationFocalConfig> {
-    const validTypes = ['desktop_support', 'it_support', 'pantawid_ict_support', 'all'];
+    const validTypes = ['desktop_support', 'it_support', 'pantawid_ict_support', 'specialized_concerns', 'all'];
     if (!validTypes.includes(dto.ticketType)) {
       throw new BadRequestException(`ticketType must be one of: ${validTypes.join(', ')}`);
     }
@@ -873,7 +888,7 @@ export class TicketSettingsService {
       );
 
     const user = await this.categoryRepo.manager.query(
-      `SELECT id, first_name, last_name, email, role FROM users WHERE id = ? AND active = 1`,
+      `SELECT id, first_name, middle_name, last_name, suffix, email, role FROM users WHERE id = ? AND active = 1`,
       [userId],
     );
     if (!user || user.length === 0) {
@@ -887,7 +902,7 @@ export class TicketSettingsService {
       throw new BadRequestException('Selected user is not eligible to be an escalation focal.');
     }
 
-    const name = [user[0].first_name, user[0].last_name].filter(Boolean).join(' ') || user[0].email;
+    const name = formatPersonName(user[0], user[0].email);
 
     const config = this.escalationFocalRepo.create({
       ticketType: dto.ticketType,

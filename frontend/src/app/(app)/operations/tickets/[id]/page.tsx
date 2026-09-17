@@ -35,6 +35,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSse } from '@/lib/utils/useSse';
+import { formatPersonName } from '@/lib/utils/person-name';
 import {
   ticketsApi,
   ticketSettingsApi,
@@ -642,6 +643,14 @@ export default function TicketDetailPage() {
   };
 
   const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
+  const selectCommentImage = useCallback((file?: File) => {
+    if (!file) return;
+    if (!isAllowedImageFile(file)) {
+      enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed.', { variant: 'error' });
+      return;
+    }
+    setCommentAttachment(file);
+  }, [enqueueSnackbar]);
 
   const handleAddComment = async () => {
     if (!comment.trim() && !commentAttachment) return;
@@ -1299,8 +1308,7 @@ export default function TicketDetailPage() {
                   startIcon={<StarIcon />}
                   onClick={() => {
                     const assignedName = ticket.assignedTo
-                      ? `${ticket.assignedTo.firstName ?? ''} ${ticket.assignedTo.lastName ?? ''}`.trim() ||
-                      ticket.assignedTo.email
+                      ? formatPersonName(ticket.assignedTo, ticket.assignedTo.email)
                       : '';
                     setCsatForm({
                       consentGiven: false,
@@ -1670,7 +1678,7 @@ export default function TicketDetailPage() {
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Typography variant="body2">
                       {(ticket as any).requester
-                        ? `${(ticket as any).requester.firstName} ${(ticket as any).requester.lastName}`
+                        ? formatPersonName((ticket as any).requester, `User #${ticket.requesterId}`)
                         : `User #${ticket.requesterId}`}
                     </Typography>
                     {canCorrectTicketRecord && (
@@ -1688,7 +1696,7 @@ export default function TicketDetailPage() {
                       </Typography>
                       <Typography variant="body2">
                         {(ticket as any).createdBy
-                          ? `${(ticket as any).createdBy.firstName} ${(ticket as any).createdBy.lastName}`
+                          ? formatPersonName((ticket as any).createdBy, `Staff #${(ticket as any).createdById}`)
                           : `Staff #${(ticket as any).createdById}`}
                       </Typography>
                     </Box>
@@ -1709,7 +1717,7 @@ export default function TicketDetailPage() {
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Typography variant="body2">
                         {(ticket as any).assignedTo
-                          ? `${(ticket as any).assignedTo.firstName} ${(ticket as any).assignedTo.lastName}`
+                          ? formatPersonName((ticket as any).assignedTo, `User #${ticket.assignedToId}`)
                           : `User #${ticket.assignedToId}`}
                       </Typography>
                       {canCorrectAssignee && (
@@ -1863,11 +1871,11 @@ export default function TicketDetailPage() {
                   />
                   <Typography variant="body2">
                     <strong>
-                      {e.escalatedBy?.firstName} {e.escalatedBy?.lastName}
+                      {formatPersonName(e.escalatedBy, '—')}
                     </strong>
                     {' → '}
                     <strong>
-                      {e.escalatedTo?.firstName} {e.escalatedTo?.lastName}
+                      {formatPersonName(e.escalatedTo, '—')}
                     </strong>
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -2088,9 +2096,7 @@ export default function TicketDetailPage() {
                         <Box display="flex" alignItems="center" gap={1}>
                           <Typography variant="body2" fontWeight={600}>
                             {c.user
-                              ? ([c.user.firstName ?? c.user.first_name, c.user.lastName ?? c.user.last_name]
-                                .filter(Boolean)
-                                .join(' ') || c.user.email || `User #${c.userId}`)
+                              ? formatPersonName(c.user, `User #${c.userId}`)
                               : `User #${c.userId}`}
                           </Typography>
                           {(() => {
@@ -2176,7 +2182,30 @@ export default function TicketDetailPage() {
                   sx={{ mt: 1 }}
                 />
               )}
-              <Box mt={1} display="flex" alignItems="center" gap={2}>
+              <Box
+                mt={1}
+                display="flex"
+                alignItems="center"
+                gap={2}
+                flexWrap="wrap"
+                tabIndex={0}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  selectCommentImage(event.dataTransfer.files?.[0]);
+                }}
+                onPaste={(event) => {
+                  const image = Array.from(event.clipboardData.files).find((file) => file.type.startsWith('image/'));
+                  if (image) {
+                    event.preventDefault();
+                    selectCommentImage(image);
+                  }
+                }}
+                sx={{ border: '1px dashed', borderColor: 'divider', borderRadius: 1, p: 1, outline: 'none', '&:focus': { borderColor: 'primary.main' } }}
+              >
+                <Typography variant="caption" color="text.secondary" sx={{ width: '100%' }}>
+                  Attach by selecting, dragging and dropping, or focusing here and pasting from the clipboard.
+                </Typography>
                 <Button
                   variant="contained"
                   size="small"
@@ -2193,14 +2222,7 @@ export default function TicketDetailPage() {
                     hidden
                     accept={ALLOWED_IMAGE_FILE_ACCEPT}
                     onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file && isAllowedImageFile(file)) {
-                        setCommentAttachment(file);
-                      } else if (file) {
-                        enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed.', {
-                          variant: 'error',
-                        });
-                      }
+                      selectCommentImage(e.target.files?.[0]);
                       e.target.value = '';
                     }}
                   />
@@ -2352,7 +2374,7 @@ export default function TicketDetailPage() {
         <DialogContent>
           <Autocomplete
             options={technicians.filter((t) => t.id !== ticket?.assignedToId)}
-              getOptionLabel={(t) => `${t.firstName} ${t.lastName} (${t.openCount} Active)`}
+              getOptionLabel={(t) => `${formatPersonName(t, t.email)} (${t.openCount} Active)`}
             value={technicians.find((t) => t.id === assignToId) ?? null}
             onChange={(_, newValue) => setAssignToId(newValue ? Number(newValue.id) : '')}
             isOptionEqualToValue={(option, value) => option.id === value.id}
@@ -2397,7 +2419,7 @@ export default function TicketDetailPage() {
           <Autocomplete
             options={requesterOptions}
             getOptionLabel={(option) =>
-              `${option.firstName ?? ''} ${option.lastName ?? ''}`.trim() || option.email
+              formatPersonName(option, option.email)
             }
             value={requesterOptions.find((option) => option.id === correctedRequesterId) ?? null}
             onChange={(_, option) => setCorrectedRequesterId(option?.id ?? '')}
@@ -2439,7 +2461,7 @@ export default function TicketDetailPage() {
           <Autocomplete
             options={assigneeCorrectionOptions}
             getOptionLabel={(option) =>
-              `${option.firstName ?? ''} ${option.lastName ?? ''}`.trim() || option.email
+              formatPersonName(option, option.email)
             }
             value={
               assigneeCorrectionOptions.find((option) => option.id === correctedAssigneeId) ?? null
@@ -2481,7 +2503,7 @@ export default function TicketDetailPage() {
           </Alert>
           <Autocomplete
             options={escalationFocalUsers}
-            getOptionLabel={(t) => `${t.firstName} ${t.lastName}`}
+            getOptionLabel={(t) => formatPersonName(t, t.email)}
             value={escalationFocalUsers.find((t) => t.id === escalateToId) ?? null}
             onChange={(_, newValue) => setEscalateToId(newValue ? Number(newValue.id) : '')}
             isOptionEqualToValue={(option, value) => option.id === value.id}

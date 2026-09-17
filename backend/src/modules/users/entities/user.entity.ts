@@ -31,6 +31,7 @@ export enum UserRole {
   DESKTOP_JR = 'desktop_jr',
   IT_SUPPORT_JR = 'it_support_jr',
   PANTAWID_ICT = 'pantawid_ict',
+  PANTAWID_ICT_LEAD = 'pantawid_ict_lead',
   RECORDS_OFFICER = 'records_officer',
   HR_ID_OFFICER = 'hr_id_officer',
 }

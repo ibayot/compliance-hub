@@ -35,6 +35,7 @@ import {
   EventBusService,
   CAPABILITIES_UPDATED_EVENT,
 } from '../../common/events/event-bus.service';
+import { SSE_EVENT_CHANNEL } from '../../common/events/sse.service';
 
 @ApiTags('users')
 @Controller('users')
@@ -46,6 +47,16 @@ export class UsersController {
     private readonly roleCapabilitiesService: RoleCapabilitiesService,
     private readonly eventBus: EventBusService,
   ) {}
+
+  private emitUserDirectoryUpdated(userId: number, action: 'created' | 'updated' | 'disabled') {
+    void this.eventBus.publish(SSE_EVENT_CHANNEL, {
+      sourceId: 'users-service',
+      event: {
+        type: 'USER_DIRECTORY_UPDATED',
+        payload: { userId, action },
+      },
+    });
+  }
 
   @Get('roles')
   @UseGuards(CapabilityGuard)
@@ -93,12 +104,14 @@ export class UsersController {
       createUserDto.role = UserRole.USER;
     }
 
-    return this.usersService.create(createUserDto);
+    const created = await this.usersService.create(createUserDto);
+    this.emitUserDirectoryUpdated(created.id, 'created');
+    return created;
   }
 
   @Get('search-email')
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isUserManagementView')
+  @RequireCapability(['isUserManagementView', 'isUserManagementAdmin'])
   searchEmail(@Query('q') q: string) {
     return this.usersService.searchEmails(q);
   }
@@ -121,7 +134,7 @@ export class UsersController {
 
   @Get('federated')
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isUserManagementView')
+  @RequireCapability(['isUserManagementView', 'isUserManagementAdmin'])
   getFederatedUsers() {
     return this.usersService.getFederatedUsers();
   }
@@ -190,7 +203,7 @@ export class UsersController {
 
   @Get(':id')
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isUserManagementView')
+  @RequireCapability(['isUserManagementView', 'isUserManagementAdmin'])
   findOne(@Param('id') id: string) {
     const parsedId = parseInt(id, 10);
     if (isNaN(parsedId)) {
@@ -249,6 +262,7 @@ export class UsersController {
         message: 'Your assigned role was updated. Your available modules and actions may have changed.',
       });
     }
+    this.emitUserDirectoryUpdated(updated.id, updated.active === false ? 'disabled' : 'updated');
     return updated;
   }
 
@@ -308,6 +322,8 @@ export class UsersController {
     }
 
 
-    return this.usersService.remove(parsedId);
+    const removed = await this.usersService.remove(parsedId);
+    this.emitUserDirectoryUpdated(parsedId, 'disabled');
+    return removed;
   }
 }

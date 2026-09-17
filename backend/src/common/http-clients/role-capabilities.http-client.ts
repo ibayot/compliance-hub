@@ -19,6 +19,7 @@ export type CapabilityKey =
   | 'isDesktop'
   | 'isItSupport'
   | 'isPantawidIct'
+  | 'isSpecializedSupport'
   | 'isEscalationFocal'
   | 'isTicketSettingsFocal'
   | 'isSmtpSettingsAccess'
@@ -145,6 +146,9 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
   isPantawidIct(role: string): boolean {
     return !!this.get(role)?.isPantawidIct;
   }
+  isSpecializedSupport(role: string): boolean {
+    return !!this.get(role)?.isSpecializedSupport;
+  }
   isEscalationFocal(role: string): boolean {
     return !!this.get(role)?.isEscalationFocal;
   }
@@ -156,7 +160,7 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
 
   isSeniorTech(role: string): boolean {
     const c = this.get(role);
-    return !!c && !!c.isFocal && (!!c.isDesktop || !!c.isItSupport);
+    return !!c && !!c.isFocal && (!!c.isDesktop || !!c.isItSupport || !!c.isPantawidIct);
   }
 
   isSeniorDesktop(role: string): boolean {
@@ -320,7 +324,7 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
 
   getSeniorTechRoles(): string[] {
     return [...this.cache.values()]
-      .filter((r) => r.isFocal && (r.isDesktop || r.isItSupport))
+      .filter((r) => r.isFocal && (r.isDesktop || r.isItSupport || r.isPantawidIct))
       .map((r) => r.roleValue);
   }
 

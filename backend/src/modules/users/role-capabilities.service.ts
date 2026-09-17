@@ -122,6 +122,11 @@ export class RoleCapabilitiesService implements OnModuleInit {
     return !!this.get(role)?.isPantawidIct;
   }
 
+  /** True for roles that may receive manually assigned Specialized Concerns tickets. */
+  isSpecializedSupport(role: string): boolean {
+    return !!this.get(role)?.isSpecializedSupport;
+  }
+
   /** True for roles that may receive escalated tickets. */
   isEscalationFocal(role: string): boolean {
     return !!this.get(role)?.isEscalationFocal;
@@ -137,13 +142,13 @@ export class RoleCapabilitiesService implements OnModuleInit {
   }
 
   /**
-   * True for SENIOR technicians only (desktop_sr, it_support_sr).
-   * Derived: isFocal AND (isDesktop OR isItSupport).
+   * True for SENIOR technicians (desktop_sr, it_support_sr, pantawid_ict_lead).
+   * Derived: isFocal AND a technician specialization capability.
    * These roles are excluded from auto-ticket-assignment (they self-assign via admin UI).
    */
   isSeniorTech(role: string): boolean {
     const c = this.get(role);
-    return !!c && !!c.isFocal && (!!c.isDesktop || !!c.isItSupport);
+    return !!c && !!c.isFocal && (!!c.isDesktop || !!c.isItSupport || !!c.isPantawidIct);
   }
 
   /**
@@ -303,6 +308,7 @@ export class RoleCapabilitiesService implements OnModuleInit {
       | 'isDesktop'
       | 'isItSupport'
       | 'isPantawidIct'
+      | 'isSpecializedSupport'
       | 'isEscalationFocal'
       | 'isTicketSettingsFocal'
       | 'isSmtpSettingsAccess'
@@ -347,10 +353,10 @@ export class RoleCapabilitiesService implements OnModuleInit {
     return [...this.cache.values()].filter((r) => r[capability]).map((r) => r.roleValue);
   }
 
-  /** Return all senior tech role values (isFocal + isDesktop or isItSupport). */
+  /** Return all senior tech role values (isFocal plus a technician specialization). */
   getSeniorTechRoles(): string[] {
     return [...this.cache.values()]
-      .filter((r) => r.isFocal && (r.isDesktop || r.isItSupport))
+      .filter((r) => r.isFocal && (r.isDesktop || r.isItSupport || r.isPantawidIct))
       .map((r) => r.roleValue);
   }
 

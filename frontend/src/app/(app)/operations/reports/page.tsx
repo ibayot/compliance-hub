@@ -41,6 +41,7 @@ import {
 } from 'recharts';
 import { ticketsApi, TicketReportResult, RatingsReportResult } from '@/app/api/references';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatPersonName } from '@/lib/utils/person-name';
 import { useSse } from '@/lib/utils/useSse';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
 
@@ -54,6 +55,7 @@ const TYPE_LABELS: Record<string, string> = {
   desktop_support: 'Desktop Support',
   it_support: 'IT Support',
   pantawid_ict_support: 'Pantawid ICT Support',
+  specialized_concerns: 'Specialized Concerns',
 };
 
 const RATING_COLOR = (avg: number): 'error' | 'warning' | 'success' | 'info' => {
@@ -124,7 +126,7 @@ export default function TicketReportsPage() {
   const [slaPieData, setSlaPieData] = useState<any[]>([]);
   const [ticketType, setTicketType] = useState<string>('');
   const [technicians, setTechnicians] = useState<
-    Array<{ id: number; firstName: string; lastName: string; role: string }>
+    Array<{ id: number; firstName: string; middleName?: string; lastName: string; suffix?: string; role: string }>
   >([]);
   const [result, setResult] = useState<TicketReportResult | null>(null);
   const [detailedResult, setDetailedResult] = useState<RatingsReportResult | null>(null);
@@ -528,23 +530,24 @@ export default function TicketReportsPage() {
                     <MenuItem value="desktop_support">Desktop Support</MenuItem>
                     <MenuItem value="it_support">IT Support</MenuItem>
                     <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
+                    <MenuItem value="specialized_concerns">Specialized Concerns</MenuItem>
                   </TextField>
                   {canManageReports && (
                     <TextField
                       select
                       fullWidth
                       size="small"
-                      label="Technician"
+                      label="Assignee"
                       value={technicianId}
                       onChange={(e) =>
                         setTechnicianId(e.target.value === '' ? '' : Number(e.target.value))
                       }
                       sx={{ minWidth: 120 }}
                     >
-                      <MenuItem value="">All Technicians</MenuItem>
+                      <MenuItem value="">All Assignees</MenuItem>
                       {technicians.map((t) => (
                         <MenuItem key={t.id} value={t.id}>
-                          {t.firstName} {t.lastName}
+                          {formatPersonName(t)}
                         </MenuItem>
                       ))}
                     </TextField>
@@ -566,7 +569,7 @@ export default function TicketReportsPage() {
             sx={{ '@media print': { display: 'none' } }}
           >
             <Typography variant="body2" color="text.secondary">
-              Satisfaction ratings overview — average overall, per support type, and per technician.
+              Satisfaction ratings overview — average overall, per support type, and per assignee.
             </Typography>
             <ToggleButtonGroup
               value={viewMode}
@@ -999,7 +1002,7 @@ export default function TicketReportsPage() {
                         <Card>
                           <CardContent>
                             <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                              Average Rating by Technician
+                              Average Rating by Assignee
                             </Typography>
                             {barData.length === 0 ? (
                               <Typography variant="body2" color="text.secondary">
@@ -1033,7 +1036,7 @@ export default function TicketReportsPage() {
                         <Card>
                           <CardContent>
                             <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                              Ticket Volume by Technician
+                              Ticket Volume by Assignee
                             </Typography>
                             {countBarData.length === 0 ? (
                               <Typography variant="body2" color="text.secondary">
@@ -1100,12 +1103,12 @@ export default function TicketReportsPage() {
                           <Card>
                             <CardContent>
                               <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                                Technician Detail
+                                Assignee Detail
                               </Typography>
                               <Table size="small">
                                 <TableHead>
                                   <TableRow>
-                                    <TableCell>Technician</TableCell>
+                                    <TableCell>Assignee</TableCell>
                                     <TableCell align="right">Resolved Tickets</TableCell>
                                     <TableCell align="right">Rated Tickets</TableCell>
                                     <TableCell>Avg Rating</TableCell>
@@ -1390,7 +1393,7 @@ export default function TicketReportsPage() {
                       gutterBottom
                       sx={{ mt: 4, borderBottom: '1px solid #ccc' }}
                     >
-                      Technician Performance Detail
+                      Assignee Performance Detail
                     </Typography>
                     <Box
                       height={250}
@@ -1419,7 +1422,7 @@ export default function TicketReportsPage() {
                     <Table size="small" sx={{ mb: 4 }}>
                       <TableHead>
                         <TableRow>
-                          <TableCell>Technician</TableCell>
+                          <TableCell>Assignee</TableCell>
                           <TableCell align="right">Resolved Tickets</TableCell>
                           <TableCell align="right">Rated Tickets</TableCell>
                           <TableCell align="right">Average Rating</TableCell>
@@ -1480,12 +1483,12 @@ export default function TicketReportsPage() {
                       gutterBottom
                       sx={{ mt: 4, borderBottom: '1px solid #ccc' }}
                     >
-                      SLA Detail By Technician
+                      SLA Detail By Assignee
                     </Typography>
                     <Table size="small" sx={{ mb: 4 }}>
                       <TableHead>
                         <TableRow>
-                          <TableCell>Technician</TableCell>
+                          <TableCell>Assignee</TableCell>
                           <TableCell align="right">Met SLA</TableCell>
                           <TableCell align="right">Missed SLA</TableCell>
                           <TableCell align="right">Avg Time (hrs)</TableCell>
@@ -1518,7 +1521,7 @@ export default function TicketReportsPage() {
           </Typography>
           {!hasPerformanceData && (
             <Alert severity="info" sx={{ mb: 2 }}>
-              No performance data is available for the selected period and technician.
+              No performance data is available for the selected period and assignee.
             </Alert>
           )}
           <Grid container spacing={3}>
@@ -1596,16 +1599,16 @@ export default function TicketReportsPage() {
               </Grid>
             )}
 
-            {/* SLA by Technician */}
+            {/* SLA by Assignee */}
             {result.slaByTechnician && result.slaByTechnician.length > 0 && (
               <Grid item xs={12}>
                 <Card>
                   <CardContent>
-                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>SLA by Technician</Typography>
+                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>SLA by Assignee</Typography>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Technician</TableCell>
+                          <TableCell>Assignee</TableCell>
                           <TableCell align="right">Met</TableCell>
                           <TableCell align="right">Missed</TableCell>
                           <TableCell align="right">Avg Time (hrs)</TableCell>
@@ -1627,15 +1630,15 @@ export default function TicketReportsPage() {
               </Grid>
             )}
             
-            {/* Technician Performance Detail */}
+            {/* Assignee Performance Detail */}
             {result.avgRatingByTechnician.length > 0 && (
               <Grid item xs={12}>
                 <Card><CardContent>
-                <Typography variant="subtitle1" fontWeight={600} gutterBottom>Technician Performance Detail</Typography>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>Assignee Performance Detail</Typography>
                   <Table size="small" sx={{ mb: 4 }}>
                     <TableHead>
                       <TableRow>
-                        <TableCell>Technician</TableCell>
+                        <TableCell>Assignee</TableCell>
                         <TableCell align="right">Resolved Tickets</TableCell>
                         <TableCell align="right">Rated Tickets</TableCell>
                         <TableCell align="right">Average Rating</TableCell>

@@ -9,6 +9,7 @@ import {
 import { Injectable } from '@nestjs/common';
 import { auditContext } from './audit.context';
 import { redactAuditValue } from './audit-redaction';
+import { formatPersonName } from '../utils/person-name';
 function getAuditLogTableName(): string {
   const databaseName = process.env.AUDIT_DB_DATABASE?.trim();
   if (!databaseName || !/^[A-Za-z0-9_]+$/.test(databaseName)) {
@@ -89,9 +90,9 @@ export class AuditVariableSubscriber implements EntitySubscriberInterface {
           if (sanitized[key].email !== undefined) keepProps.email = sanitized[key].email;
           if (sanitized[key].name !== undefined) keepProps.name = sanitized[key].name;
           if (sanitized[key].username !== undefined) keepProps.username = sanitized[key].username;
-          if (sanitized[key].firstName !== undefined || sanitized[key].lastName !== undefined) {
+          if (sanitized[key].firstName !== undefined || sanitized[key].middleName !== undefined || sanitized[key].lastName !== undefined || sanitized[key].suffix !== undefined) {
             keepProps.name =
-              `${sanitized[key].firstName || ''} ${sanitized[key].lastName || ''}`.trim();
+              formatPersonName(sanitized[key]);
           }
 
           sanitized[key] =

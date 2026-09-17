@@ -95,6 +95,7 @@ export interface RoleCapabilityRecord {
   isDesktop: boolean;
   isItSupport: boolean;
   isPantawidIct: boolean;
+  isSpecializedSupport: boolean;
   isIto: boolean;
   isEscalationFocal: boolean;
   isTicketSettingsFocal: boolean;
@@ -143,6 +144,7 @@ export interface UpdateRoleCapabilityPayload {
   isDesktop?: boolean;
   isItSupport?: boolean;
   isPantawidIct?: boolean;
+  isSpecializedSupport?: boolean;
   isIto?: boolean;
   isEscalationFocal?: boolean;
   isTicketSettingsFocal?: boolean;
@@ -195,7 +197,14 @@ export const usersApi = {
     return response.data;
   },
 
-  updateSecurityConfig: async (payload: { defaultPassword?: string }) => {
+  updateSecurityConfig: async (payload: {
+    defaultPassword?: string;
+    mfaTestMode?: boolean;
+    vaptMode?: boolean;
+    appMode?: string;
+    googleSignInEnabled?: boolean;
+    allowedEmailDomains?: string[];
+  }) => {
     const response = await apiClient.put('/users/security-config', payload);
     return response.data;
   },
@@ -272,7 +281,7 @@ export const usersApi = {
 
   searchEmails: async (
     q: string,
-  ): Promise<{ id: number; email: string; firstName?: string; lastName?: string }[]> => {
+  ): Promise<{ id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string }[]> => {
     const response = await apiClient.get(`/users/search-email?q=${encodeURIComponent(q)}`);
     return response.data;
   },

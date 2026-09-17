@@ -26,6 +26,9 @@ export class TicketCategoryConfig {
   @Column({ name: 'is_pantawid', type: 'boolean', default: false })
   isPantawid: boolean;
 
+  @Column({ name: 'is_specialized', type: 'boolean', default: false })
+  isSpecialized: boolean;
+
   @Column({ type: 'text', nullable: true })
   description: string | null;
 

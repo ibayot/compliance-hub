@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Cron } from '@nestjs/schedule';
 import { In, Repository } from 'typeorm';
 import { UsersHttpClient, UserStub } from '../../../common/http-clients/users.http-client';
+import { formatPersonName } from '../../../shared/utils/person-name';
 import {
   APP_NOTIFICATION_REQUESTED_EVENT,
   EventBusService,
@@ -274,7 +275,7 @@ export class DutyService {
       const user = users.get(member.userId);
       return {
         ...member,
-        name: user ? `${user.first_name} ${user.last_name}`.trim() : `User #${member.userId}`,
+        name: user ? formatPersonName(user) : `User #${member.userId}`,
         lastAssigned: last?.dutyDate ?? null,
         daysSince,
         excluded: managementOverrideUsers.has(member.userId) || exceptions.some((exception) =>
@@ -338,7 +339,7 @@ export class DutyService {
             : null;
         const names = uniqueUserIds.map((userId) => {
           const user = users.get(userId);
-          return user ? `${user.first_name} ${user.last_name}`.trim() : `User #${userId}`;
+          return user ? formatPersonName(user) : `User #${userId}`;
         });
         cards.push({
           dutyType,
@@ -412,7 +413,7 @@ export class DutyService {
         dutyType,
         coverageId: displayCoverage?.id ?? null,
         userId: cardUserId,
-        name: isOnDuty ? `${assigned!.first_name} ${assigned!.last_name}`.trim() : interventionCandidate?.name ?? next?.name ?? 'No Eligible Technicians',
+        name: isOnDuty ? formatPersonName(assigned!) : interventionCandidate?.name ?? next?.name ?? 'No Eligible Technicians',
         daysSince: isOnDuty
           ? (assignedRotation?.daysSince === 9999 ? null : assignedRotation?.daysSince ?? null)
           : (interventionCandidate ?? next)?.daysSince === 9999 ? null : (interventionCandidate ?? next)?.daysSince ?? null,
@@ -440,7 +441,7 @@ export class DutyService {
       this.usersById(),
     ]);
     const relievers = await this.relieversForReservationIds(reservations.map((reservation) => reservation.id));
-    const name = (id: number | null) => id && users.get(id) ? `${users.get(id)!.first_name} ${users.get(id)!.last_name}`.trim() : null;
+    const name = (id: number | null) => id && users.get(id) ? formatPersonName(users.get(id)!) : null;
     const reservationRelievers = (reservationId: string) => relievers
       .filter((reliever) => reliever.reservationId === reservationId)
       .map((reliever) => ({ ...reliever, name: name(reliever.userId) ?? `User #${reliever.userId}` }));
@@ -466,7 +467,7 @@ export class DutyService {
       this.usersById(),
     ]);
     return {
-      items: rows.map((x) => ({ ...x, name: users.get(x.userId) ? `${users.get(x.userId)!.first_name} ${users.get(x.userId)!.last_name}`.trim() : `User #${x.userId}` })),
+      items: rows.map((x) => ({ ...x, name: users.get(x.userId) ? formatPersonName(users.get(x.userId)!) : `User #${x.userId}` })),
       total,
       ...pagination,
       totalPages: Math.ceil(total / pagination.limit),
@@ -566,7 +567,7 @@ export class DutyService {
         userId: member.userId,
         sortOrder: member.sortOrder,
         odOnly: member.odOnly === true,
-        name: user ? `${user.first_name} ${user.last_name}`.trim() : `User #${member.userId}`,
+        name: user ? formatPersonName(user) : `User #${member.userId}`,
       };
     });
   }
@@ -656,7 +657,7 @@ export class DutyService {
             const user = users.get(reliever.userId);
             return {
               ...reliever,
-              name: user ? `${user.first_name} ${user.last_name}`.trim() : `User #${reliever.userId}`,
+              name: user ? formatPersonName(user) : `User #${reliever.userId}`,
             };
           }),
       })),
@@ -796,7 +797,7 @@ export class DutyService {
       const user = users.get(row.userId);
       return {
         ...row,
-        name: user ? `${user.first_name} ${user.last_name}`.trim() : `User #${row.userId}`,
+        name: user ? formatPersonName(user) : `User #${row.userId}`,
       };
     });
   }

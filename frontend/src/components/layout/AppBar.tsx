@@ -32,6 +32,7 @@ import { useSidebar } from '@/contexts/SidebarContext';
 import { usePageTitle } from '@/contexts/PageTitleContext';
 import { useThemeMode } from '@/contexts/ThemeModeContext';
 import { useSse } from '@/lib/utils/useSse';
+import { formatPersonName } from '@/lib/utils/person-name';
 import React, { useState, useEffect } from 'react';
 import FeedbackModal from '../FeedbackModal';
 import { attendanceApi, notificationsApi, AttendanceStatus } from '@/app/api/references';
@@ -64,6 +65,7 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotifLoading, setIsNotifLoading] = useState(false);
+  const [notifError, setNotifError] = useState<string | null>(null);
 
   const fetchMyShift = React.useCallback(() => {
     if (myCap?.isAttendanceEligible) {
@@ -132,18 +134,21 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
     out_of_office: 'Out of Office',
   };
 
-  const fetchUnread = React.useCallback((playSound = false) => {
-    if (user) {
-      notificationsApi.getUnreadCount()
-        .then(res => {
-          const currentCount = res.count;
-           if (playSound && currentCount > prevUnreadCountRef.current) {
-             playNotificationSound();
-           }
-          prevUnreadCountRef.current = currentCount;
-          setUnreadCount(currentCount);
-        })
-        .catch(() => {});
+  const fetchNotificationSummary = React.useCallback(async (playSound = false) => {
+    if (!user) return null;
+    try {
+      const summary = await notificationsApi.getSummary();
+      if (playSound && summary.unreadCount > prevUnreadCountRef.current) {
+        playNotificationSound();
+      }
+      prevUnreadCountRef.current = summary.unreadCount;
+      setUnreadCount(summary.unreadCount);
+      setNotifications(summary.notifications);
+      setNotifError(null);
+      return summary;
+    } catch {
+      setNotifError('Notifications could not be loaded. Select here to retry.');
+      return null;
     }
   }, [playNotificationSound, user]);
 
@@ -152,11 +157,11 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
     if (!user) return;
 
     // Load initially
-    fetchUnread();
+    void fetchNotificationSummary();
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        fetchUnread(true);
+        void fetchNotificationSummary(true);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -164,12 +169,12 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user, fetchUnread]);
+  }, [user, fetchNotificationSummary]);
 
   // Live updates – listen for SSE changes
   useSse(['NOTIFICATION_CREATED'], () => {
     playNotificationSound();
-    fetchUnread();
+    void fetchNotificationSummary();
   });
 
   useSse(['ATTENDANCE_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
@@ -181,14 +186,18 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
     setNotifAnchorEl(event.currentTarget);
     setIsNotifLoading(true);
     try {
-      const notifs = await notificationsApi.getMyNotifications();
-      setNotifications(notifs);
-      if (unreadCount > 0) {
-        await notificationsApi.markAllRead();
-        setUnreadCount(0);
+      const summary = await fetchNotificationSummary();
+      if (summary && summary.unreadCount > 0) {
+        try {
+          await notificationsApi.markAllRead();
+          setNotifications(summary.notifications.map((notification) => ({ ...notification, isRead: true })));
+          prevUnreadCountRef.current = 0;
+          setUnreadCount(0);
+        } catch {
+          // Keep the summary count and list together if the read-state update fails.
+          setUnreadCount(summary.unreadCount);
+        }
       }
-    } catch (err) {
-      console.error('Failed to load notifications', err);
     } finally {
       setIsNotifLoading(false);
     }
@@ -422,6 +431,10 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
             <Divider />
             {isNotifLoading ? (
               <MenuItem disabled><Typography variant="body2">Loading...</Typography></MenuItem>
+            ) : notifError ? (
+              <MenuItem onClick={() => void fetchNotificationSummary()}>
+                <Typography variant="body2" color="error">{notifError}</Typography>
+              </MenuItem>
             ) : notifications.length === 0 ? (
               <MenuItem disabled><Typography variant="body2">No notifications</Typography></MenuItem>
             ) : (
@@ -484,7 +497,7 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
           >
             <Box sx={{ px: 2, py: 1 }}>
               <Typography variant="subtitle2" fontWeight={600}>
-                {user?.firstName} {user?.lastName}
+                {formatPersonName(user, '—')}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {user?.email}

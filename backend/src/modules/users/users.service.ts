@@ -177,7 +177,15 @@ const DEFAULT_ROLE_DEFINITIONS: Array<
     value: UserRole.PANTAWID_ICT,
     label: 'Pantawid ICT Support',
     description:
-      'Handles Pantawid Pamilyang Pilipino Program (4Ps) ICT support requests exclusively.',
+      'Handles assigned Pantawid Pamilyang Pilipino Program (4Ps) ICT support requests as a junior technician.',
+    assignable: true,
+    isSystem: true,
+  },
+  {
+    value: UserRole.PANTAWID_ICT_LEAD,
+    label: 'Pantawid ICT Lead',
+    description:
+      'Leads Pantawid ICT support with the same focal and assignment authority as other senior technician roles.',
     assignable: true,
     isSystem: true,
   },
@@ -393,6 +401,11 @@ const previousValue = value;
   }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
+    createUserDto.email = createUserDto.email.trim().toLowerCase();
+    if (!(await this.securityConfigService.isEmailDomainAllowed(createUserDto.email))) {
+      throw new BadRequestException('Email domain is not allowed by Security Settings.');
+    }
+
     // Check if user already exists
     const existingUser = await this.usersRepository.findOne({
       where: { email: createUserDto.email },
@@ -416,8 +429,11 @@ const previousValue = value;
           existingUser.positionFull = this.optionalText((createUserDto as any).positionFull) as any;
         if ((createUserDto as any).designation !== undefined)
           existingUser.designation = this.optionalText((createUserDto as any).designation) as any;
-        if (createUserDto.autoAssignmentEligible !== undefined)
+        if (existingUser.role === UserRole.USER) {
+          existingUser.autoAssignmentEligible = false;
+        } else if (createUserDto.autoAssignmentEligible !== undefined) {
           existingUser.autoAssignmentEligible = createUserDto.autoAssignmentEligible;
+        }
 
         if (createUserDto.unitIds !== undefined) {
           existingUser.units = await this.resolveUnitSelection(
@@ -472,9 +488,10 @@ const previousValue = value;
 
       authProvider: AuthProvider.LOCAL,
       googleSub: null,
-      // Admin-created users are always RICTMS staff → default to FOCAL unless explicitly set
+      // User Management may create regular or RICTMS accounts; assignment eligibility follows the selected role.
       role: createUserDto.role as UserRole,
-      autoAssignmentEligible: createUserDto.autoAssignmentEligible ?? true,
+      autoAssignmentEligible:
+        createUserDto.role === UserRole.USER ? false : (createUserDto.autoAssignmentEligible ?? true),
       units,
     } as any) as unknown as User;
 
@@ -526,7 +543,7 @@ const previousValue = value;
    * This deliberately does not expose the full user-management payload.
    */
   async findTicketRequesters(currentUserId: number, currentRole: string): Promise<
-    Array<Pick<User, 'id' | 'email' | 'firstName' | 'lastName' | 'role' | 'active'>>
+    Array<Pick<User, 'id' | 'email' | 'firstName' | 'middleName' | 'lastName' | 'suffix' | 'role' | 'active'>>
   > {
     let users: User[];
     if (currentRole === UserRole.USER) {
@@ -559,11 +576,13 @@ const previousValue = value;
 
     return users
       .filter((user) => user.role !== UserRole.SUPER_ADMIN)
-      .map(({ id, email, firstName, lastName, role, active }) => ({
+      .map(({ id, email, firstName, middleName, lastName, suffix, role, active }) => ({
         id,
         email,
         firstName,
+        middleName,
         lastName,
+        suffix,
         role,
         active,
       }));
@@ -724,13 +743,13 @@ const previousValue = value;
     query: string,
     limit = 10,
   ): Promise<
-    Array<{ id: number; email: string; firstName: string; lastName: string; role: string }>
+    Array<{ id: number; email: string; firstName: string; middleName?: string; lastName: string; suffix?: string; role: string }>
   > {
     if (!query || query.trim().length < 2) return [];
     const clean = `%${query.trim().toLowerCase()}%`;
     const rows = await this.usersRepository
       .createQueryBuilder('u')
-      .select(['u.id', 'u.email', 'u.firstName', 'u.lastName', 'u.role'])
+      .select(['u.id', 'u.email', 'u.firstName', 'u.middleName', 'u.lastName', 'u.suffix', 'u.role'])
       .where('LOWER(u.email) LIKE :q', { q: clean })
       .orderBy('u.email', 'ASC')
       .limit(limit)
@@ -739,7 +758,9 @@ const previousValue = value;
       id: u.id,
       email: u.email,
       firstName: u.firstName,
+      middleName: u.middleName,
       lastName: u.lastName,
+      suffix: u.suffix,
       role: u.role,
     }));
   }
@@ -753,7 +774,9 @@ const previousValue = value;
       id: number;
       email: string;
       firstName: string;
+      middleName: string | null;
       lastName: string;
+      suffix: string | null;
       role: string;
       active: boolean;
       unitIds: number[];
@@ -765,7 +788,9 @@ const previousValue = value;
         u.id,
         u.email,
         u.first_name AS firstName,
+        u.middle_name AS middleName,
         u.last_name AS lastName,
+        u.suffix AS suffix,
         u.role,
         u.active,
         GROUP_CONCAT(DISTINCT uu.id ORDER BY uu.id SEPARATOR ',') AS unitIds,
@@ -773,7 +798,7 @@ const previousValue = value;
       FROM users u
       LEFT JOIN user_unit_access uua ON uua.user_id = u.id
       LEFT JOIN units uu ON uu.id = uua.unit_id
-      GROUP BY u.id, u.email, u.first_name, u.last_name, u.role, u.active
+      GROUP BY u.id, u.email, u.first_name, u.middle_name, u.last_name, u.suffix, u.role, u.active
       ORDER BY u.last_name ASC, u.first_name ASC
     `);
 
@@ -781,7 +806,9 @@ const previousValue = value;
       id: Number(row.id),
       email: String(row.email || ''),
       firstName: String(row.firstName || ''),
+      middleName: row.middleName ? String(row.middleName) : null,
       lastName: String(row.lastName || ''),
+      suffix: row.suffix ? String(row.suffix) : null,
       role: String(row.role || ''),
       active: Boolean(row.active),
       unitIds: String(row.unitIds || '')
@@ -872,7 +899,13 @@ const previousValue = value;
     const targetRole = dto.role ?? user.role;
 
     // Update basic fields
-    if (dto.email) user.email = dto.email;
+    if (dto.email) {
+      const normalizedEmail = String(dto.email).trim().toLowerCase();
+      if (!(await this.securityConfigService.isEmailDomainAllowed(normalizedEmail))) {
+        throw new BadRequestException('Email domain is not allowed by Security Settings.');
+      }
+      user.email = normalizedEmail;
+    }
     if (dto.staffId !== undefined) {
       if (dto.staffId?.trim()) {
         const existing = await this.usersRepository.findOne({ where: { staffId: dto.staffId } });
@@ -894,7 +927,9 @@ const previousValue = value;
 
     if (dto.role !== undefined) user.role = dto.role;
     if ((dto as any).active !== undefined) user.active = (dto as any).active;
-    if (dto.autoAssignmentEligible !== undefined) {
+    if (targetRole === UserRole.USER) {
+      user.autoAssignmentEligible = false;
+    } else if (dto.autoAssignmentEligible !== undefined) {
       user.autoAssignmentEligible = dto.autoAssignmentEligible;
     }
 

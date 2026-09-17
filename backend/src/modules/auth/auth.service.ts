@@ -202,7 +202,17 @@ export class AuthService {
     return globalMfaEnabled;
   }
 
+  async getPublicConfig(): Promise<{ googleSignInEnabled: boolean }> {
+    const config = await this.securityConfigService.getConfig();
+    return { googleSignInEnabled: config.googleSignInEnabled !== false };
+  }
+
   async googleLogin(idToken: string): Promise<AuthResponse> {
+    const securityConfig = await this.securityConfigService.getConfig();
+    if (securityConfig.googleSignInEnabled === false) {
+      throw new UnauthorizedException('Google sign-in is disabled.');
+    }
+
     const payload = await this.verifyGoogleIdToken(idToken);
 
     const googleSub = String(payload.sub || '').trim();
@@ -214,14 +224,15 @@ export class AuthService {
       .trim()
       .toLowerCase();
 
-    const securityConfig = await this.securityConfigService.getConfig();
-
     let user = await this.usersService.findByGoogleSub(googleSub);
     if (!user) {
       const existingByEmail = await this.usersService.findByEmail(normalizedEmail);
       if (existingByEmail) {
         user = await this.usersService.linkGoogleIdentity(existingByEmail.id, googleSub);
       } else {
+        if (!(await this.securityConfigService.isEmailDomainAllowed(normalizedEmail))) {
+          throw new UnauthorizedException('Email domain is not allowed by Security Settings.');
+        }
         // Brand-new Google sign-in → register as plain 'user' (no compliance access)
         user = await this.usersService.createGoogleUser({
           email: normalizedEmail,

@@ -53,6 +53,11 @@ export class AuthController {
     return safeResult;
   }
 
+  @Get('public-config')
+  getPublicConfig() {
+    return this.authService.getPublicConfig();
+  }
+
   @Post('login')
   async login(@Body() loginDto: LoginDto, @Request() req: any, @Res({ passthrough: true }) res: Response) {
     const deviceToken = req.headers?.['x-device-token'];

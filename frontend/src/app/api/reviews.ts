@@ -32,7 +32,9 @@ export interface ManualReview {
     id: number;
     email: string;
     firstName: string;
+    middleName?: string;
     lastName: string;
+    suffix?: string;
   };
   reviewed_at: string;
 }

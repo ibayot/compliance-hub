@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.9] - 2026-09-17 - Specialized Concerns and Pilot Test Reliability
+
+### Added
+- Added Specialized Concerns as a fourth support type for reviews, assessments, governance work, upgrades, project charters, and other specialist requests.
+- Added manual-only Specialized Concerns assignment guarded by the Specialized capability and explicit present attendance.
+- Added the Pantawid ICT Lead role with the same senior/focal behavior used by existing senior technician roles while keeping Pantawid ICT as the junior role.
+- Added image selection, drag-and-drop, and clipboard paste to ticket creation and ticket comments.
+- Added live Requested For directory refresh after user creation and clickable My Assigned Tickets dashboard access for ticket-enabled RICTMS staff.
+
+### Changed
+- RICTMS-created tickets now require an issue; regular-user ticket creation hides and omits the issue and does not start an unexplained SLA.
+- Account email domains are configurable in Security Settings, with DSWD, Gmail, Yahoo, Hotmail, Rocketmail, Outlook, iCloud, and AOL included by default.
+- Google sign-in visibility and backend enforcement are controlled by Security Settings on both the login page and the 15-minute session lock.
+- User Management View can list RICTMS and regular accounts while create, edit, reset, and disable operations remain limited to regular accounts; User Management Admin retains full management access.
+- Middle name and suffix are carried through user, requester, assignee, reviewer, attendance, reporting, audit, and ticket displays whenever values exist.
+- Ticket reporting terminology now uses Assignee instead of Technician where the assignee may be non-technical staff.
+- End User accounts are always excluded from automatic ticket assignment and no longer show the eligibility option in User Management.
+
+### Fixed
+- Resolving the front ticket now promotes the next waiting ticket to In Progress, starts only its configured issue SLA, and sends a live ticket update.
+- Notification badge counts and notification-list contents now come from one summary snapshot so a count cannot appear without its corresponding list entries.
+- Specialized Concerns are excluded from automatic assignment, automatic reassignment, and the ordinary support fallback queues.
+- Staff without User Management capabilities no longer receive RICTMS or regular-user directory lists.
+
+### Deployment Note
+- Apply `db-init/20260917-add-security-login-settings-and-pantawid-lead.sql` to the Users database, then apply `db-init/20260917-add-specialized-concerns-ticketing.sql` to the Ticketing database before deploying the services.
+- Configure the Specialized capability on the intended roles and create the environment-specific Specialized issue/SLA definitions before RICTMS staff submit this ticket type.
+
 ## [1.0.8] - 2026-09-16 - Ticket Assignee Record Correction
 
 ### Added

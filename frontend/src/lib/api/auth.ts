@@ -2,6 +2,11 @@ import { apiClient } from './client';
 import { LoginCredentials, AuthResponse, User } from '../types/auth';
 
 export const authApi = {
+  getPublicConfig: async (): Promise<{ googleSignInEnabled: boolean }> => {
+    const response = await apiClient.get('/auth/public-config');
+    return response.data;
+  },
+
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     let deviceToken = localStorage.getItem('deviceToken');
     if (!deviceToken) {

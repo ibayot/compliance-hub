@@ -50,6 +50,7 @@ import {
   Computer as DesktopIcon,
   Wifi as ITIcon,
   Assignment as PantawidIcon,
+  AccountTree as SpecializedIcon,
   SentimentVerySatisfied,
   SentimentSatisfied,
   SentimentNeutral,
@@ -82,6 +83,7 @@ import {
 } from '@/app/api/references';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useSse } from '@/lib/utils/useSse';
+import { formatPersonName } from '@/lib/utils/person-name';
 
 import { PRIORITY_COLOR, STATUS_COLOR, TICKET_TYPE_LABELS } from '@/lib/utils/ticket-colors';
 
@@ -111,6 +113,7 @@ const populatedFieldSx = (populated: boolean) =>
 function ticketTypeIcon(t: TicketType) {
   if (t === 'desktop_support') return <DesktopIcon />;
   if (t === 'pantawid_ict_support') return <PantawidIcon />;
+  if (t === 'specialized_concerns') return <SpecializedIcon />;
   return <ITIcon />;
 }
 
@@ -233,6 +236,14 @@ export default function TicketsPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const selectTicketImage = useCallback((file?: File) => {
+    if (!file) return;
+    if (!isAllowedImageFile(file)) {
+      enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed.', { variant: 'error' });
+      return;
+    }
+    setSelectedImage(file);
+  }, [enqueueSnackbar]);
   const [allUsers, setAllUsers] = useState<UserRecord[]>([]);
   const [categories, setCategories] = useState<TicketCategory[]>([]);
   const [issues, setIssues] = useState<TicketIssueType[]>([]);
@@ -410,7 +421,7 @@ export default function TicketsPage() {
       const matchesSearch = !q ? true : (
         t.ticketNumber.toLowerCase().includes(q) ||
         t.subject.toLowerCase().includes(q) ||
-        (t.requester?.firstName + " " + t.requester?.lastName).toLowerCase().includes(q)
+        formatPersonName(t.requester).toLowerCase().includes(q)
       );
       return matchesPriority && matchesSearch;
     });
@@ -453,6 +464,10 @@ export default function TicketsPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
+      if (params.get('assignedToMe') === '1') {
+        setShowMyTickets(true);
+        setShowEscalatedToMe(false);
+      }
       if (params.get('filter') === 'pending_satisfaction') {
         setUserTab(2);
       }
@@ -683,13 +698,19 @@ export default function TicketsPage() {
     if (ticketSseTimerRef.current) clearTimeout(ticketSseTimerRef.current);
   }, []);
 
-  useEffect(() => {
-    // Load the restricted requester list for ticket proxy creation.
+  const refreshRequesterOptions = useCallback(() => {
     usersApi
       .listTicketRequesters()
       .then((users) => setAllUsers(users.filter((u) => u.active && u.role !== 'super_admin')))
       .catch(() => { });
   }, []);
+
+  useEffect(() => {
+    // Load the restricted requester list for ticket proxy creation.
+    refreshRequesterOptions();
+  }, [refreshRequesterOptions]);
+
+  useSse(['USER_DIRECTORY_UPDATED'], refreshRequesterOptions);
 
   // Fetch categories when the New Ticket dialog opens or support type changes
   // Pass activeOnly=true so only active categories appear in the creation dropdown
@@ -771,6 +792,11 @@ export default function TicketsPage() {
       return;
     }
 
+    if (user?.role !== 'user' && !form.issueTypeId) {
+      enqueueSnackbar('Issue is required for tickets created by RICTMS staff.', { variant: 'warning' });
+      return;
+    }
+
     if (isTechnician && form.requesterId == null && !confirmedForSelf) {
       setRequestedForConfirmOpen(true);
       return;
@@ -794,13 +820,13 @@ export default function TicketsPage() {
         if (form.priority) formData.append('priority', form.priority);
         if (form.categoryId) formData.append('categoryId', form.categoryId);
         if (form.issueType) formData.append('issueType', form.issueType);
-        if (form.issueTypeId) formData.append('issueTypeId', form.issueTypeId);
+        if (user?.role !== 'user' && form.issueTypeId) formData.append('issueTypeId', form.issueTypeId);
         if (form.requesterId) formData.append('requesterId', form.requesterId.toString());
         if (form.assignedToId) formData.append('assignedToId', form.assignedToId.toString());
         formData.append('image', selectedImage);
         payload = formData;
       } else {
-        payload = { ...form, description: finalDescription };
+        payload = { ...form, description: finalDescription, issueTypeId: user?.role === 'user' ? undefined : form.issueTypeId };
       }
 
       await ticketsApi.create(payload);
@@ -865,7 +891,7 @@ export default function TicketsPage() {
     setAssigningTicket(ticket);
     setSelectedTechId('');
     try {
-      const techs = await ticketsApi.getTechnicians();
+      const techs = await ticketsApi.getTechnicians(ticket.ticketType);
       const availableByAttendance = techs.filter(
         (t) => !t.isUnavailable && t.attendanceStatus === 'present',
       );
@@ -971,8 +997,7 @@ export default function TicketsPage() {
   const openSatDialog = (ticket: Ticket) => {
     setSatTicket(ticket);
     const assignedName = ticket.assignedTo
-      ? `${ticket.assignedTo.firstName ?? ''} ${ticket.assignedTo.lastName ?? ''}`.trim() ||
-      ticket.assignedTo.email
+      ? formatPersonName(ticket.assignedTo, ticket.assignedTo.email)
       : '';
     setCsatForm({
       consentGiven: false,
@@ -1063,7 +1088,7 @@ export default function TicketsPage() {
             Help Desk Tickets
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Submit and track assistance requests for Desktop &amp; IT Support
+            Submit and track RICTMS support requests and specialized concerns
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
@@ -1256,6 +1281,7 @@ export default function TicketsPage() {
                     <MenuItem value="desktop_support">Desktop Support</MenuItem>
                     <MenuItem value="it_support">IT Support</MenuItem>
                     <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
+                    <MenuItem value="specialized_concerns">Specialized Concerns</MenuItem>
                   </TextField>
                   <TextField inputProps={{ maxLength: 255 }}
                     select
@@ -1609,8 +1635,8 @@ export default function TicketsPage() {
                             color={e.status === 'pending' ? 'warning' : e.status === 'accepted' ? 'success' : 'default'}
                           />
                         </TableCell>
-                        <TableCell>{e.escalatedBy?.firstName} {e.escalatedBy?.lastName}</TableCell>
-                        <TableCell>{e.escalatedTo?.firstName} {e.escalatedTo?.lastName}</TableCell>
+                        <TableCell>{formatPersonName(e.escalatedBy, '—')}</TableCell>
+                        <TableCell>{formatPersonName(e.escalatedTo, '—')}</TableCell>
                         <TableCell>{e.notes?.substring(0, 50)}{(e.notes?.length ?? 0) > 50 ? '...' : ''}</TableCell>
                       </TableRow>
                     ))}
@@ -1685,7 +1711,7 @@ export default function TicketsPage() {
                       {ticket.requesterId !== user?.id && (
                         <Chip
                           size="small"
-                          label={`Requested for: ${ticket.requester?.firstName || ticket.requester?.email || 'Unknown'}`}
+                          label={`Requested for: ${ticket.requester ? formatPersonName(ticket.requester, ticket.requester.email || 'Unknown') : 'Unknown'}`}
                           color="secondary"
                         />
                       )}
@@ -2010,8 +2036,7 @@ export default function TicketsPage() {
                         <TableCell>
                           <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
                             {ticket.requester
-                              ? `${ticket.requester.firstName ?? ''} ${ticket.requester.lastName ?? ''}`.trim() ||
-                              ticket.requester.email
+                              ? formatPersonName(ticket.requester, ticket.requester.email)
                               : '—'}
                           </Typography>
                         </TableCell>
@@ -2022,8 +2047,7 @@ export default function TicketsPage() {
                           {ticket.assignedTo ? (
                             <Box display="flex" alignItems="center" gap={0.5}>
                               <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                                {`${ticket.assignedTo.firstName ?? ''} ${ticket.assignedTo.lastName ?? ''}`.trim() ||
-                                  ticket.assignedTo.email}
+                                {formatPersonName(ticket.assignedTo, ticket.assignedTo.email)}
                               </Typography>
                               {ticket.assignedTechAbsent && (canAssign || canManageAll) && (
                                 <Tooltip title="Technician is absent today">
@@ -2158,6 +2182,13 @@ export default function TicketsPage() {
                   color: '#7b1fa2',
                   desc: 'Pantawid Pamilyang Program ICT requests',
                 },
+                {
+                  value: 'specialized_concerns' as TicketType,
+                  label: 'Specialized Concerns',
+                  icon: '🧭',
+                  color: '#00695c',
+                  desc: 'Reviews, assessments, governance, upgrades, and specialist work',
+                },
               ].map((opt) => (
                 <Card
                   key={opt.value}
@@ -2197,6 +2228,7 @@ export default function TicketsPage() {
                 if (form.ticketType === 'it_support') return c.isIt;
                 if (form.ticketType === 'desktop_support') return c.isDesktop;
                 if (form.ticketType === 'pantawid_ict_support') return c.isPantawid;
+                if (form.ticketType === 'specialized_concerns') return c.isSpecialized;
                 return false;
               });
 
@@ -2232,13 +2264,14 @@ export default function TicketsPage() {
               return (
                 <TextField inputProps={{ maxLength: 255 }}
                   select
-                  label="Issue"
+                  label="Issue *"
                   value={form.issueTypeId ?? ''}
                   fullWidth
                   onChange={(e) => setForm({ ...form, issueTypeId: e.target.value || undefined })}
-                  helperText="Select a specific issue for routing and SLA tracking"
+                  required
+                  helperText="Required for RICTMS staff; this determines routing and SLA tracking"
                 >
-                  <MenuItem value="">— No specific issue —</MenuItem>
+
                   {filteredIssues.map((iss) => (
                     <MenuItem key={iss.id} value={iss.id}>
                       {iss.name}
@@ -2357,9 +2390,24 @@ export default function TicketsPage() {
               rows={4}
               placeholder="Provide details: what happened, when, steps tried..."
             />
-            <Box>
+            <Box
+              tabIndex={0}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                selectTicketImage(event.dataTransfer.files?.[0]);
+              }}
+              onPaste={(event) => {
+                const image = Array.from(event.clipboardData.files).find((file) => file.type.startsWith('image/'));
+                if (image) {
+                  event.preventDefault();
+                  selectTicketImage(image);
+                }
+              }}
+              sx={{ border: '1px dashed', borderColor: 'divider', borderRadius: 1, p: 1.5, outline: 'none', '&:focus': { borderColor: 'primary.main' } }}
+            >
               <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
-                Attach Image (Optional)
+                Attach Image (Optional) — select, drag and drop, or focus here and paste from the clipboard
               </Typography>
               <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />}>
                 {selectedImage ? 'Change Image' : 'Select Image'}
@@ -2368,11 +2416,7 @@ export default function TicketsPage() {
                   hidden
                   accept={ALLOWED_IMAGE_FILE_ACCEPT}
                   onChange={(e) => {
-                    const files = Array.from(e.target.files ?? []);
-                    const validFiles = files.filter(isAllowedImageFile);
-                    if (validFiles.length > 0) {
-                      setSelectedImage(validFiles[0]);
-                    }
+                    selectTicketImage(e.target.files?.[0]);
                     e.target.value = '';
                   }}
                 />
@@ -2389,7 +2433,7 @@ export default function TicketsPage() {
             <Autocomplete
               options={allUsers.filter((u) => u.role !== 'super_admin')}
               getOptionLabel={(u) =>
-                `${[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}`
+                formatPersonName(u, u.email)
               }
               value={allUsers.find((u) => u.id === form.requesterId) ?? null}
               onChange={(_, newValue) =>
@@ -2423,7 +2467,7 @@ export default function TicketsPage() {
                 <MenuItem value="">Automatic Assignment</MenuItem>
                 {technicians.map((technician) => (
                   <MenuItem key={technician.id} value={technician.id}>
-                    {[technician.firstName, technician.lastName].filter(Boolean).join(' ') || technician.email}
+                    {formatPersonName(technician, technician.email)}
                     {` (${technician.openCount ?? 0} Active)`}
                   </MenuItem>
                 ))}
@@ -2634,7 +2678,7 @@ export default function TicketsPage() {
             </Typography>
             <Autocomplete
               options={technicians}
-              getOptionLabel={(t) => `${t.firstName} ${t.lastName} (${t.openCount} Active)`}
+              getOptionLabel={(t) => `${formatPersonName(t, t.email)} (${t.openCount} Active)`}
               value={technicians.find((t) => String(t.id) === selectedTechId) ?? null}
               onChange={(_, newValue) => setSelectedTechId(newValue ? String(newValue.id) : '')}
               isOptionEqualToValue={(option, value) => option.id === value.id}
@@ -2679,7 +2723,7 @@ export default function TicketsPage() {
           </Alert>
           <Autocomplete
             options={escalationFocalUsers}
-            getOptionLabel={(t) => `${t.firstName} ${t.lastName}`}
+            getOptionLabel={(t) => formatPersonName(t, t.email)}
             value={escalationFocalUsers.find((t) => String(t.id) === escalateToId) ?? null}
             onChange={(_, newValue) => setEscalateToId(newValue ? String(newValue.id) : '')}
             isOptionEqualToValue={(option, value) => option.id === value.id}

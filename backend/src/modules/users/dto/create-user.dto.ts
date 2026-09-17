@@ -16,9 +16,6 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateUserDto {
   @IsEmail()
-  @Matches(/@(gmail\.com|dswd\.gov\.ph|yahoomail\.com|hotmail\.com|rocketmail\.com|outlook\.com|icloud\.com|aol\.com)$/i, {
-    message: 'Email must belong to an approved domain (e.g. gmail.com, dswd.gov.ph)',
-  })
   email: string;
 
   @ApiPropertyOptional({
