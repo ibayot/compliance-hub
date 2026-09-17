@@ -17,6 +17,7 @@ import {
   Res,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
@@ -140,6 +141,29 @@ export class TicketController {
   }
 
   /** GET /tickets/sla/summary — active Overdue, Nearing SLA, and On Track metrics */
+  /**
+   * Least-privilege personal queue for RICTMS staff whose role does not have
+   * the full Tickets module. The assignee is always derived from the JWT.
+   */
+  @Get('my-assigned')
+  async getMyAssignedTickets(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Request() req?: any,
+  ) {
+    if (req?.user?.role === UserRole.USER) {
+      throw new ForbiddenException('End User accounts do not have an assigned-ticket queue.');
+    }
+    const viewerId = Number(req?.user?.id ?? req?.user?.userId);
+    return this.ticketService.getTickets({
+      assignedToId: viewerId,
+      viewerId,
+      viewerRole: req?.user?.role,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 50,
+    });
+  }
+
   @Get('sla/summary')
   @RequireCapability('isTicketModuleAccess')
   async getSlaSummary(@Request() req: any) {

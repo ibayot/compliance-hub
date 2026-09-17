@@ -620,6 +620,10 @@ export interface PaginatedTickets {
 // Tickets API (IT Help Desk)
 export const ticketsApi = {
   // Global/Technician Pause Methods
+  getMyAssigned: async (): Promise<PaginatedTickets> => {
+    const response = await apiClient.get('/tickets/my-assigned');
+    return response.data;
+  },
   globalPause: async (): Promise<{ success: boolean; count: number; message: string }> => {
     const res = await apiClient.post('/tickets/global-pause');
     return res.data;

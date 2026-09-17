@@ -1041,7 +1041,7 @@ export class TicketService implements OnModuleInit {
         if (matchedRule.targetCategoryId) {
           categoryId = matchedRule.targetCategoryId;
         }
-        if (matchedRule.targetIssueTypeId && !isRegularUserSubmission) {
+        if (matchedRule.targetIssueTypeId) {
           issueTypeId = matchedRule.targetIssueTypeId;
           if (matchedRule.targetIssueType) {
             issueTypeKey = matchedRule.targetIssueType.key;
@@ -2477,6 +2477,12 @@ export class TicketService implements OnModuleInit {
         }
 
         // const originalStatus = ticket.status as TicketStatus; // Removed hoisting here
+        if (dto.status === TicketStatus.RESOLVED && !ticket.issueTypeId) {
+          throw new BadRequestException(
+            'An Issue must be selected before this ticket can be marked as Resolved.',
+          );
+        }
+
 
         // --- SLA Freezing Logic ---
         if ([TicketStatus.FREEZE, TicketStatus.PAUSE].includes(dto.status as TicketStatus)) {
@@ -5679,6 +5685,10 @@ export class TicketService implements OnModuleInit {
     }
 
     // Tickets without a configured issue SLA do not run an SLA clock.
+    // An unmatched regular-user ticket uses the explicit four-hour fallback
+    // until staff select the correct Issue and its configured SLA.
+    if (!slaHours && !ticket.issueTypeId) slaHours = 4;
+
     if (!slaHours) return null;
 
     const config = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);

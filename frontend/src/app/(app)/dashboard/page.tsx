@@ -701,7 +701,7 @@ export default function DashboardPage() {
                 <Button
                   variant="outlined"
                   startIcon={<TicketIcon />}
-                  onClick={() => router.push('/operations/tickets?assignedToMe=1')}
+                  onClick={() => router.push('/operations/my-assigned-tickets')}
                 >
                   View Assigned Tickets
                 </Button>

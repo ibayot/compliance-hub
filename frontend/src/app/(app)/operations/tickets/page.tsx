@@ -488,10 +488,10 @@ export default function TicketsPage() {
   useEffect(() => {
     if (!newDialogOpen || !isTicketAdmin) return;
     ticketsApi
-      .getTechnicians()
+      .getTechnicians(form.ticketType)
       .then((rows) => setTechnicians(rows.filter((row) => row.attendanceStatus === 'present' && !row.isUnavailable)))
       .catch(() => setTechnicians([]));
-  }, [newDialogOpen, isTicketAdmin]);
+  }, [newDialogOpen, isTicketAdmin, form.ticketType]);
 
   const tabFilteredTickets = canManageAll
     ? ([frontendFilteredTickets, activeTickets, pausedTickets, doneTickets, frozenTickets, duplicateTickets, proxyCreatedTickets][
