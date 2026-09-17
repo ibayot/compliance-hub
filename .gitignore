@@ -132,3 +132,8 @@ frontend/tests/
 frontend/playwright*.ts
 frontend/scripts/run-e2e-loop.mjs
 frontend/scripts/run-visible-e2e-loop.ps1
+
+# Local-only test runners under the otherwise tracked scripts directory.
+scripts/*test*
+scripts/*smoke*
+scripts/*regression*
