@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.11] - 2026-09-21 - Dashboard Navigation and Internal Mentions
+
+### Added
+- Added `@` mention suggestions for Internal Notes, limited to active RICTMS staff with ticket access, with dedicated in-app mention notifications.
+- Added status and month drill-down filters from the Assigned, In Progress, Resolved, and Closed personal dashboard cards.
+
+### Changed
+- Dashboard ticket metrics and attendance assignment alerts now refresh silently from SSE events instead of periodically replacing the visible dashboard with a loading state.
+- Internal Notes notify the ticket requester and current assignee, while explicitly mentioned staff receive a distinct mention notification.
+- Mobile ticket cards can be opened by tapping anywhere on the card while their existing action buttons retain their original behavior.
+
+### Fixed
+- My Assigned Tickets, Assigned, In Progress, Resolved, and Closed dashboard areas now navigate to the corresponding personal ticket list.
+- Attendance assignment alerts preserve and display Absent, Half Day, OOO, and Assumed Late instead of collapsing unavailable statuses into Absent.
+- Authentication heartbeat capability refreshes no longer cause the dashboard to visibly reload.
+
+### Deployment Note
+- This release requires no new database migration.
+
 ## [1.0.10] - 2026-09-21 - Pilot Reliability and SLA Controls
 
 ### Added

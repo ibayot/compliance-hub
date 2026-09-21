@@ -237,7 +237,7 @@ export interface AttendanceAssignmentAlert {
   userId: number;
   staffName: string;
   role: string;
-  attendanceState: 'absent' | 'assumed_late';
+  attendanceState: 'absent' | 'half_day' | 'out_of_office' | 'assumed_late';
   attendanceLabel: string;
   clockInTime: string | null;
   tickets: Array<{
@@ -253,6 +253,13 @@ export interface AttendanceAutoReassignResult {
   reassigned: number;
   remaining: number;
   messages: string[];
+}
+
+export interface InternalNoteMentionCandidate {
+  id: number;
+  label: string;
+  email: string;
+  role: string;
 }
 
 export interface CreateTicketDto {
@@ -621,8 +628,17 @@ export interface PaginatedTickets {
 // Tickets API (IT Help Desk)
 export const ticketsApi = {
   // Global/Technician Pause Methods
-  getMyAssigned: async (): Promise<PaginatedTickets> => {
-    const response = await apiClient.get('/tickets/my-assigned');
+  getMyAssigned: async (filters?: {
+    status?: TicketStatus;
+    year?: number;
+    month?: number;
+  }): Promise<PaginatedTickets> => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.year) params.set('year', String(filters.year));
+    if (filters?.month) params.set('month', String(filters.month));
+    const query = params.toString();
+    const response = await apiClient.get(`/tickets/my-assigned${query ? `?${query}` : ''}`);
     return response.data;
   },
   globalPause: async (): Promise<{ success: boolean; count: number; message: string }> => {
@@ -676,6 +692,11 @@ export const ticketsApi = {
 
   getAttendanceAssignmentAlerts: async (): Promise<AttendanceAssignmentAlert[]> => {
     const response = await apiClient.get('/tickets/attendance-assignment-alerts');
+    return response.data;
+  },
+
+  getInternalNoteMentionCandidates: async (): Promise<InternalNoteMentionCandidate[]> => {
+    const response = await apiClient.get('/tickets/internal-note-mentions');
     return response.data;
   },
 
@@ -749,6 +770,7 @@ export const ticketsApi = {
     comment: string,
     isInternal = false,
     attachment?: File | null,
+    mentionedUserIds: number[] = [],
   ): Promise<TicketComment> => {
     const formData = new FormData();
     formData.append('comment', comment);
@@ -756,6 +778,9 @@ export const ticketsApi = {
     if (attachment) {
       formData.append('attachment', attachment);
     }
+    mentionedUserIds.forEach((userId) => {
+      formData.append('mentionedUserIds', String(userId));
+    });
     const response = await apiClient.post(`/tickets/${ticketId}/comments`, formData);
     return response.data;
   },

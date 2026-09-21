@@ -30,6 +30,8 @@ import {
   Autocomplete,
   InputAdornment,
   IconButton,
+  Paper,
+  ListItemButton,
 } from '@mui/material';
 import { useParams, useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
@@ -49,6 +51,7 @@ import {
   TicketEscalation,
   EscalationFocalConfig,
   TicketIssueType,
+  InternalNoteMentionCandidate,
 } from '@/app/api/references';
 import { AuthImage } from '@/components/AuthImage';
 import TicketImageDropzone from '@/components/TicketImageDropzone';
@@ -231,6 +234,8 @@ export default function TicketDetailPage() {
   // Comment form
   const [comment, setComment] = useState('');
   const [isInternal, setIsInternal] = useState(false);
+  const [mentionCandidates, setMentionCandidates] = useState<InternalNoteMentionCandidate[]>([]);
+  const [mentionedUserIds, setMentionedUserIds] = useState<number[]>([]);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [visibleCommentCount, setVisibleCommentCount] = useState(COMMENTS_PAGE_SIZE);
 
@@ -361,6 +366,49 @@ export default function TicketDetailPage() {
     Number(user?.id) !== Number(ticket.requesterId) &&
     Number(user?.id) !== Number(ticket.createdById);
   const canPriority = canStaff;
+
+  useEffect(() => {
+    if (!canStaff || !isInternal || mentionCandidates.length > 0) return;
+    ticketsApi
+      .getInternalNoteMentionCandidates()
+      .then(setMentionCandidates)
+      .catch(() => setMentionCandidates([]));
+  }, [canStaff, isInternal, mentionCandidates.length]);
+
+  const activeMention = useMemo(
+    () => (isInternal ? comment.match(/(^|\s)@([^@\n]*)$/) : null),
+    [comment, isInternal],
+  );
+  const mentionSuggestions = useMemo(() => {
+    if (!activeMention) return [];
+    const query = activeMention[2].trim().toLowerCase();
+    return mentionCandidates
+      .filter(
+        (candidate) =>
+          !mentionedUserIds.includes(candidate.id) &&
+          (!query ||
+            candidate.label.toLowerCase().includes(query) ||
+            candidate.email.toLowerCase().includes(query)),
+      )
+      .slice(0, 8);
+  }, [activeMention, mentionCandidates, mentionedUserIds]);
+
+  const updateComment = (value: string) => {
+    setComment(value);
+    setMentionedUserIds((current) =>
+      current.filter((userId) => {
+        const candidate = mentionCandidates.find((entry) => entry.id === userId);
+        return candidate ? value.includes(`@${candidate.label}`) : false;
+      }),
+    );
+  };
+
+  const insertMention = (candidate: InternalNoteMentionCandidate) => {
+    if (!activeMention || activeMention.index === undefined) return;
+    const mentionStart = activeMention.index + activeMention[1].length;
+    setComment(`${comment.slice(0, mentionStart)}@${candidate.label} `);
+    setMentionedUserIds((current) => [...new Set([...current, candidate.id])]);
+  };
   const isComplianceOfficer = !!myCap?.isReportsAccess;
   const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage;
   const canEscalate =
@@ -657,13 +705,20 @@ export default function TicketDetailPage() {
     if (!comment.trim() && !commentAttachment) return;
     try {
       setSubmittingComment(true);
-      const createdComment = await ticketsApi.addComment(ticketId, comment, isInternal && canStaff, commentAttachment);
+      const createdComment = await ticketsApi.addComment(
+        ticketId,
+        comment,
+        isInternal && canStaff,
+        commentAttachment,
+        isInternal && canStaff ? mentionedUserIds : [],
+      );
       setTicket((current) => current ? {
         ...current,
         comments: [...(current.comments ?? []), createdComment],
       } : current);
       setVisibleCommentCount(COMMENTS_PAGE_SIZE);
       setComment('');
+      setMentionedUserIds([]);
       setCommentAttachment(null);
       setIsInternal(false);
       enqueueSnackbar('Comment added.', { variant: 'success' });
@@ -2170,21 +2225,43 @@ export default function TicketDetailPage() {
                 rows={3}
                 label="Add a comment"
                 value={comment}
-                onChange={(e) => setComment(e.target.value)}
+                onChange={(e) => updateComment(e.target.value)}
                 size="small"
                 inputProps={{ maxLength: 1000 }}
               />
+              {isInternal && activeMention && mentionSuggestions.length > 0 && (
+                <Paper variant="outlined" sx={{ mt: 0.5, maxHeight: 240, overflowY: 'auto' }}>
+                  <List dense disablePadding aria-label="Internal note mention suggestions">
+                    {mentionSuggestions.map((candidate) => (
+                      <ListItemButton
+                        key={candidate.id}
+                        onClick={() => insertMention(candidate)}
+                      >
+                        <ListItemText
+                          primary={candidate.label}
+                          secondary={`${candidate.email} · ${candidate.role.replaceAll('_', ' ')}`}
+                        />
+                      </ListItemButton>
+                    ))}
+                  </List>
+                </Paper>
+              )}
               {canStaff && (
                 <FormControlLabel
                   control={
                     <Switch
                       checked={isInternal}
-                      onChange={(e) => setIsInternal(e.target.checked)}
+                      onChange={(e) => {
+                        setIsInternal(e.target.checked);
+                        if (!e.target.checked) setMentionedUserIds([]);
+                      }}
                       size="small"
                     />
                   }
                   label={
-                    <Typography variant="caption">Internal note (hidden from requester)</Typography>
+                    <Typography variant="caption">
+                      Internal note (type @ to notify RICTMS staff)
+                    </Typography>
                   }
                   sx={{ mt: 1 }}
                 />

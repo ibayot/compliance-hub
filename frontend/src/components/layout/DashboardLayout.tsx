@@ -96,11 +96,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
 
   useEffect(() => {
     void refreshAttendanceAlerts();
-    const interval = window.setInterval(() => {
-      void refreshAttendanceAlerts();
-    }, 5 * 60 * 1000);
     return () => {
-      window.clearInterval(interval);
       if (attendanceReminderTimer.current) clearTimeout(attendanceReminderTimer.current);
       if (attendanceSseTimer.current) clearTimeout(attendanceSseTimer.current);
     };
@@ -184,9 +180,9 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         <DialogTitle>Assigned tickets need attention</DialogTitle>
         <DialogContent dividers>
           <Alert severity="warning" sx={{ mb: 2 }}>
-            The following RICTMS staff are absent or assumed late because they have no attendance
-            record after the clock-in threshold, and still have Assigned or In Progress tickets.
-            Choose automatic reassignment or review the tickets and reassign them manually.
+            The following RICTMS staff are marked Absent, Half Day, OOO, or Assumed Late and still
+            have Assigned or In Progress tickets. Choose automatic reassignment or review the
+            tickets and reassign them manually.
           </Alert>
           <Stack spacing={2} divider={<Divider flexItem />}>
             {attendanceAlerts.map((alert) => (
@@ -205,7 +201,13 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
                   </Box>
                   <Chip
                     label={alert.attendanceLabel}
-                    color={alert.attendanceState === 'absent' ? 'error' : 'warning'}
+                    color={
+                      alert.attendanceState === 'absent'
+                        ? 'error'
+                        : alert.attendanceState === 'out_of_office'
+                          ? 'info'
+                          : 'warning'
+                    }
                     size="small"
                   />
                 </Stack>

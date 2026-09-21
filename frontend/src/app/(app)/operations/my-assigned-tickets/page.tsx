@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -13,36 +13,65 @@ import {
   Typography,
 } from '@mui/material';
 import { ArrowBack as BackIcon, Assignment as AssignedIcon } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import { ticketsApi, Ticket } from '@/app/api/references';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { ticketsApi, Ticket, TicketStatus } from '@/app/api/references';
+import { useSse } from '@/lib/utils/useSse';
 export default function MyAssignedTicketsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const load = async () => {
-    setLoading(true);
+  const filters = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const requestedStatus = params.get('status');
+    const allowedStatuses: TicketStatus[] = ['assigned', 'in_progress', 'resolved', 'closed'];
+    const status = allowedStatuses.includes(requestedStatus as TicketStatus)
+      ? (requestedStatus as TicketStatus)
+      : undefined;
+    const year = Number(params.get('year')) || undefined;
+    const month = Number(params.get('month')) || undefined;
+    return { status, year, month };
+  }, [location.search]);
+
+  const load = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
-      const result = await ticketsApi.getMyAssigned();
+      const result = await ticketsApi.getMyAssigned(filters);
       setTickets(result.data ?? []);
       setError('');
     } catch (cause: any) {
       setError(cause?.response?.data?.message || 'Unable to load your assigned tickets.');
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  };
+  }, [filters]);
   useEffect(() => {
-    void load();
-  }, []);
+    void load(true);
+  }, [load]);
+  useSse(['TICKET_UPDATED'], () => {
+    void load(false);
+  });
+
+  const periodLabel = filters.year && filters.month
+    ? new Date(filters.year, filters.month - 1, 1).toLocaleDateString(undefined, {
+        month: 'long',
+        year: 'numeric',
+      })
+    : null;
   return (
     <Box>
       <Button startIcon={<BackIcon />} onClick={() => navigate('/dashboard')} sx={{ mb: 2 }}>
         Back to Dashboard
       </Button>
-      <Box display="flex" alignItems="center" gap={1} mb={2}>
+      <Box display="flex" alignItems="center" gap={1} mb={2} flexWrap="wrap">
         <AssignedIcon color="primary" />
         <Typography variant="h5">My Assigned Tickets</Typography>
+        {(filters.status || periodLabel) && (
+          <Typography variant="body2" color="text.secondary">
+            {[filters.status?.replace('_', ' '), periodLabel].filter(Boolean).join(' · ')}
+          </Typography>
+        )}
       </Box>
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>

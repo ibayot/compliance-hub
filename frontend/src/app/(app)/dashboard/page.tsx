@@ -122,6 +122,7 @@ export default function DashboardPage() {
   const periodMonth = now.getMonth() + 1;
 
   const isRegularUser = user?.role === 'user';
+  const capabilitiesReady = isRegularUser || myCap !== null;
   const isTechnicianAny = !!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct;
   const canViewAssignedTickets = !!user && !isRegularUser;
   const isLowerLevelTech = (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
@@ -187,6 +188,18 @@ export default function DashboardPage() {
   const ticketingEnabled = appMode !== 'compliance_only';
   const complianceEnabled = appMode !== 'ticketing_only';
 
+  const openMyAssignedTickets = useCallback(
+    (status?: 'assigned' | 'in_progress' | 'resolved' | 'closed') => {
+      const params = new URLSearchParams({
+        year: String(techStatsYear),
+        month: String(techStatsMonth),
+      });
+      if (status) params.set('status', status);
+      router.push(`/operations/my-assigned-tickets?${params.toString()}`);
+    },
+    [router, techStatsMonth, techStatsYear],
+  );
+
   useEffect(() => {
     if (myCap?.isGlobalSettingsAccess && ticketingEnabled) {
       ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(() => { });
@@ -195,9 +208,9 @@ export default function DashboardPage() {
   }, [myCap?.isGlobalSettingsAccess, ticketingEnabled]);
 
   const silentFetchDashboardData = useCallback(async () => {
-    if (!user) return;
+    if (!user?.id) return;
     if (appMode === 'loading') return;
-    if (!isRegularUser && myCap === null) return;
+    if (!capabilitiesReady) return;
 
     try {
       if (isRequesterDashboard && ticketingEnabled) {
@@ -254,15 +267,35 @@ export default function DashboardPage() {
     } catch (err) {
       console.error('Failed to silently fetch dashboard data:', err);
     }
-  }, [user, myCap, isRegularUser, isRequesterDashboard, isTechnicianAny, isFullDashboard, periodYear, periodMonth, appMode, ticketingEnabled, complianceEnabled, canViewDocuments, isComplianceOfficer]);
+  }, [user?.id, capabilitiesReady, isRequesterDashboard, isTechnicianAny, isFullDashboard, periodYear, periodMonth, appMode, ticketingEnabled, complianceEnabled, canViewDocuments, canViewCybersecurityMetrics, canViewSecurityIncidents, isComplianceOfficer]);
 
-  useSse(['TICKET_UPDATED', 'INCIDENT_SNAPSHOT_CREATED'], silentFetchDashboardData);
+  const refreshTechAssignedStats = useCallback(async (showLoading = false) => {
+    if (appMode === 'loading' || !canViewAssignedTickets || !user?.id || !ticketingEnabled) return;
+    if (showLoading) setTechStatsLoading(true);
+    try {
+      const data = await ticketsApi.getAssignedStats(techStatsYear, techStatsMonth);
+      setTechAssignedStats(data);
+    } catch {
+      // Keep the last successful snapshot during a background refresh failure.
+    } finally {
+      if (showLoading) setTechStatsLoading(false);
+    }
+  }, [appMode, canViewAssignedTickets, user?.id, ticketingEnabled, techStatsYear, techStatsMonth]);
+
+  useSse(['TICKET_UPDATED'], () => {
+    void silentFetchDashboardData();
+    void refreshTechAssignedStats(false);
+    if (myCap?.isTicketSettingsFocal) {
+      ticketsApi.getSlaSummary().then(setSlaSummary).catch(() => undefined);
+    }
+  });
+  useSse(['INCIDENT_SNAPSHOT_CREATED'], silentFetchDashboardData);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
     if (appMode === 'loading') return;
     // For staff/admins, wait until capabilities are loaded before fetching data
-    if (!isRegularUser && myCap === null) return;
+    if (!capabilitiesReady) return;
     
     const fetchDashboardData = async () => {
       try {
@@ -346,7 +379,7 @@ export default function DashboardPage() {
     };
 
     fetchDashboardData();
-  }, [user?.id, myCap, isRegularUser, isRequesterDashboard, isTechnicianAny, isFullDashboard, periodYear, periodMonth, appMode, ticketingEnabled, complianceEnabled, canViewDocuments, isComplianceOfficer]);
+  }, [user?.id, capabilitiesReady, isRequesterDashboard, isTechnicianAny, isFullDashboard, periodYear, periodMonth, appMode, ticketingEnabled, complianceEnabled, canViewDocuments, canViewCybersecurityMetrics, canViewSecurityIncidents, isComplianceOfficer]);
 
   // Fetch IT Help Desk Overview stats when filters change
   useEffect(() => {
@@ -389,14 +422,8 @@ export default function DashboardPage() {
 
   // Fetch monthly assigned-ticket stats for technicians whenever period changes
   useEffect(() => {
-    if (appMode === 'loading' || !canViewAssignedTickets || !user?.id || !ticketingEnabled) return;
-    setTechStatsLoading(true);
-    ticketsApi
-      .getAssignedStats(techStatsYear, techStatsMonth)
-      .then((data) => setTechAssignedStats(data))
-      .catch(() => { })
-      .finally(() => setTechStatsLoading(false));
-  }, [appMode, canViewAssignedTickets, user?.id, ticketingEnabled, techStatsYear, techStatsMonth]);
+    void refreshTechAssignedStats(true);
+  }, [refreshTechAssignedStats]);
 
 
 
@@ -688,7 +715,22 @@ export default function DashboardPage() {
               mb={2}
               flexWrap="wrap"
             >
-              <Box display="flex" alignItems="center" gap={2}>
+              <Box
+                display="flex"
+                alignItems="center"
+                gap={2}
+                role="button"
+                tabIndex={0}
+                aria-label="Open My Assigned Tickets"
+                onClick={() => openMyAssignedTickets()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openMyAssignedTickets();
+                  }
+                }}
+                sx={{ cursor: 'pointer', borderRadius: 1, '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 3 } }}
+              >
                 <AssignedIcon color="primary" fontSize="large" />
                 <Box>
                   <Typography variant="h6">My Assigned Tickets</Typography>
@@ -701,7 +743,7 @@ export default function DashboardPage() {
                 <Button
                   variant="outlined"
                   startIcon={<TicketIcon />}
-                  onClick={() => router.push('/operations/my-assigned-tickets')}
+                  onClick={() => openMyAssignedTickets()}
                 >
                   View Assigned Tickets
                 </Button>
@@ -761,30 +803,34 @@ export default function DashboardPage() {
                     [
                       {
                         label: 'Assigned',
+                        status: 'assigned' as const,
                         value: techAssignedStats.assigned,
                         color: 'warning' as const,
                         Icon: TicketIcon,
                       },
                       {
                         label: 'In Progress',
+                        status: 'in_progress' as const,
                         value: techAssignedStats.inProgress,
                         color: 'primary' as const,
                         Icon: InProgressIcon,
                       },
                       {
                         label: 'Resolved',
+                        status: 'resolved' as const,
                         value: techAssignedStats.resolved,
                         color: 'success' as const,
                         Icon: ResolvedIcon,
                       },
                       {
                         label: 'Closed',
+                        status: 'closed' as const,
                         value: techAssignedStats.closed,
                         color: 'default' as const,
                         Icon: ClosedIcon,
                       },
                     ] as const
-                  ).map(({ label, value, color, Icon }) => (
+                  ).map(({ label, status, value, color, Icon }) => (
                     <Grid item xs={6} sm={3} key={label}>
                       <Card
                         sx={{
@@ -794,19 +840,24 @@ export default function DashboardPage() {
                           textAlign: 'center',
                         }}
                       >
-                        <CardContent>
-                        <Icon color={color === 'default' ? 'action' : color} fontSize="large" />
-                        <Typography
-                          variant="h4"
-                          color={color === 'default' ? 'text.secondary' : `${color}.main`}
-                          mt={1}
+                        <CardActionArea
+                          onClick={() => openMyAssignedTickets(status)}
+                          aria-label={`Open ${label} assigned tickets`}
                         >
-                          {value}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {label}
-                        </Typography>
-                      </CardContent>
+                          <CardContent>
+                            <Icon color={color === 'default' ? 'action' : color} fontSize="large" />
+                            <Typography
+                              variant="h4"
+                              color={color === 'default' ? 'text.secondary' : `${color}.main`}
+                              mt={1}
+                            >
+                              {value}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {label}
+                            </Typography>
+                          </CardContent>
+                        </CardActionArea>
                       </Card>
                     </Grid>
                   ))}

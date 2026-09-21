@@ -148,6 +148,9 @@ export class TicketController {
   async getMyAssignedTickets(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('status') status?: TicketStatus,
+    @Query('year') year?: string,
+    @Query('month') month?: string,
     @Request() req?: any,
   ) {
     if (req?.user?.role === UserRole.USER) {
@@ -158,6 +161,9 @@ export class TicketController {
       assignedOnly: true,
       viewerId,
       viewerRole: req?.user?.role,
+      status,
+      year: year ? Number(year) : undefined,
+      month: month ? Number(month) : undefined,
       page: page ? Number(page) : 1,
       limit: limit ? Number(limit) : 50,
     });
@@ -334,6 +340,16 @@ export class TicketController {
   @RequireCapability(['isTicketFocal', 'isTicketSettingsFocal'])
   async getAttendanceAssignmentAlerts() {
     return this.ticketService.getAttendanceAssignmentAlerts();
+  }
+
+  /** GET /tickets/internal-note-mentions — active RICTMS staff available for @mentions */
+  @Get('internal-note-mentions')
+  @RequireCapability('isTicketModuleAccess')
+  async getInternalNoteMentionCandidates(@Request() req: any) {
+    return this.ticketService.getInternalNoteMentionCandidates(
+      req.user.role,
+      req.user.id ?? req.user.userId,
+    );
   }
 
   /** POST /tickets/attendance-assignment-alerts/:userId/auto-reassign */

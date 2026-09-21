@@ -1667,7 +1667,24 @@ export default function TicketsPage() {
               return (
                 <Card
                   key={ticket.id}
-                  sx={hasPendingSatisfaction ? { backgroundColor: 'warning.50' } : {}}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open ticket ${ticket.ticketNumber}`}
+                  onClick={() => router.push(`/operations/tickets/${ticket.id}`)}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      router.push(`/operations/tickets/${ticket.id}`);
+                    }
+                  }}
+                  sx={{
+                    ...(hasPendingSatisfaction ? { backgroundColor: 'warning.50' } : {}),
+                    cursor: 'pointer',
+                    transition: 'box-shadow 120ms ease, transform 120ms ease',
+                    '&:hover, &:focus-visible': { boxShadow: 4 },
+                    '&:active': { transform: 'scale(0.995)' },
+                  }}
                 >
                   <CardContent>
                     <Box
@@ -1745,7 +1762,10 @@ export default function TicketsPage() {
                         <Tooltip title="View Details">
                           <IconButton
                             size="small"
-                            onClick={() => router.push(`/operations/tickets/${ticket.id}`)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              router.push(`/operations/tickets/${ticket.id}`);
+                            }}
                           >
                             <ViewIcon fontSize="small" />
                           </IconButton>
@@ -1762,7 +1782,10 @@ export default function TicketsPage() {
                               <IconButton
                                 size="small"
                                 color="primary"
-                                onClick={() => openAssignDialog(ticket)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openAssignDialog(ticket);
+                                }}
                                 disabled={['resolved', 'closed'].includes(ticket.status)}
                               >
                                 <AssignIcon fontSize="small" />
@@ -1777,7 +1800,10 @@ export default function TicketsPage() {
                               <IconButton
                                 size="small"
                                 color="warning"
-                                onClick={() => openEscalateDialog(ticket)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openEscalateDialog(ticket);
+                                }}
                               >
                                 <AssignIcon fontSize="small" />
                               </IconButton>
@@ -1788,7 +1814,10 @@ export default function TicketsPage() {
                             <IconButton
                               size="small"
                               color="success"
-                              onClick={() => openSatDialog(ticket)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openSatDialog(ticket);
+                              }}
                             >
                               <SatisfactionIcon fontSize="small" />
                             </IconButton>
@@ -1799,7 +1828,10 @@ export default function TicketsPage() {
                             <IconButton
                               size="small"
                               color="secondary"
-                              onClick={() => openResolutionOverrideDialog(ticket)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openResolutionOverrideDialog(ticket);
+                              }}
                             >
                               <ResolutionTimeIcon fontSize="small" />
                             </IconButton>

@@ -7,6 +7,8 @@ import {
   IsOptional,
   IsNotEmpty,
   IsArray,
+  IsInt,
+  ArrayUnique,
   ValidateNested,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
@@ -208,7 +210,11 @@ export class CorrectTicketAssigneeDto {
   expectedUpdatedAt: string;
 }
 
-export type AttendanceAssignmentState = 'absent' | 'assumed_late';
+export type AttendanceAssignmentState =
+  | 'absent'
+  | 'half_day'
+  | 'out_of_office'
+  | 'assumed_late';
 export type ActiveTicketSlaState = 'overdue' | 'nearing_sla' | 'on_track';
 
 export interface AttendanceAssignmentAlert {
@@ -242,6 +248,18 @@ export class AddCommentDto {
   @IsBoolean()
   @ApiPropertyOptional()
   isInternal?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    const values = Array.isArray(value) ? value : [value];
+    return values.map((entry) => Number(entry));
+  })
+  @IsArray()
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @ApiPropertyOptional({ type: [Number] })
+  mentionedUserIds?: number[];
 }
 
 export class CsatFormData {
@@ -3363,6 +3381,31 @@ export class TicketService implements OnModuleInit {
   }
   // --- Comments ------------------------------------------------------------
 
+  async getInternalNoteMentionCandidates(actorRole: UserRole, actorId?: number): Promise<
+    Array<{ id: number; label: string; email: string; role: string }>
+  > {
+    if (actorRole === UserRole.USER) {
+      throw new ForbiddenException('Only RICTMS staff can mention users in internal notes.');
+    }
+
+    const users = await this.usersHttpClient.getUsers();
+    return users
+      .filter(
+        (user) =>
+          user.active !== false &&
+          user.role !== UserRole.USER &&
+          Number(user.id) !== Number(actorId) &&
+          this.roleCapSvc.isTicketModuleAccess(user.role),
+      )
+      .map((user) => ({
+        id: Number(user.id),
+        label: formatPersonName(user, user.email),
+        email: user.email,
+        role: user.role,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }
+
   async addComment(
     ticketId: string,
     dto: AddCommentDto,
@@ -3382,6 +3425,24 @@ export class TicketService implements OnModuleInit {
 
     const commentText = (dto.content ?? dto.comment ?? '').trim();
     if (!commentText) throw new BadRequestException('Comment content cannot be empty.');
+
+    const requestedMentionIds = [...new Set(dto.mentionedUserIds ?? [])].filter(
+      (userId) => userId !== actorId,
+    );
+    if (requestedMentionIds.length > 0 && !isInternal) {
+      throw new BadRequestException('Mentions are currently supported only in internal notes.');
+    }
+
+    let mentionedUserIds: number[] = [];
+    if (requestedMentionIds.length > 0) {
+      const candidates = await this.getInternalNoteMentionCandidates(actorRole, actorId);
+      const allowedIds = new Set(candidates.map((candidate) => candidate.id));
+      const invalidMentionIds = requestedMentionIds.filter((userId) => !allowedIds.has(userId));
+      if (invalidMentionIds.length > 0) {
+        throw new BadRequestException('One or more mentioned users cannot receive ticket mentions.');
+      }
+      mentionedUserIds = requestedMentionIds;
+    }
 
     let attachmentPath: string | null = null;
     if (attachment) {
@@ -3442,24 +3503,47 @@ export class TicketService implements OnModuleInit {
     // Emit explicitly instead of relying on the asynchronous event-log write.
     this.sseService.emitTicketUpdated(ticket.id);
 
-    // In-app notification
-    const notifyUsers: number[] = [];
-    if (actorRole === UserRole.USER) {
-      if (ticket.assignedToId && ticket.assignedToId !== actorId)
-        notifyUsers.push(ticket.assignedToId);
-    } else if (ticket.requesterId === actorId) {
-      if (ticket.assignedToId && ticket.assignedToId !== actorId)
-        notifyUsers.push(ticket.assignedToId);
+    // In-app notifications. Internal notes notify both ticket participants, while
+    // explicitly mentioned staff receive a distinct mention notification.
+    if (isInternal) {
+      const participantIds = [ticket.requesterId, ticket.assignedToId]
+        .map((userId) => Number(userId))
+        .filter((userId) => Boolean(userId) && userId !== actorId);
+      const mentionedIdSet = new Set(mentionedUserIds);
+      const generalRecipients = [...new Set(participantIds)].filter(
+        (userId) => !mentionedIdSet.has(userId),
+      );
+
+      this.sendNotification(
+        generalRecipients,
+        ticket.id,
+        'internal_note_added',
+        `An internal update was recorded on ticket ${ticket.ticketNumber}`,
+      ).catch(() => {});
+      this.sendNotification(
+        mentionedUserIds,
+        ticket.id,
+        'internal_note_mentioned',
+        `You were mentioned in an internal note on ticket ${ticket.ticketNumber}`,
+      ).catch(() => {});
     } else {
-      if (!isInternal && ticket.requesterId && ticket.requesterId !== actorId)
+      const notifyUsers: number[] = [];
+      if (actorRole === UserRole.USER) {
+        if (ticket.assignedToId && ticket.assignedToId !== actorId)
+          notifyUsers.push(ticket.assignedToId);
+      } else if (ticket.requesterId === actorId) {
+        if (ticket.assignedToId && ticket.assignedToId !== actorId)
+          notifyUsers.push(ticket.assignedToId);
+      } else if (ticket.requesterId && ticket.requesterId !== actorId) {
         notifyUsers.push(ticket.requesterId);
+      }
+      this.sendNotification(
+        notifyUsers,
+        ticket.id,
+        'comment_added',
+        `New comment on ticket ${ticket.ticketNumber}`,
+      ).catch(() => {});
     }
-    this.sendNotification(
-      notifyUsers,
-      ticket.id,
-      'comment_added',
-      `New comment on ticket ${ticket.ticketNumber}`,
-    ).catch(() => {});
 
     return savedComment;
   }
@@ -4478,11 +4562,12 @@ export class TicketService implements OnModuleInit {
 
       const attendance = attendanceByUser.get(userId);
       let attendanceState: AttendanceAssignmentState | null = null;
-      if (
-        attendance?.status === AttendanceStatus.ABSENT ||
-        attendance?.status === AttendanceStatus.OUT_OF_OFFICE
-      ) {
+      if (attendance?.status === AttendanceStatus.ABSENT) {
         attendanceState = 'absent';
+      } else if (attendance?.status === AttendanceStatus.HALF_DAY) {
+        attendanceState = 'half_day';
+      } else if (attendance?.status === AttendanceStatus.OUT_OF_OFFICE) {
+        attendanceState = 'out_of_office';
       } else if (!attendance && hasCurrentDtrData && currentTime >= expectedClockIn) {
         attendanceState = currentTime >= workdayEnd ? 'absent' : 'assumed_late';
       }
@@ -4499,7 +4584,12 @@ export class TicketService implements OnModuleInit {
         }));
       if (affectedTickets.length === 0) continue;
 
-      const attendanceLabel = attendanceState === 'assumed_late' ? 'Assumed Late' : 'Absent';
+      const attendanceLabel = {
+        absent: 'Absent',
+        half_day: 'Half Day',
+        out_of_office: 'OOO',
+        assumed_late: 'Assumed Late',
+      }[attendanceState];
       alerts.push({
         userId,
         staffName: formatPersonName(user, user.email),
