@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.10] - 2026-09-21 - Pilot Reliability and SLA Controls
+
+### Added
+- Added minute-level SLA configuration so issue targets can be shorter than one hour.
+- Added reusable image selection, drag-and-drop, and clipboard paste support across ticket descriptions, comments, and escalation proof areas.
+- Added an explicit DTR-verified action for restoring manually overridden attendance to Present.
+
+### Changed
+- Dynamic staff and user selectors are searchable and display the available person names consistently.
+- My Assigned Tickets is available and clickable for every ticket-enabled RICTMS role.
+- Regular-user tickets without a keyword-matched issue receive the four-hour fallback SLA until staff select the correct issue.
+- User Management View keeps End User fixed for regular-account creation while retaining its limited regular-user management scope.
+
+### Fixed
+- Manual Absent, Half Day, and OOO attendance overrides are no longer overwritten by the recurring DTR synchronization.
+- Freeze now consistently pauses the SLA timer, preserves repeated business-time pauses, and resumes without consuming the frozen interval.
+- Queue handoff promotes the next waiting ticket to In Progress and emits the corresponding live update.
+- Notification badge/list reads and notification target paths are synchronized and hardened against missing legacy values.
+- Tickets cannot be resolved without a configured issue, and regular-user tickets without an issue no longer inherit an unexplained SLA.
+- Ticket details, SLA summary data, and My Assigned Tickets navigation no longer fail on the pilot-test edge cases addressed in this release.
+
+### Deployment Note
+- Apply the environment-managed Specialized Concerns, notification `target_path`, and minute-SLA schema updates in staging or production if that environment does not already contain them. Attendance override restoration requires no new schema migration.
+
 ## [1.0.9] - 2026-09-17 - Specialized Concerns and Pilot Test Reliability
 
 ### Added

@@ -274,6 +274,68 @@ export class AttendanceService implements OnModuleInit {
     return { message: 'Attendance deleted' };
   }
 
+  /**
+   * Clear a manual attendance override only after confirming that today's DTR
+   * still has a clock-in for the staff member. This is the supported way to
+   * return Absent, Half Day, or OOO back to DTR-managed Present.
+   */
+  async restoreAttendanceFromDtr(
+    userId: number,
+    date: string,
+    actorRole?: string,
+  ): Promise<TechAttendance> {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+    if (date !== today) {
+      throw new BadRequestException('Only today\'s attendance can be restored from DTR.');
+    }
+
+    if (actorRole && !this.roleCapSvc.isAttendanceManage(actorRole)) {
+      throw new ForbiddenException('You do not have permission to manage attendance.');
+    }
+
+    const record = await this.attendanceRepo.findOne({ where: { userId, date } });
+    if (!record) {
+      throw new NotFoundException('Attendance record not found.');
+    }
+    if (!record.isManualOverride) {
+      throw new BadRequestException('Attendance is already managed by DTR.');
+    }
+    if (!this.isDtrViewOnline) {
+      throw new BadRequestException('DTR is offline. Present can only be restored after DTR is available.');
+    }
+
+    const user = await this.userRepo.findOne({ where: { id: userId, active: true } });
+    if (!user?.staffId) {
+      throw new BadRequestException('This staff account has no DTR employee code.');
+    }
+
+    const dtrRecord = await this.dtrViewRepo.findOne({
+      where: { workDate: date, empCode: String(user.staffId) },
+    });
+    if (!dtrRecord?.firstClockInTime) {
+      throw new BadRequestException('No DTR clock-in was found for this staff member today.');
+    }
+
+    record.status = AttendanceStatus.PRESENT;
+    record.clockInTime = dtrRecord.firstClockInTime;
+    record.isManualOverride = false;
+    record.setById = null;
+    record.notes = 'Restored from the verified DTR clock-in record.';
+    const savedRecord = await this.attendanceRepo.save(record);
+
+    void this.eventBus.publish(APP_NOTIFICATION_REQUESTED_EVENT, {
+      userIds: [userId],
+      targetPath: '/dashboard',
+      eventType: 'attendance_updated',
+      message: 'Your attendance for ' + date + ' was restored to Present from the DTR clock-in record.',
+    });
+    this.eventBus.publish('attendance.verified', { userId }).catch(() => {
+      this.logger.error('Failed to publish attendance verified event.');
+    });
+
+    return savedRecord;
+  }
+
 
   /** Get technicians who are available (present or half_day) for a ticket type on a given date */
   async getAvailableTechnicians(ticketType: string, date: string): Promise<User[]> {
@@ -757,6 +819,13 @@ export class AttendanceService implements OnModuleInit {
         }
 
         const existingRecord = existingAttendance.find(a => a.userId === tech.id);
+
+        // A manual attendance decision remains authoritative for the day. It
+        // may only return to Present through restoreAttendanceFromDtr(), which
+        // verifies the clock-in again before clearing the override.
+        if (existingRecord?.isManualOverride) {
+          continue;
+        }
         
         const clockInChanged = !existingRecord?.clockInTime ||
           existingRecord.clockInTime.getTime() !== dtr.firstClockInTime.getTime();

@@ -520,6 +520,7 @@ export interface TechAttendance {
   notes?: string;
   setById?: number;
   clockInTime?: string;
+  isManualOverride?: boolean;
   createdAt: string;
 }
 
@@ -1275,6 +1276,10 @@ export const attendanceApi = {
       const response = await apiClient.delete(`/attendance/${userId}/${date}`);
       return response.data;
     },
+  restoreFromDtr: async (userId: number, date: string): Promise<TechAttendance> => {
+    const response = await apiClient.post('/attendance/' + userId + '/' + date + '/restore-dtr');
+    return response.data;
+  },
   setAttendance: async (data: {
     userId: number;
     date: string;

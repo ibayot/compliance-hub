@@ -32,6 +32,5 @@ export const TICKET_TYPE_LABELS: Record<TicketType, string> = {
 
 export function formatTicketStatus(status: string): string {
   if (!status) return '';
-  if (status.toLowerCase() === 'freeze') return 'ON HOLD';
   return status.replace(/_/g, ' ').toUpperCase();
 }

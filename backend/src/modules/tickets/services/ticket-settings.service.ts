@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNumber, IsBoolean, IsEnum, IsOptional, IsNotEmpty, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsNumber, IsBoolean, IsEnum, IsOptional, IsNotEmpty, IsArray, ValidateNested, Min, Max } from 'class-validator';
 
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -19,6 +19,9 @@ import { NotificationService } from './notification.service';
 import { formatPersonName } from '../../../shared/utils/person-name';
 
 // --- DTOs ------------------------------------------------------------------
+
+export const MIN_SLA_HOURS = 1 / 60;
+export const MAX_SLA_HOURS = 168;
 
 export class CreateCategoryDto {
   @IsNotEmpty()
@@ -168,6 +171,8 @@ export class CreateIssueTypeDto {
   categoryId?: string | null;
   @IsOptional()
   @IsNumber()
+  @Min(MIN_SLA_HOURS)
+  @Max(MAX_SLA_HOURS)
   @ApiPropertyOptional()
   slaHours?: number | null;
   @IsOptional()
@@ -203,6 +208,8 @@ export class UpdateIssueTypeDto {
   categoryId?: string | null;
   @IsOptional()
   @IsNumber()
+  @Min(MIN_SLA_HOURS)
+  @Max(MAX_SLA_HOURS)
   @ApiPropertyOptional()
   slaHours?: number | null;
   @IsOptional()
@@ -596,8 +603,12 @@ export class TicketSettingsService {
     if (existing && !existing.isDeleted) throw new BadRequestException(`Issue type key "${key}" already exists`);
 
     if (dto.slaHours !== undefined && dto.slaHours !== null) {
-      if (dto.slaHours < 0 || dto.slaHours > 168) {
-        throw new BadRequestException('SLA hours must be between 0 and 168');
+      if (
+        !Number.isFinite(dto.slaHours) ||
+        dto.slaHours < MIN_SLA_HOURS ||
+        dto.slaHours > MAX_SLA_HOURS
+      ) {
+        throw new BadRequestException('SLA must be between 1 minute and 168 hours');
       }
     }
 
@@ -668,8 +679,15 @@ export class TicketSettingsService {
     }
     if (dto.description !== undefined) issueType.description = dto.description?.trim() || null;
     if (dto.slaHours !== undefined) {
-      if (dto.slaHours !== null && (dto.slaHours < 0 || dto.slaHours > 168)) {
-        throw new BadRequestException('SLA hours must be between 0 and 168');
+      if (
+        dto.slaHours !== null &&
+        (
+          !Number.isFinite(dto.slaHours) ||
+          dto.slaHours < MIN_SLA_HOURS ||
+          dto.slaHours > MAX_SLA_HOURS
+        )
+      ) {
+        throw new BadRequestException('SLA must be between 1 minute and 168 hours');
       }
       issueType.slaHours = dto.slaHours ?? null;
       if (issueType.slaHours === null) {

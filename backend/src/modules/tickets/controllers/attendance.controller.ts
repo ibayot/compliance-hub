@@ -120,6 +120,23 @@ export class AttendanceController {
     return mapAttendance(record);
   }
 
+  /** POST /attendance/:userId/:date/restore-dtr — clear a manual override after DTR verification */
+  @Post(':userId/:date/restore-dtr')
+  @RequireCapability('isAttendanceManage')
+  @HttpCode(HttpStatus.OK)
+  async restoreAttendanceFromDtr(
+    @Param('userId') userId: string,
+    @Param('date') date: string,
+    @Request() req: any,
+  ) {
+    const record = await this.attendanceService.restoreAttendanceFromDtr(
+      Number(userId),
+      date,
+      req.user.role,
+    );
+    return mapAttendance(record);
+  }
+
   /** DELETE /attendance/:userId/:date */
   @Delete(':userId/:date')
   @RequireCapability('isAttendanceManage')

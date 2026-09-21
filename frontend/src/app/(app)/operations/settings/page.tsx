@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSse } from '@/lib/utils/useSse';
 import {
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -72,6 +73,18 @@ const TYPE_LABELS: Record<string, string> = {
   specialized_concerns: 'Specialized Concerns',
 };
 const PAGE_SIZE = 10;
+const MAX_SLA_HOURS = 168;
+const MINUTES_PER_HOUR = 60;
+const MAX_SLA_MINUTES = MAX_SLA_HOURS * MINUTES_PER_HOUR;
+
+const formatSlaDuration = (hours: number): string => {
+  const numericHours = Number(hours);
+  if (!Number.isFinite(numericHours)) return '—';
+  if (numericHours < 1 || !Number.isInteger(numericHours)) {
+    return String(Math.round(numericHours * MINUTES_PER_HOUR)) + ' min';
+  }
+  return String(numericHours) + 'h';
+};
 
 const SEARCH_FIELD_SX = {
   flex: { xs: '1 1 100%', sm: '2 1 300px' },
@@ -216,6 +229,7 @@ export default function TicketSettingsPage() {
     description: string;
     categoryId: string;
     slaHours: string;
+    slaUnit: 'hours' | 'minutes';
     allowablePauseHours: string;
     isActive: boolean;
     maxFreezeHours: string;
@@ -224,6 +238,7 @@ export default function TicketSettingsPage() {
     description: '',
     categoryId: '',
     slaHours: '24',
+    slaUnit: 'hours',
     allowablePauseHours: '48',
     isActive: true,
     maxFreezeHours: '',
@@ -630,12 +645,21 @@ export default function TicketSettingsPage() {
   // Issue CRUD
   const openIssueDialog = (issue?: TicketIssueType) => {
     if (issue) {
+      const configuredSlaHours = issue.slaHours == null ? null : Number(issue.slaHours);
+      const showSlaInMinutes =
+        configuredSlaHours !== null &&
+        (configuredSlaHours < 1 || !Number.isInteger(configuredSlaHours));
       setEditIssue(issue);
       setIssueForm({
         name: issue.name,
         description: issue.description || '',
         categoryId: String(issue.categoryId || issue.category?.id || issue.category_id || ''),
-        slaHours: issue.slaHours != null ? String(issue.slaHours) : '',
+        slaHours: configuredSlaHours === null
+          ? ''
+          : showSlaInMinutes
+            ? String(Math.round(configuredSlaHours * MINUTES_PER_HOUR))
+            : String(configuredSlaHours),
+        slaUnit: showSlaInMinutes ? 'minutes' : 'hours',
         allowablePauseHours: String(issue.allowablePauseHours ?? 48),
         isActive: issue.isActive,
         maxFreezeHours: issue.maxFreezeHours != null ? String(issue.maxFreezeHours) : '',
@@ -647,6 +671,7 @@ export default function TicketSettingsPage() {
         description: '',
         categoryId: '',
         slaHours: '24',
+        slaUnit: 'hours',
         allowablePauseHours: '48',
         isActive: true,
         maxFreezeHours: '',
@@ -659,11 +684,27 @@ export default function TicketSettingsPage() {
     if (!issueForm.name.trim()) return enqueueSnackbar('Name required', { variant: 'error' });
     if (!issueForm.categoryId) return enqueueSnackbar('Category required', { variant: 'error' });
     
-    const parsedSla = issueForm.slaHours ? Number(issueForm.slaHours) : null;
-    if (parsedSla === null || parsedSla <= 0 || parsedSla > 168) {
-      enqueueSnackbar('SLA must be between 1 and 168 hours', { variant: 'warning' });
+    const enteredSla = issueForm.slaHours ? Number(issueForm.slaHours) : null;
+    const minEnteredSla = issueForm.slaUnit === 'minutes' ? 1 : 1 / MINUTES_PER_HOUR;
+    const maxEnteredSla = issueForm.slaUnit === 'minutes' ? MAX_SLA_MINUTES : MAX_SLA_HOURS;
+    if (
+      enteredSla === null ||
+      !Number.isFinite(enteredSla) ||
+      (issueForm.slaUnit === 'minutes' && !Number.isInteger(enteredSla)) ||
+      enteredSla < minEnteredSla ||
+      enteredSla > maxEnteredSla
+    ) {
+      enqueueSnackbar(
+        issueForm.slaUnit === 'minutes'
+          ? 'SLA must be a whole number between 1 and ' + MAX_SLA_MINUTES + ' minutes'
+          : 'SLA must be between 0.016667 and ' + MAX_SLA_HOURS + ' hours',
+        { variant: 'warning' },
+      );
       return;
     }
+    const parsedSla = issueForm.slaUnit === 'minutes'
+      ? enteredSla / MINUTES_PER_HOUR
+      : enteredSla;
 
     const parsedPause = issueForm.allowablePauseHours ? Number(issueForm.allowablePauseHours) : 48;
     const parsedFreeze = issueForm.maxFreezeHours ? Number(issueForm.maxFreezeHours) : null;
@@ -675,7 +716,10 @@ export default function TicketSettingsPage() {
     setIssueSubmitting(true);
     try {
       const payload = {
-        ...issueForm,
+        name: issueForm.name,
+        description: issueForm.description,
+        categoryId: issueForm.categoryId,
+        isActive: issueForm.isActive,
         slaHours: parsedSla,
         allowablePauseHours: parsedPause,
         maxFreezeHours: parsedFreeze
@@ -1022,7 +1066,7 @@ export default function TicketSettingsPage() {
                             </Typography>
                           )}
                         </TableCell>
-                        <TableCell>{iss.slaHours != null ? `${iss.slaHours}h` : '—'}</TableCell>
+                        <TableCell>{iss.slaHours != null ? formatSlaDuration(iss.slaHours) : '—'}</TableCell>
                         <TableCell>{iss.allowablePauseHours ?? 48}h</TableCell>
                         <TableCell>{iss.maxFreezeHours != null ? `${iss.maxFreezeHours}h` : 'Unlimited'}</TableCell>
                         <TableCell>
@@ -1785,21 +1829,52 @@ export default function TicketSettingsPage() {
               value={issueForm.description}
               onChange={(e) => setIssueForm({ ...issueForm, description: e.target.value })}
             />
-            <TextField
-              label="SLA Time Limit (hours)"
-              type="text"
-              inputMode="numeric"
-              inputProps={{ min: 1, max: 99, maxLength: 2 }}
-              fullWidth
-              size="small"
-              value={issueForm.slaHours}
-              onChange={(e) => {
-                let val = e.target.value.replace(/\D/g, '');
-                if (val !== '' && Number(val) > 99) val = '99';
-                setIssueForm({ ...issueForm, slaHours: val });
-              }}
-              helperText="Optional. Enter hours > 0."
-            />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+              <TextField
+                label="SLA Time Limit"
+                type="text"
+                inputMode={issueForm.slaUnit === 'minutes' ? 'numeric' : 'decimal'}
+                inputProps={{
+                  min: issueForm.slaUnit === 'minutes' ? 1 : 1 / MINUTES_PER_HOUR,
+                  max: issueForm.slaUnit === 'minutes' ? MAX_SLA_MINUTES : MAX_SLA_HOURS,
+                  maxLength: issueForm.slaUnit === 'minutes' ? 5 : 10,
+                }}
+                fullWidth
+                size="small"
+                value={issueForm.slaHours}
+                onChange={(e) => {
+                  const maxValue = issueForm.slaUnit === 'minutes' ? MAX_SLA_MINUTES : MAX_SLA_HOURS;
+                  let val = issueForm.slaUnit === 'minutes'
+                    ? e.target.value.replace(/\D/g, '')
+                    : e.target.value.replace(/[^\d.]/g, '');
+                  if (issueForm.slaUnit === 'hours' && !/^\d*(\.\d{0,6})?$/.test(val)) return;
+                  if (val !== '' && Number(val) > maxValue) val = String(maxValue);
+                  setIssueForm({ ...issueForm, slaHours: val });
+                }}
+                helperText="Minimum 1 minute; maximum 168 hours."
+              />
+              <TextField
+                select
+                label="Unit"
+                size="small"
+                value={issueForm.slaUnit}
+                onChange={(e) => {
+                  const nextUnit = e.target.value as 'hours' | 'minutes';
+                  const currentValue = Number(issueForm.slaHours);
+                  let convertedValue = issueForm.slaHours;
+                  if (issueForm.slaHours && Number.isFinite(currentValue)) {
+                    convertedValue = nextUnit === 'minutes'
+                      ? String(Math.round(currentValue * MINUTES_PER_HOUR))
+                      : String(Number((currentValue / MINUTES_PER_HOUR).toFixed(6)));
+                  }
+                  setIssueForm({ ...issueForm, slaHours: convertedValue, slaUnit: nextUnit });
+                }}
+                sx={{ minWidth: { xs: '100%', sm: 140 } }}
+              >
+                <MenuItem value="minutes">Minutes</MenuItem>
+                <MenuItem value="hours">Hours</MenuItem>
+              </TextField>
+            </Stack>
             <TextField
               label="Max Pause Hours *"
                 type="text"
@@ -1872,25 +1947,20 @@ export default function TicketSettingsPage() {
               <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
               <MenuItem value="specialized_concerns">Specialized Concerns</MenuItem>
             </TextField>
-            <TextField
-              select
-              label="Select Focal User *"
-              value={focalForm.userId}
-              onChange={(e) => setFocalForm((f) => ({ ...f, userId: e.target.value }))}
+            <Autocomplete
+              options={availableUsers}
+              getOptionLabel={(option) => option.label}
+              value={availableUsers.find((option) => option.value === focalForm.userId) ?? null}
+              onChange={(_, option) => setFocalForm((form) => ({ ...form, userId: option?.value ?? '' }))}
+              isOptionEqualToValue={(option, value) => option.value === value.value}
+              openOnFocus
+              clearOnEscape
               fullWidth
-            >
-              {availableUsers.length === 0 ? (
-                <MenuItem disabled value="">
-                  No eligible staff available
-                </MenuItem>
-              ) : (
-                availableUsers.map((r) => (
-                  <MenuItem key={r.value} value={r.value}>
-                    {r.label}
-                  </MenuItem>
-                ))
+              noOptionsText="No eligible staff available"
+              renderInput={(params) => (
+                <TextField {...params} label="Select Focal User *" required />
               )}
-            </TextField>
+            />
           </Stack>
         </DialogContent>
         <DialogActions>

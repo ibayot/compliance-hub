@@ -35,6 +35,7 @@ import {
   Cancel as AbsentIcon,
   WbSunny as HalfDayIcon,
   FlightTakeoff as OOOIcon,
+  Restore as RestoreDtrIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
@@ -339,13 +340,18 @@ export default function AttendancePage() {
       const idx = prev.findIndex((r) => r.userId === userId && r.date.slice(0, 10) === date);
       if (idx !== -1) {
         const arr = [...prev];
-        arr[idx] = { ...arr[idx], status, clockInTime: clockInTime ?? arr[idx].clockInTime };
+        arr[idx] = {
+          ...arr[idx],
+          status,
+          clockInTime: clockInTime ?? arr[idx].clockInTime,
+          isManualOverride: true,
+        };
         return arr;
       }
       // No record yet: create a temporary placeholder
       return [
         ...prev,
-        { id: `temp-${userId}-${date}`, userId, date, status, clockInTime, createdAt: '' } as TechAttendance,
+        { id: `temp-${userId}-${date}`, userId, date, status, clockInTime, isManualOverride: true, createdAt: '' } as TechAttendance,
       ];
     });
     try {
@@ -364,6 +370,23 @@ export default function AttendancePage() {
       // Rollback on error by refetching
       fetchAttendance();
       enqueueSnackbar(err?.response?.data?.message || 'Failed', { variant: 'error' });
+    }
+  };
+
+  const handleRestoreDtrAttendance = async (userId: number, date: string) => {
+    try {
+      const restored = await attendanceApi.restoreFromDtr(userId, date);
+      setAttendance((prev) => {
+        const idx = prev.findIndex((r) => r.userId === userId && r.date.slice(0, 10) === date);
+        if (idx === -1) return [...prev, restored];
+        const next = [...prev];
+        next[idx] = restored;
+        return next;
+      });
+      enqueueSnackbar('Attendance restored to Present from DTR.', { variant: 'success' });
+    } catch (err: any) {
+      fetchAttendance();
+      enqueueSnackbar(err?.response?.data?.message || 'Failed to restore attendance from DTR.', { variant: 'error' });
     }
   };
 
@@ -659,6 +682,13 @@ export default function AttendancePage() {
                             const isPastDate = dateStr < todayStr;
                             const isFutureDate = dateStr > todayStr;
                             const isToday = dateStr === todayStr;
+                            const canRestoreFromDtr = Boolean(
+                              canManage &&
+                              isToday &&
+                              systemStatus?.isOnline &&
+                              rec?.isManualOverride &&
+                              rec.clockInTime,
+                            );
 
                             const cellClickHandler = () => {
                               if (!canManage || isPastDate || isFutureDate) return;
@@ -687,8 +717,20 @@ export default function AttendancePage() {
                                 handleTransition(cycle[0]);
                               } else {
                                 const currentIdx = cycle.indexOf(status);
-                                if (currentIdx === -1 || currentIdx === cycle.length - 1) {
-                                  // if it was 'present' and not in cycle, or at end of cycle
+                                if (
+                                  currentIdx === -1 &&
+                                  status === 'present' &&
+                                  systemStatus?.isOnline
+                                ) {
+                                  // DTR Present becomes the first manual override in one click.
+                                  handleTransition(cycle[0]);
+                                } else if (currentIdx === -1 || currentIdx === cycle.length - 1) {
+                                  if (canRestoreFromDtr) {
+                                    handleRestoreDtrAttendance(userId, dateStr);
+                                    return;
+                                  }
+                                  // If it was Present and not in the cycle, or at the end of the cycle,
+                                  // remove a record that cannot be restored from a verified DTR clock-in.
                                   setAttendance((prev) => prev.filter((r) => !(r.userId === userId && r.date.slice(0, 10) === dateStr)));
                                   attendanceApi.deleteAttendance(userId, dateStr).catch(() => fetchAttendance());
                                 } else {
@@ -737,6 +779,21 @@ export default function AttendancePage() {
                                       }}
                                     >
                                       {renderIcon()}
+                                      {canRestoreFromDtr && (
+                                        <Tooltip title="Restore DTR Present">
+                                          <IconButton
+                                            size="small"
+                                            aria-label="Restore attendance to Present from DTR"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              handleRestoreDtrAttendance(userId, dateStr);
+                                            }}
+                                            sx={{ p: 0.125, ml: 0.25, color: 'success.main' }}
+                                          >
+                                            <RestoreDtrIcon sx={{ fontSize: '0.9rem' }} />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
                                     </Box>
                                     {rec?.clockInTime && (
                                       <Typography variant="caption" sx={{ fontSize: '0.6rem', lineHeight: 1, mt: 0.25, color: 'text.secondary' }}>

@@ -140,7 +140,6 @@ export class TicketController {
     });
   }
 
-  /** GET /tickets/sla/summary — active Overdue, Nearing SLA, and On Track metrics */
   /**
    * Least-privilege personal queue for RICTMS staff whose role does not have
    * the full Tickets module. The assignee is always derived from the JWT.
@@ -156,7 +155,7 @@ export class TicketController {
     }
     const viewerId = Number(req?.user?.id ?? req?.user?.userId);
     return this.ticketService.getTickets({
-      assignedToId: viewerId,
+      assignedOnly: true,
       viewerId,
       viewerRole: req?.user?.role,
       page: page ? Number(page) : 1,
@@ -164,6 +163,7 @@ export class TicketController {
     });
   }
 
+  /** GET /tickets/sla/summary — active Overdue, Nearing SLA, and On Track metrics */
   @Get('sla/summary')
   @RequireCapability('isTicketModuleAccess')
   async getSlaSummary(@Request() req: any) {
@@ -223,12 +223,14 @@ export class TicketController {
 
   /** GET /tickets/assigned-stats?year=&month= — monthly stats for tickets ASSIGNED to the caller */
   @Get('assigned-stats')
-  @RequireCapability('isTicketModuleAccess')
   async getAssignedStats(
     @Request() req: any,
     @Query('year') year?: string,
     @Query('month') month?: string,
   ) {
+    if (req?.user?.role === UserRole.USER) {
+      throw new ForbiddenException('End User accounts do not have assigned-ticket statistics.');
+    }
     const now = new Date();
     return this.ticketService.getTechAssignedStats(
       req.user.id ?? req.user.userId,

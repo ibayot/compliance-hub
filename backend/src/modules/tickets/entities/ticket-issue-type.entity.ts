@@ -29,8 +29,22 @@ export class TicketIssueType {
   @Column({ name: 'is_deleted', type: 'boolean', default: false })
   isDeleted: boolean;
 
-  /** SLA time limit in hours from assignment to resolved — null = no SLA */
-  @Column({ name: 'sla_hours', type: 'int', nullable: true })
+  /**
+   * SLA time limit in hours from assignment to resolved — null = no SLA.
+   * Fractional hours allow administrators to configure minute-level targets.
+   */
+  @Column({
+    name: 'sla_hours',
+    type: 'decimal',
+    precision: 10,
+    scale: 6,
+    nullable: true,
+    transformer: {
+      to: (value: number | null | undefined) => value,
+      from: (value: string | number | null | undefined) =>
+        value == null ? value : Number(value),
+    },
+  })
   slaHours: number | null;
 
   @Column({ name: 'allowable_pause_hours', type: 'int', default: 48 })

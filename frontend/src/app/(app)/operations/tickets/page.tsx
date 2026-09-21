@@ -81,6 +81,7 @@ import {
   CsatFormData,
   TicketEscalation,
 } from '@/app/api/references';
+import TicketImageDropzone from '@/components/TicketImageDropzone';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useSse } from '@/lib/utils/useSse';
 import { formatPersonName } from '@/lib/utils/person-name';
@@ -1267,7 +1268,7 @@ export default function TicketsPage() {
                     <MenuItem value="in_progress">In Progress</MenuItem>
                     <MenuItem value="resolved">Resolved</MenuItem>
                     <MenuItem value="closed">Closed</MenuItem>
-                    <MenuItem value="freeze">On Hold</MenuItem>
+                    <MenuItem value="freeze">Freeze</MenuItem>
                     <MenuItem value="duplicate">Duplicate</MenuItem>
                   </TextField>
                   <TextField inputProps={{ maxLength: 255 }}
@@ -2235,21 +2236,20 @@ export default function TicketsPage() {
               if (filteredCategories.length === 0) return null;
 
               return (
-                <TextField inputProps={{ maxLength: 255 }}
-                  select
-                  label="Category"
-                  value={form.categoryId ?? ''}
+                <Autocomplete
+                  options={filteredCategories}
+                  getOptionLabel={(category) => category.name}
+                  value={filteredCategories.find((category) => category.id === form.categoryId) ?? null}
+                  onChange={(_, category) => setForm({ ...form, categoryId: category?.id, issueTypeId: undefined })}
+                  isOptionEqualToValue={(option, value) => option.id === value.id}
+                  openOnFocus
+                  clearOnEscape
                   fullWidth
-                  onChange={(e) => setForm({ ...form, categoryId: e.target.value || undefined, issueTypeId: undefined })}
-                  helperText="Select a specific category for faster routing"
-                >
-                  <MenuItem value="">— No specific category —</MenuItem>
-                  {filteredCategories.map((c) => (
-                    <MenuItem key={c.id} value={c.id}>
-                      {c.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                  noOptionsText="No categories available"
+                  renderInput={(params) => (
+                    <TextField {...params} label="Category" helperText="Select a specific category for faster routing" />
+                  )}
+                />
               );
             })()}
 
@@ -2262,22 +2262,20 @@ export default function TicketsPage() {
               if (filteredIssues.length === 0) return null;
 
               return (
-                <TextField inputProps={{ maxLength: 255 }}
-                  select
-                  label="Issue *"
-                  value={form.issueTypeId ?? ''}
+                <Autocomplete
+                  options={filteredIssues}
+                  getOptionLabel={(issue) => issue.name}
+                  value={filteredIssues.find((issue) => issue.id === form.issueTypeId) ?? null}
+                  onChange={(_, issue) => setForm({ ...form, issueTypeId: issue?.id })}
+                  isOptionEqualToValue={(option, value) => option.id === value.id}
+                  openOnFocus
+                  clearOnEscape
                   fullWidth
-                  onChange={(e) => setForm({ ...form, issueTypeId: e.target.value || undefined })}
-                  required
-                  helperText="Required for RICTMS staff; this determines routing and SLA tracking"
-                >
-
-                  {filteredIssues.map((iss) => (
-                    <MenuItem key={iss.id} value={iss.id}>
-                      {iss.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                  noOptionsText="No issues available"
+                  renderInput={(params) => (
+                    <TextField {...params} label="Issue *" required helperText="Required for RICTMS staff; this determines routing and SLA tracking" />
+                  )}
+                />
               );
             })()}
 
@@ -2451,27 +2449,28 @@ export default function TicketsPage() {
               fullWidth
             />
             {isTicketAdmin && (
-              <TextField
-                select
-                label="Assignment"
-                value={form.assignedToId ?? ''}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    assignedToId: e.target.value ? Number(e.target.value) : undefined,
-                  })
-                }
-                helperText="Leave on Automatic Assignment to use the configured routing rules."
+              <Autocomplete
+                options={technicians}
+                getOptionLabel={(technician) => `${formatPersonName(technician, technician.email)} (${technician.openCount ?? 0} Active)`}
+                value={technicians.find((technician) => technician.id === form.assignedToId) ?? null}
+                onChange={(_, technician) => setForm({ ...form, assignedToId: technician?.id })}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                openOnFocus
+                clearOnEscape
                 fullWidth
-              >
-                <MenuItem value="">Automatic Assignment</MenuItem>
-                {technicians.map((technician) => (
-                  <MenuItem key={technician.id} value={technician.id}>
-                    {formatPersonName(technician, technician.email)}
-                    {` (${technician.openCount ?? 0} Active)`}
-                  </MenuItem>
-                ))}
-              </TextField>
+                noOptionsText="No eligible staff available"
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Assignment"
+                    helperText={
+                      form.ticketType === 'specialized_concerns'
+                        ? 'Leave blank for manual assignment later.'
+                        : 'Leave blank to use automatic assignment.'
+                    }
+                  />
+                )}
+              />
             )}
             {(canManageAll || isTechnician) && (
               <TextField inputProps={{ maxLength: 255 }}
@@ -2609,33 +2608,12 @@ export default function TicketsPage() {
               required
               fullWidth
             />
-            <Box>
-              <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
-                Proof image with visible timestamp (required, max 10 files, 10 MB each)
-              </Typography>
-              <Button component="label" variant="outlined" startIcon={<UploadIcon />}>
-                Upload Proof Image(s)
-                <input
-                  type="file"
-                  hidden
-                  multiple
-                  accept={ALLOWED_IMAGE_FILE_ACCEPT}
-                  onChange={(event) => {
-                    const selected = Array.from(event.target.files ?? []).slice(0, 10);
-                    const valid = selected.filter(isAllowedImageFile);
-                    if (valid.length !== selected.length) {
-                      enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed.', { variant: 'error' });
-                    }
-                    setResolutionOverrideFiles(valid);
-                  }}
-                />
-              </Button>
-              {resolutionOverrideFiles.length > 0 && (
-                <Typography variant="caption" display="block" mt={0.5}>
-                  {resolutionOverrideFiles.length} proof image(s) selected
-                </Typography>
-              )}
-            </Box>
+            <TicketImageDropzone
+              files={resolutionOverrideFiles}
+              onFilesChange={setResolutionOverrideFiles}
+              label="Proof image with visible timestamp (required, max 10 files, 10 MB each)."
+              buttonLabel="Select Proof Image(s)"
+            />
             <FormControlLabel
               control={(
                 <Checkbox
@@ -2753,35 +2731,12 @@ export default function TicketsPage() {
             onChange={(e) => setEscalateNotes(e.target.value)}
             sx={{ mb: 2 }}
           />
-          <Box>
-            <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
-              Proof photos (optional, max 10 files, 10 MB each)
-            </Typography>
-            <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />}>
-              Upload Proof Photo(s)
-              <input
-                type="file"
-                hidden
-                multiple
-                accept={ALLOWED_IMAGE_FILE_ACCEPT}
-                onChange={(e) => {
-                  const files = Array.from(e.target.files ?? []);
-                  const validFiles = files.filter(isAllowedImageFile);
-                  if (validFiles.length !== files.length) {
-                      enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed for proof photos.', {
-                      variant: 'error',
-                    });
-                  }
-                  setEscalateFiles(validFiles);
-                }}
-              />
-            </Button>
-            {escalateFiles.length > 0 && (
-              <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
-                {escalateFiles.length} file(s) selected
-              </Typography>
-            )}
-          </Box>
+          <TicketImageDropzone
+            files={escalateFiles}
+            onFilesChange={setEscalateFiles}
+            label="Proof photos (optional, max 10 files, 10 MB each)."
+            buttonLabel="Select Proof Photo(s)"
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEscalateDialogOpen(false)}>Cancel</Button>

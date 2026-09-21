@@ -51,6 +51,7 @@ import {
   TicketIssueType,
 } from '@/app/api/references';
 import { AuthImage } from '@/components/AuthImage';
+import TicketImageDropzone from '@/components/TicketImageDropzone';
 import {
   ArrowBack as BackIcon,
   Star as StarIcon,
@@ -92,7 +93,7 @@ const STATUS_OPTS = [
   { value: 'assigned', label: 'Assigned' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'resolved', label: 'Resolved' },
-  { value: 'freeze', label: 'On Hold' },
+  { value: 'freeze', label: 'Freeze' },
   { value: 'pause', label: 'Pause' },
   { value: 'duplicate', label: 'Duplicate' },
 ];
@@ -535,8 +536,8 @@ export default function TicketDetailPage() {
   });
 
   useEffect(() => {
-    if (canStaff) fetchTechnicians();
-  }, [canStaff]);
+    if (canStaff && ticket?.ticketType) fetchTechnicians(ticket.ticketType);
+  }, [canStaff, ticket?.ticketType]);
 
   const fetchTicket = async () => {
     try {
@@ -570,9 +571,9 @@ export default function TicketDetailPage() {
     }
   };
 
-  const fetchTechnicians = async () => {
+  const fetchTechnicians = async (ticketType = ticket?.ticketType) => {
     try {
-      const data = await ticketsApi.getTechnicians();
+      const data = await ticketsApi.getTechnicians(ticketType);
       const available = (data || []).filter(
         (t: any) => t.attendanceStatus === 'present',
       );
@@ -1409,6 +1410,7 @@ export default function TicketDetailPage() {
                 const activeIssueTypeId = ticket?.issueTypeId || (ticket as any)?.issueTypeConfig?.id;
                 const needsPriority = newStatus === 'in_progress' && (!effectivePriority || !activeIssueTypeId);
                 const isStatusUnchanged = newStatus === ticket?.status && newPriority === ticket?.priority;
+                const needsIssueForResolution = newStatus === 'resolved' && !activeIssueTypeId;
                 const isKbMissingNotes = newStatus === 'resolved' && generateKb && !resolutionNotes.trim();
                 const needsJustification = (newStatus === 'freeze' || newStatus === 'pause') && !statusJustification.trim();
                 return (
@@ -1531,13 +1533,18 @@ export default function TicketDetailPage() {
                         )}
                       </Grid>
                     )}
+                    {needsIssueForResolution && (
+                      <Grid item xs={12}>
+                        <Alert severity="error">Select an Issue before resolving this ticket.</Alert>
+                      </Grid>
+                    )}
                     <Grid item xs={12}>
                       <Box display="flex" gap={1}>
                         <Button
                           variant="contained"
                           size="small"
                           onClick={() => handleUpdateStatus()}
-                          disabled={needsPriority || isStatusUnchanged || isKbMissingNotes || needsJustification}
+                          disabled={needsPriority || needsIssueForResolution || isStatusUnchanged || isKbMissingNotes || needsJustification}
                         >
                           Save
                         </Button>
@@ -2535,35 +2542,12 @@ export default function TicketDetailPage() {
             sx={{ mb: 2 }}
             inputProps={{ maxLength: 1000 }}
           />
-          <Box>
-            <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
-              Proof photos (optional, max 10 files, 10 MB each)
-            </Typography>
-            <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />}>
-              Upload Proof Photo(s)
-              <input
-                type="file"
-                hidden
-                multiple
-                accept={ALLOWED_IMAGE_FILE_ACCEPT}
-                onChange={(e) => {
-                  const files = Array.from(e.target.files ?? []);
-                  const validFiles = files.filter(isAllowedImageFile);
-                  if (validFiles.length !== files.length) {
-                    enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed.', {
-                      variant: 'error',
-                    });
-                  }
-                  setEscalateFiles(validFiles);
-                }}
-              />
-            </Button>
-            {escalateFiles.length > 0 && (
-              <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
-                {escalateFiles.length} file(s) selected
-              </Typography>
-            )}
-          </Box>
+          <TicketImageDropzone
+            files={escalateFiles}
+            onFilesChange={setEscalateFiles}
+            label="Proof photos (optional, max 10 files, 10 MB each)."
+            buttonLabel="Select Proof Photo(s)"
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEscalateDialogOpen(false)}>Cancel</Button>
@@ -2633,35 +2617,12 @@ export default function TicketDetailPage() {
             size="small"
             sx={{ mb: 2 }}
           />
-          <Box>
-            <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
-              Additional proof photos (max 10 files, 10 MB each)
-            </Typography>
-            <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />}>
-              Upload Photo(s)
-              <input
-                type="file"
-                hidden
-                multiple
-                accept={ALLOWED_IMAGE_FILE_ACCEPT}
-                onChange={(e) => {
-                  const files = Array.from(e.target.files ?? []);
-                  const validFiles = files.filter(isAllowedImageFile);
-                  if (validFiles.length !== files.length) {
-                    enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed.', {
-                      variant: 'error',
-                    });
-                  }
-                  setAddProofFiles(validFiles);
-                }}
-              />
-            </Button>
-            {addProofFiles.length > 0 && (
-              <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
-                {addProofFiles.length} new file(s) selected
-              </Typography>
-            )}
-          </Box>
+          <TicketImageDropzone
+            files={addProofFiles}
+            onFilesChange={setAddProofFiles}
+            label="Additional proof photos (max 10 files, 10 MB each)."
+            buttonLabel="Select Photo(s)"
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAddProofDialogOpen(false)}>Cancel</Button>
@@ -3054,33 +3015,12 @@ export default function TicketDetailPage() {
               required
               fullWidth
             />
-            <Box>
-              <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
-                Proof image with visible timestamp (required, max 10 files, 10 MB each)
-              </Typography>
-              <Button component="label" variant="outlined" startIcon={<UploadIcon />}>
-                Upload Proof Image(s)
-                <input
-                  type="file"
-                  hidden
-                  multiple
-                  accept={ALLOWED_IMAGE_FILE_ACCEPT}
-                  onChange={(event) => {
-                    const selected = Array.from(event.target.files ?? []).slice(0, 10);
-                    const valid = selected.filter(isAllowedImageFile);
-                    if (valid.length !== selected.length) {
-                      enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed.', { variant: 'error' });
-                    }
-                    setResolutionOverrideFiles(valid);
-                  }}
-                />
-              </Button>
-              {resolutionOverrideFiles.length > 0 && (
-                <Typography variant="caption" display="block" mt={0.5}>
-                  {resolutionOverrideFiles.length} proof image(s) selected
-                </Typography>
-              )}
-            </Box>
+            <TicketImageDropzone
+              files={resolutionOverrideFiles}
+              onFilesChange={setResolutionOverrideFiles}
+              label="Proof image with visible timestamp (required, max 10 files, 10 MB each)."
+              buttonLabel="Select Proof Image(s)"
+            />
             <FormControlLabel
               control={(
                 <Checkbox

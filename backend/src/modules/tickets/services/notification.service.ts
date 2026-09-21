@@ -48,8 +48,8 @@ export class NotificationService implements OnModuleInit {
         users.forEach((user) => userIds.add(Number(user.id)));
       }
       await this.create([...userIds], payload);
-    } catch {
-      this.logger.warn('Failed to create an event-bus notification.');
+    } catch (error: any) {
+      this.logger.error(`Failed to create an event-bus notification: ${error?.message || error}`);
     }
   }
 

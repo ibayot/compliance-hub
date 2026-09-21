@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -533,24 +534,20 @@ export default function TicketReportsPage() {
                     <MenuItem value="specialized_concerns">Specialized Concerns</MenuItem>
                   </TextField>
                   {canManageReports && (
-                    <TextField
-                      select
+                    <Autocomplete
+                      options={technicians}
+                      getOptionLabel={(option) => formatPersonName(option)}
+                      value={technicians.find((option) => option.id === technicianId) ?? null}
+                      onChange={(_, option) => setTechnicianId(option?.id ?? '')}
+                      isOptionEqualToValue={(option, value) => option.id === value.id}
+                      openOnFocus
+                      clearOnEscape
                       fullWidth
                       size="small"
-                      label="Assignee"
-                      value={technicianId}
-                      onChange={(e) =>
-                        setTechnicianId(e.target.value === '' ? '' : Number(e.target.value))
-                      }
                       sx={{ minWidth: 120 }}
-                    >
-                      <MenuItem value="">All Assignees</MenuItem>
-                      {technicians.map((t) => (
-                        <MenuItem key={t.id} value={t.id}>
-                          {formatPersonName(t)}
-                        </MenuItem>
-                      ))}
-                    </TextField>
+                      noOptionsText="No assignees available"
+                      renderInput={(params) => <TextField {...params} label="Assignee" placeholder="All Assignees" />}
+                    />
                   )}
                 </>
               )}

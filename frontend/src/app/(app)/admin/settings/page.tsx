@@ -1444,7 +1444,7 @@ function FocalUserManagementCard() {
       position: '',
       positionFull: '',
       designation: '',
-      autoAssignmentEligible: true,
+      autoAssignmentEligible: false,
       unitIds: [],
     });
     setIsExistingEmail(false);
@@ -1607,12 +1607,14 @@ function FocalUserManagementCard() {
                   required
                   label="Role"
                   value={form.role}
+                  disabled={!isUserManagementAdmin}
+                  helperText={!isUserManagementAdmin ? 'User Management View can create End User accounts only.' : undefined}
                   onChange={(e) => {
                     const role = e.target.value as UserRole;
                     setForm({
                       ...form,
                       role,
-                      autoAssignmentEligible: role === UserRole.USER ? false : form.autoAssignmentEligible,
+                      autoAssignmentEligible: role !== UserRole.USER,
                     });
                   }}
                   fullWidth

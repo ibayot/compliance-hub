@@ -123,7 +123,7 @@ export default function DashboardPage() {
 
   const isRegularUser = user?.role === 'user';
   const isTechnicianAny = !!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct;
-  const canViewAssignedTickets = !isRegularUser && !!myCap?.isTicketModuleAccess;
+  const canViewAssignedTickets = !!user && !isRegularUser;
   const isLowerLevelTech = (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
   const isComplianceOfficer = !!myCap?.isReportsAccess;
   const canViewDocuments = !!myCap?.isDocumentsAccess;
