@@ -1607,8 +1607,14 @@ export class TicketService implements OnModuleInit {
             .where('LOWER(t.ticketNumber) LIKE :search', { search })
             .orWhere('LOWER(t.subject) LIKE :search', { search })
             .orWhere('LOWER(t.description) LIKE :search', { search })
+            .orWhere("LOWER(COALESCE(category.name, '')) LIKE :search", { search })
+            .orWhere("LOWER(COALESCE(category.key, '')) LIKE :search", { search })
             .orWhere(
               "EXISTS (SELECT 1 FROM users u WHERE u.id = t.requester_id AND (LOWER(u.email) LIKE :search OR LOWER(CONCAT_WS(' ', u.first_name, u.middle_name, u.last_name, u.suffix)) LIKE :search))",
+              { search },
+            )
+            .orWhere(
+              "EXISTS (SELECT 1 FROM users assigned_user WHERE assigned_user.id = t.assigned_to_id AND (LOWER(assigned_user.email) LIKE :search OR LOWER(CONCAT_WS(' ', assigned_user.first_name, assigned_user.middle_name, assigned_user.last_name, assigned_user.suffix)) LIKE :search))",
               { search },
             );
         }),

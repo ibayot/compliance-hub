@@ -1121,6 +1121,37 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
     }
   };
 
+  const filterGridSx = {
+    display: 'grid',
+    gridTemplateColumns: {
+      xs: 'repeat(2, minmax(0, 1fr))',
+      sm: 'repeat(4, minmax(0, 1fr))',
+      md: 'repeat(6, minmax(0, 1fr))',
+      lg: 'minmax(0, 2.5fr) repeat(9, minmax(0, 1fr))',
+    },
+    gap: 1,
+    alignItems: 'center',
+    '& > *': { minWidth: 0, width: '100%' },
+  } as const;
+
+  const searchField = (
+    <TextField
+      fullWidth
+      size="small"
+      placeholder="Search by ticket number, subject, requester, assignee, or category..."
+      value={searchDraft}
+      onChange={(e) => { setSearchDraft(e.target.value); setPage(1); }}
+      sx={{ gridColumn: { xs: '1 / -1', sm: 'span 2', md: 'span 2', lg: 'span 1' } }}
+      InputProps={{
+        startAdornment: (
+          <InputAdornment position="start">
+            <SearchIcon />
+          </InputAdornment>
+        ),
+      }}
+    />
+  );
+
   return (
     <Box>
       <Box
@@ -1146,32 +1177,11 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
         </Stack>
       </Box>
 
-      {/* Search Bar (Visible to everyone) */}
-      <Card sx={{ mb: 1 }}>
-        <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Search by ticket number, subject, or requester name..."
-            value={searchDraft}
-            onChange={(e) => { setSearchDraft(e.target.value); setPage(1); }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-          />
-        </CardContent>
-      </Card>
-
       {!canManageAll && (
         <Card sx={{ mb: 1 }}>
           <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} lg={12}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, '& > *': { flex: '1 1 100px' } }}>
+            <Box sx={filterGridSx}>
+                  {searchField}
                   <TextField
                     select
                     label="Year"
@@ -1275,7 +1285,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                   )}
                   <Button
                     variant="outlined"
-                    sx={{ flex: '0 0 auto', minWidth: 72, height: 36 }}
+                    sx={{ minWidth: 0, height: 36 }}
                     onClick={() => {
                       setFilterStatus('');
                       setFilterType('');
@@ -1291,9 +1301,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                   >
                     Reset
                   </Button>
-                </Box>
-              </Grid>
-            </Grid>
+            </Box>
           </CardContent>
         </Card>
       )}
@@ -1301,9 +1309,8 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
       {canManageAll && (
         <Card sx={{ mb: 1 }}>
           <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-            <Grid container spacing={1} alignItems="center">
-              <Grid item xs={12} lg={9}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, '& > *': { flex: '1 1 100px' } }}>
+            <Box sx={filterGridSx}>
+                  {searchField}
                   <TextField inputProps={{ maxLength: 255 }}
                     select
                     label="Type"
@@ -1446,7 +1453,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                   )}
                   <Button
                     variant="outlined"
-                    sx={{ flex: '0 0 auto', minWidth: 72, height: 36 }}
+                    sx={{ minWidth: 0, height: 36 }}
                     onClick={() => {
                       setFilterStatus('');
                       setFilterType('');
@@ -1463,12 +1470,9 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                   >
                     Reset
                   </Button>
-                </Box>
-              </Grid>
-              <Grid item xs={12} lg={3}>
-                <Stack direction="row" spacing={1} sx={{ '& > *': { flex: 1, minWidth: 0 } }}>
+                  <Box sx={{ gridColumn: { xs: '1 / -1', sm: 'span 2', md: 'span 2', lg: 'span 2' }, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1, minWidth: 0 }}>
                   {!restrictedAssignedOnly && (isFocalTech || canManageAll) && (
-                    <Badge badgeContent={myTicketsCount} color="error" overlap="circular" sx={{ width: '100%', height: 36, '& .MuiBadge-badge': { zIndex: 1 } }}>
+                    <Badge badgeContent={myTicketsCount} color="error" overlap="circular" sx={{ width: '100%', minWidth: 0, height: 36, '& .MuiBadge-badge': { zIndex: 1 } }}>
                       <Button
                         fullWidth
                         size="small"
@@ -1485,7 +1489,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                     </Badge>
                   )}
                   {canViewEscalatedQueue && (
-                    <Badge badgeContent={escalatedToMeCount} color="error" overlap="circular" sx={{ width: '100%', height: 36, '& .MuiBadge-badge': { zIndex: 1 } }}>
+                    <Badge badgeContent={escalatedToMeCount} color="error" overlap="circular" sx={{ width: '100%', minWidth: 0, height: 36, '& .MuiBadge-badge': { zIndex: 1 } }}>
                       <Button
                         fullWidth
                         size="small"
@@ -1501,9 +1505,8 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                       </Button>
                     </Badge>
                   )}
-                </Stack>
-              </Grid>
-            </Grid>
+                  </Box>
+            </Box>
           </CardContent>
         </Card>
       )}
