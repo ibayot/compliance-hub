@@ -1129,7 +1129,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
         gap={{ xs: 2, sm: 0 }}
         justifyContent="space-between"
         alignItems={{ xs: 'flex-start', sm: 'center' }}
-        mb={3}
+        mb={2}
       >
         <Box>
           <Typography variant="h4" fontWeight={700}>
@@ -1147,8 +1147,8 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
       </Box>
 
       {/* Search Bar (Visible to everyone) */}
-      <Card sx={{ mb: 2 }}>
-        <CardContent sx={{ pb: '16px !important' }}>
+      <Card sx={{ mb: 1 }}>
+        <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
           <TextField
             fullWidth
             size="small"
@@ -1166,17 +1166,12 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
         </CardContent>
       </Card>
 
-      {totalPages > 1 && (
-        <Box display="flex" justifyContent="center" sx={{ mb: 2 }}>
-          <Pagination count={totalPages} page={page} onChange={(_, value) => setPage(value)} color="primary" size="small" showFirstButton showLastButton />
-        </Box>
-      )}
       {!canManageAll && (
-        <Card sx={{ mb: 2 }}>
-          <CardContent>
+        <Card sx={{ mb: 1 }}>
+          <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
             <Grid container spacing={2}>
               <Grid item xs={12} lg={12}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, '& > *': { flex: '1 1 120px' } }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, '& > *': { flex: '1 1 100px' } }}>
                   <TextField
                     select
                     label="Year"
@@ -1280,7 +1275,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                   )}
                   <Button
                     variant="outlined"
-                    sx={{ flex: '0 0 auto', minWidth: 80, height: 40 }}
+                    sx={{ flex: '0 0 auto', minWidth: 72, height: 36 }}
                     onClick={() => {
                       setFilterStatus('');
                       setFilterType('');
@@ -1304,11 +1299,11 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
       )}
 
       {canManageAll && (
-        <Card sx={{ mb: 2 }}>
-          <CardContent>
-            <Grid container spacing={2}>
-              <Grid item xs={12} lg={12}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, '& > *': { flex: '1 1 120px' } }}>
+        <Card sx={{ mb: 1 }}>
+          <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+            <Grid container spacing={1} alignItems="center">
+              <Grid item xs={12} lg={9}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, '& > *': { flex: '1 1 100px' } }}>
                   <TextField inputProps={{ maxLength: 255 }}
                     select
                     label="Type"
@@ -1451,7 +1446,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                   )}
                   <Button
                     variant="outlined"
-                    sx={{ flex: '0 0 auto', minWidth: 80, height: 40 }}
+                    sx={{ flex: '0 0 auto', minWidth: 72, height: 36 }}
                     onClick={() => {
                       setFilterStatus('');
                       setFilterType('');
@@ -1470,16 +1465,16 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                   </Button>
                 </Box>
               </Grid>
-              <Grid item xs={12} lg={4}>
-                <Stack direction="row" spacing={2} sx={{ '& > *': { flex: 1 } }}>
+              <Grid item xs={12} lg={3}>
+                <Stack direction="row" spacing={1} sx={{ '& > *': { flex: 1, minWidth: 0 } }}>
                   {!restrictedAssignedOnly && (isFocalTech || canManageAll) && (
-                    <Badge badgeContent={myTicketsCount} color="error" overlap="circular" sx={{ width: '100%', height: 40, '& .MuiBadge-badge': { zIndex: 1 } }}>
+                    <Badge badgeContent={myTicketsCount} color="error" overlap="circular" sx={{ width: '100%', height: 36, '& .MuiBadge-badge': { zIndex: 1 } }}>
                       <Button
                         fullWidth
                         size="small"
                         variant={showMyTickets ? 'contained' : 'outlined'}
                         color="primary"
-                        sx={{ height: '100%' }}
+                        sx={{ height: '100%', whiteSpace: 'nowrap', px: 1 }}
                         onClick={() => {
                           setShowMyTickets((v) => !v);
                           setShowEscalatedToMe(false);
@@ -1490,13 +1485,13 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                     </Badge>
                   )}
                   {canViewEscalatedQueue && (
-                    <Badge badgeContent={escalatedToMeCount} color="error" overlap="circular" sx={{ width: '100%', height: 40, '& .MuiBadge-badge': { zIndex: 1 } }}>
+                    <Badge badgeContent={escalatedToMeCount} color="error" overlap="circular" sx={{ width: '100%', height: 36, '& .MuiBadge-badge': { zIndex: 1 } }}>
                       <Button
                         fullWidth
                         size="small"
                         variant={showEscalatedToMe ? 'contained' : 'outlined'}
                         color="warning"
-                        sx={{ height: '100%' }}
+                        sx={{ height: '100%', whiteSpace: 'nowrap', px: 1 }}
                         onClick={() => {
                           setShowEscalatedToMe((v) => !v);
                           setShowMyTickets(false);
@@ -1513,9 +1508,9 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
         </Card>
       )}
       {!restrictedAssignedOnly && !canManageAll && (isFocalTech || canViewEscalatedQueue) && (
-        <Card sx={{ mb: 2 }}>
-          <CardContent>
-            <Stack direction="row" spacing={2} sx={{ '& > *': { flex: 1, maxWidth: { xs: '100%', md: '50%', lg: '33%' } } }}>
+        <Card sx={{ mb: 1 }}>
+          <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+            <Stack direction="row" spacing={1} sx={{ '& > *': { flex: 1, maxWidth: { xs: '100%', md: '50%', lg: '33%' } } }}>
               {(isFocalTech || canManageAll) && (
                 <Badge badgeContent={myTicketsCount} color="error" overlap="circular" sx={{ width: '100%', '& .MuiBadge-badge': { zIndex: 1 } }}>
                   <Button
@@ -1562,8 +1557,8 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
           </CardContent>
         </Card>
       )}
-      <Card sx={{ mb: 2 }}>
-        <CardContent sx={{ pb: '0 !important' }}>
+      <Card sx={{ mb: 1 }}>
+        <CardContent sx={{ pt: 0.5, px: 1, pb: '0 !important' }}>
           <Tabs value={selectedTab === 'to_rate' ? false : selectedTab} onChange={(_, value) => { setSelectedTab(value); setShowEscalations(false); }} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
             {statusTabs.map(({ key, label }) => (
               <Tab key={key} value={key} label={key === 'proxy' ? label : `${label} (${key === 'all' ? allCount : statusCounts[key] ?? 0})`} />
@@ -1871,7 +1866,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
             <TableHead>
               <TableRow>
                 <TableCell sx={{ width: 90, position: 'sticky', left: 0, backgroundColor: 'background.paper', zIndex: 3, borderRight: '1px solid', borderColor: 'divider' }}>Ticket #</TableCell>
-                <TableCell sx={{ width: 300 }}>Subject</TableCell>
+                <TableCell sx={{ width: 270 }}>Subject</TableCell>
                 <TableCell sx={{ width: 150 }}>Type</TableCell>
                 <TableCell sx={{ width: 130 }}>Category</TableCell>
                 <TableCell sx={{ width: 110 }}>Priority</TableCell>
@@ -2155,6 +2150,12 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
             </TableBody>
           </Table>
         </TableContainer>
+        </Box>
+      )}
+
+      {totalPages > 1 && (
+        <Box display="flex" justifyContent="center" sx={{ mt: 1, mb: 2 }}>
+          <Pagination count={totalPages} page={page} onChange={(_, value) => setPage(value)} color="primary" size="small" showFirstButton showLastButton />
         </Box>
       )}
 
