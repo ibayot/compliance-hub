@@ -142,6 +142,8 @@ export default function TicketReportsPage() {
   const [viewMode, setViewMode] = useState<'overview' | 'detailed'>('overview');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const reportRequestRef = React.useRef(0);
+  const visibleReportRequestInFlight = React.useRef(false);
 
   // Tabs State
   const [tab, setTab] = useState(0);
@@ -173,7 +175,10 @@ export default function TicketReportsPage() {
   }, [canManageReports, year, periodMode, month, quarter, semester, ticketType]);
 
   const fetchReports = useCallback(async (silent = false) => {
+    if (silent && visibleReportRequestInFlight.current) return;
+    const requestId = ++reportRequestRef.current;
     if (!silent) {
+      visibleReportRequestInFlight.current = true;
       setLoading(true);
       setError(null);
     }
@@ -183,24 +188,32 @@ export default function TicketReportsPage() {
       else if (periodMode === 'quarter') filters.quarter = quarter;
       else if (periodMode === 'semester') filters.semester = semester;
       // Privileged users: filter by chosen technician (optional); non-privileged: always filter to own id
+      const useStaffAndTypeFilters = tab === 0 || tab === 3;
       const effectiveTechId = canManageReports
-        ? technicianId !== ''
+        ? useStaffAndTypeFilters && technicianId !== ''
           ? (technicianId as number)
           : undefined
         : (user?.id ?? undefined);
       if (effectiveTechId) filters.technicianId = effectiveTechId;
-      if (ticketType) filters.ticketType = ticketType;
+      if (useStaffAndTypeFilters && ticketType) filters.ticketType = ticketType;
       const data = await ticketsApi.getReports(filters);
+      if (requestId !== reportRequestRef.current) return;
       setResult(data);
       try {
         if (canManageReports) {
-          const issueData = await ticketsApi.getIssueCountsReport(filters);
+          const { technicianId: _unusedTechnicianId, ticketType: _unusedTicketType, ...issueFilters } = filters;
+          const issueData = await ticketsApi.getIssueCountsReport(issueFilters);
+          if (requestId !== reportRequestRef.current) return;
           setIssueCountsData(issueData);
         } else {
           setIssueCountsData([]);
         }
       } catch (err) {
         console.error('Failed to fetch issue counts', err);
+        if (requestId === reportRequestRef.current) {
+          setIssueCountsData([]);
+          if (tab === 1) setError('Failed to load issue counts. Please refresh or adjust the period.');
+        }
       }
 
       const pData = data.avgRatingByType.map((row) => ({
@@ -216,8 +229,9 @@ export default function TicketReportsPage() {
           quarter: periodMode === 'quarter' ? quarter : undefined,
           semester: periodMode === 'semester' ? semester : undefined,
           technicianId: effectiveTechId,
-          ticketType: ticketType ? ticketType : undefined,
+          ticketType: useStaffAndTypeFilters && ticketType ? ticketType : undefined,
         });
+        if (requestId !== reportRequestRef.current) return;
         setDetailedResult(dData);
 
         const escChartData = [];
@@ -244,9 +258,14 @@ export default function TicketReportsPage() {
         console.error('Failed to fetch detailed ratings', err);
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to load report data.');
+      if (requestId === reportRequestRef.current) {
+        setResult(null);
+        setIssueCountsData([]);
+        setError(err?.response?.data?.message || 'Failed to load report data.');
+      }
     } finally {
-      if (!silent) {
+      if (!silent && requestId === reportRequestRef.current) {
+        visibleReportRequestInFlight.current = false;
         setLoading(false);
       }
     }
@@ -258,6 +277,7 @@ export default function TicketReportsPage() {
     semester,
     technicianId,
     ticketType,
+    tab,
     canManageReports,
     user?.id,
   ]);
@@ -293,6 +313,16 @@ export default function TicketReportsPage() {
     const cats = new Set(issueCountsData.map((i: any) => i.categoryName || 'Unknown'));
     return Array.from(cats) as string[];
   }, [issueCountsData]);
+
+  const categoryColors = React.useMemo(() => Object.fromEntries(
+    [...uniqueCategories].sort().map((name, index) => {
+      const hue = Math.round((index * 137.508 + 205) % 360);
+      return [name, {
+        strong: `hsl(${hue} 65% 40%)`,
+        light: `hsl(${hue} 65% 40% / 0.09)`,
+      }];
+    }),
+  ) as Record<string, { strong: string; light: string }>, [uniqueCategories]);
 
   const categoryData = React.useMemo(() => {
     if (!issueCountsData) return [];
@@ -597,10 +627,10 @@ export default function TicketReportsPage() {
       .bar-line { display: flex; align-items: center; gap: 7px; margin: 5px 0; }
       .bar-label { width: 170px; overflow-wrap: anywhere; }
       .bar-track { flex: 1; height: 10px; background: #e7edf4; border-radius: 4px; overflow: hidden; }
-      .bar-fill { display: block; height: 100%; background: #1976d2; }
+      .bar-fill { display: block; height: 100%; background: #1976d2; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
       .bar-value { width: 70px; text-align: right; }
       table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
-      th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; }
+      th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
       th { background: #edf2f7; } thead { display: table-header-group; }
       tr, .explanation { break-inside: avoid; page-break-inside: avoid; }
       section { margin-bottom: 20px; } section h2 { break-after: avoid; }
@@ -616,9 +646,10 @@ export default function TicketReportsPage() {
     add('h1', `Ticket Reports — ${sectionTitle}`);
     const assignee = technicians.find((person) => person.id === technicianId);
     const assigneeLabel = assignee ? formatPersonName(assignee, `Assignee #${assignee.id}`) : canManageReports ? 'All assignees' : 'My tickets';
-    add('div', `${periodLabel} ${year} • ${ticketType ? TYPE_LABELS[ticketType] ?? ticketType : 'All support types'} • ${assigneeLabel} • Generated ${new Date().toLocaleString()}`, doc.body).className = 'meta';
+    const printUsesStaffAndTypeFilters = tab === 0 || tab === 3;
+    add('div', `${periodLabel} ${year} • ${printUsesStaffAndTypeFilters && ticketType ? TYPE_LABELS[ticketType] ?? ticketType : 'All support types'} • ${printUsesStaffAndTypeFilters ? assigneeLabel : 'All assignees'} • Generated ${new Date().toLocaleString()}`, doc.body).className = 'meta';
     if (tab === 1) add('p', 'These counts include tickets with configured issues and exclude duplicate tickets. Category totals are the sum of their listed issues.');
-    const addBarChart = (values: Array<{ label: string; value: number }>, parent: HTMLElement) => {
+    const addBarChart = (values: Array<{ label: string; value: number }>, parent: HTMLElement, visualId: string) => {
       const maxValue = Math.max(1, ...values.map((row) => Number(row.value) || 0));
       const chart = doc.createElement('div');
       chart.className = 'print-chart';
@@ -632,6 +663,10 @@ export default function TicketReportsPage() {
         track.className = 'bar-track';
         const bar = doc.createElement('span');
         bar.className = 'bar-fill';
+        const categoryName = visualId === 'issues_categories_chart' ? row.label
+          : visualId === 'issues_all_chart' ? allIssuesAggregated.find((issue) => issue.name === row.label)?.categoryName
+            : undefined;
+        if (categoryName && categoryColors[categoryName]) bar.style.backgroundColor = categoryColors[categoryName].strong;
         bar.style.width = `${Math.max(0, Math.min(100, (Number(row.value) / maxValue) * 100))}%`;
         track.appendChild(bar);
         const value = doc.createElement('span');
@@ -652,7 +687,7 @@ export default function TicketReportsPage() {
       if (assigneeVisualIds.has(chart.id) && chart.values.length > 0) {
         add('p', 'Assignee numbers in the explanation correspond to the names below, in displayed order.', section);
       }
-      if (chart.kind === 'chart') addBarChart(chart.values, section);
+      if (chart.kind === 'chart') addBarChart(chart.values, section, chart.id);
       if (chart.values.length === 0 && (!chart.rows || chart.rows.length === 0)) {
         add('p', 'No data is available for this section.', section);
         continue;
@@ -667,7 +702,13 @@ export default function TicketReportsPage() {
       const rows = chart.rows ?? chart.values.map((row) => [row.label, Number(row.value).toLocaleString(undefined, { maximumFractionDigits: 2 })]);
       for (const row of rows) {
         const tr = doc.createElement('tr');
-        for (const value of row) add('td', value, tr);
+        for (const [index, value] of row.entries()) {
+          const cell = add('td', value, tr);
+          if (chart.id === 'issues_all_chart' && index === 0 && categoryColors[row[0]]) {
+            cell.style.backgroundColor = categoryColors[row[0]].light;
+            cell.style.borderLeft = `4px solid ${categoryColors[row[0]].strong}`;
+          }
+        }
         tbody.appendChild(tr);
       }
       table.appendChild(tbody);
@@ -694,7 +735,7 @@ export default function TicketReportsPage() {
           variant="outlined"
           startIcon={<PrintIcon />}
           onClick={handlePrint}
-          disabled={!result || printSpecs.length === 0 || loading || explanationsLoading || (tab === 2 && slaLoading)}
+          disabled={!result || !!error || printSpecs.length === 0 || loading || explanationsLoading || (tab === 2 && slaLoading)}
           size="small"
         >
           Print / Export PDF
@@ -1847,7 +1888,9 @@ export default function TicketReportsPage() {
       )}
 
       {/* ── Tab 1: Issues ── */}
-      {canManageReports && tab === 1 && result && issueCountsData && (
+      {canManageReports && tab === 1 && loading && <Box display="flex" justifyContent="center" py={6}><CircularProgress /></Box>}
+      {canManageReports && tab === 1 && error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {canManageReports && tab === 1 && !loading && !error && result && (
         <Box sx={{ mt: 2 }}>
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
             <Tabs value={issuesSubTab} onChange={(_, v) => setIssuesSubTab(v)}>
@@ -1902,9 +1945,8 @@ export default function TicketReportsPage() {
                             {categoryData.map((entry: any, index: number) => (
                               <Cell
                                 key={`cell-${index}`}
-                                fill={
-                                  selectedCategoryName === entry.categoryName ? '#ffc658' : '#8884d8'
-                                }
+                                fill={categoryColors[entry.categoryName]?.strong ?? '#8884d8'}
+                                opacity={selectedCategoryName && selectedCategoryName !== entry.categoryName ? 0.45 : 1}
                               />
                             ))}
                           </Bar>
@@ -1968,6 +2010,30 @@ export default function TicketReportsPage() {
 
           {issuesSubTab === 1 && (
             <Box>
+              {allIssuesAggregated.length > 0 && (
+                <Card sx={{ mb: 3 }}>
+                  <CardContent>
+                    <Typography variant="h6" fontWeight={600} gutterBottom>
+                      Most Reported Issues
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" mb={2}>
+                      The 12 most reported issues are shown here; the complete issue list and exact counts remain below. Bar colors match their categories.
+                    </Typography>
+                    <ResponsiveContainer width="100%" height={Math.max(260, Math.min(12, allIssuesAggregated.length) * 38 + 50)}>
+                      <BarChart layout="vertical" data={allIssuesAggregated.slice(0, 12)} margin={{ top: 8, right: 32, bottom: 8, left: 8 }}>
+                        <XAxis type="number" allowDecimals={false} />
+                        <YAxis type="category" dataKey="name" width={190} interval={0} tick={{ fontSize: 11 }} tickFormatter={(label: string) => label.length > 28 ? `${label.slice(0, 25)}…` : label} />
+                        <Tooltip formatter={(value: number) => [value, 'Tickets']} labelFormatter={(label) => String(label)} />
+                        <Bar dataKey="count" name="Tickets" radius={[0, 4, 4, 0]}>
+                          {allIssuesAggregated.slice(0, 12).map((row) => (
+                            <Cell key={JSON.stringify([row.categoryName, row.issueName])} fill={categoryColors[row.categoryName]?.strong ?? '#1976d2'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
               <Card>
                 <CardContent>
                   <Typography variant="h6" fontWeight={600} gutterBottom>
@@ -1991,8 +2057,10 @@ export default function TicketReportsPage() {
                       </TableHead>
                       <TableBody>
                         {allIssuesAggregated.map((row) => (
-                          <TableRow key={JSON.stringify([row.categoryName, row.issueName])} hover>
-                            <TableCell>{row.categoryName}</TableCell>
+                          <TableRow key={JSON.stringify([row.categoryName, row.issueName])} hover sx={{ backgroundColor: categoryColors[row.categoryName]?.light }}>
+                            <TableCell sx={{ borderLeft: `4px solid ${categoryColors[row.categoryName]?.strong ?? 'transparent'}` }}>
+                              <Chip size="small" label={row.categoryName} sx={{ backgroundColor: categoryColors[row.categoryName]?.light, color: categoryColors[row.categoryName]?.strong, fontWeight: 700 }} />
+                            </TableCell>
                             <TableCell>{row.issueName}</TableCell>
                             <TableCell align="right">{row.count}</TableCell>
                           </TableRow>

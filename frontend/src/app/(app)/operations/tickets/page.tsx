@@ -413,18 +413,9 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
     };
   }, [handleTableScroll, tickets, allEscalations]);
 
-  const frontendFilteredTickets = React.useMemo(() => {
-    return tickets.filter(t => {
-      const matchesPriority = !filterPriority || t.priority === filterPriority;
-      const q = searchQuery.toLowerCase();
-      const matchesSearch = !q ? true : (
-        t.ticketNumber.toLowerCase().includes(q) ||
-        t.subject.toLowerCase().includes(q) ||
-        formatPersonName(t.requester).toLowerCase().includes(q)
-      );
-      return matchesPriority && matchesSearch;
-    });
-  }, [tickets, filterPriority, searchQuery]);
+  // The API applies all search fields and filters before pagination. Filtering
+  // these results again here would hide valid assignee/category matches.
+  const frontendFilteredTickets = tickets;
 
   const frontendFilteredEscalations = React.useMemo(() => {
     const query = escalationSearch.trim().toLowerCase();
