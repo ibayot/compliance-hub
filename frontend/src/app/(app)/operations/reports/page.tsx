@@ -143,6 +143,10 @@ export default function TicketReportsPage() {
   const [slaLoading, setSlaLoading] = useState(false);
 
   const [issueCountsData, setIssueCountsData] = useState<any[]>([]);
+  const [explanations, setExplanations] = useState<Record<string, string>>({});
+  const [explanationSource, setExplanationSource] = useState<'cloudflare' | 'fallback' | null>(null);
+  const [explanationsLoading, setExplanationsLoading] = useState(false);
+  const [printError, setPrintError] = useState('');
 
   useEffect(() => {
     if (!canManageReports && (tab === 1 || tab === 2)) setTab(0);
@@ -401,6 +405,171 @@ export default function TicketReportsPage() {
     (result?.slaByTechnician?.length ?? 0) > 0 ||
     (result?.avgRatingByTechnician?.length ?? 0) > 0;
 
+  const sectionTitle = tab === 0 ? 'Overview & Ratings'
+    : tab === 1 ? issuesSubTab === 0 ? 'Issues — Categories & Issues' : 'Issues — All Issues'
+      : tab === 2 ? 'SLA Insights' : 'Performance';
+  const chartSpecs = React.useMemo(() => {
+    if (!result) return [];
+    if (tab === 0) return [
+      { id: 'volume', title: 'Ticket volume and ratings', values: [
+        { label: 'Total tickets', value: result.totalTickets },
+        { label: 'Tickets with ratings', value: result.totalWithRating },
+        { label: 'Average rating (out of 5)', value: result.avgOverallRating ?? 0 },
+      ] },
+      { id: 'ratings_type', title: 'Ratings by support type', values: result.avgRatingByType.map((row) => ({ label: TYPE_LABELS[row.type] ?? row.type, value: row.avg })) },
+      { id: 'ratings_assignee', title: 'Ratings by assignee', values: result.avgRatingByTechnician.map((row, index) => ({ label: `Assignee ${index + 1}`, value: row.avg })) },
+      { id: 'volume_assignee', title: 'Ticket volume by assignee', values: result.avgRatingByTechnician.map((row, index) => ({ label: `Assignee ${index + 1}`, value: row.count })) },
+      { id: 'escalations', title: 'Escalation outcomes', values: [
+        { label: 'Accepted', value: result.acceptedEscalations },
+        { label: 'Returned', value: result.returnedEscalations },
+        { label: 'Pending or other', value: Math.max(0, result.totalEscalations - result.acceptedEscalations - result.returnedEscalations) },
+      ] },
+      { id: 'sla_outcomes', title: 'SLA outcomes', values: [
+        { label: 'Met SLA', value: result.slaStats?.met ?? 0 }, { label: 'Missed SLA', value: result.slaStats?.missed ?? 0 },
+      ] },
+    ];
+    if (tab === 1 && issuesSubTab === 0) return [
+      { id: 'issue_categories', title: 'Issue categories', values: categoryData.map((row, index) => ({ label: `Category ${index + 1}`, value: row.count })) },
+      ...(selectedCategoryName ? [{ id: 'issue_detail', title: 'Issues in selected category', values: drillDownData.map((row: any, index: number) => ({ label: `Issue ${index + 1}`, value: row.open + row.in_progress + row.resolved + row.closed + row.freeze_pause })) }] : []),
+    ];
+    if (tab === 1) return [{ id: 'all_issues', title: 'All issue counts', values: allIssuesAggregated.map((row, index) => ({ label: `Issue ${index + 1}`, value: row.count })) }];
+    if (tab === 2) return [{ id: 'sla_comparison', title: 'Configured versus actual SLA hours', values: slaInsights.flatMap((row: any, index: number) => [
+      { label: `Issue ${index + 1} configured SLA hours`, value: Number(row.configuredSlaHours || 0) },
+      { label: `Issue ${index + 1} average resolution hours`, value: Number(row.avgResolutionHours || 0) },
+    ]) }];
+    return [
+      { id: 'sla_outcomes', title: 'SLA outcomes', values: [
+        { label: 'Met SLA', value: result.slaStats?.met ?? 0 }, { label: 'Missed SLA', value: result.slaStats?.missed ?? 0 },
+      ] },
+      { id: 'sla_type', title: 'SLA by support type', values: result.slaByType.flatMap((row) => [
+        { label: `${TYPE_LABELS[row.type] ?? row.type} met`, value: row.met },
+        { label: `${TYPE_LABELS[row.type] ?? row.type} missed`, value: row.missed },
+      ]) },
+      { id: 'sla_assignee', title: 'SLA by assignee', values: result.slaByTechnician.flatMap((row, index) => [
+        { label: `Assignee ${index + 1} met`, value: row.met },
+        { label: `Assignee ${index + 1} missed`, value: row.missed },
+      ]) },
+    ];
+  }, [result, tab, issuesSubTab, categoryData, selectedCategoryName, drillDownData, allIssuesAggregated, slaInsights]);
+  const chartSignature = JSON.stringify(chartSpecs);
+  useEffect(() => {
+    if (!chartSpecs.length || loading || (tab === 2 && slaLoading)) return;
+    let cancelled = false;
+    setExplanationsLoading(true);
+    setExplanations({});
+    ticketsApi.getReportExplanations(chartSpecs.map((chart) => ({ ...chart, values: chart.values.slice(0, 30) })))
+      .then((response) => { if (!cancelled) { setExplanations(response.explanations); setExplanationSource(response.source); } })
+      .catch(() => { if (!cancelled) setExplanationSource('fallback'); })
+      .finally(() => { if (!cancelled) setExplanationsLoading(false); });
+    return () => { cancelled = true; };
+  }, [chartSignature, loading, slaLoading, tab]);
+
+  const handlePrint = () => {
+    if (loading || explanationsLoading || (tab === 2 && slaLoading)) return;
+    const printWindow = window.open('', '_blank', 'width=1100,height=780');
+    if (!printWindow) {
+      setPrintError('The print window was blocked. Allow pop-ups for this site, then try again.');
+      return;
+    }
+    setPrintError('');
+    const doc = printWindow.document;
+    doc.title = `Ticket Reports - ${sectionTitle} - ${periodLabel} ${year}`;
+    const style = doc.createElement('style');
+    style.textContent = `
+      @page { size: A4 ${tab === 1 || tab === 2 ? 'landscape' : 'portrait'}; margin: 13mm; }
+      body { font-family: Arial, sans-serif; color: #222; font-size: 12px; }
+      h1 { font-size: 22px; margin: 0 0 5px; } h2 { font-size: 16px; margin: 20px 0 6px; }
+      .meta { color: #555; border-bottom: 2px solid #1976d2; padding-bottom: 12px; }
+      .explanation { background: #f2f7fc; padding: 9px 11px; border-left: 3px solid #1976d2; line-height: 1.45; }
+      table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+      th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; }
+      th { background: #edf2f7; } thead { display: table-header-group; }
+      tr, .explanation { break-inside: avoid; page-break-inside: avoid; }
+      section { margin-bottom: 20px; } section h2 { break-after: avoid; }
+      .footer { margin-top: 24px; border-top: 1px solid #ccc; padding-top: 8px; color: #666; font-size: 10px; }
+    `;
+    doc.head.appendChild(style);
+    const add = (tag: string, value: string, parent: HTMLElement = doc.body) => {
+      const element = doc.createElement(tag);
+      element.textContent = value;
+      parent.appendChild(element);
+      return element;
+    };
+    add('h1', `Ticket Reports — ${sectionTitle}`);
+    const assignee = technicians.find((person) => person.id === technicianId);
+    add('div', `${periodLabel} ${year} • ${ticketType ? TYPE_LABELS[ticketType] ?? ticketType : 'All support types'} • ${assignee ? formatPersonName(assignee) : canManageReports ? 'All assignees' : 'My tickets'} • Generated ${new Date().toLocaleString()}`, doc.body).className = 'meta';
+    for (const chart of chartSpecs) {
+      // Labels in this print-only document stay in the browser; the AI request uses anonymized labels.
+      const printValues = chart.id === 'ratings_assignee'
+        ? result?.avgRatingByTechnician.map((row) => ({ label: row.techName, value: row.avg })) ?? chart.values
+        : chart.id === 'volume_assignee'
+          ? result?.avgRatingByTechnician.map((row) => ({ label: row.techName, value: row.count })) ?? chart.values
+          : chart.id === 'sla_assignee'
+            ? result?.slaByTechnician.flatMap((row) => [
+              { label: `${row.techName} met`, value: row.met }, { label: `${row.techName} missed`, value: row.missed },
+            ]) ?? chart.values
+            : chart.id === 'issue_categories'
+              ? categoryData.map((row) => ({ label: row.categoryName, value: row.count }))
+              : chart.id === 'issue_detail'
+                ? drillDownData.map((row: any) => ({ label: row.issueName, value: row.open + row.in_progress + row.resolved + row.closed + row.freeze_pause }))
+                : chart.id === 'all_issues'
+                  ? allIssuesAggregated.map((row) => ({ label: row.name, value: row.count }))
+                  : chart.id === 'sla_comparison'
+                    ? slaInsights.flatMap((row: any) => [
+                      { label: `${row.issueName} configured SLA hours`, value: Number(row.configuredSlaHours || 0) },
+                      { label: `${row.issueName} average resolution hours`, value: Number(row.avgResolutionHours || 0) },
+                    ]) : chart.values;
+      const section = doc.createElement('section');
+      doc.body.appendChild(section);
+      add('h2', chart.title, section);
+      const explanation = add('p', explanations[chart.id] || `${chart.title} shows the recorded values for the selected period.`, section);
+      explanation.className = 'explanation';
+      if (printValues.length === 0) {
+        add('p', 'No data is available for this section.', section);
+        continue;
+      }
+      const table = doc.createElement('table');
+      const thead = doc.createElement('thead');
+      const heading = doc.createElement('tr');
+      for (const label of ['Measure', 'Value']) add('th', label, heading);
+      thead.appendChild(heading);
+      table.appendChild(thead);
+      const tbody = doc.createElement('tbody');
+      for (const row of printValues) {
+        const tr = doc.createElement('tr');
+        add('td', row.label, tr);
+        add('td', Number(row.value).toLocaleString(undefined, { maximumFractionDigits: 2 }), tr);
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      section.appendChild(table);
+    }
+    if (tab === 0 && viewMode === 'detailed' && detailedResult?.byTicket?.length) {
+      const section = doc.createElement('section');
+      doc.body.appendChild(section);
+      add('h2', 'Detailed ticket ratings', section);
+      const table = doc.createElement('table');
+      const thead = doc.createElement('thead');
+      const heading = doc.createElement('tr');
+      for (const label of ['Ticket', 'Rating', 'Submitted']) add('th', label, heading);
+      thead.appendChild(heading);
+      table.appendChild(thead);
+      const tbody = doc.createElement('tbody');
+      for (const rating of detailedResult.byTicket) {
+        const tr = doc.createElement('tr');
+        add('td', rating.ticketNumber, tr);
+        add('td', String(rating.rating), tr);
+        add('td', new Date(rating.submittedAt).toLocaleDateString(), tr);
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      section.appendChild(table);
+    }
+    add('div', `Generated from Ticket Reports • ${explanationSource === 'cloudflare' ? 'Explanations assisted by Cloudflare AI; verify against the figures.' : 'Descriptions use the displayed figures.'}`, doc.body).className = 'footer';
+    printWindow.focus();
+    printWindow.setTimeout(() => printWindow.print(), 250);
+  };
+
   return (
     <Box>
       <Box
@@ -416,12 +585,14 @@ export default function TicketReportsPage() {
         <Button
           variant="outlined"
           startIcon={<PrintIcon />}
-          onClick={() => window.print()}
+          onClick={handlePrint}
+          disabled={!result || chartSpecs.length === 0 || loading || explanationsLoading || (tab === 2 && slaLoading)}
           size="small"
         >
-          Print
+          Print / Export PDF
         </Button>
       </Box>
+      {printError && <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setPrintError('')}>{printError}</Alert>}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
           <Tab value={0} label="Overview & Ratings" />
@@ -555,6 +726,30 @@ export default function TicketReportsPage() {
           </Box>
         </CardContent>
       </Card>
+
+      {result && chartSpecs.length > 0 && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+              Chart explanations {explanationSource === 'cloudflare' ? '· Cloudflare AI' : ''}
+            </Typography>
+            {explanationsLoading && <Typography variant="body2" color="text.secondary">Generating explanations from the selected report figures…</Typography>}
+            <Stack spacing={1.5}>
+              {chartSpecs.map((chart) => (
+                <Box key={chart.id}>
+                  <Typography variant="subtitle2" fontWeight={600}>{chart.title}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {explanations[chart.id] || (chart.values.length ? 'This chart compares the recorded values for the selected period.' : 'No data is available for this chart.')}
+                  </Typography>
+                </Box>
+              ))}
+            </Stack>
+            {explanationSource === 'fallback' && !explanationsLoading && (
+              <Typography variant="caption" color="text.secondary">Cloudflare AI is unavailable; descriptions are based on the displayed figures.</Typography>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {tab === 0 && (
         <Box>

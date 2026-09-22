@@ -182,6 +182,7 @@ export interface Ticket {
   createdBy?: { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string } | null;
   assignedToId?: number | null;
   assignedTo?: { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string } | null;
+  canViewInternalNotes?: boolean;
   resolutionNotes?: string | null;
   resolvedAt?: string | null;
   resolutionTimeOverride?: string | null;
@@ -632,11 +633,31 @@ export const ticketsApi = {
     status?: TicketStatus;
     year?: number;
     month?: number;
+    quarter?: number;
+    semester?: number;
+    date?: string;
+    includeCarryover?: boolean;
+    ticketType?: TicketType;
+    priority?: string;
+    search?: string;
+    proxyCreatedByMe?: boolean;
+    page?: number;
+    limit?: number;
   }): Promise<PaginatedTickets> => {
     const params = new URLSearchParams();
     if (filters?.status) params.set('status', filters.status);
     if (filters?.year) params.set('year', String(filters.year));
     if (filters?.month) params.set('month', String(filters.month));
+    if (filters?.quarter) params.set('quarter', String(filters.quarter));
+    if (filters?.semester) params.set('semester', String(filters.semester));
+    if (filters?.date) params.set('date', filters.date);
+    if (filters?.includeCarryover) params.set('includeCarryover', 'true');
+    if (filters?.ticketType) params.set('ticketType', filters.ticketType);
+    if (filters?.priority) params.set('priority', filters.priority);
+    if (filters?.search) params.set('search', filters.search);
+    if (filters?.proxyCreatedByMe) params.set('proxyCreatedByMe', 'true');
+    if (filters?.page) params.set('page', String(filters.page));
+    if (filters?.limit) params.set('limit', String(filters.limit));
     const query = params.toString();
     const response = await apiClient.get(`/tickets/my-assigned${query ? `?${query}` : ''}`);
     return response.data;
@@ -661,6 +682,11 @@ export const ticketsApi = {
     requesterId?: number;
     createdById?: number;
     assignedToId?: number;
+    assignedToMe?: boolean;
+    proxyCreatedByMe?: boolean;
+    pendingSatisfaction?: boolean;
+    date?: string;
+    includeCarryover?: boolean;
     escalatedToMe?: boolean;
     year?: string;
     month?: string;
@@ -677,6 +703,11 @@ export const ticketsApi = {
     if (filters?.priority) params.append('priority', filters.priority);
     if (filters?.requesterId) params.append('requesterId', String(filters.requesterId));
     if (filters?.assignedToId) params.append('assignedToId', String(filters.assignedToId));
+    if (filters?.assignedToMe) params.append('assignedToMe', 'true');
+    if (filters?.proxyCreatedByMe) params.append('proxyCreatedByMe', 'true');
+    if (filters?.pendingSatisfaction) params.append('pendingSatisfaction', 'true');
+    if (filters?.date) params.append('date', filters.date);
+    if (filters?.includeCarryover) params.append('includeCarryover', 'true');
     if (filters?.escalatedToMe) params.append('escalatedToMe', 'true');
     if (filters?.year) params.append('year', filters.year);
     if (filters?.month) params.append('month', filters.month);
@@ -695,8 +726,8 @@ export const ticketsApi = {
     return response.data;
   },
 
-  getInternalNoteMentionCandidates: async (): Promise<InternalNoteMentionCandidate[]> => {
-    const response = await apiClient.get('/tickets/internal-note-mentions');
+  getInternalNoteMentionCandidates: async (ticketId: string): Promise<InternalNoteMentionCandidate[]> => {
+    const response = await apiClient.get(`/tickets/${ticketId}/internal-note-mentions`);
     return response.data;
   },
 
@@ -884,6 +915,11 @@ export const ticketsApi = {
   },
 
   /** Get ticket satisfaction reports with optional filters (QA #11) */
+  getReportExplanations: async (charts: Array<{ id: string; title: string; values: Array<{ label: string; value: number }> }>): Promise<{ source: 'cloudflare' | 'fallback'; explanations: Record<string, string> }> => {
+    const response = await apiClient.post('/tickets/reports/explanations', { charts });
+    return response.data;
+  },
+
   getReports: async (filters?: {
     year?: number;
     month?: number;

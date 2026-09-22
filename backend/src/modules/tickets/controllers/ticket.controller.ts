@@ -43,6 +43,7 @@ import {
 } from '../services/ticket.service';
 import { TicketStatus, TicketType } from '../entities/ticket.entity';
 import { TicketSettingsService } from '../services/ticket-settings.service';
+import { KnowledgeBaseService } from '../services/knowledge-base.service';
 
 @ApiTags('tickets')
 @Controller('tickets')
@@ -52,6 +53,7 @@ export class TicketController {
   constructor(
     private readonly ticketService: TicketService,
     private readonly settingsService: TicketSettingsService,
+    private readonly knowledgeBaseService: KnowledgeBaseService,
   ) {}
 
   /** POST /tickets - Any authenticated user can submit a ticket */
@@ -111,19 +113,40 @@ export class TicketController {
     @Query('limit') limit?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+    @Query('date') date?: string,
+    @Query('includeCarryover') includeCarryover?: string,
+    @Query('assignedToMe') assignedToMe?: string,
+    @Query('proxyCreatedByMe') proxyCreatedByMe?: string,
+    @Query('pendingSatisfaction') pendingSatisfaction?: string,
+    @Query('priority') priority?: string,
     @Request() req?: any,
   ) {
     const allowedSlaStates = new Set<ActiveTicketSlaState>(['overdue', 'nearing_sla', 'on_track']);
     if (slaState && !allowedSlaStates.has(slaState as ActiveTicketSlaState)) {
       throw new BadRequestException('SLA filter must be Overdue, Nearing SLA, or On Track.');
     }
+    if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+      Number.isNaN(Date.parse(`${date}T00:00:00+08:00`)) ||
+      new Date(`${date}T00:00:00+08:00`).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }) !== date)) {
+      throw new BadRequestException('Date must be a valid YYYY-MM-DD date.');
+    }
     const viewerId = req?.user?.id ?? req?.user?.userId;
     const showEscalatedToMe = escalatedToMe === 'true' || escalatedToMe === '1';
+    const ownAssignment = assignedToMe === 'true' || assignedToMe === '1';
+    if (ownAssignment && req?.user?.role === UserRole.USER) {
+      throw new ForbiddenException('End User accounts do not have an assigned-ticket queue.');
+    }
     return this.ticketService.getTickets({
       status,
       ticketType,
       requesterId: requesterId ? Number(requesterId) : undefined,
-      assignedToId: assignedToId ? Number(assignedToId) : undefined,
+      assignedToId: ownAssignment ? Number(viewerId) : assignedToId ? Number(assignedToId) : undefined,
+      assignedOnly: ownAssignment,
+      proxyCreatedByMe: proxyCreatedByMe === 'true' || proxyCreatedByMe === '1',
+      pendingSatisfaction: pendingSatisfaction === 'true' || pendingSatisfaction === '1',
+      priority,
+      date,
+      includeCarryover: includeCarryover === 'true' || includeCarryover === '1',
       escalatedToId: showEscalatedToMe ? viewerId : undefined,
       year: year ? Number(year) : undefined,
       month: month ? Number(month) : undefined,
@@ -151,10 +174,23 @@ export class TicketController {
     @Query('status') status?: TicketStatus,
     @Query('year') year?: string,
     @Query('month') month?: string,
+    @Query('quarter') quarter?: string,
+    @Query('semester') semester?: string,
+    @Query('date') date?: string,
+    @Query('includeCarryover') includeCarryover?: string,
+    @Query('ticketType') ticketType?: TicketType,
+    @Query('priority') priority?: string,
+    @Query('search') search?: string,
+    @Query('proxyCreatedByMe') proxyCreatedByMe?: string,
     @Request() req?: any,
   ) {
     if (req?.user?.role === UserRole.USER) {
       throw new ForbiddenException('End User accounts do not have an assigned-ticket queue.');
+    }
+    if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+      Number.isNaN(Date.parse(`${date}T00:00:00+08:00`)) ||
+      new Date(`${date}T00:00:00+08:00`).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }) !== date)) {
+      throw new BadRequestException('Date must be a valid YYYY-MM-DD date.');
     }
     const viewerId = Number(req?.user?.id ?? req?.user?.userId);
     return this.ticketService.getTickets({
@@ -162,8 +198,16 @@ export class TicketController {
       viewerId,
       viewerRole: req?.user?.role,
       status,
+      ticketType,
+      priority,
+      search,
+      proxyCreatedByMe: proxyCreatedByMe === 'true' || proxyCreatedByMe === '1',
+      date,
+      includeCarryover: includeCarryover === 'true' || includeCarryover === '1',
       year: year ? Number(year) : undefined,
       month: month ? Number(month) : undefined,
+      quarter: quarter ? Number(quarter) : undefined,
+      semester: semester ? Number(semester) : undefined,
       page: page ? Number(page) : 1,
       limit: limit ? Number(limit) : 50,
     });
@@ -246,6 +290,18 @@ export class TicketController {
   }
 
   /** GET /tickets/reports — satisfaction reports (QA #11) */
+  @Post('reports/explanations')
+  @RequireCapability('isTicketReportsAccess')
+  async explainReportCharts(
+    @Body() body: { charts?: Array<{ id: string; title: string; values: Array<{ label: string; value: number }> }> },
+  ) {
+    try {
+      return await this.knowledgeBaseService.explainTicketReportCharts(body?.charts || []);
+    } catch {
+      throw new BadRequestException('Invalid chart aggregates for report explanation.');
+    }
+  }
+
   @Get('reports')
   @RequireCapability('isTicketReportsAccess')
   async getTicketReports(
@@ -342,11 +398,11 @@ export class TicketController {
     return this.ticketService.getAttendanceAssignmentAlerts();
   }
 
-  /** GET /tickets/internal-note-mentions — active RICTMS staff available for @mentions */
-  @Get('internal-note-mentions')
-  @RequireCapability('isTicketModuleAccess')
-  async getInternalNoteMentionCandidates(@Request() req: any) {
+  /** GET /tickets/:id/internal-note-mentions — ticket-specific @mention audience */
+  @Get(':id/internal-note-mentions')
+  async getInternalNoteMentionCandidates(@Param('id') id: string, @Request() req: any) {
     return this.ticketService.getInternalNoteMentionCandidates(
+      id,
       req.user.role,
       req.user.id ?? req.user.userId,
     );

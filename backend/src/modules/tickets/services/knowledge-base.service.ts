@@ -227,6 +227,81 @@ export class KnowledgeBaseService {
     throw lastError || new Error('Cloudflare Workers AI did not return a result.');
   }
 
+  /** Explain report aggregates without sending ticket text or assignee identities to AI. */
+  async explainTicketReportCharts(charts: Array<{ id: string; title: string; values: Array<{ label: string; value: number }> }>) {
+    const allowedIds = new Set([
+      'volume', 'ratings_type', 'ratings_assignee', 'volume_assignee', 'escalations',
+      'issue_categories', 'issue_detail', 'all_issues', 'sla_comparison',
+      'sla_outcomes', 'sla_type', 'sla_assignee',
+    ]);
+    const safeLabel = (id: string, label: unknown): boolean => {
+      if (typeof label !== 'string') return false;
+      if (id === 'volume') return ['Total tickets', 'Tickets with ratings', 'Average rating (out of 5)'].includes(label);
+      if (id === 'ratings_type' || id === 'sla_type') {
+        return /^(Desktop Support|IT Support|Pantawid ICT Support|Specialized Concerns)( met| missed)?$/.test(label);
+      }
+      if (id === 'ratings_assignee' || id === 'volume_assignee' || id === 'sla_assignee') {
+        return /^Assignee [1-9]\d*( met| missed)?$/.test(label);
+      }
+      if (id === 'escalations') return ['Accepted', 'Returned', 'Pending or other'].includes(label);
+      if (id === 'issue_categories') return /^Category [1-9]\d*$/.test(label);
+      if (id === 'issue_detail' || id === 'all_issues') return /^Issue [1-9]\d*$/.test(label);
+      if (id === 'sla_comparison') return /^Issue [1-9]\d* (configured SLA hours|average resolution hours)$/.test(label);
+      if (id === 'sla_outcomes') return ['Met SLA', 'Missed SLA'].includes(label);
+      return false;
+    };
+    if (!Array.isArray(charts) || charts.length < 1 || charts.length > 6 || charts.some((chart) =>
+      !allowedIds.has(chart?.id) || !Array.isArray(chart.values) || chart.values.length > 30 ||
+      chart.values.some((item) => !safeLabel(chart.id, item?.label) || !Number.isFinite(item?.value) || item.value < 0 || item.value > 1_000_000_000))) {
+      throw new Error('Invalid report chart data.');
+    }
+    const titles: Record<string, string> = {
+      volume: 'Ticket volume and ratings', ratings_type: 'Ratings by support type',
+      ratings_assignee: 'Ratings by assignee', escalations: 'Escalation outcomes',
+      volume_assignee: 'Ticket volume by assignee',
+      issue_categories: 'Issue categories', issue_detail: 'Issues in selected category',
+      all_issues: 'All issue counts', sla_comparison: 'Configured versus actual SLA',
+      sla_outcomes: 'SLA outcomes', sla_type: 'SLA by support type',
+      sla_assignee: 'SLA by assignee',
+    };
+    const safeCharts = charts.map((chart) => ({
+      id: chart.id,
+      title: titles[chart.id],
+      values: chart.values.map((item) => ({
+        label: String(item.label || '').slice(0, 80).replace(/[\r\n<>]/g, ' ').trim(),
+        value: Number(item.value),
+      })),
+    }));
+    const fallback = Object.fromEntries(safeCharts.map((chart) => [chart.id,
+      chart.values.length
+        ? `${chart.title}: ${chart.values.length} reported measures are shown for the selected period. Compare the values in the chart or table; this summary does not infer a cause.`
+        : `${chart.title}: no data is available for the selected period.`,
+    ]));
+    if (!this.cloudflareAccountId || !this.cloudflareApiToken) {
+      return { source: 'fallback', explanations: fallback };
+    }
+    try {
+      const prompt = [
+        'Explain each IT support report chart in plain language for nontechnical staff.',
+        'Use only the numeric aggregates provided. Do not infer causes, diagnoses, identities, or recommendations unsupported by the figures.',
+        'For each chart, give one or two concise sentences with the most important comparison and the meaning of the measure.',
+        'Return only valid JSON: {"explanations":{"chart_id":"explanation"}}. Include every chart id exactly once.',
+        await this.stripSensitiveData(JSON.stringify(safeCharts)),
+      ].join('\n');
+      const parsed = this.parseAiJson(await this.requestCloudflare(prompt));
+      const explanations: Record<string, string> = {};
+      for (const chart of safeCharts) {
+        const value = parsed.explanations?.[chart.id];
+        explanations[chart.id] = typeof value === 'string' && value.trim()
+          ? value.trim().slice(0, 600) : fallback[chart.id];
+      }
+      return { source: 'cloudflare', explanations };
+    } catch (error: any) {
+      this.logger.warn(`Cloudflare report explanation failed: ${error?.message || 'unknown error'}`);
+      return { source: 'fallback', explanations: fallback };
+    }
+  }
+
   private async getCloudflareModels(): Promise<string[]> {
     const now = Date.now();
     if (this.cloudflareModels.length > 0 && now - this.cloudflareModelsFetchedAt < this.cloudflareModelCacheMs) {

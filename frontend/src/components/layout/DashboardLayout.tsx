@@ -180,7 +180,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         <DialogTitle>Assigned tickets need attention</DialogTitle>
         <DialogContent dividers>
           <Alert severity="warning" sx={{ mb: 2 }}>
-            The following RICTMS staff are marked Absent, Half Day, OOO, or Assumed Late and still
+            The following RICTMS staff are marked Absent, Half Day, or Assumed Late and still
             have Assigned or In Progress tickets. Choose automatic reassignment or review the
             tickets and reassign them manually.
           </Alert>

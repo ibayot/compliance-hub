@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSse } from '@/lib/utils/useSse';
 import {
@@ -191,13 +191,20 @@ export default function DashboardPage() {
   const openMyAssignedTickets = useCallback(
     (status?: 'assigned' | 'in_progress' | 'resolved' | 'closed') => {
       const params = new URLSearchParams({
+        period: 'month',
         year: String(techStatsYear),
         month: String(techStatsMonth),
       });
       if (status) params.set('status', status);
-      router.push(`/operations/my-assigned-tickets?${params.toString()}`);
+      if (myCap?.isTicketModuleAccess) {
+        params.set('scope', 'assigned_to_me');
+        router.push(`/operations/tickets?${params.toString()}`);
+      } else {
+        // Keep the self-scoped endpoint for staff without Tickets module access.
+        router.push(`/operations/my-assigned-tickets?${params.toString()}`);
+      }
     },
-    [router, techStatsMonth, techStatsYear],
+    [router, techStatsMonth, techStatsYear, myCap?.isTicketModuleAccess],
   );
 
   useEffect(() => {
@@ -282,13 +289,19 @@ export default function DashboardPage() {
     }
   }, [appMode, canViewAssignedTickets, user?.id, ticketingEnabled, techStatsYear, techStatsMonth]);
 
-  useSse(['TICKET_UPDATED'], () => {
-    void silentFetchDashboardData();
-    void refreshTechAssignedStats(false);
-    if (myCap?.isTicketSettingsFocal) {
-      ticketsApi.getSlaSummary().then(setSlaSummary).catch(() => undefined);
-    }
+  const dashboardSseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useSse(['TICKET_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
+    if (dashboardSseTimer.current) clearTimeout(dashboardSseTimer.current);
+    dashboardSseTimer.current = setTimeout(() => {
+      dashboardSseTimer.current = null;
+      void silentFetchDashboardData();
+      void refreshTechAssignedStats(false);
+      if (myCap?.isTicketSettingsFocal) {
+        ticketsApi.getSlaSummary().then(setSlaSummary).catch(() => undefined);
+      }
+    }, 750);
   });
+  useEffect(() => () => { if (dashboardSseTimer.current) clearTimeout(dashboardSseTimer.current); }, []);
   useSse(['INCIDENT_SNAPSHOT_CREATED'], silentFetchDashboardData);
 
   useEffect(() => {

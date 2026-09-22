@@ -358,6 +358,7 @@ export default function TicketDetailPage() {
   const isAdmin = !!myCap?.isTicketSettingsFocal || !!myCap?.isTicketFocal;
   const canAssignByCapability = !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
   const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isAllTickets;
+  const canViewInternalNotes = ticket?.canViewInternalNotes === true;
   const canOverrideResolutionTime = !!myCap?.isTicketResolutionTimeOverride;
   const canCorrectTicketRecord = !!myCap?.isTicketRequesterCorrection;
   const canCorrectAssignee =
@@ -368,12 +369,22 @@ export default function TicketDetailPage() {
   const canPriority = canStaff;
 
   useEffect(() => {
-    if (!canStaff || !isInternal || mentionCandidates.length > 0) return;
+    if (!canViewInternalNotes || !isInternal || !ticket?.id) return;
+    let cancelled = false;
     ticketsApi
-      .getInternalNoteMentionCandidates()
-      .then(setMentionCandidates)
-      .catch(() => setMentionCandidates([]));
-  }, [canStaff, isInternal, mentionCandidates.length]);
+      .getInternalNoteMentionCandidates(ticket.id)
+      .then((candidates) => { if (!cancelled) setMentionCandidates(candidates); })
+      .catch(() => { if (!cancelled) setMentionCandidates([]); });
+    return () => { cancelled = true; };
+  }, [canViewInternalNotes, isInternal, ticket?.id, ticket?.assignedToId]);
+
+  useEffect(() => {
+    if (!canViewInternalNotes) {
+      setIsInternal(false);
+      setMentionCandidates([]);
+      setMentionedUserIds([]);
+    }
+  }, [canViewInternalNotes]);
 
   const activeMention = useMemo(
     () => (isInternal ? comment.match(/(^|\s)@([^@\n]*)$/) : null),
@@ -623,7 +634,7 @@ export default function TicketDetailPage() {
     try {
       const data = await ticketsApi.getTechnicians(ticketType);
       const available = (data || []).filter(
-        (t: any) => t.attendanceStatus === 'present',
+        (t: any) => t.attendanceStatus === 'present' || t.attendanceStatus === 'out_of_office',
       );
       setTechnicians(available);
     } catch {
@@ -708,9 +719,9 @@ export default function TicketDetailPage() {
       const createdComment = await ticketsApi.addComment(
         ticketId,
         comment,
-        isInternal && canStaff,
+        isInternal && canViewInternalNotes,
         commentAttachment,
-        isInternal && canStaff ? mentionedUserIds : [],
+        isInternal && canViewInternalNotes ? mentionedUserIds : [],
       );
       setTicket((current) => current ? {
         ...current,
@@ -2246,7 +2257,7 @@ export default function TicketDetailPage() {
                   </List>
                 </Paper>
               )}
-              {canStaff && (
+              {canViewInternalNotes && (
                 <FormControlLabel
                   control={
                     <Switch
@@ -2458,7 +2469,7 @@ export default function TicketDetailPage() {
         <DialogContent>
           <Autocomplete
             options={technicians.filter((t) => t.id !== ticket?.assignedToId)}
-              getOptionLabel={(t) => `${formatPersonName(t, t.email)} (${t.openCount} Active)`}
+              getOptionLabel={(t) => `${formatPersonName(t, t.email)} (${t.openCount} Active${t.attendanceStatus === 'out_of_office' ? ', OOO' : ''})`}
             value={technicians.find((t) => t.id === assignToId) ?? null}
             onChange={(_, newValue) => setAssignToId(newValue ? Number(newValue.id) : '')}
             isOptionEqualToValue={(option, value) => option.id === value.id}

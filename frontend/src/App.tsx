@@ -15,7 +15,6 @@ import IncidentsPage from '@/app/(app)/governance/incidents/page';
 import IssuancesPage from '@/app/(app)/governance/issuances/page';
 import TicketsPage from '@/app/(app)/operations/tickets/page';
 import TicketDetailPage from '@/app/(app)/operations/tickets/[id]/page';
-import MyAssignedTicketsPage from '@/app/(app)/operations/my-assigned-tickets/page';
 import UnitsPage from '@/app/(app)/admin/units/page';
 import MetricsPage from '@/app/(app)/governance/metrics/page';
 import ReviewsPage from '@/app/(app)/governance/reviews/page';
@@ -148,7 +147,7 @@ export default function App() {
         path="/operations/my-assigned-tickets"
         element={
           <ProtectedDashboard>
-            <MyAssignedTicketsPage />
+            <TicketsPage restrictedAssignedOnly />
           </ProtectedDashboard>
         }
       />

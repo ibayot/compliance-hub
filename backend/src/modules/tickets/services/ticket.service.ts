@@ -878,7 +878,7 @@ export class TicketService implements OnModuleInit {
     viewerId?: number,
     viewerRole?: UserRole,
   ): Promise<Array<TicketEvent & { actorName?: string }>> {
-    await this.getTicketById(ticketId, viewerRole, viewerId);
+    const ticket = await this.getTicketById(ticketId, viewerRole, viewerId);
 
     const events = await this.eventRepo
       .createQueryBuilder('e')
@@ -893,7 +893,10 @@ export class TicketService implements OnModuleInit {
 
     await this.enrichEventsWithUsers(events);
 
-    return events.map((e) => ({
+    return events
+      .filter((e) => this.canViewInternalNotes(ticket, viewerRole, viewerId) ||
+        !(e.eventType === 'comment_added' && e.meta && JSON.parse(e.meta)?.isInternal))
+      .map((e) => ({
       ...e,
       meta: e.meta ? JSON.parse(e.meta) : null,
       actorName: e.actor
@@ -901,7 +904,7 @@ export class TicketService implements OnModuleInit {
         : e.eventType === 'auto_assigned'
           ? 'Automatic Ticket Assignment'
           : undefined,
-    }));
+      }));
   }
 
   private canViewAllTicketsInTicketing(role?: string): boolean {
@@ -974,6 +977,14 @@ export class TicketService implements OnModuleInit {
     if (await this.canAccessTicketByEscalation(ticket.id, vId)) return;
 
     throw new ForbiddenException('You do not have access to this ticket.');
+  }
+
+  private canViewInternalNotes(ticket: Ticket, viewerRole?: UserRole, viewerId?: number): boolean {
+    if (!viewerId || !viewerRole || viewerRole === UserRole.USER) return false;
+    if (this.roleCapSvc.isTicketSettingsFocal(viewerRole as string)) return true;
+    if (Number(ticket.assignedToId) === Number(viewerId)) return true;
+    return Boolean(ticket.createdById && Number(ticket.createdById) === Number(viewerId) &&
+      Number(ticket.createdById) !== Number(ticket.requesterId) && ticket.createdBy?.role !== UserRole.USER);
   }
 
   // --- Create (with Auto-Shift, Auto-Assign, Email) -------------------------
@@ -1155,9 +1166,9 @@ export class TicketService implements OnModuleInit {
       const selectedAttendance = attendance.find(
         (row) => Number(row.userId) === Number(dto.assignedToId),
       );
-      if (!selectedAttendance || selectedAttendance.status !== AttendanceStatus.PRESENT) {
+      if (!selectedAttendance || ![AttendanceStatus.PRESENT, AttendanceStatus.OUT_OF_OFFICE].includes(selectedAttendance.status)) {
         throw new BadRequestException(
-          'Cannot assign a ticket to a technician who is not explicitly marked present.',
+          'Manual assignment requires the staff member to be marked Present or OOO.',
         );
       }
 
@@ -1481,6 +1492,11 @@ export class TicketService implements OnModuleInit {
     assignedToId?: number;
     escalatedToId?: number;
     assignedOnly?: boolean;
+    proxyCreatedByMe?: boolean;
+    pendingSatisfaction?: boolean;
+    priority?: string;
+    date?: string;
+    includeCarryover?: boolean;
     viewerId?: number;
     viewerRole?: UserRole;
     page?: number;
@@ -1523,7 +1539,6 @@ export class TicketService implements OnModuleInit {
 
       .leftJoinAndSelect('t.category', 'category')
       .leftJoinAndSelect('t.issueTypeConfig', 'issueTypeConfig')
-      .leftJoinAndSelect('t.comments', 'comments')
 
       .orderBy(sortBy, sortOrder as 'ASC' | 'DESC')
       .distinct(true);
@@ -1546,14 +1561,12 @@ export class TicketService implements OnModuleInit {
         },
       ).distinct(true);
 
-      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
       if (filters.ticketType)
         qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
       if (filters.requesterId) qb.andWhere('t.requesterId = :rid', { rid: filters.requesterId });
       if (filters.assignedToId) qb.andWhere('t.assignedToId = :aid', { aid: filters.assignedToId });
     } else if (filters.assignedOnly) {
       qb.where('t.assignedToId = :assignedViewerId', { assignedViewerId: filters.viewerId });
-      if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
       if (filters.ticketType) {
         qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
       }
@@ -1569,20 +1582,21 @@ export class TicketService implements OnModuleInit {
         this.canViewAllTicketsInTicketing(filters.viewerRole as string)
       ) {
         // Privileged roles: no WHERE restriction — see all tickets with full filter support
-        if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
         if (filters.ticketType)
           qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
         if (filters.requesterId) qb.andWhere('t.requesterId = :rid', { rid: filters.requesterId });
         if (filters.assignedToId)
           qb.andWhere('t.assignedToId = :aid', { aid: filters.assignedToId });
       } else {
-        // All other staff: see only tickets assigned to them OR submitted by them
-        qb.where('(t.assignedToId = :uid OR t.requesterId = :uid)', { uid: filters.viewerId });
-        if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
+        // Other staff may see their assignments and tickets they requested or filed as proxy.
+        qb.where('(t.assignedToId = :uid OR t.requesterId = :uid OR t.createdById = :uid)', { uid: filters.viewerId });
         if (filters.ticketType)
           qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+        if (filters.assignedToId) qb.andWhere('t.assignedToId = :aid', { aid: filters.assignedToId });
       }
     }
+
+    if (filters.priority) qb.andWhere('t.priority = :priority', { priority: filters.priority });
 
     // Apply optional text search before pagination so totals remain accurate.
     if (filters.search?.trim()) {
@@ -1601,16 +1615,29 @@ export class TicketService implements OnModuleInit {
       );
     }
     // Apply date filters
-    if (filters.year) {
+    if (filters.date) {
+      const start = new Date(`${filters.date}T00:00:00+08:00`);
+      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+      if (filters.includeCarryover) {
+        qb.andWhere(new Brackets((where) => where
+          .where('t.createdAt >= :dateStart AND t.createdAt < :dateEnd', { dateStart: start, dateEnd: end })
+          .orWhere('t.createdAt < :dateStart AND t.status IN (:...unfinishedStatuses)', {
+            dateStart: start,
+            unfinishedStatuses: [TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE, TicketStatus.FREEZE],
+          })));
+      } else {
+        qb.andWhere('t.createdAt >= :dateStart AND t.createdAt < :dateEnd', { dateStart: start, dateEnd: end });
+      }
+    } else if (filters.year) {
       qb.andWhere('EXTRACT(YEAR FROM t.createdAt) = :year', { year: filters.year });
     }
-    if (filters.month) {
+    if (!filters.date && filters.month) {
       qb.andWhere('EXTRACT(MONTH FROM t.createdAt) = :month', { month: filters.month });
     }
-    if (filters.quarter) {
+    if (!filters.date && filters.quarter) {
       qb.andWhere('EXTRACT(QUARTER FROM t.createdAt) = :quarter', { quarter: filters.quarter });
     }
-    if (filters.semester) {
+    if (!filters.date && filters.semester) {
       if (filters.semester === 1) {
         qb.andWhere('EXTRACT(MONTH FROM t.createdAt) <= 6');
       } else {
@@ -1621,6 +1648,19 @@ export class TicketService implements OnModuleInit {
     // Apply SLA state before pagination so card totals and ticket pages use
     // the same mutually exclusive definitions regardless of calendar date.
     this.applyActiveTicketSlaFilter(qb, filters.slaState);
+
+    const countsQb = qb.clone();
+    if (filters.pendingSatisfaction) {
+      qb.andWhere('t.requesterId = :ratingRequesterId', { ratingRequesterId: filters.viewerId })
+        .andWhere('t.status IN (:...rateableStatuses)', { rateableStatuses: [TicketStatus.RESOLVED, TicketStatus.CLOSED] })
+        .andWhere('t.satisfactionSubmittedAt IS NULL');
+    }
+    if (filters.proxyCreatedByMe) {
+      qb.andWhere('t.createdById = :proxyCreatorId AND t.requesterId <> :proxyCreatorId', {
+        proxyCreatorId: filters.viewerId,
+      });
+    }
+    if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
 
     const page = filters.page && filters.page > 0 ? Math.floor(filters.page) : undefined;
     const limit =
@@ -1654,7 +1694,7 @@ export class TicketService implements OnModuleInit {
       .select('ta.user_id', 'userId')
       .from('attendance', 'ta')
       .where('ta.date = :today', { today })
-      .andWhere("ta.status IN ('absent', 'out_of_office')")
+      .andWhere('ta.status = :absent', { absent: 'absent' })
       .getRawMany();
     const absentIds = new Set<number>(absentRows.map((r) => Number(r.userId)));
 
@@ -1686,7 +1726,7 @@ export class TicketService implements OnModuleInit {
       }),
     );
 
-    const statusRows = await qb
+    const statusRows = await countsQb
       .clone()
       .select('t.status', 'status')
       .addSelect('COUNT(DISTINCT t.id)', 'count')
@@ -1737,8 +1777,8 @@ export class TicketService implements OnModuleInit {
       ticket.hasUnreadTechnician = false;
     }
 
-    // Strip internal notes for regular users — they should never see staff-only comments
-    if (viewerRole === UserRole.USER && ticket.comments) {
+    const canViewInternalNotes = this.canViewInternalNotes(ticket, viewerRole, viewerId);
+    if (!canViewInternalNotes && ticket.comments) {
       (ticket as any).comments = ticket.comments.filter((c: any) => !c.isInternal);
     }
 
@@ -1747,6 +1787,7 @@ export class TicketService implements OnModuleInit {
     const slaState = await this.projectTicketSlaState(ticket, config, new Date());
     return Object.assign(ticket, {
       effectiveResolvedAt: getEffectiveResolvedAt(ticket),
+      canViewInternalNotes,
       resolutionTimeOverrides,
       ...slaState,
     });
@@ -3115,9 +3156,9 @@ export class TicketService implements OnModuleInit {
     const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     const attendanceRecord = await this.attendanceService.getAttendanceForDate(todayStr);
     const techAttendance = attendanceRecord.find((a) => a.userId === dto.assignedToId);
-    if (!techAttendance || techAttendance.status !== 'present') {
+    if (!techAttendance || ![AttendanceStatus.PRESENT, AttendanceStatus.OUT_OF_OFFICE].includes(techAttendance.status as AttendanceStatus)) {
       throw new BadRequestException(
-        'Cannot assign a ticket to a technician who is not explicitly marked present.',
+        'Manual assignment requires the staff member to be marked Present or OOO.',
       );
     }
 
@@ -3192,13 +3233,10 @@ export class TicketService implements OnModuleInit {
     ticket.lastAssignedAt = new Date();
     // The first active ticket assigned to a staff member starts immediately.
     // Keep the existing queue behavior when that staff member already has work.
-    if (
-      busyCount === 0 &&
-      [TicketStatus.OPEN, TicketStatus.ASSIGNED].includes(ticket.status as TicketStatus)
-    ) {
-      ticket.status = TicketStatus.IN_PROGRESS;
-    } else if (ticket.status === TicketStatus.OPEN) {
-      ticket.status = TicketStatus.ASSIGNED;
+    if ([TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(ticket.status as TicketStatus)) {
+      // A busy new owner must receive queued work as Assigned, even when the
+      // previous owner had already started it. It resumes when their queue frees.
+      ticket.status = busyCount === 0 ? TicketStatus.IN_PROGRESS : TicketStatus.ASSIGNED;
     }
 
     // Initialize the configured issue SLA or the four-hour no-issue fallback.
@@ -3223,6 +3261,22 @@ export class TicketService implements OnModuleInit {
     }
 
     const assigned = await this.ticketRepo.save(ticket);
+    this.sseService.emitTicketUpdated(assigned.id);
+
+    // Moving the active ticket away may free the previous owner's queue.
+    // This method already runs under the auto-assignment lock, so promotion is atomic
+    // with respect to other assignment/handoff decisions.
+    if (previousAssigneeId && previousAssigneeId !== dto.assignedToId) {
+      const remainingActiveCount = await this.ticketRepo.count({
+        where: [
+          { assignedToId: previousAssigneeId, status: TicketStatus.ASSIGNED, isSlaWaiting: false },
+          { assignedToId: previousAssigneeId, status: TicketStatus.IN_PROGRESS },
+        ],
+      });
+      if (remainingActiveCount === 0) {
+        await this.unpauseNextWaitingTicketAndSetInProgress(previousAssigneeId, 'queue_promoted_after_reassignment');
+      }
+    }
 
     // Log assignment event
     const eventType =
@@ -3381,11 +3435,15 @@ export class TicketService implements OnModuleInit {
   }
   // --- Comments ------------------------------------------------------------
 
-  async getInternalNoteMentionCandidates(actorRole: UserRole, actorId?: number): Promise<
+  async getInternalNoteMentionCandidates(ticketId: string, actorRole: UserRole, actorId?: number): Promise<
     Array<{ id: number; label: string; email: string; role: string }>
   > {
-    if (actorRole === UserRole.USER) {
-      throw new ForbiddenException('Only RICTMS staff can mention users in internal notes.');
+    const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
+    if (!ticket) throw new NotFoundException('Ticket not found');
+    await this.enrichTicketsWithUsers([ticket]);
+    await this.assertTicketReadAccess(ticket, actorId, actorRole);
+    if (!this.canViewInternalNotes(ticket, actorRole, actorId)) {
+      throw new ForbiddenException('You cannot view internal notes on this ticket.');
     }
 
     const users = await this.usersHttpClient.getUsers();
@@ -3395,7 +3453,7 @@ export class TicketService implements OnModuleInit {
           user.active !== false &&
           user.role !== UserRole.USER &&
           Number(user.id) !== Number(actorId) &&
-          this.roleCapSvc.isTicketModuleAccess(user.role),
+          this.canViewInternalNotes(ticket, user.role as UserRole, Number(user.id)),
       )
       .map((user) => ({
         id: Number(user.id),
@@ -3415,8 +3473,10 @@ export class TicketService implements OnModuleInit {
   ): Promise<TicketComment> {
     const ticket = await this.getTicketById(ticketId, actorRole, actorId);
 
-    // Regular users cannot add internal notes
-    const isInternal = dto.isInternal && actorRole !== UserRole.USER;
+    const isInternal = Boolean(dto.isInternal);
+    if (isInternal && !this.canViewInternalNotes(ticket, actorRole, actorId)) {
+      throw new ForbiddenException('You cannot add an internal note on this ticket.');
+    }
 
     // Regular users can only comment on their own tickets
     if (actorRole === UserRole.USER && ticket.requesterId !== actorId) {
@@ -3435,7 +3495,7 @@ export class TicketService implements OnModuleInit {
 
     let mentionedUserIds: number[] = [];
     if (requestedMentionIds.length > 0) {
-      const candidates = await this.getInternalNoteMentionCandidates(actorRole, actorId);
+      const candidates = await this.getInternalNoteMentionCandidates(ticketId, actorRole, actorId);
       const allowedIds = new Set(candidates.map((candidate) => candidate.id));
       const invalidMentionIds = requestedMentionIds.filter((userId) => !allowedIds.has(userId));
       if (invalidMentionIds.length > 0) {
@@ -3484,7 +3544,7 @@ export class TicketService implements OnModuleInit {
     if (actorRole === UserRole.USER) {
       ticket.hasUnreadTechnician = true;
       await this.ticketRepo.update(ticket.id, { hasUnreadTechnician: true });
-    } else {
+    } else if (!isInternal) {
       ticket.hasUnreadUser = true;
       await this.ticketRepo.update(ticket.id, { hasUnreadUser: true });
     }
@@ -3503,10 +3563,11 @@ export class TicketService implements OnModuleInit {
     // Emit explicitly instead of relying on the asynchronous event-log write.
     this.sseService.emitTicketUpdated(ticket.id);
 
-    // In-app notifications. Internal notes notify both ticket participants, while
-    // explicitly mentioned staff receive a distinct mention notification.
+    // Internal note notifications must never reveal the note to the regular requester.
     if (isInternal) {
-      const participantIds = [ticket.requesterId, ticket.assignedToId]
+      const proxyFilerId = ticket.createdById && ticket.createdById !== ticket.requesterId &&
+        ticket.createdBy?.role !== UserRole.USER ? ticket.createdById : null;
+      const participantIds = [ticket.assignedToId, proxyFilerId]
         .map((userId) => Number(userId))
         .filter((userId) => Boolean(userId) && userId !== actorId);
       const mentionedIdSet = new Set(mentionedUserIds);
@@ -4202,7 +4263,8 @@ export class TicketService implements OnModuleInit {
           this.roleCapSvc.isSpecializedSupport(u.role)),
     );
 
-    // Read attendance for today so assignment UI can hide unavailable technicians.
+    // Read attendance for today. Manual assignment also permits OOO staff;
+    // automatic routing remains Present-only in the separate availability flow.
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     const attendanceRows = await this.dataSource
       .createQueryBuilder()
@@ -4237,10 +4299,10 @@ export class TicketService implements OnModuleInit {
 
     const results = [];
     for (const tech of technicians) {
-      // Manual assignment requires an explicit PRESENT attendance record.
+      // Absent, Half Day, and unknown attendance remain ineligible.
       const attendanceStatus = attendanceMap.get(tech.id) ?? null;
       const isUnavailable = attendanceStatus !== AttendanceStatus.PRESENT;
-      if (isUnavailable) continue;
+      if (![AttendanceStatus.PRESENT, AttendanceStatus.OUT_OF_OFFICE].includes(attendanceStatus as AttendanceStatus)) continue;
 
       results.push({
         id: tech.id,
@@ -4561,13 +4623,14 @@ export class TicketService implements OnModuleInit {
       if (!user || user.role === UserRole.USER || user.role === UserRole.SUPER_ADMIN) continue;
 
       const attendance = attendanceByUser.get(userId);
+      // OOO work can be intentionally assigned for field support; it must not
+      // appear in the recurring absence/reassignment prompt.
+      if (attendance?.status === AttendanceStatus.OUT_OF_OFFICE) continue;
       let attendanceState: AttendanceAssignmentState | null = null;
       if (attendance?.status === AttendanceStatus.ABSENT) {
         attendanceState = 'absent';
       } else if (attendance?.status === AttendanceStatus.HALF_DAY) {
         attendanceState = 'half_day';
-      } else if (attendance?.status === AttendanceStatus.OUT_OF_OFFICE) {
-        attendanceState = 'out_of_office';
       } else if (!attendance && hasCurrentDtrData && currentTime >= expectedClockIn) {
         attendanceState = currentTime >= workdayEnd ? 'absent' : 'assumed_late';
       }
@@ -5441,15 +5504,18 @@ export class TicketService implements OnModuleInit {
     viewerRole?: UserRole,
   ): Promise<{ root: string; safeFilename: string }> {
     // Basic access check
-    await this.getTicketById(ticketId, viewerRole, viewerId);
+    const ticket = await this.getTicketById(ticketId, viewerRole, viewerId);
 
     const safeFilename = path.basename(filename);
     const comments = await this.commentRepo.find({ where: { ticketId } });
-    const isReferenced = comments.some(
+    const referencedComment = comments.find(
       (c) => c.attachmentPath && path.basename(String(c.attachmentPath)) === safeFilename,
     );
-    if (!isReferenced) {
+    if (!referencedComment) {
       throw new NotFoundException('Comment attachment not found');
+    }
+    if (referencedComment.isInternal && !this.canViewInternalNotes(ticket, viewerRole, viewerId)) {
+      throw new ForbiddenException('You cannot view this internal note attachment.');
     }
 
     const safeTicketId = path.basename(ticketId);

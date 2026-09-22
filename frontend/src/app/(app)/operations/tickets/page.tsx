@@ -157,7 +157,7 @@ const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'war
   paused: { label: 'SLA Paused', color: 'info' },
 };
 
-export default function TicketsPage() {
+export default function TicketsPage({ restrictedAssignedOnly = false }: { restrictedAssignedOnly?: boolean }) {
   const router = useRouter();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -182,13 +182,15 @@ export default function TicketsPage() {
   const currentYear = now.getFullYear().toString();
   const yearOptions = Array.from({ length: 7 }, (_, index) => Number(currentYear) - 3 + index);
 
+  const todayInManila = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  const [filterDate, setFilterDate] = useState(todayInManila);
   const [filterYear, setFilterYear] = useState(currentYear);
   const [filterMonth, setFilterMonth] = useState(currentMonth);
   const [filterQuarter, setFilterQuarter] = useState('');
   const [filterSemester, setFilterSemester] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchDraft, setSearchDraft] = useState('');
-  const [filterPeriodMode, setFilterPeriodMode] = useState<'month' | 'quarter' | 'semester' | 'year'>('month');
+  const [filterPeriodMode, setFilterPeriodMode] = useState<'day' | 'month' | 'quarter' | 'semester' | 'year'>('day');
   const [showMyTickets, setShowMyTickets] = useState(false);
 
   const initializedMyTickets = useRef(false);
@@ -313,9 +315,9 @@ export default function TicketsPage() {
   const isTechnician = isFocalTech || isLowerLevelTech || isJuniorTech || isItoRole;
   const isFocal = !!myCap?.isFocal;
   // DB-driven: is_all_tickets column
-  const canManageAll = !!myCap?.isAllTickets;
+  const canManageAll = !restrictedAssignedOnly && !!myCap?.isAllTickets;
   // Matrix-driven: Escalated To Me tab is visible when Escalation capability is ticked.
-  const canViewEscalatedQueue = !!myCap?.isEscalationFocal;
+  const canViewEscalatedQueue = !restrictedAssignedOnly && !!myCap?.isEscalationFocal;
   // DB-driven: is_ticket_focal column — who can manually assign/reassign tickets
   const canAssign = !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
   const isTicketAdmin = !!myCap?.isTicketSettingsFocal;
@@ -384,14 +386,8 @@ export default function TicketsPage() {
     }
   };
 
-  // Senior technician tab state (isFocalTech && !canManageAll view)
-  const [ticketTab, setTicketTab] = useState(0);
-  // Management tab state (canManageAll view: CO, SH, super_admin)
-  // 0=All, 1=Active, 2=Resolved/Closed, 3=Frozen, 4=Duplicate, 5=Proxy Requests
-  const [mgmtTab, setMgmtTab] = useState(0);
-  // User tab state (!isTechnician && !canManageAll view)
-  // 0 = All, 1 = Active, 2 = To Rate, 3 = Closed, 4 = Requested For
-  const [userTab, setUserTab] = useState(0);
+  const [selectedTab, setSelectedTab] = useState('all');
+  const [showEscalations, setShowEscalations] = useState(false);
 
   // Table Scroll State
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -432,18 +428,21 @@ export default function TicketsPage() {
     return allEscalations.filter(e => !filterPriority || (e.ticket && e.ticket.priority === filterPriority));
   }, [allEscalations, filterPriority]);
 
-  const activeTickets = frontendFilteredTickets.filter((t) =>
-    ['open', 'assigned', 'in_progress', 'pause'].includes(t.status),
-  );
-  const pausedTickets = frontendFilteredTickets.filter((t) => t.status === 'pause');
-  const doneTickets = frontendFilteredTickets.filter((t) => ['resolved', 'closed'].includes(t.status));
-  const frozenTickets = frontendFilteredTickets.filter((t) => t.status === 'freeze');
-  const duplicateTickets = frontendFilteredTickets.filter((t) => t.status === 'duplicate');
-  const activeCount = ['open', 'assigned', 'in_progress', 'pause'].reduce((sum, status) => sum + (statusCounts[status] ?? 0), 0);
-  const pausedCount = statusCounts.pause ?? 0;
-  const doneCount = (statusCounts.resolved ?? 0) + (statusCounts.closed ?? 0);
-  const frozenCount = statusCounts.freeze ?? 0;
-  const duplicateCount = statusCounts.duplicate ?? 0;
+  const statusTabs = [
+    { key: 'all', label: 'All' },
+    { key: 'open', label: 'Open' },
+    { key: 'assigned', label: 'Assigned' },
+    { key: 'in_progress', label: 'In Progress' },
+    { key: 'pause', label: 'Paused' },
+    { key: 'resolved', label: 'Resolved' },
+    { key: 'closed', label: 'Closed' },
+    { key: 'freeze', label: 'Frozen' },
+    { key: 'duplicate', label: 'Duplicate' },
+    { key: 'proxy', label: 'Proxy Requests' },
+  ];
+  const selectedStatus = statusTabs.some(({ key }) => key === selectedTab && key !== 'all' && key !== 'proxy')
+    ? selectedTab as TicketStatus : undefined;
+  const allCount = Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
 
   const toRateTickets = frontendFilteredTickets.filter(
     (t) =>
@@ -465,12 +464,26 @@ export default function TicketsPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('assignedToMe') === '1') {
+      if (params.get('assignedToMe') === '1' || params.get('scope') === 'assigned_to_me') {
         setShowMyTickets(true);
         setShowEscalatedToMe(false);
       }
       if (params.get('filter') === 'pending_satisfaction') {
-        setUserTab(2);
+        setSelectedTab('to_rate');
+      }
+      const status = params.get('status');
+      if (status && ['open', 'assigned', 'in_progress', 'pause', 'resolved', 'closed', 'freeze', 'duplicate'].includes(status)) {
+        setSelectedTab(status);
+      }
+      const period = params.get('period');
+      if (period === 'month' && params.get('year') && params.get('month')) {
+        setFilterPeriodMode('month');
+        setFilterDate('');
+        setFilterYear(params.get('year')!);
+        setFilterMonth(params.get('month')!);
+      } else if (period === 'day' && params.get('date')) {
+        setFilterPeriodMode('day');
+        setFilterDate(params.get('date')!);
       }
       const sla = params.get('sla');
       if (sla === 'overdue' || sla === 'nearing_sla' || sla === 'on_track') {
@@ -482,6 +495,7 @@ export default function TicketsPage() {
         setFilterQuarter('');
         setFilterSemester('');
         setFilterPeriodMode('year');
+        setFilterDate('');
       }
     }
   }, []);
@@ -490,18 +504,11 @@ export default function TicketsPage() {
     if (!newDialogOpen || !isTicketAdmin) return;
     ticketsApi
       .getTechnicians(form.ticketType)
-      .then((rows) => setTechnicians(rows.filter((row) => row.attendanceStatus === 'present' && !row.isUnavailable)))
+      .then((rows) => setTechnicians(rows.filter((row) => row.attendanceStatus === 'present' || row.attendanceStatus === 'out_of_office')))
       .catch(() => setTechnicians([]));
   }, [newDialogOpen, isTicketAdmin, form.ticketType]);
 
-  const tabFilteredTickets = canManageAll
-    ? ([frontendFilteredTickets, activeTickets, pausedTickets, doneTickets, frozenTickets, duplicateTickets, proxyCreatedTickets][
-      mgmtTab
-    ] ?? frontendFilteredTickets)
-    : isTechnician
-      ? ([activeTickets, pausedTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? frontendFilteredTickets)
-      : ([frontendFilteredTickets, activeTickets, toRateTickets, doneTickets, proxyCreatedTickets][userTab] ??
-        frontendFilteredTickets);
+  const tabFilteredTickets = frontendFilteredTickets;
 
   const refreshEscalationStates = useCallback(
     async (rows: Ticket[]) => {
@@ -535,7 +542,7 @@ export default function TicketsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [filterStatus, filterType, filterPriority, filterSla, filterYear, filterMonth, filterQuarter, filterSemester, searchQuery, showMyTickets, showEscalatedToMe]);
+  }, [selectedTab, filterStatus, filterType, filterPriority, filterSla, filterDate, filterYear, filterMonth, filterQuarter, filterSemester, searchQuery, showMyTickets, showEscalatedToMe]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setSearchQuery(searchDraft.trim()), 300);
@@ -546,17 +553,34 @@ export default function TicketsPage() {
     try {
       setLoading(true);
       const [data, dashboardStats] = await Promise.all([
-        ticketsApi.getAll({
-        status: (filterStatus as TicketStatus) || undefined,
+        restrictedAssignedOnly ? ticketsApi.getMyAssigned({
+          status: selectedStatus,
+          ticketType: (filterType as TicketType) || undefined,
+          priority: filterPriority || undefined,
+          date: filterPeriodMode === 'day' ? filterDate : undefined,
+          includeCarryover: filterPeriodMode === 'day' && filterDate === todayInManila(),
+          year: filterPeriodMode !== 'day' ? Number(filterYear) || undefined : undefined,
+          month: filterPeriodMode === 'month' ? Number(filterMonth) || undefined : undefined,
+          quarter: filterPeriodMode === 'quarter' ? Number(filterQuarter) || undefined : undefined,
+          semester: filterPeriodMode === 'semester' ? Number(filterSemester) || undefined : undefined,
+          search: searchQuery,
+          proxyCreatedByMe: selectedTab === 'proxy',
+          page,
+          limit: TICKETS_PAGE_SIZE,
+        }) : ticketsApi.getAll({
+        status: selectedStatus || (filterStatus as TicketStatus) || undefined,
         ticketType: (filterType as TicketType) || undefined,
         priority: filterPriority || undefined,
-        year: filterYear || undefined,
-        month: filterMonth || undefined,
-        quarter: filterQuarter || undefined,
-        semester: filterSemester || undefined,
+        date: filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
+        includeCarryover: filterPeriodMode === 'day' && filterDate === todayInManila() && !filterSla,
+        year: filterPeriodMode !== 'day' && selectedTab !== 'to_rate' ? filterYear || undefined : undefined,
+        month: filterPeriodMode === 'month' && selectedTab !== 'to_rate' ? filterMonth || undefined : undefined,
+        quarter: filterPeriodMode === 'quarter' && selectedTab !== 'to_rate' ? filterQuarter || undefined : undefined,
+        semester: filterPeriodMode === 'semester' && selectedTab !== 'to_rate' ? filterSemester || undefined : undefined,
         slaState: filterSla || undefined,
-        // assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
-        assignedToId: showMyTickets && !showEscalatedToMe ? user?.id : undefined,
+        assignedToMe: showMyTickets && !showEscalatedToMe,
+        proxyCreatedByMe: selectedTab === 'proxy',
+        pendingSatisfaction: selectedTab === 'to_rate',
         escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
         search: searchQuery,
         page,
@@ -584,10 +608,14 @@ export default function TicketsPage() {
     }
   }, [
     filterStatus,
+    selectedTab,
+    selectedStatus,
     filterType,
     filterPriority,
     filterSla,
     filterYear,
+    filterDate,
+    filterPeriodMode,
     filterMonth,
     filterQuarter,
     filterSemester,
@@ -601,6 +629,7 @@ export default function TicketsPage() {
     isFocalTech,
     user?.id,
     canManageAll,
+    restrictedAssignedOnly,
   ]);
 
   useEffect(() => {
@@ -608,13 +637,8 @@ export default function TicketsPage() {
   }, [fetchTickets]);
 
   useEffect(() => {
-    const rows = canManageAll
-      ? ([tickets, activeTickets, pausedTickets, doneTickets, frozenTickets, duplicateTickets][mgmtTab] ?? tickets)
-      : isTechnician
-        ? ([activeTickets, pausedTickets, doneTickets, frozenTickets, duplicateTickets][ticketTab] ?? tickets)
-        : tickets;
-    refreshEscalationStates(rows);
-  }, [tickets, canManageAll, isTechnician, mgmtTab, ticketTab, refreshEscalationStates]);
+    refreshEscalationStates(tickets);
+  }, [tickets, refreshEscalationStates]);
 
   // For non-super admins: load pending satisfaction count and badge counts
   // useEffect(() => {
@@ -639,17 +663,34 @@ export default function TicketsPage() {
     const requestId = ++ticketRequestRef.current;
     try {
       const [data, dashboardStats] = await Promise.all([
-        ticketsApi.getAll({
-        status: (filterStatus as TicketStatus) || undefined,
+        restrictedAssignedOnly ? ticketsApi.getMyAssigned({
+          status: selectedStatus,
+          ticketType: (filterType as TicketType) || undefined,
+          priority: filterPriority || undefined,
+          date: filterPeriodMode === 'day' ? filterDate : undefined,
+          includeCarryover: filterPeriodMode === 'day' && filterDate === todayInManila(),
+          year: filterPeriodMode !== 'day' ? Number(filterYear) || undefined : undefined,
+          month: filterPeriodMode === 'month' ? Number(filterMonth) || undefined : undefined,
+          quarter: filterPeriodMode === 'quarter' ? Number(filterQuarter) || undefined : undefined,
+          semester: filterPeriodMode === 'semester' ? Number(filterSemester) || undefined : undefined,
+          search: searchQuery,
+          proxyCreatedByMe: selectedTab === 'proxy',
+          page,
+          limit: TICKETS_PAGE_SIZE,
+        }) : ticketsApi.getAll({
+        status: selectedStatus || (filterStatus as TicketStatus) || undefined,
         ticketType: (filterType as TicketType) || undefined,
         priority: filterPriority || undefined,
-        year: filterYear || undefined,
-        month: filterMonth || undefined,
-        quarter: filterQuarter || undefined,
-        semester: filterSemester || undefined,
+        date: filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
+        includeCarryover: filterPeriodMode === 'day' && filterDate === todayInManila() && !filterSla,
+        year: filterPeriodMode !== 'day' && selectedTab !== 'to_rate' ? filterYear || undefined : undefined,
+        month: filterPeriodMode === 'month' && selectedTab !== 'to_rate' ? filterMonth || undefined : undefined,
+        quarter: filterPeriodMode === 'quarter' && selectedTab !== 'to_rate' ? filterQuarter || undefined : undefined,
+        semester: filterPeriodMode === 'semester' && selectedTab !== 'to_rate' ? filterSemester || undefined : undefined,
         slaState: filterSla || undefined,
-        // assignedToId: showMyTickets && isFocalTech && !showEscalatedToMe ? user?.id : undefined,
-        assignedToId: showMyTickets && !showEscalatedToMe ? user?.id : undefined,
+        assignedToMe: showMyTickets && !showEscalatedToMe,
+        proxyCreatedByMe: selectedTab === 'proxy',
+        pendingSatisfaction: selectedTab === 'to_rate',
         escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
         search: searchQuery,
         page,
@@ -670,10 +711,14 @@ export default function TicketsPage() {
     }
   }, [
     filterStatus,
+    selectedTab,
+    selectedStatus,
     filterType,
     filterPriority,
     filterSla,
     filterYear,
+    filterDate,
+    filterPeriodMode,
     filterMonth,
     filterQuarter,
     filterSemester,
@@ -686,6 +731,7 @@ export default function TicketsPage() {
     page,
     isFocalTech,
     user?.id,
+    restrictedAssignedOnly,
   ]);
   useSse(['TICKET_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
     if (ticketSseTimerRef.current) clearTimeout(ticketSseTimerRef.current);
@@ -700,11 +746,12 @@ export default function TicketsPage() {
   }, []);
 
   const refreshRequesterOptions = useCallback(() => {
+    if (restrictedAssignedOnly) return;
     usersApi
       .listTicketRequesters()
       .then((users) => setAllUsers(users.filter((u) => u.active && u.role !== 'super_admin')))
       .catch(() => { });
-  }, []);
+  }, [restrictedAssignedOnly]);
 
   useEffect(() => {
     // Load the restricted requester list for ticket proxy creation.
@@ -894,7 +941,7 @@ export default function TicketsPage() {
     try {
       const techs = await ticketsApi.getTechnicians(ticket.ticketType);
       const availableByAttendance = techs.filter(
-        (t) => !t.isUnavailable && t.attendanceStatus === 'present',
+        (t) => t.attendanceStatus === 'present' || t.attendanceStatus === 'out_of_office',
       );
       setTechnicians(availableByAttendance);
       // Only pre-select current assignee if they're still in the available list
@@ -1086,16 +1133,16 @@ export default function TicketsPage() {
       >
         <Box>
           <Typography variant="h4" fontWeight={700}>
-            Help Desk Tickets
+            {restrictedAssignedOnly ? 'My Assigned Tickets' : 'Help Desk Tickets'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Submit and track RICTMS support requests and specialized concerns
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenNewTicket}>
+          {!restrictedAssignedOnly && <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenNewTicket}>
             New Ticket
-          </Button>
+          </Button>}
         </Stack>
       </Box>
 
@@ -1148,8 +1195,9 @@ export default function TicketsPage() {
                     label="Period"
                     value={filterPeriodMode}
                     onChange={(e) => {
-                      const mode = e.target.value as 'month' | 'quarter' | 'semester' | 'year';
+                      const mode = e.target.value as 'day' | 'month' | 'quarter' | 'semester' | 'year';
                       setFilterPeriodMode(mode);
+                      setFilterDate(mode === 'day' ? todayInManila() : '');
                       if (mode === 'year') {
                         setFilterMonth('');
                         setFilterQuarter('');
@@ -1170,11 +1218,15 @@ export default function TicketsPage() {
                     }}
                     size="small"
                   >
+                    <MenuItem value="day">Daily</MenuItem>
                     <MenuItem value="month">Monthly</MenuItem>
                     <MenuItem value="quarter">Quarterly</MenuItem>
                     <MenuItem value="semester">Semester</MenuItem>
                     <MenuItem value="year">Full Year</MenuItem>
                   </TextField>
+                  {filterPeriodMode === 'day' && (
+                    <TextField type="date" label="Date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} size="small" InputLabelProps={{ shrink: true }} />
+                  )}
                   {filterPeriodMode === 'month' && (
                     <TextField
                       select
@@ -1237,7 +1289,9 @@ export default function TicketsPage() {
                       setFilterMonth((new Date().getMonth() + 1).toString());
                       setFilterQuarter('');
                       setFilterSemester('');
-                      setFilterPeriodMode('month');
+                      setFilterPeriodMode('day');
+                      setFilterDate(todayInManila());
+                      setSelectedTab('all');
                     }}
                   >
                     Reset
@@ -1255,22 +1309,6 @@ export default function TicketsPage() {
             <Grid container spacing={2}>
               <Grid item xs={12} lg={12}>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, '& > *': { flex: '1 1 120px' } }}>
-                  <TextField inputProps={{ maxLength: 255 }}
-                    select
-                    label="Status"
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    size="small"
-                  >
-                    <MenuItem value="">All Statuses</MenuItem>
-                    <MenuItem value="open">Open</MenuItem>
-                    <MenuItem value="assigned">Assigned</MenuItem>
-                    <MenuItem value="in_progress">In Progress</MenuItem>
-                    <MenuItem value="resolved">Resolved</MenuItem>
-                    <MenuItem value="closed">Closed</MenuItem>
-                    <MenuItem value="freeze">Freeze</MenuItem>
-                    <MenuItem value="duplicate">Duplicate</MenuItem>
-                  </TextField>
                   <TextField inputProps={{ maxLength: 255 }}
                     select
                     label="Type"
@@ -1328,8 +1366,9 @@ export default function TicketsPage() {
                     label="Period"
                     value={filterPeriodMode}
                     onChange={(e) => {
-                      const mode = e.target.value as 'month' | 'quarter' | 'semester' | 'year';
+                      const mode = e.target.value as 'day' | 'month' | 'quarter' | 'semester' | 'year';
                       setFilterPeriodMode(mode);
+                      setFilterDate(mode === 'day' ? todayInManila() : '');
                       if (mode === 'year') {
                         setFilterMonth('');
                         setFilterQuarter('');
@@ -1350,11 +1389,15 @@ export default function TicketsPage() {
                     }}
                     size="small"
                   >
+                    <MenuItem value="day">Daily</MenuItem>
                     <MenuItem value="month">Monthly</MenuItem>
                     <MenuItem value="quarter">Quarterly</MenuItem>
                     <MenuItem value="semester">Semester</MenuItem>
                     <MenuItem value="year">Full Year</MenuItem>
                   </TextField>
+                  {filterPeriodMode === 'day' && (
+                    <TextField type="date" label="Date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} size="small" InputLabelProps={{ shrink: true }} />
+                  )}
                   {filterPeriodMode === 'month' && (
                     <TextField
                       select
@@ -1418,7 +1461,9 @@ export default function TicketsPage() {
                       setFilterMonth((new Date().getMonth() + 1).toString());
                       setFilterQuarter('');
                       setFilterSemester('');
-                      setFilterPeriodMode('month');
+                      setFilterPeriodMode('day');
+                      setFilterDate(todayInManila());
+                      setSelectedTab('all');
                     }}
                   >
                     Reset
@@ -1427,7 +1472,7 @@ export default function TicketsPage() {
               </Grid>
               <Grid item xs={12} lg={4}>
                 <Stack direction="row" spacing={2} sx={{ '& > *': { flex: 1 } }}>
-                  {(isFocalTech || canManageAll) && (
+                  {!restrictedAssignedOnly && (isFocalTech || canManageAll) && (
                     <Badge badgeContent={myTicketsCount} color="error" overlap="circular" sx={{ width: '100%', height: 40, '& .MuiBadge-badge': { zIndex: 1 } }}>
                       <Button
                         fullWidth
@@ -1467,7 +1512,7 @@ export default function TicketsPage() {
           </CardContent>
         </Card>
       )}
-      {!canManageAll && (isFocalTech || canViewEscalatedQueue) && (
+      {!restrictedAssignedOnly && !canManageAll && (isFocalTech || canViewEscalatedQueue) && (
         <Card sx={{ mb: 2 }}>
           <CardContent>
             <Stack direction="row" spacing={2} sx={{ '& > *': { flex: 1, maxWidth: { xs: '100%', md: '50%', lg: '33%' } } }}>
@@ -1517,86 +1562,19 @@ export default function TicketsPage() {
           </CardContent>
         </Card>
       )}
-      {canManageAll && (
-        <Card sx={{ mb: 2 }}>
-          <CardContent sx={{ pb: '0 !important' }}>
-            <Tabs
-              value={mgmtTab}
-              onChange={(_, v) => setMgmtTab(v)}
-              variant="scrollable"
-              scrollButtons="auto"
-            >
-              <Tab label={`All (${totalTickets})`} />
-              <Tab label={`Active (${activeCount})`} />
-              <Tab label={`Paused (${pausedCount})`} />
-              <Tab label={`Resolved / Closed (${doneCount})`} />
-              <Tab label={`Frozen (${frozenCount})`} />
-              <Tab label={`Duplicate (${duplicateCount})`} />
-              <Tab
-                label={
-                  <Badge color="info" variant="dot" invisible={proxyCreatedTickets.length === 0}>
-                    Proxy Requests ({proxyCreatedTickets.length})
-                  </Badge>
-                }
-              />
-              <Tab label={`Escalations (${frontendFilteredEscalations.length})`} />
-            </Tabs>
-          </CardContent>
-        </Card>
-      )}
-      {isTechnician && !canManageAll && (
-        <Card sx={{ mb: 2 }}>
-          <CardContent sx={{ pb: '0 !important' }}>
-            <Tabs
-              value={ticketTab}
-              onChange={(_, v) => setTicketTab(v)}
-              variant="scrollable"
-              scrollButtons="auto"
-              allowScrollButtonsMobile
-            >
-              <Tab label={`Active (${activeCount})`} />
-              <Tab label={`Paused (${pausedCount})`} />
-              <Tab label={`Resolved / Closed (${doneCount})`} />
-              <Tab label={`Frozen (${frozenCount})`} />
-              <Tab label={`Duplicate (${duplicateCount})`} />
-            </Tabs>
-          </CardContent>
-        </Card>
-      )}
-      {!isTechnician && !canManageAll && (
-        <Card sx={{ mb: 2 }}>
-          <CardContent sx={{ pb: '0 !important' }}>
-            <Tabs
-              value={userTab}
-              onChange={(_, v) => setUserTab(v)}
-              variant="scrollable"
-              scrollButtons="auto"
-              allowScrollButtonsMobile
-              sx={{ mb: 2 }}
-            >
-              <Tab label={`All (${totalTickets})`} />
-              <Tab label={`Active (${activeCount})`} />
-              <Tab
-                label={
-                  <Badge color="warning" variant="dot" invisible={toRateTickets.length === 0}>
-                    To Rate ({toRateTickets.length})
-                  </Badge>
-                }
-              />
-              <Tab label={`Closed / Resolved (${doneCount})`} />
-              <Tab
-                label={
-                  <Badge color="info" variant="dot" invisible={proxyCreatedTickets.length === 0}>
-                    Requested For ({proxyCreatedTickets.length})
-                  </Badge>
-                }
-              />
-            </Tabs>
-          </CardContent>
-        </Card>
-      )}
+      <Card sx={{ mb: 2 }}>
+        <CardContent sx={{ pb: '0 !important' }}>
+          <Tabs value={selectedTab === 'to_rate' ? false : selectedTab} onChange={(_, value) => { setSelectedTab(value); setShowEscalations(false); }} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
+            {statusTabs.map(({ key, label }) => (
+              <Tab key={key} value={key} label={key === 'proxy' ? label : `${label} (${key === 'all' ? allCount : statusCounts[key] ?? 0})`} />
+            ))}
+          </Tabs>
+          {canManageAll && <Button size="small" onClick={() => setShowEscalations((value) => !value)}>Escalations ({frontendFilteredEscalations.length})</Button>}
+          {user?.role === 'user' && <Button size="small" onClick={() => { setSelectedTab('to_rate'); setShowEscalations(false); }}>To Rate ({pendingSatCount})</Button>}
+        </CardContent>
+      </Card>
 
-      {canManageAll && mgmtTab === 7 ? (
+      {canManageAll && showEscalations ? (
         <Card sx={{ mb: 2 }}>
           <CardContent>
             {loading ? (
@@ -2483,7 +2461,7 @@ export default function TicketsPage() {
             {isTicketAdmin && (
               <Autocomplete
                 options={technicians}
-                getOptionLabel={(technician) => `${formatPersonName(technician, technician.email)} (${technician.openCount ?? 0} Active)`}
+                getOptionLabel={(technician) => `${formatPersonName(technician, technician.email)} (${technician.openCount ?? 0} Active${technician.attendanceStatus === 'out_of_office' ? ', OOO' : ''})`}
                 value={technicians.find((technician) => technician.id === form.assignedToId) ?? null}
                 onChange={(_, technician) => setForm({ ...form, assignedToId: technician?.id })}
                 isOptionEqualToValue={(option, value) => option.id === value.id}
@@ -2688,7 +2666,7 @@ export default function TicketsPage() {
             </Typography>
             <Autocomplete
               options={technicians}
-              getOptionLabel={(t) => `${formatPersonName(t, t.email)} (${t.openCount} Active)`}
+              getOptionLabel={(t) => `${formatPersonName(t, t.email)} (${t.openCount} Active${t.attendanceStatus === 'out_of_office' ? ', OOO' : ''})`}
               value={technicians.find((t) => String(t.id) === selectedTechId) ?? null}
               onChange={(_, newValue) => setSelectedTechId(newValue ? String(newValue.id) : '')}
               isOptionEqualToValue={(option, value) => option.id === value.id}
