@@ -293,7 +293,7 @@ export class TicketController {
   @Post('reports/explanations')
   @RequireCapability('isTicketReportsAccess')
   async explainReportCharts(
-    @Body() body: { charts?: Array<{ id: string; title: string; values: Array<{ label: string; value: number }> }> },
+    @Body() body: { charts?: Array<{ id: string; title: string; totalValues?: number; values: Array<{ label: string; value: number }> }> },
   ) {
     try {
       return await this.knowledgeBaseService.explainTicketReportCharts(body?.charts || []);

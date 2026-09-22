@@ -915,7 +915,7 @@ export const ticketsApi = {
   },
 
   /** Get ticket satisfaction reports with optional filters (QA #11) */
-  getReportExplanations: async (charts: Array<{ id: string; title: string; values: Array<{ label: string; value: number }> }>): Promise<{ source: 'cloudflare' | 'fallback'; explanations: Record<string, string> }> => {
+  getReportExplanations: async (charts: Array<{ id: string; title: string; totalValues?: number; values: Array<{ label: string; value: number }> }>): Promise<{ source: 'cloudflare' | 'fallback'; explanations: Record<string, string> }> => {
     const response = await apiClient.post('/tickets/reports/explanations', { charts });
     return response.data;
   },

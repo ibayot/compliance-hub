@@ -1984,6 +1984,9 @@ export class TicketService implements OnModuleInit {
 
       previousAssigneeId = ticket.assignedToId;
       ticket.assignedToId = Number(dto.assignedToId);
+      if ([TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE].includes(ticket.status)) {
+        ticket.lastAssignedAt = new Date();
+      }
 
       // Correcting an active assignment follows the same queue rule as a normal
       // assignment: a free assignee starts the ticket, while a busy assignee
@@ -2020,6 +2023,7 @@ export class TicketService implements OnModuleInit {
           where: [
             { assignedToId: previousAssigneeId, status: TicketStatus.ASSIGNED, isSlaWaiting: false },
             { assignedToId: previousAssigneeId, status: TicketStatus.IN_PROGRESS },
+            { assignedToId: previousAssigneeId, status: TicketStatus.PAUSE, isSlaWaiting: false },
           ],
         });
         if (remainingActiveCount === 0) {
@@ -3014,6 +3018,7 @@ export class TicketService implements OnModuleInit {
                 isSlaWaiting: false,
               },
               { assignedToId: assignedTechnicianId, status: TicketStatus.IN_PROGRESS },
+              { assignedToId: assignedTechnicianId, status: TicketStatus.PAUSE, isSlaWaiting: false },
             ],
           });
           if (remainingActiveCount === 0) {
@@ -3332,6 +3337,7 @@ export class TicketService implements OnModuleInit {
         where: [
           { assignedToId: previousAssigneeId, status: TicketStatus.ASSIGNED, isSlaWaiting: false },
           { assignedToId: previousAssigneeId, status: TicketStatus.IN_PROGRESS },
+          { assignedToId: previousAssigneeId, status: TicketStatus.PAUSE, isSlaWaiting: false },
         ],
       });
       if (remainingActiveCount === 0) {

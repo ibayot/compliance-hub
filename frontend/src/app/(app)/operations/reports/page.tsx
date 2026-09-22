@@ -428,6 +428,22 @@ export default function TicketReportsPage() {
       assigneeLabels[index], String(row.count || 0), String(row.ratedCount || 0), Number(row.avg || 0).toFixed(2),
     ]);
     const baseOverview: ReportVisualSpec[] = [
+      {
+        id: 'overview_summary_table', title: 'Overview summary', kind: 'table',
+        values: [
+          { label: 'Total tickets', value: result.totalTickets },
+          { label: 'Tickets with ratings', value: result.totalWithRating },
+          { label: 'Rating fill rate (%)', value: result.totalTickets > 0 ? Math.round((result.totalWithRating / result.totalTickets) * 100) : 0 },
+          ...(result.avgOverallRating === null ? [] : [{ label: 'Average rating (out of 5)', value: result.avgOverallRating }]),
+        ],
+        headers: ['Measure', 'Value'],
+        rows: [
+          ['Total tickets', String(result.totalTickets)],
+          ['Tickets with ratings', String(result.totalWithRating)],
+          ['Rating fill rate', `${result.totalTickets > 0 ? Math.round((result.totalWithRating / result.totalTickets) * 100) : 0}%`],
+          ['Average rating (out of 5)', result.avgOverallRating === null ? 'N/A' : result.avgOverallRating.toFixed(2)],
+        ],
+      },
       { id: 'overview_support_type_chart', title: 'Tickets by support type', kind: 'chart', values: pieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })) },
       { id: 'overview_escalation_chart', title: 'Escalation outcome', kind: 'chart', values: escalationPieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })) },
       { id: 'overview_rating_type_chart', title: 'Average rating by support type', kind: 'chart', values: supportTypeValues },
@@ -465,7 +481,7 @@ export default function TicketReportsPage() {
     if (tab === 1) return [{ id: 'issues_all_chart', title: 'All issue counts', kind: 'chart', values: allIssuesAggregated.map((row) => ({ label: row.name, value: Number(row.count || 0) })) }] as ReportVisualSpec[];
     if (tab === 2) return [
       { id: 'sla_insights_chart', title: 'Configured versus actual SLA', kind: 'chart', values: slaInsights.flatMap((row: any) => [{ label: `${row.issueName || 'Unknown issue'} — configured SLA hours`, value: Number(row.configuredSlaHours || 0) }, { label: `${row.issueName || 'Unknown issue'} — average resolution hours`, value: Number(row.avgResolutionHours || 0) }]) },
-      { id: 'sla_insights_table', title: 'SLA insight details', kind: 'table', values: slaInsights.map((row: any) => ({ label: row.issueName || 'Unknown issue', value: Number(row.avgResolutionHours || 0) })), headers: ['Category', 'Issue', 'Resolved Tickets', 'Configured SLA', 'Avg Actual Resolution', 'Status', 'Interpretation'], rows: slaInsights.map((row: any) => [row.categoryName || 'Unknown', row.issueName, String(row.resolvedTicketsCount || 0), row.configuredSlaHours > 0 ? `${Number(row.configuredSlaHours).toFixed(1)}h` : 'None', row.avgResolutionHours ? `${Number(row.avgResolutionHours).toFixed(1)}h` : '—', row.configuredSlaHours > 0 ? (row.isFailingSla ? 'Failing' : 'Healthy') : 'No SLA', row.isFailingSla ? 'Consider extending SLA' : 'SLA is balanced']) },
+      { id: 'sla_insights_table', title: 'SLA insight details', kind: 'table', values: slaInsights.map((row: any) => ({ label: row.issueName || 'Unknown issue', value: Number(row.avgResolutionHours || 0) })), headers: ['Category', 'Issue', 'Resolved Tickets', 'Configured SLA', 'Avg Actual Resolution', 'Status', 'Interpretation'], rows: slaInsights.map((row: any) => [row.categoryName || 'Unknown', row.issueName, String(row.resolvedTicketsCount || 0), row.configuredSlaHours > 0 ? `${Number(row.configuredSlaHours).toFixed(1)}h` : 'None', row.avgResolutionHours ? `${Number(row.avgResolutionHours).toFixed(1)}h` : '—', row.configuredSlaHours > 0 ? (row.isFailingSla ? 'Failing' : 'Healthy') : 'Unmonitored', row.configuredSlaHours <= 0 ? '—' : row.isFailingSla ? 'Consider extending SLA' : row.avgResolutionHours < row.configuredSlaHours * 0.5 ? 'SLA is very generous, consider tightening' : 'SLA is balanced']) },
     ] as ReportVisualSpec[];
     if (tab === 3) return [
       { id: 'performance_sla_chart', title: 'SLA performance', kind: 'chart', values: slaPieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })) },
@@ -485,10 +501,37 @@ export default function TicketReportsPage() {
     }
     setExplanationsLoading(true);
     setPrintError('');
+    const assigneeVisualIds = new Set([
+      'overview_rating_assignee_chart', 'overview_volume_assignee_chart', 'overview_assignee_table',
+      'performance_sla_assignee_table', 'performance_assignee_table',
+    ]);
+    const explanationSpecs = printSpecs.map(({ id, title, values }) => {
+      // Keep actual staff names in the printed chart/table, but never send them to AI.
+      const safeValues = values.map((item, index) => ({
+        label: assigneeVisualIds.has(id) ? `Assignee ${index + 1}` : item.label,
+        value: item.value,
+      }));
+      const rankedValues = safeValues.length > 30 ? [...safeValues].sort((a, b) => b.value - a.value) : safeValues;
+      const sampledValues = rankedValues.length > 30
+        ? [...rankedValues.slice(0, 15), ...rankedValues.slice(-15)]
+        : rankedValues;
+      return { id, title, totalValues: values.length, values: sampledValues };
+    });
+    const localExplanation = (chart: typeof explanationSpecs[number]) => {
+      if (chart.values.length === 0) return `${chart.title} has no recorded values for the selected period. There is no comparison to make in this section. A broader period may provide data for review.`;
+      if (chart.id === 'overview_summary_table') {
+        return `The overview records ${chart.values.map((item) => `${item.label}: ${item.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`).join('; ')}. Counts describe ticket and feedback volume; the fill rate and average rating describe different measures. Read these values together without treating their magnitudes as directly comparable.`;
+      }
+      const highest = chart.values.reduce((best, current) => current.value > best.value ? current : best);
+      const lowest = chart.values.reduce((best, current) => current.value < best.value ? current : best);
+      const sampleNote = chart.totalValues > chart.values.length ? ` These are the extremes selected from all ${chart.totalValues} printed measures.` : '';
+      return `${chart.title} contains ${chart.totalValues} recorded measures for the selected period. The highest supplied value is ${highest.label} (${highest.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}), and the lowest is ${lowest.label} (${lowest.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}).${sampleNote} The figures show a comparison, not a cause or recommendation.`;
+    };
     let explanationResponse: { source: 'cloudflare' | 'fallback'; explanations: Record<string, string> } = { source: 'fallback', explanations: {} };
     try {
-      explanationResponse = await ticketsApi.getReportExplanations(printSpecs.map(({ id, title, values }) => ({ id, title, values: values.slice(0, 30) })));
+      explanationResponse = await ticketsApi.getReportExplanations(explanationSpecs);
     } catch {
+      explanationResponse.explanations = Object.fromEntries(explanationSpecs.map((chart) => [chart.id, localExplanation(chart)]));
     } finally {
       setExplanationsLoading(false);
     }
@@ -554,8 +597,12 @@ export default function TicketReportsPage() {
       const section = doc.createElement('section');
       doc.body.appendChild(section);
       add('h2', chart.title, section);
-      const explanation = add('p', explanationResponse.explanations[chart.id] || `${chart.title} shows the recorded values for the selected period.`, section);
+      const explanationSpec = explanationSpecs.find((item) => item.id === chart.id);
+      const explanation = add('p', explanationResponse.explanations[chart.id] || (explanationSpec ? localExplanation(explanationSpec) : `${chart.title} has no explanation available.`), section);
       explanation.className = 'explanation';
+      if (assigneeVisualIds.has(chart.id) && chart.values.length > 0) {
+        add('p', 'Assignee numbers in the explanation correspond to the names below, in displayed order.', section);
+      }
       if (chart.kind === 'chart') addBarChart(chart.values, section);
       if (chart.values.length === 0 && (!chart.rows || chart.rows.length === 0)) {
         add('p', 'No data is available for this section.', section);
