@@ -388,6 +388,8 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
 
   const [selectedTab, setSelectedTab] = useState('all');
   const [showEscalations, setShowEscalations] = useState(false);
+  const [escalationSearch, setEscalationSearch] = useState('');
+  const [escalationPage, setEscalationPage] = useState(1);
 
   // Table Scroll State
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -425,8 +427,24 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
   }, [tickets, filterPriority, searchQuery]);
 
   const frontendFilteredEscalations = React.useMemo(() => {
-    return allEscalations.filter(e => !filterPriority || (e.ticket && e.ticket.priority === filterPriority));
-  }, [allEscalations, filterPriority]);
+    const query = escalationSearch.trim().toLowerCase();
+    return allEscalations
+      .filter((e) => !query || [
+        e.ticket?.ticketNumber, e.ticketId, e.status, e.notes,
+        formatPersonName(e.escalatedBy, ''), formatPersonName(e.escalatedTo, ''),
+      ].some((part) => part?.toLowerCase().includes(query)))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [allEscalations, escalationSearch]);
+  const escalationTotalPages = Math.max(1, Math.ceil(frontendFilteredEscalations.length / TICKETS_PAGE_SIZE));
+  const visibleEscalations = frontendFilteredEscalations.slice(
+    (escalationPage - 1) * TICKETS_PAGE_SIZE,
+    escalationPage * TICKETS_PAGE_SIZE,
+  );
+
+  useEffect(() => { setEscalationPage(1); }, [escalationSearch]);
+  useEffect(() => {
+    if (escalationPage > escalationTotalPages) setEscalationPage(escalationTotalPages);
+  }, [escalationPage, escalationTotalPages]);
 
   const statusTabs = [
     { key: 'all', label: 'All' },
@@ -597,7 +615,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
       setMyTicketsCount(dashboardStats.myTicketsCount ?? 0);
       setEscalatedToMeCount(dashboardStats.escalatedToMeCount ?? 0);
 
-      if (canManageAll) {
+      if (canViewEscalatedQueue) {
         const escalations = await ticketsApi.getAllEscalations();
         setAllEscalations(escalations);
       }
@@ -1164,20 +1182,25 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
       >
         <Box>
           <Typography variant="h4" fontWeight={700}>
-            {restrictedAssignedOnly ? 'My Assigned Tickets' : 'Help Desk Tickets'}
+            {showEscalations ? 'Escalation History' : restrictedAssignedOnly ? 'My Assigned Tickets' : 'Help Desk Tickets'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Submit and track RICTMS support requests and specialized concerns
+            {showEscalations ? 'Review ticket escalations, outcomes, and the staff involved.' : 'Submit and track RICTMS support requests and specialized concerns'}
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
-          {!restrictedAssignedOnly && <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenNewTicket}>
+          {canViewEscalatedQueue && (
+            <Button variant="outlined" onClick={() => setShowEscalations((value) => !value)}>
+              {showEscalations ? 'Back to Tickets' : `Escalation History (${allEscalations.length})`}
+            </Button>
+          )}
+          {!restrictedAssignedOnly && !showEscalations && <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenNewTicket}>
             New Ticket
           </Button>}
         </Stack>
       </Box>
 
-      {!canManageAll && (
+      {!showEscalations && !canManageAll && (
         <Card sx={{ mb: 1 }}>
           <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
             <Box sx={filterGridSx}>
@@ -1306,7 +1329,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
         </Card>
       )}
 
-      {canManageAll && (
+      {!showEscalations && canManageAll && (
         <Card sx={{ mb: 1 }}>
           <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
             <Box sx={filterGridSx}>
@@ -1510,7 +1533,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
           </CardContent>
         </Card>
       )}
-      {!restrictedAssignedOnly && !canManageAll && (isFocalTech || canViewEscalatedQueue) && (
+      {!showEscalations && !restrictedAssignedOnly && !canManageAll && (isFocalTech || canViewEscalatedQueue) && (
         <Card sx={{ mb: 1 }}>
           <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
             <Stack direction="row" spacing={1} sx={{ '& > *': { flex: 1, maxWidth: { xs: '100%', md: '50%', lg: '33%' } } }}>
@@ -1550,7 +1573,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
           </CardContent>
         </Card>
       )}
-      {isLowerLevelTech && (
+      {!showEscalations && isLowerLevelTech && (
         <Card sx={{ mb: 2 }}>
           <CardContent>
             <Typography variant="body2" color="text.secondary">
@@ -1560,21 +1583,33 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
           </CardContent>
         </Card>
       )}
-      <Card sx={{ mb: 1 }}>
+      {!showEscalations && <Card sx={{ mb: 1 }}>
         <CardContent sx={{ pt: 0.5, px: 1, pb: '0 !important' }}>
           <Tabs value={selectedTab === 'to_rate' ? false : selectedTab} onChange={(_, value) => { setSelectedTab(value); setShowEscalations(false); }} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
             {statusTabs.map(({ key, label }) => (
               <Tab key={key} value={key} label={key === 'proxy' ? label : `${label} (${key === 'all' ? allCount : statusCounts[key] ?? 0})`} />
             ))}
           </Tabs>
-          {canManageAll && <Button size="small" onClick={() => setShowEscalations((value) => !value)}>Escalations ({frontendFilteredEscalations.length})</Button>}
           {user?.role === 'user' && <Button size="small" onClick={() => { setSelectedTab('to_rate'); setShowEscalations(false); }}>To Rate ({pendingSatCount})</Button>}
         </CardContent>
-      </Card>
+      </Card>}
 
-      {canManageAll && showEscalations ? (
+      {canViewEscalatedQueue && showEscalations ? (
         <Card sx={{ mb: 2 }}>
           <CardContent>
+            <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} gap={1} mb={2}>
+              <Typography variant="body2" color="text.secondary">
+                {frontendFilteredEscalations.length} escalation{frontendFilteredEscalations.length === 1 ? '' : 's'} · newest first
+              </Typography>
+              <TextField
+                size="small"
+                placeholder="Search ticket, staff, notes, or outcome"
+                value={escalationSearch}
+                onChange={(event) => setEscalationSearch(event.target.value)}
+                sx={{ width: { xs: '100%', sm: 360 } }}
+                inputProps={{ 'aria-label': 'Search escalation history' }}
+              />
+            </Box>
             {loading ? (
               <Box display="flex" justifyContent="center" p={3}>
                 <CircularProgress size={28} />
@@ -1597,7 +1632,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {frontendFilteredEscalations.map((e) => (
+                    {visibleEscalations.map((e) => (
                       <TableRow key={e.id} hover onClick={() => router.push(`/operations/tickets/${e.ticketId}`)} sx={{ cursor: 'pointer' }}>
                         <TableCell>{new Date(e.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell>
@@ -1620,6 +1655,11 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                   </TableBody>
                 </Table>
               </TableContainer>
+            )}
+            {escalationTotalPages > 1 && (
+              <Box display="flex" justifyContent="center" mt={2}>
+                <Pagination count={escalationTotalPages} page={escalationPage} onChange={(_, value) => setEscalationPage(value)} color="primary" size="small" showFirstButton showLastButton />
+              </Box>
             )}
           </CardContent>
         </Card>
@@ -2156,7 +2196,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
         </Box>
       )}
 
-      {totalPages > 1 && (
+      {!showEscalations && totalPages > 1 && (
         <Box display="flex" justifyContent="center" sx={{ mt: 1, mb: 2 }}>
           <Pagination count={totalPages} page={page} onChange={(_, value) => setPage(value)} color="primary" size="small" showFirstButton showLastButton />
         </Box>

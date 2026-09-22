@@ -1837,6 +1837,9 @@ export class TicketService implements OnModuleInit {
           'This ticket changed after you opened the requester window. Refresh the ticket, review the latest details, and try again.',
         );
       }
+      if (![TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(ticket.status)) {
+        throw new BadRequestException('Ticket record correction is only available for Assigned or In Progress tickets.');
+      }
       if (Number(ticket.requesterId) === Number(dto.requesterId)) {
         throw new BadRequestException('The selected person is already the ticket requester.');
       }
@@ -1955,6 +1958,9 @@ export class TicketService implements OnModuleInit {
           'This ticket changed after you opened the correction window. Refresh the ticket, review the latest details, and try again.',
         );
       }
+      if (![TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(ticket.status)) {
+        throw new BadRequestException('Ticket record correction is only available for Assigned or In Progress tickets.');
+      }
       if (!ticket.assignedToId) {
         throw new BadRequestException(
           'This ticket has no assigned staff member. Use Assign Ticket instead.',
@@ -1984,14 +1990,10 @@ export class TicketService implements OnModuleInit {
 
       previousAssigneeId = ticket.assignedToId;
       ticket.assignedToId = Number(dto.assignedToId);
-      if ([TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE].includes(ticket.status)) {
-        ticket.lastAssignedAt = new Date();
-      }
+      ticket.lastAssignedAt = new Date();
 
-      // Correcting an active assignment follows the same queue rule as a normal
-      // assignment: a free assignee starts the ticket, while a busy assignee
-      // receives it as queued work. Terminal tickets retain their status.
-      if ([TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(ticket.status)) {
+      // A free assignee starts the ticket; a busy assignee receives queued work.
+      if ([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(ticket.status)) {
         if (targetActiveCount === 0) {
           if (wasQueueWaiting) {
             // Save it as waiting first, then use the shared promotion helper so

@@ -65,7 +65,6 @@ const RATING_COLOR = (avg: number): 'error' | 'warning' | 'success' | 'info' => 
   if (avg >= 2.5) return 'warning';
   return 'error';
 };
-const ISSUE_CHART_COLORS = ['#1976d2', '#ed6c02', '#2e7d32', '#9c27b0', '#00838f', '#c62828', '#6d4c41'];
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i);
@@ -91,7 +90,7 @@ type ReportVisualSpec = {
   title: string;
   kind: 'chart' | 'table';
   values: Array<{ label: string; value: number }>;
-  headers?: string[];
+  headers: string[];
   rows?: string[][];
 };
 
@@ -303,7 +302,7 @@ export default function TicketReportsPage() {
       catMap[cat] = (catMap[cat] || 0) + Number(item.count);
     });
     const data = Object.keys(catMap).map(cat => ({ categoryName: cat, count: catMap[cat] }));
-    return data.filter(d => d.count > 0);
+    return data.filter(d => d.count > 0).sort((a, b) => b.count - a.count || a.categoryName.localeCompare(b.categoryName));
   }, [issueCountsData]);
 
   const drillDownData = React.useMemo(() => {
@@ -341,28 +340,20 @@ export default function TicketReportsPage() {
 
 
   const allIssuesAggregated = React.useMemo(() => {
-    if (!issueCountsData) return [];
-    const map: Record<string, number> = {};
+    const map = new Map<string, { categoryName: string; issueName: string; count: number }>();
     issueCountsData.forEach((item: any) => {
-      const name = `${item.categoryName || 'Unknown'} - ${item.issueName || 'Unknown'}`;
-      map[name] = (map[name] || 0) + Number(item.count);
+      const categoryName = item.categoryName || 'Unknown';
+      const issueName = item.issueName || 'Unknown';
+      const key = JSON.stringify([categoryName, issueName]);
+      const entry = map.get(key) || { categoryName, issueName, count: 0 };
+      entry.count += Number(item.count);
+      map.set(key, entry);
     });
-    return Object.keys(map)
-      .map((name, index) => {
-        const [categoryName, ...issueParts] = name.split(' - ');
-        return {
-          name,
-          shortLabel: String(index + 1),
-          categoryName,
-          issueName: issueParts.join(' - '),
-          count: map[name],
-        };
-      })
+    return Array.from(map.values())
+      .map((entry) => ({ ...entry, name: `${entry.categoryName} — ${entry.issueName}` }))
       .filter(d => d.count > 0)
-      .sort((a, b) => b.count - a.count);
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }, [issueCountsData]);
-
-  const allIssueCategories = Array.from(new Set(allIssuesAggregated.map((item) => item.categoryName)));
 
   const catBottomMargin = React.useMemo(() => {
     if (!categoryData.length) return 60;
@@ -392,7 +383,7 @@ export default function TicketReportsPage() {
 
   const barData =
     result?.avgRatingByTechnician.map((row) => ({
-      name: row.techName.split(' ').pop() ?? row.techName,
+      name: row.techName,
       avg: parseFloat(row.avg.toFixed(2)),
       count: row.count,
     })) ?? [];
@@ -400,7 +391,7 @@ export default function TicketReportsPage() {
   // Ticket count per technician (grouped view — 2nd bar chart)
   const countBarData =
     result?.avgRatingByTechnician.map((row) => ({
-      name: row.techName.split(' ').pop() ?? row.techName,
+      name: row.techName,
       tickets: row.count,
     })) ?? [];
 
@@ -413,7 +404,7 @@ export default function TicketReportsPage() {
     (result?.avgRatingByTechnician?.length ?? 0) > 0;
 
   const sectionTitle = tab === 0 ? 'Overview & Ratings'
-    : tab === 1 ? issuesSubTab === 0 ? 'Issues — Categories & Issues' : 'Issues — All Issues'
+    : tab === 1 ? issuesSubTab === 0 ? 'Categories' : 'Issues'
       : tab === 2 ? 'SLA Insights' : 'Performance';
   const chartSpecs = React.useMemo<ReportVisualSpec[]>(() => {
     if (!result) return [];
@@ -424,9 +415,6 @@ export default function TicketReportsPage() {
     const assigneeLabels = result.avgRatingByTechnician.map((row) => row.techName || `Assignee #${row.techId}`);
     const assigneeValues = result.avgRatingByTechnician.map((row, index) => ({ label: assigneeLabels[index], value: Number(row.avg || 0) }));
     const volumeAssigneeValues = result.avgRatingByTechnician.map((row, index) => ({ label: assigneeLabels[index], value: Number(row.count || 0) }));
-    const assigneeRows = result.avgRatingByTechnician.map((row, index) => [
-      assigneeLabels[index], String(row.count || 0), String(row.ratedCount || 0), Number(row.avg || 0).toFixed(2),
-    ]);
     const baseOverview: ReportVisualSpec[] = [
       {
         id: 'overview_summary_table', title: 'Overview summary', kind: 'table',
@@ -436,7 +424,7 @@ export default function TicketReportsPage() {
           { label: 'Rating fill rate (%)', value: result.totalTickets > 0 ? Math.round((result.totalWithRating / result.totalTickets) * 100) : 0 },
           ...(result.avgOverallRating === null ? [] : [{ label: 'Average rating (out of 5)', value: result.avgOverallRating }]),
         ],
-        headers: ['Measure', 'Value'],
+        headers: ['Overview Metric', 'Result'],
         rows: [
           ['Total tickets', String(result.totalTickets)],
           ['Tickets with ratings', String(result.totalWithRating)],
@@ -444,15 +432,14 @@ export default function TicketReportsPage() {
           ['Average rating (out of 5)', result.avgOverallRating === null ? 'N/A' : result.avgOverallRating.toFixed(2)],
         ],
       },
-      { id: 'overview_support_type_chart', title: 'Tickets by support type', kind: 'chart', values: pieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })) },
-      { id: 'overview_escalation_chart', title: 'Escalation outcome', kind: 'chart', values: escalationPieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })) },
-      { id: 'overview_rating_type_chart', title: 'Average rating by support type', kind: 'chart', values: supportTypeValues },
-      { id: 'overview_sla_chart', title: 'SLA performance', kind: 'chart', values: slaPieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })) },
+      { id: 'overview_support_type_chart', title: 'Tickets by support type', kind: 'chart', values: pieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })), headers: ['Support Type', 'Tickets'] },
+      { id: 'overview_escalation_chart', title: 'Escalation outcome', kind: 'chart', values: escalationPieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })), headers: ['Outcome', 'Escalations'] },
+      { id: 'overview_rating_type_chart', title: 'Average rating by support type', kind: 'chart', values: supportTypeValues, headers: ['Support Type', 'Average Rating (out of 5)'] },
     ];
     if (viewMode === 'detailed' && detailedResult) {
       return [
-        { id: 'overview_detailed_day_chart', title: 'Average rating by day', kind: 'chart', values: detailedResult.byDay.map((row) => ({ label: row.date, value: Number(row.avgRating || 0) })) },
-        { id: 'overview_detailed_week_chart', title: 'Average rating by week', kind: 'chart', values: detailedResult.byWeek.map((row) => ({ label: row.week, value: Number(row.avgRating || 0) })) },
+        { id: 'overview_detailed_day_chart', title: 'Average rating by day', kind: 'chart', values: detailedResult.byDay.map((row) => ({ label: row.date, value: Number(row.avgRating || 0) })), headers: ['Day', 'Average Rating (out of 5)'] },
+        { id: 'overview_detailed_week_chart', title: 'Average rating by week', kind: 'chart', values: detailedResult.byWeek.map((row) => ({ label: row.week, value: Number(row.avgRating || 0) })), headers: ['Week', 'Average Rating (out of 5)'] },
         {
           id: 'overview_ratings_table', title: 'Ratings per ticket', kind: 'table',
           values: detailedResult.byTicket.map((row) => ({ label: row.ticketNumber, value: Number(row.rating || 0) })),
@@ -464,9 +451,8 @@ export default function TicketReportsPage() {
     if (viewMode === 'detailed') return [];
     if (!isIndividualView) {
       baseOverview.push(
-        { id: 'overview_rating_assignee_chart', title: 'Average rating by assignee', kind: 'chart', values: assigneeValues },
-        { id: 'overview_volume_assignee_chart', title: 'Ticket volume by assignee', kind: 'chart', values: volumeAssigneeValues },
-        { id: 'overview_assignee_table', title: 'Assignee detail', kind: 'table', values: assigneeLabels.map((label, index) => ({ label, value: Number(result.avgRatingByTechnician[index].count || 0) })), headers: ['Assignee', 'Resolved Tickets', 'Rated Tickets', 'Average Rating'], rows: assigneeRows },
+        { id: 'overview_rating_assignee_chart', title: 'Average rating by assignee', kind: 'chart', values: assigneeValues, headers: ['Assignee', 'Average Rating (out of 5)'] },
+        { id: 'overview_volume_assignee_chart', title: 'Resolved tickets by assignee', kind: 'chart', values: volumeAssigneeValues, headers: ['Assignee', 'Resolved Tickets'] },
       );
     }
     return baseOverview;
@@ -475,18 +461,18 @@ export default function TicketReportsPage() {
   const printSpecs = React.useMemo<ReportVisualSpec[]>(() => {
     if (!result) return [];
     if (tab === 1 && issuesSubTab === 0) return [
-      { id: 'issues_categories_chart', title: 'Issue categories', kind: 'chart', values: categoryData.map((row) => ({ label: row.categoryName, value: Number(row.count || 0) })) },
-      ...(selectedCategoryName ? [{ id: 'issues_category_drilldown_chart', title: 'Issues in selected category', kind: 'chart', values: drillDownData.map((row: any) => ({ label: row.issueName, value: Number(row.open || 0) + Number(row.in_progress || 0) + Number(row.resolved || 0) + Number(row.closed || 0) + Number(row.freeze_pause || 0) })) }] : []),
+      { id: 'issues_categories_chart', title: 'Tickets by category', kind: 'chart', values: categoryData.map((row) => ({ label: row.categoryName, value: Number(row.count || 0) })), headers: ['Category', 'Tickets with Issues'] },
+      ...(selectedCategoryName ? [{ id: 'issues_category_drilldown_chart', title: `Issues in ${selectedCategoryName}`, kind: 'chart', values: drillDownData.map((row: any) => ({ label: row.issueName, value: Number(row.open || 0) + Number(row.in_progress || 0) + Number(row.resolved || 0) + Number(row.closed || 0) + Number(row.freeze_pause || 0) })), headers: ['Issue', 'Tickets'] }] : []),
     ] as ReportVisualSpec[];
-    if (tab === 1) return [{ id: 'issues_all_chart', title: 'All issue counts', kind: 'chart', values: allIssuesAggregated.map((row) => ({ label: row.name, value: Number(row.count || 0) })) }] as ReportVisualSpec[];
+    if (tab === 1) return [{ id: 'issues_all_chart', title: 'Tickets by issue', kind: 'chart', values: allIssuesAggregated.map((row) => ({ label: row.name, value: Number(row.count || 0) })), headers: ['Category', 'Issue', 'Tickets'], rows: allIssuesAggregated.map((row) => [row.categoryName, row.issueName, String(row.count)]) }] as ReportVisualSpec[];
     if (tab === 2) return [
-      { id: 'sla_insights_chart', title: 'Configured versus actual SLA', kind: 'chart', values: slaInsights.flatMap((row: any) => [{ label: `${row.issueName || 'Unknown issue'} — configured SLA hours`, value: Number(row.configuredSlaHours || 0) }, { label: `${row.issueName || 'Unknown issue'} — average resolution hours`, value: Number(row.avgResolutionHours || 0) }]) },
+      { id: 'sla_insights_chart', title: 'Configured versus actual SLA', kind: 'chart', values: slaInsights.flatMap((row: any) => [{ label: `${row.issueName || 'Unknown issue'} — configured SLA hours`, value: Number(row.configuredSlaHours || 0) }, { label: `${row.issueName || 'Unknown issue'} — average resolution hours`, value: Number(row.avgResolutionHours || 0) }]), headers: ['Issue and Metric', 'Hours'] },
       { id: 'sla_insights_table', title: 'SLA insight details', kind: 'table', values: slaInsights.map((row: any) => ({ label: row.issueName || 'Unknown issue', value: Number(row.avgResolutionHours || 0) })), headers: ['Category', 'Issue', 'Resolved Tickets', 'Configured SLA', 'Avg Actual Resolution', 'Status', 'Interpretation'], rows: slaInsights.map((row: any) => [row.categoryName || 'Unknown', row.issueName, String(row.resolvedTicketsCount || 0), row.configuredSlaHours > 0 ? `${Number(row.configuredSlaHours).toFixed(1)}h` : 'None', row.avgResolutionHours ? `${Number(row.avgResolutionHours).toFixed(1)}h` : '—', row.configuredSlaHours > 0 ? (row.isFailingSla ? 'Failing' : 'Healthy') : 'Unmonitored', row.configuredSlaHours <= 0 ? '—' : row.isFailingSla ? 'Consider extending SLA' : row.avgResolutionHours < row.configuredSlaHours * 0.5 ? 'SLA is very generous, consider tightening' : 'SLA is balanced']) },
     ] as ReportVisualSpec[];
     if (tab === 3) return [
-      { id: 'performance_sla_chart', title: 'SLA performance', kind: 'chart', values: slaPieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })) },
-      { id: 'performance_sla_category_table', title: 'SLA by category', kind: 'table', values: result.slaByType.map((row) => ({ label: TYPE_LABELS[row.type] ?? row.type, value: Number(row.met || 0) })), headers: ['Category', 'Met', 'Missed', 'Avg Time (hrs)'], rows: result.slaByType.map((row) => [TYPE_LABELS[row.type] ?? row.type, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
-      { id: 'performance_sla_assignee_table', title: 'SLA by assignee', kind: 'table', values: result.slaByTechnician.map((row) => ({ label: row.techName || `Assignee #${row.techId}`, value: Number(row.met || 0) })), headers: ['Assignee', 'Met', 'Missed', 'Avg Time (hrs)'], rows: result.slaByTechnician.map((row) => [row.techName || `Assignee #${row.techId}`, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
+      { id: 'performance_sla_chart', title: 'SLA performance', kind: 'chart', values: slaPieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })), headers: ['SLA Outcome', 'Resolved Tickets'] },
+      { id: 'performance_sla_category_table', title: 'SLA by support type', kind: 'table', values: result.slaByType.flatMap((row) => [{ label: `${TYPE_LABELS[row.type] ?? row.type} met`, value: Number(row.met || 0) }, { label: `${TYPE_LABELS[row.type] ?? row.type} missed`, value: Number(row.missed || 0) }]), headers: ['Support Type', 'Met', 'Missed', 'Avg Time (hrs)'], rows: result.slaByType.map((row) => [TYPE_LABELS[row.type] ?? row.type, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
+      { id: 'performance_sla_assignee_table', title: 'SLA by assignee', kind: 'table', values: result.slaByTechnician.flatMap((row) => [{ label: `${row.techName || `Assignee #${row.techId}`} met`, value: Number(row.met || 0) }, { label: `${row.techName || `Assignee #${row.techId}`} missed`, value: Number(row.missed || 0) }]), headers: ['Assignee', 'Met', 'Missed', 'Avg Time (hrs)'], rows: result.slaByTechnician.map((row) => [row.techName || `Assignee #${row.techId}`, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
       { id: 'performance_assignee_table', title: 'Assignee performance detail', kind: 'table', values: result.avgRatingByTechnician.map((row) => ({ label: row.techName || `Assignee #${row.techId}`, value: Number(row.avg || 0) })), headers: ['Assignee', 'Resolved Tickets', 'Rated Tickets', 'Average Rating'], rows: result.avgRatingByTechnician.map((row) => [row.techName || `Assignee #${row.techId}`, String(row.count), String(row.ratedCount || 0), Number(row.avg || 0).toFixed(2)]) },
     ];
     return chartSpecs;
@@ -508,7 +494,9 @@ export default function TicketReportsPage() {
     const explanationSpecs = printSpecs.map(({ id, title, values }) => {
       // Keep actual staff names in the printed chart/table, but never send them to AI.
       const safeValues = values.map((item, index) => ({
-        label: assigneeVisualIds.has(id) ? `Assignee ${index + 1}` : item.label,
+        label: id === 'performance_sla_assignee_table'
+          ? `Assignee ${Math.floor(index / 2) + 1} ${index % 2 === 0 ? 'met' : 'missed'}`
+          : assigneeVisualIds.has(id) ? `Assignee ${index + 1}` : item.label,
         value: item.value,
       }));
       const rankedValues = safeValues.length > 30 ? [...safeValues].sort((a, b) => b.value - a.value) : safeValues;
@@ -518,14 +506,74 @@ export default function TicketReportsPage() {
       return { id, title, totalValues: values.length, values: sampledValues };
     });
     const localExplanation = (chart: typeof explanationSpecs[number]) => {
-      if (chart.values.length === 0) return `${chart.title} has no recorded values for the selected period. There is no comparison to make in this section. A broader period may provide data for review.`;
+      const number = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      const byLabel = (label: string) => chart.values.find((item) => item.label === label)?.value ?? 0;
+      if (chart.values.length === 0) {
+        const subject = chart.id.startsWith('issues_') ? 'tickets with configured issues' : chart.id.includes('rating') ? 'requester ratings' : 'tickets';
+        return `No ${subject} were recorded for this part of the selected period. There are therefore no results to compare here. A broader period or different filter may show activity.`;
+      }
       if (chart.id === 'overview_summary_table') {
-        return `The overview records ${chart.values.map((item) => `${item.label}: ${item.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`).join('; ')}. Counts describe ticket and feedback volume; the fill rate and average rating describe different measures. Read these values together without treating their magnitudes as directly comparable.`;
+        const rating = chart.values.find((item) => item.label === 'Average rating (out of 5)');
+        return `During the selected period, ${number(byLabel('Total tickets'))} tickets were recorded and ${number(byLabel('Tickets with ratings'))} received a requester rating. That is a ${number(byLabel('Rating fill rate (%)'))}% rating response rate. ${byLabel('Tickets with ratings') > 0 && rating ? `The average rating was ${number(rating.value)} out of 5.` : 'No average rating is available because no tickets were rated.'}`;
+      }
+      if (chart.id === 'overview_escalation_chart') {
+        const accepted = byLabel('Accepted');
+        const returned = byLabel('Returned');
+        const pending = byLabel('Pending/Other');
+        return `During the selected period, ${number(accepted + returned + pending)} ticket escalations were recorded. ${number(accepted)} were accepted, ${number(returned)} returned, and ${number(pending)} had a pending or other outcome. These counts do not establish the reasons behind the outcomes.`;
+      }
+      if (chart.id === 'performance_sla_chart' || chart.id === 'overview_sla_chart') {
+        const met = byLabel('Met SLA');
+        const missed = byLabel('Missed SLA');
+        return `Of the ${number(met + missed)} resolved tickets with an SLA outcome, ${number(met)} were classified as met and ${number(missed)} as missed. The support-type and assignee results show where these outcomes occurred. The counts alone do not establish why a deadline was missed.`;
       }
       const highest = chart.values.reduce((best, current) => current.value > best.value ? current : best);
       const lowest = chart.values.reduce((best, current) => current.value < best.value ? current : best);
-      const sampleNote = chart.totalValues > chart.values.length ? ` These are the extremes selected from all ${chart.totalValues} printed measures.` : '';
-      return `${chart.title} contains ${chart.totalValues} recorded measures for the selected period. The highest supplied value is ${highest.label} (${highest.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}), and the lowest is ${lowest.label} (${lowest.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}).${sampleNote} The figures show a comparison, not a cause or recommendation.`;
+      if (chart.id.startsWith('issues_')) {
+        const subject = chart.id === 'issues_categories_chart' ? 'categories' : 'issues';
+        const total = chart.values.reduce((sum, item) => sum + item.value, 0);
+        const opening = chart.totalValues > chart.values.length
+          ? `Tickets with configured issues were counted across ${chart.totalValues} ${subject}.`
+          : `${number(total)} tickets with configured issues were counted across ${chart.totalValues} ${subject}.`;
+        return `${opening} ${highest.label} accounted for ${number(highest.value)} tickets, while ${lowest.label} accounted for ${number(lowest.value)}. Tickets without an issue and duplicates are excluded from these counts.`;
+      }
+      if (chart.id === 'performance_sla_category_table' || chart.id === 'performance_sla_assignee_table') {
+        const met = chart.values.filter((item) => item.label.endsWith(' met'));
+        const missed = chart.values.filter((item) => item.label.endsWith(' missed'));
+        const group = chart.id === 'performance_sla_category_table' ? 'support type' : 'assignee';
+        const topMet = met.reduce((best, current) => current.value > best.value ? current : best, met[0]);
+        const opening = chart.totalValues > chart.values.length
+          ? `SLA outcomes were reported across ${Math.ceil(chart.totalValues / 2)} ${group}s.`
+          : `Across the reported ${group}s, ${number(met.reduce((sum, item) => sum + item.value, 0))} resolved tickets met their SLA classification and ${number(missed.reduce((sum, item) => sum + item.value, 0))} missed it.`;
+        return `${opening} ${topMet?.label.replace(/ met$/, '') || 'No group'} had the most met outcomes among the reported comparisons at ${number(topMet?.value || 0)}. Compare each group's met and missed counts alongside its average resolution time before drawing conclusions.`;
+      }
+      if (chart.id === 'sla_insights_chart') {
+        const configured = chart.values.filter((item) => item.label.endsWith('configured SLA hours'));
+        const actual = chart.values.filter((item) => item.label.endsWith('average resolution hours'));
+        const topConfigured = configured.reduce((best, current) => current.value > best.value ? current : best, configured[0]);
+        const topActual = actual.reduce((best, current) => current.value > best.value ? current : best, actual[0]);
+        return `Configured SLA targets and actual average resolution times are compared in hours for the listed issues. ${topConfigured?.label.replace(/ — configured SLA hours$/, '') || 'No issue'} had the longest target at ${number(topConfigured?.value || 0)} hours, while ${topActual?.label.replace(/ — average resolution hours$/, '') || 'no issue'} had the longest actual average at ${number(topActual?.value || 0)} hours. Compare the target and actual time for the same issue before considering an adjustment.`;
+      }
+      const subjects: Record<string, string> = {
+        overview_support_type_chart: 'tickets were distributed among support types',
+        overview_rating_type_chart: 'requester ratings were averaged by support type',
+        overview_rating_assignee_chart: 'requester ratings were averaged by assignee',
+        overview_volume_assignee_chart: 'resolved tickets were distributed among assignees',
+        overview_detailed_day_chart: 'requester ratings were averaged by day',
+        overview_detailed_week_chart: 'requester ratings were averaged by week',
+        overview_ratings_table: 'rated tickets were recorded individually',
+        sla_insights_chart: 'configured SLA targets and actual resolution times were compared in hours',
+        sla_insights_table: 'actual resolution times were averaged for each issue',
+        performance_sla_category_table: 'SLA outcomes were grouped by support type',
+        performance_sla_assignee_table: 'SLA outcomes were grouped by assignee',
+        performance_assignee_table: 'resolved ticket ratings were grouped by assignee',
+      };
+      const unit = chart.id.includes('rating') || chart.id === 'performance_assignee_table' || chart.id.startsWith('overview_detailed_') ? ' out of 5'
+        : chart.id.startsWith('sla_insights_') ? ' hours' : ' tickets';
+      const contrast = highest.label === lowest.label
+        ? `${highest.label} recorded ${number(highest.value)}${unit}.`
+        : `${highest.label} had the highest result at ${number(highest.value)}${unit}, while ${lowest.label} had the lowest at ${number(lowest.value)}${unit}.`;
+      return `During the selected period, ${subjects[chart.id] || 'ticket activity was recorded'}. ${contrast} The difference describes recorded activity and does not establish its cause.`;
     };
     let explanationResponse: { source: 'cloudflare' | 'fallback'; explanations: Record<string, string> } = { source: 'fallback', explanations: {} };
     try {
@@ -541,17 +589,17 @@ export default function TicketReportsPage() {
     const style = doc.createElement('style');
     style.textContent = `
       @page { size: A4 ${tab === 1 || tab === 2 ? 'landscape' : 'portrait'}; margin: 13mm; }
-      body { font-family: Arial, sans-serif; color: #222; font-size: 12px; }
+      body { font-family: Arial, sans-serif; color: #222; font-size: 13px; }
       h1 { font-size: 22px; margin: 0 0 5px; } h2 { font-size: 16px; margin: 20px 0 6px; }
       .meta { color: #555; border-bottom: 2px solid #1976d2; padding-bottom: 12px; }
-      .explanation { background: #f2f7fc; padding: 9px 11px; border-left: 3px solid #1976d2; line-height: 1.45; }
+      .explanation { background: #f2f7fc; padding: 9px 11px; border-left: 3px solid #1976d2; font-size: 13px; line-height: 1.5; }
       .print-chart { border: 1px solid #d7dee8; padding: 8px; margin-top: 8px; break-inside: avoid; page-break-inside: avoid; }
       .bar-line { display: flex; align-items: center; gap: 7px; margin: 5px 0; }
       .bar-label { width: 170px; overflow-wrap: anywhere; }
       .bar-track { flex: 1; height: 10px; background: #e7edf4; border-radius: 4px; overflow: hidden; }
       .bar-fill { display: block; height: 100%; background: #1976d2; }
       .bar-value { width: 70px; text-align: right; }
-      table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
       th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; }
       th { background: #edf2f7; } thead { display: table-header-group; }
       tr, .explanation { break-inside: avoid; page-break-inside: avoid; }
@@ -569,6 +617,7 @@ export default function TicketReportsPage() {
     const assignee = technicians.find((person) => person.id === technicianId);
     const assigneeLabel = assignee ? formatPersonName(assignee, `Assignee #${assignee.id}`) : canManageReports ? 'All assignees' : 'My tickets';
     add('div', `${periodLabel} ${year} • ${ticketType ? TYPE_LABELS[ticketType] ?? ticketType : 'All support types'} • ${assigneeLabel} • Generated ${new Date().toLocaleString()}`, doc.body).className = 'meta';
+    if (tab === 1) add('p', 'These counts include tickets with configured issues and exclude duplicate tickets. Category totals are the sum of their listed issues.');
     const addBarChart = (values: Array<{ label: string; value: number }>, parent: HTMLElement) => {
       const maxValue = Math.max(1, ...values.map((row) => Number(row.value) || 0));
       const chart = doc.createElement('div');
@@ -611,7 +660,7 @@ export default function TicketReportsPage() {
       const table = doc.createElement('table');
       const thead = doc.createElement('thead');
       const heading = doc.createElement('tr');
-      for (const label of chart.headers ?? ['Measure', 'Value']) add('th', label, heading);
+      for (const label of chart.headers) add('th', label, heading);
       thead.appendChild(heading);
       table.appendChild(thead);
       const tbody = doc.createElement('tbody');
@@ -1114,64 +1163,6 @@ export default function TicketReportsPage() {
                         </Card>
                       </Grid>
 
-                      {/* Pie 3 — SLA */}
-                      {slaPieData.length > 0 && (
-                        <Grid item xs={12} md={4}>
-                          <Card>
-                            <CardContent>
-                              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                                SLA Performance
-                              </Typography>
-                              <ResponsiveContainer width="100%" height={320}>
-                                <PieChart>
-                                  <Pie
-                                    data={slaPieData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={40}
-                                    outerRadius={80}
-                                    dataKey="value"
-                                    labelLine={false}
-                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, value }) => {
-                                      const RADIAN = Math.PI / 180;
-                                      const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                                      const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                                      const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                                      return (
-                                        <text
-                                          x={x}
-                                          y={y}
-                                          fill="white"
-                                          textAnchor="middle"
-                                          dominantBaseline="central"
-                                          fontSize={12}
-                                        >
-                                          {value}
-                                        </text>
-                                      );
-                                    }}
-                                  >
-                                    {slaPieData.map((entry, index) => (
-                                      <Cell
-                                        key={`cell-${index}`}
-                                        fill={
-                                          entry.name === 'Met SLA'
-                                            ? '#2e7d32'
-                                            : entry.name === 'Missed SLA'
-                                              ? '#d32f2f'
-                                              : '#757575'
-                                        }
-                                      />
-                                    ))}
-                                  </Pie>
-                                  <Tooltip />
-                                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                                </PieChart>
-                              </ResponsiveContainer>
-                            </CardContent>
-                          </Card>
-                        </Grid>
-                      )}
                     </>
                   )}
 
@@ -1241,7 +1232,7 @@ export default function TicketReportsPage() {
                                   data={barData}
                                   margin={{ top: 4, right: 8, left: -20, bottom: 4 }}
                                 >
-                                  <XAxis dataKey="issueName" tick={{ fontSize: 11 }} />
+                                  <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-35} textAnchor="end" height={80} interval={0} />
                                   <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
                                   <Tooltip formatter={(v: number) => v.toFixed(2)} />
                                   <Legend wrapperStyle={{ paddingTop: '20px' }} />
@@ -1263,7 +1254,7 @@ export default function TicketReportsPage() {
                         <Card>
                           <CardContent>
                             <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                              Ticket Volume by Assignee
+                              Resolved Tickets by Assignee
                             </Typography>
                             {countBarData.length === 0 ? (
                               <Typography variant="body2" color="text.secondary">
@@ -1275,7 +1266,7 @@ export default function TicketReportsPage() {
                                   data={countBarData}
                                   margin={{ top: 4, right: 8, left: -20, bottom: 4 }}
                                 >
-                                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                                  <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-35} textAnchor="end" height={80} interval={0} />
                                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                                   <Tooltip />
                                   <Legend wrapperStyle={{ paddingTop: '20px' }} />
@@ -1324,40 +1315,6 @@ export default function TicketReportsPage() {
                         </Card>
                       </Grid>
 
-                      {/* Technician detail table (grouped view reference) */}
-                      {result!.avgRatingByTechnician.length > 0 && (
-                        <Grid item xs={12}>
-                          <Card>
-                            <CardContent>
-                              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                                Assignee Detail
-                              </Typography>
-                              <Table size="small">
-                                <TableHead>
-                                  <TableRow>
-                                    <TableCell>Assignee</TableCell>
-                                    <TableCell align="right">Resolved Tickets</TableCell>
-                                    <TableCell align="right">Rated Tickets</TableCell>
-                                    <TableCell>Avg Rating</TableCell>
-                                  </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                  {result!.avgRatingByTechnician.map((row) => (
-                                    <TableRow key={row.techId}>
-                                      <TableCell>{row.techName}</TableCell>
-                                      <TableCell align="right">{row.count}</TableCell>
-                                      <TableCell align="right">{row.ratedCount ?? 0}</TableCell>
-                                      <TableCell>
-                                        <RatingBar avg={row.avg} />
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            </CardContent>
-                          </Card>
-                        </Grid>
-                      )}
                     </>
                   )}
 
@@ -1800,11 +1757,11 @@ export default function TicketReportsPage() {
               <Grid item xs={12}>
                 <Card>
                   <CardContent>
-                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>SLA by Category</Typography>
+                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>SLA by Support Type</Typography>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Category</TableCell>
+                          <TableCell>Support Type</TableCell>
                           <TableCell align="right">Met</TableCell>
                           <TableCell align="right">Missed</TableCell>
                           <TableCell align="right">Avg Time (hrs)</TableCell>
@@ -1894,8 +1851,8 @@ export default function TicketReportsPage() {
         <Box sx={{ mt: 2 }}>
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
             <Tabs value={issuesSubTab} onChange={(_, v) => setIssuesSubTab(v)}>
-              <Tab label="Categories & Issues" />
-              <Tab label="All Issues" />
+              <Tab label="Categories" />
+              <Tab label="Issues" />
             </Tabs>
           </Box>
 
@@ -1905,7 +1862,10 @@ export default function TicketReportsPage() {
                 <Card>
                   <CardContent>
                     <Typography variant="h6" fontWeight={600} gutterBottom>
-                      Issue Categories Overview
+                      Tickets by Category
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" mb={2}>
+                      Each category total is the sum of tickets with its configured issues. Select a bar to inspect that category.
                     </Typography>
                     {categoryData.length === 0 ? (
                       <Box display="flex" justifyContent="center" alignItems="center" minHeight={300}>
@@ -2011,37 +1971,34 @@ export default function TicketReportsPage() {
               <Card>
                 <CardContent>
                   <Typography variant="h6" fontWeight={600} gutterBottom>
-                    All Issues
+                    Tickets by Issue
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" mb={2}>
+                    Every configured issue is listed with its category and ticket count. Tickets without an issue and duplicate tickets are excluded.
                   </Typography>
                   {allIssuesAggregated.length === 0 ? (
                     <Box display="flex" justifyContent="center" alignItems="center" minHeight={300}>
                       <Typography color="text.secondary">No specific issues reported in this timeframe.</Typography>
                     </Box>
                   ) : (
-                    <ResponsiveContainer width="100%" height={360}>
-                      <BarChart
-                        data={allIssuesAggregated}
-                        margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
-                      >
-                        <XAxis dataKey="shortLabel" tick={{ fontSize: 11 }} label={{ value: 'Issue', position: 'insideBottom', offset: -15 }} />
-                        <YAxis allowDecimals={false} tickCount={5} />
-                        <Tooltip
-                          cursor={{ fill: 'rgba(0,0,0,0.05)' }}
-                          formatter={(value) => [value, 'Occurrences']}
-                          labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''}
-                        />
-                        <Legend verticalAlign="top" />
-                        {allIssueCategories.map((category, index) => (
-                          <Bar
-                            key={category}
-                            dataKey={(entry: any) => entry.categoryName === category ? entry.count : 0}
-                            name={category}
-                            fill={ISSUE_CHART_COLORS[index % ISSUE_CHART_COLORS.length]}
-                            radius={[4, 4, 0, 0]}
-                          />
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Category</TableCell>
+                          <TableCell>Issue</TableCell>
+                          <TableCell align="right">Tickets</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {allIssuesAggregated.map((row) => (
+                          <TableRow key={JSON.stringify([row.categoryName, row.issueName])} hover>
+                            <TableCell>{row.categoryName}</TableCell>
+                            <TableCell>{row.issueName}</TableCell>
+                            <TableCell align="right">{row.count}</TableCell>
+                          </TableRow>
                         ))}
-                      </BarChart>
-                    </ResponsiveContainer>
+                      </TableBody>
+                    </Table>
                   )}
                 </CardContent>
               </Card>

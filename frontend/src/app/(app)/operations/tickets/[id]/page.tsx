@@ -360,7 +360,8 @@ export default function TicketDetailPage() {
   const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isAllTickets;
   const canViewInternalNotes = ticket?.canViewInternalNotes === true;
   const canOverrideResolutionTime = !!myCap?.isTicketResolutionTimeOverride;
-  const canCorrectTicketRecord = !!myCap?.isTicketRequesterCorrection;
+  const canCorrectTicketRecord = !!myCap?.isTicketRequesterCorrection &&
+    !!ticket && ['assigned', 'in_progress'].includes(ticket.status);
   const canCorrectAssignee =
     canCorrectTicketRecord &&
     !!ticket &&
