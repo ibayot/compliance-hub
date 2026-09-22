@@ -292,11 +292,19 @@ export class KnowledgeBaseService {
         value: Number(item.value),
       })),
     }));
-    const fallback = Object.fromEntries(safeCharts.map((chart) => [chart.id,
-      chart.values.length
-        ? `${chart.title}: ${chart.values.length} reported measures are shown for the selected period. Compare the values in the chart or table; this summary does not infer a cause.`
-        : `${chart.title}: no data is available for the selected period.`,
-    ]));
+    const fallback = Object.fromEntries(safeCharts.map((chart) => {
+      if (chart.values.length === 0) {
+        return [chart.id, `${chart.title} has no recorded values for the selected period. There is therefore no comparison to make in this section. A later report period or a broader filter may provide data for review.`];
+      }
+      const highest = chart.values.reduce((best, current) => current.value > best.value ? current : best, chart.values[0]);
+      const lowest = chart.values.reduce((best, current) => current.value < best.value ? current : best, chart.values[0]);
+      const highestText = `${highest.label} (${highest.value.toLocaleString(undefined, { maximumFractionDigits: 2 })})`;
+      const lowestText = `${lowest.label} (${lowest.value.toLocaleString(undefined, { maximumFractionDigits: 2 })})`;
+      const comparison = highest.label === lowest.label
+        ? `The reported value is ${highestText}.`
+        : `The highest reported value is ${highestText}, while the lowest is ${lowestText}.`;
+      return [chart.id, `${chart.title} summarizes ${chart.values.length} recorded measure${chart.values.length === 1 ? '' : 's'} for the selected period. ${comparison} Use the accompanying values to compare the groups or measures directly; this descriptive summary does not establish a cause or recommendation.`];
+    }));
     if (!this.cloudflareAccountId || !this.cloudflareApiToken) {
       return { source: 'fallback', explanations: fallback };
     }
@@ -304,7 +312,7 @@ export class KnowledgeBaseService {
       const prompt = [
         'Explain each IT support report chart in plain language for nontechnical staff.',
         'Use only the numeric aggregates provided. Do not infer causes, diagnoses, identities, or recommendations unsupported by the figures.',
-        'For each chart, give one or two concise sentences with the most important comparison and the meaning of the measure.',
+        'For each chart or table, write a substantive 3-5 sentence explanation. State what the measure represents, cite the most important actual labels and values, explain the highest/lowest or other meaningful comparison, and say how the reader should interpret the figures. Do not use placeholders such as Assignee 1, Category 1, Issue 1, or generic wording that ignores the supplied values.',
         'Return only valid JSON: {"explanations":{"chart_id":"explanation"}}. Include every chart id exactly once.',
         await this.stripSensitiveData(JSON.stringify(safeCharts)),
       ].join('\n');
@@ -313,7 +321,7 @@ export class KnowledgeBaseService {
       for (const chart of safeCharts) {
         const value = parsed.explanations?.[chart.id];
         explanations[chart.id] = typeof value === 'string' && value.trim()
-          ? value.trim().slice(0, 600) : fallback[chart.id];
+          ? value.trim().slice(0, 1200) : fallback[chart.id];
       }
       return { source: 'cloudflare', explanations };
     } catch (error: any) {

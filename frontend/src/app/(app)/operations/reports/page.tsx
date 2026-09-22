@@ -421,7 +421,7 @@ export default function TicketReportsPage() {
       label: TYPE_LABELS[row.type] ?? row.type,
       value: Number(row.avg || 0),
     }));
-    const assigneeLabels = result.avgRatingByTechnician.map((_, index) => `Assignee ${index + 1}`);
+    const assigneeLabels = result.avgRatingByTechnician.map((row) => row.techName || `Assignee #${row.techId}`);
     const assigneeValues = result.avgRatingByTechnician.map((row, index) => ({ label: assigneeLabels[index], value: Number(row.avg || 0) }));
     const volumeAssigneeValues = result.avgRatingByTechnician.map((row, index) => ({ label: assigneeLabels[index], value: Number(row.count || 0) }));
     const assigneeRows = result.avgRatingByTechnician.map((row, index) => [
@@ -435,11 +435,11 @@ export default function TicketReportsPage() {
     ];
     if (viewMode === 'detailed' && detailedResult) {
       return [
-        { id: 'overview_detailed_day_chart', title: 'Average rating by day', kind: 'chart', values: detailedResult.byDay.map((row, index) => ({ label: `Day ${index + 1}`, value: Number(row.avgRating || 0) })) },
-        { id: 'overview_detailed_week_chart', title: 'Average rating by week', kind: 'chart', values: detailedResult.byWeek.map((row, index) => ({ label: `Week ${index + 1}`, value: Number(row.avgRating || 0) })) },
+        { id: 'overview_detailed_day_chart', title: 'Average rating by day', kind: 'chart', values: detailedResult.byDay.map((row) => ({ label: row.date, value: Number(row.avgRating || 0) })) },
+        { id: 'overview_detailed_week_chart', title: 'Average rating by week', kind: 'chart', values: detailedResult.byWeek.map((row) => ({ label: row.week, value: Number(row.avgRating || 0) })) },
         {
           id: 'overview_ratings_table', title: 'Ratings per ticket', kind: 'table',
-          values: detailedResult.byTicket.map((_, index) => ({ label: `Ticket ${index + 1}`, value: Number(detailedResult.byTicket[index].rating || 0) })),
+          values: detailedResult.byTicket.map((row) => ({ label: row.ticketNumber, value: Number(row.rating || 0) })),
           headers: ['Ticket', 'Subject', 'Submitted At', 'Rating', 'Comment'],
           rows: detailedResult.byTicket.map((row) => [row.ticketNumber, row.subject, new Date(row.submittedAt).toLocaleDateString(), String(row.rating), row.comment || '—']),
         },
@@ -459,19 +459,19 @@ export default function TicketReportsPage() {
   const printSpecs = React.useMemo<ReportVisualSpec[]>(() => {
     if (!result) return [];
     if (tab === 1 && issuesSubTab === 0) return [
-      { id: 'issues_categories_chart', title: 'Issue categories', kind: 'chart', values: categoryData.map((row, index) => ({ label: `Category ${index + 1}`, value: Number(row.count || 0) })) },
-      ...(selectedCategoryName ? [{ id: 'issues_category_drilldown_chart', title: 'Issues in selected category', kind: 'chart', values: drillDownData.map((row: any, index: number) => ({ label: `Issue ${index + 1}`, value: Number(row.open || 0) + Number(row.in_progress || 0) + Number(row.resolved || 0) + Number(row.closed || 0) + Number(row.freeze_pause || 0) })) }] : []),
+      { id: 'issues_categories_chart', title: 'Issue categories', kind: 'chart', values: categoryData.map((row) => ({ label: row.categoryName, value: Number(row.count || 0) })) },
+      ...(selectedCategoryName ? [{ id: 'issues_category_drilldown_chart', title: 'Issues in selected category', kind: 'chart', values: drillDownData.map((row: any) => ({ label: row.issueName, value: Number(row.open || 0) + Number(row.in_progress || 0) + Number(row.resolved || 0) + Number(row.closed || 0) + Number(row.freeze_pause || 0) })) }] : []),
     ] as ReportVisualSpec[];
-    if (tab === 1) return [{ id: 'issues_all_chart', title: 'All issue counts', kind: 'chart', values: allIssuesAggregated.map((row, index) => ({ label: `Issue ${index + 1}`, value: Number(row.count || 0) })) }] as ReportVisualSpec[];
+    if (tab === 1) return [{ id: 'issues_all_chart', title: 'All issue counts', kind: 'chart', values: allIssuesAggregated.map((row) => ({ label: row.name, value: Number(row.count || 0) })) }] as ReportVisualSpec[];
     if (tab === 2) return [
-      { id: 'sla_insights_chart', title: 'Configured versus actual SLA', kind: 'chart', values: slaInsights.flatMap((row: any, index: number) => [{ label: `Issue ${index + 1} configured SLA hours`, value: Number(row.configuredSlaHours || 0) }, { label: `Issue ${index + 1} average resolution hours`, value: Number(row.avgResolutionHours || 0) }]) },
-      { id: 'sla_insights_table', title: 'SLA insight details', kind: 'table', values: slaInsights.map((_, index) => ({ label: `Issue ${index + 1}`, value: Number(slaInsights[index].avgResolutionHours || 0) })), headers: ['Category', 'Issue', 'Resolved Tickets', 'Configured SLA', 'Avg Actual Resolution', 'Status', 'Interpretation'], rows: slaInsights.map((row: any) => [row.categoryName || 'Unknown', row.issueName, String(row.resolvedTicketsCount || 0), row.configuredSlaHours > 0 ? `${Number(row.configuredSlaHours).toFixed(1)}h` : 'None', row.avgResolutionHours ? `${Number(row.avgResolutionHours).toFixed(1)}h` : '—', row.configuredSlaHours > 0 ? (row.isFailingSla ? 'Failing' : 'Healthy') : 'No SLA', row.isFailingSla ? 'Consider extending SLA' : 'SLA is balanced']) },
+      { id: 'sla_insights_chart', title: 'Configured versus actual SLA', kind: 'chart', values: slaInsights.flatMap((row: any) => [{ label: `${row.issueName || 'Unknown issue'} — configured SLA hours`, value: Number(row.configuredSlaHours || 0) }, { label: `${row.issueName || 'Unknown issue'} — average resolution hours`, value: Number(row.avgResolutionHours || 0) }]) },
+      { id: 'sla_insights_table', title: 'SLA insight details', kind: 'table', values: slaInsights.map((row: any) => ({ label: row.issueName || 'Unknown issue', value: Number(row.avgResolutionHours || 0) })), headers: ['Category', 'Issue', 'Resolved Tickets', 'Configured SLA', 'Avg Actual Resolution', 'Status', 'Interpretation'], rows: slaInsights.map((row: any) => [row.categoryName || 'Unknown', row.issueName, String(row.resolvedTicketsCount || 0), row.configuredSlaHours > 0 ? `${Number(row.configuredSlaHours).toFixed(1)}h` : 'None', row.avgResolutionHours ? `${Number(row.avgResolutionHours).toFixed(1)}h` : '—', row.configuredSlaHours > 0 ? (row.isFailingSla ? 'Failing' : 'Healthy') : 'No SLA', row.isFailingSla ? 'Consider extending SLA' : 'SLA is balanced']) },
     ] as ReportVisualSpec[];
     if (tab === 3) return [
       { id: 'performance_sla_chart', title: 'SLA performance', kind: 'chart', values: slaPieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })) },
       { id: 'performance_sla_category_table', title: 'SLA by category', kind: 'table', values: result.slaByType.map((row) => ({ label: TYPE_LABELS[row.type] ?? row.type, value: Number(row.met || 0) })), headers: ['Category', 'Met', 'Missed', 'Avg Time (hrs)'], rows: result.slaByType.map((row) => [TYPE_LABELS[row.type] ?? row.type, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
-      { id: 'performance_sla_assignee_table', title: 'SLA by assignee', kind: 'table', values: result.slaByTechnician.map((row, index) => ({ label: `Assignee ${index + 1}`, value: Number(row.met || 0) })), headers: ['Assignee', 'Met', 'Missed', 'Avg Time (hrs)'], rows: result.slaByTechnician.map((row, index) => [`Assignee ${index + 1}`, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
-      { id: 'performance_assignee_table', title: 'Assignee performance detail', kind: 'table', values: result.avgRatingByTechnician.map((row, index) => ({ label: `Assignee ${index + 1}`, value: Number(row.avg || 0) })), headers: ['Assignee', 'Resolved Tickets', 'Rated Tickets', 'Average Rating'], rows: result.avgRatingByTechnician.map((row, index) => [`Assignee ${index + 1}`, String(row.count), String(row.ratedCount || 0), Number(row.avg || 0).toFixed(2)]) },
+      { id: 'performance_sla_assignee_table', title: 'SLA by assignee', kind: 'table', values: result.slaByTechnician.map((row) => ({ label: row.techName || `Assignee #${row.techId}`, value: Number(row.met || 0) })), headers: ['Assignee', 'Met', 'Missed', 'Avg Time (hrs)'], rows: result.slaByTechnician.map((row) => [row.techName || `Assignee #${row.techId}`, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
+      { id: 'performance_assignee_table', title: 'Assignee performance detail', kind: 'table', values: result.avgRatingByTechnician.map((row) => ({ label: row.techName || `Assignee #${row.techId}`, value: Number(row.avg || 0) })), headers: ['Assignee', 'Resolved Tickets', 'Rated Tickets', 'Average Rating'], rows: result.avgRatingByTechnician.map((row) => [row.techName || `Assignee #${row.techId}`, String(row.count), String(row.ratedCount || 0), Number(row.avg || 0).toFixed(2)]) },
     ];
     return chartSpecs;
   }, [result, tab, issuesSubTab, categoryData, selectedCategoryName, drillDownData, allIssuesAggregated, slaInsights, slaPieData, chartSpecs]);
@@ -524,7 +524,8 @@ export default function TicketReportsPage() {
     };
     add('h1', `Ticket Reports — ${sectionTitle}`);
     const assignee = technicians.find((person) => person.id === technicianId);
-    add('div', `${periodLabel} ${year} • ${ticketType ? TYPE_LABELS[ticketType] ?? ticketType : 'All support types'} • ${assignee ? 'Selected assignee' : canManageReports ? 'All assignees' : 'My tickets'} • Generated ${new Date().toLocaleString()}`, doc.body).className = 'meta';
+    const assigneeLabel = assignee ? formatPersonName(assignee, `Assignee #${assignee.id}`) : canManageReports ? 'All assignees' : 'My tickets';
+    add('div', `${periodLabel} ${year} • ${ticketType ? TYPE_LABELS[ticketType] ?? ticketType : 'All support types'} • ${assigneeLabel} • Generated ${new Date().toLocaleString()}`, doc.body).className = 'meta';
     const addBarChart = (values: Array<{ label: string; value: number }>, parent: HTMLElement) => {
       const maxValue = Math.max(1, ...values.map((row) => Number(row.value) || 0));
       const chart = doc.createElement('div');
