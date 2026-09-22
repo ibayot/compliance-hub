@@ -230,39 +230,59 @@ export class KnowledgeBaseService {
   /** Explain report aggregates without sending ticket text or assignee identities to AI. */
   async explainTicketReportCharts(charts: Array<{ id: string; title: string; values: Array<{ label: string; value: number }> }>) {
     const allowedIds = new Set([
-      'volume', 'ratings_type', 'ratings_assignee', 'volume_assignee', 'escalations',
-      'issue_categories', 'issue_detail', 'all_issues', 'sla_comparison',
-      'sla_outcomes', 'sla_type', 'sla_assignee',
+      'overview_support_type_chart', 'overview_escalation_chart', 'overview_rating_type_chart',
+      'overview_sla_chart', 'overview_rating_assignee_chart', 'overview_volume_assignee_chart',
+      'overview_assignee_table', 'overview_detailed_day_chart', 'overview_detailed_week_chart',
+      'overview_ratings_table', 'issues_categories_chart', 'issues_category_drilldown_chart',
+      'issues_all_chart', 'sla_insights_chart', 'sla_insights_table', 'performance_sla_chart',
+      'performance_sla_category_table', 'performance_sla_assignee_table',
+      'performance_assignee_table',
     ]);
     const safeLabel = (id: string, label: unknown): boolean => {
       if (typeof label !== 'string') return false;
-      if (id === 'volume') return ['Total tickets', 'Tickets with ratings', 'Average rating (out of 5)'].includes(label);
-      if (id === 'ratings_type' || id === 'sla_type') {
+      if (id === 'overview_support_type_chart' || id === 'overview_rating_type_chart' || id === 'performance_sla_category_table') {
         return /^(Desktop Support|IT Support|Pantawid ICT Support|Specialized Concerns)( met| missed)?$/.test(label);
       }
-      if (id === 'ratings_assignee' || id === 'volume_assignee' || id === 'sla_assignee') {
+      if (id === 'overview_rating_assignee_chart' || id === 'overview_volume_assignee_chart' || id === 'performance_sla_assignee_table') {
         return /^Assignee [1-9]\d*( met| missed)?$/.test(label);
       }
-      if (id === 'escalations') return ['Accepted', 'Returned', 'Pending or other'].includes(label);
-      if (id === 'issue_categories') return /^Category [1-9]\d*$/.test(label);
-      if (id === 'issue_detail' || id === 'all_issues') return /^Issue [1-9]\d*$/.test(label);
-      if (id === 'sla_comparison') return /^Issue [1-9]\d* (configured SLA hours|average resolution hours)$/.test(label);
-      if (id === 'sla_outcomes') return ['Met SLA', 'Missed SLA'].includes(label);
+      if (id === 'overview_escalation_chart') return ['Accepted', 'Returned', 'Pending or other'].includes(label);
+      if (id === 'overview_sla_chart' || id === 'performance_sla_chart') return ['Met SLA', 'Missed SLA'].includes(label);
+      if (id === 'overview_assignee_table' || id === 'performance_assignee_table') return /^Assignee [1-9]\d*$/.test(label);
+      if (id === 'overview_detailed_day_chart') return /^Day [1-9]\d*$/.test(label);
+      if (id === 'overview_detailed_week_chart') return /^Week [1-9]\d*$/.test(label);
+      if (id === 'overview_ratings_table') return /^Ticket [1-9]\d*$/.test(label);
+      if (id === 'issues_categories_chart') return /^Category [1-9]\d*$/.test(label);
+      if (id === 'issues_category_drilldown_chart' || id === 'issues_all_chart') return /^Issue [1-9]\d*$/.test(label);
+      if (id === 'sla_insights_chart') return /^Issue [1-9]\d* (configured SLA hours|average resolution hours)$/.test(label);
+      if (id === 'sla_insights_table') return /^Issue [1-9]\d*$/.test(label);
       return false;
     };
-    if (!Array.isArray(charts) || charts.length < 1 || charts.length > 6 || charts.some((chart) =>
+    if (!Array.isArray(charts) || charts.length < 1 || charts.length > 24 || new Set(charts.map((chart) => chart?.id)).size !== charts.length || charts.some((chart) =>
       !allowedIds.has(chart?.id) || !Array.isArray(chart.values) || chart.values.length > 30 ||
       chart.values.some((item) => !safeLabel(chart.id, item?.label) || !Number.isFinite(item?.value) || item.value < 0 || item.value > 1_000_000_000))) {
       throw new Error('Invalid report chart data.');
     }
     const titles: Record<string, string> = {
-      volume: 'Ticket volume and ratings', ratings_type: 'Ratings by support type',
-      ratings_assignee: 'Ratings by assignee', escalations: 'Escalation outcomes',
-      volume_assignee: 'Ticket volume by assignee',
-      issue_categories: 'Issue categories', issue_detail: 'Issues in selected category',
-      all_issues: 'All issue counts', sla_comparison: 'Configured versus actual SLA',
-      sla_outcomes: 'SLA outcomes', sla_type: 'SLA by support type',
-      sla_assignee: 'SLA by assignee',
+      overview_support_type_chart: 'Tickets by support type',
+      overview_escalation_chart: 'Escalation outcome',
+      overview_rating_type_chart: 'Average rating by support type',
+      overview_sla_chart: 'SLA performance',
+      overview_rating_assignee_chart: 'Average rating by assignee',
+      overview_volume_assignee_chart: 'Ticket volume by assignee',
+      overview_assignee_table: 'Assignee detail',
+      overview_detailed_day_chart: 'Average rating by day',
+      overview_detailed_week_chart: 'Average rating by week',
+      overview_ratings_table: 'Ratings per ticket',
+      issues_categories_chart: 'Issue categories',
+      issues_category_drilldown_chart: 'Issues in selected category',
+      issues_all_chart: 'All issue counts',
+      sla_insights_chart: 'Configured versus actual SLA',
+      sla_insights_table: 'SLA insight details',
+      performance_sla_chart: 'SLA performance',
+      performance_sla_category_table: 'SLA by category',
+      performance_sla_assignee_table: 'SLA by assignee',
+      performance_assignee_table: 'Assignee performance detail',
     };
     const safeCharts = charts.map((chart) => ({
       id: chart.id,

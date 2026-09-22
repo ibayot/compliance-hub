@@ -1966,9 +1966,64 @@ export class TicketService implements OnModuleInit {
         throw new BadRequestException('The selected person is already assigned to this ticket.');
       }
 
+      const activeStatuses = [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE];
+      const targetActiveCount = await this.ticketRepo.count({
+        where: activeStatuses.map((status) => ({
+          assignedToId: dto.assignedToId,
+          status,
+        })),
+      });
+      const wasQueueWaiting = Boolean(ticket.isSlaWaiting);
+      const wasSchedulePaused = Boolean(ticket.slaPausedAt && !ticket.isSlaWaiting);
+
       previousAssigneeId = ticket.assignedToId;
       ticket.assignedToId = Number(dto.assignedToId);
-      return this.ticketRepo.save(ticket);
+
+      // Correcting an active assignment follows the same queue rule as a normal
+      // assignment: a free assignee starts the ticket, while a busy assignee
+      // receives it as queued work. Terminal tickets retain their status.
+      if ([TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(ticket.status)) {
+        if (targetActiveCount === 0) {
+          if (wasQueueWaiting) {
+            // Save it as waiting first, then use the shared promotion helper so
+            // accumulated pause time and the SLA deadline are resumed correctly.
+            ticket.status = TicketStatus.ASSIGNED;
+            ticket.isSlaWaiting = true;
+            if (!ticket.slaPausedAt) ticket.slaPausedAt = new Date();
+          } else {
+            ticket.status = TicketStatus.IN_PROGRESS;
+            ticket.isSlaWaiting = false;
+            if (!wasSchedulePaused) ticket.slaPausedAt = null;
+          }
+        } else {
+          ticket.status = TicketStatus.ASSIGNED;
+          ticket.isSlaWaiting = true;
+          if (!ticket.slaPausedAt) ticket.slaPausedAt = new Date();
+        }
+      }
+
+      const corrected = await this.ticketRepo.save(ticket);
+      if (targetActiveCount === 0 && wasQueueWaiting) {
+        await this.unpauseNextWaitingTicketAndSetInProgress(
+          Number(dto.assignedToId),
+          'assignee_correction_queue_promoted',
+        );
+      }
+      if (previousAssigneeId && previousAssigneeId !== Number(dto.assignedToId)) {
+        const remainingActiveCount = await this.ticketRepo.count({
+          where: [
+            { assignedToId: previousAssigneeId, status: TicketStatus.ASSIGNED, isSlaWaiting: false },
+            { assignedToId: previousAssigneeId, status: TicketStatus.IN_PROGRESS },
+          ],
+        });
+        if (remainingActiveCount === 0) {
+          await this.unpauseNextWaitingTicketAndSetInProgress(
+            previousAssigneeId,
+            'queue_promoted_after_reassignment',
+          );
+        }
+      }
+      return corrected;
     });
 
     const previousAssignee = previousAssigneeId
