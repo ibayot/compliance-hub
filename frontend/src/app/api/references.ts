@@ -82,7 +82,11 @@ export interface CreateIssuanceDto {
   is_active?: boolean;
 }
 
-export type TicketType = 'desktop_support' | 'it_support' | 'pantawid_ict_support' | 'specialized_concerns';
+export type TicketType =
+  | 'desktop_support'
+  | 'it_support'
+  | 'pantawid_ict_support'
+  | 'specialized_concerns';
 export type TicketStatus =
   | 'open'
   | 'assigned'
@@ -177,11 +181,32 @@ export interface Ticket {
   issueTypeId?: string | null;
   issueType?: TicketIssueType | null;
   requesterId: number;
-  requester?: { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string };
+  requester?: {
+    id: number;
+    email: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    suffix?: string;
+  };
   createdById?: number | null;
-  createdBy?: { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string } | null;
+  createdBy?: {
+    id: number;
+    email: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    suffix?: string;
+  } | null;
   assignedToId?: number | null;
-  assignedTo?: { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string } | null;
+  assignedTo?: {
+    id: number;
+    email: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    suffix?: string;
+  } | null;
   canViewInternalNotes?: boolean;
   resolutionNotes?: string | null;
   resolvedAt?: string | null;
@@ -232,7 +257,15 @@ export interface TicketComment {
   createdAt: string;
   attachmentPath?: string | null;
   attachmentPaths?: string[] | null;
-  user?: { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string; role?: string };
+  user?: {
+    id: number;
+    email: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    suffix?: string;
+    role?: string;
+  };
 }
 
 export interface AttendanceAssignmentAlert {
@@ -362,7 +395,13 @@ export interface TicketReportsData {
   totalTickets: number;
   totalWithRating: number;
   avgOverallRating: number | null;
-  avgRatingByType: Array<{ type: string; avg: number; count: number; ratedCount?: number; resolvedCount?: number }>;
+  avgRatingByType: Array<{
+    type: string;
+    avg: number;
+    count: number;
+    ratedCount?: number;
+    resolvedCount?: number;
+  }>;
   avgRatingByTechnician: Array<{
     techId: number;
     techName: string;
@@ -384,7 +423,13 @@ export interface TicketReportResult {
   totalTickets: number;
   totalWithRating: number;
   avgOverallRating: number | null;
-  avgRatingByType: Array<{ type: string; avg: number; count: number; ratedCount?: number; resolvedCount?: number }>;
+  avgRatingByType: Array<{
+    type: string;
+    avg: number;
+    count: number;
+    ratedCount?: number;
+    resolvedCount?: number;
+  }>;
   avgRatingByTechnician: Array<{
     techId: number;
     techName: string;
@@ -411,8 +456,21 @@ export interface TicketReportResult {
     missed: number;
     avgResolutionTimeHours: number;
   };
-  slaByType: Array<{ type: string; met: number; missed: number; avgResolutionTimeHours: number; count: number }>;
-  slaByTechnician: Array<{ techId: number; techName: string; met: number; missed: number; avgResolutionTimeHours: number; count: number }>;
+  slaByType: Array<{
+    type: string;
+    met: number;
+    missed: number;
+    avgResolutionTimeHours: number;
+    count: number;
+  }>;
+  slaByTechnician: Array<{
+    techId: number;
+    techName: string;
+    met: number;
+    missed: number;
+    avgResolutionTimeHours: number;
+    count: number;
+  }>;
 }
 
 export interface RatingsReportResult {
@@ -448,8 +506,22 @@ export interface TicketEscalation {
   ticketId: string;
   escalatedById: number;
   escalatedToId: number;
-  escalatedBy?: { id: number; firstName?: string; middleName?: string; lastName?: string; suffix?: string; email: string };
-  escalatedTo?: { id: number; firstName?: string; middleName?: string; lastName?: string; suffix?: string; email: string };
+  escalatedBy?: {
+    id: number;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    suffix?: string;
+    email: string;
+  };
+  escalatedTo?: {
+    id: number;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    suffix?: string;
+    email: string;
+  };
   ticket?: Ticket;
   status: EscalationStatus;
   notes?: string | null;
@@ -523,7 +595,15 @@ export type AttendanceStatus = 'present' | 'absent' | 'half_day' | 'out_of_offic
 export interface TechAttendance {
   id: string;
   userId: number;
-  user?: { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string; role?: string };
+  user?: {
+    id: number;
+    email: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    suffix?: string;
+    role?: string;
+  };
   date: string;
   status: AttendanceStatus;
   notes?: string;
@@ -727,7 +807,9 @@ export const ticketsApi = {
     return response.data;
   },
 
-  getInternalNoteMentionCandidates: async (ticketId: string): Promise<InternalNoteMentionCandidate[]> => {
+  getInternalNoteMentionCandidates: async (
+    ticketId: string,
+  ): Promise<InternalNoteMentionCandidate[]> => {
     const response = await apiClient.get(`/tickets/${ticketId}/internal-note-mentions`);
     return response.data;
   },
@@ -759,7 +841,10 @@ export const ticketsApi = {
   assign: async (
     id: string,
     assignedToId: number,
-    expected?: Pick<AssignTicketDto, 'expectedUpdatedAt' | 'expectedAssignedToId' | 'expectedStatus'>,
+    expected?: Pick<
+      AssignTicketDto,
+      'expectedUpdatedAt' | 'expectedAssignedToId' | 'expectedStatus'
+    >,
   ): Promise<Ticket> => {
     const response = await apiClient.patch(`/tickets/${id}/assign`, {
       assignedToId,
@@ -780,8 +865,10 @@ export const ticketsApi = {
     return response.data;
   },
 
-  getAssigneeCorrectionOptions: async (): Promise<TechnicianOption[]> => {
-    const response = await apiClient.get('/tickets/assignee-correction-options');
+  getAssigneeCorrectionOptions: async (ticketId: string): Promise<TechnicianOption[]> => {
+    const response = await apiClient.get(
+      `/tickets/assignee-correction-options?ticketId=${encodeURIComponent(ticketId)}`,
+    );
     return response.data;
   },
 
@@ -866,8 +953,13 @@ export const ticketsApi = {
     return response.data;
   },
 
-  getGeneralOverviewStats: async (year: number, month: number): Promise<TechAssignedStats & { open: number }> => {
-    const response = await apiClient.get(`/tickets/general-overview-stats?year=${year}&month=${month}`);
+  getGeneralOverviewStats: async (
+    year: number,
+    month: number,
+  ): Promise<TechAssignedStats & { open: number }> => {
+    const response = await apiClient.get(
+      `/tickets/general-overview-stats?year=${year}&month=${month}`,
+    );
     return response.data;
   },
 
@@ -902,7 +994,12 @@ export const ticketsApi = {
   },
 
   /** Get SLA calibration insights (QA #11 extension) */
-  getSlaInsights: async (filters?: { year?: number; month?: number; quarter?: number; semester?: number }): Promise<any[]> => {
+  getSlaInsights: async (filters?: {
+    year?: number;
+    month?: number;
+    quarter?: number;
+    semester?: number;
+  }): Promise<any[]> => {
     const params = new URLSearchParams();
     if (filters?.year) params.append('year', filters.year.toString());
     if (filters?.month) params.append('month', filters.month.toString());
@@ -914,7 +1011,14 @@ export const ticketsApi = {
   },
 
   /** Get ticket satisfaction reports with optional filters (QA #11) */
-  getReportExplanations: async (charts: Array<{ id: string; title: string; totalValues?: number; values: Array<{ label: string; value: number }> }>): Promise<{ source: 'cloudflare' | 'fallback'; explanations: Record<string, string> }> => {
+  getReportExplanations: async (
+    charts: Array<{
+      id: string;
+      title: string;
+      totalValues?: number;
+      values: Array<{ label: string; value: number }>;
+    }>,
+  ): Promise<{ source: 'cloudflare' | 'fallback'; explanations: Record<string, string> }> => {
     const response = await apiClient.post('/tickets/reports/explanations', { charts });
     return response.data;
   },
@@ -984,7 +1088,16 @@ export const ticketsApi = {
     quarter?: number;
     semester?: number;
     ticketType?: string;
-  }): Promise<Array<{ id: number; firstName: string; middleName?: string; lastName: string; suffix?: string; role: string }>> => {
+  }): Promise<
+    Array<{
+      id: number;
+      firstName: string;
+      middleName?: string;
+      lastName: string;
+      suffix?: string;
+      role: string;
+    }>
+  > => {
     const params = new URLSearchParams();
     if (filters?.year) params.append('year', String(filters.year));
     if (filters?.month) params.append('month', String(filters.month));
@@ -1003,7 +1116,9 @@ export const ticketsApi = {
     semester?: number;
     technicianId?: number;
     ticketType?: string;
-  }): Promise<Array<{ categoryName: string; issueName: string; count: number; status: string }>> => {
+  }): Promise<
+    Array<{ categoryName: string; issueName: string; count: number; status: string }>
+  > => {
     const params = new URLSearchParams();
     if (filters?.year) params.append('year', String(filters.year));
     if (filters?.month) params.append('month', String(filters.month));
@@ -1014,7 +1129,6 @@ export const ticketsApi = {
     const response = await apiClient.get(`/tickets/reports/issue-counts?${params}`);
     return response.data;
   },
-
 
   // --- Escalation ---
   getAllEscalations: async (): Promise<TicketEscalation[]> => {
@@ -1059,7 +1173,7 @@ export const ticketsApi = {
   ): Promise<TicketEscalation> => {
     const response = await apiClient.patch(
       `/tickets/${ticketId}/escalation/${escalationId}/update-proof`,
-      data
+      data,
     );
     return response.data;
   },
@@ -1095,7 +1209,15 @@ export const ticketSettingsApi = {
   },
   updateCategory: async (
     id: string,
-    data: Partial<{ name: string; isIt: boolean; isDesktop: boolean; isPantawid: boolean; isSpecialized: boolean; slaHours: number | null; isActive: boolean }>,
+    data: Partial<{
+      name: string;
+      isIt: boolean;
+      isDesktop: boolean;
+      isPantawid: boolean;
+      isSpecialized: boolean;
+      slaHours: number | null;
+      isActive: boolean;
+    }>,
   ): Promise<TicketCategory> => {
     const response = await apiClient.patch(`/ticket-settings/categories/${id}`, data);
     return response.data;
@@ -1250,23 +1372,41 @@ export const ticketSettingsApi = {
     emailTestOverride?: string | null;
   }): Promise<void> => {
     const allowedKeys = [
-      'assignmentStrategy', 'roundRobinCapHours', 'autoCloseDays',
-      'smtpHost', 'smtpPort', 'smtpUser', 'smtpPass', 'smtpFrom', 'smtpFromName',
-      'primarySmtpDailyLimit', 'scheduleMode', 'officeClockin', 'officeClockout',
-      'cwwClockinStart', 'cwwClockinEnd', 'cwwClockoutStart', 'cwwClockoutEnd',
-      'isFlagCeremonyPaused', 'isEmailNotificationsEnabled', 'emailTestOverride',
+      'assignmentStrategy',
+      'roundRobinCapHours',
+      'autoCloseDays',
+      'smtpHost',
+      'smtpPort',
+      'smtpUser',
+      'smtpPass',
+      'smtpFrom',
+      'smtpFromName',
+      'primarySmtpDailyLimit',
+      'scheduleMode',
+      'officeClockin',
+      'officeClockout',
+      'cwwClockinStart',
+      'cwwClockinEnd',
+      'cwwClockoutStart',
+      'cwwClockoutEnd',
+      'isFlagCeremonyPaused',
+      'isEmailNotificationsEnabled',
+      'emailTestOverride',
     ] as const;
     const payload = Object.fromEntries(
-      allowedKeys
-        .filter((key) => data[key] !== undefined)
-        .map((key) => [key, data[key]]),
+      allowedKeys.filter((key) => data[key] !== undefined).map((key) => [key, data[key]]),
     );
     const response = await apiClient.patch(`/ticket-settings/global-config`, payload);
     return response.data;
   },
 
   // SLA Insights
-  getSlaInsights: async (filters?: { year?: number; month?: number; quarter?: number; semester?: number }): Promise<
+  getSlaInsights: async (filters?: {
+    year?: number;
+    month?: number;
+    quarter?: number;
+    semester?: number;
+  }): Promise<
     Array<{
       categoryName: string;
       configuredSlaHours: number;
@@ -1304,14 +1444,24 @@ export const knowledgeBaseApi = {
     const res = await apiClient.get('/knowledge-base');
     return res.data;
   },
-  update: async (id: number, data: { title: string; tags: string; content: string }): Promise<any> => {
+  update: async (
+    id: number,
+    data: { title: string; tags: string; content: string },
+  ): Promise<any> => {
     const res = await apiClient.put(`/knowledge-base/${id}`, data);
     return res.data;
   },
 };
 
 export const auditLogsApi = {
-  getLogs: async (params?: { page?: number; limit?: number; action?: string; tableName?: string; startDate?: string; endDate?: string }) => {
+  getLogs: async (params?: {
+    page?: number;
+    limit?: number;
+    action?: string;
+    tableName?: string;
+    startDate?: string;
+    endDate?: string;
+  }) => {
     const res = await apiClient.get('/audit-logs', { params });
     return res.data;
   },
@@ -1321,7 +1471,6 @@ export const auditLogsApi = {
   },
 };
 
-
 // Attendance API
 export const attendanceApi = {
   // System Status
@@ -1330,7 +1479,11 @@ export const attendanceApi = {
     return response.data;
   },
   // Tech attendance
-  getMyShift: async (): Promise<{ clockIn: Date | null; clockOut: Date | null; attendanceStatus?: AttendanceStatus | null }> => {
+  getMyShift: async (): Promise<{
+    clockIn: Date | null;
+    clockOut: Date | null;
+    attendanceStatus?: AttendanceStatus | null;
+  }> => {
     const response = await apiClient.get('/attendance/my-shift');
     return {
       clockIn: response.data.clockIn ? new Date(response.data.clockIn) : null,
@@ -1348,10 +1501,10 @@ export const attendanceApi = {
     const response = await apiClient.get(`/attendance?${params}`);
     return response.data;
   },
-    deleteAttendance: async (userId: number, date: string): Promise<any> => {
-      const response = await apiClient.delete(`/attendance/${userId}/${date}`);
-      return response.data;
-    },
+  deleteAttendance: async (userId: number, date: string): Promise<any> => {
+    const response = await apiClient.delete(`/attendance/${userId}/${date}`);
+    return response.data;
+  },
   restoreFromDtr: async (userId: number, date: string): Promise<TechAttendance> => {
     const response = await apiClient.post('/attendance/' + userId + '/' + date + '/restore-dtr');
     return response.data;

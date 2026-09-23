@@ -124,9 +124,14 @@ export class TicketController {
     if (slaState && !allowedSlaStates.has(slaState as ActiveTicketSlaState)) {
       throw new BadRequestException('SLA filter must be Overdue, Nearing SLA, or On Track.');
     }
-    if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-      Number.isNaN(Date.parse(`${date}T00:00:00+08:00`)) ||
-      new Date(`${date}T00:00:00+08:00`).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }) !== date)) {
+    if (
+      date &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+        Number.isNaN(Date.parse(`${date}T00:00:00+08:00`)) ||
+        new Date(`${date}T00:00:00+08:00`).toLocaleDateString('en-CA', {
+          timeZone: 'Asia/Manila',
+        }) !== date)
+    ) {
       throw new BadRequestException('Date must be a valid YYYY-MM-DD date.');
     }
     const viewerId = req?.user?.id ?? req?.user?.userId;
@@ -139,7 +144,11 @@ export class TicketController {
       status,
       ticketType,
       requesterId: requesterId ? Number(requesterId) : undefined,
-      assignedToId: ownAssignment ? Number(viewerId) : assignedToId ? Number(assignedToId) : undefined,
+      assignedToId: ownAssignment
+        ? Number(viewerId)
+        : assignedToId
+          ? Number(assignedToId)
+          : undefined,
       assignedOnly: ownAssignment,
       proxyCreatedByMe: proxyCreatedByMe === 'true' || proxyCreatedByMe === '1',
       pendingSatisfaction: pendingSatisfaction === 'true' || pendingSatisfaction === '1',
@@ -186,9 +195,14 @@ export class TicketController {
     if (req?.user?.role === UserRole.USER) {
       throw new ForbiddenException('End User accounts do not have an assigned-ticket queue.');
     }
-    if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-      Number.isNaN(Date.parse(`${date}T00:00:00+08:00`)) ||
-      new Date(`${date}T00:00:00+08:00`).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }) !== date)) {
+    if (
+      date &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+        Number.isNaN(Date.parse(`${date}T00:00:00+08:00`)) ||
+        new Date(`${date}T00:00:00+08:00`).toLocaleDateString('en-CA', {
+          timeZone: 'Asia/Manila',
+        }) !== date)
+    ) {
       throw new BadRequestException('Date must be a valid YYYY-MM-DD date.');
     }
     const viewerId = Number(req?.user?.id ?? req?.user?.userId);
@@ -246,17 +260,15 @@ export class TicketController {
   /** GET /tickets/assignee-correction-options — active RICTMS staff for factual corrections */
   @Get('assignee-correction-options')
   @RequireCapability('isTicketRequesterCorrection')
-  async getAssigneeCorrectionOptions() {
-    return this.ticketService.getAssigneeCorrectionOptions();
+  async getAssigneeCorrectionOptions(@Query('ticketId') ticketId?: string) {
+    if (!ticketId) throw new BadRequestException('ticketId is required.');
+    return this.ticketService.getAssigneeCorrectionOptions(ticketId);
   }
 
   /** GET /tickets/general-overview-stats?year=&month= */
   @Get('general-overview-stats')
   @RequireCapability('isReportsAccess')
-  async getGeneralOverviewStats(
-    @Query('year') year?: string,
-    @Query('month') month?: string,
-  ) {
+  async getGeneralOverviewStats(@Query('year') year?: string, @Query('month') month?: string) {
     const now = new Date();
     return this.ticketService.getGeneralOverviewStats(
       year ? Number(year) : now.getFullYear(),
@@ -292,7 +304,15 @@ export class TicketController {
   @Post('reports/explanations')
   @RequireCapability('isTicketReportsAccess')
   async explainReportCharts(
-    @Body() body: { charts?: Array<{ id: string; title: string; totalValues?: number; values: Array<{ label: string; value: number }> }> },
+    @Body()
+    body: {
+      charts?: Array<{
+        id: string;
+        title: string;
+        totalValues?: number;
+        values: Array<{ label: string; value: number }>;
+      }>;
+    },
   ) {
     try {
       return await this.knowledgeBaseService.explainTicketReportCharts(body?.charts || []);
@@ -410,10 +430,7 @@ export class TicketController {
   /** POST /tickets/attendance-assignment-alerts/:userId/auto-reassign */
   @Post('attendance-assignment-alerts/:userId/auto-reassign')
   @RequireCapability(['isTicketFocal', 'isTicketSettingsFocal'])
-  async autoReassignAttendanceAlertTickets(
-    @Param('userId') userId: string,
-    @Request() req: any,
-  ) {
+  async autoReassignAttendanceAlertTickets(@Param('userId') userId: string, @Request() req: any) {
     return this.ticketService.autoReassignAttendanceAlertTickets(
       Number(userId),
       req.user.id ?? req.user.userId,

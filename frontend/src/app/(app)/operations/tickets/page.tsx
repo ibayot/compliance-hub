@@ -117,7 +117,9 @@ const toDateTimeLocalValue = (value?: string | null) => {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 };
 
-function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | 'paused' | null {
+function getSlaStatus(
+  ticket: Ticket,
+): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | 'paused' | null {
   if (!ticket.slaDeadline) return null;
   const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
   if (isTerminal) {
@@ -138,15 +140,19 @@ function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'ove
 }
 
 const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'warning' | 'error' }> =
-{
-  met: { label: 'Met', color: 'success' },
-  on_track: { label: 'On Track', color: 'info' },
-  nearing_sla: { label: 'Nearing SLA', color: 'warning' },
-  overdue: { label: 'Overdue', color: 'error' },
-  paused: { label: 'SLA Paused', color: 'info' },
-};
+  {
+    met: { label: 'Met', color: 'success' },
+    on_track: { label: 'On Track', color: 'info' },
+    nearing_sla: { label: 'Nearing SLA', color: 'warning' },
+    overdue: { label: 'Overdue', color: 'error' },
+    paused: { label: 'SLA Paused', color: 'info' },
+  };
 
-export default function TicketsPage({ restrictedAssignedOnly = false }: { restrictedAssignedOnly?: boolean }) {
+export default function TicketsPage({
+  restrictedAssignedOnly = false,
+}: {
+  restrictedAssignedOnly?: boolean;
+}) {
   const router = useRouter();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -179,14 +185,17 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
   const [filterSemester, setFilterSemester] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchDraft, setSearchDraft] = useState('');
-  const [filterPeriodMode, setFilterPeriodMode] = useState<'day' | 'month' | 'quarter' | 'semester' | 'year'>('day');
+  const [filterPeriodMode, setFilterPeriodMode] = useState<
+    'day' | 'month' | 'quarter' | 'semester' | 'year'
+  >('day');
   const [showMyTickets, setShowMyTickets] = useState(false);
 
   const initializedMyTickets = useRef(false);
   useEffect(() => {
     if (myCap && !initializedMyTickets.current) {
       initializedMyTickets.current = true;
-      const isTech = !!myCap.isDesktop || !!myCap.isItSupport || !!myCap.isPantawidIct || !!myCap.isIto;
+      const isTech =
+        !!myCap.isDesktop || !!myCap.isItSupport || !!myCap.isPantawidIct || !!myCap.isIto;
       const canManageAll = !!myCap.isAllTickets;
       if (isTech && !canManageAll) {
         setShowMyTickets(true);
@@ -200,7 +209,10 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
 
   useEffect(() => {
     if (myCap?.isGlobalSettingsAccess) {
-      ticketSettingsApi.getGlobalConfig().then(setGlobalConfig).catch(() => { });
+      ticketSettingsApi
+        .getGlobalConfig()
+        .then(setGlobalConfig)
+        .catch(() => {});
     }
   }, [myCap?.isGlobalSettingsAccess]);
 
@@ -288,8 +300,10 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
   // DB-driven role capabilities (is_all_tickets, is_ticket_focal) — loaded from AuthContext
   // (also available: myCap?.isEscalationFocal, myCap?.isTicketSettingsFocal, myCap?.isFocal)
 
-  const isFocalTech = !!myCap?.isFocal && (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct);
-  const isLowerLevelTech = (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
+  const isFocalTech =
+    !!myCap?.isFocal && (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct);
+  const isLowerLevelTech =
+    (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
   const isJuniorTech = isLowerLevelTech;
   // ITO staff roles: see only their own tickets (restricted view), same as junior techs
   const isItoRole = !!myCap?.isIto;
@@ -308,12 +322,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
   const canEscalate =
     !!myCap?.isTicketSettingsFocal ||
     !!myCap?.isTicketFocal ||
-    !!(
-      myCap?.isDesktop ||
-      myCap?.isItSupport ||
-      myCap?.isPantawidIct ||
-      myCap?.isAllTickets
-    );
+    !!(myCap?.isDesktop || myCap?.isItSupport || myCap?.isPantawidIct || myCap?.isAllTickets);
 
   const openResolutionOverrideDialog = (ticket: Ticket) => {
     setResolutionOverrideTicket(ticket);
@@ -342,11 +351,15 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
       return;
     }
     if (resolutionOverrideFiles.length === 0) {
-      enqueueSnackbar('Upload at least one proof image with a visible timestamp.', { variant: 'error' });
+      enqueueSnackbar('Upload at least one proof image with a visible timestamp.', {
+        variant: 'error',
+      });
       return;
     }
     if (!resolutionOverrideConfirmed) {
-      enqueueSnackbar('Confirm that the proof supports the verified completion time.', { variant: 'error' });
+      enqueueSnackbar('Confirm that the proof supports the verified completion time.', {
+        variant: 'error',
+      });
       return;
     }
     try {
@@ -356,12 +369,16 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
       formData.append('reason', resolutionOverrideReason.trim());
       resolutionOverrideFiles.forEach((file) => formData.append('proofFiles', file));
       await ticketsApi.overrideResolutionTime(resolutionOverrideTicket.id, formData);
-      enqueueSnackbar('Verified resolution time saved. SLA results were recalculated.', { variant: 'success' });
+      enqueueSnackbar('Verified resolution time saved. SLA results were recalculated.', {
+        variant: 'success',
+      });
       setSavingResolutionOverride(false);
       closeResolutionOverrideDialog();
       await silentFetchTickets();
     } catch (error: any) {
-      enqueueSnackbar(error?.response?.data?.message || 'Unable to correct the resolution time.', { variant: 'error' });
+      enqueueSnackbar(error?.response?.data?.message || 'Unable to correct the resolution time.', {
+        variant: 'error',
+      });
     } finally {
       setSavingResolutionOverride(false);
     }
@@ -401,19 +418,32 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
   const frontendFilteredEscalations = React.useMemo(() => {
     const query = escalationSearch.trim().toLowerCase();
     return allEscalations
-      .filter((e) => !query || [
-        e.ticket?.ticketNumber, e.ticketId, e.status, e.notes,
-        formatPersonName(e.escalatedBy, ''), formatPersonName(e.escalatedTo, ''),
-      ].some((part) => part?.toLowerCase().includes(query)))
+      .filter(
+        (e) =>
+          !query ||
+          [
+            e.ticket?.ticketNumber,
+            e.ticketId,
+            e.status,
+            e.notes,
+            formatPersonName(e.escalatedBy, ''),
+            formatPersonName(e.escalatedTo, ''),
+          ].some((part) => part?.toLowerCase().includes(query)),
+      )
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [allEscalations, escalationSearch]);
-  const escalationTotalPages = Math.max(1, Math.ceil(frontendFilteredEscalations.length / TICKETS_PAGE_SIZE));
+  const escalationTotalPages = Math.max(
+    1,
+    Math.ceil(frontendFilteredEscalations.length / TICKETS_PAGE_SIZE),
+  );
   const visibleEscalations = frontendFilteredEscalations.slice(
     (escalationPage - 1) * TICKETS_PAGE_SIZE,
     escalationPage * TICKETS_PAGE_SIZE,
   );
 
-  useEffect(() => { setEscalationPage(1); }, [escalationSearch]);
+  useEffect(() => {
+    setEscalationPage(1);
+  }, [escalationSearch]);
   useEffect(() => {
     if (escalationPage > escalationTotalPages) setEscalationPage(escalationTotalPages);
   }, [escalationPage, escalationTotalPages]);
@@ -430,8 +460,11 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
     { key: 'duplicate', label: 'Duplicate' },
     { key: 'proxy', label: 'Proxy Requests' },
   ];
-  const selectedStatus = statusTabs.some(({ key }) => key === selectedTab && key !== 'all' && key !== 'proxy')
-    ? selectedTab as TicketStatus : undefined;
+  const selectedStatus = statusTabs.some(
+    ({ key }) => key === selectedTab && key !== 'all' && key !== 'proxy',
+  )
+    ? (selectedTab as TicketStatus)
+    : undefined;
   const allCount = Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
 
   const toRateTickets = frontendFilteredTickets.filter(
@@ -462,7 +495,19 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
         setSelectedTab('to_rate');
       }
       const status = params.get('status');
-      if (status && ['open', 'assigned', 'in_progress', 'pause', 'resolved', 'closed', 'freeze', 'duplicate'].includes(status)) {
+      if (
+        status &&
+        [
+          'open',
+          'assigned',
+          'in_progress',
+          'pause',
+          'resolved',
+          'closed',
+          'freeze',
+          'duplicate',
+        ].includes(status)
+      ) {
         setSelectedTab(status);
       }
       const period = params.get('period');
@@ -494,7 +539,13 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
     if (!newDialogOpen || !isTicketAdmin) return;
     ticketsApi
       .getTechnicians(form.ticketType)
-      .then((rows) => setTechnicians(rows.filter((row) => row.attendanceStatus === 'present' || row.attendanceStatus === 'out_of_office')))
+      .then((rows) =>
+        setTechnicians(
+          rows.filter(
+            (row) => row.attendanceStatus === 'present' || row.attendanceStatus === 'out_of_office',
+          ),
+        ),
+      )
       .catch(() => setTechnicians([]));
   }, [newDialogOpen, isTicketAdmin, form.ticketType]);
 
@@ -532,7 +583,21 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
 
   useEffect(() => {
     setPage(1);
-  }, [selectedTab, filterStatus, filterType, filterPriority, filterSla, filterDate, filterYear, filterMonth, filterQuarter, filterSemester, searchQuery, showMyTickets, showEscalatedToMe]);
+  }, [
+    selectedTab,
+    filterStatus,
+    filterType,
+    filterPriority,
+    filterSla,
+    filterDate,
+    filterYear,
+    filterMonth,
+    filterQuarter,
+    filterSemester,
+    searchQuery,
+    showMyTickets,
+    showEscalatedToMe,
+  ]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setSearchQuery(searchDraft.trim()), 300);
@@ -543,39 +608,56 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
     try {
       setLoading(true);
       const [data, dashboardStats] = await Promise.all([
-        restrictedAssignedOnly ? ticketsApi.getMyAssigned({
-          status: selectedStatus,
-          ticketType: (filterType as TicketType) || undefined,
-          priority: filterPriority || undefined,
-          date: filterPeriodMode === 'day' ? filterDate : undefined,
-          includeCarryover: filterPeriodMode === 'day',
-          year: filterPeriodMode !== 'day' ? Number(filterYear) || undefined : undefined,
-          month: filterPeriodMode === 'month' ? Number(filterMonth) || undefined : undefined,
-          quarter: filterPeriodMode === 'quarter' ? Number(filterQuarter) || undefined : undefined,
-          semester: filterPeriodMode === 'semester' ? Number(filterSemester) || undefined : undefined,
-          search: searchQuery,
-          proxyCreatedByMe: selectedTab === 'proxy',
-          page,
-          limit: TICKETS_PAGE_SIZE,
-        }) : ticketsApi.getAll({
-        status: selectedStatus || (filterStatus as TicketStatus) || undefined,
-        ticketType: (filterType as TicketType) || undefined,
-        priority: filterPriority || undefined,
-        date: filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
-        includeCarryover: filterPeriodMode === 'day',
-        year: filterPeriodMode !== 'day' && selectedTab !== 'to_rate' ? filterYear || undefined : undefined,
-        month: filterPeriodMode === 'month' && selectedTab !== 'to_rate' ? filterMonth || undefined : undefined,
-        quarter: filterPeriodMode === 'quarter' && selectedTab !== 'to_rate' ? filterQuarter || undefined : undefined,
-        semester: filterPeriodMode === 'semester' && selectedTab !== 'to_rate' ? filterSemester || undefined : undefined,
-        slaState: filterSla || undefined,
-        assignedToMe: showMyTickets && !showEscalatedToMe,
-        proxyCreatedByMe: selectedTab === 'proxy',
-        pendingSatisfaction: selectedTab === 'to_rate',
-        escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
-        search: searchQuery,
-        page,
-          limit: TICKETS_PAGE_SIZE,
-        }),
+        restrictedAssignedOnly
+          ? ticketsApi.getMyAssigned({
+              status: selectedStatus,
+              ticketType: (filterType as TicketType) || undefined,
+              priority: filterPriority || undefined,
+              date: filterPeriodMode === 'day' ? filterDate : undefined,
+              includeCarryover: filterPeriodMode === 'day',
+              year: filterPeriodMode !== 'day' ? Number(filterYear) || undefined : undefined,
+              month: filterPeriodMode === 'month' ? Number(filterMonth) || undefined : undefined,
+              quarter:
+                filterPeriodMode === 'quarter' ? Number(filterQuarter) || undefined : undefined,
+              semester:
+                filterPeriodMode === 'semester' ? Number(filterSemester) || undefined : undefined,
+              search: searchQuery,
+              proxyCreatedByMe: selectedTab === 'proxy',
+              page,
+              limit: TICKETS_PAGE_SIZE,
+            })
+          : ticketsApi.getAll({
+              status: selectedStatus || (filterStatus as TicketStatus) || undefined,
+              ticketType: (filterType as TicketType) || undefined,
+              priority: filterPriority || undefined,
+              date:
+                filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
+              includeCarryover: filterPeriodMode === 'day',
+              year:
+                filterPeriodMode !== 'day' && selectedTab !== 'to_rate'
+                  ? filterYear || undefined
+                  : undefined,
+              month:
+                filterPeriodMode === 'month' && selectedTab !== 'to_rate'
+                  ? filterMonth || undefined
+                  : undefined,
+              quarter:
+                filterPeriodMode === 'quarter' && selectedTab !== 'to_rate'
+                  ? filterQuarter || undefined
+                  : undefined,
+              semester:
+                filterPeriodMode === 'semester' && selectedTab !== 'to_rate'
+                  ? filterSemester || undefined
+                  : undefined,
+              slaState: filterSla || undefined,
+              assignedToMe: showMyTickets && !showEscalatedToMe,
+              proxyCreatedByMe: selectedTab === 'proxy',
+              pendingSatisfaction: selectedTab === 'to_rate',
+              escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
+              search: searchQuery,
+              page,
+              limit: TICKETS_PAGE_SIZE,
+            }),
         ticketsApi.getDashboardStats(),
       ]);
       if (requestId !== ticketRequestRef.current) return;
@@ -653,39 +735,56 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
     const requestId = ++ticketRequestRef.current;
     try {
       const [data, dashboardStats] = await Promise.all([
-        restrictedAssignedOnly ? ticketsApi.getMyAssigned({
-          status: selectedStatus,
-          ticketType: (filterType as TicketType) || undefined,
-          priority: filterPriority || undefined,
-          date: filterPeriodMode === 'day' ? filterDate : undefined,
-          includeCarryover: filterPeriodMode === 'day',
-          year: filterPeriodMode !== 'day' ? Number(filterYear) || undefined : undefined,
-          month: filterPeriodMode === 'month' ? Number(filterMonth) || undefined : undefined,
-          quarter: filterPeriodMode === 'quarter' ? Number(filterQuarter) || undefined : undefined,
-          semester: filterPeriodMode === 'semester' ? Number(filterSemester) || undefined : undefined,
-          search: searchQuery,
-          proxyCreatedByMe: selectedTab === 'proxy',
-          page,
-          limit: TICKETS_PAGE_SIZE,
-        }) : ticketsApi.getAll({
-        status: selectedStatus || (filterStatus as TicketStatus) || undefined,
-        ticketType: (filterType as TicketType) || undefined,
-        priority: filterPriority || undefined,
-        date: filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
-        includeCarryover: filterPeriodMode === 'day',
-        year: filterPeriodMode !== 'day' && selectedTab !== 'to_rate' ? filterYear || undefined : undefined,
-        month: filterPeriodMode === 'month' && selectedTab !== 'to_rate' ? filterMonth || undefined : undefined,
-        quarter: filterPeriodMode === 'quarter' && selectedTab !== 'to_rate' ? filterQuarter || undefined : undefined,
-        semester: filterPeriodMode === 'semester' && selectedTab !== 'to_rate' ? filterSemester || undefined : undefined,
-        slaState: filterSla || undefined,
-        assignedToMe: showMyTickets && !showEscalatedToMe,
-        proxyCreatedByMe: selectedTab === 'proxy',
-        pendingSatisfaction: selectedTab === 'to_rate',
-        escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
-        search: searchQuery,
-        page,
-          limit: TICKETS_PAGE_SIZE,
-        }),
+        restrictedAssignedOnly
+          ? ticketsApi.getMyAssigned({
+              status: selectedStatus,
+              ticketType: (filterType as TicketType) || undefined,
+              priority: filterPriority || undefined,
+              date: filterPeriodMode === 'day' ? filterDate : undefined,
+              includeCarryover: filterPeriodMode === 'day',
+              year: filterPeriodMode !== 'day' ? Number(filterYear) || undefined : undefined,
+              month: filterPeriodMode === 'month' ? Number(filterMonth) || undefined : undefined,
+              quarter:
+                filterPeriodMode === 'quarter' ? Number(filterQuarter) || undefined : undefined,
+              semester:
+                filterPeriodMode === 'semester' ? Number(filterSemester) || undefined : undefined,
+              search: searchQuery,
+              proxyCreatedByMe: selectedTab === 'proxy',
+              page,
+              limit: TICKETS_PAGE_SIZE,
+            })
+          : ticketsApi.getAll({
+              status: selectedStatus || (filterStatus as TicketStatus) || undefined,
+              ticketType: (filterType as TicketType) || undefined,
+              priority: filterPriority || undefined,
+              date:
+                filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
+              includeCarryover: filterPeriodMode === 'day',
+              year:
+                filterPeriodMode !== 'day' && selectedTab !== 'to_rate'
+                  ? filterYear || undefined
+                  : undefined,
+              month:
+                filterPeriodMode === 'month' && selectedTab !== 'to_rate'
+                  ? filterMonth || undefined
+                  : undefined,
+              quarter:
+                filterPeriodMode === 'quarter' && selectedTab !== 'to_rate'
+                  ? filterQuarter || undefined
+                  : undefined,
+              semester:
+                filterPeriodMode === 'semester' && selectedTab !== 'to_rate'
+                  ? filterSemester || undefined
+                  : undefined,
+              slaState: filterSla || undefined,
+              assignedToMe: showMyTickets && !showEscalatedToMe,
+              proxyCreatedByMe: selectedTab === 'proxy',
+              pendingSatisfaction: selectedTab === 'to_rate',
+              escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
+              search: searchQuery,
+              page,
+              limit: TICKETS_PAGE_SIZE,
+            }),
         ticketsApi.getDashboardStats(),
       ]);
       if (requestId !== ticketRequestRef.current) return;
@@ -731,16 +830,19 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
     }, 750);
   });
 
-  useEffect(() => () => {
-    if (ticketSseTimerRef.current) clearTimeout(ticketSseTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (ticketSseTimerRef.current) clearTimeout(ticketSseTimerRef.current);
+    },
+    [],
+  );
 
   const refreshRequesterOptions = useCallback(() => {
     if (restrictedAssignedOnly) return;
     usersApi
       .listTicketRequesters()
       .then((users) => setAllUsers(users.filter((u) => u.active && u.role !== 'super_admin')))
-      .catch(() => { });
+      .catch(() => {});
   }, [restrictedAssignedOnly]);
 
   useEffect(() => {
@@ -778,7 +880,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
       ticketSettingsApi
         .getCategories(form.ticketType, true)
         .then(setCategories)
-        .catch(() => { }); // silent — don't show errors on background polls
+        .catch(() => {}); // silent — don't show errors on background polls
     }
   });
 
@@ -831,7 +933,9 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
     }
 
     if (user?.role !== 'user' && !form.issueTypeId) {
-      enqueueSnackbar('Issue is required for tickets created by RICTMS staff.', { variant: 'warning' });
+      enqueueSnackbar('Issue is required for tickets created by RICTMS staff.', {
+        variant: 'warning',
+      });
       return;
     }
 
@@ -858,13 +962,18 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
         if (form.priority) formData.append('priority', form.priority);
         if (form.categoryId) formData.append('categoryId', form.categoryId);
         if (form.issueType) formData.append('issueType', form.issueType);
-        if (user?.role !== 'user' && form.issueTypeId) formData.append('issueTypeId', form.issueTypeId);
+        if (user?.role !== 'user' && form.issueTypeId)
+          formData.append('issueTypeId', form.issueTypeId);
         if (form.requesterId) formData.append('requesterId', form.requesterId.toString());
         if (form.assignedToId) formData.append('assignedToId', form.assignedToId.toString());
-        selectedImages.forEach(image => formData.append('attachments', image));
+        selectedImages.forEach((image) => formData.append('attachments', image));
         payload = formData;
       } else {
-        payload = { ...form, description: finalDescription, issueTypeId: user?.role === 'user' ? undefined : form.issueTypeId };
+        payload = {
+          ...form,
+          description: finalDescription,
+          issueTypeId: user?.role === 'user' ? undefined : form.issueTypeId,
+        };
       }
 
       await ticketsApi.create(payload);
@@ -974,16 +1083,16 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
         attendanceApi.getTechnicians('ito'),
         attendanceApi.getTechnicians(ticket.ticketType),
       ]);
-      const mergedUsers = [...itoUsers, ...supportUsers].filter(
+      const candidateUsers =
+        ticket.ticketType === 'specialized_concerns'
+          ? supportUsers
+          : [...itoUsers, ...supportUsers];
+      const mergedUsers = candidateUsers.filter(
         (u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx,
       );
 
       const allowedValues = new Set(focals.map((f) => String(f.userId)));
-      setEscalationFocalUsers(
-        mergedUsers.filter(
-          (t) => allowedValues.has(String(t.id)),
-        ),
-      );
+      setEscalationFocalUsers(mergedUsers.filter((t) => allowedValues.has(String(t.id))));
     } catch {
       setEscalationFocalUsers([]);
     }
@@ -1059,8 +1168,8 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
     //   .catch(() => { });
     unitsApi
       .listAll()
-      .then((units) => setUnitSuggestions(units.map(u => u.name)))
-      .catch(() => { });
+      .then((units) => setUnitSuggestions(units.map((u) => u.name)))
+      .catch(() => {});
     setSatDialogOpen(true);
   };
 
@@ -1130,7 +1239,10 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
       size="small"
       placeholder="Search by ticket number, subject, requester, assignee, or category..."
       value={searchDraft}
-      onChange={(e) => { setSearchDraft(e.target.value); setPage(1); }}
+      onChange={(e) => {
+        setSearchDraft(e.target.value);
+        setPage(1);
+      }}
       sx={{ gridColumn: { xs: '1 / -1', sm: 'span 2', md: 'span 2', lg: 'span 1' } }}
       InputProps={{
         startAdornment: (
@@ -1154,21 +1266,31 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
       >
         <Box>
           <Typography variant="h4" fontWeight={700}>
-            {showEscalations ? 'Escalation History' : restrictedAssignedOnly ? 'My Assigned Tickets' : 'Help Desk Tickets'}
+            {showEscalations
+              ? 'Escalation History'
+              : restrictedAssignedOnly
+                ? 'My Assigned Tickets'
+                : 'Help Desk Tickets'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {showEscalations ? 'Review ticket escalations, outcomes, and the staff involved.' : 'Submit and track RICTMS support requests and specialized concerns'}
+            {showEscalations
+              ? 'Review ticket escalations, outcomes, and the staff involved.'
+              : 'Submit and track RICTMS support requests and specialized concerns'}
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
           {canViewEscalatedQueue && (
             <Button variant="outlined" onClick={() => setShowEscalations((value) => !value)}>
-              {showEscalations ? 'Back to Tickets' : `Escalation History (${allEscalations.length})`}
+              {showEscalations
+                ? 'Back to Tickets'
+                : `Escalation History (${allEscalations.length})`}
             </Button>
           )}
-          {!restrictedAssignedOnly && !showEscalations && <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenNewTicket}>
-            New Ticket
-          </Button>}
+          {!restrictedAssignedOnly && !showEscalations && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenNewTicket}>
+              New Ticket
+            </Button>
+          )}
         </Stack>
       </Box>
 
@@ -1176,126 +1298,135 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
         <Card sx={{ mb: 1 }}>
           <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
             <Box sx={filterGridSx}>
-                  {searchField}
-                  <TextField
-                    select
-                    label="Year"
-                    value={filterYear}
-                    onChange={(e) => setFilterYear(e.target.value)}
-                    size="small"
-                  >
-                    <MenuItem value="">All</MenuItem>
+              {searchField}
+              <TextField
+                select
+                label="Year"
+                value={filterYear}
+                onChange={(e) => setFilterYear(e.target.value)}
+                size="small"
+              >
+                <MenuItem value="">All</MenuItem>
 
-                    {yearOptions.map((year) => (
-                      <MenuItem key={year} value={year.toString()}>{year}</MenuItem>
-                    ))}
-                  </TextField>
-                  <TextField
-                    select
-                    label="Period"
-                    value={filterPeriodMode}
-                    onChange={(e) => {
-                      const mode = e.target.value as 'day' | 'month' | 'quarter' | 'semester' | 'year';
-                      setFilterPeriodMode(mode);
-                      setFilterDate(mode === 'day' ? todayInManila() : '');
-                      if (mode === 'year') {
-                        setFilterMonth('');
-                        setFilterQuarter('');
-                        setFilterSemester('');
-                      } else if (mode === 'semester') {
-                        setFilterMonth('');
-                        setFilterQuarter('');
-                        setFilterSemester('');
-                      } else if (mode === 'quarter') {
-                        setFilterMonth('');
-                        setFilterQuarter('');
-                        setFilterSemester('');
-                      } else {
-                        setFilterMonth('');
-                        setFilterQuarter('');
-                        setFilterSemester('');
-                      }
-                    }}
-                    size="small"
-                  >
-                    <MenuItem value="day">Daily</MenuItem>
-                    <MenuItem value="month">Monthly</MenuItem>
-                    <MenuItem value="quarter">Quarterly</MenuItem>
-                    <MenuItem value="semester">Semester</MenuItem>
-                    <MenuItem value="year">Full Year</MenuItem>
-                  </TextField>
-                  {filterPeriodMode === 'day' && (
-                    <TextField type="date" label="Date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} size="small" InputLabelProps={{ shrink: true }} />
-                  )}
-                  {filterPeriodMode === 'month' && (
-                    <TextField
-                      select
-                      label="Month"
-                      value={filterMonth}
-                      onChange={(e) => setFilterMonth(e.target.value)}
-                      size="small"
-                    >
-                      <MenuItem value="">All</MenuItem>
-                      <MenuItem value="1">January</MenuItem>
-                      <MenuItem value="2">February</MenuItem>
-                      <MenuItem value="3">March</MenuItem>
-                      <MenuItem value="4">April</MenuItem>
-                      <MenuItem value="5">May</MenuItem>
-                      <MenuItem value="6">June</MenuItem>
-                      <MenuItem value="7">July</MenuItem>
-                      <MenuItem value="8">August</MenuItem>
-                      <MenuItem value="9">September</MenuItem>
-                      <MenuItem value="10">October</MenuItem>
-                      <MenuItem value="11">November</MenuItem>
-                      <MenuItem value="12">December</MenuItem>
-                    </TextField>
-                  )}
-                  {filterPeriodMode === 'quarter' && (
-                    <TextField
-                      select
-                      label="Quarter"
-                      value={filterQuarter}
-                      onChange={(e) => setFilterQuarter(e.target.value)}
-                      size="small"
-                    >
-                      <MenuItem value="">All</MenuItem>
-                      <MenuItem value="1">Q1</MenuItem>
-                      <MenuItem value="2">Q2</MenuItem>
-                      <MenuItem value="3">Q3</MenuItem>
-                      <MenuItem value="4">Q4</MenuItem>
-                    </TextField>
-                  )}
-                  {filterPeriodMode === 'semester' && (
-                    <TextField
-                      select
-                      label="Semester"
-                      value={filterSemester}
-                      onChange={(e) => setFilterSemester(e.target.value)}
-                      size="small"
-                    >
-                      <MenuItem value="">All</MenuItem>
-                      <MenuItem value="1">1st Semester</MenuItem>
-                      <MenuItem value="2">2nd Semester</MenuItem>
-                    </TextField>
-                  )}
-                  <Button
-                    variant="outlined"
-                    sx={{ minWidth: 0, height: 36 }}
-                    onClick={() => {
-                      setFilterStatus('');
-                      setFilterType('');
-                      setFilterPriority('');
-                      setFilterYear(new Date().getFullYear().toString());
-                      setFilterMonth((new Date().getMonth() + 1).toString());
-                      setFilterQuarter('');
-                      setFilterSemester('');
-                      setFilterPeriodMode('day');
-                      setFilterDate(todayInManila());
-                      setSelectedTab('all');
-                    }}
-                  >
-                    Reset
-                  </Button>
+                {yearOptions.map((year) => (
+                  <MenuItem key={year} value={year.toString()}>
+                    {year}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                label="Period"
+                value={filterPeriodMode}
+                onChange={(e) => {
+                  const mode = e.target.value as 'day' | 'month' | 'quarter' | 'semester' | 'year';
+                  setFilterPeriodMode(mode);
+                  setFilterDate(mode === 'day' ? todayInManila() : '');
+                  if (mode === 'year') {
+                    setFilterMonth('');
+                    setFilterQuarter('');
+                    setFilterSemester('');
+                  } else if (mode === 'semester') {
+                    setFilterMonth('');
+                    setFilterQuarter('');
+                    setFilterSemester('');
+                  } else if (mode === 'quarter') {
+                    setFilterMonth('');
+                    setFilterQuarter('');
+                    setFilterSemester('');
+                  } else {
+                    setFilterMonth('');
+                    setFilterQuarter('');
+                    setFilterSemester('');
+                  }
+                }}
+                size="small"
+              >
+                <MenuItem value="day">Daily</MenuItem>
+                <MenuItem value="month">Monthly</MenuItem>
+                <MenuItem value="quarter">Quarterly</MenuItem>
+                <MenuItem value="semester">Semester</MenuItem>
+                <MenuItem value="year">Full Year</MenuItem>
+              </TextField>
+              {filterPeriodMode === 'day' && (
+                <TextField
+                  type="date"
+                  label="Date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+              )}
+              {filterPeriodMode === 'month' && (
+                <TextField
+                  select
+                  label="Month"
+                  value={filterMonth}
+                  onChange={(e) => setFilterMonth(e.target.value)}
+                  size="small"
+                >
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="1">January</MenuItem>
+                  <MenuItem value="2">February</MenuItem>
+                  <MenuItem value="3">March</MenuItem>
+                  <MenuItem value="4">April</MenuItem>
+                  <MenuItem value="5">May</MenuItem>
+                  <MenuItem value="6">June</MenuItem>
+                  <MenuItem value="7">July</MenuItem>
+                  <MenuItem value="8">August</MenuItem>
+                  <MenuItem value="9">September</MenuItem>
+                  <MenuItem value="10">October</MenuItem>
+                  <MenuItem value="11">November</MenuItem>
+                  <MenuItem value="12">December</MenuItem>
+                </TextField>
+              )}
+              {filterPeriodMode === 'quarter' && (
+                <TextField
+                  select
+                  label="Quarter"
+                  value={filterQuarter}
+                  onChange={(e) => setFilterQuarter(e.target.value)}
+                  size="small"
+                >
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="1">Q1</MenuItem>
+                  <MenuItem value="2">Q2</MenuItem>
+                  <MenuItem value="3">Q3</MenuItem>
+                  <MenuItem value="4">Q4</MenuItem>
+                </TextField>
+              )}
+              {filterPeriodMode === 'semester' && (
+                <TextField
+                  select
+                  label="Semester"
+                  value={filterSemester}
+                  onChange={(e) => setFilterSemester(e.target.value)}
+                  size="small"
+                >
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="1">1st Semester</MenuItem>
+                  <MenuItem value="2">2nd Semester</MenuItem>
+                </TextField>
+              )}
+              <Button
+                variant="outlined"
+                sx={{ minWidth: 0, height: 36 }}
+                onClick={() => {
+                  setFilterStatus('');
+                  setFilterType('');
+                  setFilterPriority('');
+                  setFilterYear(new Date().getFullYear().toString());
+                  setFilterMonth((new Date().getMonth() + 1).toString());
+                  setFilterQuarter('');
+                  setFilterSemester('');
+                  setFilterPeriodMode('day');
+                  setFilterDate(todayInManila());
+                  setSelectedTab('all');
+                }}
+              >
+                Reset
+              </Button>
             </Box>
           </CardContent>
         </Card>
@@ -1305,246 +1436,302 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
         <Card sx={{ mb: 1 }}>
           <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
             <Box sx={filterGridSx}>
-                  {searchField}
-                  <TextField inputProps={{ maxLength: 255 }}
-                    select
-                    label="Type"
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value)}
-                    size="small"
-                  >
-                    <MenuItem value="">All Types</MenuItem>
-                    <MenuItem value="desktop_support">Desktop Support</MenuItem>
-                    <MenuItem value="it_support">IT Support</MenuItem>
-                    <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
-                    <MenuItem value="specialized_concerns">Specialized Concerns</MenuItem>
-                  </TextField>
-                  <TextField inputProps={{ maxLength: 255 }}
-                    select
-                    label="Priority"
-                    value={filterPriority}
-                    onChange={(e) => setFilterPriority(e.target.value)}
-                    size="small"
-                  >
-                    <MenuItem value="">All Priorities</MenuItem>
-                    <MenuItem value="low">Low</MenuItem>
-                    <MenuItem value="medium">Medium</MenuItem>
-                    <MenuItem value="high">High</MenuItem>
-                    <MenuItem value="urgent">Urgent</MenuItem>
-                    <MenuItem value="critical">Critical</MenuItem>
-                  </TextField>
-                  <TextField
-                    select
-                    label="SLA"
-                    value={filterSla}
-                    onChange={(e) => setFilterSla(e.target.value as typeof filterSla)}
-                    size="small"
-                  >
-                    <MenuItem value="">All SLA States</MenuItem>
-                    <MenuItem value="overdue">Overdue</MenuItem>
-                    <MenuItem value="nearing_sla">Nearing SLA</MenuItem>
-                    <MenuItem value="on_track">On Track</MenuItem>
-                  </TextField>
-                  <TextField
-                    select
-                    label="Year"
-                    value={filterYear}
-                    onChange={(e) => setFilterYear(e.target.value)}
-                    size="small"
-                  >
-                    <MenuItem value="">All</MenuItem>
+              {searchField}
+              <TextField
+                inputProps={{ maxLength: 255 }}
+                select
+                label="Type"
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                size="small"
+              >
+                <MenuItem value="">All Types</MenuItem>
+                <MenuItem value="desktop_support">Desktop Support</MenuItem>
+                <MenuItem value="it_support">IT Support</MenuItem>
+                <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
+                <MenuItem value="specialized_concerns">Specialized Concerns</MenuItem>
+              </TextField>
+              <TextField
+                inputProps={{ maxLength: 255 }}
+                select
+                label="Priority"
+                value={filterPriority}
+                onChange={(e) => setFilterPriority(e.target.value)}
+                size="small"
+              >
+                <MenuItem value="">All Priorities</MenuItem>
+                <MenuItem value="low">Low</MenuItem>
+                <MenuItem value="medium">Medium</MenuItem>
+                <MenuItem value="high">High</MenuItem>
+                <MenuItem value="urgent">Urgent</MenuItem>
+                <MenuItem value="critical">Critical</MenuItem>
+              </TextField>
+              <TextField
+                select
+                label="SLA"
+                value={filterSla}
+                onChange={(e) => setFilterSla(e.target.value as typeof filterSla)}
+                size="small"
+              >
+                <MenuItem value="">All SLA States</MenuItem>
+                <MenuItem value="overdue">Overdue</MenuItem>
+                <MenuItem value="nearing_sla">Nearing SLA</MenuItem>
+                <MenuItem value="on_track">On Track</MenuItem>
+              </TextField>
+              <TextField
+                select
+                label="Year"
+                value={filterYear}
+                onChange={(e) => setFilterYear(e.target.value)}
+                size="small"
+              >
+                <MenuItem value="">All</MenuItem>
 
-                    {yearOptions.map((year) => (
-                      <MenuItem key={year} value={year.toString()}>{year}</MenuItem>
-                    ))}
-                  </TextField>
-                  <TextField
-                    select
-                    label="Period"
-                    value={filterPeriodMode}
-                    onChange={(e) => {
-                      const mode = e.target.value as 'day' | 'month' | 'quarter' | 'semester' | 'year';
-                      setFilterPeriodMode(mode);
-                      setFilterDate(mode === 'day' ? todayInManila() : '');
-                      if (mode === 'year') {
-                        setFilterMonth('');
-                        setFilterQuarter('');
-                        setFilterSemester('');
-                      } else if (mode === 'semester') {
-                        setFilterMonth('');
-                        setFilterQuarter('');
-                        setFilterSemester('');
-                      } else if (mode === 'quarter') {
-                        setFilterMonth('');
-                        setFilterQuarter('');
-                        setFilterSemester('');
-                      } else {
-                        setFilterMonth('');
-                        setFilterQuarter('');
-                        setFilterSemester('');
-                      }
+                {yearOptions.map((year) => (
+                  <MenuItem key={year} value={year.toString()}>
+                    {year}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                label="Period"
+                value={filterPeriodMode}
+                onChange={(e) => {
+                  const mode = e.target.value as 'day' | 'month' | 'quarter' | 'semester' | 'year';
+                  setFilterPeriodMode(mode);
+                  setFilterDate(mode === 'day' ? todayInManila() : '');
+                  if (mode === 'year') {
+                    setFilterMonth('');
+                    setFilterQuarter('');
+                    setFilterSemester('');
+                  } else if (mode === 'semester') {
+                    setFilterMonth('');
+                    setFilterQuarter('');
+                    setFilterSemester('');
+                  } else if (mode === 'quarter') {
+                    setFilterMonth('');
+                    setFilterQuarter('');
+                    setFilterSemester('');
+                  } else {
+                    setFilterMonth('');
+                    setFilterQuarter('');
+                    setFilterSemester('');
+                  }
+                }}
+                size="small"
+              >
+                <MenuItem value="day">Daily</MenuItem>
+                <MenuItem value="month">Monthly</MenuItem>
+                <MenuItem value="quarter">Quarterly</MenuItem>
+                <MenuItem value="semester">Semester</MenuItem>
+                <MenuItem value="year">Full Year</MenuItem>
+              </TextField>
+              {filterPeriodMode === 'day' && (
+                <TextField
+                  type="date"
+                  label="Date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+              )}
+              {filterPeriodMode === 'month' && (
+                <TextField
+                  select
+                  label="Month"
+                  value={filterMonth}
+                  onChange={(e) => setFilterMonth(e.target.value)}
+                  size="small"
+                >
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="1">January</MenuItem>
+                  <MenuItem value="2">February</MenuItem>
+                  <MenuItem value="3">March</MenuItem>
+                  <MenuItem value="4">April</MenuItem>
+                  <MenuItem value="5">May</MenuItem>
+                  <MenuItem value="6">June</MenuItem>
+                  <MenuItem value="7">July</MenuItem>
+                  <MenuItem value="8">August</MenuItem>
+                  <MenuItem value="9">September</MenuItem>
+                  <MenuItem value="10">October</MenuItem>
+                  <MenuItem value="11">November</MenuItem>
+                  <MenuItem value="12">December</MenuItem>
+                </TextField>
+              )}
+              {filterPeriodMode === 'quarter' && (
+                <TextField
+                  select
+                  label="Quarter"
+                  value={filterQuarter}
+                  onChange={(e) => setFilterQuarter(e.target.value)}
+                  size="small"
+                >
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="1">Q1</MenuItem>
+                  <MenuItem value="2">Q2</MenuItem>
+                  <MenuItem value="3">Q3</MenuItem>
+                  <MenuItem value="4">Q4</MenuItem>
+                </TextField>
+              )}
+              {filterPeriodMode === 'semester' && (
+                <TextField
+                  select
+                  label="Semester"
+                  value={filterSemester}
+                  onChange={(e) => setFilterSemester(e.target.value)}
+                  size="small"
+                >
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="1">1st Semester</MenuItem>
+                  <MenuItem value="2">2nd Semester</MenuItem>
+                </TextField>
+              )}
+              <Button
+                variant="outlined"
+                sx={{ minWidth: 0, height: 36 }}
+                onClick={() => {
+                  setFilterStatus('');
+                  setFilterType('');
+                  setFilterPriority('');
+                  setFilterSla('');
+                  setFilterYear(new Date().getFullYear().toString());
+                  setFilterMonth((new Date().getMonth() + 1).toString());
+                  setFilterQuarter('');
+                  setFilterSemester('');
+                  setFilterPeriodMode('day');
+                  setFilterDate(todayInManila());
+                  setSelectedTab('all');
+                }}
+              >
+                Reset
+              </Button>
+              <Box
+                sx={{
+                  gridColumn: { xs: '1 / -1', sm: 'span 2', md: 'span 2', lg: 'span 2' },
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  gap: 1,
+                  minWidth: 0,
+                }}
+              >
+                {!restrictedAssignedOnly && (isFocalTech || canManageAll) && (
+                  <Badge
+                    badgeContent={myTicketsCount}
+                    color="error"
+                    overlap="circular"
+                    sx={{
+                      width: '100%',
+                      minWidth: 0,
+                      height: 36,
+                      '& .MuiBadge-badge': { zIndex: 1 },
                     }}
-                    size="small"
                   >
-                    <MenuItem value="day">Daily</MenuItem>
-                    <MenuItem value="month">Monthly</MenuItem>
-                    <MenuItem value="quarter">Quarterly</MenuItem>
-                    <MenuItem value="semester">Semester</MenuItem>
-                    <MenuItem value="year">Full Year</MenuItem>
-                  </TextField>
-                  {filterPeriodMode === 'day' && (
-                    <TextField type="date" label="Date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} size="small" InputLabelProps={{ shrink: true }} />
-                  )}
-                  {filterPeriodMode === 'month' && (
-                    <TextField
-                      select
-                      label="Month"
-                      value={filterMonth}
-                      onChange={(e) => setFilterMonth(e.target.value)}
+                    <Button
+                      fullWidth
                       size="small"
+                      variant={showMyTickets ? 'contained' : 'outlined'}
+                      color="primary"
+                      sx={{ height: '100%', whiteSpace: 'nowrap', px: 1 }}
+                      onClick={() => {
+                        setShowMyTickets((v) => !v);
+                        setShowEscalatedToMe(false);
+                      }}
                     >
-                      <MenuItem value="">All</MenuItem>
-                      <MenuItem value="1">January</MenuItem>
-                      <MenuItem value="2">February</MenuItem>
-                      <MenuItem value="3">March</MenuItem>
-                      <MenuItem value="4">April</MenuItem>
-                      <MenuItem value="5">May</MenuItem>
-                      <MenuItem value="6">June</MenuItem>
-                      <MenuItem value="7">July</MenuItem>
-                      <MenuItem value="8">August</MenuItem>
-                      <MenuItem value="9">September</MenuItem>
-                      <MenuItem value="10">October</MenuItem>
-                      <MenuItem value="11">November</MenuItem>
-                      <MenuItem value="12">December</MenuItem>
-                    </TextField>
-                  )}
-                  {filterPeriodMode === 'quarter' && (
-                    <TextField
-                      select
-                      label="Quarter"
-                      value={filterQuarter}
-                      onChange={(e) => setFilterQuarter(e.target.value)}
-                      size="small"
-                    >
-                      <MenuItem value="">All</MenuItem>
-                      <MenuItem value="1">Q1</MenuItem>
-                      <MenuItem value="2">Q2</MenuItem>
-                      <MenuItem value="3">Q3</MenuItem>
-                      <MenuItem value="4">Q4</MenuItem>
-                    </TextField>
-                  )}
-                  {filterPeriodMode === 'semester' && (
-                    <TextField
-                      select
-                      label="Semester"
-                      value={filterSemester}
-                      onChange={(e) => setFilterSemester(e.target.value)}
-                      size="small"
-                    >
-                      <MenuItem value="">All</MenuItem>
-                      <MenuItem value="1">1st Semester</MenuItem>
-                      <MenuItem value="2">2nd Semester</MenuItem>
-                    </TextField>
-                  )}
-                  <Button
-                    variant="outlined"
-                    sx={{ minWidth: 0, height: 36 }}
-                    onClick={() => {
-                      setFilterStatus('');
-                      setFilterType('');
-                      setFilterPriority('');
-                      setFilterSla('');
-                      setFilterYear(new Date().getFullYear().toString());
-                      setFilterMonth((new Date().getMonth() + 1).toString());
-                      setFilterQuarter('');
-                      setFilterSemester('');
-                      setFilterPeriodMode('day');
-                      setFilterDate(todayInManila());
-                      setSelectedTab('all');
+                      {showMyTickets ? 'My Tickets ✓' : 'My Tickets'}
+                    </Button>
+                  </Badge>
+                )}
+                {canViewEscalatedQueue && (
+                  <Badge
+                    badgeContent={escalatedToMeCount}
+                    color="error"
+                    overlap="circular"
+                    sx={{
+                      width: '100%',
+                      minWidth: 0,
+                      height: 36,
+                      '& .MuiBadge-badge': { zIndex: 1 },
                     }}
                   >
-                    Reset
-                  </Button>
-                  <Box sx={{ gridColumn: { xs: '1 / -1', sm: 'span 2', md: 'span 2', lg: 'span 2' }, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1, minWidth: 0 }}>
-                  {!restrictedAssignedOnly && (isFocalTech || canManageAll) && (
-                    <Badge badgeContent={myTicketsCount} color="error" overlap="circular" sx={{ width: '100%', minWidth: 0, height: 36, '& .MuiBadge-badge': { zIndex: 1 } }}>
-                      <Button
-                        fullWidth
-                        size="small"
-                        variant={showMyTickets ? 'contained' : 'outlined'}
-                        color="primary"
-                        sx={{ height: '100%', whiteSpace: 'nowrap', px: 1 }}
-                        onClick={() => {
-                          setShowMyTickets((v) => !v);
-                          setShowEscalatedToMe(false);
-                        }}
-                      >
-                        {showMyTickets ? 'My Tickets ✓' : 'My Tickets'}
-                      </Button>
-                    </Badge>
-                  )}
-                  {canViewEscalatedQueue && (
-                    <Badge badgeContent={escalatedToMeCount} color="error" overlap="circular" sx={{ width: '100%', minWidth: 0, height: 36, '& .MuiBadge-badge': { zIndex: 1 } }}>
-                      <Button
-                        fullWidth
-                        size="small"
-                        variant={showEscalatedToMe ? 'contained' : 'outlined'}
-                        color="warning"
-                        sx={{ height: '100%', whiteSpace: 'nowrap', px: 1 }}
-                        onClick={() => {
-                          setShowEscalatedToMe((v) => !v);
-                          setShowMyTickets(false);
-                        }}
-                      >
-                        {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
-                      </Button>
-                    </Badge>
-                  )}
-                  </Box>
+                    <Button
+                      fullWidth
+                      size="small"
+                      variant={showEscalatedToMe ? 'contained' : 'outlined'}
+                      color="warning"
+                      sx={{ height: '100%', whiteSpace: 'nowrap', px: 1 }}
+                      onClick={() => {
+                        setShowEscalatedToMe((v) => !v);
+                        setShowMyTickets(false);
+                      }}
+                    >
+                      {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
+                    </Button>
+                  </Badge>
+                )}
+              </Box>
             </Box>
           </CardContent>
         </Card>
       )}
-      {!showEscalations && !restrictedAssignedOnly && !canManageAll && (isFocalTech || canViewEscalatedQueue) && (
-        <Card sx={{ mb: 1 }}>
-          <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-            <Stack direction="row" spacing={1} sx={{ '& > *': { flex: 1, maxWidth: { xs: '100%', md: '50%', lg: '33%' } } }}>
-              {(isFocalTech || canManageAll) && (
-                <Badge badgeContent={myTicketsCount} color="error" overlap="circular" sx={{ width: '100%', '& .MuiBadge-badge': { zIndex: 1 } }}>
-                  <Button
-                    fullWidth
-                    size="small"
-                    variant={showMyTickets ? 'contained' : 'outlined'}
-                    color="primary"
-                    onClick={() => {
-                      setShowMyTickets((v) => !v);
-                      setShowEscalatedToMe(false);
-                    }}
+      {!showEscalations &&
+        !restrictedAssignedOnly &&
+        !canManageAll &&
+        (isFocalTech || canViewEscalatedQueue) && (
+          <Card sx={{ mb: 1 }}>
+            <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ '& > *': { flex: 1, maxWidth: { xs: '100%', md: '50%', lg: '33%' } } }}
+              >
+                {(isFocalTech || canManageAll) && (
+                  <Badge
+                    badgeContent={myTicketsCount}
+                    color="error"
+                    overlap="circular"
+                    sx={{ width: '100%', '& .MuiBadge-badge': { zIndex: 1 } }}
                   >
-                    {showMyTickets ? 'My Assigned Tickets ✓' : 'All Tickets'}
-                  </Button>
-                </Badge>
-              )}
-              {canViewEscalatedQueue && (
-                <Badge badgeContent={escalatedToMeCount} color="error" overlap="circular" sx={{ width: '100%', '& .MuiBadge-badge': { zIndex: 1 } }}>
-                  <Button
-                    fullWidth
-                    size="small"
-                    variant={showEscalatedToMe ? 'contained' : 'outlined'}
-                    color="warning"
-                    onClick={() => {
-                      setShowEscalatedToMe((v) => !v);
-                      setShowMyTickets(false);
-                    }}
+                    <Button
+                      fullWidth
+                      size="small"
+                      variant={showMyTickets ? 'contained' : 'outlined'}
+                      color="primary"
+                      onClick={() => {
+                        setShowMyTickets((v) => !v);
+                        setShowEscalatedToMe(false);
+                      }}
+                    >
+                      {showMyTickets ? 'My Assigned Tickets ✓' : 'All Tickets'}
+                    </Button>
+                  </Badge>
+                )}
+                {canViewEscalatedQueue && (
+                  <Badge
+                    badgeContent={escalatedToMeCount}
+                    color="error"
+                    overlap="circular"
+                    sx={{ width: '100%', '& .MuiBadge-badge': { zIndex: 1 } }}
                   >
-                    {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
-                  </Button>
-                </Badge>
-              )}
-            </Stack>
-          </CardContent>
-        </Card>
-      )}
+                    <Button
+                      fullWidth
+                      size="small"
+                      variant={showEscalatedToMe ? 'contained' : 'outlined'}
+                      color="warning"
+                      onClick={() => {
+                        setShowEscalatedToMe((v) => !v);
+                        setShowMyTickets(false);
+                      }}
+                    >
+                      {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
+                    </Button>
+                  </Badge>
+                )}
+              </Stack>
+            </CardContent>
+          </Card>
+        )}
       {!showEscalations && isLowerLevelTech && (
         <Card sx={{ mb: 2 }}>
           <CardContent>
@@ -1555,23 +1742,60 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
           </CardContent>
         </Card>
       )}
-      {!showEscalations && <Card sx={{ mb: 1 }}>
-        <CardContent sx={{ pt: 0.5, px: 1, pb: '0 !important' }}>
-          <Tabs value={selectedTab === 'to_rate' ? false : selectedTab} onChange={(_, value) => { setSelectedTab(value); setShowEscalations(false); }} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
-            {statusTabs.map(({ key, label }) => (
-              <Tab key={key} value={key} label={key === 'proxy' ? label : `${label} (${key === 'all' ? allCount : statusCounts[key] ?? 0})`} />
-            ))}
-          </Tabs>
-          {user?.role === 'user' && <Button size="small" onClick={() => { setSelectedTab('to_rate'); setShowEscalations(false); }}>To Rate ({pendingSatCount})</Button>}
-        </CardContent>
-      </Card>}
+      {!showEscalations && (
+        <Card sx={{ mb: 1 }}>
+          <CardContent sx={{ pt: 0.5, px: 1, pb: '0 !important' }}>
+            <Tabs
+              value={selectedTab === 'to_rate' ? false : selectedTab}
+              onChange={(_, value) => {
+                setSelectedTab(value);
+                setShowEscalations(false);
+              }}
+              variant="scrollable"
+              scrollButtons="auto"
+              allowScrollButtonsMobile
+            >
+              {statusTabs.map(({ key, label }) => (
+                <Tab
+                  key={key}
+                  value={key}
+                  label={
+                    key === 'proxy'
+                      ? label
+                      : `${label} (${key === 'all' ? allCount : (statusCounts[key] ?? 0)})`
+                  }
+                />
+              ))}
+            </Tabs>
+            {user?.role === 'user' && (
+              <Button
+                size="small"
+                onClick={() => {
+                  setSelectedTab('to_rate');
+                  setShowEscalations(false);
+                }}
+              >
+                To Rate ({pendingSatCount})
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {canViewEscalatedQueue && showEscalations ? (
         <Card sx={{ mb: 2 }}>
           <CardContent>
-            <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} gap={1} mb={2}>
+            <Box
+              display="flex"
+              flexDirection={{ xs: 'column', sm: 'row' }}
+              justifyContent="space-between"
+              alignItems={{ xs: 'stretch', sm: 'center' }}
+              gap={1}
+              mb={2}
+            >
               <Typography variant="body2" color="text.secondary">
-                {frontendFilteredEscalations.length} escalation{frontendFilteredEscalations.length === 1 ? '' : 's'} · newest first
+                {frontendFilteredEscalations.length} escalation
+                {frontendFilteredEscalations.length === 1 ? '' : 's'} · newest first
               </Typography>
               <TextField
                 size="small"
@@ -1605,7 +1829,12 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                   </TableHead>
                   <TableBody>
                     {visibleEscalations.map((e) => (
-                      <TableRow key={e.id} hover onClick={() => router.push(`/operations/tickets/${e.ticketId}`)} sx={{ cursor: 'pointer' }}>
+                      <TableRow
+                        key={e.id}
+                        hover
+                        onClick={() => router.push(`/operations/tickets/${e.ticketId}`)}
+                        sx={{ cursor: 'pointer' }}
+                      >
                         <TableCell>{new Date(e.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell>
                           <Typography variant="body2" fontWeight={600} color="primary.main">
@@ -1616,12 +1845,21 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                           <Chip
                             size="small"
                             label={e.status.toUpperCase()}
-                            color={e.status === 'pending' ? 'warning' : e.status === 'accepted' ? 'success' : 'default'}
+                            color={
+                              e.status === 'pending'
+                                ? 'warning'
+                                : e.status === 'accepted'
+                                  ? 'success'
+                                  : 'default'
+                            }
                           />
                         </TableCell>
                         <TableCell>{formatPersonName(e.escalatedBy, '—')}</TableCell>
                         <TableCell>{formatPersonName(e.escalatedTo, '—')}</TableCell>
-                        <TableCell>{e.notes?.substring(0, 50)}{(e.notes?.length ?? 0) > 50 ? '...' : ''}</TableCell>
+                        <TableCell>
+                          {e.notes?.substring(0, 50)}
+                          {(e.notes?.length ?? 0) > 50 ? '...' : ''}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1630,7 +1868,15 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
             )}
             {escalationTotalPages > 1 && (
               <Box display="flex" justifyContent="center" mt={2}>
-                <Pagination count={escalationTotalPages} page={escalationPage} onChange={(_, value) => setEscalationPage(value)} color="primary" size="small" showFirstButton showLastButton />
+                <Pagination
+                  count={escalationTotalPages}
+                  page={escalationPage}
+                  onChange={(_, value) => setEscalationPage(value)}
+                  color="primary"
+                  size="small"
+                  showFirstButton
+                  showLastButton
+                />
               </Box>
             )}
           </CardContent>
@@ -1739,7 +1985,12 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                         ) : null;
                       })()}
                       {ticket.resolutionTimeOverride && (
-                        <Chip size="small" label="SLA time adjusted" color="secondary" variant="outlined" />
+                        <Chip
+                          size="small"
+                          label="SLA time adjusted"
+                          color="secondary"
+                          variant="outlined"
+                        />
                       )}
                     </Stack>
                     <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -1811,20 +2062,21 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                             </IconButton>
                           </Tooltip>
                         )}
-                        {canOverrideResolutionTime && ['resolved', 'closed'].includes(ticket.status) && (
-                          <Tooltip title="Correct resolution time">
-                            <IconButton
-                              size="small"
-                              color="secondary"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openResolutionOverrideDialog(ticket);
-                              }}
-                            >
-                              <ResolutionTimeIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
+                        {canOverrideResolutionTime &&
+                          ['resolved', 'closed'].includes(ticket.status) && (
+                            <Tooltip title="Correct resolution time">
+                              <IconButton
+                                size="small"
+                                color="secondary"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openResolutionOverrideDialog(ticket);
+                                }}
+                              >
+                                <ResolutionTimeIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                       </Stack>
                     </Box>
                   </CardContent>
@@ -1838,7 +2090,9 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
           {canScrollLeft && (
             <IconButton
               size="small"
-              onClick={() => tableContainerRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
+              onClick={() =>
+                tableContainerRef.current?.scrollBy({ left: -300, behavior: 'smooth' })
+              }
               sx={{
                 position: 'absolute',
                 left: 8, // float over the sticky Ticket column
@@ -1847,7 +2101,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                 zIndex: 4,
                 bgcolor: 'background.paper',
                 boxShadow: 3,
-                '&:hover': { bgcolor: 'background.paper' }
+                '&:hover': { bgcolor: 'background.paper' },
               }}
             >
               <ChevronLeft />
@@ -1865,312 +2119,397 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                 zIndex: 4,
                 bgcolor: 'background.paper',
                 boxShadow: 3,
-                '&:hover': { bgcolor: 'background.paper' }
+                '&:hover': { bgcolor: 'background.paper' },
               }}
             >
               <ChevronRight />
             </IconButton>
           )}
-          <TableContainer 
-            component={Card} 
+          <TableContainer
+            component={Card}
             sx={{ overflow: 'auto', maxHeight: 'calc(100vh - 320px)' }}
             ref={tableContainerRef}
             onScroll={handleTableScroll}
           >
-          <Table size="small" stickyHeader sx={{ tableLayout: 'fixed', width: '100%', minWidth: canManageAll ? 1300 : 1060 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ width: 90, position: 'sticky', left: 0, backgroundColor: 'background.paper', zIndex: 3, borderRight: '1px solid', borderColor: 'divider' }}>Ticket #</TableCell>
-                <TableCell sx={{ width: 270 }}>Subject</TableCell>
-                <TableCell sx={{ width: 150 }}>Type</TableCell>
-                <TableCell sx={{ width: 130 }}>Category</TableCell>
-                <TableCell sx={{ width: 110 }}>Priority</TableCell>
-                <TableCell sx={{ width: 140, ...populatedFieldSx(!!user?.middleName) }}>Status</TableCell>
-                <TableCell sx={{ width: 120 }}>SLA</TableCell>
-                {canManageAll && <TableCell sx={{ width: 120 }}>Requester</TableCell>}
-                {canManageAll && <TableCell sx={{ width: 120 }}>Assigned To</TableCell>}
-                <TableCell sx={{ width: 140, ...populatedFieldSx(!!user?.middleName) }}>Date</TableCell>
-                <TableCell sx={{ width: 120 }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
+            <Table
+              size="small"
+              stickyHeader
+              sx={{ tableLayout: 'fixed', width: '100%', minWidth: canManageAll ? 1300 : 1060 }}
+            >
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={11} align="center">
-                    <CircularProgress size={28} />
+                  <TableCell
+                    sx={{
+                      width: 90,
+                      position: 'sticky',
+                      left: 0,
+                      backgroundColor: 'background.paper',
+                      zIndex: 3,
+                      borderRight: '1px solid',
+                      borderColor: 'divider',
+                    }}
+                  >
+                    Ticket #
                   </TableCell>
-                </TableRow>
-              ) : tabFilteredTickets.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={11} align="center">
-                    <Typography color="text.secondary" py={3}>
-                      No tickets found in this category.
-                    </Typography>
+                  <TableCell sx={{ width: 270 }}>Subject</TableCell>
+                  <TableCell sx={{ width: 150 }}>Type</TableCell>
+                  <TableCell sx={{ width: 130 }}>Category</TableCell>
+                  <TableCell sx={{ width: 110 }}>Priority</TableCell>
+                  <TableCell sx={{ width: 140, ...populatedFieldSx(!!user?.middleName) }}>
+                    Status
                   </TableCell>
+                  <TableCell sx={{ width: 120 }}>SLA</TableCell>
+                  {canManageAll && <TableCell sx={{ width: 120 }}>Requester</TableCell>}
+                  {canManageAll && <TableCell sx={{ width: 120 }}>Assigned To</TableCell>}
+                  <TableCell sx={{ width: 140, ...populatedFieldSx(!!user?.middleName) }}>
+                    Date
+                  </TableCell>
+                  <TableCell sx={{ width: 120 }}>Actions</TableCell>
                 </TableRow>
-              ) : (
-                tabFilteredTickets.map((ticket) => {
-                  const hasPendingSatisfaction =
-                    (ticket.status === 'resolved' || ticket.status === 'closed') &&
-                    ticket.requesterId === user?.id &&
-                    !ticket.satisfactionSubmittedAt;
+              </TableHead>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={11} align="center">
+                      <CircularProgress size={28} />
+                    </TableCell>
+                  </TableRow>
+                ) : tabFilteredTickets.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={11} align="center">
+                      <Typography color="text.secondary" py={3}>
+                        No tickets found in this category.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  tabFilteredTickets.map((ticket) => {
+                    const hasPendingSatisfaction =
+                      (ticket.status === 'resolved' || ticket.status === 'closed') &&
+                      ticket.requesterId === user?.id &&
+                      !ticket.satisfactionSubmittedAt;
 
-                  const hasUnread = canManageAll ? ticket.hasUnreadTechnician : ticket.hasUnreadUser;
+                    const hasUnread = canManageAll
+                      ? ticket.hasUnreadTechnician
+                      : ticket.hasUnreadUser;
 
-                  return (
-                    <TableRow
-                      key={ticket.id}
-                      hover
-                      className="ticket-row"
-                      sx={[
-                        { '&:hover .ticket-cell::after': { opacity: 1 } }
-                      ]}
-                    >
-                      {/* Ticket # */}
-                      <TableCell 
-                        className="ticket-cell"
-                        sx={{ 
-                          fontFamily: 'monospace', fontWeight: 600, wordBreak: 'break-word', 
-                          position: 'sticky', left: 0, 
-                          bgcolor: (theme) => theme.palette.mode === 'dark' ? '#121212' : '#ffffff', 
-                          zIndex: 2, borderRight: '1px solid', borderColor: 'divider',
-                          '&::after': {
-                            content: '""',
-                            position: 'absolute',
-                            top: 0, left: 0, right: 0, bottom: 0,
-                            bgcolor: 'rgba(0, 0, 0, 0.04)',
-                            opacity: 0,
-                            transition: 'opacity 0.2s',
-                            pointerEvents: 'none',
-                            zIndex: 0,
-                          }
-                        }}
+                    return (
+                      <TableRow
+                        key={ticket.id}
+                        hover
+                        className="ticket-row"
+                        sx={[{ '&:hover .ticket-cell::after': { opacity: 1 } }]}
                       >
-                        <Box sx={{ position: 'relative', zIndex: 1 }}>
-                          {hasUnread ? (
-                            <Badge color="error" variant="dot" sx={{ '& .MuiBadge-badge': { right: -6, top: 4 } }}>
-                              {ticket.ticketNumber}
-                            </Badge>
-                          ) : (
-                            ticket.ticketNumber
-                          )}
-                        </Box>
-                      </TableCell>
-                      {/* Subject — only column with ellipsis */}
-                      <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {ticket.subject}
-                      </TableCell>
-                      {/* Type */}
-                      <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
-                        <Stack direction="column" spacing={0.5}>
-                          {ticket.createdById && ticket.createdById !== ticket.requesterId && (
-                            <Chip
-                              size="small"
-                              label="Proxy"
-                              color="secondary"
-                              sx={{
-                                width: '100%', height: 'auto', py: 0.5,
-                                '& .MuiChip-label': { display: 'block', whiteSpace: 'normal', wordBreak: 'break-word' }
-                              }}
-                            />
-                          )}
-                          <Chip
-                            size="small"
-                            icon={ticketTypeIcon(ticket.ticketType)}
-                            label={TICKET_TYPE_LABELS[ticket.ticketType]}
-                            variant="outlined"
-                            sx={{
-                              width: '100%', height: 'auto', py: 0.5,
-                              '& .MuiChip-label': { display: 'block', whiteSpace: 'normal', wordBreak: 'break-word' }
-                            }}
-                          />
-                        </Stack>
-                      </TableCell>
-                      {/* Category */}
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
-                          {ticket.category?.name ?? '—'}
-                        </Typography>
-                      </TableCell>
-                      {/* Priority */}
-                      <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
-                        {ticket.priority ? (
-                          <Chip
-                            size="small"
-                            label={ticket.priority.toUpperCase()}
-                            color={ticket.priority === 'critical' ? 'default' : (PRIORITY_COLOR[ticket.priority] ?? 'default')}
-                            sx={{
-                              width: '100%',
-                              ...(ticket.priority === 'critical' && {
-                                bgcolor: '#000',
-                                color: '#fff',
-                                '& .MuiChip-label': { color: '#fff' },
-                              }),
-                              ...(ticket.priority === 'urgent' && {
-                                bgcolor: 'error.dark',
-                                color: '#fff',
-                                '& .MuiChip-label': { color: '#fff' },
-                              }),
-                            }}
-                          />
-                        ) : (
-                          <Typography variant="body2" color="text.disabled">—</Typography>
-                        )}
-                      </TableCell>
-                      {/* Status */}
-                      <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
-                        <Stack direction="column" spacing={0.5}>
-                          <Chip
-                            size="small"
-                            label={ticket.status.replace(/_/g, ' ').toUpperCase()}
-                            color={STATUS_COLOR[ticket.status] ?? 'default'}
-                            sx={{ width: '100%' }}
-                          />
-                          {hasPendingSatisfaction && (
-                            <Chip size="small" label="Unrated" color="warning" variant="filled" sx={{ width: '100%' }} />
-                          )}
-                        </Stack>
-                      </TableCell>
-                      {/* SLA */}
-                      <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
-                        {(() => {
-                          const s = getSlaStatus(ticket);
-                          return s ? (
-                            <Stack spacing={0.5}>
+                        {/* Ticket # */}
+                        <TableCell
+                          className="ticket-cell"
+                          sx={{
+                            fontFamily: 'monospace',
+                            fontWeight: 600,
+                            wordBreak: 'break-word',
+                            position: 'sticky',
+                            left: 0,
+                            bgcolor: (theme) =>
+                              theme.palette.mode === 'dark' ? '#121212' : '#ffffff',
+                            zIndex: 2,
+                            borderRight: '1px solid',
+                            borderColor: 'divider',
+                            '&::after': {
+                              content: '""',
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              bgcolor: 'rgba(0, 0, 0, 0.04)',
+                              opacity: 0,
+                              transition: 'opacity 0.2s',
+                              pointerEvents: 'none',
+                              zIndex: 0,
+                            },
+                          }}
+                        >
+                          <Box sx={{ position: 'relative', zIndex: 1 }}>
+                            {hasUnread ? (
+                              <Badge
+                                color="error"
+                                variant="dot"
+                                sx={{ '& .MuiBadge-badge': { right: -6, top: 4 } }}
+                              >
+                                {ticket.ticketNumber}
+                              </Badge>
+                            ) : (
+                              ticket.ticketNumber
+                            )}
+                          </Box>
+                        </TableCell>
+                        {/* Subject — only column with ellipsis */}
+                        <TableCell
+                          sx={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {ticket.subject}
+                        </TableCell>
+                        {/* Type */}
+                        <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
+                          <Stack direction="column" spacing={0.5}>
+                            {ticket.createdById && ticket.createdById !== ticket.requesterId && (
                               <Chip
                                 size="small"
-                                label={SLA_CHIP[s].label}
-                                color={SLA_CHIP[s].color}
-                                sx={{ width: '100%' }}
+                                label="Proxy"
+                                color="secondary"
+                                sx={{
+                                  width: '100%',
+                                  height: 'auto',
+                                  py: 0.5,
+                                  '& .MuiChip-label': {
+                                    display: 'block',
+                                    whiteSpace: 'normal',
+                                    wordBreak: 'break-word',
+                                  },
+                                }}
                               />
-                              {ticket.resolutionTimeOverride && (
-                                <Chip size="small" label="Time adjusted" color="secondary" variant="outlined" />
-                              )}
-                            </Stack>
-                          ) : (
-                            <Typography variant="body2" color="text.disabled">—</Typography>
-                          );
-                        })()}
-                      </TableCell>
-                      {/* Requester */}
-                      {canManageAll && (
+                            )}
+                            <Chip
+                              size="small"
+                              icon={ticketTypeIcon(ticket.ticketType)}
+                              label={TICKET_TYPE_LABELS[ticket.ticketType]}
+                              variant="outlined"
+                              sx={{
+                                width: '100%',
+                                height: 'auto',
+                                py: 0.5,
+                                '& .MuiChip-label': {
+                                  display: 'block',
+                                  whiteSpace: 'normal',
+                                  wordBreak: 'break-word',
+                                },
+                              }}
+                            />
+                          </Stack>
+                        </TableCell>
+                        {/* Category */}
                         <TableCell>
-                          <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                            {ticket.requester
-                              ? formatPersonName(ticket.requester, ticket.requester.email)
-                              : '—'}
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ whiteSpace: 'normal', wordBreak: 'break-word' }}
+                          >
+                            {ticket.category?.name ?? '—'}
                           </Typography>
                         </TableCell>
-                      )}
-                      {/* Assigned To */}
-                      {canManageAll && (
-                        <TableCell>
-                          {ticket.assignedTo ? (
-                            <Box display="flex" alignItems="center" gap={0.5}>
-                              <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                                {formatPersonName(ticket.assignedTo, ticket.assignedTo.email)}
-                              </Typography>
-                              {ticket.assignedTechAbsent && (canAssign || canManageAll) && (
-                                <Tooltip title="Technician is absent today">
-                                  <FiberManualRecord sx={{ color: 'error.main', fontSize: 10, flexShrink: 0 }} />
-                                </Tooltip>
-                              )}
-                            </Box>
+                        {/* Priority */}
+                        <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
+                          {ticket.priority ? (
+                            <Chip
+                              size="small"
+                              label={ticket.priority.toUpperCase()}
+                              color={
+                                ticket.priority === 'critical'
+                                  ? 'default'
+                                  : (PRIORITY_COLOR[ticket.priority] ?? 'default')
+                              }
+                              sx={{
+                                width: '100%',
+                                ...(ticket.priority === 'critical' && {
+                                  bgcolor: '#000',
+                                  color: '#fff',
+                                  '& .MuiChip-label': { color: '#fff' },
+                                }),
+                                ...(ticket.priority === 'urgent' && {
+                                  bgcolor: 'error.dark',
+                                  color: '#fff',
+                                  '& .MuiChip-label': { color: '#fff' },
+                                }),
+                              }}
+                            />
                           ) : (
-                            <Typography color="text.disabled" variant="body2">
-                              Unassigned
+                            <Typography variant="body2" color="text.disabled">
+                              —
                             </Typography>
                           )}
                         </TableCell>
-                      )}
-                      {/* Date */}
-                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                        {new Date(ticket.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                          <Tooltip title="View Details">
-                            <IconButton
+                        {/* Status */}
+                        <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
+                          <Stack direction="column" spacing={0.5}>
+                            <Chip
                               size="small"
-                              onClick={() => router.push(`/operations/tickets/${ticket.id}`)}
-                            >
-                              <ViewIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          {canAssign && ticket.status !== 'duplicate' && (
-                            <Tooltip
-                              title={
-                                ['resolved', 'closed'].includes(ticket.status)
-                                  ? 'Reassign disabled for resolved/closed tickets'
-                                  : ticket.assignedToId
-                                    ? 'Reassign Ticket'
-                                    : 'Assign Ticket'
-                              }
-                            >
-                              <span>
-                                <IconButton
-                                  size="small"
-                                  color="primary"
-                                  onClick={() => openAssignDialog(ticket)}
-                                  disabled={['resolved', 'closed'].includes(ticket.status)}
-                                >
-                                  <AssignIcon fontSize="small" />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
-                          )}
-                          {canEscalate &&
-                            escalationStateByTicket[ticket.id] !== 'active' &&
-                            !['duplicate', 'closed', 'resolved'].includes(ticket.status) && (
-                              <Tooltip title="Escalate Ticket">
-                                <IconButton
-                                  size="small"
-                                  color="warning"
-                                  onClick={() => openEscalateDialog(ticket)}
-                                >
-                                  <AssignIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
+                              label={ticket.status.replace(/_/g, ' ').toUpperCase()}
+                              color={STATUS_COLOR[ticket.status] ?? 'default'}
+                              sx={{ width: '100%' }}
+                            />
+                            {hasPendingSatisfaction && (
+                              <Chip
+                                size="small"
+                                label="Unrated"
+                                color="warning"
+                                variant="filled"
+                                sx={{ width: '100%' }}
+                              />
                             )}
-                          {(ticket.status === 'resolved' || ticket.status === 'closed') &&
-                            ticket.requesterId === user?.id &&
-                            !ticket.satisfactionSubmittedAt && (
-                              <Tooltip title="Rate this resolution">
-                                <IconButton
+                          </Stack>
+                        </TableCell>
+                        {/* SLA */}
+                        <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
+                          {(() => {
+                            const s = getSlaStatus(ticket);
+                            return s ? (
+                              <Stack spacing={0.5}>
+                                <Chip
                                   size="small"
-                                  color="success"
-                                  onClick={() => openSatDialog(ticket)}
-                                >
-                                  <SatisfactionIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
+                                  label={SLA_CHIP[s].label}
+                                  color={SLA_CHIP[s].color}
+                                  sx={{ width: '100%' }}
+                                />
+                                {ticket.resolutionTimeOverride && (
+                                  <Chip
+                                    size="small"
+                                    label="Time adjusted"
+                                    color="secondary"
+                                    variant="outlined"
+                                  />
+                                )}
+                              </Stack>
+                            ) : (
+                              <Typography variant="body2" color="text.disabled">
+                                —
+                              </Typography>
+                            );
+                          })()}
+                        </TableCell>
+                        {/* Requester */}
+                        {canManageAll && (
+                          <TableCell>
+                            <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                              {ticket.requester
+                                ? formatPersonName(ticket.requester, ticket.requester.email)
+                                : '—'}
+                            </Typography>
+                          </TableCell>
+                        )}
+                        {/* Assigned To */}
+                        {canManageAll && (
+                          <TableCell>
+                            {ticket.assignedTo ? (
+                              <Box display="flex" alignItems="center" gap={0.5}>
+                                <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                                  {formatPersonName(ticket.assignedTo, ticket.assignedTo.email)}
+                                </Typography>
+                                {ticket.assignedTechAbsent && (canAssign || canManageAll) && (
+                                  <Tooltip title="Technician is absent today">
+                                    <FiberManualRecord
+                                      sx={{ color: 'error.main', fontSize: 10, flexShrink: 0 }}
+                                    />
+                                  </Tooltip>
+                                )}
+                              </Box>
+                            ) : (
+                              <Typography color="text.disabled" variant="body2">
+                                Unassigned
+                              </Typography>
                             )}
-                          {canOverrideResolutionTime && ['resolved', 'closed'].includes(ticket.status) && (
-                            <Tooltip title="Correct resolution time">
+                          </TableCell>
+                        )}
+                        {/* Date */}
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                          {new Date(ticket.createdAt).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                            <Tooltip title="View Details">
                               <IconButton
                                 size="small"
-                                color="secondary"
-                                onClick={() => openResolutionOverrideDialog(ticket)}
+                                onClick={() => router.push(`/operations/tickets/${ticket.id}`)}
                               >
-                                <ResolutionTimeIcon fontSize="small" />
+                                <ViewIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                          )}
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                            {canAssign && ticket.status !== 'duplicate' && (
+                              <Tooltip
+                                title={
+                                  ['resolved', 'closed'].includes(ticket.status)
+                                    ? 'Reassign disabled for resolved/closed tickets'
+                                    : ticket.assignedToId
+                                      ? 'Reassign Ticket'
+                                      : 'Assign Ticket'
+                                }
+                              >
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    color="primary"
+                                    onClick={() => openAssignDialog(ticket)}
+                                    disabled={['resolved', 'closed'].includes(ticket.status)}
+                                  >
+                                    <AssignIcon fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            )}
+                            {canEscalate &&
+                              escalationStateByTicket[ticket.id] !== 'active' &&
+                              !['duplicate', 'closed', 'resolved'].includes(ticket.status) && (
+                                <Tooltip title="Escalate Ticket">
+                                  <IconButton
+                                    size="small"
+                                    color="warning"
+                                    onClick={() => openEscalateDialog(ticket)}
+                                  >
+                                    <AssignIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            {(ticket.status === 'resolved' || ticket.status === 'closed') &&
+                              ticket.requesterId === user?.id &&
+                              !ticket.satisfactionSubmittedAt && (
+                                <Tooltip title="Rate this resolution">
+                                  <IconButton
+                                    size="small"
+                                    color="success"
+                                    onClick={() => openSatDialog(ticket)}
+                                  >
+                                    <SatisfactionIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            {canOverrideResolutionTime &&
+                              ['resolved', 'closed'].includes(ticket.status) && (
+                                <Tooltip title="Correct resolution time">
+                                  <IconButton
+                                    size="small"
+                                    color="secondary"
+                                    onClick={() => openResolutionOverrideDialog(ticket)}
+                                  >
+                                    <ResolutionTimeIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </Box>
       )}
 
       {!showEscalations && totalPages > 1 && (
         <Box display="flex" justifyContent="center" sx={{ mt: 1, mb: 2 }}>
-          <Pagination count={totalPages} page={page} onChange={(_, value) => setPage(value)} color="primary" size="small" showFirstButton showLastButton />
+          <Pagination
+            count={totalPages}
+            page={page}
+            onChange={(_, value) => setPage(value)}
+            color="primary"
+            size="small"
+            showFirstButton
+            showLastButton
+          />
         </Box>
       )}
 
@@ -2219,7 +2558,14 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
               ].map((opt) => (
                 <Card
                   key={opt.value}
-                  onClick={() => setForm({ ...form, ticketType: opt.value, categoryId: undefined, issueTypeId: undefined })}
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      ticketType: opt.value,
+                      categoryId: undefined,
+                      issueTypeId: undefined,
+                    })
+                  }
                   sx={{
                     flex: 1,
                     cursor: 'pointer',
@@ -2249,105 +2595,149 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
               ))}
             </Stack>
 
-            {categories.length > 0 && (() => {
-              const filteredCategories = categories.filter((c) => {
-                if (c.isDeleted) return false;
-                if (form.ticketType === 'it_support') return c.isIt;
-                if (form.ticketType === 'desktop_support') return c.isDesktop;
-                if (form.ticketType === 'pantawid_ict_support') return c.isPantawid;
-                if (form.ticketType === 'specialized_concerns') return c.isSpecialized;
-                return false;
-              });
+            {categories.length > 0 &&
+              (() => {
+                const filteredCategories = categories.filter((c) => {
+                  if (c.isDeleted) return false;
+                  if (form.ticketType === 'it_support') return c.isIt;
+                  if (form.ticketType === 'desktop_support') return c.isDesktop;
+                  if (form.ticketType === 'pantawid_ict_support') return c.isPantawid;
+                  if (form.ticketType === 'specialized_concerns') return c.isSpecialized;
+                  return false;
+                });
 
-              if (filteredCategories.length === 0) return null;
+                if (filteredCategories.length === 0) return null;
 
-              return (
-                <Autocomplete
-                  options={filteredCategories}
-                  getOptionLabel={(category) => category.name}
-                  value={filteredCategories.find((category) => category.id === form.categoryId) ?? null}
-                  onChange={(_, category) => setForm({ ...form, categoryId: category?.id, issueTypeId: undefined })}
-                  isOptionEqualToValue={(option, value) => option.id === value.id}
-                  openOnFocus
-                  clearOnEscape
-                  fullWidth
-                  noOptionsText="No categories available"
-                  renderInput={(params) => (
-                    <TextField {...params} label="Category" helperText="Select a specific category for faster routing" />
-                  )}
-                />
-              );
-            })()}
+                return (
+                  <Autocomplete
+                    options={filteredCategories}
+                    getOptionLabel={(category) => category.name}
+                    value={
+                      filteredCategories.find((category) => category.id === form.categoryId) ?? null
+                    }
+                    onChange={(_, category) =>
+                      setForm({ ...form, categoryId: category?.id, issueTypeId: undefined })
+                    }
+                    isOptionEqualToValue={(option, value) => option.id === value.id}
+                    openOnFocus
+                    clearOnEscape
+                    fullWidth
+                    noOptionsText="No categories available"
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Category"
+                        helperText="Select a specific category for faster routing"
+                      />
+                    )}
+                  />
+                );
+              })()}
 
-            {user?.role !== 'user' && categories.length > 0 && issues.length > 0 && form.categoryId && (() => {
-              // Older ticket-settings responses serialize the foreign key as
-              // `category_id`; accept both shapes while the API contract is
-              // normalized so issue selection does not silently disappear.
-              const filteredIssues = issues.filter((iss) => !iss.isDeleted && (iss.categoryId ?? iss.category_id) === form.categoryId);
+            {user?.role !== 'user' &&
+              categories.length > 0 &&
+              issues.length > 0 &&
+              form.categoryId &&
+              (() => {
+                // Older ticket-settings responses serialize the foreign key as
+                // `category_id`; accept both shapes while the API contract is
+                // normalized so issue selection does not silently disappear.
+                const filteredIssues = issues.filter(
+                  (iss) =>
+                    !iss.isDeleted && (iss.categoryId ?? iss.category_id) === form.categoryId,
+                );
 
-              if (filteredIssues.length === 0) return null;
+                if (filteredIssues.length === 0) return null;
 
-              return (
-                <Autocomplete
-                  options={filteredIssues}
-                  getOptionLabel={(issue) => issue.name}
-                  value={filteredIssues.find((issue) => issue.id === form.issueTypeId) ?? null}
-                  onChange={(_, issue) => setForm({ ...form, issueTypeId: issue?.id })}
-                  isOptionEqualToValue={(option, value) => option.id === value.id}
-                  openOnFocus
-                  clearOnEscape
-                  fullWidth
-                  noOptionsText="No issues available"
-                  renderInput={(params) => (
-                    <TextField {...params} label="Issue *" required helperText="Required for RICTMS staff; this determines routing and SLA tracking" />
-                  )}
-                />
-              );
-            })()}
+                return (
+                  <Autocomplete
+                    options={filteredIssues}
+                    getOptionLabel={(issue) => issue.name}
+                    value={filteredIssues.find((issue) => issue.id === form.issueTypeId) ?? null}
+                    onChange={(_, issue) => setForm({ ...form, issueTypeId: issue?.id })}
+                    isOptionEqualToValue={(option, value) => option.id === value.id}
+                    openOnFocus
+                    clearOnEscape
+                    fullWidth
+                    noOptionsText="No issues available"
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Issue *"
+                        required
+                        helperText="Required for RICTMS staff; this determines routing and SLA tracking"
+                      />
+                    )}
+                  />
+                );
+              })()}
 
-            <TextField label="Subject *"
+            <TextField
+              label="Subject *"
               value={form.subject}
               onChange={(e) => setForm({ ...form, subject: e.target.value })}
               inputProps={{ maxLength: 255 }}
               fullWidth
               placeholder="Brief description of your issue"
             />
-            {categories.find(c => c.id === form.categoryId)?.name.toLowerCase().includes('disposal') && (
-              <Box p={2} mb={1} bgcolor="action.hover" borderRadius={1} border="1px solid" borderColor="divider">
+            {categories
+              .find((c) => c.id === form.categoryId)
+              ?.name.toLowerCase()
+              .includes('disposal') && (
+              <Box
+                p={2}
+                mb={1}
+                bgcolor="action.hover"
+                borderRadius={1}
+                border="1px solid"
+                borderColor="divider"
+              >
                 <Typography variant="subtitle2" gutterBottom>
                   Disposal Details
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
-                    <TextField label="Equipment Type *"
+                    <TextField
+                      label="Equipment Type *"
                       size="small"
                       fullWidth
                       value={disposalDetails.equipmentType}
-                      onChange={(e) => setDisposalDetails({ ...disposalDetails, equipmentType: e.target.value })}
+                      onChange={(e) =>
+                        setDisposalDetails({ ...disposalDetails, equipmentType: e.target.value })
+                      }
                     />
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <TextField label="Serial Number *"
+                    <TextField
+                      label="Serial Number *"
                       size="small"
                       fullWidth
                       value={disposalDetails.serialNumber}
-                      onChange={(e) => setDisposalDetails({ ...disposalDetails, serialNumber: e.target.value })}
+                      onChange={(e) =>
+                        setDisposalDetails({ ...disposalDetails, serialNumber: e.target.value })
+                      }
                     />
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <TextField label="Property Number *"
+                    <TextField
+                      label="Property Number *"
                       size="small"
                       fullWidth
                       value={disposalDetails.propertyNumber}
-                      onChange={(e) => setDisposalDetails({ ...disposalDetails, propertyNumber: e.target.value })}
+                      onChange={(e) =>
+                        setDisposalDetails({ ...disposalDetails, propertyNumber: e.target.value })
+                      }
                     />
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <TextField label="Reason for Disposal *"
+                    <TextField
+                      label="Reason for Disposal *"
                       size="small"
                       fullWidth
                       value={disposalDetails.reason}
-                      onChange={(e) => setDisposalDetails({ ...disposalDetails, reason: e.target.value })}
+                      onChange={(e) =>
+                        setDisposalDetails({ ...disposalDetails, reason: e.target.value })
+                      }
                     />
                   </Grid>
                 </Grid>
@@ -2356,7 +2746,9 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
             {loadingKb && (
               <Box display="flex" alignItems="center" gap={1}>
                 <CircularProgress size={16} />
-                <Typography variant="caption" color="text.secondary">Searching Knowledge Base...</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Searching Knowledge Base...
+                </Typography>
               </Box>
             )}
             {kbSuggestions.length > 0 && (
@@ -2366,8 +2758,17 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                     💡 Suggested Solutions
                   </Typography>
                   <Stack spacing={1}>
-                    {kbSuggestions.map(kb => (
-                      <Box key={kb.id} sx={{ bgcolor: 'background.paper', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                    {kbSuggestions.map((kb) => (
+                      <Box
+                        key={kb.id}
+                        sx={{
+                          bgcolor: 'background.paper',
+                          p: 1.5,
+                          borderRadius: 1,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                        }}
+                      >
                         <Typography
                           variant="body2"
                           fontWeight={600}
@@ -2379,21 +2780,60 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                         {kb.tags && (
                           <Box display="flex" gap={0.5} flexWrap="wrap" mb={1}>
                             {kb.tags.split(',').map((tag: string) => (
-                              <Chip key={tag} label={tag.trim()} size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
+                              <Chip
+                                key={tag}
+                                label={tag.trim()}
+                                size="small"
+                                variant="outlined"
+                                sx={{ fontSize: '0.65rem', height: 20 }}
+                              />
                             ))}
                           </Box>
                         )}
                         {expandedKbId === kb.id && (
                           <Box mt={1}>
-                            <Box sx={{ maxHeight: 200, overflowY: 'auto', p: 1, bgcolor: 'action.hover', borderRadius: 1, typography: 'body2', color: 'text.secondary', '& p': { m: 0, mb: 1 }, '& ul, & ol': { m: 0, pl: 2 } }}>
+                            <Box
+                              sx={{
+                                maxHeight: 200,
+                                overflowY: 'auto',
+                                p: 1,
+                                bgcolor: 'action.hover',
+                                borderRadius: 1,
+                                typography: 'body2',
+                                color: 'text.secondary',
+                                '& p': { m: 0, mb: 1 },
+                                '& ul, & ol': { m: 0, pl: 2 },
+                              }}
+                            >
                               <ReactMarkdown>{kb.content}</ReactMarkdown>
                             </Box>
-                            <Box display="flex" alignItems="center" gap={2} mt={1.5} pt={1} borderTop="1px solid" borderColor="divider">
-                              <Typography variant="caption" fontWeight={600}>Did this solve your issue?</Typography>
-                              <Button size="small" color="success" variant="outlined" startIcon={<SatisfactionIcon />} onClick={() => handleRateKb(kb.id, true)}>
+                            <Box
+                              display="flex"
+                              alignItems="center"
+                              gap={2}
+                              mt={1.5}
+                              pt={1}
+                              borderTop="1px solid"
+                              borderColor="divider"
+                            >
+                              <Typography variant="caption" fontWeight={600}>
+                                Did this solve your issue?
+                              </Typography>
+                              <Button
+                                size="small"
+                                color="success"
+                                variant="outlined"
+                                startIcon={<SatisfactionIcon />}
+                                onClick={() => handleRateKb(kb.id, true)}
+                              >
                                 Yes, cancel ticket
                               </Button>
-                              <Button size="small" color="error" variant="outlined" onClick={() => handleRateKb(kb.id, false)}>
+                              <Button
+                                size="small"
+                                color="error"
+                                variant="outlined"
+                                onClick={() => handleRateKb(kb.id, false)}
+                              >
                                 No
                               </Button>
                             </Box>
@@ -2405,7 +2845,8 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                 </CardContent>
               </Card>
             )}
-            <TextField label="Description *"
+            <TextField
+              label="Description *"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               inputProps={{ maxLength: 1000 }}
@@ -2414,19 +2855,24 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
               rows={4}
               placeholder="Provide details: what happened, when, steps tried..."
             />
-            <TicketImageDropzone files={selectedImages} onFilesChange={setSelectedImages} maxFiles={5} label="Attach up to 5 images (optional)." buttonLabel="Select Images" />
+            <TicketImageDropzone
+              files={selectedImages}
+              onFilesChange={setSelectedImages}
+              maxFiles={5}
+              label="Attach up to 5 images (optional)."
+              buttonLabel="Select Images"
+            />
             <Autocomplete
               options={allUsers.filter((u) => u.role !== 'super_admin')}
-              getOptionLabel={(u) =>
-                formatPersonName(u, u.email)
-              }
+              getOptionLabel={(u) => formatPersonName(u, u.email)}
               value={allUsers.find((u) => u.id === form.requesterId) ?? null}
               onChange={(_, newValue) =>
                 setForm({ ...form, requesterId: newValue?.id ?? undefined })
               }
               isOptionEqualToValue={(option, value) => option.id === value.id}
               renderInput={(params) => (
-                <TextField {...params}
+                <TextField
+                  {...params}
                   label="Requested For (Optional)"
                   helperText="Leave blank if you are requesting for yourself. Select a user to request on their behalf."
                   fullWidth
@@ -2438,8 +2884,12 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
             {isTicketAdmin && (
               <Autocomplete
                 options={technicians}
-                getOptionLabel={(technician) => `${formatPersonName(technician, technician.email)} (${technician.openCount ?? 0} Active${technician.attendanceStatus === 'out_of_office' ? ', OOO' : ''})`}
-                value={technicians.find((technician) => technician.id === form.assignedToId) ?? null}
+                getOptionLabel={(technician) =>
+                  `${formatPersonName(technician, technician.email)} (${technician.openCount ?? 0} Active${technician.attendanceStatus === 'out_of_office' ? ', OOO' : ''})`
+                }
+                value={
+                  technicians.find((technician) => technician.id === form.assignedToId) ?? null
+                }
                 onChange={(_, technician) => setForm({ ...form, assignedToId: technician?.id })}
                 isOptionEqualToValue={(option, value) => option.id === value.id}
                 openOnFocus
@@ -2460,7 +2910,8 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
               />
             )}
             {(canManageAll || isTechnician) && (
-              <TextField inputProps={{ maxLength: 255 }}
+              <TextField
+                inputProps={{ maxLength: 255 }}
                 select
                 label="Priority"
                 value={form.priority}
@@ -2476,17 +2927,17 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
 
             <Alert severity="info" sx={{ fontSize: '0.82rem' }}>
               Tickets are auto-assigned to available technicians.
-              {globalConfig && (
-                globalConfig.isEmailNotificationsEnabled === false ? (
+              {globalConfig &&
+                (globalConfig.isEmailNotificationsEnabled === false ? (
                   <strong style={{ display: 'block', marginTop: '4px', color: '#d32f2f' }}>
                     Email notifications are currently completely disabled globally.
                   </strong>
                 ) : globalConfig.emailTestOverride ? (
                   <strong style={{ display: 'block', marginTop: '4px', color: '#ed6c02' }}>
-                    Warning: All system emails are being rerouted to {globalConfig.emailTestOverride} for testing.
+                    Warning: All system emails are being rerouted to{' '}
+                    {globalConfig.emailTestOverride} for testing.
                   </strong>
-                ) : null
-              )}
+                ) : null)}
             </Alert>
           </Stack>
         </DialogContent>
@@ -2555,19 +3006,29 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
       </Dialog>
 
       {/* Assign Dialog */}
-      <Dialog open={!!resolutionOverrideTicket} onClose={closeResolutionOverrideDialog} maxWidth="sm" fullWidth>
+      <Dialog
+        open={!!resolutionOverrideTicket}
+        onClose={closeResolutionOverrideDialog}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Correct Resolution Time</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Alert severity="warning">
-              The recorded system resolution time will remain unchanged. The verified time will be used for SLA displays and reports.
+              The recorded system resolution time will remain unchanged. The verified time will be
+              used for SLA displays and reports.
             </Alert>
             <Typography variant="body2">
               Ticket: <strong>{resolutionOverrideTicket?.ticketNumber}</strong>
             </Typography>
             <TextField
               label="Recorded system resolution time"
-              value={resolutionOverrideTicket?.resolvedAt ? new Date(resolutionOverrideTicket.resolvedAt).toLocaleString() : ''}
+              value={
+                resolutionOverrideTicket?.resolvedAt
+                  ? new Date(resolutionOverrideTicket.resolvedAt).toLocaleString()
+                  : ''
+              }
               disabled
               fullWidth
             />
@@ -2602,18 +3063,20 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
               buttonLabel="Select Proof Image(s)"
             />
             <FormControlLabel
-              control={(
+              control={
                 <Checkbox
                   checked={resolutionOverrideConfirmed}
                   onChange={(event) => setResolutionOverrideConfirmed(event.target.checked)}
                 />
-              )}
+              }
               label="I confirm that the attached proof visibly supports the verified completion time."
             />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeResolutionOverrideDialog} disabled={savingResolutionOverride}>Cancel</Button>
+          <Button onClick={closeResolutionOverrideDialog} disabled={savingResolutionOverride}>
+            Cancel
+          </Button>
           <Button
             variant="contained"
             color="secondary"
@@ -2643,12 +3106,15 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
             </Typography>
             <Autocomplete
               options={technicians}
-              getOptionLabel={(t) => `${formatPersonName(t, t.email)} (${t.openCount} Active${t.attendanceStatus === 'out_of_office' ? ', OOO' : ''})`}
+              getOptionLabel={(t) =>
+                `${formatPersonName(t, t.email)} (${t.openCount} Active${t.attendanceStatus === 'out_of_office' ? ', OOO' : ''})`
+              }
               value={technicians.find((t) => String(t.id) === selectedTechId) ?? null}
               onChange={(_, newValue) => setSelectedTechId(newValue ? String(newValue.id) : '')}
               isOptionEqualToValue={(option, value) => option.id === value.id}
               renderInput={(params) => (
-                <TextField {...params}
+                <TextField
+                  {...params}
                   label="Select Technician"
                   fullWidth
                   error={technicians.length === 0}
@@ -2693,7 +3159,8 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
             onChange={(_, newValue) => setEscalateToId(newValue ? String(newValue.id) : '')}
             isOptionEqualToValue={(option, value) => option.id === value.id}
             renderInput={(params) => (
-              <TextField {...params}
+              <TextField
+                {...params}
                 label="Escalate To"
                 fullWidth
                 size="small"
@@ -2709,7 +3176,8 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
             clearOnEscape
             fullWidth
           />
-          <TextField inputProps={{ maxLength: 255 }}
+          <TextField
+            inputProps={{ maxLength: 255 }}
             fullWidth
             multiline
             rows={3}
@@ -2776,43 +3244,55 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                   options={unitSuggestions}
                   freeSolo
                   fullWidth
-                  disabled={!!user?.units?.[0]?.name} sx={populatedFieldSx(!!user?.units?.[0]?.name)}
+                  disabled={!!user?.units?.[0]?.name}
+                  sx={populatedFieldSx(!!user?.units?.[0]?.name)}
                   value={csatForm.unitSection}
                   onInputChange={(_, v) => setCsatForm((f) => ({ ...f, unitSection: v }))}
                   renderInput={(params) => <TextField {...params} label="Unit/Section *" />}
                 />
-                <TextField label="Date of Transaction *"
+                <TextField
+                  label="Date of Transaction *"
                   type="date"
                   value={csatForm.dateOfTransaction}
                   InputProps={{ readOnly: true }}
                   disabled
                   fullWidth
-                  InputLabelProps={{ shrink: true }} sx={populatedFieldSx(true)}
+                  InputLabelProps={{ shrink: true }}
+                  sx={populatedFieldSx(true)}
                 />
               </Stack>
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField label="First Name *"
-                  disabled={!!user?.firstName} sx={populatedFieldSx(!!user?.firstName)}
+                <TextField
+                  label="First Name *"
+                  disabled={!!user?.firstName}
+                  sx={populatedFieldSx(!!user?.firstName)}
                   value={csatForm.clientFirstName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientFirstName: e.target.value }))}
                   fullWidth
                 />
-                <TextField label="M.I."
+                <TextField
+                  label="M.I."
                   disabled={!!user?.middleName}
                   value={csatForm.clientMiddleInitial}
                   onChange={(e) =>
-                    setCsatForm((f) => ({ ...f, clientMiddleInitial: e.target.value.substring(0, 1) }))
+                    setCsatForm((f) => ({
+                      ...f,
+                      clientMiddleInitial: e.target.value.substring(0, 1),
+                    }))
                   }
                   sx={{ width: 140, ...populatedFieldSx(!!user?.middleName) }}
                 />
-                <TextField label="Last Name *"
-                  disabled={!!user?.lastName} sx={populatedFieldSx(!!user?.lastName)}
+                <TextField
+                  label="Last Name *"
+                  disabled={!!user?.lastName}
+                  sx={populatedFieldSx(!!user?.lastName)}
                   value={csatForm.clientLastName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientLastName: e.target.value }))}
                   fullWidth
                 />
-                <TextField label="Suffix"
+                <TextField
+                  label="Suffix"
                   disabled={!!user?.suffix}
                   value={csatForm.suffix}
                   onChange={(e) => setCsatForm((f) => ({ ...f, suffix: e.target.value }))}
@@ -2821,19 +3301,22 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
               </Stack>
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField label="Age"
+                <TextField
+                  label="Age"
                   type="number"
                   inputProps={{ min: 20, max: 89 }}
                   value={csatForm.age ?? ''}
                   onChange={(e) => setCsatForm((f) => ({ ...f, age: Number(e.target.value) }))}
                   sx={{ maxWidth: 100 }}
                 />
-                <TextField label="Religion"
+                <TextField
+                  label="Religion"
                   value={csatForm.religion ?? ''}
                   onChange={(e) => setCsatForm((f) => ({ ...f, religion: e.target.value }))}
                   sx={{ flex: 1 }}
                 />
-                <TextField inputProps={{ maxLength: 255 }}
+                <TextField
+                  inputProps={{ maxLength: 255 }}
                   select
                   label="Sex *"
                   disabled={!!user?.sex}
@@ -2846,7 +3329,8 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                   <MenuItem value="Other">Other</MenuItem>
                   <MenuItem value="Prefer Not to Say">Prefer Not to Say</MenuItem>
                 </TextField>
-              <TextField label="Contact Number *"
+                <TextField
+                  label="Contact Number *"
                   disabled={!!user?.phoneNumber}
                   value={csatForm.contactNumber ?? ''}
                   onChange={(e) => {
@@ -2861,7 +3345,8 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                 />
               </Stack>
 
-              <TextField label="Technician Name *"
+              <TextField
+                label="Technician Name *"
                 value={csatForm.technicianName}
                 InputProps={{ readOnly: true }}
                 inputProps={{ tabIndex: -1 }}

@@ -131,7 +131,15 @@ function OverdueTimer({ targetDate }: { targetDate: string }) {
   return <>{elapsed}</>;
 }
 
-function SlaCountdownTimer({ targetDate, isNearingSLA, isOverdue }: { targetDate: string, isNearingSLA: boolean, isOverdue: boolean }) {
+function SlaCountdownTimer({
+  targetDate,
+  isNearingSLA,
+  isOverdue,
+}: {
+  targetDate: string;
+  isNearingSLA: boolean;
+  isOverdue: boolean;
+}) {
   const [timeLeft, setTimeLeft] = useState('');
   const [hasExpired, setHasExpired] = useState(false);
 
@@ -166,10 +174,16 @@ function SlaCountdownTimer({ targetDate, isNearingSLA, isOverdue }: { targetDate
   }
 
   const color = isOverdue ? 'error' : isNearingSLA ? 'warning' : 'success';
-  return <Typography variant="body2" color={`${color}.main`} fontWeight={600}>{timeLeft}</Typography>;
+  return (
+    <Typography variant="body2" color={`${color}.main`} fontWeight={600}>
+      {timeLeft}
+    </Typography>
+  );
 }
 
-function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | 'paused' | null {
+function getSlaStatus(
+  ticket: Ticket,
+): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | 'paused' | null {
   if (!ticket.slaDeadline) return null;
   const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
   if (isTerminal) {
@@ -189,13 +203,13 @@ function getSlaStatus(ticket: Ticket): 'met' | 'on_track' | 'nearing_sla' | 'ove
 }
 
 const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'warning' | 'error' }> =
-{
-  met: { label: 'Met', color: 'success' },
-  on_track: { label: 'On Track', color: 'info' },
-  nearing_sla: { label: 'Nearing SLA', color: 'warning' },
-  overdue: { label: 'Overdue', color: 'error' },
-  paused: { label: 'SLA Paused', color: 'info' },
-};
+  {
+    met: { label: 'Met', color: 'success' },
+    on_track: { label: 'On Track', color: 'info' },
+    nearing_sla: { label: 'Nearing SLA', color: 'warning' },
+    overdue: { label: 'Overdue', color: 'error' },
+    paused: { label: 'SLA Paused', color: 'info' },
+  };
 
 export default function TicketDetailPage() {
   const params = useParams();
@@ -219,7 +233,10 @@ export default function TicketDetailPage() {
 
   useEffect(() => {
     if (ticket?.status === 'duplicate' && ticket?.duplicateOfId) {
-      ticketsApi.getById(ticket.duplicateOfId).then(t => setParentTicketNumber(t.ticketNumber)).catch(() => {});
+      ticketsApi
+        .getById(ticket.duplicateOfId)
+        .then((t) => setParentTicketNumber(t.ticketNumber))
+        .catch(() => {});
     }
   }, [ticket?.status, ticket?.duplicateOfId]);
 
@@ -262,7 +279,9 @@ export default function TicketDetailPage() {
   const [savingRequesterCorrection, setSavingRequesterCorrection] = useState(false);
 
   const [assigneeCorrectionDialogOpen, setAssigneeCorrectionDialogOpen] = useState(false);
-  const [assigneeCorrectionOptions, setAssigneeCorrectionOptions] = useState<TechnicianOption[]>([]);
+  const [assigneeCorrectionOptions, setAssigneeCorrectionOptions] = useState<TechnicianOption[]>(
+    [],
+  );
   const [correctedAssigneeId, setCorrectedAssigneeId] = useState<number | ''>('');
   const [assigneeSnapshotUpdatedAt, setAssigneeSnapshotUpdatedAt] = useState('');
   const [savingAssigneeCorrection, setSavingAssigneeCorrection] = useState(false);
@@ -342,8 +361,10 @@ export default function TicketDetailPage() {
   const [selectedDupOfId, setSelectedDupOfId] = useState('');
 
   const isRegularUser = user?.role === 'user';
-  const isFocalTech = !!myCap?.isFocal && (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct);
-  const isLowerLevelTech = (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
+  const isFocalTech =
+    !!myCap?.isFocal && (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct);
+  const isLowerLevelTech =
+    (!!myCap?.isDesktop || !!myCap?.isItSupport || !!myCap?.isPantawidIct) && !myCap?.isFocal;
   const isJuniorTech = isLowerLevelTech;
   const isTechnician = isFocalTech || isLowerLevelTech || !!myCap?.isIto;
   const isFocal = !!myCap?.isFocal;
@@ -352,13 +373,16 @@ export default function TicketDetailPage() {
   const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isAllTickets;
   const canViewInternalNotes = ticket?.canViewInternalNotes === true;
   const canOverrideResolutionTime = !!myCap?.isTicketResolutionTimeOverride;
-  const canCorrectTicketRecord = !!myCap?.isTicketRequesterCorrection &&
-    !!ticket && ['assigned', 'in_progress'].includes(ticket.status);
+  const canCorrectTicketRecord =
+    !!myCap?.isTicketRequesterCorrection &&
+    !!ticket &&
+    ['assigned', 'in_progress'].includes(ticket.status);
   const canCorrectAssignee =
     canCorrectTicketRecord &&
     !!ticket &&
-    Number(user?.id) !== Number(ticket.requesterId) &&
-    Number(user?.id) !== Number(ticket.createdById);
+    (ticket.ticketType === 'specialized_concerns' ||
+      (Number(user?.id) !== Number(ticket.requesterId) &&
+        Number(user?.id) !== Number(ticket.createdById)));
   const canPriority = canStaff;
 
   useEffect(() => {
@@ -366,9 +390,15 @@ export default function TicketDetailPage() {
     let cancelled = false;
     ticketsApi
       .getInternalNoteMentionCandidates(ticket.id)
-      .then((candidates) => { if (!cancelled) setMentionCandidates(candidates); })
-      .catch(() => { if (!cancelled) setMentionCandidates([]); });
-    return () => { cancelled = true; };
+      .then((candidates) => {
+        if (!cancelled) setMentionCandidates(candidates);
+      })
+      .catch(() => {
+        if (!cancelled) setMentionCandidates([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [canViewInternalNotes, isInternal, ticket?.id, ticket?.assignedToId]);
 
   useEffect(() => {
@@ -418,12 +448,7 @@ export default function TicketDetailPage() {
   const canEscalate =
     !!myCap?.isTicketSettingsFocal ||
     !!myCap?.isTicketFocal ||
-    !!(
-      myCap?.isDesktop ||
-      myCap?.isItSupport ||
-      myCap?.isPantawidIct ||
-      myCap?.isAllTickets
-    );
+    !!(myCap?.isDesktop || myCap?.isItSupport || myCap?.isPantawidIct || myCap?.isAllTickets);
   const isEscalationAdmin = !!myCap?.isTicketSettingsFocal || isComplianceOfficer || isSectionHead;
   const latestEscalation = escalations.length > 0 ? escalations[0] : null;
   const hasPendingEscalation = latestEscalation?.status === 'pending';
@@ -444,7 +469,10 @@ export default function TicketDetailPage() {
   // Ticket can be escalated again if there is no pending escalation.
   const canEscalateNow =
     canEscalate && (!latestEscalation || latestEscalation.status !== 'pending');
-  const isTypeLockedByEscalation = (hasPendingEscalation || hasAcceptedEscalation) && !myCap?.isTicketSettingsFocal && !isAcceptedEscalationFocal;
+  const isTypeLockedByEscalation =
+    (hasPendingEscalation || hasAcceptedEscalation) &&
+    !myCap?.isTicketSettingsFocal &&
+    !isAcceptedEscalationFocal;
   const isRequester = ticket?.requesterId === (user as any)?.id;
   const canSatisfaction =
     isRequester &&
@@ -454,7 +482,7 @@ export default function TicketDetailPage() {
   const isDuplicate = ticket?.status === 'duplicate';
   const sortedComments = useMemo(() => {
     const comments = [...(((ticket as any)?.comments ?? []) as any[])].filter(
-      c => c.comment !== '[Initial Ticket Attachment]'
+      (c) => c.comment !== '[Initial Ticket Attachment]',
     );
     return comments.sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
@@ -518,7 +546,8 @@ export default function TicketDetailPage() {
   }, [ticketId]);
   useEffect(() => {
     if (ticket?.ticketType) {
-      ticketSettingsApi.getCategories(ticket.ticketType, true)
+      ticketSettingsApi
+        .getCategories(ticket.ticketType, true)
         .then(setCategories)
         .catch(() => setCategories([]));
     }
@@ -526,7 +555,8 @@ export default function TicketDetailPage() {
 
   useEffect(() => {
     if (ticket?.categoryId) {
-      ticketSettingsApi.getIssueTypes(ticket.categoryId)
+      ticketSettingsApi
+        .getIssueTypes(ticket.categoryId)
         .then((data) => setIssues(data.filter((iss) => iss.isActive && !iss.isDeleted)))
         .catch(() => setIssues([]));
     } else {
@@ -605,7 +635,11 @@ export default function TicketDetailPage() {
           emailActionHandledRef.current = true;
           const cleanUrl = new URL(window.location.href);
           cleanUrl.searchParams.delete('emailAction');
-          window.history.replaceState({}, '', `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
+          window.history.replaceState(
+            {},
+            '',
+            `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`,
+          );
           if (data.status === 'closed') {
             enqueueSnackbar(
               data.satisfactionSubmittedAt
@@ -630,7 +664,7 @@ export default function TicketDetailPage() {
           .then((updated) => {
             if (updated) setTicket(updated);
           })
-          .catch(() => { });
+          .catch(() => {});
       }
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to fetch ticket', {
@@ -689,11 +723,15 @@ export default function TicketDetailPage() {
       return;
     }
     if (resolutionOverrideFiles.length === 0) {
-      enqueueSnackbar('Upload at least one proof image with a visible timestamp.', { variant: 'error' });
+      enqueueSnackbar('Upload at least one proof image with a visible timestamp.', {
+        variant: 'error',
+      });
       return;
     }
     if (!resolutionOverrideConfirmed) {
-      enqueueSnackbar('Confirm that the proof supports the verified completion time.', { variant: 'error' });
+      enqueueSnackbar('Confirm that the proof supports the verified completion time.', {
+        variant: 'error',
+      });
       return;
     }
     try {
@@ -703,11 +741,15 @@ export default function TicketDetailPage() {
       formData.append('reason', resolutionOverrideReason.trim());
       resolutionOverrideFiles.forEach((file) => formData.append('proofFiles', file));
       await ticketsApi.overrideResolutionTime(ticket.id, formData);
-      enqueueSnackbar('Verified resolution time saved. SLA results were recalculated.', { variant: 'success' });
+      enqueueSnackbar('Verified resolution time saved. SLA results were recalculated.', {
+        variant: 'success',
+      });
       closeResolutionOverrideDialog();
       await Promise.all([fetchTicket(), fetchEvents()]);
     } catch (error: any) {
-      enqueueSnackbar(error?.response?.data?.message || 'Unable to correct the resolution time.', { variant: 'error' });
+      enqueueSnackbar(error?.response?.data?.message || 'Unable to correct the resolution time.', {
+        variant: 'error',
+      });
     } finally {
       setSavingResolutionOverride(false);
     }
@@ -726,10 +768,14 @@ export default function TicketDetailPage() {
         commentAttachments,
         isInternal && canViewInternalNotes ? mentionedUserIds : [],
       );
-      setTicket((current) => current ? {
-        ...current,
-        comments: [...(current.comments ?? []), createdComment],
-      } : current);
+      setTicket((current) =>
+        current
+          ? {
+              ...current,
+              comments: [...(current.comments ?? []), createdComment],
+            }
+          : current,
+      );
       setVisibleCommentCount(COMMENTS_PAGE_SIZE);
       setComment('');
       setMentionedUserIds([]);
@@ -776,10 +822,13 @@ export default function TicketDetailPage() {
       await Promise.all([fetchTicket(), fetchEvents()]);
       enqueueSnackbar('Ticket updated.', { variant: 'success' });
       if (newStatus === 'resolved' && generateKb) {
-        enqueueSnackbar('AI is generating a Knowledge Base article in the background. It will be available shortly.', {
-          variant: 'info',
-          autoHideDuration: 5000,
-        });
+        enqueueSnackbar(
+          'AI is generating a Knowledge Base article in the background. It will be available shortly.',
+          {
+            variant: 'info',
+            autoHideDuration: 5000,
+          },
+        );
       }
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to update ticket', {
@@ -864,7 +913,7 @@ export default function TicketDetailPage() {
     setAssigneeSnapshotUpdatedAt(ticket.updatedAt);
     setCorrectedAssigneeId('');
     try {
-      const users = await ticketsApi.getAssigneeCorrectionOptions();
+      const users = await ticketsApi.getAssigneeCorrectionOptions(ticket.id);
       setAssigneeCorrectionOptions(
         users.filter((candidate) => Number(candidate.id) !== Number(ticket.assignedToId)),
       );
@@ -904,7 +953,8 @@ export default function TicketDetailPage() {
       setEscalating(true);
       const formData = new FormData();
       formData.append('escalatedToId', String(escalateToId));
-      const finalNotes = !escalateNotes.trim() && escalateFiles.length > 0 ? '[Attachment Only]' : escalateNotes;
+      const finalNotes =
+        !escalateNotes.trim() && escalateFiles.length > 0 ? '[Attachment Only]' : escalateNotes;
       if (finalNotes) formData.append('notes', finalNotes);
       escalateFiles.forEach((f) => formData.append('proofFiles', f));
       await ticketsApi.escalateTicket(ticketId, formData);
@@ -958,7 +1008,8 @@ export default function TicketDetailPage() {
     try {
       setAddingProof(true);
       const formData = new FormData();
-      const finalNotes = !addProofNotes.trim() && addProofFiles.length > 0 ? '[Attachment Only]' : addProofNotes;
+      const finalNotes =
+        !addProofNotes.trim() && addProofFiles.length > 0 ? '[Attachment Only]' : addProofNotes;
       if (finalNotes !== undefined) formData.append('notes', finalNotes);
       addProofFiles.forEach((f) => formData.append('proofFiles', f));
       await ticketsApi.updateEscalationProof(ticketId, addProofEscalationId, formData);
@@ -984,7 +1035,11 @@ export default function TicketDetailPage() {
         attendanceApi.getTechnicians(ticket?.ticketType),
       ]);
       setEscalationFocals(focals);
-      const mergedUsers = [...itoUsers, ...supportUsers].filter(
+      const candidateUsers =
+        ticket?.ticketType === 'specialized_concerns'
+          ? supportUsers
+          : [...itoUsers, ...supportUsers];
+      const mergedUsers = candidateUsers.filter(
         (u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx,
       );
       // From all techs, keep only those whose user ID or role matches the configured escalation focals
@@ -1116,11 +1171,14 @@ export default function TicketDetailPage() {
               </Typography>
               <Box display="flex" flexWrap="wrap" gap={1}>
                 {!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id ? (
-                  <TextField inputProps={{ maxLength: 255 }}
+                  <TextField
+                    inputProps={{ maxLength: 255 }}
                     select
                     size="small"
                     value={ticket.ticketType}
-                    disabled={['resolved', 'closed'].includes(ticket.status) || isTypeLockedByEscalation}
+                    disabled={
+                      ['resolved', 'closed'].includes(ticket.status) || isTypeLockedByEscalation
+                    }
                     onChange={async (e) => {
                       try {
                         await ticketsApi.update(ticketId, { ticketType: e.target.value as any });
@@ -1129,7 +1187,9 @@ export default function TicketDetailPage() {
                       } catch (err: any) {
                         enqueueSnackbar(
                           err.response?.data?.message || 'Failed to update ticket type',
-                          { variant: 'error' },
+                          {
+                            variant: 'error',
+                          },
                         );
                       }
                     }}
@@ -1156,7 +1216,7 @@ export default function TicketDetailPage() {
                     variant="outlined"
                   />
                 )}
-                
+
                 {/* Category Dropdown */}
                 {!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id ? (
                   <SearchableSelect
@@ -1169,7 +1229,9 @@ export default function TicketDetailPage() {
                     }))}
                     clearable={false}
                     fullWidth={false}
-                    disabled={['resolved', 'closed'].includes(ticket.status) || isTypeLockedByEscalation}
+                    disabled={
+                      ['resolved', 'closed'].includes(ticket.status) || isTypeLockedByEscalation
+                    }
                     onChange={async (categoryId) => {
                       if (!categoryId) return;
                       try {
@@ -1179,7 +1241,9 @@ export default function TicketDetailPage() {
                       } catch (err: any) {
                         enqueueSnackbar(
                           err.response?.data?.message || 'Failed to update ticket category',
-                          { variant: 'error' },
+                          {
+                            variant: 'error',
+                          },
                         );
                       }
                     }}
@@ -1191,20 +1255,19 @@ export default function TicketDetailPage() {
                       },
                     }}
                   />
-                ) : (
-                  ticket.category ? (
-                    <Chip
-                      label={ticket.category.name}
-                      color="secondary"
-                      size="small"
-                      variant="outlined"
-                    />
-                  ) : null
-                )}
+                ) : ticket.category ? (
+                  <Chip
+                    label={ticket.category.name}
+                    color="secondary"
+                    size="small"
+                    variant="outlined"
+                  />
+                ) : null}
 
                 {/* Issue Dropdown */}
-                {user?.role !== 'user' && issues.length > 0 && (
-                  (!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id) ? (
+                {user?.role !== 'user' &&
+                  issues.length > 0 &&
+                  (!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id ? (
                     <SearchableSelect
                       size="small"
                       label="Issue"
@@ -1212,16 +1275,24 @@ export default function TicketDetailPage() {
                       options={issues.map((issue) => ({ value: issue.id, label: issue.name }))}
                       clearable={false}
                       fullWidth={false}
-                      disabled={['resolved', 'closed'].includes(ticket.status) || isTypeLockedByEscalation}
+                      disabled={
+                        ['resolved', 'closed'].includes(ticket.status) || isTypeLockedByEscalation
+                      }
                       onChange={async (issueTypeId) => {
                         if (!issueTypeId) return;
                         const newIssueTypeId = String(issueTypeId);
-                        setTicket((prev: any) => prev ? { 
-                          ...prev, 
-                          issueTypeId: newIssueTypeId,
-                          issueTypeConfig: prev.issueTypeConfig ? { ...prev.issueTypeConfig, id: newIssueTypeId } : { id: newIssueTypeId }
-                        } : prev);
-                        
+                        setTicket((prev: any) =>
+                          prev
+                            ? {
+                                ...prev,
+                                issueTypeId: newIssueTypeId,
+                                issueTypeConfig: prev.issueTypeConfig
+                                  ? { ...prev.issueTypeConfig, id: newIssueTypeId }
+                                  : { id: newIssueTypeId },
+                              }
+                            : prev,
+                        );
+
                         try {
                           await ticketsApi.update(ticketId, { issueTypeId: newIssueTypeId });
                           fetchTicket();
@@ -1229,7 +1300,9 @@ export default function TicketDetailPage() {
                         } catch (err: any) {
                           enqueueSnackbar(
                             err.response?.data?.message || 'Failed to update ticket issue',
-                            { variant: 'error' },
+                            {
+                              variant: 'error',
+                            },
                           );
                           fetchTicket(); // Revert on failure
                         }
@@ -1242,17 +1315,19 @@ export default function TicketDetailPage() {
                         },
                       }}
                     />
-                  ) : (
-                    ticket.issueTypeId || (ticket as any).issueTypeConfig?.id ? (
-                      <Chip
-                        label={issues.find((i) => i.id === (ticket.issueTypeId || (ticket as any).issueTypeConfig?.id))?.name || 'Unknown Issue'}
-                        color="secondary"
-                        size="small"
-                        variant="outlined"
-                      />
-                    ) : null
-                  )
-                )}
+                  ) : ticket.issueTypeId || (ticket as any).issueTypeConfig?.id ? (
+                    <Chip
+                      label={
+                        issues.find(
+                          (i) =>
+                            i.id === (ticket.issueTypeId || (ticket as any).issueTypeConfig?.id),
+                        )?.name || 'Unknown Issue'
+                      }
+                      color="secondary"
+                      size="small"
+                      variant="outlined"
+                    />
+                  ) : null)}
                 <Chip
                   label={
                     ticket.priority
@@ -1273,13 +1348,7 @@ export default function TicketDetailPage() {
                   const slaStatus = getSlaStatus(ticket);
                   if (!slaStatus) return null;
                   const chipData = SLA_CHIP[slaStatus];
-                  return (
-                    <Chip
-                      label={chipData.label}
-                      color={chipData.color as any}
-                      size="small"
-                    />
-                  );
+                  return <Chip label={chipData.label} color={chipData.color as any} size="small" />;
                 })()}
               </Box>
             </Box>
@@ -1303,11 +1372,21 @@ export default function TicketDetailPage() {
                 )}
               {ticket.category?.name?.toLowerCase().includes('disposal') && (
                 <>
-                  <Button variant="contained" size="small" color="secondary" onClick={() => window.print()}>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    color="secondary"
+                    onClick={() => window.print()}
+                  >
                     Print Disposal Form
                   </Button>
                   {(isTechnician || !!myCap?.isTicketSettingsFocal) && (
-                    <Button variant="outlined" size="small" color="secondary" onClick={() => window.print()}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      color="secondary"
+                      onClick={() => window.print()}
+                    >
                       Print Inspection Form
                     </Button>
                   )}
@@ -1375,7 +1454,9 @@ export default function TicketDetailPage() {
                       consentGiven: false,
                       unitSection: user?.units?.[0]?.name || '',
                       clientFirstName: user?.firstName || '',
-                      clientMiddleInitial: user?.middleName ? user.middleName.charAt(0).toUpperCase() : '',
+                      clientMiddleInitial: user?.middleName
+                        ? user.middleName.charAt(0).toUpperCase()
+                        : '',
                       clientLastName: user?.lastName || '',
                       suffix: user?.suffix || '',
                       religion: '',
@@ -1383,7 +1464,9 @@ export default function TicketDetailPage() {
                       contactNumber: user?.phoneNumber || '',
                       technicianName: assignedName,
                       dateOfTransaction: effectiveResolvedAt(ticket)
-                        ? new Date(effectiveResolvedAt(ticket) as string).toISOString().split('T')[0]
+                        ? new Date(effectiveResolvedAt(ticket) as string)
+                            .toISOString()
+                            .split('T')[0]
                         : new Date().toISOString().split('T')[0],
                       likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
                     });
@@ -1393,8 +1476,8 @@ export default function TicketDetailPage() {
                     //   .catch(() => { });
                     unitsApi
                       .listAll()
-                      .then((units) => setUnitSuggestions(units.map(u => u.name)))
-                      .catch(() => { });
+                      .then((units) => setUnitSuggestions(units.map((u) => u.name)))
+                      .catch(() => {});
                     setSatDialogOpen(true);
                   }}
                 >
@@ -1425,7 +1508,10 @@ export default function TicketDetailPage() {
                 let allowedValues: string[] = [];
                 switch (ticket?.status) {
                   case 'open':
-                    allowedValues = (myCap?.isTicketSettingsFocal || myCap?.isTicketFocal) ? ['freeze', 'duplicate'] : ['duplicate'];
+                    allowedValues =
+                      myCap?.isTicketSettingsFocal || myCap?.isTicketFocal
+                        ? ['freeze', 'duplicate']
+                        : ['duplicate'];
                     break;
                   case 'assigned': {
                     const assignedValues = ['in_progress', 'duplicate'];
@@ -1439,9 +1525,10 @@ export default function TicketDetailPage() {
                     break;
                   }
                   case 'in_progress':
-                    allowedValues = (myCap?.isTicketSettingsFocal || myCap?.isTicketFocal)
-                      ? ['resolved', 'pause', 'freeze']
-                      : ['resolved', 'pause'];
+                    allowedValues =
+                      myCap?.isTicketSettingsFocal || myCap?.isTicketFocal
+                        ? ['resolved', 'pause', 'freeze']
+                        : ['resolved', 'pause'];
                     break;
                   case 'resolved':
                     allowedValues = ['closed'];
@@ -1467,16 +1554,22 @@ export default function TicketDetailPage() {
                 const allowedOpts = STATUS_OPTS.filter((s) => allowedValues.includes(s.value));
                 // QA #5: Disable Save when transitioning to in_progress without a priority or issue type
                 const effectivePriority = newPriority || ticket?.priority;
-                const activeIssueTypeId = ticket?.issueTypeId || (ticket as any)?.issueTypeConfig?.id;
-                const needsPriority = newStatus === 'in_progress' && (!effectivePriority || !activeIssueTypeId);
-                const isStatusUnchanged = newStatus === ticket?.status && newPriority === ticket?.priority;
+                const activeIssueTypeId =
+                  ticket?.issueTypeId || (ticket as any)?.issueTypeConfig?.id;
+                const needsPriority =
+                  newStatus === 'in_progress' && (!effectivePriority || !activeIssueTypeId);
+                const isStatusUnchanged =
+                  newStatus === ticket?.status && newPriority === ticket?.priority;
                 const needsIssueForResolution = newStatus === 'resolved' && !activeIssueTypeId;
-                const isKbMissingNotes = newStatus === 'resolved' && generateKb && !resolutionNotes.trim();
-                const needsJustification = (newStatus === 'freeze' || newStatus === 'pause') && !statusJustification.trim();
+                const isKbMissingNotes =
+                  newStatus === 'resolved' && generateKb && !resolutionNotes.trim();
+                const needsJustification =
+                  (newStatus === 'freeze' || newStatus === 'pause') && !statusJustification.trim();
                 return (
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
-                      <TextField inputProps={{ maxLength: 255 }}
+                      <TextField
+                        inputProps={{ maxLength: 255 }}
                         select
                         fullWidth
                         label="Status"
@@ -1492,7 +1585,8 @@ export default function TicketDetailPage() {
                       </TextField>
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <TextField inputProps={{ maxLength: 255 }}
+                      <TextField
+                        inputProps={{ maxLength: 255 }}
                         select
                         fullWidth
                         label={newStatus === 'in_progress' ? 'Priority *' : 'Priority'}
@@ -1529,14 +1623,25 @@ export default function TicketDetailPage() {
                           placeholder={`Please explain why this ticket is being put on ${newStatus}...`}
                           inputProps={{ maxLength: 1000 }}
                           error={needsJustification}
-                          helperText={needsJustification ? 'A justification is required for this status.' : undefined}
+                          helperText={
+                            needsJustification
+                              ? 'A justification is required for this status.'
+                              : undefined
+                          }
                         />
                       </Grid>
                     )}
 
                     <Grid item xs={12}>
-                      <Box display="flex" alignItems="center" justifyContent="space-between" mb={0.5}>
-                        <Typography variant="caption" color="text.secondary">Resolution Notes (optional)</Typography>
+                      <Box
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        mb={0.5}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          Resolution Notes (optional)
+                        </Typography>
                         <Button
                           size="small"
                           variant="outlined"
@@ -1547,27 +1652,33 @@ export default function TicketDetailPage() {
                               try {
                                 const data = await knowledgeBaseApi.getInsights();
                                 setKbArticles(data ?? []);
-                              } catch { /* ignore */ }
+                              } catch {
+                                /* ignore */
+                              }
                               setKbLoading(false);
                             }
                           }}
                           sx={{ fontSize: 11, py: 0.25, px: 1 }}
                         >
-                  Load from KB
+                          Load from KB
                         </Button>
                       </Box>
                       <TextField
                         fullWidth
                         multiline
                         rows={6}
-                        label={generateKb ? "Resolution Notes *" : "Resolution Notes"}
+                        label={generateKb ? 'Resolution Notes *' : 'Resolution Notes'}
                         value={resolutionNotes}
                         onChange={(e) => setResolutionNotes(e.target.value)}
                         size="small"
                         placeholder="Describe what was done to resolve this ticket..."
                         inputProps={{ maxLength: 1000 }}
                         error={isKbMissingNotes}
-                        helperText={isKbMissingNotes ? 'Resolution notes are required to generate a KB article.' : undefined}
+                        helperText={
+                          isKbMissingNotes
+                            ? 'Resolution notes are required to generate a KB article.'
+                            : undefined
+                        }
                       />
                     </Grid>
                     {newStatus === 'resolved' && (
@@ -1581,21 +1692,27 @@ export default function TicketDetailPage() {
                             />
                           }
                           label={
-                            <Typography variant="body2">
-                              Generate Knowledge Base Article
-                            </Typography>
+                            <Typography variant="body2">Generate Knowledge Base Article</Typography>
                           }
                         />
                         {generateKb && (
-                          <Typography variant="caption" color="text.secondary" display="block" ml={3.5}>
-                            Our AI will automatically scrub sensitive data and create/update an article based on your resolution.
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                            ml={3.5}
+                          >
+                            Our AI will automatically scrub sensitive data and create/update an
+                            article based on your resolution.
                           </Typography>
                         )}
                       </Grid>
                     )}
                     {needsIssueForResolution && (
                       <Grid item xs={12}>
-                        <Alert severity="error">Select an Issue before resolving this ticket.</Alert>
+                        <Alert severity="error">
+                          Select an Issue before resolving this ticket.
+                        </Alert>
                       </Grid>
                     )}
                     <Grid item xs={12}>
@@ -1604,7 +1721,13 @@ export default function TicketDetailPage() {
                           variant="contained"
                           size="small"
                           onClick={() => handleUpdateStatus()}
-                          disabled={needsPriority || needsIssueForResolution || isStatusUnchanged || isKbMissingNotes || needsJustification}
+                          disabled={
+                            needsPriority ||
+                            needsIssueForResolution ||
+                            isStatusUnchanged ||
+                            isKbMissingNotes ||
+                            needsJustification
+                          }
                         >
                           Save
                         </Button>
@@ -1635,18 +1758,24 @@ export default function TicketDetailPage() {
 
               {ticket.status === 'duplicate' && ticket.duplicateOfId && (
                 <Box mt={2}>
-                  <Alert severity="warning"
+                  <Alert
+                    severity="warning"
                     action={
-                      <Button color="inherit" size="small" onClick={() => router.push(`/operations/tickets/${ticket.duplicateOfId}`)}>
+                      <Button
+                        color="inherit"
+                        size="small"
+                        onClick={() => router.push(`/operations/tickets/${ticket.duplicateOfId}`)}
+                      >
                         View Original
                       </Button>
                     }
                   >
-                    This ticket is a duplicate of <strong>{parentTicketNumber || 'another ticket'}</strong>.
+                    This ticket is a duplicate of{' '}
+                    <strong>{parentTicketNumber || 'another ticket'}</strong>.
                   </Alert>
                 </Box>
               )}
-              
+
               {(() => {
                 const initialAttachmentComment = ticket.comments?.find(
                   (c) =>
@@ -1660,7 +1789,7 @@ export default function TicketDetailPage() {
                     ? [initialAttachmentComment.attachmentPath]
                     : []),
                 ].filter((path, index, paths) => paths.indexOf(path) === index);
-                
+
                 return (
                   <Box mt={2}>
                     <Typography variant="subtitle2" gutterBottom>
@@ -1669,9 +1798,15 @@ export default function TicketDetailPage() {
                     <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
                       {attachmentPaths.map((attachmentPath, index) => {
                         const fileExt = attachmentPath.split('.').pop()?.toLowerCase();
-                        const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'].includes(
-                          fileExt ?? '',
-                        );
+                        const isImage = [
+                          'jpg',
+                          'jpeg',
+                          'png',
+                          'gif',
+                          'webp',
+                          'heic',
+                          'heif',
+                        ].includes(fileExt ?? '');
                         const url = `/tickets/comment-attachment/${ticket.id}/${attachmentPath.split('/').pop()}`;
                         return isImage ? (
                           <AuthImage
@@ -1764,7 +1899,7 @@ export default function TicketDetailPage() {
                 <Box>
                   <Typography variant="caption" color="text.secondary">
                     {(ticket as any).createdById &&
-                      (ticket as any).createdById !== ticket.requesterId
+                    (ticket as any).createdById !== ticket.requesterId
                       ? 'Requested For'
                       : 'Requested By'}
                   </Typography>
@@ -1789,20 +1924,23 @@ export default function TicketDetailPage() {
                       </Typography>
                       <Typography variant="body2">
                         {(ticket as any).createdBy
-                          ? formatPersonName((ticket as any).createdBy, `Staff #${(ticket as any).createdById}`)
+                          ? formatPersonName(
+                              (ticket as any).createdBy,
+                              `Staff #${(ticket as any).createdById}`,
+                            )
                           : `Staff #${(ticket as any).createdById}`}
                       </Typography>
                     </Box>
                   )}
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Requester Unit
-                    </Typography>
-                    <Typography variant="body2">
-                      {(ticket as any).requester?.units?.[0]?.name || '—'}
-                    </Typography>
-                  </Box>
-                  {ticket.assignedToId && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Requester Unit
+                  </Typography>
+                  <Typography variant="body2">
+                    {(ticket as any).requester?.units?.[0]?.name || '—'}
+                  </Typography>
+                </Box>
+                {ticket.assignedToId && (
                   <Box>
                     <Typography variant="caption" color="text.secondary">
                       Assigned To
@@ -1810,7 +1948,10 @@ export default function TicketDetailPage() {
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Typography variant="body2">
                         {(ticket as any).assignedTo
-                          ? formatPersonName((ticket as any).assignedTo, `User #${ticket.assignedToId}`)
+                          ? formatPersonName(
+                              (ticket as any).assignedTo,
+                              `User #${ticket.assignedToId}`,
+                            )
                           : `User #${ticket.assignedToId}`}
                       </Typography>
                       {canCorrectAssignee && (
@@ -1852,81 +1993,89 @@ export default function TicketDetailPage() {
                     </Stack>
                   </Box>
                 )}
-                {ticket.slaDeadline && (!ticket.isSlaWaiting || ticket.status === 'in_progress') && (
-                  <>
-                    <Divider sx={{ my: 1 }} />
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">
-                        {ticket.slaPaused ? 'Projected SLA Deadline' : 'SLA Deadline'}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        color={
-                          effectiveResolvedAt(ticket)
-                            ? new Date(effectiveResolvedAt(ticket) as string) > new Date(ticket.slaDeadline)
-                              ? 'error.main'
-                              : 'success.main'
-                            : !ticket.slaPaused && new Date() > new Date(ticket.slaDeadline)
-                              ? 'error.main'
-                              : 'text.primary'
-                        }
-                      >
-                        {new Date(ticket.slaDeadline).toLocaleString()}
-                      </Typography>
-                    </Box>
-                    {ticket.slaPaused && (
-                      <Alert severity="info" sx={{ mt: 1 }}>
-                        SLA timing is paused.
-                        {ticket.slaResumeAt
-                          ? ` It will resume by ${new Date(ticket.slaResumeAt).toLocaleString()}${ticket.slaResumeCanBeEarly ? ', or earlier when the assigned staff member clocks in during the allowed CWW window' : ''}.`
-                          : ' It will resume when ticket timing is enabled again.'}
-                      </Alert>
-                    )}
-                    {!ticket.slaPaused && !effectiveResolvedAt(ticket) && new Date() < new Date(ticket.slaDeadline) && (
-                      <Box mt={1}>
-                        <SlaCountdownTimer 
-                          targetDate={ticket.slaDeadline} 
-                          isNearingSLA={ticket.isNearingSLA ?? false} 
-                          isOverdue={ticket.isOverdue ?? false} 
-                        />
-                      </Box>
-                    )}
-                    {effectiveResolvedAt(ticket) && (
+                {ticket.slaDeadline &&
+                  (!ticket.isSlaWaiting || ticket.status === 'in_progress') && (
+                    <>
+                      <Divider sx={{ my: 1 }} />
                       <Box>
                         <Typography variant="caption" color="text.secondary">
-                          Resolution Time vs SLA
+                          {ticket.slaPaused ? 'Projected SLA Deadline' : 'SLA Deadline'}
                         </Typography>
                         <Typography
                           variant="body2"
                           color={
-                            new Date(effectiveResolvedAt(ticket) as string) > new Date(ticket.slaDeadline)
-                              ? 'error.main'
-                              : 'success.main'
+                            effectiveResolvedAt(ticket)
+                              ? new Date(effectiveResolvedAt(ticket) as string) >
+                                new Date(ticket.slaDeadline)
+                                ? 'error.main'
+                                : 'success.main'
+                              : !ticket.slaPaused && new Date() > new Date(ticket.slaDeadline)
+                                ? 'error.main'
+                                : 'text.primary'
                           }
-                          fontWeight={600}
                         >
-                          {new Date(effectiveResolvedAt(ticket) as string) > new Date(ticket.slaDeadline)
-                            ? `Missed SLA by ${Math.round(
-                              (new Date(effectiveResolvedAt(ticket) as string).getTime() -
-                                new Date(ticket.slaDeadline).getTime()) /
-                              (1000 * 60 * 60)
-                            )} hr(s)`
-                            : 'Met SLA'}
+                          {new Date(ticket.slaDeadline).toLocaleString()}
                         </Typography>
                       </Box>
-                    )}
-                    {!ticket.slaPaused && !effectiveResolvedAt(ticket) && new Date() > new Date(ticket.slaDeadline) && (
-                      <Box mt={1}>
-                        <Typography variant="caption" color="text.secondary">
-                          Elapsed time after SLA Deadline
-                        </Typography>
-                        <Typography variant="body2" color="error.main" fontWeight={600}>
-                          <OverdueTimer targetDate={ticket.slaDeadline} />
-                        </Typography>
-                      </Box>
-                    )}
-                  </>
-                )}
+                      {ticket.slaPaused && (
+                        <Alert severity="info" sx={{ mt: 1 }}>
+                          SLA timing is paused.
+                          {ticket.slaResumeAt
+                            ? ` It will resume by ${new Date(ticket.slaResumeAt).toLocaleString()}${ticket.slaResumeCanBeEarly ? ', or earlier when the assigned staff member clocks in during the allowed CWW window' : ''}.`
+                            : ' It will resume when ticket timing is enabled again.'}
+                        </Alert>
+                      )}
+                      {!ticket.slaPaused &&
+                        !effectiveResolvedAt(ticket) &&
+                        new Date() < new Date(ticket.slaDeadline) && (
+                          <Box mt={1}>
+                            <SlaCountdownTimer
+                              targetDate={ticket.slaDeadline}
+                              isNearingSLA={ticket.isNearingSLA ?? false}
+                              isOverdue={ticket.isOverdue ?? false}
+                            />
+                          </Box>
+                        )}
+                      {effectiveResolvedAt(ticket) && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">
+                            Resolution Time vs SLA
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color={
+                              new Date(effectiveResolvedAt(ticket) as string) >
+                              new Date(ticket.slaDeadline)
+                                ? 'error.main'
+                                : 'success.main'
+                            }
+                            fontWeight={600}
+                          >
+                            {new Date(effectiveResolvedAt(ticket) as string) >
+                            new Date(ticket.slaDeadline)
+                              ? `Missed SLA by ${Math.round(
+                                  (new Date(effectiveResolvedAt(ticket) as string).getTime() -
+                                    new Date(ticket.slaDeadline).getTime()) /
+                                    (1000 * 60 * 60),
+                                )} hr(s)`
+                              : 'Met SLA'}
+                          </Typography>
+                        </Box>
+                      )}
+                      {!ticket.slaPaused &&
+                        !effectiveResolvedAt(ticket) &&
+                        new Date() > new Date(ticket.slaDeadline) && (
+                          <Box mt={1}>
+                            <Typography variant="caption" color="text.secondary">
+                              Elapsed time after SLA Deadline
+                            </Typography>
+                            <Typography variant="body2" color="error.main" fontWeight={600}>
+                              <OverdueTimer targetDate={ticket.slaDeadline} />
+                            </Typography>
+                          </Box>
+                        )}
+                    </>
+                  )}
               </Box>
             </CardContent>
           </Card>
@@ -1963,13 +2112,9 @@ export default function TicketDetailPage() {
                     }
                   />
                   <Typography variant="body2">
-                    <strong>
-                      {formatPersonName(e.escalatedBy, '—')}
-                    </strong>
+                    <strong>{formatPersonName(e.escalatedBy, '—')}</strong>
                     {' → '}
-                    <strong>
-                      {formatPersonName(e.escalatedTo, '—')}
-                    </strong>
+                    <strong>{formatPersonName(e.escalatedTo, '—')}</strong>
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {new Date(e.createdAt).toLocaleString()}
@@ -2055,7 +2200,7 @@ export default function TicketDetailPage() {
                 )}
                 {e.status === 'pending' &&
                   String(e.escalatedToId || e.escalatedTo?.id || (e as any).escalated_to_id) ===
-                  String((user as any)?.id) && (
+                    String((user as any)?.id) && (
                     <Box mt={1} display="flex" gap={1}>
                       <Button
                         size="small"
@@ -2081,7 +2226,7 @@ export default function TicketDetailPage() {
                   )}
                 {e.status === 'pending' &&
                   (e.escalatedById || e.escalatedBy?.id || (e as any).escalated_by_id) ===
-                  (user as any)?.id && (
+                    (user as any)?.id && (
                     <Box mt={1}>
                       <Button
                         size="small"
@@ -2112,31 +2257,44 @@ export default function TicketDetailPage() {
               Resolution Time Correction History ({ticket.resolutionTimeOverrides.length})
             </Typography>
             <Alert severity="info" sx={{ mb: 2 }}>
-              The original system resolution time is retained. SLA calculations use the latest verified completion time.
+              The original system resolution time is retained. SLA calculations use the latest
+              verified completion time.
             </Alert>
             <Stack spacing={2}>
               {ticket.resolutionTimeOverrides.map((correction, index) => (
                 <Box key={correction.id} p={1.5} bgcolor="action.hover" borderRadius={1}>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
                     <Box>
-                      <Typography variant="caption" color="text.secondary">Recorded Resolution</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Recorded Resolution
+                      </Typography>
                       <Typography variant="body2">
                         {new Date(correction.recordedResolvedAt).toLocaleString()}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="caption" color="text.secondary">Verified Completion</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Verified Completion
+                      </Typography>
                       <Typography variant="body2" fontWeight={600}>
                         {new Date(correction.verifiedResolvedAt).toLocaleString()}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="caption" color="text.secondary">Approved By</Typography>
-                      <Typography variant="body2">{correction.createdByName || `User #${correction.createdById}`}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Approved By
+                      </Typography>
+                      <Typography variant="body2">
+                        {correction.createdByName || `User #${correction.createdById}`}
+                      </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="caption" color="text.secondary">Correction Recorded</Typography>
-                      <Typography variant="body2">{new Date(correction.createdAt).toLocaleString()}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Correction Recorded
+                      </Typography>
+                      <Typography variant="body2">
+                        {new Date(correction.createdAt).toLocaleString()}
+                      </Typography>
                     </Box>
                   </Stack>
                   <Typography variant="body2" mt={1}>
@@ -2173,13 +2331,16 @@ export default function TicketDetailPage() {
           </Typography>
 
           {olderCommentCount > 0 && (
-  <Box display="flex" justifyContent="center" mb={1}>
-    <Button size="small" onClick={() => setVisibleCommentCount((count) => count + COMMENTS_PAGE_SIZE)}>
-      ... Load previous {Math.min(COMMENTS_PAGE_SIZE, olderCommentCount)}
-    </Button>
-  </Box>
-)}
-{visibleComments.length > 0 ? (
+            <Box display="flex" justifyContent="center" mb={1}>
+              <Button
+                size="small"
+                onClick={() => setVisibleCommentCount((count) => count + COMMENTS_PAGE_SIZE)}
+              >
+                ... Load previous {Math.min(COMMENTS_PAGE_SIZE, olderCommentCount)}
+              </Button>
+            </Box>
+          )}
+          {visibleComments.length > 0 ? (
             <List disablePadding>
               {visibleComments.map((c: any, i: number) => (
                 <React.Fragment key={c.id ?? i}>
@@ -2198,7 +2359,13 @@ export default function TicketDetailPage() {
                             if (isAssignedTech) {
                               return <Chip label="Assigned Tech" size="small" color="primary" />;
                             }
-                            return <Chip label="User" size="small" sx={{ bgcolor: 'grey.300', color: 'grey.800' }} />;
+                            return (
+                              <Chip
+                                label="User"
+                                size="small"
+                                sx={{ bgcolor: 'grey.300', color: 'grey.800' }}
+                              />
+                            );
                           })()}
                           {c.isInternal && (
                             <Chip
@@ -2223,12 +2390,19 @@ export default function TicketDetailPage() {
                           >
                             {c.comment}
                           </Typography>
-                          {[...(c.attachmentPaths ?? []), ...(c.attachmentPath ? [c.attachmentPath] : [])].map((attachmentPath) => (
+                          {[
+                            ...(c.attachmentPaths ?? []),
+                            ...(c.attachmentPath ? [c.attachmentPath] : []),
+                          ].map((attachmentPath) => (
                             <Box mt={1} key={attachmentPath}>
                               <AuthImage
                                 url={`/tickets/comment-attachment/${c.ticketId}/${attachmentPath.split('/').pop()}`}
                                 alt="Comment Attachment"
-                                style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '4px' }}
+                                style={{
+                                  maxWidth: '100%',
+                                  maxHeight: '300px',
+                                  borderRadius: '4px',
+                                }}
                               />
                             </Box>
                           ))}
@@ -2264,10 +2438,7 @@ export default function TicketDetailPage() {
                 <Paper variant="outlined" sx={{ mt: 0.5, maxHeight: 240, overflowY: 'auto' }}>
                   <List dense disablePadding aria-label="Internal note mention suggestions">
                     {mentionSuggestions.map((candidate) => (
-                      <ListItemButton
-                        key={candidate.id}
-                        onClick={() => insertMention(candidate)}
-                      >
+                      <ListItemButton key={candidate.id} onClick={() => insertMention(candidate)}>
                         <ListItemText
                           primary={candidate.label}
                           secondary={`${candidate.email} · ${candidate.role.replaceAll('_', ' ')}`}
@@ -2298,7 +2469,13 @@ export default function TicketDetailPage() {
                 />
               )}
               <Stack spacing={1} mt={1}>
-                <TicketImageDropzone files={commentAttachments} onFilesChange={setCommentAttachments} maxFiles={5} label="Attach up to 5 images." buttonLabel="Select Images" />
+                <TicketImageDropzone
+                  files={commentAttachments}
+                  onFilesChange={setCommentAttachments}
+                  maxFiles={5}
+                  label="Attach up to 5 images."
+                  buttonLabel="Select Images"
+                />
                 <Button
                   variant="contained"
                   size="small"
@@ -2307,7 +2484,6 @@ export default function TicketDetailPage() {
                 >
                   {submittingComment ? 'Submitting…' : 'Add Comment'}
                 </Button>
-
               </Stack>
             </Box>
           )}
@@ -2335,6 +2511,8 @@ export default function TicketDetailPage() {
                 const EVENT_LABELS: Record<string, string> = {
                   created: 'Ticket Created',
                   auto_assigned: 'Auto-Assigned',
+                  auto_reassigned: 'Automatically Reassigned',
+                  queue_promoted: 'Queue Ticket Started',
                   manually_assigned: 'Manually Assigned',
                   manually_reassigned: 'Reassigned',
                   status_changed: 'Status Changed',
@@ -2355,7 +2533,7 @@ export default function TicketDetailPage() {
                 const label = EVENT_LABELS[ev.eventType] ?? ev.eventType.replace(/_/g, ' ');
                 const actorLine = ev.actorName
                   ? `by ${ev.actorName}`
-                  : ev.eventType === 'auto_assigned'
+                  : ['auto_assigned', 'auto_reassigned', 'queue_promoted'].includes(ev.eventType)
                     ? 'by System'
                     : '';
                 return (
@@ -2397,7 +2575,12 @@ export default function TicketDetailPage() {
                         </Typography>
                       )}
                       {ev.meta?.justification && (
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ fontStyle: 'italic' }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          display="block"
+                          sx={{ fontStyle: 'italic' }}
+                        >
                           Justification: {ev.meta.justification}
                         </Typography>
                       )}
@@ -2414,13 +2597,20 @@ export default function TicketDetailPage() {
                           {String(ev.meta.assigneeName)}
                         </Typography>
                       )}
-                      {ev.eventType === 'resolution_time_overridden' && ev.meta?.verifiedResolvedAt && (
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Verified completion: {new Date(String(ev.meta.verifiedResolvedAt)).toLocaleString()}
-                        </Typography>
-                      )}
+                      {ev.eventType === 'resolution_time_overridden' &&
+                        ev.meta?.verifiedResolvedAt && (
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            Verified completion:{' '}
+                            {new Date(String(ev.meta.verifiedResolvedAt)).toLocaleString()}
+                          </Typography>
+                        )}
                       {ev.eventType === 'resolution_time_overridden' && ev.meta?.reason && (
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ fontStyle: 'italic' }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          display="block"
+                          sx={{ fontStyle: 'italic' }}
+                        >
                           Reason: {String(ev.meta.reason)}
                         </Typography>
                       )}
@@ -2443,16 +2633,21 @@ export default function TicketDetailPage() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>{ticket?.assignedToId ? 'Reassign Technician' : 'Assign Technician'}</DialogTitle>
+        <DialogTitle>
+          {ticket?.assignedToId ? 'Reassign Technician' : 'Assign Technician'}
+        </DialogTitle>
         <DialogContent>
           <Autocomplete
             options={technicians.filter((t) => t.id !== ticket?.assignedToId)}
-              getOptionLabel={(t) => `${formatPersonName(t, t.email)} (${t.openCount} Active${t.attendanceStatus === 'out_of_office' ? ', OOO' : ''})`}
+            getOptionLabel={(t) =>
+              `${formatPersonName(t, t.email)} (${t.openCount} Active${t.attendanceStatus === 'out_of_office' ? ', OOO' : ''})`
+            }
             value={technicians.find((t) => t.id === assignToId) ?? null}
             onChange={(_, newValue) => setAssignToId(newValue ? Number(newValue.id) : '')}
             isOptionEqualToValue={(option, value) => option.id === value.id}
             renderInput={(params) => (
-              <TextField {...params}
+              <TextField
+                {...params}
                 label="Assign Technician"
                 fullWidth
                 size="small"
@@ -2491,15 +2686,11 @@ export default function TicketDetailPage() {
           </Alert>
           <Autocomplete
             options={requesterOptions}
-            getOptionLabel={(option) =>
-              formatPersonName(option, option.email)
-            }
+            getOptionLabel={(option) => formatPersonName(option, option.email)}
             value={requesterOptions.find((option) => option.id === correctedRequesterId) ?? null}
             onChange={(_, option) => setCorrectedRequesterId(option?.id ?? '')}
             isOptionEqualToValue={(option, value) => option.id === value.id}
-            renderInput={(params) => (
-              <TextField {...params} label="Requested For" required />
-            )}
+            renderInput={(params) => <TextField {...params} label="Requested For" required />}
           />
         </DialogContent>
         <DialogActions>
@@ -2533,9 +2724,7 @@ export default function TicketDetailPage() {
           </Alert>
           <Autocomplete
             options={assigneeCorrectionOptions}
-            getOptionLabel={(option) =>
-              formatPersonName(option, option.email)
-            }
+            getOptionLabel={(option) => formatPersonName(option, option.email)}
             value={
               assigneeCorrectionOptions.find((option) => option.id === correctedAssigneeId) ?? null
             }
@@ -2581,7 +2770,8 @@ export default function TicketDetailPage() {
             onChange={(_, newValue) => setEscalateToId(newValue ? Number(newValue.id) : '')}
             isOptionEqualToValue={(option, value) => option.id === value.id}
             renderInput={(params) => (
-              <TextField {...params}
+              <TextField
+                {...params}
                 label="Escalate To"
                 fullWidth
                 size="small"
@@ -2637,7 +2827,8 @@ export default function TicketDetailPage() {
       >
         <DialogTitle>Return Ticket</DialogTitle>
         <DialogContent>
-          <TextField inputProps={{ maxLength: 255 }}
+          <TextField
+            inputProps={{ maxLength: 255 }}
             fullWidth
             multiline
             rows={3}
@@ -2673,7 +2864,8 @@ export default function TicketDetailPage() {
           <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
             You can update the reason and attach additional proof photos to your pending escalation.
           </Alert>
-          <TextField inputProps={{ maxLength: 255 }}
+          <TextField
+            inputProps={{ maxLength: 255 }}
             fullWidth
             multiline
             rows={3}
@@ -2741,7 +2933,9 @@ export default function TicketDetailPage() {
             <Autocomplete
               options={requesterOpenTickets}
               getOptionLabel={(option) => `${option.ticketNumber} — ${option.subject}`}
-              renderInput={(params) => <TextField {...params} label="Original Ticket" size="small" />}
+              renderInput={(params) => (
+                <TextField {...params} label="Original Ticket" size="small" />
+              )}
               onChange={(_, newValue) => setSelectedDupOfId(newValue ? newValue.id.toString() : '')}
               sx={{ mt: 2 }}
               fullWidth
@@ -2804,7 +2998,8 @@ export default function TicketDetailPage() {
                   onInputChange={(_, v) => setCsatForm((f) => ({ ...f, unitSection: v }))}
                   renderInput={(params) => <TextField {...params} label="Unit/Section *" />}
                 />
-                <TextField label="Date of Transaction *"
+                <TextField
+                  label="Date of Transaction *"
                   type="date"
                   value={csatForm.dateOfTransaction}
                   InputProps={{ readOnly: true }}
@@ -2815,29 +3010,36 @@ export default function TicketDetailPage() {
                 />
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField label="First Name *"
+                <TextField
+                  label="First Name *"
                   disabled={!!user?.firstName}
                   value={csatForm.clientFirstName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientFirstName: e.target.value }))}
                   fullWidth
                   sx={populatedFieldSx(!!user?.firstName)}
                 />
-                <TextField label="M.I."
+                <TextField
+                  label="M.I."
                   disabled={!!user?.middleName}
                   value={csatForm.clientMiddleInitial}
                   onChange={(e) =>
-                    setCsatForm((f) => ({ ...f, clientMiddleInitial: e.target.value.substring(0, 1) }))
+                    setCsatForm((f) => ({
+                      ...f,
+                      clientMiddleInitial: e.target.value.substring(0, 1),
+                    }))
                   }
                   sx={{ width: 140, ...populatedFieldSx(!!user?.middleName) }}
                 />
-                <TextField label="Last Name *"
+                <TextField
+                  label="Last Name *"
                   disabled={!!user?.lastName}
                   value={csatForm.clientLastName}
                   onChange={(e) => setCsatForm((f) => ({ ...f, clientLastName: e.target.value }))}
                   fullWidth
                   sx={populatedFieldSx(!!user?.lastName)}
                 />
-                <TextField label="Suffix"
+                <TextField
+                  label="Suffix"
                   disabled={!!user?.suffix}
                   value={csatForm.suffix}
                   onChange={(e) => setCsatForm((f) => ({ ...f, suffix: e.target.value }))}
@@ -2845,19 +3047,22 @@ export default function TicketDetailPage() {
                 />
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField label="Age"
+                <TextField
+                  label="Age"
                   type="number"
                   inputProps={{ min: 20, max: 89 }}
                   value={csatForm.age ?? ''}
                   onChange={(e) => setCsatForm((f) => ({ ...f, age: Number(e.target.value) }))}
                   sx={{ maxWidth: 200 }}
                 />
-                <TextField label="Religion"
+                <TextField
+                  label="Religion"
                   value={csatForm.religion ?? ''}
                   onChange={(e) => setCsatForm((f) => ({ ...f, religion: e.target.value }))}
                   sx={{ flex: 1 }}
                 />
-                <TextField inputProps={{ maxLength: 255 }}
+                <TextField
+                  inputProps={{ maxLength: 255 }}
                   select
                   label="Sex *"
                   disabled={!!user?.sex}
@@ -2870,7 +3075,8 @@ export default function TicketDetailPage() {
                   <MenuItem value="Other">Other</MenuItem>
                   <MenuItem value="Prefer Not to Say">Prefer Not to Say</MenuItem>
                 </TextField>
-                <TextField label="Contact Number *"
+                <TextField
+                  label="Contact Number *"
                   disabled={!!user?.phoneNumber}
                   value={csatForm.contactNumber ?? ''}
                   onChange={(e) => {
@@ -2884,11 +3090,12 @@ export default function TicketDetailPage() {
                   sx={{ flex: 1, ...populatedFieldSx(!!user?.phoneNumber) }}
                 />
               </Stack>
-              <TextField label="Technician Name *"
+              <TextField
+                label="Technician Name *"
                 value={csatForm.technicianName}
                 InputProps={{ readOnly: true }}
                 disabled
-              // fullWidth
+                // fullWidth
               />
 
               <Typography variant="subtitle2" fontWeight={700} mt={1}>
@@ -3046,7 +3253,8 @@ export default function TicketDetailPage() {
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Alert severity="warning">
-              The recorded system resolution time will remain unchanged. The verified time will be used for SLA displays and reports.
+              The recorded system resolution time will remain unchanged. The verified time will be
+              used for SLA displays and reports.
             </Alert>
             <Typography variant="body2">
               Ticket: <strong>{ticket.ticketNumber}</strong>
@@ -3088,18 +3296,20 @@ export default function TicketDetailPage() {
               buttonLabel="Select Proof Image(s)"
             />
             <FormControlLabel
-              control={(
+              control={
                 <Checkbox
                   checked={resolutionOverrideConfirmed}
                   onChange={(event) => setResolutionOverrideConfirmed(event.target.checked)}
                 />
-              )}
+              }
               label="I confirm that the attached proof visibly supports the verified completion time."
             />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeResolutionOverrideDialog} disabled={savingResolutionOverride}>Cancel</Button>
+          <Button onClick={closeResolutionOverrideDialog} disabled={savingResolutionOverride}>
+            Cancel
+          </Button>
           <Button
             variant="contained"
             color="secondary"
@@ -3192,7 +3402,8 @@ export default function TicketDetailPage() {
       <Dialog open={kbPickerOpen} onClose={() => setKbPickerOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Load from Knowledge Base</DialogTitle>
         <DialogContent dividers>
-          <TextField inputProps={{ maxLength: 255 }}
+          <TextField
+            inputProps={{ maxLength: 255 }}
             fullWidth
             size="small"
             placeholder="Search articles by title or content..."
@@ -3201,29 +3412,41 @@ export default function TicketDetailPage() {
             sx={{ mb: 2 }}
           />
           {kbLoading ? (
-            <Box display="flex" justifyContent="center" py={3}><CircularProgress size={28} /></Box>
+            <Box display="flex" justifyContent="center" py={3}>
+              <CircularProgress size={28} />
+            </Box>
           ) : (
             <List disablePadding>
               {(kbSearch
-                ? kbArticles.filter((a) =>
-                    a.title?.toLowerCase().includes(kbSearch.toLowerCase()) ||
-                    a.content?.toLowerCase().includes(kbSearch.toLowerCase()))
+                ? kbArticles.filter(
+                    (a) =>
+                      a.title?.toLowerCase().includes(kbSearch.toLowerCase()) ||
+                      a.content?.toLowerCase().includes(kbSearch.toLowerCase()),
+                  )
                 : kbArticles
               ).length === 0 ? (
                 <Typography color="text.secondary" textAlign="center" py={3} fontSize={14}>
-                  {kbArticles.length === 0 ? 'No KB articles available yet.' : 'No articles match your search.'}
+                  {kbArticles.length === 0
+                    ? 'No KB articles available yet.'
+                    : 'No articles match your search.'}
                 </Typography>
               ) : (
                 (kbSearch
-                  ? kbArticles.filter((a) =>
-                      a.title?.toLowerCase().includes(kbSearch.toLowerCase()) ||
-                      a.content?.toLowerCase().includes(kbSearch.toLowerCase()))
+                  ? kbArticles.filter(
+                      (a) =>
+                        a.title?.toLowerCase().includes(kbSearch.toLowerCase()) ||
+                        a.content?.toLowerCase().includes(kbSearch.toLowerCase()),
+                    )
                   : kbArticles
                 ).map((article: any) => (
                   <React.Fragment key={article.id}>
                     <ListItem
                       alignItems="flex-start"
-                      sx={{ cursor: 'pointer', borderRadius: 1, '&:hover': { bgcolor: 'action.hover' } }}
+                      sx={{
+                        cursor: 'pointer',
+                        borderRadius: 1,
+                        '&:hover': { bgcolor: 'action.hover' },
+                      }}
                       onClick={() => {
                         setResolutionNotes(article.content ?? '');
                         setKbPickerOpen(false);
@@ -3232,11 +3455,18 @@ export default function TicketDetailPage() {
                     >
                       <ListItemText
                         primary={
-                          <Typography fontWeight={600} fontSize={14}>{article.title}</Typography>
+                          <Typography fontWeight={600} fontSize={14}>
+                            {article.title}
+                          </Typography>
                         }
                         secondary={
-                          <Typography fontSize={12} color="text.secondary" sx={{ whiteSpace: 'pre-wrap', mt: 0.5 }}>
-                            {article.content?.slice(0, 200)}{(article.content?.length ?? 0) > 200 ? '…' : ''}
+                          <Typography
+                            fontSize={12}
+                            color="text.secondary"
+                            sx={{ whiteSpace: 'pre-wrap', mt: 0.5 }}
+                          >
+                            {article.content?.slice(0, 200)}
+                            {(article.content?.length ?? 0) > 200 ? '…' : ''}
                           </Typography>
                         }
                       />
@@ -3249,10 +3479,16 @@ export default function TicketDetailPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setKbPickerOpen(false); setKbSearch(''); }}>Cancel</Button>
+          <Button
+            onClick={() => {
+              setKbPickerOpen(false);
+              setKbSearch('');
+            }}
+          >
+            Cancel
+          </Button>
         </DialogActions>
       </Dialog>
-
     </Box>
   );
 }
