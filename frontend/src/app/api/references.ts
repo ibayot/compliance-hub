@@ -231,6 +231,7 @@ export interface TicketComment {
   isInternal: boolean;
   createdAt: string;
   attachmentPath?: string | null;
+  attachmentPaths?: string[] | null;
   user?: { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string; role?: string };
 }
 
@@ -800,15 +801,13 @@ export const ticketsApi = {
     ticketId: string,
     comment: string,
     isInternal = false,
-    attachment?: File | null,
+    attachments: File[] = [],
     mentionedUserIds: number[] = [],
   ): Promise<TicketComment> => {
     const formData = new FormData();
     formData.append('comment', comment);
     formData.append('isInternal', String(isInternal));
-    if (attachment) {
-      formData.append('attachment', attachment);
-    }
+    attachments.forEach((attachment) => formData.append('attachments', attachment));
     mentionedUserIds.forEach((userId) => {
       formData.append('mentionedUserIds', String(userId));
     });

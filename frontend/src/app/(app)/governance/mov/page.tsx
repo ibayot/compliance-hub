@@ -53,6 +53,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { formatPersonName } from '@/lib/utils/person-name';
 import { UserRole } from '@/lib/types/auth';
 import { useSse } from '@/lib/utils/useSse';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 const ALLOWED_IMAGE_FILE_ACCEPT =
   '.jpg,.jpeg,.png,.heic,.heif,.webp,image/jpeg,image/png,image/heic,image/heif,image/webp';
@@ -1132,20 +1133,19 @@ export default function MovBuilderPage() {
                   {/* ── Saved Presets ── */}
                   {printPresets.length > 0 && (
                     <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                      <FormControl size="small" sx={{ minWidth: 200 }}>
-                        <InputLabel>Load Preset</InputLabel>
-                        <Select
-                          value={selectedPresetId}
-                          label="Load Preset"
-                          onChange={(e) => setSelectedPresetId(e.target.value)}
-                        >
-                          {printPresets.map((p) => (
-                            <MenuItem key={p.id} value={p.id}>
-                              {p.title}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
+                      <SearchableSelect
+                        size="small"
+                        label="Load Preset"
+                        value={selectedPresetId || null}
+                        options={printPresets.map((preset) => ({
+                          value: preset.id,
+                          label: preset.title,
+                        }))}
+                        onChange={(presetId) => setSelectedPresetId(presetId || '')}
+                        clearable={false}
+                        fullWidth={false}
+                        sx={{ minWidth: 200 }}
+                      />
                       <Button variant="outlined" size="small" onClick={handleLoadPreset}>
                         Load
                       </Button>

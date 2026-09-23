@@ -229,6 +229,9 @@ export class RoleCapability {
   @Column({ name: 'is_metrics_delete', type: 'tinyint', width: 1, default: 0 })
   isMetricsDelete: boolean;
 
+  @Column({ name: 'is_changelog_management', type: 'tinyint', width: 1, default: 0 })
+  isChangelogManagement: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

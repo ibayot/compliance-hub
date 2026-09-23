@@ -137,6 +137,7 @@ export interface RoleCapabilityRecord {
   isDocumentsDelete: boolean;
   isIssuancesManage: boolean;
   isMetricsDelete: boolean;
+  isChangelogManagement: boolean;
 }
 
 export interface UpdateRoleCapabilityPayload {
@@ -184,6 +185,7 @@ export interface UpdateRoleCapabilityPayload {
   isDocumentsDelete?: boolean;
   isIssuancesManage?: boolean;
   isMetricsDelete?: boolean;
+  isChangelogManagement?: boolean;
 }
 
 export const usersApi = {

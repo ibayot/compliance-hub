@@ -27,11 +27,10 @@ import { useSidebar } from '@/contexts/SidebarContext';
 import { PageTitleProvider } from '@/contexts/PageTitleContext';
 import { useServiceAvailability } from '@/lib/utils/useServiceAvailability';
 import { useAuth } from '@/contexts/AuthContext';
+import ChangelogDialog from '@/components/ChangelogDialog';
+import { AppRelease, changelogApi } from '@/lib/api/changelog';
 import { useSse } from '@/lib/utils/useSse';
-import {
-  AttendanceAssignmentAlert,
-  ticketsApi,
-} from '@/app/api/references';
+import { AttendanceAssignmentAlert, ticketsApi } from '@/app/api/references';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -62,37 +61,77 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
   const attendanceReminderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attendanceSseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attendanceRequestId = useRef(0);
-  const canManageTicketAssignments = Boolean(
-    myCap?.isTicketFocal || myCap?.isTicketSettingsFocal,
-  );
-
-  const refreshAttendanceAlerts = useCallback(async (forcePrompt = false) => {
+  const canManageTicketAssignments = Boolean(myCap?.isTicketFocal || myCap?.isTicketSettingsFocal);
+  const [changelogOpen, setChangelogOpen] = useState(false);
+  const [changelogManual, setChangelogManual] = useState(false);
+  const [changelogReleases, setChangelogReleases] = useState<AppRelease[]>([]);
+  useEffect(() => {
     if (
       !user ||
-      !canManageTicketAssignments ||
       isSessionLocked ||
-      requiresPasswordChange
-    ) {
-      attendanceRequestId.current += 1;
-      setAttendanceAlerts([]);
-      setAttendanceAlertOpen(false);
+      requiresPasswordChange ||
+      sessionStorage.getItem('changelog-prompt-checked')
+    )
       return;
-    }
-
+    sessionStorage.setItem('changelog-prompt-checked', '1');
+    changelogApi
+      .prompt()
+      .then(async (releases) => {
+        if (releases.length) {
+          setChangelogReleases(releases);
+          setChangelogManual(false);
+          setChangelogOpen(true);
+          await changelogApi.displayed(releases.map((r) => r.id));
+        }
+      })
+      .catch(() => {});
+  }, [user, isSessionLocked, requiresPasswordChange]);
+  const openChangelogHistory = () => {
+    changelogApi
+      .history()
+      .then((r) => {
+        setChangelogReleases(r);
+        setChangelogManual(true);
+        setChangelogOpen(true);
+      })
+      .catch(() => enqueueSnackbar('Unable to load release notes.', { variant: 'error' }));
+  };
+  const acknowledgeChangelog = async () => {
     try {
-      const requestId = ++attendanceRequestId.current;
-      const alerts = await ticketsApi.getAttendanceAssignmentAlerts();
-      if (requestId !== attendanceRequestId.current) return;
-      setAttendanceAlerts(alerts);
-      if (alerts.length === 0) {
-        setAttendanceAlertOpen(false);
-      } else if (forcePrompt || Date.now() >= nextAttendancePromptAt.current) {
-        setAttendanceAlertOpen(true);
-      }
+      await changelogApi.acknowledge(changelogReleases.map((release) => release.id));
+      setChangelogOpen(false);
     } catch {
-      // This background check must never interrupt normal navigation.
+      enqueueSnackbar('Unable to acknowledge the release notes. Please try again.', {
+        variant: 'error',
+      });
     }
-  }, [canManageTicketAssignments, isSessionLocked, requiresPasswordChange, user]);
+  };
+
+  const refreshAttendanceAlerts = useCallback(
+    async (forcePrompt = false) => {
+      if (!user || !canManageTicketAssignments || isSessionLocked || requiresPasswordChange) {
+        attendanceRequestId.current += 1;
+        setAttendanceAlerts([]);
+        setAttendanceAlertOpen(false);
+        return;
+      }
+
+      try {
+        const requestId = ++attendanceRequestId.current;
+        const alerts = await ticketsApi.getAttendanceAssignmentAlerts();
+        if (requestId !== attendanceRequestId.current) return;
+        setAttendanceAlerts(alerts);
+        if (alerts.length === 0) {
+          setAttendanceAlertOpen(false);
+        } else if (forcePrompt || Date.now() >= nextAttendancePromptAt.current) {
+          setAttendanceAlertOpen(true);
+        }
+      } catch {
+        // This background check must never interrupt normal navigation.
+      }
+    },
+    [canManageTicketAssignments, isSessionLocked, requiresPasswordChange, user],
+  );
 
   useEffect(() => {
     void refreshAttendanceAlerts();
@@ -113,10 +152,13 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
   const scheduleFiveMinuteReminder = () => {
     nextAttendancePromptAt.current = Date.now() + 5 * 60 * 1000;
     if (attendanceReminderTimer.current) clearTimeout(attendanceReminderTimer.current);
-    attendanceReminderTimer.current = setTimeout(() => {
-      attendanceReminderTimer.current = null;
-      void refreshAttendanceAlerts(true);
-    }, 5 * 60 * 1000);
+    attendanceReminderTimer.current = setTimeout(
+      () => {
+        attendanceReminderTimer.current = null;
+        void refreshAttendanceAlerts(true);
+      },
+      5 * 60 * 1000,
+    );
   };
 
   const handleManualReassignment = (alert: AttendanceAssignmentAlert) => {
@@ -130,9 +172,10 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
     setReassigningUserId(alert.userId);
     try {
       const result = await ticketsApi.autoReassignAttendanceAlertTickets(alert.userId);
-      const message = result.remaining > 0
-        ? `${result.reassigned} ticket(s) reassigned; ${result.remaining} still need manual reassignment.`
-        : `${result.reassigned} ticket(s) reassigned successfully.`;
+      const message =
+        result.remaining > 0
+          ? `${result.reassigned} ticket(s) reassigned; ${result.remaining} still need manual reassignment.`
+          : `${result.reassigned} ticket(s) reassigned successfully.`;
       enqueueSnackbar(message, { variant: result.remaining > 0 ? 'warning' : 'success' });
       if (result.messages.length > 0) {
         enqueueSnackbar(result.messages.join(' '), { variant: 'warning' });
@@ -140,7 +183,8 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
       await refreshAttendanceAlerts(true);
     } catch (error: any) {
       enqueueSnackbar(
-        error?.response?.data?.message || 'Automatic reassignment failed. Please reassign the tickets manually.',
+        error?.response?.data?.message ||
+          'Automatic reassignment failed. Please reassign the tickets manually.',
         { variant: 'error' },
       );
     } finally {
@@ -180,9 +224,9 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         <DialogTitle>Assigned tickets need attention</DialogTitle>
         <DialogContent dividers>
           <Alert severity="warning" sx={{ mb: 2 }}>
-            The following RICTMS staff are marked Absent, Half Day, or Assumed Late and still
-            have Assigned or In Progress tickets. Choose automatic reassignment or review the
-            tickets and reassign them manually.
+            The following RICTMS staff are marked Absent, Half Day, or Assumed Late and still have
+            Assigned or In Progress tickets. Choose automatic reassignment or review the tickets and
+            reassign them manually.
           </Alert>
           <Stack spacing={2} divider={<Divider flexItem />}>
             {attendanceAlerts.map((alert) => (
@@ -214,7 +258,8 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
                 <Stack spacing={0.5} sx={{ my: 1.5 }}>
                   {alert.tickets.map((ticket) => (
                     <Typography key={ticket.id} variant="body2">
-                      {ticket.ticketNumber} — {ticket.subject} ({ticket.status.replaceAll('_', ' ')})
+                      {ticket.ticketNumber} — {ticket.subject} ({ticket.status.replaceAll('_', ' ')}
+                      )
                     </Typography>
                   ))}
                 </Stack>
@@ -250,7 +295,14 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         </DialogActions>
       </Dialog>
       {/* App Bar */}
-      <AppBar onMenuClick={handleDrawerToggle} />
+      <AppBar onMenuClick={handleDrawerToggle} onOpenChangelog={openChangelogHistory} />
+      <ChangelogDialog
+        open={changelogOpen}
+        releases={changelogReleases}
+        manual={changelogManual}
+        onClose={() => setChangelogOpen(false)}
+        onAcknowledge={() => void acknowledgeChangelog()}
+      />
 
       {/* Sidebar */}
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />

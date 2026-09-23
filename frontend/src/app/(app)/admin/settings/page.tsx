@@ -6,7 +6,6 @@ import {
   Alert,
   AccordionSummary,
   AccordionDetails,
-  Autocomplete,
   Avatar,
   Box,
   Button,
@@ -26,7 +25,6 @@ import {
   IconButton,
   InputLabel,
   InputAdornment,
-  ListItemText,
   MenuItem,
   Stack,
   Select,
@@ -81,6 +79,7 @@ import {
   saveBiometricCredentials,
 } from '@/lib/auth/biometric';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 // --- Change Password Card ---------------------------------------------------
 
@@ -700,6 +699,7 @@ const CAPABILITY_CATEGORIES = [
       { key: 'isTicketRequesterCorrection', label: 'Ticket Record Correction', description: 'Correct the Requested For or Assigned To person on an existing ticket' },
       { key: 'isSecuritySettingsAccess', label: 'Security Settings Admin', description: 'Manage the default password in Security Settings' },
       { key: 'isSmtpSettingsAccess', label: 'SMTP Admin', description: 'Manage SMTP credentials in Settings' },
+      { key: 'isChangelogManagement', label: 'Changelog Admin', description: 'Create and publish capability-targeted user-visible release notes' },
     ]
   }
 ];
@@ -1602,29 +1602,23 @@ function FocalUserManagementCard() {
                 />
               </Grid>
               <Grid item xs={12} md={6}>
-                <TextField
-                  select
+                <SearchableSelect
                   required
                   label="Role"
                   value={form.role}
                   disabled={!isUserManagementAdmin}
                   helperText={!isUserManagementAdmin ? 'User Management View can create End User accounts only.' : undefined}
-                  onChange={(e) => {
-                    const role = e.target.value as UserRole;
+                  options={assignableRoles.map((role) => ({ value: role.value, label: role.label }))}
+                  onChange={(selectedRole) => {
+                    const role = selectedRole as UserRole;
                     setForm({
                       ...form,
                       role,
                       autoAssignmentEligible: role !== UserRole.USER,
                     });
                   }}
-                  fullWidth
-                >
-                  {assignableRoles.map((r) => (
-                    <MenuItem key={r.value} value={r.value}>
-                      {r.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                  clearable={false}
+                />
               </Grid>
               {form.role !== UserRole.USER && (
                 <Grid item xs={12}>
@@ -2107,13 +2101,12 @@ function FocalUserManagementCard() {
                 />
               </Grid>
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Role</InputLabel>
-                  <Select
-                    value={editUser?.role || ''}
+                <SearchableSelect
+                    value={editUser?.role || null}
                     label="Role"
-                    onChange={(e) => {
-                      const nextRole = e.target.value as UserRole;
+                    options={assignableRoles.map((role) => ({ value: role.value, label: role.label }))}
+                    onChange={(selectedRole) => {
+                      const nextRole = selectedRole as UserRole;
                       setEditUser((prev: any) => {
                         const currentUnit = units.find((unit) => unit.id === prev?.unitIds?.[0]);
                         const keepsUnit = currentUnit && isReportorialUnit(currentUnit) === (nextRole !== UserRole.USER);
@@ -2124,40 +2117,19 @@ function FocalUserManagementCard() {
                         };
                       });
                     }}
-                  >
-                    {assignableRoles.map((r) => (
-                      <MenuItem key={r.value} value={r.value}>
-                        {r.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                    clearable={false}
+                />
               </Grid>
               
               <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Assigned Unit</InputLabel>
-                  <Select
-                    value={editUser?.unitIds?.[0] || ''}
-                    label="Assigned Unit"
-                    onChange={(e) =>
-                      setEditUser((prev: any) => ({ ...prev, unitIds: e.target.value ? [e.target.value as number] : [] }))
-                    }
-                    renderValue={(selected) =>
-                      units.find((u) => u.id === selected)?.name ?? selected
-                    }
-                    MenuProps={{ disableAutoFocusItem: true }}
-                  >
-                    <MenuItem value="">
-                      <em>None</em>
-                    </MenuItem>
-                    {selectableUnits.map((unit) => (
-                      <MenuItem key={unit.id} value={unit.id}>
-                        {unit.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <SearchableSelect
+                  label="Assigned Unit"
+                  value={editUser?.unitIds?.[0] || null}
+                  options={selectableUnits.map((unit) => ({ value: unit.id, label: unit.name }))}
+                  onChange={(unitId) =>
+                    setEditUser((prev: any) => ({ ...prev, unitIds: unitId ? [unitId] : [] }))
+                  }
+                />
               </Grid>
               {editUser?.role !== UserRole.USER && (
                 <Grid item xs={12}>
@@ -2476,13 +2448,14 @@ function ProfilePreferencesCard() {
             </FormControl>
           </Grid>
           <Grid item xs={12} md={4}>
-            <FormControl fullWidth required>
-              <InputLabel>Unit/Section</InputLabel>
-              <Select value={form.unitId} label="Unit/Section" onChange={(e) => setForm((prev) => ({ ...prev, unitId: e.target.value as number | '' }))}>
-                <MenuItem value=""><em>Select a unit</em></MenuItem>
-                {availableUnits.map((unit) => <MenuItem key={unit.id} value={unit.id}>{unit.name}</MenuItem>)}
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              required
+              label="Unit/Section"
+              value={form.unitId || null}
+              options={availableUnits.map((unit) => ({ value: unit.id, label: unit.name }))}
+              onChange={(unitId) => setForm((prev) => ({ ...prev, unitId: unitId ?? '' }))}
+              placeholder="Search units"
+            />
           </Grid>
           <Grid item xs={12} md={4}>
             <TextField label="Position" value={form.position} onChange={(e) => setForm((prev) => ({ ...prev, position: e.target.value }))} inputProps={{ maxLength: 12 }} fullWidth />

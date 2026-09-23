@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Box,
   Card,
@@ -77,16 +77,7 @@ import {
 
 import { unitsApi } from '@/lib/api/units';
 import { usersApi, UserRecord } from '@/lib/api/users';
-
-const ALLOWED_IMAGE_FILE_ACCEPT =
-  '.jpg,.jpeg,.png,.heic,.heif,.webp,image/jpeg,image/png,image/heic,image/heif,image/webp';
-const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp']);
-const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp']);
-const isAllowedImageFile = (file: File) => {
-  const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
-  const mime = file.type.toLowerCase();
-  return ALLOWED_IMAGE_EXTENSIONS.has(extension) && (!mime || ALLOWED_IMAGE_MIME_TYPES.has(mime));
-};
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 const effectiveResolvedAt = (ticket: Ticket) =>
   ticket.effectiveResolvedAt || ticket.resolutionTimeOverride || ticket.resolvedAt || null;
@@ -222,6 +213,7 @@ export default function TicketDetailPage() {
 
   // Guard: auto-view mark fires only once per ticket load
   const viewedRef = useRef(false);
+  const emailActionHandledRef = useRef(false);
 
   const [parentTicketNumber, setParentTicketNumber] = useState<string | null>(null);
 
@@ -607,6 +599,24 @@ export default function TicketDetailPage() {
       setNewStatus(data.status);
       setResolutionNotes(data.resolutionNotes || '');
 
+      if (!emailActionHandledRef.current) {
+        const emailAction = new URLSearchParams(window.location.search).get('emailAction');
+        if (emailAction === 'close' || emailAction === 'rate') {
+          emailActionHandledRef.current = true;
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete('emailAction');
+          window.history.replaceState({}, '', `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
+          if (data.status === 'closed') {
+            enqueueSnackbar(
+              data.satisfactionSubmittedAt
+                ? 'This ticket has already been rated and is closed.'
+                : 'This ticket is already closed.',
+              { variant: 'info' },
+            );
+          }
+        }
+      }
+
       // Auto-transition assigned → in_progress when the assigned technician opens the detail view
       if (
         !viewedRef.current &&
@@ -703,25 +713,17 @@ export default function TicketDetailPage() {
     }
   };
 
-  const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
-  const selectCommentImage = useCallback((file?: File) => {
-    if (!file) return;
-    if (!isAllowedImageFile(file)) {
-      enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed.', { variant: 'error' });
-      return;
-    }
-    setCommentAttachment(file);
-  }, [enqueueSnackbar]);
+  const [commentAttachments, setCommentAttachments] = useState<File[]>([]);
 
   const handleAddComment = async () => {
-    if (!comment.trim() && !commentAttachment) return;
+    if (!comment.trim() && !commentAttachments.length) return;
     try {
       setSubmittingComment(true);
       const createdComment = await ticketsApi.addComment(
         ticketId,
         comment,
         isInternal && canViewInternalNotes,
-        commentAttachment,
+        commentAttachments,
         isInternal && canViewInternalNotes ? mentionedUserIds : [],
       );
       setTicket((current) => current ? {
@@ -731,7 +733,7 @@ export default function TicketDetailPage() {
       setVisibleCommentCount(COMMENTS_PAGE_SIZE);
       setComment('');
       setMentionedUserIds([]);
-      setCommentAttachment(null);
+      setCommentAttachments([]);
       setIsInternal(false);
       enqueueSnackbar('Comment added.', { variant: 'success' });
     } catch (err: any) {
@@ -1157,14 +1159,21 @@ export default function TicketDetailPage() {
                 
                 {/* Category Dropdown */}
                 {!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id ? (
-                  <TextField inputProps={{ maxLength: 255 }}
-                    select
+                  <SearchableSelect
                     size="small"
-                    value={ticket.categoryId || ''}
+                    label="Category"
+                    value={ticket.categoryId || null}
+                    options={categories.map((category: any) => ({
+                      value: category.id,
+                      label: category.name,
+                    }))}
+                    clearable={false}
+                    fullWidth={false}
                     disabled={['resolved', 'closed'].includes(ticket.status) || isTypeLockedByEscalation}
-                    onChange={async (e) => {
+                    onChange={async (categoryId) => {
+                      if (!categoryId) return;
                       try {
-                        await ticketsApi.update(ticketId, { categoryId: e.target.value as string });
+                        await ticketsApi.update(ticketId, { categoryId: String(categoryId) });
                         fetchTicket();
                         enqueueSnackbar('Ticket category updated.', { variant: 'success' });
                       } catch (err: any) {
@@ -1175,23 +1184,13 @@ export default function TicketDetailPage() {
                       }
                     }}
                     sx={{
-                      minWidth: 160,
+                      minWidth: 190,
                       '& .MuiInputBase-root': {
-                        height: 26,
                         fontSize: '0.8125rem',
                         borderRadius: '16px',
                       },
                     }}
-                  >
-                    <MenuItem value="" disabled sx={{ fontSize: '0.8125rem', fontStyle: 'italic' }}>
-                      Select Category
-                    </MenuItem>
-                    {categories.map((cat: any) => (
-                      <MenuItem key={cat.id} value={cat.id} sx={{ fontSize: '0.8125rem' }}>
-                        {cat.name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                  />
                 ) : (
                   ticket.category ? (
                     <Chip
@@ -1206,13 +1205,17 @@ export default function TicketDetailPage() {
                 {/* Issue Dropdown */}
                 {user?.role !== 'user' && issues.length > 0 && (
                   (!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id) ? (
-                    <TextField inputProps={{ maxLength: 255 }}
-                      select
+                    <SearchableSelect
                       size="small"
-                      value={ticket.issueTypeId || (ticket as any).issueTypeConfig?.id || ''}
+                      label="Issue"
+                      value={ticket.issueTypeId || (ticket as any).issueTypeConfig?.id || null}
+                      options={issues.map((issue) => ({ value: issue.id, label: issue.name }))}
+                      clearable={false}
+                      fullWidth={false}
                       disabled={['resolved', 'closed'].includes(ticket.status) || isTypeLockedByEscalation}
-                      onChange={async (e) => {
-                        const newIssueTypeId = e.target.value as string;
+                      onChange={async (issueTypeId) => {
+                        if (!issueTypeId) return;
+                        const newIssueTypeId = String(issueTypeId);
                         setTicket((prev: any) => prev ? { 
                           ...prev, 
                           issueTypeId: newIssueTypeId,
@@ -1232,23 +1235,13 @@ export default function TicketDetailPage() {
                         }
                       }}
                       sx={{
-                        minWidth: 160,
+                        minWidth: 190,
                         '& .MuiInputBase-root': {
-                          height: 26,
                           fontSize: '0.8125rem',
                           borderRadius: '16px',
                         },
                       }}
-                    >
-                      <MenuItem value="" disabled sx={{ fontSize: '0.8125rem', fontStyle: 'italic' }}>
-                        Select Issue
-                      </MenuItem>
-                      {issues.map((iss) => (
-                        <MenuItem key={iss.id} value={iss.id} sx={{ fontSize: '0.8125rem' }}>
-                          {iss.name}
-                        </MenuItem>
-                      ))}
-                    </TextField>
+                    />
                   ) : (
                     ticket.issueTypeId || (ticket as any).issueTypeConfig?.id ? (
                       <Chip
@@ -1656,29 +1649,55 @@ export default function TicketDetailPage() {
               
               {(() => {
                 const initialAttachmentComment = ticket.comments?.find(
-                  (c) => c.comment === '[Initial Ticket Attachment]' && c.attachmentPath
+                  (c) =>
+                    c.comment === '[Initial Ticket Attachment]' &&
+                    ((c.attachmentPaths?.length ?? 0) > 0 || c.attachmentPath),
                 );
                 if (!initialAttachmentComment) return null;
-                const fileExt = initialAttachmentComment.attachmentPath!.split('.').pop()?.toLowerCase();
-                const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt ?? '');
-                const url = `/tickets/comment-attachment/${ticket.id}/${initialAttachmentComment.attachmentPath!.split('/').pop()}`;
+                const attachmentPaths = [
+                  ...(initialAttachmentComment.attachmentPaths ?? []),
+                  ...(initialAttachmentComment.attachmentPath
+                    ? [initialAttachmentComment.attachmentPath]
+                    : []),
+                ].filter((path, index, paths) => paths.indexOf(path) === index);
                 
                 return (
                   <Box mt={2}>
                     <Typography variant="subtitle2" gutterBottom>
-                      Attached Image
+                      Attached Images
                     </Typography>
-                    {isImage ? (
-                      <AuthImage
-                        url={url}
-                        alt="Initial Attachment"
-                        style={{ maxWidth: '100%', maxHeight: 400, borderRadius: 4, border: '1px solid var(--mui-palette-divider)' }}
-                      />
-                    ) : (
-                      <Button variant="outlined" size="small" href={url} target="_blank">
-                        View Attachment
-                      </Button>
-                    )}
+                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                      {attachmentPaths.map((attachmentPath, index) => {
+                        const fileExt = attachmentPath.split('.').pop()?.toLowerCase();
+                        const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'].includes(
+                          fileExt ?? '',
+                        );
+                        const url = `/tickets/comment-attachment/${ticket.id}/${attachmentPath.split('/').pop()}`;
+                        return isImage ? (
+                          <AuthImage
+                            key={attachmentPath}
+                            url={url}
+                            alt={`Initial attachment ${index + 1}`}
+                            style={{
+                              maxWidth: 240,
+                              maxHeight: 240,
+                              borderRadius: 4,
+                              border: '1px solid var(--mui-palette-divider)',
+                            }}
+                          />
+                        ) : (
+                          <Button
+                            key={attachmentPath}
+                            variant="outlined"
+                            size="small"
+                            href={url}
+                            target="_blank"
+                          >
+                            View Attachment {index + 1}
+                          </Button>
+                        );
+                      })}
+                    </Stack>
                   </Box>
                 );
               })()}
@@ -2204,15 +2223,15 @@ export default function TicketDetailPage() {
                           >
                             {c.comment}
                           </Typography>
-                          {c.attachmentPath && (
-                            <Box mt={1}>
+                          {[...(c.attachmentPaths ?? []), ...(c.attachmentPath ? [c.attachmentPath] : [])].map((attachmentPath) => (
+                            <Box mt={1} key={attachmentPath}>
                               <AuthImage
-                                url={`/tickets/comment-attachment/${c.ticketId}/${c.attachmentPath.split('/').pop()}`}
+                                url={`/tickets/comment-attachment/${c.ticketId}/${attachmentPath.split('/').pop()}`}
                                 alt="Comment Attachment"
                                 style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '4px' }}
                               />
                             </Box>
-                          )}
+                          ))}
                         </Box>
                       }
                     />
@@ -2278,60 +2297,18 @@ export default function TicketDetailPage() {
                   sx={{ mt: 1 }}
                 />
               )}
-              <Box
-                mt={1}
-                display="flex"
-                alignItems="center"
-                gap={2}
-                flexWrap="wrap"
-                tabIndex={0}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  selectCommentImage(event.dataTransfer.files?.[0]);
-                }}
-                onPaste={(event) => {
-                  const image = Array.from(event.clipboardData.files).find((file) => file.type.startsWith('image/'));
-                  if (image) {
-                    event.preventDefault();
-                    selectCommentImage(image);
-                  }
-                }}
-                sx={{ border: '1px dashed', borderColor: 'divider', borderRadius: 1, p: 1, outline: 'none', '&:focus': { borderColor: 'primary.main' } }}
-              >
-                <Typography variant="caption" color="text.secondary" sx={{ width: '100%' }}>
-                  Attach by selecting, dragging and dropping, or focusing here and pasting from the clipboard.
-                </Typography>
+              <Stack spacing={1} mt={1}>
+                <TicketImageDropzone files={commentAttachments} onFilesChange={setCommentAttachments} maxFiles={5} label="Attach up to 5 images." buttonLabel="Select Images" />
                 <Button
                   variant="contained"
                   size="small"
                   onClick={handleAddComment}
-                  disabled={submittingComment || (!comment.trim() && !commentAttachment)}
+                  disabled={submittingComment || (!comment.trim() && !commentAttachments.length)}
                 >
                   {submittingComment ? 'Submitting…' : 'Add Comment'}
                 </Button>
 
-                <Button variant="outlined" component="label" size="small">
-                  Attach Picture
-                  <input
-                    type="file"
-                    hidden
-                    accept={ALLOWED_IMAGE_FILE_ACCEPT}
-                    onChange={(e) => {
-                      selectCommentImage(e.target.files?.[0]);
-                      e.target.value = '';
-                    }}
-                  />
-                </Button>
-
-                {commentAttachment && (
-                  <Chip
-                    label={commentAttachment.name}
-                    onDelete={() => setCommentAttachment(null)}
-                    size="small"
-                  />
-                )}
-              </Box>
+              </Stack>
             </Box>
           )}
         </CardContent>
@@ -2634,7 +2611,7 @@ export default function TicketDetailPage() {
           <TicketImageDropzone
             files={escalateFiles}
             onFilesChange={setEscalateFiles}
-            label="Proof photos (optional, max 10 files, 10 MB each)."
+            label="Proof photos (optional, max 5 files, 10 MB each)."
             buttonLabel="Select Proof Photo(s)"
           />
         </DialogContent>
@@ -2709,7 +2686,7 @@ export default function TicketDetailPage() {
           <TicketImageDropzone
             files={addProofFiles}
             onFilesChange={setAddProofFiles}
-            label="Additional proof photos (max 10 files, 10 MB each)."
+            label="Additional proof photos (max 5 files total, 10 MB each)."
             buttonLabel="Select Photo(s)"
           />
         </DialogContent>
@@ -2812,7 +2789,7 @@ export default function TicketDetailPage() {
                     that I have read the provided information, or it has been read to me. I have had
                     the opportunity to ask questions about it, and any inquiries I made were
                     answered to my satisfaction. I understand that any information collected will be
-                    utilized solely to enhance the basic social services provided by the DSWD.
+                    utilized solely to enhance the basic social services provided by the DSWD. *
                   </Typography>
                 }
               />
@@ -2893,7 +2870,7 @@ export default function TicketDetailPage() {
                   <MenuItem value="Other">Other</MenuItem>
                   <MenuItem value="Prefer Not to Say">Prefer Not to Say</MenuItem>
                 </TextField>
-                <TextField label="Contact Number"
+                <TextField label="Contact Number *"
                   disabled={!!user?.phoneNumber}
                   value={csatForm.contactNumber ?? ''}
                   onChange={(e) => {
@@ -2907,7 +2884,7 @@ export default function TicketDetailPage() {
                   sx={{ flex: 1, ...populatedFieldSx(!!user?.phoneNumber) }}
                 />
               </Stack>
-              <TextField label="Technician Name"
+              <TextField label="Technician Name *"
                 value={csatForm.technicianName}
                 InputProps={{ readOnly: true }}
                 disabled
@@ -2915,7 +2892,7 @@ export default function TicketDetailPage() {
               />
 
               <Typography variant="subtitle2" fontWeight={700} mt={1}>
-                INSTRUCTION:
+                SERVICE QUALITY RATINGS *
               </Typography>
               <Typography variant="body2">
                 For Service Quality Dimension 0-8, please select the number that best corresponds to
@@ -3107,7 +3084,7 @@ export default function TicketDetailPage() {
             <TicketImageDropzone
               files={resolutionOverrideFiles}
               onFilesChange={setResolutionOverrideFiles}
-              label="Proof image with visible timestamp (required, max 10 files, 10 MB each)."
+              label="Proof image with visible timestamp (required, max 5 files, 10 MB each)."
               buttonLabel="Select Proof Image(s)"
             />
             <FormControlLabel

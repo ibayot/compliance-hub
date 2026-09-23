@@ -39,7 +39,7 @@ export default function TicketImageDropzone({
   label,
   buttonLabel,
   multiple = true,
-  maxFiles = 10,
+  maxFiles = 5,
 }: TicketImageDropzoneProps) {
   const { enqueueSnackbar } = useSnackbar();
 

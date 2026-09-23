@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.13] - 2026-09-23 - Targeted Release Notes and Multi-Image Evidence
+
+### Added
+- Added capability-targeted in-application release notes with acknowledgement tracking, a login prompt, catch-up visibility, upper-right What’s New history, and protected changelog management.
+- Ticket requests, public comments, and internal notes now accept up to five images through selection, drag-and-drop, or clipboard paste.
+- Unread notifications now add a numeric browser-tab badge, briefly animate the tab title, and use a richer multi-tone alert.
+
+### Changed
+- Escalation and resolution-time proof uploads now consistently allow a maximum of five images.
+- Snackbars now suppress duplicates, use a shorter controlled queue, continue timing when the browser loses focus, and include a visible close button.
+- Ticket email application links now use HTTPS outside local development, and resolution emails distinguish Close Ticket from Rate Technician links.
+- Required fields in the client satisfaction form now use consistent asterisk markers.
+- Data-driven dropdowns now support type-ahead search while short fixed-choice workflow fields retain their compact selectors.
+
+### Fixed
+- Resolution email actions now tell the requester when a ticket was already rated and closed or was otherwise already closed.
+- Initial ticket evidence now displays every uploaded image instead of only the legacy single attachment.
+- Outbound email now consistently uses the saved SMTP Configuration From Name for both primary and fallback delivery paths.
+
+### Deployment Note
+- Apply the environment-managed `v1.0.13_users_changelog.sql` migration to the Users database and `v1.0.13_ticketing_multi_images.sql` to the Ticketing database before deploying this release.
+
 ## [1.0.12] - 2026-09-23 - Global Settings Save Reliability
 
 ### Fixed

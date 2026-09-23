@@ -1016,19 +1016,19 @@ export class TicketService implements OnModuleInit {
     dto: CreateTicketDto,
     callerId: number,
     callerRole?: UserRole,
-    image?: Express.Multer.File,
+    images: Express.Multer.File[] = [],
   ): Promise<
     Ticket & { autoShifted?: boolean; autoAssigned?: boolean; noTechAvailable?: boolean }
   > {
     return this.withAutoAssignmentLock(() =>
-      this.createTicketInternal(dto, callerId, callerRole, image),
+      this.createTicketInternal(dto, callerId, callerRole, images),
     );
   }
   private async createTicketInternal(
     dto: CreateTicketDto,
     callerId: number,
     callerRole?: UserRole,
-    image?: Express.Multer.File,
+    images: Express.Multer.File[] = [],
   ): Promise<
     Ticket & { autoShifted?: boolean; autoAssigned?: boolean; noTechAvailable?: boolean }
   > {
@@ -1466,13 +1466,13 @@ export class TicketService implements OnModuleInit {
       }
     }
 
-    if (image) {
+    if (images.length) {
       await this.addComment(
         saved.id,
         { content: '[Initial Ticket Attachment]', isInternal: false },
         callerId,
         callerRole || UserRole.USER,
-        image,
+        images,
       ).catch((err) => {
         this.logger.error('Failed to attach initial ticket image.');
       });
@@ -3541,7 +3541,7 @@ export class TicketService implements OnModuleInit {
     dto: AddCommentDto,
     actorId: number,
     actorRole: UserRole,
-    attachment?: Express.Multer.File,
+    attachments: Express.Multer.File[] = [],
   ): Promise<TicketComment> {
     const ticket = await this.getTicketById(ticketId, actorRole, actorId);
 
@@ -3555,7 +3555,7 @@ export class TicketService implements OnModuleInit {
       throw new ForbiddenException('You can only comment on your own tickets.');
     }
 
-    const commentText = (dto.content ?? dto.comment ?? '').trim();
+    const commentText = (dto.content ?? dto.comment ?? '').trim() || (attachments.length ? '[Image attachment]' : '');
     if (!commentText) throw new BadRequestException('Comment content cannot be empty.');
 
     const requestedMentionIds = [...new Set(dto.mentionedUserIds ?? [])].filter(
@@ -3576,16 +3576,17 @@ export class TicketService implements OnModuleInit {
       mentionedUserIds = requestedMentionIds;
     }
 
-    let attachmentPath: string | null = null;
-    if (attachment) {
-      this.validateImageUpload(attachment);
+    const attachmentPaths: string[] = [];
+    if (attachments.length) {
+      if (attachments.length > 5) throw new BadRequestException('A maximum of 5 images is allowed.');
+      attachments.forEach((file) => this.validateImageUpload(file));
       const dir = path.join(this.commentAttachmentStorageRoot(), ticketId);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-      const filename = this.createSafeImageFilename(attachment);
-      const fullPath = path.join(dir, filename);
-      fs.writeFileSync(fullPath, attachment.buffer);
-      attachmentPath = `comment-attachments/${ticketId}/${filename}`;
+      for (const attachment of attachments) {
+        const filename = this.createSafeImageFilename(attachment);
+        fs.writeFileSync(path.join(dir, filename), attachment.buffer);
+        attachmentPaths.push(`comment-attachments/${ticketId}/${filename}`);
+      }
     }
 
     const comment = this.commentRepo.create({
@@ -3593,7 +3594,8 @@ export class TicketService implements OnModuleInit {
       comment: commentText,
       userId: actorId,
       isInternal: isInternal ?? false,
-      attachmentPath,
+      attachmentPath: null,
+      attachmentPaths,
     });
 
     const savedComment = await this.commentRepo.save(comment);
@@ -3627,7 +3629,7 @@ export class TicketService implements OnModuleInit {
       actorId,
       {
         isInternal,
-        hasAttachment: !!attachment,
+        hasAttachment: attachments.length > 0,
       },
       false,
     ).catch(() => {});
@@ -5581,7 +5583,11 @@ export class TicketService implements OnModuleInit {
     const safeFilename = path.basename(filename);
     const comments = await this.commentRepo.find({ where: { ticketId } });
     const referencedComment = comments.find(
-      (c) => c.attachmentPath && path.basename(String(c.attachmentPath)) === safeFilename,
+      (c) =>
+        (c.attachmentPath && path.basename(String(c.attachmentPath)) === safeFilename) ||
+        (c.attachmentPaths ?? []).some((attachmentPath) =>
+          path.basename(String(attachmentPath)) === safeFilename,
+        ),
     );
     if (!referencedComment) {
       throw new NotFoundException('Comment attachment not found');
@@ -5634,6 +5640,9 @@ export class TicketService implements OnModuleInit {
       const dir = path.join(this.escalationStorageRoot(), ticketId);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       const savedPaths: string[] = [...(escalation.proofFiles ?? [])];
+      if (savedPaths.length + proofFiles.length > 5) {
+        throw new BadRequestException('An escalation can contain a maximum of 5 proof images.');
+      }
       for (const file of proofFiles) {
         const filename = this.createSafeImageFilename(file);
         const fullPath = path.join(dir, filename);

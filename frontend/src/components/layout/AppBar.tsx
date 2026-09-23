@@ -25,6 +25,7 @@ import {
   Brightness7 as LightModeIcon,
   Feedback as FeedbackIcon,
   Notifications as NotificationsIcon,
+  NewReleases as NewReleasesIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -39,13 +40,14 @@ import { attendanceApi, notificationsApi, AttendanceStatus } from '@/app/api/ref
 
 interface AppBarProps {
   onMenuClick: () => void;
+  onOpenChangelog: () => void;
 }
 
 /** Detect UUID-like or numeric-id-like segments that shouldn't show verbatim in breadcrumbs */
 const isIdSegment = (s: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) || /^\d+$/.test(s);
 
-export default function AppBar({ onMenuClick }: AppBarProps) {
+export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, myCap, logout } = useAuth();
@@ -69,15 +71,18 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
 
   const fetchMyShift = React.useCallback(() => {
     if (myCap?.isAttendanceEligible) {
-      attendanceApi.getMyShift().then(shift => {
-        if (shift.clockIn && shift.clockOut) {
-          setMyShift(shift);
-        } else if (shift.attendanceStatus) {
-          setMyShift(shift);
-        } else {
-          setMyShift(null);
-        }
-      }).catch(console.error);
+      attendanceApi
+        .getMyShift()
+        .then((shift) => {
+          if (shift.clockIn && shift.clockOut) {
+            setMyShift(shift);
+          } else if (shift.attendanceStatus) {
+            setMyShift(shift);
+          } else {
+            setMyShift(null);
+          }
+        })
+        .catch(console.error);
     }
   }, [myCap?.isAttendanceEligible]);
 
@@ -85,34 +90,83 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
     fetchMyShift();
   }, [fetchMyShift]);
 
-  // Audio ref for notification sound
+  // Audio fallback plus a Web Audio context for a more noticeable multi-tone chime.
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = React.useRef<AudioContext | null>(null);
   React.useEffect(() => {
-    audioRef.current = new Audio("/notification.mp3");
+    audioRef.current = new Audio('/notification.mp3');
     audioRef.current.preload = 'auto';
   }, []);
 
   const notificationAudioUnlockedRef = React.useRef(false);
+  const getNotificationAudioContext = React.useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    const AudioContextConstructor =
+      window.AudioContext ||
+      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextConstructor) return null;
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContextConstructor();
+    }
+    return audioContextRef.current;
+  }, []);
+
   const playNotificationSound = React.useCallback(() => {
-    const audio = new Audio('/notification.mp3');
+    const audioContext = getNotificationAudioContext();
+    if (audioContext && audioContext.state === 'running') {
+      const startedAt = audioContext.currentTime + 0.02;
+      const notes = [
+        { frequency: 659.25, offset: 0 },
+        { frequency: 783.99, offset: 0.16 },
+        { frequency: 1046.5, offset: 0.34 },
+        { frequency: 783.99, offset: 0.62 },
+      ];
+
+      notes.forEach(({ frequency, offset }) => {
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        const noteStart = startedAt + offset;
+        oscillator.type = 'triangle';
+        oscillator.frequency.setValueAtTime(frequency, noteStart);
+        gain.gain.setValueAtTime(0.0001, noteStart);
+        gain.gain.exponentialRampToValueAtTime(0.2, noteStart + 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.0001, noteStart + 0.22);
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start(noteStart);
+        oscillator.stop(noteStart + 0.24);
+      });
+      return;
+    }
+
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = 0;
     audio.volume = 1;
     void audio.play().catch(() => {
       // Browsers may block sound until the user interacts with the page.
     });
-  }, []);
+  }, [getNotificationAudioContext]);
+
   const unlockNotificationAudio = React.useCallback(async () => {
-    if (notificationAudioUnlockedRef.current || !audioRef.current) return;
+    if (notificationAudioUnlockedRef.current) return;
     try {
-      audioRef.current.volume = 0;
-      await audioRef.current.play();
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current.volume = 1;
+      const audioContext = getNotificationAudioContext();
+      if (audioContext?.state === 'suspended') {
+        await audioContext.resume();
+      }
+      if (!audioContext && audioRef.current) {
+        audioRef.current.volume = 0;
+        await audioRef.current.play();
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.volume = 1;
+      }
       notificationAudioUnlockedRef.current = true;
     } catch {
       // Ignore autoplay policy failures; the next user gesture can retry.
     }
-  }, []);
+  }, [getNotificationAudioContext]);
 
   useEffect(() => {
     const unlock = () => {
@@ -127,6 +181,89 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
   }, [unlockNotificationAudio]);
 
   const prevUnreadCountRef = React.useRef(0);
+  const originalDocumentTitleRef = React.useRef<string | null>(null);
+  const originalFaviconHrefRef = React.useRef<string | null>(null);
+  const faviconLinkRef = React.useRef<HTMLLinkElement | null>(null);
+  const faviconCreatedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (originalDocumentTitleRef.current === null) {
+      originalDocumentTitleRef.current = document.title;
+    }
+
+    let favicon = document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
+    if (!favicon) {
+      favicon = document.createElement('link');
+      favicon.rel = 'icon';
+      document.head.appendChild(favicon);
+      faviconCreatedRef.current = true;
+    }
+    faviconLinkRef.current = favicon;
+    if (originalFaviconHrefRef.current === null) {
+      originalFaviconHrefRef.current = favicon.getAttribute('href') || '';
+    }
+
+    const baseTitle = originalDocumentTitleRef.current || 'RICTMS Compliance Hub';
+    const originalFavicon = originalFaviconHrefRef.current;
+    let animationTimer: ReturnType<typeof setInterval> | null = null;
+    let animationStopTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const notificationFavicon = (pulse: boolean) => {
+      const badgeText = unreadCount > 99 ? '99+' : String(unreadCount);
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#1565c0"/><path d="M18 43h28l-4-6V27a10 10 0 0 0-20 0v10l-4 6Z" fill="white"/><circle cx="44" cy="17" r="${pulse ? 14 : 12}" fill="${pulse ? '#ff1744' : '#d32f2f'}"/><text x="44" y="21" text-anchor="middle" font-family="Arial,sans-serif" font-size="${badgeText.length > 2 ? 10 : 13}" font-weight="700" fill="white">${badgeText}</text></svg>`;
+      return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    };
+
+    const renderAttention = (pulse: boolean) => {
+      const countLabel = unreadCount > 99 ? '99+' : unreadCount;
+      document.title = `${pulse ? '🔔 ' : ''}(${countLabel}) ${baseTitle}`;
+      favicon.href = notificationFavicon(pulse);
+    };
+
+    if (unreadCount > 0) {
+      let pulse = true;
+      renderAttention(pulse);
+      animationTimer = setInterval(() => {
+        pulse = !pulse;
+        renderAttention(pulse);
+      }, 700);
+      animationStopTimer = setTimeout(() => {
+        if (animationTimer) clearInterval(animationTimer);
+        animationTimer = null;
+        renderAttention(false);
+      }, 10000);
+    } else {
+      document.title = baseTitle;
+      if (faviconCreatedRef.current && !originalFavicon) {
+        favicon.remove();
+        faviconLinkRef.current = null;
+      } else if (originalFavicon) {
+        favicon.href = originalFavicon;
+      }
+    }
+
+    return () => {
+      if (animationTimer) clearInterval(animationTimer);
+      if (animationStopTimer) clearTimeout(animationStopTimer);
+    };
+  }, [unreadCount]);
+
+  useEffect(
+    () => () => {
+      if (originalDocumentTitleRef.current !== null) {
+        document.title = originalDocumentTitleRef.current;
+      }
+      if (faviconCreatedRef.current && faviconLinkRef.current) {
+        faviconLinkRef.current.remove();
+      } else if (faviconLinkRef.current && originalFaviconHrefRef.current) {
+        faviconLinkRef.current.href = originalFaviconHrefRef.current;
+      }
+      void audioContextRef.current?.close();
+    },
+    [],
+  );
+
   const attendanceStatusLabel: Record<AttendanceStatus, string> = {
     present: 'Present',
     absent: 'Absent',
@@ -134,23 +271,26 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
     out_of_office: 'Out of Office',
   };
 
-  const fetchNotificationSummary = React.useCallback(async (playSound = false) => {
-    if (!user) return null;
-    try {
-      const summary = await notificationsApi.getSummary();
-      if (playSound && summary.unreadCount > prevUnreadCountRef.current) {
-        playNotificationSound();
+  const fetchNotificationSummary = React.useCallback(
+    async (playSound = false) => {
+      if (!user) return null;
+      try {
+        const summary = await notificationsApi.getSummary();
+        if (playSound && summary.unreadCount > prevUnreadCountRef.current) {
+          playNotificationSound();
+        }
+        prevUnreadCountRef.current = summary.unreadCount;
+        setUnreadCount(summary.unreadCount);
+        setNotifications(summary.notifications);
+        setNotifError(null);
+        return summary;
+      } catch {
+        setNotifError('Notifications could not be loaded. Select here to retry.');
+        return null;
       }
-      prevUnreadCountRef.current = summary.unreadCount;
-      setUnreadCount(summary.unreadCount);
-      setNotifications(summary.notifications);
-      setNotifError(null);
-      return summary;
-    } catch {
-      setNotifError('Notifications could not be loaded. Select here to retry.');
-      return null;
-    }
-  }, [playNotificationSound, user]);
+    },
+    [playNotificationSound, user],
+  );
 
   // Notifications Polling with Page Visibility API
   useEffect(() => {
@@ -190,7 +330,9 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
       if (summary && summary.unreadCount > 0) {
         try {
           await notificationsApi.markAllRead();
-          setNotifications(summary.notifications.map((notification) => ({ ...notification, isRead: true })));
+          setNotifications(
+            summary.notifications.map((notification) => ({ ...notification, isRead: true })),
+          );
           prevUnreadCountRef.current = 0;
           setUnreadCount(0);
         } catch {
@@ -209,7 +351,8 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
 
   const handleNotifClick = (notification: any) => {
     handleNotifClose();
-    const target = notification.targetPath ||
+    const target =
+      notification.targetPath ||
       (notification.ticketId ? `/operations/tickets/${notification.ticketId}` : null);
     if (target) router.push(target);
   };
@@ -377,7 +520,18 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
         ) : myShift && myShift.clockIn && myShift.clockOut ? (
           <Box sx={{ mr: 2, display: { xs: 'none', sm: 'block' } }}>
             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-              Shift: {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(myShift.clockIn)} - {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(myShift.clockOut)}
+              Shift:{' '}
+              {new Intl.DateTimeFormat('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+              }).format(myShift.clockIn)}{' '}
+              -{' '}
+              {new Intl.DateTimeFormat('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+              }).format(myShift.clockOut)}
             </Typography>
           </Box>
         ) : null}
@@ -426,17 +580,25 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
             anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
           >
             <Box sx={{ px: 2, py: 1 }}>
-              <Typography variant="subtitle1" fontWeight="bold">Notifications</Typography>
+              <Typography variant="subtitle1" fontWeight="bold">
+                Notifications
+              </Typography>
             </Box>
             <Divider />
             {isNotifLoading ? (
-              <MenuItem disabled><Typography variant="body2">Loading...</Typography></MenuItem>
+              <MenuItem disabled>
+                <Typography variant="body2">Loading...</Typography>
+              </MenuItem>
             ) : notifError ? (
               <MenuItem onClick={() => void fetchNotificationSummary()}>
-                <Typography variant="body2" color="error">{notifError}</Typography>
+                <Typography variant="body2" color="error">
+                  {notifError}
+                </Typography>
               </MenuItem>
             ) : notifications.length === 0 ? (
-              <MenuItem disabled><Typography variant="body2">No notifications</Typography></MenuItem>
+              <MenuItem disabled>
+                <Typography variant="body2">No notifications</Typography>
+              </MenuItem>
             ) : (
               notifications.map((notif) => (
                 <MenuItem
@@ -446,7 +608,7 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
                     whiteSpace: 'normal',
                     bgcolor: notif.isRead ? 'transparent' : 'action.hover',
                     flexDirection: 'column',
-                    alignItems: 'flex-start'
+                    alignItems: 'flex-start',
                   }}
                 >
                   <Typography variant="body2" sx={{ fontWeight: notif.isRead ? 'normal' : 'bold' }}>
@@ -471,9 +633,13 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
             onClick={handleProfileMenuOpen}
             color="inherit"
           >
-            <Avatar 
+            <Avatar
               sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}
-              src={import.meta.env.VITE_PROFILE_IMAGE_URL ? `${import.meta.env.VITE_PROFILE_IMAGE_URL}/${user?.staffId}.jpg` : undefined}
+              src={
+                import.meta.env.VITE_PROFILE_IMAGE_URL
+                  ? `${import.meta.env.VITE_PROFILE_IMAGE_URL}/${user?.staffId}.jpg`
+                  : undefined
+              }
               imgProps={{ style: { objectPosition: 'center 20%' } }}
             >
               {user?.firstName?.charAt(0)}
@@ -512,6 +678,26 @@ export default function AppBar({ onMenuClick }: AppBarProps) {
               <AccountCircle sx={{ mr: 1 }} />
               Settings
             </MenuItem>
+            <MenuItem
+              onClick={() => {
+                onOpenChangelog();
+                handleProfileMenuClose();
+              }}
+            >
+              <NewReleasesIcon sx={{ mr: 1 }} />
+              What&apos;s New
+            </MenuItem>
+            {myCap?.isChangelogManagement && (
+              <MenuItem
+                onClick={() => {
+                  router.push('/admin/changelog');
+                  handleProfileMenuClose();
+                }}
+              >
+                <NewReleasesIcon sx={{ mr: 1 }} />
+                Manage Changelog
+              </MenuItem>
+            )}
             <MenuItem
               onClick={() => {
                 setFeedbackOpen(true);

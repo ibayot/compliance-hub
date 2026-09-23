@@ -28,6 +28,7 @@ import { documentsApi, Document, ListDocumentsParams } from '@/lib/api/documents
 import { unitsApi } from '@/lib/api/units';
 import DocumentList from '@/components/documents/DocumentList';
 import { useAuth } from '@/contexts/AuthContext';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 const documentTypes = ['Policy', 'Procedure', 'Guidelines', 'Manual', 'Report', 'Other'];
 const statusOptions = [
@@ -363,20 +364,16 @@ export default function DocumentsPage() {
                 />
               </Grid>
               <Grid item xs={12} md={3}>
-                <TextField
-                  select
+                <SearchableSelect
                   label="Unit"
                   value={filters.unit_id || ''}
-                  onChange={(e) => handleFilterChange('unit_id', e.target.value)}
-                  fullWidth
-                >
-                  <MenuItem value="">All Units</MenuItem>
-                  {unitsResponse?.data?.map((unit) => (
-                    <MenuItem key={unit.id} value={unit.id}>
-                      {unit.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                  options={[
+                    { value: '', label: 'All Units' },
+                    ...(unitsResponse?.data?.map((unit) => ({ value: String(unit.id), label: unit.name })) || []),
+                  ]}
+                  onChange={(unitId) => handleFilterChange('unit_id', unitId ?? '')}
+                  clearable={false}
+                />
               </Grid>
               <Grid item xs={12} md={3}>
                 <TextField

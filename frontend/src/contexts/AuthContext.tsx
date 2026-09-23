@@ -165,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenStore.remove('accessToken');
       tokenStore.remove('refreshToken');
       sessionStorage.removeItem('isSessionLocked');
+      sessionStorage.removeItem('changelog-prompt-checked');
       setUser(null);
       setMyCap(null);
       setIsSessionLocked(false);
@@ -318,6 +319,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, enqueueSnackbar, isSessionLocked, requiresPasswordChange, logout]);
 
   const login = async (email: string, password: string, redirectTo?: string) => {
+    sessionStorage.removeItem('changelog-prompt-checked');
     const response = await authApi.login({ email, password });
     
     if ((response as any).mfaRequired) {
@@ -355,6 +357,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loginWithGoogle = async (idToken: string, redirectTo?: string) => {
+    sessionStorage.removeItem('changelog-prompt-checked');
     const response = await authApi.loginWithGoogle({ idToken });
     if (response.accessToken && response.refreshToken) {
       tokenStore.set('accessToken', response.accessToken);

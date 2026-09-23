@@ -28,6 +28,7 @@ import type { User } from '@/lib/types/auth';
 import { authApi } from '@/lib/api/auth';
 import { useSnackbar } from 'notistack';
 import { unitsForUserRole } from '@/lib/utils/unit-visibility';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 interface Props {
   open: boolean;
@@ -359,20 +360,15 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={4}>
-              <FormControl fullWidth margin="dense" required>
-                <InputLabel>Unit/Section</InputLabel>
-                <Select
-                  value={unitId}
-                  label="Unit/Section"
-                  onChange={(e) => setUnitId(e.target.value as number)}
-                >
-                  {availableUnits.map((unit) => (
-                    <MenuItem key={unit.id} value={unit.id}>
-                      {unit.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <SearchableSelect
+                required
+                label="Unit/Section"
+                value={unitId || null}
+                options={availableUnits.map((unit) => ({ value: unit.id, label: unit.name }))}
+                onChange={(selectedUnitId) => setUnitId(selectedUnitId || 0)}
+                clearable={false}
+                textFieldProps={{ margin: 'dense' }}
+              />
             </Grid>
           </Grid>
 

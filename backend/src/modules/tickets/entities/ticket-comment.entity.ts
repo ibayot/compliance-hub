@@ -36,6 +36,9 @@ export class TicketComment {
   @Column({ name: 'attachment_path', type: 'varchar', length: 255, nullable: true })
   attachmentPath: string | null;
 
+  @Column({ name: 'attachment_paths', type: 'simple-json', nullable: true })
+  attachmentPaths: string[] | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

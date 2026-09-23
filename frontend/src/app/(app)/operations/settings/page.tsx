@@ -65,6 +65,7 @@ import { feedbackApi, Feedback } from '@/lib/api/feedback';
 import { UserRole } from '@/lib/types/auth';
 import { formatPersonName } from '@/lib/utils/person-name';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 const TYPE_LABELS: Record<string, string> = {
   it_support: 'IT Support',
@@ -1015,19 +1016,21 @@ export default function TicketSettingsPage() {
                 <MenuItem value="active">Active</MenuItem>
                 <MenuItem value="inactive">Inactive</MenuItem>
               </TextField>
-              <TextField
-                select
+              <SearchableSelect
                 size="small"
                 label="Category"
                 value={issueCategoryFilter}
-                onChange={(e) => { setIssueCategoryFilter(e.target.value); setIssuePage(0); }}
+                options={[
+                  { value: 'all', label: 'All Categories' },
+                  ...categories.filter((category) => !category.isDeleted).map((category) => ({
+                    value: category.id,
+                    label: category.name,
+                  })),
+                ]}
+                onChange={(categoryId) => { setIssueCategoryFilter(categoryId || 'all'); setIssuePage(0); }}
+                clearable={false}
                 sx={FILTER_FIELD_SX}
-              >
-                <MenuItem value="all">All Categories</MenuItem>
-                {categories.filter((c) => !c.isDeleted).map((category) => (
-                  <MenuItem key={category.id} value={category.id}>{category.name}</MenuItem>
-                ))}
-              </TextField>
+              />
             </SettingsFilterPanel>
 
             {issuesLoading ? (
@@ -1160,32 +1163,36 @@ export default function TicketSettingsPage() {
                 <MenuItem value="active">Active</MenuItem>
                 <MenuItem value="inactive">Inactive</MenuItem>
               </TextField>
-              <TextField
-                select
+              <SearchableSelect
                 size="small"
                 label="Category"
                 value={ruleCategoryFilter}
-                onChange={(e) => { setRuleCategoryFilter(e.target.value); setRulePage(0); }}
+                options={[
+                  { value: 'all', label: 'All Categories' },
+                  ...categories.filter((category) => !category.isDeleted).map((category) => ({
+                    value: category.id,
+                    label: category.name,
+                  })),
+                ]}
+                onChange={(categoryId) => { setRuleCategoryFilter(categoryId || 'all'); setRulePage(0); }}
+                clearable={false}
                 sx={FILTER_FIELD_SX}
-              >
-                <MenuItem value="all">All Categories</MenuItem>
-                {categories.filter((c) => !c.isDeleted).map((category) => (
-                  <MenuItem key={category.id} value={category.id}>{category.name}</MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                select
+              />
+              <SearchableSelect
                 size="small"
                 label="Issue"
                 value={ruleIssueFilter}
-                onChange={(e) => { setRuleIssueFilter(e.target.value); setRulePage(0); }}
+                options={[
+                  { value: 'all', label: 'All Issues' },
+                  ...issues.filter((issue) => !issue.isDeleted).map((issue) => ({
+                    value: issue.id,
+                    label: issue.name,
+                  })),
+                ]}
+                onChange={(issueId) => { setRuleIssueFilter(issueId || 'all'); setRulePage(0); }}
+                clearable={false}
                 sx={FILTER_FIELD_SX}
-              >
-                <MenuItem value="all">All Issues</MenuItem>
-                {issues.filter((iss) => !iss.isDeleted).map((issue) => (
-                  <MenuItem key={issue.id} value={issue.id}>{issue.name}</MenuItem>
-                ))}
-              </TextField>
+              />
               <TextField
                 select
                 size="small"
@@ -1798,20 +1805,18 @@ export default function TicketSettingsPage() {
         <DialogTitle>{editIssue ? 'Edit Issue' : 'Add Issue'}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} mt={1}>
-            <TextField
-              select
+            <SearchableSelect
               label="Category *"
-              fullWidth
               size="small"
               value={issueForm.categoryId}
-              onChange={(e) => setIssueForm({ ...issueForm, categoryId: e.target.value })}
-            >
-              {categories.filter(c => !c.isDeleted).map((c) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.name}
-                </MenuItem>
-              ))}
-            </TextField>
+              options={categories.filter((category) => !category.isDeleted).map((category) => ({
+                value: category.id,
+                label: category.name,
+              }))}
+              onChange={(categoryId) => setIssueForm({ ...issueForm, categoryId: categoryId || '' })}
+              clearable={false}
+              required
+            />
             <TextField
               label="Issue Name"
               fullWidth
@@ -2108,33 +2113,26 @@ export default function TicketSettingsPage() {
               <MenuItem value="pantawid_ict_support">Pantawid ICT Support</MenuItem>
               <MenuItem value="specialized_concerns">Specialized Concerns</MenuItem>
             </TextField>
-            <TextField
-              select
+            <SearchableSelect
               label="Target Category *"
               value={ruleForm.targetCategoryId}
-              onChange={(e) => setRuleForm({ ...ruleForm, targetCategoryId: e.target.value })}
-              fullWidth
-            >
-              {filteredCategoriesForRule.map((c) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.name}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
+              options={filteredCategoriesForRule.map((category) => ({
+                value: category.id,
+                label: category.name,
+              }))}
+              onChange={(categoryId) => setRuleForm({ ...ruleForm, targetCategoryId: categoryId || '' })}
+              clearable={false}
+              required
+            />
+            <SearchableSelect
               label="Target Issue *"
               value={ruleForm.targetIssueTypeId}
-              onChange={(e) => setRuleForm({ ...ruleForm, targetIssueTypeId: e.target.value })}
-              fullWidth
+              options={filteredIssuesForRule.map((issue) => ({ value: issue.id, label: issue.name }))}
+              onChange={(issueId) => setRuleForm({ ...ruleForm, targetIssueTypeId: issueId || '' })}
               disabled={!ruleForm.targetCategoryId}
-            >
-              {filteredIssuesForRule.map((iss) => (
-                <MenuItem key={iss.id} value={iss.id}>
-                  {iss.name}
-                </MenuItem>
-              ))}
-            </TextField>
+              clearable={false}
+              required
+            />
             <FormControlLabel
               control={
                 <Switch

@@ -30,6 +30,7 @@ import TicketReportsPage from '@/app/(app)/operations/reports/page';
 import KnowledgeBasePage from '@/app/(app)/operations/knowledge-base/page';
 import AuditLogsPage from '@/app/(app)/admin/audit-logs/page';
 import DutiesPage from '@/app/(app)/operations/duties/page';
+import ChangelogManagementPage from '@/app/(app)/admin/changelog/page';
 
 function ProtectedDashboard({
   children,
@@ -87,6 +88,10 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/mfa-verify" element={<MfaVerifyPage />} />
 
+      <Route
+        path="/admin/changelog"
+        element={<ProtectedDashboard requiredCapability="isChangelogManagement"><ChangelogManagementPage /></ProtectedDashboard>}
+      />
       <Route
         path="/dashboard"
         element={

@@ -79,9 +79,9 @@ export class EmailService implements OnModuleInit {
     private readonly configRepo: Repository<TicketingConfig>,
     private readonly eventBus: EventBusService,
   ) {
-    this.frontendUrl = (
-      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'
-    ).replace(/\/$/, '');
+    const configuredFrontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    this.frontendUrl = this.normalizeFrontendUrl(configuredFrontendUrl);
     this.primaryFromAddress = '"DSWD FO2 Compliance Hub" <noreply@rictms.gov.ph>';
     this.fallbackFromAddress = '"DSWD FO2 Compliance Hub" <noreply@rictms.gov.ph>';
 
@@ -98,6 +98,26 @@ export class EmailService implements OnModuleInit {
     this.testOverrideTo = null; // Used as fallback if not in DB
   }
 
+  private normalizeFrontendUrl(value: string): string {
+    const trimmed = value.trim().replace(/\/$/, '');
+    const withScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)
+      ? trimmed
+      : `https://${trimmed}`;
+    const isLocalDevelopmentUrl =
+      this.configService.get<string>('NODE_ENV') !== 'production' &&
+      /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(?:\/|$)/i.test(withScheme);
+
+    return isLocalDevelopmentUrl
+      ? withScheme
+      : withScheme.replace(/^http:\/\//i, 'https://');
+  }
+
+  private formatFromAddress(name: string, address: string): string {
+    const safeName = name.replace(/[\r\n]+/g, ' ').replace(/["\\]/g, '').trim();
+    const safeAddress = address.replace(/[\r\n<>]+/g, '').trim();
+    return `"${safeName || 'DSWD FO2 Compliance Hub'}" <${safeAddress}>`;
+  }
+
   async onModuleInit() {
     await this.reloadSmtpConfig();
   }
@@ -112,9 +132,11 @@ export class EmailService implements OnModuleInit {
       const pUser = this.configService.get<string>('SMTP_USER');
       const pPass = this.configService.get<string>('SMTP_PASS');
       const pFrom = this.configService.get<string>('SMTP_FROM') || 'noreply@rictms.gov.ph';
-      const pFromName =
-        this.configService.get<string>('SMTP_FROM_NAME') || 'DSWD FO2 Compliance Hub';
-      this.primaryFromAddress = `"${pFromName}" <${pFrom}>`;
+      const configuredFromName =
+        dbConfig?.smtpFromName?.trim() ||
+        this.configService.get<string>('SMTP_FROM_NAME')?.trim() ||
+        'DSWD FO2 Compliance Hub';
+      this.primaryFromAddress = this.formatFromAddress(configuredFromName, pFrom);
 
       if (pHost) {
         const smtpPort = parseInt(String(pPort || '587'), 10);
@@ -140,8 +162,7 @@ export class EmailService implements OnModuleInit {
       const fUser = dbConfig?.smtpUser;
       const fPass = dbConfig?.smtpPass;
       const fFrom = dbConfig?.smtpFrom || 'noreply@rictms.gov.ph';
-      const fFromName = dbConfig?.smtpFromName || 'DSWD FO2 Compliance Hub (Alternate)';
-      this.fallbackFromAddress = `"${fFromName} (Fallback)" <${fFrom}>`;
+      this.fallbackFromAddress = this.formatFromAddress(configuredFromName, fFrom);
 
       if (fHost) {
         const smtpPort = parseInt(String(fPort || '587'), 10);
@@ -310,6 +331,8 @@ export class EmailService implements OnModuleInit {
   async sendTicketResolvedEmailToRequester(data: TicketResolvedEmailData): Promise<void> {
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Ticket Resolved — Action Required`;
     const ticketUrl = `${this.frontendUrl}/operations/tickets/${data.ticketId}`;
+    const closeTicketUrl = `${ticketUrl}?emailAction=close`;
+    const rateTicketUrl = `${ticketUrl}?emailAction=rate`;
     const html = `
 <!DOCTYPE html>
 <html>
@@ -335,10 +358,10 @@ export class EmailService implements OnModuleInit {
         <table style="width:100%;">
           <tr>
             <td style="padding:4px 8px 4px 0;width:50%;">
-              <a href="${ticketUrl}" style="background:#2e7d32;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:600;font-size:13px;display:block;text-align:center;">Close Ticket</a>
+              <a href="${closeTicketUrl}" style="background:#2e7d32;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:600;font-size:13px;display:block;text-align:center;">Close Ticket</a>
             </td>
             <td style="padding:4px 0 4px 8px;width:50%;">
-              <a href="${ticketUrl}" style="background:#1565c0;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:600;font-size:13px;display:block;text-align:center;">Rate Technician</a>
+              <a href="${rateTicketUrl}" style="background:#1565c0;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:600;font-size:13px;display:block;text-align:center;">Rate Technician</a>
             </td>
           </tr>
         </table>

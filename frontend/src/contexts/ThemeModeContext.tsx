@@ -3,7 +3,9 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
 import { ThemeProvider, styled } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { SnackbarProvider, MaterialDesignContent } from 'notistack';
+import { SnackbarProvider, MaterialDesignContent, closeSnackbar } from 'notistack';
+import CloseIcon from '@mui/icons-material/Close';
+import IconButton from '@mui/material/IconButton';
 import { getAppTheme } from '@/lib/theme';
 
 const StyledMaterialDesignContent = styled(MaterialDesignContent)(({ theme }) => ({
@@ -55,9 +57,12 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <SnackbarProvider
-          maxSnack={4}
+          maxSnack={3}
+          preventDuplicate
           anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
           autoHideDuration={4000}
+          disableWindowBlurListener
+          action={(key) => <IconButton size="small" color="inherit" aria-label="Close message" onClick={() => closeSnackbar(key)}><CloseIcon fontSize="small" /></IconButton>}
           style={{ marginTop: 8 }}
           Components={{
             success: StyledMaterialDesignContent,

@@ -15,13 +15,10 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  FormControl,
   Grid,
   IconButton,
-  InputLabel,
   LinearProgress,
   MenuItem,
-  Select,
   Tab,
   Table,
   TableBody,
@@ -61,6 +58,7 @@ import {
   UnitDashboardResponse,
   UnitTimeseriesPoint,
 } from '@/lib/api/kpi';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 const monthOptions = [
   { value: 1, label: 'January' },
@@ -1112,23 +1110,17 @@ export default function KpiPage() {
               )}
             </Grid>
             <Grid item xs={12} md={3}>
-              <TextField
-                select
+              <SearchableSelect
                 label="Unit Filter"
-                value={filterUnitId}
-                onChange={(e) =>
-                  setFilterUnitId(e.target.value === '' ? '' : Number(e.target.value))
-                }
-                fullWidth
+                value={filterUnitId === '' ? '' : String(filterUnitId)}
+                options={[
+                  { value: '', label: 'All allowed units' },
+                  ...availableUnits.map((unit) => ({ value: String(unit.id), label: unit.name })),
+                ]}
+                onChange={(unitId) => setFilterUnitId(unitId ? Number(unitId) : '')}
                 disabled={!canManage}
-              >
-                <MenuItem value="">All allowed units</MenuItem>
-                {availableUnits.map((u) => (
-                  <MenuItem key={u.id} value={u.id}>
-                    {u.name}
-                  </MenuItem>
-                ))}
-              </TextField>
+                clearable={false}
+              />
             </Grid>
             <Grid item xs={12} md={2}>
               <Button
@@ -1905,21 +1897,13 @@ export default function KpiPage() {
               />
             </Grid>
             <Grid item xs={12} md={4}>
-              <TextField
-                select
+              <SearchableSelect
                 label="Unit"
-                value={masterForm.unitId}
-                onChange={(e) =>
-                  setMasterForm((prev) => ({ ...prev, unitId: Number(e.target.value) }))
-                }
-                fullWidth
-              >
-                {availableUnits.map((u) => (
-                  <MenuItem key={u.id} value={u.id}>
-                    {u.name}
-                  </MenuItem>
-                ))}
-              </TextField>
+                value={masterForm.unitId || null}
+                options={availableUnits.map((unit) => ({ value: unit.id, label: unit.name }))}
+                onChange={(unitId) => setMasterForm((prev) => ({ ...prev, unitId: Number(unitId) }))}
+                clearable={false}
+              />
             </Grid>
             <Grid item xs={12} md={4}>
               <TextField
@@ -2019,41 +2003,24 @@ export default function KpiPage() {
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
             <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>KPI</InputLabel>
-                <Select
-                  value={monitoringForm.kpiMasterCode}
-                  label="KPI"
-                  onChange={(e) =>
-                    setMonitoringForm((prev) => ({ ...prev, kpiMasterCode: e.target.value }))
-                  }
-                  disabled={Boolean(monitoringEditingId)}
-                >
-                  {masters.map((kpi) => (
-                    <MenuItem key={kpi.code} value={kpi.code}>
-                      {kpi.code} - {kpi.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <SearchableSelect
+                label="KPI"
+                value={monitoringForm.kpiMasterCode || null}
+                options={masters.map((kpi) => ({ value: kpi.code, label: `${kpi.code} - ${kpi.name}` }))}
+                onChange={(kpiMasterCode) => setMonitoringForm((prev) => ({ ...prev, kpiMasterCode: kpiMasterCode || '' }))}
+                disabled={Boolean(monitoringEditingId)}
+                clearable={false}
+              />
             </Grid>
             <Grid item xs={12} md={6}>
-              <TextField
-                select
+              <SearchableSelect
                 label="Unit"
-                value={monitoringForm.unitId}
-                onChange={(e) =>
-                  setMonitoringForm((prev) => ({ ...prev, unitId: Number(e.target.value) }))
-                }
-                fullWidth
+                value={monitoringForm.unitId || null}
+                options={availableUnits.map((unit) => ({ value: unit.id, label: unit.name }))}
+                onChange={(unitId) => setMonitoringForm((prev) => ({ ...prev, unitId: Number(unitId) }))}
                 disabled={Boolean(monitoringEditingId)}
-              >
-                {availableUnits.map((u) => (
-                  <MenuItem key={u.id} value={u.id}>
-                    {u.name}
-                  </MenuItem>
-                ))}
-              </TextField>
+                clearable={false}
+              />
             </Grid>
             <Grid item xs={12} md={4}>
               <TextField

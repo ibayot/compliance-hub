@@ -7,12 +7,8 @@ import {
   Checkbox,
   Card,
   CardContent,
-  FormControl,
-  InputLabel,
   ListItemText,
-  OutlinedInput,
   Typography,
-  Select,
   Table,
   TableBody,
   TableCell,
@@ -31,7 +27,6 @@ import {
   DialogContent,
   DialogActions,
   Link,
-  SelectChangeEvent,
   FormControlLabel,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
@@ -51,6 +46,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { issuancesApi, Issuance, CreateIssuanceDto } from '@/app/api/references';
 import { documentsApi, Document } from '@/lib/api/documents';
 import { usersApi, UserRecord } from '@/lib/api/users';
+import { SearchableMultiSelect, SearchableSelect } from '@/components/SearchableSelect';
 
 const ISSUANCE_ALLOWED_KEYS = [
   'issuance_number',
@@ -416,16 +412,6 @@ export default function IssuancesPage() {
     page * rowsPerPage + rowsPerPage,
   );
 
-  const handleAuthorityFilterChange = (event: SelectChangeEvent<string[]>) => {
-    const value = event.target.value;
-    setFilterAuthorities(typeof value === 'string' ? value.split(',') : value);
-  };
-
-  const handleCategoryFilterChange = (event: SelectChangeEvent<string[]>) => {
-    const value = event.target.value;
-    setFilterCategories(typeof value === 'string' ? value.split(',') : value);
-  };
-
   const openBlobInNewTab = (blob: Blob, fallbackFileName: string) => {
     const objectUrl = URL.createObjectURL(blob);
     const opened = window.open(objectUrl, '_blank', 'noopener,noreferrer');
@@ -611,50 +597,29 @@ export default function IssuancesPage() {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box display="flex" gap={2} alignItems="flex-start" flexWrap="wrap">
-            <FormControl size="small" sx={{ minWidth: 300 }}>
-              <InputLabel id="authority-filter-label">Authority</InputLabel>
-              <Select
-                labelId="authority-filter-label"
-                multiple
-                value={filterAuthorities}
-                onChange={handleAuthorityFilterChange}
-                input={<OutlinedInput label="Authority" />}
-                renderValue={(selected) =>
-                  (selected as string[]).length > 0
-                    ? (selected as string[]).join(', ')
-                    : 'All Authorities'
-                }
-              >
-                {authorityOptions.map((authority) => (
-                  <MenuItem key={authority} value={authority}>
-                    <Checkbox checked={filterAuthorities.includes(authority)} />
-                    <ListItemText primary={authority} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 260 }}>
-              <InputLabel id="category-filter-label">Category</InputLabel>
-              <Select
-                labelId="category-filter-label"
-                multiple
-                value={filterCategories}
-                onChange={handleCategoryFilterChange}
-                input={<OutlinedInput label="Category" />}
-                renderValue={(selected) =>
-                  (selected as string[]).length > 0
-                    ? (selected as string[]).map((item) => formatCategoryLabel(item)).join(', ')
-                    : 'All Categories'
-                }
-              >
-                {categoryOptions.map((category) => (
-                  <MenuItem key={category} value={category}>
-                    <Checkbox checked={filterCategories.includes(category)} />
-                    <ListItemText primary={formatCategoryLabel(category)} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <SearchableMultiSelect
+              size="small"
+              label="Authority"
+              value={filterAuthorities}
+              options={authorityOptions.map((authority) => ({ value: authority, label: authority }))}
+              onChange={setFilterAuthorities}
+              placeholder="All Authorities"
+              fullWidth={false}
+              sx={{ minWidth: 300 }}
+            />
+            <SearchableMultiSelect
+              size="small"
+              label="Category"
+              value={filterCategories}
+              options={categoryOptions.map((category) => ({
+                value: category,
+                label: formatCategoryLabel(category),
+              }))}
+              onChange={setFilterCategories}
+              placeholder="All Categories"
+              fullWidth={false}
+              sx={{ minWidth: 260 }}
+            />
             <TextField
               select
               label="Status"
@@ -1003,20 +968,13 @@ export default function IssuancesPage() {
               rows={2}
               fullWidth
             />
-            <TextField
-              select
+            <SearchableSelect
               label="Process Owner"
               value={formData.process_owner || ''}
-              onChange={(e) => setFormData({ ...formData, process_owner: e.target.value })}
-              fullWidth
-            >
-              <MenuItem value="">None</MenuItem>
-              {processOwnerOptions.map((owner) => (
-                <MenuItem key={owner.value} value={owner.value}>
-                  {owner.label}
-                </MenuItem>
-              ))}
-            </TextField>
+              options={[{ value: '', label: 'None' }, ...processOwnerOptions]}
+              onChange={(processOwner) => setFormData({ ...formData, process_owner: processOwner || '' })}
+              clearable={false}
+            />
             <TextField
               select
               label="Frequency / Cadence"

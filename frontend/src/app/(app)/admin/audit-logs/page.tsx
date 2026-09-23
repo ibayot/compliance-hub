@@ -28,6 +28,7 @@ import { Visibility as ViewIcon } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { auditLogsApi } from '@/app/api/references';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 function formatKey(key: string): string {
   // Convert snake_case or camelCase to Title Case
@@ -251,19 +252,19 @@ export default function AuditLogsPage() {
               <MenuItem value="DELETE">DELETE</MenuItem>
             </TextField>
 
-            <TextField
-              select
+            <SearchableSelect
               label="Table Name"
               value={filterTable}
-              onChange={(e) => { setFilterTable(e.target.value); setPage(0); }}
+              options={[
+                { value: '', label: 'All Tables' },
+                ...tables.map((table) => ({ value: table, label: table })),
+              ]}
+              onChange={(table) => { setFilterTable(table || ''); setPage(0); }}
               size="small"
+              clearable={false}
+              fullWidth={false}
               sx={{ minWidth: { xs: 0, sm: 200 } }}
-            >
-              <MenuItem value="">All Tables</MenuItem>
-              {tables.map(t => (
-                <MenuItem key={t} value={t}>{t}</MenuItem>
-              ))}
-            </TextField>
+            />
 
             <Button variant="outlined" onClick={() => { setFilterAction(''); setFilterTable(''); setPage(0); }}>
               Reset Filters

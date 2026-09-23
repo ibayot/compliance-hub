@@ -7,6 +7,7 @@ import { UsersModule } from '../modules/users/users.module';
 import { UnitsModule } from '../modules/units/units.module';
 import { InternalModule } from '../modules/internal/internal.module';
 import { AuditModule } from '../modules/audit/audit.module';
+import { ChangelogModule } from '../modules/changelog/changelog.module';
 import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditInterceptor } from '../shared/audit/audit.interceptor';
@@ -58,6 +59,7 @@ import { AuditVariableSubscriber } from '../shared/audit/audit.subscriber';
     UnitsModule,
     InternalModule,
     AuditModule,
+    ChangelogModule,
   ],
   providers: [
     AuditVariableSubscriber,

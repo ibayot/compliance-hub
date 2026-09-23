@@ -299,6 +299,7 @@ export class RoleCapabilitiesService implements OnModuleInit {
   isDocumentsDelete(role: string): boolean { return !!this.get(role)?.isDocumentsDelete; }
   isIssuancesManage(role: string): boolean { return !!this.get(role)?.isIssuancesManage; }
   isMetricsDelete(role: string): boolean { return !!this.get(role)?.isMetricsDelete; }
+  isChangelogManagement(role: string): boolean { return !!this.get(role)?.isChangelogManagement; }
 
   /** Return all role values that have a given capability set to true. */
   getRolesWhere(
@@ -348,7 +349,8 @@ export class RoleCapabilitiesService implements OnModuleInit {
       | 'isDocumentsManage'
       | 'isDocumentsDelete'
       | 'isIssuancesManage'
-      | 'isMetricsDelete',
+      | 'isMetricsDelete'
+      | 'isChangelogManagement',
   ): string[] {
     return [...this.cache.values()].filter((r) => r[capability]).map((r) => r.roleValue);
   }

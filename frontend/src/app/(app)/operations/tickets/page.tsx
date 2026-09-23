@@ -57,7 +57,6 @@ import {
   SentimentDissatisfied,
   SentimentVeryDissatisfied,
   FiberManualRecord,
-  Upload as UploadIcon,
   ChevronLeft,
   ChevronRight,
   EditCalendar as ResolutionTimeIcon,
@@ -89,16 +88,6 @@ import { formatPersonName } from '@/lib/utils/person-name';
 import { PRIORITY_COLOR, STATUS_COLOR, TICKET_TYPE_LABELS } from '@/lib/utils/ticket-colors';
 
 import { unitsApi } from '@/lib/api/units';
-
-const ALLOWED_IMAGE_FILE_ACCEPT =
-  '.jpg,.jpeg,.png,.heic,.heif,.webp,image/jpeg,image/png,image/heic,image/heif,image/webp';
-const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp']);
-const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp']);
-const isAllowedImageFile = (file: File) => {
-  const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
-  const mime = file.type.toLowerCase();
-  return ALLOWED_IMAGE_EXTENSIONS.has(extension) && (!mime || ALLOWED_IMAGE_MIME_TYPES.has(mime));
-};
 
 const populatedFieldSx = (populated: boolean) =>
   populated
@@ -238,15 +227,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
     reason: '',
   });
   const [submitting, setSubmitting] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const selectTicketImage = useCallback((file?: File) => {
-    if (!file) return;
-    if (!isAllowedImageFile(file)) {
-      enqueueSnackbar('Only JPG, JPEG, PNG, HEIC/HEIF, and WebP images are allowed.', { variant: 'error' });
-      return;
-    }
-    setSelectedImage(file);
-  }, [enqueueSnackbar]);
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [allUsers, setAllUsers] = useState<UserRecord[]>([]);
   const [categories, setCategories] = useState<TicketCategory[]>([]);
   const [issues, setIssues] = useState<TicketIssueType[]>([]);
@@ -869,7 +850,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
       setSubmitting(true);
 
       let payload: CreateTicketDto | FormData;
-      if (selectedImage) {
+      if (selectedImages.length) {
         const formData = new FormData();
         formData.append('subject', form.subject);
         formData.append('description', finalDescription);
@@ -880,7 +861,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
         if (user?.role !== 'user' && form.issueTypeId) formData.append('issueTypeId', form.issueTypeId);
         if (form.requesterId) formData.append('requesterId', form.requesterId.toString());
         if (form.assignedToId) formData.append('assignedToId', form.assignedToId.toString());
-        formData.append('image', selectedImage);
+        selectedImages.forEach(image => formData.append('attachments', image));
         payload = formData;
       } else {
         payload = { ...form, description: finalDescription, issueTypeId: user?.role === 'user' ? undefined : form.issueTypeId };
@@ -896,7 +877,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
         priority: undefined,
         categoryId: undefined,
       });
-      setSelectedImage(null);
+      setSelectedImages([]);
       setDisposalDetails({
         equipmentType: '',
         serialNumber: '',
@@ -2433,46 +2414,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
               rows={4}
               placeholder="Provide details: what happened, when, steps tried..."
             />
-            <Box
-              tabIndex={0}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                selectTicketImage(event.dataTransfer.files?.[0]);
-              }}
-              onPaste={(event) => {
-                const image = Array.from(event.clipboardData.files).find((file) => file.type.startsWith('image/'));
-                if (image) {
-                  event.preventDefault();
-                  selectTicketImage(image);
-                }
-              }}
-              sx={{ border: '1px dashed', borderColor: 'divider', borderRadius: 1, p: 1.5, outline: 'none', '&:focus': { borderColor: 'primary.main' } }}
-            >
-              <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
-                Attach Image (Optional) — select, drag and drop, or focus here and paste from the clipboard
-              </Typography>
-              <Button component="label" variant="outlined" size="small" startIcon={<UploadIcon />}>
-                {selectedImage ? 'Change Image' : 'Select Image'}
-                <input
-                  type="file"
-                  hidden
-                  accept={ALLOWED_IMAGE_FILE_ACCEPT}
-                  onChange={(e) => {
-                    selectTicketImage(e.target.files?.[0]);
-                    e.target.value = '';
-                  }}
-                />
-              </Button>
-              {selectedImage && (
-                <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
-                  {selectedImage.name} ({(selectedImage.size / 1024 / 1024).toFixed(2)} MB)
-                  <Button size="small" color="error" onClick={() => setSelectedImage(null)} sx={{ ml: 1, minWidth: 'auto', p: 0 }}>
-                    Remove
-                  </Button>
-                </Typography>
-              )}
-            </Box>
+            <TicketImageDropzone files={selectedImages} onFilesChange={setSelectedImages} maxFiles={5} label="Attach up to 5 images (optional)." buttonLabel="Select Images" />
             <Autocomplete
               options={allUsers.filter((u) => u.role !== 'super_admin')}
               getOptionLabel={(u) =>
@@ -2656,7 +2598,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
             <TicketImageDropzone
               files={resolutionOverrideFiles}
               onFilesChange={setResolutionOverrideFiles}
-              label="Proof image with visible timestamp (required, max 10 files, 10 MB each)."
+              label="Proof image with visible timestamp (required, max 5 files, 10 MB each)."
               buttonLabel="Select Proof Image(s)"
             />
             <FormControlLabel
@@ -2779,7 +2721,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
           <TicketImageDropzone
             files={escalateFiles}
             onFilesChange={setEscalateFiles}
-            label="Proof photos (optional, max 10 files, 10 MB each)."
+            label="Proof photos (optional, max 5 files, 10 MB each)."
             buttonLabel="Select Proof Photo(s)"
           />
         </DialogContent>
@@ -2824,7 +2766,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                     that I have read the provided information, or it has been read to me. I have had
                     the opportunity to ask questions about it, and any inquiries I made were
                     answered to my satisfaction. I understand that any information collected will be
-                    utilized solely to enhance the basic social services provided by the DSWD.
+                    utilized solely to enhance the basic social services provided by the DSWD. *
                   </Typography>
                 }
               />
@@ -2919,7 +2861,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
                 />
               </Stack>
 
-              <TextField label="Technician Name"
+              <TextField label="Technician Name *"
                 value={csatForm.technicianName}
                 InputProps={{ readOnly: true }}
                 inputProps={{ tabIndex: -1 }}
@@ -2935,7 +2877,7 @@ export default function TicketsPage({ restrictedAssignedOnly = false }: { restri
               />
 
               <Typography variant="subtitle2" fontWeight={700} mt={1}>
-                INSTRUCTION:
+                SERVICE QUALITY RATINGS *
               </Typography>
               <Typography variant="body2">
                 For Service Quality Dimension 0-8, please select the number that best corresponds to

@@ -189,4 +189,8 @@ export class UpdateRoleCapabilityDto {
   @IsOptional()
   @IsBoolean()
   isMetricsDelete?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isChangelogManagement?: boolean;
 }

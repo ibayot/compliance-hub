@@ -24,6 +24,7 @@ import {
   ReportorialDocType,
 } from '@/lib/api/document-types';
 import { useAuth } from '@/contexts/AuthContext';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 interface DocumentUploadProps {
   onSuccess?: () => void;
@@ -337,40 +338,30 @@ export default function DocumentUpload({ onSuccess }: DocumentUploadProps) {
               helperText="Auto-populated from your assigned unit"
             />
           ) : (
-            <FormControl fullWidth required>
-              <InputLabel>Unit</InputLabel>
-              <Select value={unitId} onChange={(e) => setUnitId(e.target.value)} label="Unit">
-                {unitOptions.map((unit) => (
-                  <MenuItem key={unit.id} value={String(unit.id)}>
-                    {unit.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              required
+              label="Unit"
+              value={unitId || null}
+              options={unitOptions.map((unit) => ({ value: String(unit.id), label: unit.name }))}
+              onChange={(selectedUnitId) => setUnitId(selectedUnitId || '')}
+              clearable={false}
+            />
           )}
 
           {/* Reportorial Document Type */}
-          <FormControl fullWidth required disabled={!unitId}>
-            <InputLabel>Document Type</InputLabel>
-            <Select
-              value={reportorialDocTypeId}
-              onChange={(e) => setReportorialDocTypeId(e.target.value)}
-              label="Document Type"
-            >
-              {docTypes
-                .filter((dt) => dt.active)
-                .map((dt) => (
-                  <MenuItem key={dt.id} value={String(dt.id)}>
-                    {dt.display_name}
-                  </MenuItem>
-                ))}
-              {docTypes.length === 0 && (
-                <MenuItem disabled value="">
-                  {unitId ? 'No document types for this unit' : 'Select a unit first'}
-                </MenuItem>
-              )}
-            </Select>
-          </FormControl>
+          <SearchableSelect
+            required
+            disabled={!unitId}
+            label="Document Type"
+            value={reportorialDocTypeId || null}
+            options={docTypes.filter((docType) => docType.active).map((docType) => ({
+              value: String(docType.id),
+              label: docType.display_name,
+            }))}
+            onChange={(documentTypeId) => setReportorialDocTypeId(documentTypeId || '')}
+            clearable={false}
+            helperText={docTypes.length === 0 ? (unitId ? 'No document types for this unit' : 'Select a unit first') : undefined}
+          />
 
           {/* ── Period Picker (shown once a doc type is selected) ── */}
           {selectedDocType && (

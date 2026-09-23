@@ -17,6 +17,7 @@ import { CybersecurityModule } from './modules/cybersecurity/cybersecurity.modul
 import { KpiModule } from './modules/kpi/kpi.module';
 import { MovModule } from './modules/mov/mov.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { ChangelogModule } from './modules/changelog/changelog.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditInterceptor } from './shared/audit/audit.interceptor';
 import { AuditVariableSubscriber } from './shared/audit/audit.subscriber';
@@ -106,6 +107,7 @@ import { AuditVariableSubscriber } from './shared/audit/audit.subscriber';
     KpiModule,
     MovModule,
     AuditModule,
+    ChangelogModule,
   ],
   controllers: [],
   providers: [

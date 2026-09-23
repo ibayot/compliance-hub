@@ -78,6 +78,7 @@ export class CapabilityGuard implements CanActivate {
       isDocumentsDelete: (r) => this.roleCapSvc.isDocumentsDelete(r),
       isIssuancesManage: (r) => this.roleCapSvc.isIssuancesManage(r),
       isMetricsDelete: (r) => this.roleCapSvc.isMetricsDelete(r),
+      isChangelogManagement: (r) => this.roleCapSvc.isChangelogManagement(r),
     };
 
     const requirements = Array.isArray(required) ? required : [required];

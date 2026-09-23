@@ -31,6 +31,7 @@ import { useSnackbar } from 'notistack';
 import { metricsApi, MetricTemplate } from '@/lib/api/metrics';
 import { unitsApi, Unit } from '@/lib/api/units';
 import { docTypesApi, ReportorialDocType } from '@/lib/api/document-types';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 type MetricType = 'section_check' | 'keyword_check' | 'property_check' | 'date_check';
 
@@ -564,22 +565,20 @@ export default function MetricsPage() {
             />
           </Box>
 
-          <TextField
-            margin="dense"
-            select
+          <SearchableSelect
             label="Reportorial Document Type (optional)"
-            fullWidth
             value={reportorialDocTypeId}
-            onChange={(event) => setReportorialDocTypeId(event.target.value)}
-          >
-            <MenuItem value="">All Document Types (Global)</MenuItem>
-            {docTypes.map((dt) => (
-              <MenuItem key={dt.id} value={String(dt.id)}>
-                {dt.unit?.name ? `${dt.unit.name} — ` : ''}
-                {dt.display_name}
-              </MenuItem>
-            ))}
-          </TextField>
+            options={[
+              { value: '', label: 'All Document Types (Global)' },
+              ...docTypes.map((docType) => ({
+                value: String(docType.id),
+                label: `${docType.unit?.name ? `${docType.unit.name} — ` : ''}${docType.display_name}`,
+              })),
+            ]}
+            onChange={(documentTypeId) => setReportorialDocTypeId(documentTypeId || '')}
+            clearable={false}
+            textFieldProps={{ margin: 'dense' }}
+          />
 
           {metricType === 'section_check' && (
             <>

@@ -49,6 +49,7 @@ import { metricsApi } from '@/lib/api/metrics';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types/auth';
 import { KpiMasterRecord, UnitTimeseriesPoint } from '@/lib/api/kpi';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 const MONTH_NAMES = [
   'January',
@@ -1572,21 +1573,16 @@ export default function ReportsPage() {
 
             {/* Unit */}
             <Grid item xs={12} sm={4}>
-              <FormControl fullWidth>
-                <InputLabel>Unit (optional)</InputLabel>
-                <Select
-                  value={selectedUnit}
-                  onChange={(e) => setSelectedUnit(e.target.value)}
-                  label="Unit (optional)"
-                >
-                  <MenuItem value="">All Units</MenuItem>
-                  {units.map((u) => (
-                    <MenuItem key={u.id} value={String(u.id)}>
-                      {u.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <SearchableSelect
+                label="Unit (optional)"
+                value={selectedUnit}
+                options={[
+                  { value: '', label: 'All Units' },
+                  ...units.map((unit) => ({ value: String(unit.id), label: unit.name })),
+                ]}
+                onChange={(unitId) => setSelectedUnit(unitId || '')}
+                clearable={false}
+              />
             </Grid>
 
             {/* Generate button */}

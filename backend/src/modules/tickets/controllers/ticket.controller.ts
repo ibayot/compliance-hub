@@ -12,7 +12,6 @@ import {
   HttpStatus,
   Logger,
   UploadedFiles,
-  UploadedFile,
   UseInterceptors,
   Res,
   BadRequestException,
@@ -23,7 +22,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
-import { FilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CapabilityGuard } from '../../../common/guards/capability.guard';
 import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
@@ -60,16 +59,16 @@ export class TicketController {
   @Post()
   @RequireCapability('isTicketModuleAccess')
   @HttpCode(HttpStatus.CREATED)
-  @UseInterceptors(FileInterceptor('image', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FilesInterceptor('attachments', 5, { limits: { fileSize: 10 * 1024 * 1024 } }))
   async createTicket(
     @Body() dto: CreateTicketDto,
     @Request() req: any,
-    @UploadedFile() image?: Express.Multer.File,
+    @UploadedFiles() attachments: Express.Multer.File[],
   ) {
-    if (image) this.ticketService.validateImageUpload(image);
+    for (const image of attachments ?? []) this.ticketService.validateImageUpload(image);
     const callerId = req.user.id ?? req.user.userId;
     const callerRole = req.user.role as UserRole;
-    return this.ticketService.createTicket(dto, callerId, callerRole, image);
+    return this.ticketService.createTicket(dto, callerId, callerRole, attachments ?? []);
   }
 
   @Post('global-pause')
@@ -468,7 +467,7 @@ export class TicketController {
   /** POST /tickets/:id/resolution-time-override */
   @Post(':id/resolution-time-override')
   @RequireCapability('isTicketResolutionTimeOverride')
-  @UseInterceptors(FilesInterceptor('proofFiles', 10, { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FilesInterceptor('proofFiles', 5, { limits: { fileSize: 10 * 1024 * 1024 } }))
   async overrideResolutionTime(
     @Param('id') id: string,
     @Body() body: { verifiedResolvedAt?: string; reason?: string },
@@ -536,20 +535,20 @@ export class TicketController {
   /** POST /tickets/:id/comments */
   @Post(':id/comments')
   @RequireCapability('isTicketModuleAccess')
-  @UseInterceptors(FileInterceptor('attachment', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FilesInterceptor('attachments', 5, { limits: { fileSize: 10 * 1024 * 1024 } }))
   async addComment(
     @Param('id') ticketId: string,
     @Body() dto: AddCommentDto,
     @Request() req: any,
-    @UploadedFile() attachment?: Express.Multer.File,
+    @UploadedFiles() attachments: Express.Multer.File[],
   ) {
-    if (attachment) this.ticketService.validateImageUpload(attachment);
+    for (const attachment of attachments ?? []) this.ticketService.validateImageUpload(attachment);
     return this.ticketService.addComment(
       ticketId,
       dto,
       req.user.id ?? req.user.userId,
       req.user.role,
-      attachment,
+      attachments ?? [],
     );
   }
 
@@ -602,7 +601,7 @@ export class TicketController {
   /** POST /tickets/:id/escalate — upload proof photos (multipart/form-data) */
   @Post(':id/escalate')
   @RequireCapability('isTicketModuleAccess')
-  @UseInterceptors(FilesInterceptor('proofFiles', 10, { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FilesInterceptor('proofFiles', 5, { limits: { fileSize: 10 * 1024 * 1024 } }))
   async escalateTicket(
     @Param('id') id: string,
     @Body() body: { escalatedToId: string; notes?: string },
@@ -648,7 +647,7 @@ export class TicketController {
    */
   @Patch(':id/escalation/:eid/update-proof')
   @RequireCapability('isTicketModuleAccess')
-  @UseInterceptors(FilesInterceptor('proofFiles', 10, { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FilesInterceptor('proofFiles', 5, { limits: { fileSize: 10 * 1024 * 1024 } }))
   async updateEscalationProof(
     @Param('id') id: string,
     @Param('eid') eid: string,

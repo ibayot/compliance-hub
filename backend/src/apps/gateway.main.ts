@@ -52,7 +52,7 @@ if (vaptConfigPollingEnabled) {
 }
 
 const SERVICE_DOMAINS: Record<string, string[]> = {
-  users: ['/api/auth', '/api/users', '/api/units', '/api/audit-logs'],
+  users: ['/api/auth', '/api/users', '/api/units', '/api/audit-logs', '/api/changelog'],
   ticketing: ['/api/tickets', '/api/attendance', '/api/ticket-settings', '/api/knowledge-base', '/api/notifications', '/api/events', '/api/duties'],
   compliance: [
     '/api/documents',
@@ -310,6 +310,10 @@ async function bootstrap() {
     app.use(
       `${prefix}/audit-logs`,
       createServiceProxy(`${usersServiceUrl}/api/audit-logs`, 'users'),
+    );
+    app.use(
+      `${prefix}/changelog`,
+      createServiceProxy(`${usersServiceUrl}/api/changelog`, 'users'),
     );
 
     app.use(
