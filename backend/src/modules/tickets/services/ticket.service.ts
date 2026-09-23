@@ -538,9 +538,12 @@ export class TicketService implements OnModuleInit {
           ? ticket.issueTypeConfig?.maxFreezeHours
           : ticket.issueTypeConfig?.allowablePauseHours;
       if (resumeAfterHours != null && Number(resumeAfterHours) > 0) {
-        slaResumeAt = new Date(
-          new Date(ticket.slaPausedAt).getTime() + Number(resumeAfterHours) * 60 * 60 * 1000,
-        );
+        const pausedAt = new Date(ticket.slaPausedAt);
+        const resumeHours = Number(resumeAfterHours);
+        slaResumeAt =
+          ticket.status === TicketStatus.PAUSE && config
+            ? await this.calculateSlaDeadline(pausedAt, resumeHours, config)
+            : new Date(pausedAt.getTime() + resumeHours * 60 * 60 * 1000);
       }
     } else if (isSchedulePaused && config) {
       slaResumeAt =

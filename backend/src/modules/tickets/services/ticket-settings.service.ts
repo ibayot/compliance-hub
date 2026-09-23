@@ -702,10 +702,9 @@ export class TicketSettingsService {
       issueType.isActive = dto.isActive;
     }
     if (dto.categoryId !== undefined) {
-      if (dto.categoryId) {
-        await this.getCategoryById(dto.categoryId);
-      }
+      const category = dto.categoryId ? await this.getCategoryById(dto.categoryId) : null;
       issueType.category_id = dto.categoryId || null;
+      issueType.category = category;
     }
     if (dto.allowablePauseHours !== undefined) {
       issueType.allowablePauseHours = dto.allowablePauseHours ?? 48;

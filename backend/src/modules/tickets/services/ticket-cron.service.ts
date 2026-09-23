@@ -310,15 +310,25 @@ export class TicketCronService implements OnModuleInit {
       relations: ['category', 'issueTypeConfig'],
     });
 
-    const now = new Date().getTime();
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    if (!config) {
+      this.logger.error('[Auto-Unpause] No global ticketing config found.');
+      return;
+    }
+
+    const now = new Date();
 
     for (const ticket of pausedTickets) {
       if (!ticket.slaPausedAt || !ticket.category) continue;
 
-      const allowableMs = (ticket.issueTypeConfig?.allowablePauseHours ?? 48) * 60 * 60 * 1000;
-      const pausedMs = now - ticket.slaPausedAt.getTime();
+      const allowableSeconds = (ticket.issueTypeConfig?.allowablePauseHours ?? 48) * 60 * 60;
+      const pausedBusinessSeconds = await this.ticketService.calculateBusinessSecondsForSla(
+        ticket.slaPausedAt,
+        now,
+        config,
+      );
 
-      if (pausedMs >= allowableMs) {
+      if (pausedBusinessSeconds >= allowableSeconds) {
         try {
           await this.ticketService.updateTicket(
             ticket.id,

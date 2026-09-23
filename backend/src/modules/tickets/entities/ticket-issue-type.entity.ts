@@ -65,7 +65,7 @@ export class TicketIssueType {
 
   @ManyToOne(() => TicketCategoryConfig, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'category_id' })
-  category: TicketCategoryConfig;
+  category: TicketCategoryConfig | null;
 
   @CreateDateColumn()
   created_at: Date;
