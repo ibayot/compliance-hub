@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.12] - 2026-09-23 - Global Settings Save Reliability
+
+### Fixed
+- Global Settings saves no longer include the duty-roster-only OD Override property, preventing the `property odOverrideEnabled should not exist` validation error.
+- Global Settings API responses and update requests now use explicit field allowlists so unrelated configuration properties cannot leak into the form payload.
+
+### Deployment Note
+- This release requires no database migration.
+
 ## [1.0.11] - 2026-09-21 - Dashboard Navigation and Internal Mentions
 
 ### Added

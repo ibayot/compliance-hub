@@ -268,14 +268,14 @@ export class TicketSettingsController {
   @UseGuards(CapabilityGuard)
   @RequireCapability('isGlobalSettingsAccess')
   async getGlobalConfig() {
-    return this.settingsService.getGlobalConfig();
+    return this.settingsService.getGlobalConfigView();
   }
 
   @Patch('global-config')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isGlobalSettingsAccess')
   async updateGlobalConfig(@Body() dto: UpdateGlobalConfigDto) {
-    const updated = await this.settingsService.updateGlobalConfig(dto);
+    await this.settingsService.updateGlobalConfig(dto);
 
     // If SMTP fields were touched, immediately trigger the email service to reload its Nodemailer transporter
     if (
@@ -289,7 +289,7 @@ export class TicketSettingsController {
       await this.emailService.reloadSmtpConfig();
     }
 
-    return updated;
+    return this.settingsService.getGlobalConfigView();
   }
 
   // ── SLA Insights ───────────────────────────────────────────────────────

@@ -1222,6 +1222,8 @@ export const ticketSettingsApi = {
     cwwClockoutStart?: string;
     cwwClockoutEnd?: string;
     isFlagCeremonyPaused?: boolean;
+    isEmailNotificationsEnabled?: boolean;
+    emailTestOverride?: string | null;
   }> => {
     const response = await apiClient.get(`/ticket-settings/global-config`);
     return response.data;
@@ -1245,8 +1247,22 @@ export const ticketSettingsApi = {
     cwwClockoutStart?: string;
     cwwClockoutEnd?: string;
     isFlagCeremonyPaused?: boolean;
+    isEmailNotificationsEnabled?: boolean;
+    emailTestOverride?: string | null;
   }): Promise<void> => {
-    const response = await apiClient.patch(`/ticket-settings/global-config`, data);
+    const allowedKeys = [
+      'assignmentStrategy', 'roundRobinCapHours', 'autoCloseDays',
+      'smtpHost', 'smtpPort', 'smtpUser', 'smtpPass', 'smtpFrom', 'smtpFromName',
+      'primarySmtpDailyLimit', 'scheduleMode', 'officeClockin', 'officeClockout',
+      'cwwClockinStart', 'cwwClockinEnd', 'cwwClockoutStart', 'cwwClockoutEnd',
+      'isFlagCeremonyPaused', 'isEmailNotificationsEnabled', 'emailTestOverride',
+    ] as const;
+    const payload = Object.fromEntries(
+      allowedKeys
+        .filter((key) => data[key] !== undefined)
+        .map((key) => [key, data[key]]),
+    );
+    const response = await apiClient.patch(`/ticket-settings/global-config`, payload);
     return response.data;
   },
 

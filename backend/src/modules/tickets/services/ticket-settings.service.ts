@@ -305,6 +305,32 @@ export class UpdateGlobalConfigDto {
   emailTestOverride?: string | null;
 }
 
+export type GlobalConfigView = Pick<
+  TicketingConfig,
+  | 'assignmentStrategy'
+  | 'roundRobinCapHours'
+  | 'autoCloseDays'
+  | 'smtpHost'
+  | 'smtpPort'
+  | 'smtpUser'
+  | 'smtpPass'
+  | 'smtpFrom'
+  | 'smtpFromName'
+  | 'primarySmtpDailyLimit'
+  | 'primarySmtpSentToday'
+  | 'primarySmtpLastSentDate'
+  | 'scheduleMode'
+  | 'officeClockin'
+  | 'officeClockout'
+  | 'cwwClockinStart'
+  | 'cwwClockinEnd'
+  | 'cwwClockoutStart'
+  | 'cwwClockoutEnd'
+  | 'isFlagCeremonyPaused'
+  | 'isEmailNotificationsEnabled'
+  | 'emailTestOverride'
+>;
+
 // --- Service ----------------------------------------------------------------
 
 @Injectable()
@@ -963,6 +989,34 @@ export class TicketSettingsService {
       await this.configRepo.save(config);
     }
     return config;
+  }
+
+  async getGlobalConfigView(): Promise<GlobalConfigView> {
+    const config = await this.getGlobalConfig();
+    return {
+      assignmentStrategy: config.assignmentStrategy,
+      roundRobinCapHours: config.roundRobinCapHours,
+      autoCloseDays: config.autoCloseDays,
+      smtpHost: config.smtpHost,
+      smtpPort: config.smtpPort,
+      smtpUser: config.smtpUser,
+      smtpPass: config.smtpPass,
+      smtpFrom: config.smtpFrom,
+      smtpFromName: config.smtpFromName,
+      primarySmtpDailyLimit: config.primarySmtpDailyLimit,
+      primarySmtpSentToday: config.primarySmtpSentToday,
+      primarySmtpLastSentDate: config.primarySmtpLastSentDate,
+      scheduleMode: config.scheduleMode,
+      officeClockin: config.officeClockin,
+      officeClockout: config.officeClockout,
+      cwwClockinStart: config.cwwClockinStart,
+      cwwClockinEnd: config.cwwClockinEnd,
+      cwwClockoutStart: config.cwwClockoutStart,
+      cwwClockoutEnd: config.cwwClockoutEnd,
+      isFlagCeremonyPaused: config.isFlagCeremonyPaused,
+      isEmailNotificationsEnabled: config.isEmailNotificationsEnabled,
+      emailTestOverride: config.emailTestOverride,
+    };
   }
 
   async updateGlobalConfig(dto: UpdateGlobalConfigDto): Promise<TicketingConfig> {
