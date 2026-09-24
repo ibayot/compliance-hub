@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.15] - 2026-09-24 - Changelog Service Startup Reliability
+
+### Fixed
+- Declared the nullable End User changelog title as an explicit MySQL `varchar`, preventing the Users service from rejecting its TypeORM metadata during startup.
+
+### Deployment Note
+- No additional database migration or seed execution is required after the v1.0.14 database scripts. Rebuild and redeploy the Users service with this application version.
+
 ## [1.0.14] - 2026-09-24 - Session Lock and Resolved Assignment Corrections
 
 ### Changed

@@ -15,7 +15,8 @@ export class AppRelease {
   @PrimaryGeneratedColumn('uuid') id: string;
   @Column({ length: 30 }) version: string;
   @Column({ length: 150 }) title: string;
-  @Column({ name: 'end_user_title', length: 150, nullable: true }) endUserTitle: string | null;
+  @Column({ name: 'end_user_title', type: 'varchar', length: 150, nullable: true })
+  endUserTitle: string | null;
   @Column({ name: 'display_days', type: 'int' }) displayDays: number;
   @Column({ length: 20, default: 'draft' }) status: string;
   @Column({ name: 'published_at', type: 'datetime', nullable: true }) publishedAt: Date | null;
