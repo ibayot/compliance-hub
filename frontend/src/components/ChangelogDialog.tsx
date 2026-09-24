@@ -10,6 +10,13 @@ import {
   Typography,
 } from '@mui/material';
 import { AppRelease } from '@/lib/api/changelog';
+
+const CATEGORY_GROUPS = [
+  { value: 'feature', label: 'FEATURE', color: 'success' },
+  { value: 'enhancement', label: 'ENHANCEMENT', color: 'primary' },
+  { value: 'bug_fix', label: 'BUG FIX', color: 'error' },
+] as const;
+
 export default function ChangelogDialog({
   open,
   releases,
@@ -34,24 +41,26 @@ export default function ChangelogDialog({
                 <Typography variant="h6">
                   v{r.version} — {r.title}
                 </Typography>
-                {r.notes.map((n) => (
-                  <Stack key={n.id} spacing={0.5}>
-                    <Chip
-                      size="small"
-                      sx={{ alignSelf: 'flex-start' }}
-                      color={
-                        n.category === 'bug_fix'
-                          ? 'error'
-                          : n.category === 'enhancement'
-                            ? 'primary'
-                            : 'success'
-                      }
-                      label={n.category.replace('_', ' ').toUpperCase()}
-                    />
-                    <Typography fontWeight={700}>{n.title}</Typography>
-                    <Typography whiteSpace="pre-wrap">{n.description}</Typography>
-                  </Stack>
-                ))}
+                {CATEGORY_GROUPS.map((group) => {
+                  const notes = r.notes.filter((note) => note.category === group.value);
+                  if (!notes.length) return null;
+                  return (
+                    <Stack key={group.value} spacing={1}>
+                      <Chip
+                        size="small"
+                        sx={{ alignSelf: 'flex-start' }}
+                        color={group.color}
+                        label={group.label}
+                      />
+                      {notes.map((note) => (
+                        <Stack key={note.id} spacing={0.5}>
+                          <Typography fontWeight={700}>{note.title}</Typography>
+                          <Typography whiteSpace="pre-wrap">{note.description}</Typography>
+                        </Stack>
+                      ))}
+                    </Stack>
+                  );
+                })}
                 <Divider />
               </Stack>
             ))

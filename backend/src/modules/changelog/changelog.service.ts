@@ -4,12 +4,38 @@ import { In, Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { RoleCapability } from '../users/entities/role-capability.entity';
 import { AppRelease, AppReleaseDelivery, AppReleaseNote } from './changelog.entity';
-const CATS = ['functional', 'enhancement', 'bug_fix'];
+const CATS = ['feature', 'enhancement', 'bug_fix'];
+const AUDIENCES = ['capability', 'end_user', 'staff'];
+const CATEGORY_ORDER = new Map(CATS.map((category, index) => [category, index]));
+const STAFF_CAPABILITIES = [
+  'isAttendanceEligible',
+  'isAllTickets',
+  'isTicketFocal',
+  'isTicketSettingsFocal',
+  'isSpecializedSupport',
+  'isDesktop',
+  'isItSupport',
+  'isPantawidIct',
+  'isIto',
+  'isFocal',
+  'isUserManagementView',
+  'isUserManagementAdmin',
+  'isRoleCapabilitiesAccess',
+  'isSystemRolesAccess',
+  'isChangelogManagement',
+];
 type Input = {
   version: string;
   title: string;
+  endUserTitle?: string | null;
   displayDays: number;
-  notes: Array<{ category: string; title: string; description: string; capabilityKeys: string[] }>;
+  notes: Array<{
+    category: string;
+    audience?: string;
+    title: string;
+    description: string;
+    capabilityKeys: string[];
+  }>;
 };
 @Injectable()
 export class ChangelogService {
@@ -43,13 +69,14 @@ export class ChangelogService {
     for (const n of x.notes) {
       if (
         !CATS.includes(n.category) ||
+        !AUDIENCES.includes(n.audience || 'capability') ||
         !n.title?.trim() ||
         !n.description?.trim() ||
         !n.capabilityKeys?.length ||
         n.capabilityKeys.some((k) => !allowed.has(k))
       )
         throw new BadRequestException(
-          'Every note must be Functional, Enhancement, or Bug Fix and have valid capability targets.',
+          'Every note must be Feature, Enhancement, or Bug Fix, have a valid audience, and have valid capability targets.',
         );
     }
   }
@@ -68,6 +95,7 @@ export class ChangelogService {
         ...r,
         version: x.version.trim(),
         title: x.title.trim(),
+        endUserTitle: x.endUserTitle?.trim() || null,
         displayDays: x.displayDays,
         status: 'draft',
       }),
@@ -77,6 +105,7 @@ export class ChangelogService {
         this.nr.create({
           releaseId: r!.id,
           category: n.category,
+          audience: n.audience || 'capability',
           title: n.title.trim(),
           description: n.description.trim(),
           capabilityKeys: [...new Set(n.capabilityKeys)],
@@ -86,13 +115,33 @@ export class ChangelogService {
     );
     return r;
   }
+  private isEndUser(c?: RoleCapability) {
+    return Boolean(
+      c?.isTicketModuleAccess && STAFF_CAPABILITIES.every((key) => !(c as any)?.[key]),
+    );
+  }
   private notes(r: AppRelease, c?: RoleCapability) {
+    const endUser = this.isEndUser(c);
     return (r.notes || [])
-      .filter((n) => n.capabilityKeys.some((k) => !!(c as any)?.[k]))
-      .sort((a, b) => a.sortOrder - b.sortOrder);
+      .filter((n) => {
+        const capabilityMatch = n.capabilityKeys.some((key) => !!(c as any)?.[key]);
+        if (!capabilityMatch) return false;
+        if (n.audience === 'end_user') return endUser;
+        if (n.audience === 'staff') return !endUser;
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          (CATEGORY_ORDER.get(a.category) ?? CATS.length) -
+            (CATEGORY_ORDER.get(b.category) ?? CATS.length) || a.sortOrder - b.sortOrder,
+      );
   }
   private view(r: AppRelease, c?: RoleCapability) {
-    return { ...r, notes: this.notes(r, c) };
+    return {
+      ...r,
+      title: this.isEndUser(c) && r.endUserTitle?.trim() ? r.endUserTitle : r.title,
+      notes: this.notes(r, c),
+    };
   }
   async publish(id: string) {
     const r = await this.rr.findOne({ where: { id }, relations: ['notes'] });

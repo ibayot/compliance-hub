@@ -32,6 +32,7 @@ type DraftNote = ReleaseDraftInput['notes'][number];
 
 const newNote = (): DraftNote => ({
   category: 'enhancement',
+  audience: 'capability',
   title: '',
   description: '',
   capabilityKeys: [],
@@ -40,6 +41,7 @@ const newNote = (): DraftNote => ({
 const newDraft = (): ReleaseDraftInput => ({
   version: '',
   title: '',
+  endUserTitle: '',
   displayDays: 14,
   notes: [newNote()],
 });
@@ -51,10 +53,16 @@ const capabilityLabel = (key: string) =>
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 const categoryLabel: Record<ChangelogCategory, string> = {
-  functional: 'Functional',
+  feature: 'Feature',
   enhancement: 'Enhancement',
   bug_fix: 'Bug Fix',
 };
+
+const audienceLabel = {
+  capability: 'Capability matched',
+  end_user: 'End User only',
+  staff: 'Staff only',
+} as const;
 
 const apiErrorMessage = (error: unknown, fallback: string) => {
   const responseMessage = (error as { response?: { data?: { message?: string | string[] } } })
@@ -116,13 +124,17 @@ export default function ChangelogManagementPage() {
     setForm({
       version: release.version,
       title: release.title,
+      endUserTitle: release.endUserTitle || '',
       displayDays: release.displayDays,
-      notes: release.notes.map(({ category, title, description, capabilityKeys: targets }) => ({
-        category,
-        title,
-        description,
-        capabilityKeys: [...targets],
-      })),
+      notes: release.notes.map(
+        ({ category, audience, title, description, capabilityKeys: targets }) => ({
+          category,
+          audience,
+          title,
+          description,
+          capabilityKeys: [...targets],
+        }),
+      ),
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -182,9 +194,9 @@ export default function ChangelogManagementPage() {
         Changelog Management
       </Typography>
       <Alert severity="info" sx={{ mb: 2 }}>
-        Publish only user-visible Functional, Enhancement, or Bug Fix information. Do not include
-        database, test, Docker, or internal deployment details. Each note can target a different set
-        of capabilities.
+        Publish only user-visible Feature, Enhancement, or Bug Fix information. End User-only notes
+        should use short, general wording for the limited requester experience. Do not include
+        database, test, Docker, or internal deployment details.
       </Alert>
 
       <Card sx={{ mb: 3 }}>
@@ -207,6 +219,13 @@ export default function ChangelogManagementPage() {
                 label="Release title"
                 value={form.title}
                 onChange={(event) => setForm({ ...form, title: event.target.value })}
+              />
+              <TextField
+                fullWidth
+                label="End User release title"
+                value={form.endUserTitle || ''}
+                onChange={(event) => setForm({ ...form, endUserTitle: event.target.value })}
+                helperText="Optional shorter title shown only to End Users"
               />
               <TextField
                 required
@@ -248,6 +267,24 @@ export default function ChangelogManagementPage() {
                         }
                       >
                         {Object.entries(categoryLabel).map(([value, label]) => (
+                          <MenuItem key={value} value={value}>
+                            {label}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl required fullWidth>
+                      <InputLabel>Audience</InputLabel>
+                      <Select
+                        label="Audience"
+                        value={note.audience}
+                        onChange={(event) =>
+                          updateNote(index, {
+                            audience: event.target.value as DraftNote['audience'],
+                          })
+                        }
+                      >
+                        {Object.entries(audienceLabel).map(([value, label]) => (
                           <MenuItem key={value} value={value}>
                             {label}
                           </MenuItem>
@@ -340,6 +377,11 @@ export default function ChangelogManagementPage() {
                       <Box key={note.id}>
                         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                           <Chip size="small" label={categoryLabel[note.category]} />
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            label={audienceLabel[note.audience]}
+                          />
                           <Typography fontWeight={700}>{note.title}</Typography>
                         </Stack>
                         <Typography variant="body2" whiteSpace="pre-wrap">

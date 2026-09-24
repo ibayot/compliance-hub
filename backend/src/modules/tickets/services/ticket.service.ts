@@ -2040,9 +2040,13 @@ export class TicketService implements OnModuleInit {
           'This ticket changed after you opened the correction window. Refresh the ticket, review the latest details, and try again.',
         );
       }
-      if (![TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(ticket.status)) {
+      const isActiveCorrection = [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(
+        ticket.status,
+      );
+      const isResolvedCorrection = ticket.status === TicketStatus.RESOLVED;
+      if (!isActiveCorrection && !isResolvedCorrection) {
         throw new BadRequestException(
-          'Ticket record correction is only available for Assigned or In Progress tickets.',
+          'Assigned To correction is only available for Assigned, In Progress, or Resolved tickets.',
         );
       }
       if (!ticket.assignedToId) {
@@ -2069,22 +2073,31 @@ export class TicketService implements OnModuleInit {
         ticket.createdById,
       );
 
-      const activeStatuses = [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE];
-      const targetActiveCount = await this.ticketRepo.count({
-        where: activeStatuses.map((status) => ({
-          assignedToId: dto.assignedToId,
-          status,
-        })),
-      });
+      let targetActiveCount = 0;
+      if (isActiveCorrection) {
+        const activeStatuses = [
+          TicketStatus.ASSIGNED,
+          TicketStatus.IN_PROGRESS,
+          TicketStatus.PAUSE,
+        ];
+        targetActiveCount = await this.ticketRepo.count({
+          where: activeStatuses.map((status) => ({
+            assignedToId: dto.assignedToId,
+            status,
+          })),
+        });
+      }
       const wasQueueWaiting = Boolean(ticket.isSlaWaiting);
       const wasSchedulePaused = Boolean(ticket.slaPausedAt && !ticket.isSlaWaiting);
 
       previousAssigneeId = ticket.assignedToId;
       ticket.assignedToId = Number(dto.assignedToId);
-      ticket.lastAssignedAt = new Date();
 
       // A free assignee starts the ticket; a busy assignee receives queued work.
-      if ([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(ticket.status)) {
+      // Resolved-ticket corrections are historical record fixes only and must not
+      // alter terminal state, timestamps, SLA state, or either staff queue.
+      if (isActiveCorrection) {
+        ticket.lastAssignedAt = new Date();
         if (targetActiveCount === 0) {
           if (wasQueueWaiting) {
             // Save it as waiting first, then use the shared promotion helper so
@@ -2105,13 +2118,17 @@ export class TicketService implements OnModuleInit {
       }
 
       const corrected = await this.ticketRepo.save(ticket);
-      if (targetActiveCount === 0 && wasQueueWaiting) {
+      if (isActiveCorrection && targetActiveCount === 0 && wasQueueWaiting) {
         await this.unpauseNextWaitingTicketAndSetInProgress(
           Number(dto.assignedToId),
           'assignee_correction',
         );
       }
-      if (previousAssigneeId && previousAssigneeId !== Number(dto.assignedToId)) {
+      if (
+        isActiveCorrection &&
+        previousAssigneeId &&
+        previousAssigneeId !== Number(dto.assignedToId)
+      ) {
         const remainingActiveCount = await this.ticketRepo.count({
           where: [
             {

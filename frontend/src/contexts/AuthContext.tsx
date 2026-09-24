@@ -19,9 +19,12 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  IconButton,
+  InputAdornment,
   TextField,
   Typography,
 } from '@mui/material';
+import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { CredentialResponse, GoogleLogin } from '@react-oauth/google';
 import { useSnackbar } from 'notistack';
 import { User } from '@/lib/types/auth';
@@ -86,12 +89,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [requiresMfa, setRequiresMfa] = useState(false);
   const [isSessionLocked, setIsSessionLocked] = useState(false);
   const [unlockPassword, setUnlockPassword] = useState('');
+  const [showUnlockPassword, setShowUnlockPassword] = useState(false);
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
   const [googleSignInEnabled, setGoogleSignInEnabled] = useState(false);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inactivityDeadlineRef = useRef<number | null>(null);
   const navigate = useNavigate();
+  const authenticatedUserId = user?.id ?? null;
 
   useEffect(() => {
     authApi.getPublicConfig()
@@ -117,12 +122,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const scheduleInactivityLock = useCallback(() => {
     clearInactivityTimer();
-    if (!user || isSessionLocked || requiresPasswordChange) return;
+    if (!authenticatedUserId || isSessionLocked || requiresPasswordChange) return;
 
     const lock = () => {
       sessionStorage.setItem('isSessionLocked', 'true');
       setIsSessionLocked(true);
       setUnlockPassword('');
+      setShowUnlockPassword(false);
       setUnlockError(null);
       inactivityDeadlineRef.current = null;
     };
@@ -138,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       inactivityTimerRef.current = setTimeout(checkDeadline, Math.min(remaining, 60_000));
     };
     checkDeadline();
-  }, [clearInactivityTimer, isSessionLocked, requiresPasswordChange, user]);
+  }, [authenticatedUserId, clearInactivityTimer, isSessionLocked, requiresPasswordChange]);
 
   const unlockSession = useCallback(
     async (password: string) => {
@@ -151,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sessionStorage.removeItem('isSessionLocked');
       setIsSessionLocked(false);
       setUnlockPassword('');
+      setShowUnlockPassword(false);
       setUnlockError(null);
       scheduleInactivityLock();
     },
@@ -231,7 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [enqueueSnackbar, logout]);
 
   useEffect(() => {
-    if (!user || loading || requiresPasswordChange) {
+    if (!authenticatedUserId || loading || requiresPasswordChange) {
       clearInactivityTimer();
       return;
     }
@@ -249,6 +256,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         sessionStorage.setItem('isSessionLocked', 'true');
         setIsSessionLocked(true);
         setUnlockPassword('');
+        setShowUnlockPassword(false);
         setUnlockError(null);
       } else {
         scheduleInactivityLock();
@@ -273,7 +281,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', visibilityHandler);
       clearInactivityTimer();
     };
-  }, [clearInactivityTimer, isSessionLocked, loading, requiresPasswordChange, scheduleInactivityLock, user]);
+  }, [
+    authenticatedUserId,
+    clearInactivityTimer,
+    isSessionLocked,
+    loading,
+    requiresPasswordChange,
+    scheduleInactivityLock,
+  ]);
 
   // ── Heartbeat: verify session every 60 s while logged in ─────────────────
   // If the account is deactivated server-side, getProfile() returns 401 →
@@ -470,7 +485,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             </Alert>
             <TextField
               fullWidth
-              type="password"
+              type={showUnlockPassword ? 'text' : 'password'}
               label="Enter Password"
               value={unlockPassword}
               onChange={(e) => setUnlockPassword(e.target.value)}
@@ -480,6 +495,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
               }}
               autoFocus
+              autoComplete="current-password"
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label={showUnlockPassword ? 'Hide password' : 'Show password'}
+                      onClick={() => setShowUnlockPassword((visible) => !visible)}
+                      edge="end"
+                    >
+                      {showUnlockPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
               sx={{ mb: 2 }}
             />
             {googleSignInEnabled && (

@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.14] - 2026-09-24 - Session Lock and Resolved Assignment Corrections
+
+### Changed
+- Authorized record correctors can correct Assigned To on resolved tickets when another staff member completed the work; the resolved status, SLA data, resolution time, assignment timestamp, and active queues remain unchanged.
+
+### Fixed
+- The 15-minute inactivity lock no longer restarts during the one-minute profile heartbeat, and its unlock password field now includes the standard show/hide control.
+- The changelog seed now preserves release deliveries and user acknowledgements when it is run repeatedly.
+
+### Deployment Note
+- No new database migration is required. Run the updated environment-managed changelog seed after deploying the application if the in-application release history is being maintained in that environment.
+
 ## [1.0.13] - 2026-09-23 - Targeted Release Notes and Multi-Image Evidence
 
 ### Added
@@ -20,6 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Required fields in the client satisfaction form now use consistent asterisk markers.
 - Data-driven dropdowns now support type-ahead search while short fixed-choice workflow fields retain their compact selectors.
 - Offline browsers now receive one persistent, dismissible connection notice; when connectivity returns, the notice changes to a restoration message and the notification badge/list refreshes automatically.
+- End Users now receive a separately curated, limited changelog with generalized release titles, while staff retain capability-matched operational notes.
+- Changelog entries are grouped once per category and consistently ordered as Feature, Enhancement, then Bug Fix.
 
 ### Fixed
 - The Target Capabilities selector now loads the complete capability catalog instead of depending on the current administrator's enabled capabilities.
@@ -29,13 +43,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Manual ticket assignment now creates an in-application notification for every assignee, including technician accounts authorized for Specialized Concerns.
 - Login connection failures no longer expose internal backend port details.
 - Historical release notes now use precise capability targets so End Users do not see staff-only correction, queue, attendance, Internal Note, or administration updates.
+- Specialized Concern eligibility is consistently applied during assignment, reassignment, correction, and support-type changes, while eligible filers can handle their own specialized requests and timeline labels distinguish manual from automatic assignment.
 
 ### Deployment Note
-- Apply the environment-managed `db-init/20260923-add-targeted-changelog-users.sql` migration and `db-init/20260924-seed-application-changelog-v1-users.sql` seed to the Users database, then apply `db-init/20260923-add-ticket-comment-multi-images-ticketing.sql` to the Ticketing database before deploying this release. The full-history seed intentionally clears existing changelog releases, notes, deliveries, and acknowledgement history before rebuilding them.
+- Apply the environment-managed `db-init/20260923-add-targeted-changelog-users.sql` and `db-init/20260924-add-end-user-changelog-audience-users.sql` migrations to the Users database before running `db-init/20260924-seed-application-changelog-v1-users.sql`; then apply `db-init/20260923-add-ticket-comment-multi-images-ticketing.sql` to the Ticketing database before deploying this release. The repeatable seed updates canonical release notes without deleting existing deliveries or acknowledgement history.
 
-## [1.0.12] - 2026-09-23 - Global Settings Save Reliability
+## [1.0.12] - 2026-09-23 - Ticket Workspace, Reporting, and Settings Reliability
+
+### Changed
+- Ticket search and filters use a compact responsive layout, pagination appears below the list, and search includes assignees and categories.
+- Ticket Reports print actual values with charts, tables, and fuller per-visual explanations; Issues reporting uses independent filters, category colors, a graph, and a complete issue list.
 
 ### Fixed
+- Ticket search counts and visible results remain synchronized.
+- Assignee correction preserves queue handoff behavior and eligible workflow-state restrictions.
+- Issue category updates persist correctly, and paused SLA calculations use business hours.
 - Global Settings saves no longer include the duty-roster-only OD Override property, preventing the `property odOverrideEnabled should not exist` validation error.
 - Global Settings API responses and update requests now use explicit field allowlists so unrelated configuration properties cannot leak into the form payload.
 

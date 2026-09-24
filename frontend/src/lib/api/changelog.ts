@@ -1,10 +1,12 @@
 import { apiClient } from './client';
 
-export type ChangelogCategory = 'functional' | 'enhancement' | 'bug_fix';
+export type ChangelogCategory = 'feature' | 'enhancement' | 'bug_fix';
+export type ChangelogAudience = 'capability' | 'end_user' | 'staff';
 
 export interface ReleaseNote {
   id: string;
   category: ChangelogCategory;
+  audience: ChangelogAudience;
   title: string;
   description: string;
   capabilityKeys: string[];
@@ -14,6 +16,7 @@ export interface AppRelease {
   id: string;
   version: string;
   title: string;
+  endUserTitle?: string | null;
   displayDays: number;
   status: 'draft' | 'published';
   publishedAt?: string;
@@ -24,6 +27,7 @@ export interface AppRelease {
 export interface ReleaseDraftInput {
   version: string;
   title: string;
+  endUserTitle?: string | null;
   displayDays: number;
   notes: Array<Omit<ReleaseNote, 'id'>>;
 }

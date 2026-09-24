@@ -368,8 +368,9 @@ export default function TicketDetailPage() {
     !!ticket &&
     ['assigned', 'in_progress'].includes(ticket.status);
   const canCorrectAssignee =
-    canCorrectTicketRecord &&
+    !!myCap?.isTicketRequesterCorrection &&
     !!ticket &&
+    ['assigned', 'in_progress', 'resolved'].includes(ticket.status) &&
     (ticket.ticketType === 'specialized_concerns' ||
       (Number(user?.id) !== Number(ticket.requesterId) &&
         Number(user?.id) !== Number(ticket.createdById)));
@@ -2595,8 +2596,8 @@ export default function TicketDetailPage() {
         <DialogTitle>Correct Assigned To</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2, mt: 0.5 }}>
-            This corrects the responsible staff record only. It does not change the ticket status,
-            SLA timer, resolution time, or assignment timestamp.
+            This corrects the responsible staff record only. For a resolved ticket, its status,
+            SLA details, resolution time, assignment timestamp, and staff queues remain unchanged.
           </Alert>
           <Autocomplete
             options={assigneeCorrectionOptions}
