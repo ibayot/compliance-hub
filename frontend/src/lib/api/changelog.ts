@@ -39,6 +39,9 @@ export const changelogApi = {
 
   adminList: async () => (await apiClient.get('/changelog/admin/releases')).data as AppRelease[],
 
+  adminCapabilities: async () =>
+    (await apiClient.get('/changelog/admin/capabilities')).data as string[],
+
   create: async (data: ReleaseDraftInput) =>
     (await apiClient.post('/changelog/admin/releases', data)).data as AppRelease,
 

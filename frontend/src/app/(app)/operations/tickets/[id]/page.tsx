@@ -29,7 +29,6 @@ import {
   Checkbox,
   Autocomplete,
   InputAdornment,
-  IconButton,
   Paper,
   ListItemButton,
 } from '@mui/material';
@@ -53,7 +52,7 @@ import {
   TicketIssueType,
   InternalNoteMentionCandidate,
 } from '@/app/api/references';
-import { AuthImage } from '@/components/AuthImage';
+import AuthenticatedImageGallery from '@/app/shared/AuthenticatedImageGallery';
 import TicketImageDropzone from '@/components/TicketImageDropzone';
 import {
   ArrowBack as BackIcon,
@@ -64,11 +63,8 @@ import {
   SentimentNeutral,
   SentimentDissatisfied,
   SentimentVeryDissatisfied,
-  NavigateBefore,
-  NavigateNext,
   EditCalendar as ResolutionTimeIcon,
 } from '@mui/icons-material';
-import { apiClient } from '@/lib/api/client';
 import {
   PRIORITY_COLOR,
   STATUS_COLOR,
@@ -308,12 +304,6 @@ export default function TicketDetailPage() {
   const [addProofNotes, setAddProofNotes] = useState('');
   const [addProofFiles, setAddProofFiles] = useState<File[]>([]);
   const [addingProof, setAddingProof] = useState(false);
-
-  // Proof photo blob URLs (authenticated loading) and lightbox modal
-  const [proofBlobUrls, setProofBlobUrls] = useState<Record<string, string>>({});
-  const [photoModalOpen, setPhotoModalOpen] = useState(false);
-  const [photoModalSrcs, setPhotoModalSrcs] = useState<string[]>([]);
-  const [photoModalIdx, setPhotoModalIdx] = useState(0);
 
   // Keep the SLA badge current without polling the server.
   useEffect(() => {
@@ -563,40 +553,6 @@ export default function TicketDetailPage() {
       setIssues([]);
     }
   }, [ticket?.categoryId]);
-
-  // Load proof photos as authenticated blob URLs
-  useEffect(() => {
-    if (!escalations.length) return;
-    const urlMap: Record<string, string> = {};
-    const loaders: Promise<void>[] = [];
-    escalations.forEach((e) => {
-      (e.proofFiles ?? []).forEach((filePath) => {
-        const parts = filePath.replace('escalation-proofs/', '').split('/');
-        const tid = parts[0] ?? ticketId;
-        const fname = encodeURIComponent(parts[1] ?? filePath);
-        const apiUrl = `/tickets/proof/${tid}/${fname}`;
-        loaders.push(
-          apiClient
-            .get(apiUrl, { responseType: 'blob' })
-            .then((r) => {
-              urlMap[apiUrl] = URL.createObjectURL(r.data);
-            })
-            .catch(() => {
-              urlMap[apiUrl] = 'error';
-            }),
-        );
-      });
-    });
-    Promise.all(loaders).then(() =>
-      setProofBlobUrls((prev) => {
-        Object.values(prev).forEach((u) => URL.revokeObjectURL(u));
-        return { ...urlMap };
-      }),
-    );
-    return () => {
-      Object.values(urlMap).forEach((u) => URL.revokeObjectURL(u));
-    };
-  }, [escalations, ticketId]);
 
   // Live updates – listen for SSE changes (QA #7: ensures user-side sees status changes)
   useSse(['TICKET_UPDATED'], async (payload) => {
@@ -1795,44 +1751,13 @@ export default function TicketDetailPage() {
                     <Typography variant="subtitle2" gutterBottom>
                       Attached Images
                     </Typography>
-                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                      {attachmentPaths.map((attachmentPath, index) => {
-                        const fileExt = attachmentPath.split('.').pop()?.toLowerCase();
-                        const isImage = [
-                          'jpg',
-                          'jpeg',
-                          'png',
-                          'gif',
-                          'webp',
-                          'heic',
-                          'heif',
-                        ].includes(fileExt ?? '');
-                        const url = `/tickets/comment-attachment/${ticket.id}/${attachmentPath.split('/').pop()}`;
-                        return isImage ? (
-                          <AuthImage
-                            key={attachmentPath}
-                            url={url}
-                            alt={`Initial attachment ${index + 1}`}
-                            style={{
-                              maxWidth: 240,
-                              maxHeight: 240,
-                              borderRadius: 4,
-                              border: '1px solid var(--mui-palette-divider)',
-                            }}
-                          />
-                        ) : (
-                          <Button
-                            key={attachmentPath}
-                            variant="outlined"
-                            size="small"
-                            href={url}
-                            target="_blank"
-                          >
-                            View Attachment {index + 1}
-                          </Button>
-                        );
-                      })}
-                    </Stack>
+                    <AuthenticatedImageGallery
+                      images={attachmentPaths.map((attachmentPath, index) => ({
+                        url: `/tickets/comment-attachment/${ticket.id}/${encodeURIComponent(attachmentPath.split('/').pop() || attachmentPath)}`,
+                        alt: `Initial attachment ${index + 1}`,
+                      }))}
+                      thumbnailStyle={{ width: 160, height: 120 }}
+                    />
                   </Box>
                 );
               })()}
@@ -2135,63 +2060,19 @@ export default function TicketDetailPage() {
                   </Typography>
                 )}
                 {e.proofFiles && e.proofFiles.length > 0 ? (
-                  <Box mt={1} display="flex" flexWrap="wrap" gap={1}>
-                    {e.proofFiles.map((filePath, idx) => {
-                      const parts = filePath.replace('escalation-proofs/', '').split('/');
-                      const tid = parts[0] ?? ticketId;
-                      const fname = encodeURIComponent(parts[1] ?? filePath);
-                      const apiUrl = `/tickets/proof/${tid}/${fname}`;
-                      const blobUrl = proofBlobUrls[apiUrl];
-                      const allBlobUrls = (e.proofFiles ?? [])
-                        .map((fp) => {
-                          const p = fp.replace('escalation-proofs/', '').split('/');
-                          const t2 = p[0] ?? ticketId;
-                          const f2 = encodeURIComponent(p[1] ?? fp);
-                          return proofBlobUrls[`/tickets/proof/${t2}/${f2}`];
-                        })
-                        .filter((u): u is string => Boolean(u) && u !== 'error');
-                      return (
-                        <Box
-                          key={idx}
-                          component="button"
-                          onClick={() => {
-                            if (!allBlobUrls.length) return;
-                            setPhotoModalSrcs(allBlobUrls);
-                            setPhotoModalIdx(idx < allBlobUrls.length ? idx : 0);
-                            setPhotoModalOpen(true);
-                          }}
-                          sx={{
-                            p: 0,
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            borderRadius: 1,
-                            cursor: 'pointer',
-                            background: 'transparent',
-                            overflow: 'hidden',
-                            width: 80,
-                            height: 80,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          {blobUrl && blobUrl !== 'error' ? (
-                            <Box
-                              component="img"
-                              src={blobUrl}
-                              alt={`Proof photo ${idx + 1}`}
-                              sx={{ width: 80, height: 80, objectFit: 'cover' }}
-                            />
-                          ) : blobUrl === 'error' ? (
-                            <Box sx={{ color: 'text.disabled', fontSize: 32, lineHeight: 1 }}>
-                              ✕
-                            </Box>
-                          ) : (
-                            <CircularProgress size={20} />
-                          )}
-                        </Box>
-                      );
-                    })}
+                  <Box mt={1}>
+                    <AuthenticatedImageGallery
+                      images={e.proofFiles.map((filePath, index) => {
+                        const parts = filePath.replace('escalation-proofs/', '').split('/');
+                        const tid = parts[0] ?? ticketId;
+                        const fname = encodeURIComponent(parts[1] ?? filePath);
+                        return {
+                          url: `/tickets/proof/${tid}/${fname}`,
+                          alt: `Escalation proof ${index + 1}`,
+                        };
+                      })}
+                      thumbnailStyle={{ width: 80, height: 80 }}
+                    />
                   </Box>
                 ) : (
                   <Typography variant="caption" color="text.secondary" mt={0.5} display="block">
@@ -2303,18 +2184,17 @@ export default function TicketDetailPage() {
                   <Typography variant="caption" color="text.secondary" display="block" mt={1}>
                     Proof image{correction.proofFiles.length === 1 ? '' : 's'}
                   </Typography>
-                  <Box mt={0.5} display="flex" flexWrap="wrap" gap={1}>
-                    {correction.proofFiles.map((filePath, proofIndex) => {
-                      const filename = filePath.split('/').pop() || filePath;
-                      return (
-                        <AuthImage
-                          key={`${correction.id}-${proofIndex}`}
-                          url={`/tickets/resolution-time-proof/${ticket.id}/${correction.id}/${encodeURIComponent(filename)}`}
-                          alt={`Resolution-time proof ${index + 1}.${proofIndex + 1}`}
-                          style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 4 }}
-                        />
-                      );
-                    })}
+                  <Box mt={0.5}>
+                    <AuthenticatedImageGallery
+                      images={correction.proofFiles.map((filePath, proofIndex) => {
+                        const filename = filePath.split('/').pop() || filePath;
+                        return {
+                          url: `/tickets/resolution-time-proof/${ticket.id}/${correction.id}/${encodeURIComponent(filename)}`,
+                          alt: `Resolution-time proof ${index + 1}.${proofIndex + 1}`,
+                        };
+                      })}
+                      thumbnailStyle={{ width: 120, height: 120 }}
+                    />
                   </Box>
                 </Box>
               ))}
@@ -2390,22 +2270,18 @@ export default function TicketDetailPage() {
                           >
                             {c.comment}
                           </Typography>
-                          {[
-                            ...(c.attachmentPaths ?? []),
-                            ...(c.attachmentPath ? [c.attachmentPath] : []),
-                          ].map((attachmentPath) => (
-                            <Box mt={1} key={attachmentPath}>
-                              <AuthImage
-                                url={`/tickets/comment-attachment/${c.ticketId}/${attachmentPath.split('/').pop()}`}
-                                alt="Comment Attachment"
-                                style={{
-                                  maxWidth: '100%',
-                                  maxHeight: '300px',
-                                  borderRadius: '4px',
-                                }}
-                              />
-                            </Box>
-                          ))}
+                          <Box mt={1}>
+                            <AuthenticatedImageGallery
+                              images={[
+                                ...(c.attachmentPaths ?? []),
+                                ...(c.attachmentPath ? [c.attachmentPath] : []),
+                              ].map((attachmentPath, attachmentIndex) => ({
+                                url: `/tickets/comment-attachment/${c.ticketId}/${encodeURIComponent(attachmentPath.split('/').pop() || attachmentPath)}`,
+                                alt: `Comment attachment ${attachmentIndex + 1}`,
+                              }))}
+                              thumbnailStyle={{ width: 160, height: 120 }}
+                            />
+                          </Box>
                         </Box>
                       }
                     />
@@ -3317,83 +3193,6 @@ export default function TicketDetailPage() {
             disabled={savingResolutionOverride}
           >
             {savingResolutionOverride ? 'Saving…' : 'Save Correction'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* ── Photo Lightbox Modal ── */}
-      <Dialog
-        open={photoModalOpen}
-        onClose={() => setPhotoModalOpen(false)}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{ sx: { bgcolor: 'black', borderRadius: 2, position: 'relative' } }}
-      >
-        <DialogContent
-          sx={{
-            p: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: 400,
-            position: 'relative',
-          }}
-        >
-          {photoModalSrcs.length > 0 && (
-            <Box
-              component="img"
-              src={photoModalSrcs[photoModalIdx]}
-              alt={`Proof photo ${photoModalIdx + 1}`}
-              sx={{
-                maxWidth: '100%',
-                maxHeight: '80vh',
-                objectFit: 'contain',
-                display: 'block',
-                mx: 'auto',
-              }}
-            />
-          )}
-          {photoModalSrcs.length > 1 && (
-            <>
-              <IconButton
-                onClick={() =>
-                  setPhotoModalIdx((i) => (i - 1 + photoModalSrcs.length) % photoModalSrcs.length)
-                }
-                sx={{
-                  position: 'absolute',
-                  left: 8,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: 'white',
-                  bgcolor: 'rgba(0,0,0,0.4)',
-                  '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
-                }}
-              >
-                <NavigateBefore />
-              </IconButton>
-              <IconButton
-                onClick={() => setPhotoModalIdx((i) => (i + 1) % photoModalSrcs.length)}
-                sx={{
-                  position: 'absolute',
-                  right: 8,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: 'white',
-                  bgcolor: 'rgba(0,0,0,0.4)',
-                  '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
-                }}
-              >
-                <NavigateNext />
-              </IconButton>
-            </>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ bgcolor: 'black', justifyContent: 'space-between', px: 2 }}>
-          <Typography variant="caption" color="grey.400">
-            {photoModalSrcs.length > 1 ? `${photoModalIdx + 1} / ${photoModalSrcs.length}` : ''}
-          </Typography>
-          <Button onClick={() => setPhotoModalOpen(false)} sx={{ color: 'grey.300' }}>
-            Close
           </Button>
         </DialogActions>
       </Dialog>

@@ -35,6 +35,12 @@ export class ChangelogController {
   list() {
     return this.s.adminList();
   }
+  @Get('admin/capabilities')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isChangelogManagement')
+  capabilities() {
+    return this.s.capabilityKeys();
+  }
   @Post('admin/releases')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isChangelogManagement')

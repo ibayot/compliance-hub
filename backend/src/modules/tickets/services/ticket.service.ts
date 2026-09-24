@@ -1498,18 +1498,20 @@ export class TicketService implements OnModuleInit {
       .catch(() => undefined);
 
     if (assignedToId) {
+      const assignmentEventType = dto.assignedToId != null ? 'manually_assigned' : 'auto_assigned';
       this.sendNotification(
-        [requesterId],
+        [assignedToId],
         persisted.id,
-        'ticket_assigned',
-        `Ticket ${persisted.ticketNumber} was assigned to ${assignedToName}.`,
+        assignmentEventType,
+        `Ticket ${persisted.ticketNumber} was ${dto.assignedToId != null ? 'assigned' : 'automatically assigned'} to you.`,
       ).catch(() => undefined);
-      if (dto.assignedToId == null) {
+
+      if (Number(requesterId) !== Number(assignedToId)) {
         this.sendNotification(
-          [assignedToId],
+          [requesterId],
           persisted.id,
-          'auto_assigned',
-          `Ticket ${persisted.ticketNumber} was automatically assigned to you.`,
+          'ticket_assigned',
+          `Ticket ${persisted.ticketNumber} was assigned to ${assignedToName}.`,
         ).catch(() => undefined);
       }
     }
@@ -3478,17 +3480,19 @@ export class TicketService implements OnModuleInit {
       previousAssignee: previousAssigneeId !== dto.assignedToId ? previousAssigneeId : undefined,
     }).catch(() => {});
 
-    // Technician manual assignments are email-only; direct assignments to
-    // other RICTMS staff also receive an in-app notification.
-    if (!this.roleCapSvc.isTechnician(technician.role as string)) {
-      this.sendNotification(
-        [dto.assignedToId],
-        assigned.id,
-        eventType,
-        `Ticket ${assigned.ticketNumber} has been ${eventType === 'manually_reassigned' ? 'reassigned' : 'assigned'} to you`,
-      ).catch(() => {});
-    }
-    if (assigned.requesterId && assigned.requesterId !== actorId) {
+    // Every directly assigned account receives an in-app notification,
+    // regardless of whether its role also carries a technician capability.
+    this.sendNotification(
+      [dto.assignedToId],
+      assigned.id,
+      eventType,
+      `Ticket ${assigned.ticketNumber} has been ${eventType === 'manually_reassigned' ? 'reassigned' : 'assigned'} to you.`,
+    ).catch(() => {});
+    if (
+      assigned.requesterId &&
+      assigned.requesterId !== actorId &&
+      Number(assigned.requesterId) !== Number(dto.assignedToId)
+    ) {
       this.sendNotification(
         [assigned.requesterId],
         assigned.id,
@@ -4173,9 +4177,7 @@ export class TicketService implements OnModuleInit {
     let open = 0,
       inProgress = 0,
       resolved = 0,
-      closed = 0,
-      frozen = 0,
-      duplicate = 0;
+      closed = 0;
     let needsSatisfaction = 0;
     const pendingSatisfactionTickets: Ticket[] = [];
 

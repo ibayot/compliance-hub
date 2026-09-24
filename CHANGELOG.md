@@ -7,24 +7,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [1.0.13] - 2026-09-23 - Targeted Release Notes and Multi-Image Evidence
 
 ### Added
-- Added capability-targeted in-application release notes with acknowledgement tracking, a login prompt, catch-up visibility, upper-right What’s New history, and protected changelog management.
+- Added capability-targeted in-application release notes with acknowledgement tracking, newest-first login prompts, catch-up visibility, upper-right What’s New history, and protected changelog management.
 - Ticket requests, public comments, and internal notes now accept up to five images through selection, drag-and-drop, or clipboard paste.
-- Unread notifications now add a numeric browser-tab badge, briefly animate the tab title, and use a richer multi-tone alert.
+- Unread notifications now add a larger numeric browser-tab badge, briefly alternate the application icon with a bell, animate the tab title, and use a richer multi-tone alert.
 
 ### Changed
 - Escalation and resolution-time proof uploads now consistently allow a maximum of five images.
+- Initial evidence, comment images, escalation proof, and resolution-time proof now use the same protected full-size gallery with previous/next navigation, image counters, and keyboard controls.
+- Pausing or freezing a ticket requires a reason that is retained in the ticket history.
 - Snackbars now suppress duplicates, use a shorter controlled queue, continue timing when the browser loses focus, and include a visible close button.
 - Ticket email application links now use HTTPS outside local development, and resolution emails distinguish Close Ticket from Rate Technician links.
 - Required fields in the client satisfaction form now use consistent asterisk markers.
 - Data-driven dropdowns now support type-ahead search while short fixed-choice workflow fields retain their compact selectors.
+- Offline browsers now receive one persistent, dismissible connection notice; when connectivity returns, the notice changes to a restoration message and the notification badge/list refreshes automatically.
 
 ### Fixed
+- The Target Capabilities selector now loads the complete capability catalog instead of depending on the current administrator's enabled capabilities.
 - Resolution email actions now tell the requester when a ticket was already rated and closed or was otherwise already closed.
 - Initial ticket evidence now displays every uploaded image instead of only the legacy single attachment.
 - Outbound email now consistently uses the saved SMTP Configuration From Name for both primary and fallback delivery paths.
+- Manual ticket assignment now creates an in-application notification for every assignee, including technician accounts authorized for Specialized Concerns.
+- Login connection failures no longer expose internal backend port details.
+- Historical release notes now use precise capability targets so End Users do not see staff-only correction, queue, attendance, Internal Note, or administration updates.
 
 ### Deployment Note
-- Apply the environment-managed `v1.0.13_users_changelog.sql` migration to the Users database and `v1.0.13_ticketing_multi_images.sql` to the Ticketing database before deploying this release.
+- Apply the environment-managed `db-init/20260923-add-targeted-changelog-users.sql` migration and `db-init/20260924-seed-application-changelog-v1-users.sql` seed to the Users database, then apply `db-init/20260923-add-ticket-comment-multi-images-ticketing.sql` to the Ticketing database before deploying this release. The full-history seed intentionally clears existing changelog releases, notes, deliveries, and acknowledgement history before rebuilding them.
 
 ## [1.0.12] - 2026-09-23 - Global Settings Save Reliability
 
@@ -232,6 +239,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Preserved single-unit assignment rules when changing a user role or unit.
 - Profile settings now load existing values and warn before a blank save removes stored data.
 - Forced password change now requires the required profile details, including one unit assignment.
+
+## [1.0.1] - 2026-09-02 - Ticketing and Attendance Refinements
+
+### Changed
+- Ticket evidence accepts JPG, JPEG, PNG, HEIC, HEIF, and WebP files and provides clearer feedback for unsupported files.
+- Attendance status screens refresh automatically and profile settings ask for confirmation before saving blank values.
+- Issue selection consistently uses the category relationship configured in Ticket Settings.
+
+### Fixed
+- Concurrent assignment safeguards prevent the same technician from receiving overlapping front-of-queue work through simultaneous requests.
+- Assigning an existing ticket preserves its established SLA deadline instead of silently restarting its target.
+- Ticket report assignee names resolve consistently from the user directory.
+
+## [1.0.0] - 2026-09-01 - Application and Ticketing Foundation
+
+### Added
+- Introduced the capability-aware Compliance Hub experience for document, compliance, review, reporting, user-management, and ticketing workflows.
+- Added ticket assignment locking and queue protections for safer concurrent operations.
+
+### Changed
+- Requester lookups tolerate temporarily unavailable directory details while preserving the ticket workflow.
+- Reopening resolved or closed tickets follows explicit authorization rules.
+- Assignment does not reset an SLA deadline that has already been established.
 
 ## [Unreleased] - 2026-08-20 - Duty Monitoring, Ticketing, SLA, Assignment and SSE Updates
 

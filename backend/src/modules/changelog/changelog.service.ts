@@ -5,7 +5,6 @@ import { User } from '../users/entities/user.entity';
 import { RoleCapability } from '../users/entities/role-capability.entity';
 import { AppRelease, AppReleaseDelivery, AppReleaseNote } from './changelog.entity';
 const CATS = ['functional', 'enhancement', 'bug_fix'];
-const SKIP = new Set(['id', 'roleValue', 'createdAt', 'updatedAt', 'label']);
 type Input = {
   version: string;
   title: string;
@@ -21,6 +20,13 @@ export class ChangelogService {
     @InjectRepository(User) private ur: Repository<User>,
     @InjectRepository(RoleCapability) private cr: Repository<RoleCapability>,
   ) {}
+
+  capabilityKeys(): string[] {
+    return Object.keys(this.cr.metadata.propertiesMap)
+      .filter((key) => key.startsWith('is'))
+      .sort((a, b) => a.localeCompare(b));
+  }
+
   private validate(x: Input) {
     if (
       !x.version?.trim() ||
@@ -33,9 +39,7 @@ export class ChangelogService {
       throw new BadRequestException(
         'Version, title, 1-365 display days, and at least one note are required.',
       );
-    const allowed = new Set(
-      Object.keys(this.cr.metadata.propertiesMap).filter((k) => !SKIP.has(k)),
-    );
+    const allowed = new Set(this.capabilityKeys());
     for (const n of x.notes) {
       if (
         !CATS.includes(n.category) ||
@@ -134,7 +138,15 @@ export class ChangelogService {
     return ds
       .filter((d) => !d.acknowledgedAt && (now <= d.release.automaticEndAt! || !d.firstDisplayedAt))
       .map((d) => this.view(d.release, c || undefined))
-      .filter((r) => r.notes.length);
+      .filter((r) => r.notes.length)
+      .sort((a, b) => {
+        const publishedDifference =
+          (b.publishedAt?.getTime() || 0) - (a.publishedAt?.getTime() || 0);
+        return (
+          publishedDifference ||
+          b.version.localeCompare(a.version, undefined, { numeric: true, sensitivity: 'base' })
+        );
+      });
   }
   async history(role: string) {
     const c = await this.cr.findOne({ where: { roleValue: role } });

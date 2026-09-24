@@ -209,30 +209,74 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     let animationTimer: ReturnType<typeof setInterval> | null = null;
     let animationStopTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const notificationFavicon = (pulse: boolean) => {
-      const badgeText = unreadCount > 99 ? '99+' : String(unreadCount);
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#1565c0"/><path d="M18 43h28l-4-6V27a10 10 0 0 0-20 0v10l-4 6Z" fill="white"/><circle cx="44" cy="17" r="${pulse ? 14 : 12}" fill="${pulse ? '#ff1744' : '#d32f2f'}"/><text x="44" y="21" text-anchor="middle" font-family="Arial,sans-serif" font-size="${badgeText.length > 2 ? 10 : 13}" font-weight="700" fill="white">${badgeText}</text></svg>`;
+    const badgeText = unreadCount > 99 ? '99+' : String(unreadCount);
+    const drawBadge = (context: CanvasRenderingContext2D) => {
+      context.beginPath();
+      context.arc(47, 17, 17, 0, Math.PI * 2);
+      context.fillStyle = '#d32f2f';
+      context.fill();
+      context.lineWidth = 2;
+      context.strokeStyle = '#ffffff';
+      context.stroke();
+      context.fillStyle = '#ffffff';
+      context.font = `700 ${badgeText.length > 2 ? 10 : 14}px Arial, sans-serif`;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(badgeText, 47, 17);
+    };
+    const bellFavicon = () => {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#1565c0"/><path d="M16 45h32l-5-7V27a11 11 0 0 0-22 0v11l-5 7Z" fill="white"/><path d="M27 49h10a5 5 0 0 1-10 0Z" fill="white"/><circle cx="47" cy="17" r="17" fill="#d32f2f" stroke="white" stroke-width="2"/><text x="47" y="18" dominant-baseline="middle" text-anchor="middle" font-family="Arial,sans-serif" font-size="${badgeText.length > 2 ? 10 : 14}" font-weight="700" fill="white">${badgeText}</text></svg>`;
       return `data:image/svg+xml,${encodeURIComponent(svg)}`;
     };
+    const createAppBadgeFavicon = () =>
+      new Promise<string>((resolve) => {
+        if (!originalFavicon) {
+          resolve(bellFavicon());
+          return;
+        }
+        const image = new Image();
+        image.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 64;
+          canvas.height = 64;
+          const context = canvas.getContext('2d');
+          if (!context) {
+            resolve(originalFavicon);
+            return;
+          }
+          context.drawImage(image, 0, 0, 64, 64);
+          drawBadge(context);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        image.onerror = () => resolve(originalFavicon);
+        image.src = originalFavicon;
+      });
 
-    const renderAttention = (pulse: boolean) => {
+    let appBadgeFavicon = originalFavicon || bellFavicon();
+    let cancelled = false;
+    const renderAttention = (showBell: boolean) => {
       const countLabel = unreadCount > 99 ? '99+' : unreadCount;
-      document.title = `${pulse ? '🔔 ' : ''}(${countLabel}) ${baseTitle}`;
-      favicon.href = notificationFavicon(pulse);
+      document.title = `${showBell ? '🔔 ' : ''}(${countLabel}) ${baseTitle}`;
+      favicon.href = showBell ? bellFavicon() : appBadgeFavicon;
     };
 
     if (unreadCount > 0) {
-      let pulse = true;
-      renderAttention(pulse);
-      animationTimer = setInterval(() => {
-        pulse = !pulse;
-        renderAttention(pulse);
-      }, 700);
-      animationStopTimer = setTimeout(() => {
-        if (animationTimer) clearInterval(animationTimer);
-        animationTimer = null;
-        renderAttention(false);
-      }, 10000);
+      renderAttention(true);
+      void createAppBadgeFavicon().then((generatedFavicon) => {
+        if (cancelled) return;
+        appBadgeFavicon = generatedFavicon;
+        let showBell = false;
+        renderAttention(showBell);
+        animationTimer = setInterval(() => {
+          showBell = !showBell;
+          renderAttention(showBell);
+        }, 700);
+        animationStopTimer = setTimeout(() => {
+          if (animationTimer) clearInterval(animationTimer);
+          animationTimer = null;
+          renderAttention(false);
+        }, 10000);
+      });
     } else {
       document.title = baseTitle;
       if (faviconCreatedRef.current && !originalFavicon) {
@@ -244,6 +288,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     }
 
     return () => {
+      cancelled = true;
       if (animationTimer) clearInterval(animationTimer);
       if (animationStopTimer) clearTimeout(animationStopTimer);
     };
@@ -285,7 +330,11 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         setNotifError(null);
         return summary;
       } catch {
-        setNotifError('Notifications could not be loaded. Select here to retry.');
+        setNotifError(
+          navigator.onLine
+            ? 'Notifications could not be loaded. Select here to retry.'
+            : 'You are offline. Notifications will refresh when your connection returns.',
+        );
         return null;
       }
     },
@@ -310,6 +359,25 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user, fetchNotificationSummary]);
+
+  // A reconnect may have missed SSE events while the browser was offline.
+  // Refresh the authoritative summary immediately so the badge and list catch up.
+  useEffect(() => {
+    const handleOffline = () => {
+      setNotifError('You are offline. Notifications will refresh when your connection returns.');
+    };
+    const handleOnline = () => {
+      void fetchNotificationSummary(true);
+    };
+
+    if (!navigator.onLine) handleOffline();
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [fetchNotificationSummary]);
 
   // Live updates – listen for SSE changes
   useSse(['NOTIFICATION_CREATED'], () => {

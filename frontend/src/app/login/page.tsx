@@ -101,7 +101,9 @@ export default function LoginPage() {
       const msg =
         serverMessage ||
         (err?.message === 'Network Error' || !err?.response
-          ? 'Cannot connect to server. Please make sure backend API is running on port 4000.'
+          ? navigator.onLine
+            ? 'Compliance Hub is temporarily unreachable. Please try again shortly.'
+            : 'You are offline. Check your internet connection and try again.'
           : 'Invalid email or password.');
       enqueueSnackbar(msg, { variant: 'error' });
     } finally {

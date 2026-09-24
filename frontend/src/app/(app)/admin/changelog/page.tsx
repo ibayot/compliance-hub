@@ -26,7 +26,6 @@ import {
   ReleaseDraftInput,
   changelogApi,
 } from '@/lib/api/changelog';
-import { usersApi } from '@/lib/api/users';
 import { SearchableMultiSelect } from '@/components/SearchableSelect';
 
 type DraftNote = ReleaseDraftInput['notes'][number];
@@ -81,17 +80,11 @@ export default function ChangelogManagementPage() {
 
   useEffect(() => {
     void loadReleases();
-    usersApi
-      .getMyCapabilities()
+    changelogApi
+      .adminCapabilities()
       .then((capabilities) =>
         setCapabilityKeys(
-          Object.keys(capabilities || {})
-            .filter(
-              (key) =>
-                key.startsWith('is') &&
-                typeof (capabilities as unknown as Record<string, unknown>)[key] === 'boolean',
-            )
-            .sort((a, b) => capabilityLabel(a).localeCompare(capabilityLabel(b))),
+          capabilities.sort((a, b) => capabilityLabel(a).localeCompare(capabilityLabel(b))),
         ),
       )
       .catch(() => setCapabilityKeys([]));
