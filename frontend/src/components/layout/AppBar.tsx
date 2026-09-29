@@ -755,7 +755,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               <NewReleasesIcon sx={{ mr: 1 }} />
               What&apos;s New
             </MenuItem>
-            {myCap?.isChangelogManagement && (
+            {Boolean(myCap?.isChangelogManagement) && (
               <MenuItem
                 onClick={() => {
                   router.push('/admin/changelog');

@@ -894,7 +894,8 @@ export class TicketService implements OnModuleInit {
     return events
       .filter(
         (e) =>
-          this.canViewInternalNotes(ticket, viewerRole, viewerId) ||
+          ((ticket as Ticket & { canViewInternalNotes?: boolean }).canViewInternalNotes ??
+            this.canViewInternalNotes(ticket, viewerRole, viewerId)) ||
           !(e.eventType === 'comment_added' && e.meta && JSON.parse(e.meta)?.isInternal),
       )
       .map((e) => ({
@@ -1022,10 +1023,37 @@ export class TicketService implements OnModuleInit {
     throw new ForbiddenException('You do not have access to this ticket.');
   }
 
-  private canViewInternalNotes(ticket: Ticket, viewerRole?: UserRole, viewerId?: number): boolean {
+  private async getLatestActiveEscalation(ticketId: string): Promise<TicketEscalation | null> {
+    // Some isolated service tests construct the prototype directly; Nest always
+    // injects this repository in the running application.
+    if (!this.escalationRepo) return null;
+    const latestEscalation = await this.escalationRepo.findOne({
+      where: { ticketId },
+      order: { createdAt: 'DESC' },
+    });
+    return latestEscalation &&
+      [EscalationStatus.PENDING, EscalationStatus.ACCEPTED].includes(latestEscalation.status)
+      ? latestEscalation
+      : null;
+  }
+
+  private canViewInternalNotes(
+    ticket: Ticket,
+    viewerRole?: UserRole,
+    viewerId?: number,
+    activeEscalation?: TicketEscalation | null,
+  ): boolean {
     if (!viewerId || !viewerRole || viewerRole === UserRole.USER) return false;
     if (this.roleCapSvc.isTicketSettingsFocal(viewerRole as string)) return true;
     if (Number(ticket.assignedToId) === Number(viewerId)) return true;
+    if (
+      activeEscalation &&
+      [activeEscalation.escalatedById, activeEscalation.escalatedToId].some(
+        (participantId) => Number(participantId) === Number(viewerId),
+      )
+    ) {
+      return true;
+    }
     return Boolean(
       ticket.createdById &&
       Number(ticket.createdById) === Number(viewerId) &&
@@ -1857,7 +1885,16 @@ export class TicketService implements OnModuleInit {
       ticket.hasUnreadTechnician = false;
     }
 
-    const canViewInternalNotes = this.canViewInternalNotes(ticket, viewerRole, viewerId);
+    let canViewInternalNotes = this.canViewInternalNotes(ticket, viewerRole, viewerId);
+    if (!canViewInternalNotes && viewerId && viewerRole && viewerRole !== UserRole.USER) {
+      const activeEscalation = await this.getLatestActiveEscalation(ticket.id);
+      canViewInternalNotes = this.canViewInternalNotes(
+        ticket,
+        viewerRole,
+        viewerId,
+        activeEscalation,
+      );
+    }
     if (!canViewInternalNotes && ticket.comments) {
       (ticket as any).comments = ticket.comments.filter((c: any) => !c.isInternal);
     }
@@ -3654,7 +3691,8 @@ export class TicketService implements OnModuleInit {
     if (!ticket) throw new NotFoundException('Ticket not found');
     await this.enrichTicketsWithUsers([ticket]);
     await this.assertTicketReadAccess(ticket, actorId, actorRole);
-    if (!this.canViewInternalNotes(ticket, actorRole, actorId)) {
+    const activeEscalation = await this.getLatestActiveEscalation(ticket.id);
+    if (!this.canViewInternalNotes(ticket, actorRole, actorId, activeEscalation)) {
       throw new ForbiddenException('You cannot view internal notes on this ticket.');
     }
 
@@ -3665,7 +3703,12 @@ export class TicketService implements OnModuleInit {
           user.active !== false &&
           user.role !== UserRole.USER &&
           Number(user.id) !== Number(actorId) &&
-          this.canViewInternalNotes(ticket, user.role as UserRole, Number(user.id)),
+          this.canViewInternalNotes(
+            ticket,
+            user.role as UserRole,
+            Number(user.id),
+            activeEscalation,
+          ),
       )
       .map((user) => ({
         id: Number(user.id),
@@ -3686,7 +3729,10 @@ export class TicketService implements OnModuleInit {
     const ticket = await this.getTicketById(ticketId, actorRole, actorId);
 
     const isInternal = Boolean(dto.isInternal);
-    if (isInternal && !this.canViewInternalNotes(ticket, actorRole, actorId)) {
+    const actorCanViewInternalNotes =
+      (ticket as Ticket & { canViewInternalNotes?: boolean }).canViewInternalNotes ??
+      this.canViewInternalNotes(ticket, actorRole, actorId);
+    if (isInternal && !actorCanViewInternalNotes) {
       throw new ForbiddenException('You cannot add an internal note on this ticket.');
     }
 
@@ -5771,7 +5817,11 @@ export class TicketService implements OnModuleInit {
     if (!referencedComment) {
       throw new NotFoundException('Comment attachment not found');
     }
-    if (referencedComment.isInternal && !this.canViewInternalNotes(ticket, viewerRole, viewerId)) {
+    if (
+      referencedComment.isInternal &&
+      !((ticket as Ticket & { canViewInternalNotes?: boolean }).canViewInternalNotes ??
+        this.canViewInternalNotes(ticket, viewerRole, viewerId))
+    ) {
       throw new ForbiddenException('You cannot view this internal note attachment.');
     }
 

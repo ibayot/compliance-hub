@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.16] - 2026-09-29 - Period-Aware Duty Handoffs
+
+### Added
+- Duty coverage and Duty Log records now distinguish AM, PM, and Whole Day periods.
+- Duty Administrators can finish active meeting duties from the overview; completion immediately records the rendered duty and presents the next unfinished period for manual activation.
+
+### Changed
+- The same staff member may render multiple duties on the same date when their periods do not overlap, and authorized administrators may create multiple manual Duty Log entries without roster, exception, or one-duty-per-day restrictions.
+- Duty Monitoring loads only the active tab, batches roster history, attendance, and active-ticket lookups, and refreshes saved records without rerunning every tab query.
+
+### Fixed
+- Ending or replacing active coverage no longer loses the completed staff member's Duty Log history.
+- Each staff member in a same-day OD handoff is recorded once even when the daily coverage row is reused, while retries remain idempotent.
+- Completed immediate relievers are removed from ticket-assignment blocking, and present relievers whose duty remains open at clock-out are still captured by end-of-day finalization.
+- Duty coverage cannot be activated from an already active or completed state, and future meeting duties cannot be completed early.
+- Users without Changelog Management no longer see a stray `0` under What's New.
+- Junior technicians can now load the configured focal choices required to escalate their eligible tickets. The receiving focal and originating technician can also find and `@` mention each other in Internal Notes for the active escalation, while unrelated staff and regular users remain excluded.
+
+### Deployment Note
+- Apply the environment-managed `db-init/20260924-add-duty-periods-ticketing.sql` migration to the Ticketing database before deploying this release. Run the updated application changelog seed in the Users database if in-application release history is maintained in that environment.
+
 ## [1.0.15] - 2026-09-24 - Changelog Service Startup Reliability
 
 ### Fixed

@@ -23,6 +23,7 @@ import {
   DutyExceptionType,
   DutyMeetingReliever,
   DutyMeetingReservation,
+  DutyPeriod,
   DutyReservationStatus,
   DutyRosterMembership,
   DutyType,
@@ -90,12 +91,13 @@ export class DutyService {
     return this.relieverRepo.find({ where: { reservationId: In(reservationIds) } });
   }
 
-  private async activeMeetingRelieversForDate(date: string): Promise<{
+  private async activeMeetingRelieversForDate(date: string, includeCompleted = false): Promise<{
     reservations: DutyMeetingReservation[];
     relievers: DutyMeetingReliever[];
   }> {
     const reservations = (await this.reservationRepo.find({ where: { meetingDate: date } }))
-      .filter((reservation) => reservation.status !== DutyReservationStatus.CANCELLED);
+      .filter((reservation) => reservation.status !== DutyReservationStatus.CANCELLED)
+      .filter((reservation) => includeCompleted || reservation.status !== DutyReservationStatus.COMPLETED);
     const relievers = await this.relieversForReservationIds(reservations.map((reservation) => reservation.id));
     return { reservations, relievers };
   }
@@ -121,11 +123,21 @@ export class DutyService {
 
   /** Duty selection follows attendance, office start, and the configured shift end. */
   private async isAttendanceEligible(userId: number, date: string): Promise<boolean> {
-    const attendance = await this.attendanceRepo.findOne({ where: { userId, date } });
+    const [attendance, config] = await Promise.all([
+      this.attendanceRepo.findOne({ where: { userId, date } }),
+      this.configRepo.findOne({ where: { id: 1 } }),
+    ]);
+    return this.isAttendanceRecordEligible(attendance, config, date);
+  }
+
+  private isAttendanceRecordEligible(
+    attendance: TechAttendance | null | undefined,
+    config: TicketingConfig | null,
+    date: string,
+  ): boolean {
     if (!attendance || attendance.status !== AttendanceStatus.PRESENT) return false;
     if (date !== this.today()) return true;
 
-    const config = await this.configRepo.findOne({ where: { id: 1 } });
     const now = this.currentTimeMinutes();
     const isCww = config?.scheduleMode === 'CWW';
     const officeStart = this.timeToMinutes(isCww ? config?.cwwClockinStart : config?.officeClockin);
@@ -165,6 +177,29 @@ export class DutyService {
     if (start < 12 * 60 && end <= 12 * 60) return 'AM';
     if (start >= 12 * 60 && end <= 24 * 60) return 'PM';
     throw new BadRequestException('A meeting cannot cross AM and PM. Use separate AM and PM reservations.');
+  }
+
+  private reservationPeriod(reservation: Pick<DutyMeetingReservation, 'startTime' | 'endTime'>): DutyPeriod {
+    return this.meetingSlot(reservation.startTime, reservation.endTime) as DutyPeriod;
+  }
+
+  private periodsOverlap(left: DutyPeriod, right: DutyPeriod): boolean {
+    return left === DutyPeriod.WHOLE_DAY || right === DutyPeriod.WHOLE_DAY || left === right;
+  }
+
+  private selectedReservation(
+    reservations: DutyMeetingReservation[],
+    dutyType: DutyType,
+  ): DutyMeetingReservation | null {
+    const rank = (reservation: DutyMeetingReservation) => {
+      const period = this.reservationPeriod(reservation);
+      if (period === DutyPeriod.WHOLE_DAY) return 0;
+      return period === DutyPeriod.AM ? 1 : 2;
+    };
+    return reservations
+      .filter((reservation) => reservation.venueType === dutyType)
+      .filter((reservation) => ![DutyReservationStatus.CANCELLED, DutyReservationStatus.COMPLETED].includes(reservation.status))
+      .sort((a, b) => rank(a) - rank(b) || String(a.startTime || '').localeCompare(String(b.startTime || '')))[0] ?? null;
   }
 
   private async isCurrentOd(userId: number, date = this.today()): Promise<boolean> {
@@ -229,7 +264,7 @@ export class DutyService {
    * legacy per-duty rows, so OD is treated as the canonical list until the
    * shared-roster migration is applied.
    */
-  private async sharedRosterMembers(): Promise<DutyRosterMembership[]> {
+  private async sharedRosterMembers(providedUsers?: Map<number, UserStub>): Promise<DutyRosterMembership[]> {
     const rows = await this.rosterRepo.find({
       where: { isActive: true },
       order: { sortOrder: 'ASC', createdAt: 'ASC' },
@@ -238,7 +273,7 @@ export class DutyService {
     const source = canonicalRows.length
       ? canonicalRows
       : [...rows].sort((a, b) => DUTY_PRIORITY.indexOf(a.dutyType) - DUTY_PRIORITY.indexOf(b.dutyType) || a.sortOrder - b.sortOrder);
-    const users = await this.usersById();
+    const users = providedUsers ?? await this.usersById();
     const unique = new Map<number, DutyRosterMembership>();
     for (const row of source) {
       if (users.has(row.userId) && !unique.has(row.userId)) unique.set(row.userId, row);
@@ -246,13 +281,12 @@ export class DutyService {
     return [...unique.values()].sort((a, b) => a.sortOrder - b.sortOrder || a.userId - b.userId);
   }
 
-  async getRotation(date = this.today(), type?: DutyType) {
-    const [sharedRoster, odOverrideEnabled, meetingOverrides] = await Promise.all([
-      this.sharedRosterMembers(),
+  async getRotation(date = this.today(), type?: DutyType, providedUsers?: Map<number, UserStub>) {
+    const users = providedUsers ?? await this.usersById();
+    const [sharedRoster, odOverrideEnabled] = await Promise.all([
+      this.sharedRosterMembers(users),
       this.isOdOverrideEnabled(),
-      this.activeMeetingRelieversForDate(date),
     ]);
-    const managementOverrideUsers = new Set(meetingOverrides.relievers.map((reliever) => reliever.userId));
     const roster = (type ? [type] : DUTY_PRIORITY).flatMap((dutyType) =>
       sharedRoster
         .filter((member) => !odOverrideEnabled || (dutyType === DutyType.OD ? member.odOnly : !member.odOnly))
@@ -260,15 +294,23 @@ export class DutyService {
     );
     const exceptions = await this.exceptionRepo.find({ where: { exceptionDate: date } });
     const excluded = new Set(exceptions.map((e) => e.userId));
-    const users = await this.usersById();
-    const rows = await Promise.all(roster.map(async (member) => {
-      const last = await this.assignmentRepo
-        .createQueryBuilder('d')
-        .where('d.user_id = :userId', { userId: member.userId })
-        .andWhere('d.duty_type = :dutyType', { dutyType: member.dutyType })
+    const rosterUserIds = [...new Set(roster.map((member) => member.userId))];
+    const priorAssignments = rosterUserIds.length > 0
+      ? await this.assignmentRepo.createQueryBuilder('d')
+        .where('d.user_id IN (:...userIds)', { userIds: rosterUserIds })
+        .andWhere('d.duty_type IN (:...dutyTypes)', { dutyTypes: type ? [type] : DUTY_PRIORITY })
         .andWhere('d.duty_date <= :date', { date })
         .orderBy('d.duty_date', 'DESC')
-        .getOne();
+        .addOrderBy('d.created_at', 'DESC')
+        .getMany()
+      : [];
+    const latestAssignment = new Map<string, DutyAssignment>();
+    for (const assignment of priorAssignments) {
+      const key = `${assignment.userId}:${assignment.dutyType}`;
+      if (!latestAssignment.has(key)) latestAssignment.set(key, assignment);
+    }
+    const rows = roster.map((member) => {
+      const last = latestAssignment.get(`${member.userId}:${member.dutyType}`);
       const daysSince = last
         ? Math.floor((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${last.dutyDate}T00:00:00Z`)) / 86400000)
         : 9999;
@@ -278,58 +320,90 @@ export class DutyService {
         name: user ? formatPersonName(user) : `User #${member.userId}`,
         lastAssigned: last?.dutyDate ?? null,
         daysSince,
-        excluded: managementOverrideUsers.has(member.userId) || exceptions.some((exception) =>
+        excluded: exceptions.some((exception) =>
           exception.userId === member.userId
           && (!exception.dutyType || exception.dutyType === member.dutyType),
         ),
         next: false,
       };
-    }));
-    const selectedForToday = new Set<number>();
-    // OD is first because it is the daily duty; a person already selected there
-    // cannot become NEXT for a venue duty on the same day.
+    });
     for (const dutyType of type ? [type] : DUTY_PRIORITY) {
       const eligible = rows
-        .filter((r) => r.dutyType === dutyType && !r.excluded && !selectedForToday.has(r.userId))
+        .filter((r) => r.dutyType === dutyType && !r.excluded)
         .sort((a, b) => b.daysSince - a.daysSince || a.sortOrder - b.sortOrder || a.userId - b.userId);
-      if (eligible[0]) {
-        eligible[0].next = true;
-        selectedForToday.add(eligible[0].userId);
-      }
+      if (eligible[0]) eligible[0].next = true;
     }
     return rows.sort((a, b) => DUTY_PRIORITY.indexOf(a.dutyType) - DUTY_PRIORITY.indexOf(b.dutyType) || Number(b.next) - Number(a.next) || b.daysSince - a.daysSince || a.sortOrder - b.sortOrder);
   }
 
   async getDashboard(date = this.today()) {
-    const [rotation, coverages, users, meetingOverrides] = await Promise.all([
-      this.getRotation(date),
+    const users = await this.usersById();
+    const [rotation, coverages, meetingOverrides, attendanceRows, config] = await Promise.all([
+      this.getRotation(date, undefined, users),
       this.coverageRepo.find({ where: { dutyDate: date } }),
-      this.usersById(),
       this.activeMeetingRelieversForDate(date),
+      this.attendanceRepo.find({ where: { date } }),
+      this.configRepo.findOne({ where: { id: 1 } }),
     ]);
-    const reservationById = new Map(meetingOverrides.reservations.map((reservation) => [reservation.id, reservation]));
-    const overridesByType = new Map<DutyType, DutyMeetingReliever[]>();
-    for (const reliever of meetingOverrides.relievers) {
-      const dutyType = reservationById.get(reliever.reservationId)?.venueType;
-      if (!dutyType) continue;
-      const rows = overridesByType.get(dutyType) ?? [];
-      rows.push(reliever);
-      overridesByType.set(dutyType, rows);
-    }
-    const selectedUsers = new Set<number>();
+    const relevantUserIds = [...new Set([
+      ...rotation.map((row) => row.userId),
+      ...coverages.flatMap((row) => [row.primaryUserId, row.assignedUserId]).filter((id): id is number => Boolean(id)),
+      ...meetingOverrides.relievers.map((row) => row.userId),
+    ])];
+    const ticketCounts = relevantUserIds.length > 0
+      ? await this.ticketRepo.createQueryBuilder('t')
+        .select('t.assigned_to_id', 'userId')
+        .addSelect('COUNT(*)', 'count')
+        .where('t.assigned_to_id IN (:...ids)', { ids: relevantUserIds })
+        .andWhere('t.status IN (:...statuses)', { statuses: ACTIVE_TICKET_STATUSES })
+        .groupBy('t.assigned_to_id')
+        .getRawMany()
+      : [];
+    const ticketCountByUser = new Map(ticketCounts.map((row) => [Number(row.userId), Number(row.count)]));
+    const attendanceByUser = new Map(attendanceRows.map((row) => [row.userId, row]));
+    const isEligible = (userId: number) => this.isAttendanceRecordEligible(attendanceByUser.get(userId), config, date);
+    const selectedUsers: Array<{ userId: number; period: DutyPeriod }> = [];
+    const alreadySelected = (userId: number, period: DutyPeriod) => selectedUsers
+      .some((entry) => entry.userId === userId && this.periodsOverlap(entry.period, period));
+    const markSelected = (userId: number, period: DutyPeriod) => selectedUsers.push({ userId, period });
     const cards = [];
     for (const dutyType of DUTY_PRIORITY) {
-      const overrideRows = dutyType === DutyType.OD ? [] : (overridesByType.get(dutyType) ?? []);
+      const reservation = dutyType === DutyType.OD
+        ? null
+        : this.selectedReservation(meetingOverrides.reservations, dutyType);
+      if (dutyType !== DutyType.OD && !reservation) {
+        cards.push({
+          dutyType,
+          dutyPeriod: null,
+          reservationId: null,
+          coverageId: null,
+          userId: null,
+          name: 'No scheduled duty',
+          daysSince: null,
+          isOnDuty: false,
+          isNext: false,
+          hasTechnician: false,
+          isSubstitute: false,
+          coverageStatus: null,
+          requiresReassignment: false,
+          activeTicketCount: 0,
+        });
+        continue;
+      }
+      const dutyPeriod = dutyType === DutyType.OD
+        ? DutyPeriod.WHOLE_DAY
+        : this.reservationPeriod(reservation!);
+      const overrideRows = reservation
+        ? meetingOverrides.relievers.filter((row) => row.reservationId === reservation.id)
+        : [];
       if (overrideRows.length > 0) {
         const uniqueUserIds = [...new Set(overrideRows.map((row) => row.userId))];
-        uniqueUserIds.forEach((userId) => selectedUsers.add(userId));
-        const readiness = await Promise.all(uniqueUserIds.map(async (userId) => ({
+        uniqueUserIds.forEach((userId) => markSelected(userId, dutyPeriod));
+        const readiness = uniqueUserIds.map((userId) => ({
           userId,
-          attendanceEligible: await this.isAttendanceEligible(userId, date),
-          activeTicketCount: await this.ticketRepo.count({
-            where: { assignedToId: userId, status: In(ACTIVE_TICKET_STATUSES) },
-          }),
-        })));
+          attendanceEligible: isEligible(userId),
+          activeTicketCount: ticketCountByUser.get(userId) ?? 0,
+        }));
         const unavailableCount = readiness.filter((row) => !row.attendanceEligible).length;
         const activeTicketCount = readiness.reduce((total, row) => total + row.activeTicketCount, 0);
         const managementOverrideIssue = unavailableCount > 0
@@ -343,6 +417,8 @@ export class DutyService {
         });
         cards.push({
           dutyType,
+          dutyPeriod,
+          reservationId: reservation?.id ?? null,
           coverageId: null,
           userId: uniqueUserIds[0] ?? null,
           userIds: uniqueUserIds,
@@ -361,41 +437,48 @@ export class DutyService {
         });
         continue;
       }
-      const coverage = coverages.find((c) => c.dutyType === dutyType && c.status !== DutyCoverageStatus.CANCELLED);
+      const coverage = coverages.find((c) =>
+        c.dutyType === dutyType
+        && c.dutyPeriod === dutyPeriod
+        && c.status !== DutyCoverageStatus.CANCELLED,
+      );
       const assigned = coverage?.assignedUserId ? users.get(coverage.assignedUserId) : null;
       const assignedRotation = coverage?.assignedUserId ? rotation.find((r) => r.userId === coverage.assignedUserId && r.dutyType === dutyType) : null;
       const assignedIsEligible = Boolean(
         assigned
         && coverage?.status === DutyCoverageStatus.ACTIVE
-        && !selectedUsers.has(coverage.assignedUserId!)
-        && await this.isActiveCoverageAttendanceEligible(coverage),
+        && !alreadySelected(coverage.assignedUserId!, dutyPeriod)
+        && (
+          (coverage.attendanceOverridden && coverage.previousAttendanceStatus === AttendanceStatus.PRESENT)
+          || isEligible(coverage.assignedUserId!)
+        ),
       );
       let displayCoverage: DutyDailyCoverage | null = coverage ?? null;
       let interventionCandidate = null;
       if (coverage?.status === DutyCoverageStatus.ACTIVE && !assignedIsEligible) displayCoverage = null;
       if (coverage?.status === DutyCoverageStatus.INTERVENTION_REQUIRED) {
         const candidates = rotation
-          .filter((r) => r.dutyType === dutyType && !r.excluded && !selectedUsers.has(r.userId))
+          .filter((r) => r.dutyType === dutyType && !r.excluded && !alreadySelected(r.userId, dutyPeriod))
           .sort((a, b) => b.daysSince - a.daysSince || a.sortOrder - b.sortOrder || a.userId - b.userId);
         for (const candidate of candidates) {
-          if (await this.isAttendanceEligible(candidate.userId, date)) {
+          if (isEligible(candidate.userId)) {
             interventionCandidate = candidate;
             break;
           }
         }
-        if (interventionCandidate) selectedUsers.add(interventionCandidate.userId);
+        if (interventionCandidate) markSelected(interventionCandidate.userId, dutyPeriod);
         if (!interventionCandidate) displayCoverage = null;
       }
-      if (assignedIsEligible) selectedUsers.add(coverage!.assignedUserId!);
+      if (assignedIsEligible) markSelected(coverage!.assignedUserId!, dutyPeriod);
       let next = null;
       if (!displayCoverage) {
         const candidates = rotation
-          .filter((r) => r.dutyType === dutyType && !r.excluded && !selectedUsers.has(r.userId))
+          .filter((r) => r.dutyType === dutyType && !r.excluded && !alreadySelected(r.userId, dutyPeriod))
           .sort((a, b) => b.daysSince - a.daysSince || a.sortOrder - b.sortOrder || a.userId - b.userId);
         for (const candidate of candidates) {
-          if (await this.isAttendanceEligible(candidate.userId, date)) { next = candidate; break; }
+          if (isEligible(candidate.userId)) { next = candidate; break; }
         }
-        if (next) selectedUsers.add(next.userId);
+        if (next) markSelected(next.userId, dutyPeriod);
       }
       const isOnDuty = assignedIsEligible;
       const cardUserId = displayCoverage?.status === DutyCoverageStatus.INTERVENTION_REQUIRED
@@ -404,13 +487,11 @@ export class DutyService {
       const activeTicketUserId = displayCoverage?.status === DutyCoverageStatus.INTERVENTION_REQUIRED
         ? cardUserId
         : assignedIsEligible ? coverage?.assignedUserId ?? null : null;
-      const activeTicketCount = activeTicketUserId
-        ? await this.ticketRepo.count({
-          where: { assignedToId: activeTicketUserId, status: In(ACTIVE_TICKET_STATUSES) },
-        })
-        : 0;
+      const activeTicketCount = activeTicketUserId ? ticketCountByUser.get(activeTicketUserId) ?? 0 : 0;
       cards.push({
         dutyType,
+        dutyPeriod,
+        reservationId: reservation?.id ?? null,
         coverageId: displayCoverage?.id ?? null,
         userId: cardUserId,
         name: isOnDuty ? formatPersonName(assigned!) : interventionCandidate?.name ?? next?.name ?? 'No Eligible Technicians',
@@ -481,16 +562,20 @@ export class DutyService {
     const dutyDate = String(body.dutyDate ?? existing?.dutyDate ?? '');
     const userId = Number(body.userId ?? existing?.userId);
     const dutyType = this.assertDutyType(String(body.dutyType ?? existing?.dutyType));
-    const sameDay = await this.assignmentRepo.find({ where: { dutyDate, userId } });
-    const duplicate = sameDay.find((row) => row.id !== existing?.id);
-    if (duplicate) {
-      throw new BadRequestException(`This technician already has ${duplicate.dutyType} duty on ${dutyDate}. One technician cannot cover multiple duties on the same day.`);
-    }
-    const exception = await this.exceptionRepo.findOne({ where: { exceptionDate: dutyDate, userId } });
-    if (exception) {
-      throw new BadRequestException(`This technician has a duty exception on ${dutyDate} and cannot be registered for duty.`);
-    }
-    const row = this.assignmentRepo.create({ ...existing, ...body, dutyDate, userId, dutyType, createdById: existing?.createdById ?? actor.id });
+    const dutyPeriod = body.dutyPeriod ?? existing?.dutyPeriod ?? DutyPeriod.WHOLE_DAY;
+    if (!Object.values(DutyPeriod).includes(dutyPeriod)) throw new BadRequestException('Invalid duty period.');
+    const users = await this.usersById();
+    if (!users.has(userId)) throw new BadRequestException('Select an active RICTMS staff member.');
+    const row = this.assignmentRepo.create({
+      ...existing,
+      ...body,
+      dutyDate,
+      userId,
+      dutyType,
+      dutyPeriod,
+      source: existing?.source ?? 'manual',
+      createdById: existing?.createdById ?? actor.id,
+    });
     const saved = await this.assignmentRepo.save(row);
     this.sse.emitDutyUpdated();
     this.notifyDutyUsers(
@@ -527,10 +612,6 @@ export class DutyService {
     const registeredRoster = await this.sharedRosterMembers();
     if (!registeredRoster.some((member) => member.userId === userId)) {
       throw new BadRequestException('Duty exceptions can only be registered for technicians on the shared duty roster.');
-    }
-    const assignment = await this.assignmentRepo.findOne({ where: { dutyDate: exceptionDate, userId } });
-    if (assignment) {
-      throw new BadRequestException(`This technician already has ${assignment.dutyType} duty on ${exceptionDate} and cannot be excepted on the same day.`);
     }
     const dutyType = body.dutyType !== undefined
       ? (body.dutyType ? this.assertDutyType(String(body.dutyType)) : null)
@@ -735,12 +816,14 @@ export class DutyService {
       }),
       this.reservationRepo.find({ where: { meetingDate: reservation.meetingDate } }),
     ]);
+    const reservationPeriod = this.reservationPeriod(reservation);
     for (const coverage of sameDayCoverages) {
       const coveredUserId = this.coverageCandidateUserId(coverage);
       if (
         coveredUserId
         && selectedUserIds.includes(coveredUserId)
         && coverage.dutyType !== reservation.venueType
+        && this.periodsOverlap(coverage.dutyPeriod, reservationPeriod)
       ) {
         throw new BadRequestException(`A selected technician is already assigned to ${coverage.dutyType} duty on that date.`);
       }
@@ -749,8 +832,14 @@ export class DutyService {
     const otherRelievers = await this.relieversForReservationIds(otherReservations.map((row) => row.id));
     const otherReservationById = new Map(otherReservations.map((row) => [row.id, row]));
     for (const reliever of otherRelievers) {
-      const otherVenue = otherReservationById.get(reliever.reservationId)?.venueType;
-      if (selectedUserIds.includes(reliever.userId) && otherVenue && otherVenue !== reservation.venueType) {
+      const otherReservation = otherReservationById.get(reliever.reservationId);
+      const otherVenue = otherReservation?.venueType;
+      if (
+        selectedUserIds.includes(reliever.userId)
+        && otherVenue
+        && otherVenue !== reservation.venueType
+        && this.periodsOverlap(this.reservationPeriod(otherReservation!), reservationPeriod)
+      ) {
         throw new BadRequestException(`A selected technician is already an immediate reliever for ${otherVenue} on that date.`);
       }
     }
@@ -870,11 +959,28 @@ export class DutyService {
     return this.isAttendanceEligible(coverage.assignedUserId!, coverage.dutyDate);
   }
 
-  async reconcileCoverage(date: string, type: DutyType, excludedUserIds: number[] = []) {
-    const reservations = await this.reservationRepo.find({ where: { meetingDate: date, venueType: type } });
-    if (type !== DutyType.OD && !reservations.some((r) => r.status !== DutyReservationStatus.CANCELLED)) return null;
+  async reconcileCoverage(
+    date: string,
+    type: DutyType,
+    excludedUserIds: number[] = [],
+    requestedPeriod?: DutyPeriod,
+  ) {
+    const allReservations = await this.reservationRepo.find({ where: { meetingDate: date, venueType: type } });
+    const selectedReservation = type === DutyType.OD ? null : this.selectedReservation(allReservations, type);
+    const dutyPeriod = type === DutyType.OD
+      ? DutyPeriod.WHOLE_DAY
+      : requestedPeriod ?? (selectedReservation ? this.reservationPeriod(selectedReservation) : null);
+    if (!dutyPeriod) return null;
+    const reservations = type === DutyType.OD
+      ? []
+      : allReservations.filter((reservation) =>
+        ![DutyReservationStatus.CANCELLED, DutyReservationStatus.COMPLETED].includes(reservation.status)
+        && this.reservationPeriod(reservation) === dutyPeriod,
+      );
+    if (type !== DutyType.OD && reservations.length === 0) return null;
+    const reservation = type === DutyType.OD ? null : reservations[0];
     const priorTypes = DUTY_PRIORITY.slice(0, DUTY_PRIORITY.indexOf(type));
-    const priorCoverages = priorTypes.length
+    const priorCoverages = (priorTypes.length
       ? await this.coverageRepo.find({
         where: {
           dutyDate: date,
@@ -882,13 +988,15 @@ export class DutyService {
           status: In([DutyCoverageStatus.ACTIVE, DutyCoverageStatus.INTERVENTION_REQUIRED]),
         },
       })
-      : [];
+      : []).filter((coverage) => this.periodsOverlap(coverage.dutyPeriod, dutyPeriod));
     const reservedByPriorDuty = new Map<number, DutyDailyCoverage>();
     for (const coverage of priorCoverages) {
       const userId = this.coverageCandidateUserId(coverage);
       if (userId) reservedByPriorDuty.set(userId, coverage);
     }
-    let currentCoverage = await this.coverageRepo.findOne({ where: { dutyDate: date, dutyType: type } });
+    let currentCoverage = await this.coverageRepo.findOne({
+      where: { dutyDate: date, dutyType: type, dutyPeriod },
+    });
     if (type !== DutyType.OD) {
       const activeReservations = reservations.filter((reservation) => reservation.status !== DutyReservationStatus.CANCELLED);
       const relievers = await this.relieversForReservationIds(activeReservations.map((reservation) => reservation.id));
@@ -978,6 +1086,8 @@ export class DutyService {
       ...coverage,
       dutyDate: date,
       dutyType: type,
+      dutyPeriod,
+      reservationId: reservation?.id ?? null,
       primaryUserId: candidates[0].userId,
       assignedUserId: null,
       isSubstitute: false,
@@ -997,13 +1107,20 @@ export class DutyService {
     this.assertAdmin(actor);
     const coverage = await this.coverageRepo.findOne({ where: { id } });
     if (!coverage) throw new NotFoundException('Duty coverage not found.');
+    if (coverage.status !== DutyCoverageStatus.INTERVENTION_REQUIRED) {
+      throw new BadRequestException('Only pending Duty coverage can be activated.');
+    }
     const otherCoverages = await this.coverageRepo.find({
       where: {
         dutyDate: coverage.dutyDate,
         status: In([DutyCoverageStatus.ACTIVE, DutyCoverageStatus.INTERVENTION_REQUIRED]),
       },
     });
-    const conflictingDuty = otherCoverages.find((row) => row.id !== coverage.id && this.coverageCandidateUserId(row) === userId);
+    const conflictingDuty = otherCoverages.find((row) =>
+      row.id !== coverage.id
+      && this.coverageCandidateUserId(row) === userId
+      && this.periodsOverlap(row.dutyPeriod, coverage.dutyPeriod),
+    );
     if (conflictingDuty) {
       throw new BadRequestException(`This technician is already selected for ${conflictingDuty.dutyType} duty on ${coverage.dutyDate}.`);
     }
@@ -1064,6 +1181,81 @@ export class DutyService {
     return { skippedUserId: userId, dashboard: await this.getDashboard(coverage.dutyDate) };
   }
 
+  private async recordCompletedCoverage(coverage: DutyDailyCoverage): Promise<void> {
+    if (!coverage.assignedUserId) return;
+    const dutyPeriod = coverage.dutyPeriod ?? DutyPeriod.WHOLE_DAY;
+    // A daily OD coverage row is intentionally reused during a handoff. Pair
+    // the coverage with the staff member so every person who actually rendered
+    // duty receives one log entry while retries remain idempotent.
+    const recorded = await this.assignmentRepo.exist({
+      where: { coverageId: coverage.id, userId: coverage.assignedUserId },
+    });
+    if (recorded) return;
+    await this.assignmentRepo.save(this.assignmentRepo.create({
+      dutyDate: coverage.dutyDate,
+      dutyType: coverage.dutyType,
+      dutyPeriod,
+      userId: coverage.assignedUserId,
+      coverageId: coverage.id,
+      reservationId: coverage.reservationId,
+      remarks: `${coverage.dutyType} ${dutyPeriod.replace('_', ' ')} duty completed`,
+      source: 'automatic',
+      createdById: null,
+    }));
+  }
+
+  async completeReservation(actor: Actor, id: string) {
+    this.assertAdmin(actor);
+    const reservation = await this.reservationRepo.findOne({ where: { id } });
+    if (!reservation) throw new NotFoundException('Meeting reservation not found.');
+    if (reservation.status === DutyReservationStatus.CANCELLED) {
+      throw new BadRequestException('A cancelled meeting duty cannot be completed.');
+    }
+    if (reservation.status === DutyReservationStatus.COMPLETED) return reservation;
+    if (reservation.meetingDate !== this.today()) {
+      throw new BadRequestException("Only today's active meeting duty can be completed.");
+    }
+    const relievers = await this.relieverRepo.find({ where: { reservationId: id } });
+    if (relievers.length === 0) {
+      throw new BadRequestException('Finish the active coverage from the Duty overview.');
+    }
+    const dutyPeriod = this.reservationPeriod(reservation);
+    for (const reliever of relievers) {
+      const recorded = await this.assignmentRepo.exist({
+        where: { reservationId: id, userId: reliever.userId },
+      });
+      if (!recorded) {
+        await this.assignmentRepo.save(this.assignmentRepo.create({
+          dutyDate: reservation.meetingDate,
+          dutyType: reservation.venueType,
+          dutyPeriod,
+          userId: reliever.userId,
+          coverageId: null,
+          reservationId: id,
+          remarks: `Immediate reliever duty completed: ${reliever.reason}`,
+          source: 'management_override',
+          createdById: actor.id,
+        }));
+      }
+    }
+    reservation.status = DutyReservationStatus.COMPLETED;
+    const saved = await this.reservationRepo.save(reservation);
+    const next = this.selectedReservation(
+      await this.reservationRepo.find({ where: { meetingDate: reservation.meetingDate, venueType: reservation.venueType } }),
+      reservation.venueType,
+    );
+    if (next) {
+      await this.reconcileCoverage(
+        reservation.meetingDate,
+        reservation.venueType,
+        [],
+        this.reservationPeriod(next),
+      );
+    }
+    this.sse.emitDutyUpdated();
+    return saved;
+  }
+
   async releaseCoverage(actor: Actor, id: string) {
     this.assertAdmin(actor);
     const coverage = await this.coverageRepo.findOne({ where: { id } });
@@ -1071,12 +1263,41 @@ export class DutyService {
     if (coverage.status !== DutyCoverageStatus.ACTIVE) {
       throw new BadRequestException('Only active Duty coverage can be returned to Ticket Assignment.');
     }
+    if (coverage.dutyType !== DutyType.OD) {
+      await this.recordCompletedCoverage(coverage);
+      await this.restoreAttendance(coverage);
+      coverage.status = DutyCoverageStatus.COMPLETED;
+      coverage.releasedAt = new Date();
+      await this.coverageRepo.save(coverage);
+      if (coverage.reservationId) {
+        const reservation = await this.reservationRepo.findOne({ where: { id: coverage.reservationId } });
+        if (reservation && reservation.status !== DutyReservationStatus.CANCELLED) {
+          reservation.status = DutyReservationStatus.COMPLETED;
+          await this.reservationRepo.save(reservation);
+        }
+      }
+      const next = this.selectedReservation(
+        await this.reservationRepo.find({ where: { meetingDate: coverage.dutyDate, venueType: coverage.dutyType } }),
+        coverage.dutyType,
+      );
+      if (next) {
+        await this.reconcileCoverage(
+          coverage.dutyDate,
+          coverage.dutyType,
+          [],
+          this.reservationPeriod(next),
+        );
+      }
+      this.sse.emitDutyUpdated();
+      return coverage;
+    }
     const activeTickets = coverage.assignedUserId
       ? await this.ticketRepo.count({ where: { assignedToId: coverage.assignedUserId, status: In(ACTIVE_TICKET_STATUSES) } })
       : 0;
     if (activeTickets > 0) {
       throw new BadRequestException('Reassign the active tickets before returning this technician to Ticket Assignment.');
     }
+    const completedCoverage = { ...coverage } as DutyDailyCoverage;
     const releasedUserId = coverage.assignedUserId;
     await this.restoreAttendance(coverage);
     coverage.status = DutyCoverageStatus.RELEASED;
@@ -1114,6 +1335,7 @@ export class DutyService {
       if (error instanceof BadRequestException) throw error;
       throw new BadRequestException('Unable to prepare a replacement technician. The current OD remains active.');
     }
+    await this.recordCompletedCoverage(completedCoverage);
     this.sse.emitDutyUpdated();
     return coverage;
   }
@@ -1191,24 +1413,31 @@ export class DutyService {
     const now = this.currentTimeMinutes();
     const workdayEnd = this.timeToMinutes(config?.scheduleMode === 'CWW' ? config?.cwwClockoutEnd : config?.officeClockout);
     if (now < workdayEnd) return;
-    const meetingOverrides = await this.activeMeetingRelieversForDate(date);
+    const meetingOverrides = await this.activeMeetingRelieversForDate(date, true);
     const reservationById = new Map(meetingOverrides.reservations.map((reservation) => [reservation.id, reservation]));
     for (const reliever of meetingOverrides.relievers) {
       const reservation = reservationById.get(reliever.reservationId);
       if (!reservation || ![DutyReservationStatus.CONFIRMED, DutyReservationStatus.COMPLETED].includes(reservation.status)) continue;
-      if (!(await this.isAttendanceEligible(reliever.userId, date))) continue;
+      // The finalizer runs at or after clock-out, when isAttendanceEligible()
+      // must return false by design. Use the recorded attendance status here
+      // so a duty that was rendered is still captured at end of day.
+      const attendance = await this.attendanceRepo.findOne({
+        where: { userId: reliever.userId, date },
+      });
+      if (!attendance || attendance.status !== AttendanceStatus.PRESENT) continue;
       const activeTickets = await this.ticketRepo.count({
         where: { assignedToId: reliever.userId, status: In(ACTIVE_TICKET_STATUSES) },
       });
       if (activeTickets > 0) continue;
-      const exists = await this.assignmentRepo.exist({
-        where: { dutyDate: date, dutyType: reservation.venueType, userId: reliever.userId },
-      });
+      const exists = await this.assignmentRepo.exist({ where: { reservationId: reservation.id, userId: reliever.userId } });
       if (!exists) {
         await this.assignmentRepo.save(this.assignmentRepo.create({
           dutyDate: date,
           dutyType: reservation.venueType,
+          dutyPeriod: this.reservationPeriod(reservation),
           userId: reliever.userId,
+          coverageId: null,
+          reservationId: reservation.id,
           remarks: `Immediate reliever: ${reliever.reason}`,
           source: 'management_override',
           createdById: reliever.createdById,
@@ -1217,13 +1446,19 @@ export class DutyService {
     }
     const coverages = await this.coverageRepo.find({ where: { dutyDate: date, status: In([DutyCoverageStatus.ACTIVE, DutyCoverageStatus.RELEASED]) } });
     for (const coverage of coverages) {
-      const reservations = await this.reservationRepo.find({ where: { meetingDate: date, venueType: coverage.dutyType } });
-      const dutyOccurred = coverage.dutyType === DutyType.OD || reservations.some((x) => [DutyReservationStatus.CONFIRMED, DutyReservationStatus.COMPLETED].includes(x.status));
+      const reservation = coverage.reservationId
+        ? await this.reservationRepo.findOne({ where: { id: coverage.reservationId } })
+        : null;
+      const dutyOccurred = coverage.dutyType === DutyType.OD
+        || Boolean(reservation && [DutyReservationStatus.CONFIRMED, DutyReservationStatus.COMPLETED].includes(reservation.status));
       if (coverage.assignedUserId && dutyOccurred) {
-        const exists = await this.assignmentRepo.exist({ where: { dutyDate: date, dutyType: coverage.dutyType, userId: coverage.assignedUserId } });
-        if (!exists) await this.assignmentRepo.save(this.assignmentRepo.create({ dutyDate: date, dutyType: coverage.dutyType, userId: coverage.assignedUserId, remarks: `${coverage.dutyType} meeting duty`, source: 'automatic', createdById: null }));
+        await this.recordCompletedCoverage(coverage);
         coverage.status = DutyCoverageStatus.COMPLETED;
         await this.coverageRepo.save(coverage);
+        if (reservation && reservation.status !== DutyReservationStatus.CANCELLED) {
+          reservation.status = DutyReservationStatus.COMPLETED;
+          await this.reservationRepo.save(reservation);
+        }
       }
       if (coverage.attendanceOverridden && coverage.status !== DutyCoverageStatus.RELEASED) {
         await this.restoreAttendance(coverage);

@@ -228,7 +228,15 @@ export class TicketSettingsController {
   /** GET /ticket-settings/escalation-focals */
   @Get('escalation-focals')
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isEscalationFocal')
+  @RequireCapability([
+    'isEscalationFocal',
+    'isTicketSettingsFocal',
+    'isTicketFocal',
+    'isAllTickets',
+    'isDesktop',
+    'isItSupport',
+    'isPantawidIct',
+  ])
   async listEscalationFocals(@Query('ticketType') ticketType?: string) {
     return this.settingsService.listEscalationFocals(ticketType);
   }

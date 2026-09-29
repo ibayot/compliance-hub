@@ -28,6 +28,8 @@ export const dutiesApi = {
     (await apiClient.post(`/duties/reservations/${reservationId}/relievers`, { userIds, reason })).data,
   clearMeetingRelievers: async (reservationId: string) =>
     apiClient.delete(`/duties/reservations/${reservationId}/relievers`),
+  completeReservation: async (reservationId: string) =>
+    (await apiClient.post(`/duties/reservations/${reservationId}/complete`)).data,
   releaseCoverage: async (id: string) => (await apiClient.post(`/duties/coverages/${id}/release`)).data,
   activateCoverage: async (id: string, userId: number) => (await apiClient.post(`/duties/coverages/${id}/activate`, { userId })).data,
   skipCoverage: async (id: string, userId: number) => (await apiClient.post(`/duties/coverages/${id}/skip`, { userId })).data,

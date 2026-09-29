@@ -15,6 +15,12 @@ export enum DutyType {
   CONFERENCE = 'CONFERENCE',
 }
 
+export enum DutyPeriod {
+  AM = 'AM',
+  PM = 'PM',
+  WHOLE_DAY = 'WHOLE_DAY',
+}
+
 export enum DutyExceptionType {
   TRAVEL_ORDER = 'travel_order',
   EXAM = 'exam',
@@ -56,12 +62,14 @@ export class DutyRosterMembership {
 }
 
 @Entity('duty_assignments')
-@Unique(['dutyDate', 'userId', 'dutyType'])
 export class DutyAssignment {
   @PrimaryGeneratedColumn('uuid') id: string;
   @Column({ name: 'duty_date', type: 'date', transformer: dateTransformer }) dutyDate: string;
   @Column({ name: 'user_id', type: 'int' }) userId: number;
   @Column({ name: 'duty_type', type: 'varchar', length: 20 }) dutyType: DutyType;
+  @Column({ name: 'duty_period', type: 'varchar', length: 20, default: DutyPeriod.WHOLE_DAY }) dutyPeriod: DutyPeriod;
+  @Column({ name: 'coverage_id', type: 'varchar', length: 36, nullable: true }) coverageId: string | null;
+  @Column({ name: 'reservation_id', type: 'varchar', length: 36, nullable: true }) reservationId: string | null;
   @Column({ type: 'text', nullable: true }) remarks: string | null;
   @Column({ type: 'varchar', length: 20, default: 'manual' }) source: string;
   @Column({ name: 'created_by_id', type: 'int', nullable: true }) createdById: number | null;
@@ -112,11 +120,13 @@ export class DutyMeetingReliever {
 }
 
 @Entity('duty_daily_coverages')
-@Unique(['dutyDate', 'dutyType'])
+@Unique(['dutyDate', 'dutyType', 'dutyPeriod'])
 export class DutyDailyCoverage {
   @PrimaryGeneratedColumn('uuid') id: string;
   @Column({ name: 'duty_date', type: 'date', transformer: dateTransformer }) dutyDate: string;
   @Column({ name: 'duty_type', type: 'varchar', length: 20 }) dutyType: DutyType;
+  @Column({ name: 'duty_period', type: 'varchar', length: 20, default: DutyPeriod.WHOLE_DAY }) dutyPeriod: DutyPeriod;
+  @Column({ name: 'reservation_id', type: 'varchar', length: 36, nullable: true }) reservationId: string | null;
   @Column({ name: 'primary_user_id', type: 'int' }) primaryUserId: number;
   @Column({ name: 'assigned_user_id', type: 'int', nullable: true }) assignedUserId: number | null;
   @Column({ name: 'is_substitute', type: 'boolean', default: false }) isSubstitute: boolean;

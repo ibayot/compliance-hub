@@ -3,13 +3,14 @@ import { ApiTags } from '@nestjs/swagger';
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { DutyExceptionType, DutyReservationStatus, DutyType } from '../entities/duty.entity';
+import { DutyExceptionType, DutyPeriod, DutyReservationStatus, DutyType } from '../entities/duty.entity';
 import { DutyService } from '../services/duty.service';
 
 class DutyLogDto {
   @IsDateString() dutyDate: string;
   @Type(() => Number) @IsInt() userId: number;
   @IsEnum(DutyType) dutyType: DutyType;
+  @IsOptional() @IsEnum(DutyPeriod) dutyPeriod?: DutyPeriod;
   @IsOptional() @IsString() @MaxLength(2000) remarks?: string;
 }
 
@@ -86,6 +87,9 @@ export class DutyController {
   }
   @Delete('reservations/:id/relievers') clearRelievers(@Request() req: any, @Param('id') id: string) {
     return this.duty.clearMeetingRelievers(req.user, id);
+  }
+  @Post('reservations/:id/complete') completeReservation(@Request() req: any, @Param('id') id: string) {
+    return this.duty.completeReservation(req.user, id);
   }
   @Post('coverages/:id/release') release(@Request() req: any, @Param('id') id: string) { return this.duty.releaseCoverage(req.user, id); }
   @Post('coverages/:id/activate') activate(@Request() req: any, @Param('id') id: string, @Body('userId') userId: number) { return this.duty.activateCoverage(req.user, id, Number(userId)); }
