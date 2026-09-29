@@ -654,16 +654,30 @@ export default function DashboardPage() {
             <Box>
               <Typography variant="h6">My Tickets</Typography>
               <Typography variant="body2" color="text.secondary">
-                Tickets you submitted as a requester
+                Tickets requested for you, including requests filed on your behalf
               </Typography>
             </Box>
-            <Button
-              variant="outlined"
-              startIcon={<TicketIcon />}
-              onClick={() => router.push('/operations/tickets')}
-            >
-              View My Tickets
-            </Button>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              {(userTicketStats?.pendingSatisfactionTickets?.length ?? 0) > 0 && (
+                <Button
+                  variant="contained"
+                  color="warning"
+                  startIcon={<StarIcon />}
+                  onClick={() =>
+                    router.push('/operations/my-tickets?filter=pending_satisfaction')
+                  }
+                >
+                  To Rate ({userTicketStats?.pendingSatisfactionTickets?.length ?? 0})
+                </Button>
+              )}
+              <Button
+                variant="outlined"
+                startIcon={<TicketIcon />}
+                onClick={() => router.push('/operations/my-tickets')}
+              >
+                View My Tickets
+              </Button>
+            </Stack>
           </Box>
           <Grid container spacing={2}>
             {[

@@ -696,11 +696,10 @@ const previousValue = value;
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiration
 
-    const device = this.trustedDeviceRepository.create({
-      userId,
-      deviceToken,
-      expiresAt,
-    });
+    const existing = await this.findTrustedDevice(userId, deviceToken);
+    const device = existing
+      ? this.trustedDeviceRepository.merge(existing, { expiresAt })
+      : this.trustedDeviceRepository.create({ userId, deviceToken, expiresAt });
     return this.trustedDeviceRepository.save(device);
   }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -20,12 +20,25 @@ import {
   CircularProgress,
   IconButton,
   Tooltip,
+  Tabs,
+  Tab,
+  Paper,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   ExpandMore as ExpandMoreIcon,
   Edit as EditIcon,
   Search as SearchIcon,
   HelpOutline as HelpIcon,
+  Add as AddIcon,
+  FormatBold as BoldIcon,
+  FormatItalic as ItalicIcon,
+  Title as HeadingIcon,
+  FormatListBulleted as BulletListIcon,
+  FormatListNumbered as NumberedListIcon,
+  Link as LinkIcon,
+  Code as CodeIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,7 +49,7 @@ interface KBArticle {
   id: number;
   title: string;
   content: string;
-  tags: string;
+  tags: string | null;
   helpfulCount: number;
   unhelpfulCount: number;
 }
@@ -44,12 +57,14 @@ interface KBArticle {
 export default function KnowledgeBasePage() {
   const { myCap } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
+  const theme = useTheme();
+  const isNarrowEditor = useMediaQuery(theme.breakpoints.down('sm'));
 
   const [articles, setArticles] = useState<KBArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Edit Dialog State
+  // Shared Add/Edit Dialog State
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedArticle, setSelectedArticle] = useState<KBArticle | null>(null);
   const [editForm, setEditForm] = useState({
@@ -58,6 +73,8 @@ export default function KnowledgeBasePage() {
     tags: '',
   });
   const [saving, setSaving] = useState(false);
+  const [editorTab, setEditorTab] = useState<'write' | 'preview'>('write');
+  const contentInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
 
   const fetchArticles = useCallback(async (query = '') => {
     try {
@@ -95,25 +112,36 @@ export default function KnowledgeBasePage() {
       content: article.content,
       tags: article.tags || '',
     });
+    setEditorTab('write');
     setEditDialogOpen(true);
   };
 
-  const handleSaveEdit = async () => {
-    if (!selectedArticle) return;
+  const openAddDialog = () => {
+    setSelectedArticle(null);
+    setEditForm({ title: '', content: '', tags: '' });
+    setEditorTab('write');
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveArticle = async () => {
     if (!editForm.title.trim() || !editForm.content.trim()) {
       enqueueSnackbar('Title and content are required.', { variant: 'warning' });
       return;
     }
     try {
       setSaving(true);
-      await knowledgeBaseApi.update(selectedArticle.id, {
+      const payload = {
         title: editForm.title.trim(),
         content: editForm.content.trim(),
         tags: editForm.tags.trim(),
+      };
+      if (selectedArticle) await knowledgeBaseApi.update(selectedArticle.id, payload);
+      else await knowledgeBaseApi.create(payload);
+      enqueueSnackbar(selectedArticle ? 'Article updated successfully' : 'Article added successfully', {
+        variant: 'success',
       });
-      enqueueSnackbar('Article updated successfully', { variant: 'success' });
       setEditDialogOpen(false);
-      fetchArticles(searchQuery);
+      await fetchArticles(searchQuery);
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to update article', {
         variant: 'error',
@@ -123,7 +151,144 @@ export default function KnowledgeBasePage() {
     }
   };
 
-  const isEditable = !!myCap?.isTicketSettingsFocal;
+  const canManage = !!myCap?.isKnowledgeBaseManage;
+
+  const applyMarkdown = (before: string, after = '', placeholder = 'text') => {
+    const input = contentInputRef.current;
+    const start = input?.selectionStart ?? editForm.content.length;
+    const end = input?.selectionEnd ?? editForm.content.length;
+    const selected = editForm.content.slice(start, end) || placeholder;
+    const content = `${editForm.content.slice(0, start)}${before}${selected}${after}${editForm.content.slice(end)}`;
+    setEditForm((current) => ({ ...current, content }));
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(start + before.length, start + before.length + selected.length);
+    });
+  };
+
+  const prefixMarkdownLines = (prefix: string) => {
+    const input = contentInputRef.current;
+    const start = input?.selectionStart ?? editForm.content.length;
+    const end = input?.selectionEnd ?? editForm.content.length;
+    const lineStart = editForm.content.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+    const nextLineBreak = editForm.content.indexOf('\n', end);
+    const lineEnd = nextLineBreak === -1 ? editForm.content.length : nextLineBreak;
+    const selected = editForm.content.slice(lineStart, lineEnd) || 'List item';
+    const replaced = selected
+      .split('\n')
+      .map((line, index) => `${prefix === '1. ' ? `${index + 1}. ` : prefix}${line}`)
+      .join('\n');
+    const content = `${editForm.content.slice(0, lineStart)}${replaced}${editForm.content.slice(lineEnd)}`;
+    setEditForm((current) => ({ ...current, content }));
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(lineStart, lineStart + replaced.length);
+    });
+  };
+
+  const editorFields = (
+    <Stack spacing={2}>
+      <TextField
+        label="Title *"
+        value={editForm.title}
+        onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+        fullWidth
+        inputProps={{ maxLength: 255 }}
+      />
+      <Box>
+        <Paper variant="outlined" sx={{ p: 0.5, mb: 1 }}>
+          <Stack direction="row" spacing={0.25} flexWrap="wrap" useFlexGap>
+            <Tooltip title="Bold">
+              <IconButton size="small" aria-label="Bold" onClick={() => applyMarkdown('**', '**')}>
+                <BoldIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Italic">
+              <IconButton size="small" aria-label="Italic" onClick={() => applyMarkdown('*', '*')}>
+                <ItalicIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Heading">
+              <IconButton size="small" aria-label="Heading" onClick={() => prefixMarkdownLines('## ')}>
+                <HeadingIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Bulleted list">
+              <IconButton size="small" aria-label="Bulleted list" onClick={() => prefixMarkdownLines('- ')}>
+                <BulletListIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Numbered list">
+              <IconButton size="small" aria-label="Numbered list" onClick={() => prefixMarkdownLines('1. ')}>
+                <NumberedListIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Link">
+              <IconButton
+                size="small"
+                aria-label="Link"
+                onClick={() => applyMarkdown('[', '](https://)', 'link text')}
+              >
+                <LinkIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Inline code">
+              <IconButton size="small" aria-label="Inline code" onClick={() => applyMarkdown('`', '`', 'code')}>
+                <CodeIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Paper>
+        <TextField
+          inputRef={contentInputRef}
+          label="Content *"
+          value={editForm.content}
+          onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
+          multiline
+          minRows={14}
+          maxRows={22}
+          fullWidth
+          inputProps={{ maxLength: 20000 }}
+          helperText={`${editForm.content.length.toLocaleString()} / 20,000 characters — Markdown formatting is supported.`}
+        />
+      </Box>
+      <TextField
+        label="Tags (comma separated)"
+        value={editForm.tags}
+        onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })}
+        placeholder="e.g. internet, connectivity, proxy"
+        fullWidth
+        inputProps={{ maxLength: 255 }}
+        helperText="Separate tags with commas."
+      />
+    </Stack>
+  );
+
+  const articlePreview = (
+    <Paper variant="outlined" sx={{ p: 2, minHeight: 360, height: '100%', overflow: 'auto' }}>
+      <Typography variant="overline" color="text.secondary">
+        Formatted preview
+      </Typography>
+      <Typography variant="h6" sx={{ mt: 0.5, mb: 2, overflowWrap: 'anywhere' }}>
+        {editForm.title.trim() || 'Article title'}
+      </Typography>
+      <Box
+        sx={{
+          typography: 'body2',
+          '& p': { mt: 0, mb: 1.5 },
+          '& pre': { overflowX: 'auto', p: 1.5, bgcolor: 'action.hover', borderRadius: 1 },
+          '& code': { overflowWrap: 'anywhere' },
+          '& img': { maxWidth: '100%' },
+        }}
+      >
+        {editForm.content.trim() ? (
+          <ReactMarkdown>{editForm.content}</ReactMarkdown>
+        ) : (
+          <Typography color="text.secondary">Your formatted article will appear here.</Typography>
+        )}
+      </Box>
+    </Paper>
+  );
 
   return (
     <Box>
@@ -139,17 +304,24 @@ export default function KnowledgeBasePage() {
       {/* Search & Actions */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <TextField
-            fullWidth
-            label="Search Knowledge Base Articles"
-            placeholder="Type keywords, tags, or topics (e.g. Internet, Printer, Email...)"
-            value={searchQuery}
-            onChange={handleSearchChange}
-            inputProps={{ maxLength: 1000 }}
-            InputProps={{
-              startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
-            }}
-          />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="stretch">
+            <TextField
+              fullWidth
+              label="Search Knowledge Base Articles"
+              placeholder="Type keywords, tags, or topics (e.g. Internet, Printer, Email...)"
+              value={searchQuery}
+              onChange={handleSearchChange}
+              inputProps={{ maxLength: 1000 }}
+              InputProps={{
+                startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
+              }}
+            />
+            {canManage && (
+              <Button variant="contained" startIcon={<AddIcon />} onClick={openAddDialog} sx={{ minWidth: 140 }}>
+                Add Article
+              </Button>
+            )}
+          </Stack>
         </CardContent>
       </Card>
 
@@ -205,7 +377,7 @@ export default function KnowledgeBasePage() {
                           color={(art.unhelpfulCount || 0) > 5 ? 'error' : 'default'}
                           variant="outlined"
                         />
-                        {isEditable && (
+                        {canManage && (
                           <Tooltip title="Edit Article">
                             <IconButton
                               size="small"
@@ -243,42 +415,43 @@ export default function KnowledgeBasePage() {
         </CardContent>
       </Card>
 
-      {/* Edit Article Dialog */}
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Edit Knowledge Base Article</DialogTitle>
+      {/* Shared Add/Edit Article Dialog */}
+      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>{selectedArticle ? 'Edit Knowledge Base Article' : 'Add Knowledge Base Article'}</DialogTitle>
         <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              label="Title *"
-              value={editForm.title}
-              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-              fullWidth
-              inputProps={{ maxLength: 255 }}
-            />
-            <TextField
-              label="Content *"
-              value={editForm.content}
-              onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
-              multiline
-              rows={8}
-              fullWidth
-              inputProps={{ maxLength: 1000 }}
-            />
-            <TextField
-              label="Tags (comma separated)"
-              value={editForm.tags}
-              onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })}
-              placeholder="e.g. internet, connectivity, proxy"
-              fullWidth
-              inputProps={{ maxLength: 255 }}
-              helperText="Separate tags with commas."
-            />
-          </Stack>
+          <Box sx={{ pt: 1 }}>
+            {isNarrowEditor ? (
+              <>
+                <Tabs
+                  value={editorTab}
+                  onChange={(_, value: 'write' | 'preview') => setEditorTab(value)}
+                  variant="fullWidth"
+                  sx={{ mb: 2 }}
+                >
+                  <Tab value="write" label="Write" />
+                  <Tab value="preview" label="Preview" />
+                </Tabs>
+                {editorTab === 'write' ? editorFields : articlePreview}
+              </>
+            ) : (
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                  gap: 2,
+                  alignItems: 'stretch',
+                }}
+              >
+                {editorFields}
+                {articlePreview}
+              </Box>
+            )}
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSaveEdit} variant="contained" disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
+          <Button onClick={handleSaveArticle} variant="contained" disabled={saving}>
+            {saving ? 'Saving…' : selectedArticle ? 'Save Changes' : 'Add Article'}
           </Button>
         </DialogActions>
       </Dialog>

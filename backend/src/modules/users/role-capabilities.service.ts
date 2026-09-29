@@ -176,6 +176,10 @@ export class RoleCapabilitiesService implements OnModuleInit {
     return !!this.get(role)?.isTicketSettingsFocal;
   }
 
+  isKnowledgeBaseManage(role: string): boolean {
+    return !!this.get(role)?.isKnowledgeBaseManage;
+  }
+
   isSmtpSettingsAccess(role: string): boolean {
     return !!this.get(role)?.isSmtpSettingsAccess;
   }
@@ -312,6 +316,7 @@ export class RoleCapabilitiesService implements OnModuleInit {
       | 'isSpecializedSupport'
       | 'isEscalationFocal'
       | 'isTicketSettingsFocal'
+      | 'isKnowledgeBaseManage'
       | 'isSmtpSettingsAccess'
       | 'isGlobalSettingsAccess'
       | 'isSecuritySettingsAccess'

@@ -642,6 +642,7 @@ const CAPABILITY_CATEGORIES = [
       { key: 'isIto', label: 'ITO Staff', description: 'Non-technician ITO professional staff group' },
       { key: 'isEscalationFocal', label: 'Escalation', description: 'Can receive escalated tickets' },
       { key: 'isTicketSettingsFocal', label: 'Ticket Admin', description: 'Full ticket settings & reports access' },
+      { key: 'isKnowledgeBaseManage', label: 'Knowledge Base Manage', description: 'Create and edit Knowledge Base articles' },
       { key: 'isAllTickets', label: 'See All Tickets', description: 'View all tickets system-wide (not just own)' },
       { key: 'isTicketFocal', label: 'Assign Tickets', description: 'Manually assign/reassign tickets to technicians' },
       { key: 'isTicketReportsAccess', label: 'Ticket Reports View', description: 'View own technician Overview, Ratings, and Performance' },

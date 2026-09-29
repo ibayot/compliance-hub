@@ -710,6 +710,39 @@ export interface PaginatedTickets {
 // Tickets API (IT Help Desk)
 export const ticketsApi = {
   // Global/Technician Pause Methods
+  getMyRequested: async (filters?: {
+    status?: TicketStatus;
+    year?: number;
+    month?: number;
+    quarter?: number;
+    semester?: number;
+    date?: string;
+    includeCarryover?: boolean;
+    ticketType?: TicketType;
+    priority?: string;
+    search?: string;
+    pendingSatisfaction?: boolean;
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedTickets> => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.year) params.set('year', String(filters.year));
+    if (filters?.month) params.set('month', String(filters.month));
+    if (filters?.quarter) params.set('quarter', String(filters.quarter));
+    if (filters?.semester) params.set('semester', String(filters.semester));
+    if (filters?.date) params.set('date', filters.date);
+    if (filters?.includeCarryover) params.set('includeCarryover', 'true');
+    if (filters?.ticketType) params.set('ticketType', filters.ticketType);
+    if (filters?.priority) params.set('priority', filters.priority);
+    if (filters?.search) params.set('search', filters.search);
+    if (filters?.pendingSatisfaction) params.set('pendingSatisfaction', 'true');
+    if (filters?.page) params.set('page', String(filters.page));
+    if (filters?.limit) params.set('limit', String(filters.limit));
+    const query = params.toString();
+    const response = await apiClient.get(`/tickets/my-requested${query ? `?${query}` : ''}`);
+    return response.data;
+  },
   getMyAssigned: async (filters?: {
     status?: TicketStatus;
     year?: number;
@@ -970,8 +1003,13 @@ export const ticketsApi = {
   },
 
   /** Get open (non-closed, non-duplicate) tickets for a specific requester — used for Duplicate picker */
-  getOpenTicketsForRequester: async (requesterId: number): Promise<Ticket[]> => {
-    const response = await apiClient.get(`/tickets/requester/${requesterId}/open`);
+  getOpenTicketsForRequester: async (
+    requesterId: number,
+    sourceTicketId?: string,
+  ): Promise<Ticket[]> => {
+    const response = await apiClient.get(`/tickets/requester/${requesterId}/open`, {
+      params: sourceTicketId ? { sourceTicketId } : undefined,
+    });
     return response.data;
   },
 
@@ -1442,6 +1480,10 @@ export const knowledgeBaseApi = {
   },
   getInsights: async (): Promise<any[]> => {
     const res = await apiClient.get('/knowledge-base');
+    return res.data;
+  },
+  create: async (data: { title: string; tags?: string; content: string }): Promise<any> => {
+    const res = await apiClient.post('/knowledge-base', data);
     return res.data;
   },
   update: async (

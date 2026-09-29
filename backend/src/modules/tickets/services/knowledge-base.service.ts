@@ -1,5 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -550,15 +549,39 @@ Output strictly JSON:
     return this.kbRepo.save(article);
   }
 
+  private normalizeArticleInput(dto: {
+    title: string;
+    tags?: string | null;
+    content: string;
+  }): { title: string; tags: string | null; content: string } {
+    const title = dto.title?.trim();
+    const content = dto.content?.trim();
+    const tags = dto.tags?.trim() || null;
+    if (!title || !content) {
+      throw new BadRequestException('Title and content are required.');
+    }
+    return { title, content, tags };
+  }
+
+  async createArticle(dto: {
+    title: string;
+    tags?: string | null;
+    content: string;
+  }): Promise<KnowledgeArticle> {
+    const values = this.normalizeArticleInput(dto);
+    return this.kbRepo.save(this.kbRepo.create(values));
+  }
+
   async updateArticle(
     id: number,
-    dto: { title: string; tags: string; content: string },
+    dto: { title: string; tags?: string | null; content: string },
   ): Promise<KnowledgeArticle> {
     const article = await this.kbRepo.findOne({ where: { id } });
     if (!article) throw new NotFoundException('Article not found');
-    article.title = dto.title;
-    article.tags = dto.tags;
-    article.content = dto.content;
+    const values = this.normalizeArticleInput(dto);
+    article.title = values.title;
+    article.tags = values.tags;
+    article.content = values.content;
     return this.kbRepo.save(article);
   }
 }

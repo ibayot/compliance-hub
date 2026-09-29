@@ -157,6 +157,14 @@ export default function App() {
         }
       />
       <Route
+        path="/operations/my-tickets"
+        element={
+          <ProtectedDashboard>
+            <TicketsPage personalRequestedOnly />
+          </ProtectedDashboard>
+        }
+      />
+      <Route
         path="/operations/tickets/:id"
         element={
           <ProtectedDashboard>

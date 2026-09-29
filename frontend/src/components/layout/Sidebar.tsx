@@ -57,6 +57,8 @@ interface NavItem {
   service?: 'users' | 'ticketing' | 'compliance' | 'core';
   /** If set, also grant access when any of myCap[capabilityKey] is true */
   capabilityKeys?: (keyof RoleCapabilityRecord)[];
+  /** Show this entry to authenticated staff accounts regardless of ticket-management capabilities. */
+  staffOnly?: boolean;
 }
 
 export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
@@ -87,6 +89,13 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       path: '/operations/tickets',
       service: 'ticketing',
       capabilityKeys: ['isTicketModuleAccess'],
+    },
+    {
+      label: 'My Tickets',
+      icon: TicketsIcon,
+      path: '/operations/my-tickets',
+      service: 'ticketing',
+      staffOnly: true,
     },
     {
       label: 'Knowledge Base',
@@ -206,6 +215,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const hasAccess = (
     capabilityKeys?: (keyof RoleCapabilityRecord)[],
     service?: NavItem['service'],
+    staffOnly?: boolean,
   ) => {
     // Application Mode filter: hide strictly unrelated services
     // Shared services (users, core) are always visible
@@ -214,6 +224,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     if (service === 'compliance' && appMode === 'ticketing_only') return false;
 
     if (!user) return false;
+    if (staffOnly && user.role === 'user') return false;
     if (!capabilityKeys || capabilityKeys.length === 0) return true;
     if (capabilityKeys && myCap && capabilityKeys.some((k) => !!myCap[k])) return true;
     return false;
@@ -324,7 +335,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
       <List sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
         {mainNavItems
-          .filter((item) => hasAccess(item.capabilityKeys, item.service))
+          .filter((item) => hasAccess(item.capabilityKeys, item.service, item.staffOnly))
           .map((item) => (
             <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
               {renderNavItem(item)}
@@ -333,7 +344,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       </List>
 
       {adminNavItems.some((item) =>
-        hasAccess(item.capabilityKeys, item.service),
+        hasAccess(item.capabilityKeys, item.service, item.staffOnly),
       ) && (
         <>
           <Divider sx={{ mx: isCollapsed ? 1 : 2, my: 1 }} />
@@ -348,7 +359,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           <List sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
             {adminNavItems
               .filter((item) =>
-                hasAccess(item.capabilityKeys, item.service),
+                hasAccess(item.capabilityKeys, item.service, item.staffOnly),
               )
               .map((item) => (
                 <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
@@ -365,7 +376,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
       <List sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
         {settingsNavItems
-          .filter((item) => hasAccess(item.capabilityKeys, item.service))
+          .filter((item) => hasAccess(item.capabilityKeys, item.service, item.staffOnly))
           .map((item) => (
             <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
               {renderNavItem(item)}

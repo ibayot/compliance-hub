@@ -12,6 +12,7 @@ const STAFF_CAPABILITIES = [
   'isAllTickets',
   'isTicketFocal',
   'isTicketSettingsFocal',
+  'isKnowledgeBaseManage',
   'isSpecializedSupport',
   'isDesktop',
   'isItSupport',

@@ -150,10 +150,16 @@ const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'war
 
 export default function TicketsPage({
   restrictedAssignedOnly = false,
+  personalRequestedOnly = false,
 }: {
   restrictedAssignedOnly?: boolean;
+  personalRequestedOnly?: boolean;
 }) {
   const router = useRouter();
+  const ticketDetailsHref = (ticketId: string) =>
+    personalRequestedOnly
+      ? `/operations/tickets/${ticketId}?source=my-tickets`
+      : `/operations/tickets/${ticketId}`;
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user, myCap } = useAuth();
@@ -310,19 +316,26 @@ export default function TicketsPage({
   const isTechnician = isFocalTech || isLowerLevelTech || isJuniorTech || isItoRole;
   const isFocal = !!myCap?.isFocal;
   // DB-driven: is_all_tickets column
-  const canManageAll = !restrictedAssignedOnly && !!myCap?.isAllTickets;
+  const canManageAll = !restrictedAssignedOnly && !personalRequestedOnly && !!myCap?.isAllTickets;
   // Matrix-driven: Escalated To Me tab is visible when Escalation capability is ticked.
-  const canViewEscalatedQueue = !restrictedAssignedOnly && !!myCap?.isEscalationFocal;
+  const canViewEscalatedQueue =
+    !restrictedAssignedOnly && !personalRequestedOnly && !!myCap?.isEscalationFocal;
   // DB-driven: is_ticket_focal column — who can manually assign/reassign tickets
-  const canAssign = !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
-  const isTicketAdmin = !!myCap?.isTicketSettingsFocal;
-  const canOverrideResolutionTime = !!myCap?.isTicketResolutionTimeOverride;
+  const canAssign =
+    !personalRequestedOnly && (!!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal);
+  const isTicketAdmin = !personalRequestedOnly && !!myCap?.isTicketSettingsFocal;
+  const canOverrideResolutionTime =
+    !personalRequestedOnly && !!myCap?.isTicketResolutionTimeOverride;
   // Matrix-driven escalation eligibility:
   // show action for technician tracks plus ticket admin/assign/all-ticket capabilities.
   const canEscalate =
-    !!myCap?.isTicketSettingsFocal ||
-    !!myCap?.isTicketFocal ||
-    !!(myCap?.isDesktop || myCap?.isItSupport || myCap?.isPantawidIct || myCap?.isAllTickets);
+    !personalRequestedOnly &&
+    (!!myCap?.isTicketSettingsFocal ||
+      !!myCap?.isTicketFocal ||
+      !!(myCap?.isDesktop ||
+        myCap?.isItSupport ||
+        myCap?.isPantawidIct ||
+        myCap?.isAllTickets));
 
   const openResolutionOverrideDialog = (ticket: Ticket) => {
     setResolutionOverrideTicket(ticket);
@@ -459,7 +472,7 @@ export default function TicketsPage({
     { key: 'freeze', label: 'Frozen' },
     { key: 'duplicate', label: 'Duplicate' },
     { key: 'proxy', label: 'Proxy Requests' },
-  ];
+  ].filter(({ key }) => !personalRequestedOnly || key !== 'proxy');
   const selectedStatus = statusTabs.some(
     ({ key }) => key === selectedTab && key !== 'all' && key !== 'proxy',
   )
@@ -608,7 +621,36 @@ export default function TicketsPage({
     try {
       setLoading(true);
       const [data, dashboardStats] = await Promise.all([
-        restrictedAssignedOnly
+        personalRequestedOnly
+          ? ticketsApi.getMyRequested({
+              status: selectedStatus || (filterStatus as TicketStatus) || undefined,
+              ticketType: (filterType as TicketType) || undefined,
+              priority: filterPriority || undefined,
+              date:
+                filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
+              includeCarryover: filterPeriodMode === 'day' && selectedTab !== 'to_rate',
+              year:
+                filterPeriodMode !== 'day' && selectedTab !== 'to_rate'
+                  ? Number(filterYear) || undefined
+                  : undefined,
+              month:
+                filterPeriodMode === 'month' && selectedTab !== 'to_rate'
+                  ? Number(filterMonth) || undefined
+                  : undefined,
+              quarter:
+                filterPeriodMode === 'quarter' && selectedTab !== 'to_rate'
+                  ? Number(filterQuarter) || undefined
+                  : undefined,
+              semester:
+                filterPeriodMode === 'semester' && selectedTab !== 'to_rate'
+                  ? Number(filterSemester) || undefined
+                  : undefined,
+              pendingSatisfaction: selectedTab === 'to_rate',
+              search: searchQuery,
+              page,
+              limit: TICKETS_PAGE_SIZE,
+            })
+          : restrictedAssignedOnly
           ? ticketsApi.getMyAssigned({
               status: selectedStatus,
               ticketType: (filterType as TicketType) || undefined,
@@ -702,6 +744,7 @@ export default function TicketsPage({
     user?.id,
     canManageAll,
     restrictedAssignedOnly,
+    personalRequestedOnly,
   ]);
 
   useEffect(() => {
@@ -735,7 +778,36 @@ export default function TicketsPage({
     const requestId = ++ticketRequestRef.current;
     try {
       const [data, dashboardStats] = await Promise.all([
-        restrictedAssignedOnly
+        personalRequestedOnly
+          ? ticketsApi.getMyRequested({
+              status: selectedStatus || (filterStatus as TicketStatus) || undefined,
+              ticketType: (filterType as TicketType) || undefined,
+              priority: filterPriority || undefined,
+              date:
+                filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
+              includeCarryover: filterPeriodMode === 'day' && selectedTab !== 'to_rate',
+              year:
+                filterPeriodMode !== 'day' && selectedTab !== 'to_rate'
+                  ? Number(filterYear) || undefined
+                  : undefined,
+              month:
+                filterPeriodMode === 'month' && selectedTab !== 'to_rate'
+                  ? Number(filterMonth) || undefined
+                  : undefined,
+              quarter:
+                filterPeriodMode === 'quarter' && selectedTab !== 'to_rate'
+                  ? Number(filterQuarter) || undefined
+                  : undefined,
+              semester:
+                filterPeriodMode === 'semester' && selectedTab !== 'to_rate'
+                  ? Number(filterSemester) || undefined
+                  : undefined,
+              pendingSatisfaction: selectedTab === 'to_rate',
+              search: searchQuery,
+              page,
+              limit: TICKETS_PAGE_SIZE,
+            })
+          : restrictedAssignedOnly
           ? ticketsApi.getMyAssigned({
               status: selectedStatus,
               ticketType: (filterType as TicketType) || undefined,
@@ -821,6 +893,7 @@ export default function TicketsPage({
     isFocalTech,
     user?.id,
     restrictedAssignedOnly,
+    personalRequestedOnly,
   ]);
   useSse(['TICKET_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
     if (ticketSseTimerRef.current) clearTimeout(ticketSseTimerRef.current);
@@ -838,12 +911,12 @@ export default function TicketsPage({
   );
 
   const refreshRequesterOptions = useCallback(() => {
-    if (restrictedAssignedOnly) return;
+    if (restrictedAssignedOnly || personalRequestedOnly) return;
     usersApi
       .listTicketRequesters()
       .then((users) => setAllUsers(users.filter((u) => u.active && u.role !== 'super_admin')))
       .catch(() => {});
-  }, [restrictedAssignedOnly]);
+  }, [restrictedAssignedOnly, personalRequestedOnly]);
 
   useEffect(() => {
     // Load the restricted requester list for ticket proxy creation.
@@ -1270,12 +1343,16 @@ export default function TicketsPage({
               ? 'Escalation History'
               : restrictedAssignedOnly
                 ? 'My Assigned Tickets'
-                : 'Help Desk Tickets'}
+                : personalRequestedOnly
+                  ? 'My Tickets'
+                  : 'Help Desk Tickets'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {showEscalations
               ? 'Review ticket escalations, outcomes, and the staff involved.'
-              : 'Submit and track RICTMS support requests and specialized concerns'}
+              : personalRequestedOnly
+                ? 'Track and rate tickets requested for you, including requests filed on your behalf.'
+                : 'Submit and track RICTMS support requests and specialized concerns'}
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
@@ -1286,7 +1363,7 @@ export default function TicketsPage({
                 : `Escalation History (${allEscalations.length})`}
             </Button>
           )}
-          {!restrictedAssignedOnly && !showEscalations && (
+          {!restrictedAssignedOnly && !personalRequestedOnly && !showEscalations && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenNewTicket}>
               New Ticket
             </Button>
@@ -1732,7 +1809,7 @@ export default function TicketsPage({
             </CardContent>
           </Card>
         )}
-      {!showEscalations && isLowerLevelTech && (
+      {!showEscalations && !personalRequestedOnly && isLowerLevelTech && (
         <Card sx={{ mb: 2 }}>
           <CardContent>
             <Typography variant="body2" color="text.secondary">
@@ -1767,7 +1844,7 @@ export default function TicketsPage({
                 />
               ))}
             </Tabs>
-            {user?.role === 'user' && (
+            {!restrictedAssignedOnly && (
               <Button
                 size="small"
                 onClick={() => {
@@ -1904,12 +1981,12 @@ export default function TicketsPage({
                   role="button"
                   tabIndex={0}
                   aria-label={`Open ticket ${ticket.ticketNumber}`}
-                  onClick={() => router.push(`/operations/tickets/${ticket.id}`)}
+                  onClick={() => router.push(ticketDetailsHref(ticket.id))}
                   onKeyDown={(event) => {
                     if (event.target !== event.currentTarget) return;
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      router.push(`/operations/tickets/${ticket.id}`);
+                      router.push(ticketDetailsHref(ticket.id));
                     }
                   }}
                   sx={{
@@ -2003,7 +2080,7 @@ export default function TicketsPage({
                             size="small"
                             onClick={(event) => {
                               event.stopPropagation();
-                              router.push(`/operations/tickets/${ticket.id}`);
+                              router.push(ticketDetailsHref(ticket.id));
                             }}
                           >
                             <ViewIcon fontSize="small" />
@@ -2422,7 +2499,7 @@ export default function TicketsPage({
                             <Tooltip title="View Details">
                               <IconButton
                                 size="small"
-                                onClick={() => router.push(`/operations/tickets/${ticket.id}`)}
+                                onClick={() => router.push(ticketDetailsHref(ticket.id))}
                               >
                                 <ViewIcon fontSize="small" />
                               </IconButton>
@@ -2514,17 +2591,22 @@ export default function TicketsPage({
       )}
 
       {/* New Ticket Dialog — Redesigned with highlighted support type cards + category dropdown */}
-      <Dialog open={newDialogOpen} onClose={() => setNewDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={newDialogOpen} onClose={() => setNewDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ fontWeight: 700 }}>Submit a Help Desk Ticket</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             <Typography variant="subtitle2" color="text.secondary">
               Choose Support Type
             </Typography>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={2}
-              flexWrap={{ xs: 'nowrap', sm: 'wrap' }}
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'repeat(auto-fit, minmax(145px, 1fr))',
+                },
+                gap: 2,
+              }}
             >
               {[
                 {
@@ -2567,11 +2649,14 @@ export default function TicketsPage({
                     })
                   }
                   sx={{
-                    flex: 1,
                     cursor: 'pointer',
                     textAlign: 'center',
                     py: 2,
                     px: 1,
+                    minHeight: 170,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
                     border:
                       form.ticketType === opt.value
                         ? `2.5px solid ${opt.color}`
@@ -2593,7 +2678,7 @@ export default function TicketsPage({
                   </Typography>
                 </Card>
               ))}
-            </Stack>
+            </Box>
 
             {categories.length > 0 &&
               (() => {

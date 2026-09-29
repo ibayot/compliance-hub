@@ -19,6 +19,10 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
 import { ConfigService } from '@nestjs/config';
+
+const TRUSTED_DEVICE_COOKIE_NAME = 'rictms_trusted_device';
+const TRUSTED_DEVICE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 function getCookieValue(cookieHeader: string | undefined, cookieName: string): string | null {
   return cookieHeader
     ?.split(';')
@@ -44,12 +48,30 @@ export class AuthController {
     return this.configService.get<string>('AUTH_REFRESH_COOKIE_NAME') as string;
   }
 
+  private trustedDeviceToken(req: any, clientPlatform: string | undefined): string | undefined {
+    const cookieToken = clientPlatform === 'browser'
+      ? getCookieValue(req.headers?.cookie, TRUSTED_DEVICE_COOKIE_NAME)
+      : null;
+    const headerToken = req.headers?.['x-device-token'];
+    const token = cookieToken || (Array.isArray(headerToken) ? headerToken[0] : headerToken);
+    if (typeof token !== 'string') return undefined;
+    const normalized = token.trim();
+    return normalized.length > 0 && normalized.length <= 255 ? normalized : undefined;
+  }
+
   private completeBrowserAuth(result: any, clientPlatform: string | undefined, res: Response) {
     if (clientPlatform !== 'browser' || !result?.accessToken || !result?.refreshToken) return result;
     const options = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/' };
     res.cookie(this.accessCookieName(), result.accessToken, options);
     res.cookie(this.refreshCookieName(), result.refreshToken, { ...options, path: '/api/auth' });
-    const { accessToken, refreshToken, ...safeResult } = result;
+    if (result.deviceToken) {
+      res.cookie(TRUSTED_DEVICE_COOKIE_NAME, result.deviceToken, {
+        ...options,
+        maxAge: TRUSTED_DEVICE_MAX_AGE_MS,
+        path: '/api/auth',
+      });
+    }
+    const { accessToken, refreshToken, deviceToken, ...safeResult } = result;
     return safeResult;
   }
 
@@ -60,8 +82,8 @@ export class AuthController {
 
   @Post('login')
   async login(@Body() loginDto: LoginDto, @Request() req: any, @Res({ passthrough: true }) res: Response) {
-    const deviceToken = req.headers?.['x-device-token'];
     const clientPlatform = req.headers?.['x-client-platform'];
+    const deviceToken = this.trustedDeviceToken(req, clientPlatform);
     return this.completeBrowserAuth(await this.authService.login(loginDto, deviceToken), clientPlatform, res);
   }
 
@@ -99,8 +121,8 @@ export class AuthController {
       @Request() req: any,
       @Res({ passthrough: true }) res: Response,
   ) {
-    const deviceToken = req.headers?.['x-device-token'];
     const clientPlatform = req.headers?.['x-client-platform'];
+    const deviceToken = this.trustedDeviceToken(req, clientPlatform);
     return this.completeBrowserAuth(await this.authService.verifyMfaCode(tempToken, code, rememberDevice, deviceToken), clientPlatform, res);
   }
 

@@ -64,6 +64,7 @@ import {
   SentimentDissatisfied,
   SentimentVeryDissatisfied,
   EditCalendar as ResolutionTimeIcon,
+  ContentCopy as DuplicateIcon,
 } from '@mui/icons-material';
 import {
   PRIORITY_COLOR,
@@ -89,6 +90,14 @@ const STATUS_OPTS = [
 ];
 
 const COMMENTS_PAGE_SIZE = 5;
+
+const formatElapsedHoursMinutes = (milliseconds: number) => {
+  const totalMinutes = Math.max(0, Math.floor(milliseconds / (1000 * 60)));
+  if (milliseconds > 0 && totalMinutes === 0) return 'less than 1 min';
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours} hr(s) ${minutes} min(s)` : `${minutes} min(s)`;
+};
 
 const populatedFieldSx = (populated: boolean) =>
   populated
@@ -213,6 +222,9 @@ export default function TicketDetailPage() {
   const { user, myCap } = useAuth();
   const ticketId = params.id as string;
   const { enqueueSnackbar } = useSnackbar();
+  const openedFromMyTickets =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('source') === 'my-tickets';
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
@@ -362,6 +374,8 @@ export default function TicketDetailPage() {
   const canAssignByCapability = !!myCap?.isTicketFocal || !!myCap?.isTicketSettingsFocal;
   const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isAllTickets;
   const canViewInternalNotes = ticket?.canViewInternalNotes === true;
+  // Duplicate is terminal — no further modifications allowed.
+  const isDuplicate = ticket?.status === 'duplicate';
   const canOverrideResolutionTime = !!myCap?.isTicketResolutionTimeOverride;
   const canCorrectTicketRecord =
     !!myCap?.isTicketRequesterCorrection &&
@@ -455,6 +469,15 @@ export default function TicketDetailPage() {
   const acceptedEscalationOnlyStatusAction = !!hasAcceptedEscalation;
   const canUpdateStatusNow =
     (canStaff && !hasAcceptedEscalation) || isEscalationAdmin || !!isAcceptedEscalationFocal;
+  const canShowStatusAction =
+    !hideTopActionButtons &&
+    !editingStatus &&
+    !isDuplicate &&
+    !['resolved', 'closed'].includes(ticket?.status || '') &&
+    ((!hasAcceptedEscalation &&
+      canUpdateStatusNow &&
+      (isTechnician || isSectionHead || isComplianceOfficer || !!myCap?.isTicketSettingsFocal)) ||
+      (hasAcceptedEscalation && (isAcceptedEscalationFocal || isEscalationAdmin)));
   // Matrix-driven reassign privilege: ticket admin/assign capability, constrained after accepted escalations.
   const canReassign = canAssignByCapability && (!hasAcceptedEscalation || isEscalationAdmin);
   // Ticket can be escalated again if there is no pending escalation.
@@ -465,12 +488,17 @@ export default function TicketDetailPage() {
     !myCap?.isTicketSettingsFocal &&
     !isAcceptedEscalationFocal;
   const isRequester = ticket?.requesterId === (user as any)?.id;
+  const ticketListPath = openedFromMyTickets
+    ? '/operations/my-tickets'
+    : myCap?.isTicketModuleAccess
+      ? '/operations/tickets'
+      : isRequester
+        ? '/operations/my-tickets'
+        : '/operations/my-assigned-tickets';
   const canSatisfaction =
     isRequester &&
     (ticket?.status === 'resolved' || ticket?.status === 'closed') &&
     !ticket?.satisfactionSubmittedAt;
-  // Duplicate is terminal — no further modifications allowed
-  const isDuplicate = ticket?.status === 'duplicate';
   const sortedComments = useMemo(() => {
     const comments = [...(((ticket as any)?.comments ?? []) as any[])].filter(
       (c) => c.comment !== '[Initial Ticket Attachment]',
@@ -797,7 +825,10 @@ export default function TicketDetailPage() {
   const handleConfirmDuplicate = async () => {
     // Step 2: After confirmation, load the requester's open tickets for the picker
     try {
-      const open = await ticketsApi.getOpenTicketsForRequester((ticket as any).requesterId);
+      const open = await ticketsApi.getOpenTicketsForRequester(
+        (ticket as any).requesterId,
+        ticketId,
+      );
       setRequesterOpenTickets(open.filter((t) => t.id !== ticketId));
     } catch {
       setRequesterOpenTickets([]);
@@ -805,6 +836,11 @@ export default function TicketDetailPage() {
     setSelectedDupOfId('');
     setDupConfirmOpen(false);
     setDupDialogOpen(true);
+  };
+
+  const openDuplicateFlow = () => {
+    setNewStatus('duplicate');
+    setDupConfirmOpen(true);
   };
 
   const handleAssign = async () => {
@@ -953,7 +989,7 @@ export default function TicketDetailPage() {
       setReturnReason('');
       enqueueSnackbar('Ticket returned to escalating technician.', { variant: 'success' });
       // UX rule: after returning escalation, only the returner view should refresh and go back to list.
-      router.push('/operations/tickets');
+      router.push(ticketListPath);
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to return escalation', {
         variant: 'error',
@@ -1090,7 +1126,7 @@ export default function TicketDetailPage() {
         <Typography color="error">Ticket not found</Typography>
         <Button
           startIcon={<BackIcon />}
-          onClick={() => router.push('/operations/tickets')}
+          onClick={() => router.push(ticketListPath)}
           sx={{ mt: 2 }}
         >
           Back to Tickets
@@ -1103,7 +1139,7 @@ export default function TicketDetailPage() {
     <Box>
       <Button
         startIcon={<BackIcon />}
-        onClick={() => router.push('/operations/tickets')}
+        onClick={() => router.push(ticketListPath)}
         sx={{ mb: 2 }}
       >
         Back to Tickets
@@ -1312,21 +1348,22 @@ export default function TicketDetailPage() {
 
             {/* Actions */}
             <Box display="flex" flexDirection="column" gap={1} minWidth={160}>
-              {!hideTopActionButtons &&
-                !editingStatus &&
-                !isDuplicate &&
-                !['resolved', 'closed'].includes(ticket.status) &&
-                ((!hasAcceptedEscalation &&
-                  canUpdateStatusNow &&
-                  (isTechnician ||
-                    isSectionHead ||
-                    isComplianceOfficer ||
-                    !!myCap?.isTicketSettingsFocal)) ||
-                  (hasAcceptedEscalation && isAcceptedEscalationFocal)) && (
-                  <Button variant="outlined" size="small" onClick={() => setEditingStatus(true)}>
-                    Update Status
-                  </Button>
-                )}
+              {canShowStatusAction && (
+                <Button variant="outlined" size="small" onClick={() => setEditingStatus(true)}>
+                  Update Status
+                </Button>
+              )}
+              {canShowStatusAction && ['assigned', 'in_progress'].includes(ticket.status) && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  color="warning"
+                  startIcon={<DuplicateIcon />}
+                  onClick={openDuplicateFlow}
+                >
+                  Mark as Duplicate
+                </Button>
+              )}
               {ticket.category?.name?.toLowerCase().includes('disposal') && (
                 <>
                   <Button
@@ -1979,11 +2016,10 @@ export default function TicketDetailPage() {
                           >
                             {new Date(effectiveResolvedAt(ticket) as string) >
                             new Date(ticket.slaDeadline)
-                              ? `Missed SLA by ${Math.round(
-                                  (new Date(effectiveResolvedAt(ticket) as string).getTime() -
-                                    new Date(ticket.slaDeadline).getTime()) /
-                                    (1000 * 60 * 60),
-                                )} hr(s)`
+                              ? `Missed SLA by ${formatElapsedHoursMinutes(
+                                  new Date(effectiveResolvedAt(ticket) as string).getTime() -
+                                    new Date(ticket.slaDeadline).getTime(),
+                                )}`
                               : 'Met SLA'}
                           </Typography>
                         </Box>

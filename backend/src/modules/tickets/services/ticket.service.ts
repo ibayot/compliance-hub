@@ -377,6 +377,23 @@ export const resolveTicketReportTechnicianId = (
   viewerId?: number,
   requestedTechnicianId?: number,
 ): number | undefined => (canManageReports ? requestedTechnicianId : viewerId);
+
+export const assertValidDuplicateOriginal = (
+  ticket: Pick<Ticket, 'id' | 'requesterId'>,
+  original: Pick<Ticket, 'id' | 'requesterId' | 'status'>,
+): void => {
+  if (original.id === ticket.id) {
+    throw new BadRequestException('A ticket cannot be marked as a duplicate of itself.');
+  }
+  if (original.status === TicketStatus.DUPLICATE) {
+    throw new BadRequestException(
+      'The selected original ticket is itself a duplicate. Select its original ticket instead.',
+    );
+  }
+  if (Number(original.requesterId) !== Number(ticket.requesterId)) {
+    throw new BadRequestException('The original and duplicate tickets must have the same requester.');
+  }
+};
 // --- Service -----------------------------------------------------------------
 
 @Injectable()
@@ -1573,6 +1590,7 @@ export class TicketService implements OnModuleInit {
     assignedToId?: number;
     escalatedToId?: number;
     assignedOnly?: boolean;
+    requestedOnly?: boolean;
     proxyCreatedByMe?: boolean;
     pendingSatisfaction?: boolean;
     priority?: string;
@@ -1630,7 +1648,20 @@ export class TicketService implements OnModuleInit {
       throw new ForbiddenException('Your role does not have escalation queue access.');
     }
 
-    if (isEscalatedQueue) {
+    if (filters.requestedOnly) {
+      if (!filters.viewerId) {
+        throw new ForbiddenException('An authenticated requester is required.');
+      }
+      // This scope is intentionally derived from the JWT. It must remain
+      // independent of role capabilities so every requester can see and rate
+      // tickets requested for them without gaining access to anyone else's queue.
+      qb.where('t.requesterId = :requestedViewerId', {
+        requestedViewerId: filters.viewerId,
+      });
+      if (filters.ticketType) {
+        qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+      }
+    } else if (isEscalatedQueue) {
       qb.innerJoin(
         'ticket_escalations',
         'te',
@@ -2017,8 +2048,7 @@ export class TicketService implements OnModuleInit {
           (ticket.ticketType !== TicketType.SPECIALIZED_CONCERNS ||
             this.roleCapSvc.isSpecializedSupport(user.role)) &&
           (ticket.ticketType === TicketType.SPECIALIZED_CONCERNS ||
-            (Number(user.id) !== Number(ticket.requesterId) &&
-              Number(user.id) !== Number(ticket.createdById))),
+            Number(user.id) !== Number(ticket.requesterId)),
       )
       .map((user) => ({
         id: user.id,
@@ -2103,12 +2133,17 @@ export class TicketService implements OnModuleInit {
       if (Number(ticket.assignedToId) === Number(dto.assignedToId)) {
         throw new BadRequestException('The selected person is already assigned to this ticket.');
       }
-      this.assertRequesterAssignmentSeparation(
-        ticket.ticketType,
-        Number(dto.assignedToId),
-        ticket.requesterId,
-        ticket.createdById,
-      );
+      // A proxy filer may be the person who actually completed the work. For a
+      // factual correction only, allow that active RICTMS filer to become the
+      // recorded assignee when Requested For is a different person. The actual
+      // requester remains excluded, and normal assignment/reassignment keeps
+      // the stricter requester/reporter separation rule.
+      if (
+        ticket.ticketType !== TicketType.SPECIALIZED_CONCERNS &&
+        Number(dto.assignedToId) === Number(ticket.requesterId)
+      ) {
+        throw new ForbiddenException('A ticket cannot be assigned to the person who requested it.');
+      }
 
       let targetActiveCount = 0;
       if (isActiveCorrection) {
@@ -2678,8 +2713,13 @@ export class TicketService implements OnModuleInit {
         [TicketStatus.IN_PROGRESS]:
           this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
           this.roleCapSvc.isTicketFocal(actorRole as string)
-            ? [TicketStatus.RESOLVED, TicketStatus.PAUSE, TicketStatus.FREEZE]
-            : [TicketStatus.RESOLVED, TicketStatus.PAUSE],
+            ? [
+                TicketStatus.RESOLVED,
+                TicketStatus.PAUSE,
+                TicketStatus.FREEZE,
+                TicketStatus.DUPLICATE,
+              ]
+            : [TicketStatus.RESOLVED, TicketStatus.PAUSE, TicketStatus.DUPLICATE],
         [TicketStatus.PAUSE]: [TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED],
         [TicketStatus.RESOLVED]: [TicketStatus.CLOSED],
         [TicketStatus.FREEZE]: [
@@ -2722,6 +2762,7 @@ export class TicketService implements OnModuleInit {
         }
         const original = await this.ticketRepo.findOne({ where: { id: dto.duplicateOfId } });
         if (!original) throw new BadRequestException('Original ticket not found.');
+        assertValidDuplicateOriginal(ticket, original);
         ticket.duplicateOfId = dto.duplicateOfId;
 
         // --- SLA Freezing Logic for Terminal DUPLICATE State ---
@@ -4596,16 +4637,20 @@ export class TicketService implements OnModuleInit {
     requesterId: number,
     viewerId?: number,
     viewerRole?: UserRole,
+    sourceTicketId?: string,
   ): Promise<Ticket[]> {
-    if (
-      viewerRole &&
-      viewerId &&
-      !this.canViewAllTicketsInTicketing(viewerRole as string) &&
-      viewerId !== requesterId
-    ) {
-      throw new ForbiddenException(
-        'You can only view open tickets for your own requester account.',
-      );
+    if (viewerRole && viewerId && !this.canViewAllTicketsInTicketing(viewerRole as string)) {
+      if (viewerId !== requesterId) {
+        if (!sourceTicketId) {
+          throw new ForbiddenException(
+            "A visible source ticket is required to load another requester's duplicate choices.",
+          );
+        }
+        const source = await this.getTicketById(sourceTicketId, viewerRole, viewerId);
+        if (Number(source.requesterId) !== Number(requesterId)) {
+          throw new ForbiddenException('The source ticket does not belong to this requester.');
+        }
+      }
     }
 
     return this.ticketRepo

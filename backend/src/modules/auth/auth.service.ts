@@ -16,6 +16,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TokenBlacklist } from './entities/token-blacklist.entity';
 
+export function isTrustedDeviceActive(
+  expiresAt: Date | string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (!expiresAt) return false;
+  const expirationMs = expiresAt instanceof Date ? expiresAt.getTime() : Date.parse(expiresAt);
+  return Number.isFinite(expirationMs) && expirationMs > now.getTime();
+}
+
 @Injectable()
 export class AuthService {
   private readonly googleClient = new OAuth2Client();
@@ -142,7 +151,7 @@ export class AuthService {
     // Check trusted device
     if (requiresMfa && deviceToken) {
       const trustedDevice = await this.usersService.findTrustedDevice(user.id, deviceToken);
-      if (trustedDevice && trustedDevice.expiresAt > new Date()) {
+      if (trustedDevice && isTrustedDeviceActive(trustedDevice.expiresAt)) {
         requiresMfa = false;
       }
     }

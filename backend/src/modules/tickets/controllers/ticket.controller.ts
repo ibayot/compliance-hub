@@ -226,6 +226,55 @@ export class TicketController {
     });
   }
 
+  /** GET /tickets/my-requested - tickets where the caller is the Requested For person */
+  @Get('my-requested')
+  async getMyRequestedTickets(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: TicketStatus,
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+    @Query('quarter') quarter?: string,
+    @Query('semester') semester?: string,
+    @Query('date') date?: string,
+    @Query('includeCarryover') includeCarryover?: string,
+    @Query('ticketType') ticketType?: TicketType,
+    @Query('priority') priority?: string,
+    @Query('search') search?: string,
+    @Query('pendingSatisfaction') pendingSatisfaction?: string,
+    @Request() req?: any,
+  ) {
+    if (
+      date &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+        Number.isNaN(Date.parse(`${date}T00:00:00+08:00`)) ||
+        new Date(`${date}T00:00:00+08:00`).toLocaleDateString('en-CA', {
+          timeZone: 'Asia/Manila',
+        }) !== date)
+    ) {
+      throw new BadRequestException('Date must be a valid YYYY-MM-DD date.');
+    }
+    const viewerId = Number(req?.user?.id ?? req?.user?.userId);
+    return this.ticketService.getTickets({
+      requestedOnly: true,
+      viewerId,
+      viewerRole: req?.user?.role,
+      status,
+      ticketType,
+      priority,
+      search,
+      pendingSatisfaction: pendingSatisfaction === 'true' || pendingSatisfaction === '1',
+      date,
+      includeCarryover: includeCarryover === 'true' || includeCarryover === '1',
+      year: year ? Number(year) : undefined,
+      month: month ? Number(month) : undefined,
+      quarter: quarter ? Number(quarter) : undefined,
+      semester: semester ? Number(semester) : undefined,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 50,
+    });
+  }
+
   /** GET /tickets/sla/summary — active Overdue, Nearing SLA, and On Track metrics */
   @Get('sla/summary')
   @RequireCapability('isTicketModuleAccess')
@@ -472,7 +521,6 @@ export class TicketController {
 
   /** GET /tickets/:id */
   @Get(':id')
-  @RequireCapability('isTicketModuleAccess')
   async getTicket(@Param('id') id: string, @Request() req: any) {
     return this.ticketService.getTicketById(
       id,
@@ -520,11 +568,16 @@ export class TicketController {
   /** GET /tickets/requester/:requesterId/open - open tickets for Duplicate picker */
   @Get('requester/:requesterId/open')
   @RequireCapability('isTicketModuleAccess')
-  async getRequesterOpenTickets(@Param('requesterId') requesterId: string, @Request() req: any) {
+  async getRequesterOpenTickets(
+    @Param('requesterId') requesterId: string,
+    @Query('sourceTicketId') sourceTicketId: string | undefined,
+    @Request() req: any,
+  ) {
     return this.ticketService.getOpenTicketsForRequester(
       Number(requesterId),
       req.user.id ?? req.user.userId,
       req.user.role,
+      sourceTicketId,
     );
   }
 
@@ -544,14 +597,12 @@ export class TicketController {
 
   /** GET /tickets/:id/events — timeline of all ticket events */
   @Get(':id/events')
-  @RequireCapability('isTicketModuleAccess')
   async getTicketEvents(@Param('id') id: string, @Request() req: any) {
     return this.ticketService.getTicketEvents(id, req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** POST /tickets/:id/comments */
   @Post(':id/comments')
-  @RequireCapability('isTicketModuleAccess')
   @UseInterceptors(FilesInterceptor('attachments', 5, { limits: { fileSize: 10 * 1024 * 1024 } }))
   async addComment(
     @Param('id') ticketId: string,
@@ -571,7 +622,6 @@ export class TicketController {
 
   /** POST /tickets/:id/satisfaction */
   @Post(':id/satisfaction')
-  @RequireCapability('isTicketModuleAccess')
   async submitSatisfaction(
     @Param('id') id: string,
     @Body() dto: SubmitSatisfactionDto,
@@ -582,7 +632,6 @@ export class TicketController {
 
   /** POST /tickets/:id/rate — backward-compatible alias for satisfaction submission */
   @Post(':id/rate')
-  @RequireCapability('isTicketModuleAccess')
   async submitSatisfactionAlias(
     @Param('id') id: string,
     @Body() dto: SubmitSatisfactionDto,
@@ -610,7 +659,6 @@ export class TicketController {
 
   /** GET /tickets/:id/escalations */
   @Get(':id/escalations')
-  @RequireCapability('isTicketModuleAccess')
   async getEscalations(@Param('id') id: string, @Request() req: any) {
     return this.ticketService.getEscalations(id, req.user.id ?? req.user.userId, req.user.role);
   }
@@ -683,7 +731,6 @@ export class TicketController {
 
   /** GET /tickets/resolution-time-proof/:ticketId/:overrideId/:filename */
   @Get('resolution-time-proof/:ticketId/:overrideId/:filename')
-  @RequireCapability('isTicketModuleAccess')
   async serveResolutionTimeProof(
     @Param('ticketId') ticketId: string,
     @Param('overrideId') overrideId: string,
@@ -708,7 +755,6 @@ export class TicketController {
 
   /** GET /tickets/proof/:ticketId/:filename — serve escalation proof photo */
   @Get('proof/:ticketId/:filename')
-  @RequireCapability('isTicketModuleAccess')
   async serveProofFile(
     @Param('ticketId') ticketId: string,
     @Param('filename') filename: string,
@@ -734,7 +780,6 @@ export class TicketController {
 
   /** GET /tickets/comment-attachment/:ticketId/:filename — serve comment attachment */
   @Get('comment-attachment/:ticketId/:filename')
-  @RequireCapability('isTicketModuleAccess')
   async serveCommentAttachmentFile(
     @Param('ticketId') ticketId: string,
     @Param('filename') filename: string,

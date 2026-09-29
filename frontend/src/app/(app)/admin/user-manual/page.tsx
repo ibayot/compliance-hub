@@ -135,7 +135,7 @@ const capabilityManuals: ManualItem[] = [
   },
   {
     title: 'Knowledge Base Management',
-    path: 'isSupportStaff',
+    path: 'isKnowledgeBaseManage',
     details: {
       purpose: 'As a support contributor I need to maintain a centralized repository of troubleshooting guides so that users can resolve common issues independently.',
       activities: [

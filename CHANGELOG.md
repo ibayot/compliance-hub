@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.17] - 2026-09-29 - Layout, Knowledge Base, and Workflow Improvements
+
+### Added
+- Desktop and laptop browsers can switch from the account Quick Access menu to a persistent tablet-style Mobile View that uses ticket cards without shrinking the application to its smallest phone layout.
+- Knowledge Base managers can add articles and edit existing content through a shared Markdown-aware editor with formatting controls and a live formatted preview.
+- Added the configurable Knowledge Base Manage capability, initially granted to escalation focals and senior technicians.
+
+### Changed
+- The New Ticket window is wider and its support-type cards use a responsive grid with space reserved for a future fifth support type.
+- Assigned and In Progress tickets now offer a direct Mark as Duplicate action with confirmation and a searchable original-ticket selector.
+
+### Fixed
+- In Progress tickets can complete the Duplicate workflow, and the backend rejects self-references, cross-requester originals, and originals that are already duplicates while retaining existing terminal-state SLA, queue handoff, timeline, notification, and live-update behavior.
+- Remember this device now persists browser trust in a protected seven-day cookie, accepts existing device identifiers for backward compatibility, handles database date values reliably, and renews an existing device record instead of creating duplicates.
+- Every authenticated requester can now open a server-scoped My Tickets view and submit a satisfaction rating, including RICTMS staff without operational Tickets access; unrelated users remain blocked from the ticket and its evidence.
+- Assigned To correction once again includes an eligible RICTMS proxy filer when Requested For is a different person, without allowing the actual requester or bypassing Specialized Concerns eligibility.
+- Resolved-ticket SLA breaches now show hours and minutes instead of rounding a partial hour up to a whole hour.
+
+### Deployment Note
+- Run `db-init/20260929-add-knowledge-base-manage-capability-users.sql` before deploying this version, then run `db-init/20260929-add-application-changelog-v1.0.17-users.sql` in the Users database.
+
 ## [1.0.16] - 2026-09-29 - Period-Aware Duty Handoffs
 
 ### Added

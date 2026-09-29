@@ -40,6 +40,10 @@ export class UpdateRoleCapabilityDto {
 
   @IsOptional()
   @IsBoolean()
+  isKnowledgeBaseManage?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   isSmtpSettingsAccess?: boolean;
 
   @IsOptional()

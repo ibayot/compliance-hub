@@ -69,6 +69,10 @@ export class RoleCapability {
   @Column({ name: 'is_ticket_settings_focal', type: 'tinyint', width: 1, default: 0 })
   isTicketSettingsFocal: boolean;
 
+  /** True for roles that can create and edit Knowledge Base articles. */
+  @Column({ name: 'is_knowledge_base_manage', type: 'tinyint', width: 1, default: 0 })
+  isKnowledgeBaseManage: boolean;
+
   /**
    * True for roles that can manage SMTP Configuration credentials.
    * This capability exposes the dynamic SMTP panel in the Ticket Settings module.

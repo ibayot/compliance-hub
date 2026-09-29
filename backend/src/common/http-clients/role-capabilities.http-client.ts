@@ -22,6 +22,7 @@ export type CapabilityKey =
   | 'isSpecializedSupport'
   | 'isEscalationFocal'
   | 'isTicketSettingsFocal'
+  | 'isKnowledgeBaseManage'
   | 'isSmtpSettingsAccess'
   | 'isGlobalSettingsAccess'
   | 'isSecuritySettingsAccess'
@@ -175,6 +176,10 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
 
   isTicketSettingsFocal(role: string): boolean {
     return !!this.get(role)?.isTicketSettingsFocal;
+  }
+
+  isKnowledgeBaseManage(role: string): boolean {
+    return !!this.get(role)?.isKnowledgeBaseManage;
   }
 
   isSmtpSettingsAccess(role: string): boolean {

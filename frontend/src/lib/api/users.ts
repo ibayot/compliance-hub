@@ -99,6 +99,7 @@ export interface RoleCapabilityRecord {
   isIto: boolean;
   isEscalationFocal: boolean;
   isTicketSettingsFocal: boolean;
+  isKnowledgeBaseManage: boolean;
   isAllTickets: boolean;
   isTicketFocal: boolean;
   isTicketModuleAccess: boolean;
@@ -149,6 +150,7 @@ export interface UpdateRoleCapabilityPayload {
   isIto?: boolean;
   isEscalationFocal?: boolean;
   isTicketSettingsFocal?: boolean;
+  isKnowledgeBaseManage?: boolean;
   isAllTickets?: boolean;
   isTicketFocal?: boolean;
   isTicketModuleAccess?: boolean;

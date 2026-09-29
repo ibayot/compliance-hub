@@ -7,6 +7,7 @@ import { SnackbarProvider, MaterialDesignContent, closeSnackbar, useSnackbar } f
 import CloseIcon from '@mui/icons-material/Close';
 import IconButton from '@mui/material/IconButton';
 import { getAppTheme } from '@/lib/theme';
+import type { AppLayoutMode } from '@/lib/theme';
 
 const StyledMaterialDesignContent = styled(MaterialDesignContent)(({ theme }) => ({
   '&.notistack-MuiContent-success': {
@@ -29,6 +30,9 @@ type ThemeModeContextValue = {
   mode: ThemeMode;
   setMode: (mode: ThemeMode) => void;
   toggleMode: () => void;
+  layoutMode: AppLayoutMode;
+  setLayoutMode: (mode: AppLayoutMode) => void;
+  toggleLayoutMode: () => void;
 };
 
 const ThemeModeContext = createContext<ThemeModeContextValue | undefined>(undefined);
@@ -91,9 +95,26 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
     setMode(mode === 'light' ? 'dark' : 'light');
   }, [mode, setMode]);
 
-  const value = useMemo(() => ({ mode, setMode, toggleMode }), [mode, setMode, toggleMode]);
+  const [layoutMode, setLayoutModeState] = useState<AppLayoutMode>(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('app-layout-mode') : null;
+    return stored === 'mobile' ? 'mobile' : 'web';
+  });
 
-  const theme = useMemo(() => getAppTheme(mode), [mode]);
+  const setLayoutMode = React.useCallback((nextMode: AppLayoutMode) => {
+    setLayoutModeState(nextMode);
+    localStorage.setItem('app-layout-mode', nextMode);
+  }, []);
+
+  const toggleLayoutMode = React.useCallback(() => {
+    setLayoutMode(layoutMode === 'web' ? 'mobile' : 'web');
+  }, [layoutMode, setLayoutMode]);
+
+  const value = useMemo(
+    () => ({ mode, setMode, toggleMode, layoutMode, setLayoutMode, toggleLayoutMode }),
+    [mode, setMode, toggleMode, layoutMode, setLayoutMode, toggleLayoutMode],
+  );
+
+  const theme = useMemo(() => getAppTheme(mode, layoutMode), [mode, layoutMode]);
 
   return (
     <ThemeModeContext.Provider value={value}>

@@ -2,8 +2,29 @@
 
 import { createTheme } from '@mui/material/styles';
 
-export const getAppTheme = (mode: 'light' | 'dark' = 'light') =>
+export type AppLayoutMode = 'web' | 'mobile';
+
+const layoutBreakpoints = (layoutMode: AppLayoutMode) =>
+  layoutMode === 'mobile'
+    ? {
+        // Preserve the tablet layout on desktop-class browsers: sm remains active,
+        // while md-and-larger layouts are intentionally kept out of reach.
+        xs: 0,
+        sm: 600,
+        md: 100000,
+        lg: 100001,
+        xl: 100002,
+      }
+    : undefined;
+
+export const getAppTheme = (
+  mode: 'light' | 'dark' = 'light',
+  layoutMode: AppLayoutMode = 'web',
+) =>
   createTheme({
+    ...(layoutBreakpoints(layoutMode)
+      ? { breakpoints: { values: layoutBreakpoints(layoutMode)! } }
+      : {}),
     palette: {
       mode,
       primary: {

@@ -14,6 +14,7 @@ import {
   Avatar,
   Divider,
   Badge,
+  Switch,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -26,6 +27,7 @@ import {
   Feedback as FeedbackIcon,
   Notifications as NotificationsIcon,
   NewReleases as NewReleasesIcon,
+  Devices as DevicesIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -37,6 +39,7 @@ import { formatPersonName } from '@/lib/utils/person-name';
 import React, { useState, useEffect } from 'react';
 import FeedbackModal from '../FeedbackModal';
 import { attendanceApi, notificationsApi, AttendanceStatus } from '@/app/api/references';
+import { Capacitor } from '@capacitor/core';
 
 interface AppBarProps {
   onMenuClick: () => void;
@@ -53,8 +56,9 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const { user, myCap, logout } = useAuth();
   const { isCollapsed, toggleSidebar, drawerWidth } = useSidebar();
   const { pageTitle } = usePageTitle();
-  const { mode, toggleMode } = useThemeMode();
+  const { mode, toggleMode, layoutMode, toggleLayoutMode } = useThemeMode();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [canChooseLayout, setCanChooseLayout] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [myShift, setMyShift] = useState<{
     clockIn: Date | null;
@@ -89,6 +93,14 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   useEffect(() => {
     fetchMyShift();
   }, [fetchMyShift]);
+
+  useEffect(() => {
+    const desktopPointer = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const refresh = () => setCanChooseLayout(!Capacitor.isNativePlatform() && desktopPointer.matches);
+    refresh();
+    desktopPointer.addEventListener('change', refresh);
+    return () => desktopPointer.removeEventListener('change', refresh);
+  }, []);
 
   // Audio fallback plus a Web Audio context for a more noticeable multi-tone chime.
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
@@ -742,6 +754,29 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               {mode === 'dark' ? <LightModeIcon sx={{ mr: 1 }} /> : <DarkModeIcon sx={{ mr: 1 }} />}
               {mode === 'dark' ? 'Light Mode' : 'Dark Mode'}
             </MenuItem>
+            {canChooseLayout && (
+              <MenuItem
+                onClick={(event) => {
+                  event.preventDefault();
+                  toggleLayoutMode();
+                  handleProfileMenuClose();
+                }}
+              >
+                <DevicesIcon sx={{ mr: 1 }} />
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="body2">Mobile View</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Use tablet-style cards and navigation
+                  </Typography>
+                </Box>
+                <Switch
+                  edge="end"
+                  size="small"
+                  checked={layoutMode === 'mobile'}
+                  inputProps={{ 'aria-label': 'Use Mobile View' }}
+                />
+              </MenuItem>
+            )}
             <MenuItem onClick={handleSettings}>
               <AccountCircle sx={{ mr: 1 }} />
               Settings
