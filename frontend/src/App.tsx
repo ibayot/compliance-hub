@@ -31,6 +31,7 @@ import KnowledgeBasePage from '@/app/(app)/operations/knowledge-base/page';
 import AuditLogsPage from '@/app/(app)/admin/audit-logs/page';
 import DutiesPage from '@/app/(app)/operations/duties/page';
 import ChangelogManagementPage from '@/app/(app)/admin/changelog/page';
+import PublicRatingPage from '@/app/rate/page';
 
 function ProtectedDashboard({
   children,
@@ -87,6 +88,8 @@ export default function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/mfa-verify" element={<MfaVerifyPage />} />
+      <Route path="/rate" element={<PublicRatingPage />} />
+      <Route path="/rate/:token" element={<PublicRatingPage />} />
 
       <Route
         path="/admin/changelog"

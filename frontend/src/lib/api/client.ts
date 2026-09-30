@@ -122,7 +122,9 @@ class ApiClient {
         // No refresh token at all — clear access token and redirect immediately
         const isBrowser = !Capacitor.isNativePlatform();
         const isAuthPage = window.location.pathname === '/login'
-          || window.location.pathname.startsWith('/mfa-verify');
+          || window.location.pathname.startsWith('/mfa-verify')
+          || window.location.pathname === '/rate'
+          || window.location.pathname.startsWith('/rate/');
         // Browser refresh tokens are HttpOnly cookies and invisible to JavaScript.
         if (!refreshToken && !isBrowser) {
           tokenStore.remove('accessToken');

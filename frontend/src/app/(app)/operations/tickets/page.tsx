@@ -60,6 +60,7 @@ import {
   ChevronLeft,
   ChevronRight,
   EditCalendar as ResolutionTimeIcon,
+  MailOutline as MailOutlineIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useRouter } from 'next/navigation';
@@ -79,6 +80,7 @@ import {
   knowledgeBaseApi,
   CsatFormData,
   TicketEscalation,
+  RatingInvitationRecipient,
 } from '@/app/api/references';
 import TicketImageDropzone from '@/components/TicketImageDropzone';
 import { usersApi, UserRecord } from '@/lib/api/users';
@@ -231,6 +233,15 @@ export default function TicketsPage({
   const ticketSseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const TICKETS_PAGE_SIZE = 25;
   const [newDialogOpen, setNewDialogOpen] = useState(false);
+  const [ratingInvitationOpen, setRatingInvitationOpen] = useState(false);
+  const [ratingInvitationRecipients, setRatingInvitationRecipients] = useState<
+    RatingInvitationRecipient[]
+  >([]);
+  const [selectedRatingRecipients, setSelectedRatingRecipients] = useState<
+    RatingInvitationRecipient[]
+  >([]);
+  const [loadingRatingRecipients, setLoadingRatingRecipients] = useState(false);
+  const [sendingRatingInvitations, setSendingRatingInvitations] = useState(false);
   const [requestedForConfirmOpen, setRequestedForConfirmOpen] = useState(false);
   const [form, setForm] = useState<CreateTicketDto>({
     subject: '',
@@ -326,16 +337,15 @@ export default function TicketsPage({
   const isTicketAdmin = !personalRequestedOnly && !!myCap?.isTicketSettingsFocal;
   const canOverrideResolutionTime =
     !personalRequestedOnly && !!myCap?.isTicketResolutionTimeOverride;
+  const canSendRatingInvitations =
+    !restrictedAssignedOnly && !personalRequestedOnly && !!myCap?.isTicketSettingsFocal;
   // Matrix-driven escalation eligibility:
   // show action for technician tracks plus ticket admin/assign/all-ticket capabilities.
   const canEscalate =
     !personalRequestedOnly &&
     (!!myCap?.isTicketSettingsFocal ||
       !!myCap?.isTicketFocal ||
-      !!(myCap?.isDesktop ||
-        myCap?.isItSupport ||
-        myCap?.isPantawidIct ||
-        myCap?.isAllTickets));
+      !!(myCap?.isDesktop || myCap?.isItSupport || myCap?.isPantawidIct || myCap?.isAllTickets));
 
   const openResolutionOverrideDialog = (ticket: Ticket) => {
     setResolutionOverrideTicket(ticket);
@@ -343,6 +353,54 @@ export default function TicketsPage({
     setResolutionOverrideReason('');
     setResolutionOverrideFiles([]);
     setResolutionOverrideConfirmed(false);
+  };
+
+  const openRatingInvitationDialog = async () => {
+    setRatingInvitationOpen(true);
+    setSelectedRatingRecipients([]);
+    setLoadingRatingRecipients(true);
+    try {
+      setRatingInvitationRecipients(await ticketsApi.getRatingInvitationRecipients());
+    } catch (error: any) {
+      enqueueSnackbar(error?.response?.data?.message || 'Failed to load eligible recipients.', {
+        variant: 'error',
+      });
+      setRatingInvitationRecipients([]);
+    } finally {
+      setLoadingRatingRecipients(false);
+    }
+  };
+
+  const sendRatingInvitations = async () => {
+    if (selectedRatingRecipients.length === 0) {
+      enqueueSnackbar('Select at least one eligible recipient.', { variant: 'warning' });
+      return;
+    }
+    setSendingRatingInvitations(true);
+    try {
+      const result = await ticketsApi.sendRatingInvitations(
+        selectedRatingRecipients.map((recipient) => recipient.id),
+      );
+      const summary = [
+        `${result.sent} sent`,
+        result.failed ? `${result.failed} failed` : '',
+        result.skipped ? `${result.skipped} skipped` : '',
+      ]
+        .filter(Boolean)
+        .join(', ');
+      enqueueSnackbar(`Rating invitations: ${summary}.`, {
+        variant: result.failed || result.skipped ? 'warning' : 'success',
+      });
+      if (result.sent > 0 && result.failed === 0) setRatingInvitationOpen(false);
+      setRatingInvitationRecipients(await ticketsApi.getRatingInvitationRecipients());
+      setSelectedRatingRecipients([]);
+    } catch (error: any) {
+      enqueueSnackbar(error?.response?.data?.message || 'Failed to send rating invitations.', {
+        variant: 'error',
+      });
+    } finally {
+      setSendingRatingInvitations(false);
+    }
   };
 
   const closeResolutionOverrideDialog = () => {
@@ -466,6 +524,7 @@ export default function TicketsPage({
     { key: 'open', label: 'Open' },
     { key: 'assigned', label: 'Assigned' },
     { key: 'in_progress', label: 'In Progress' },
+    ...(personalRequestedOnly ? [{ key: 'to_rate', label: 'To Rate' }] : []),
     { key: 'pause', label: 'Paused' },
     { key: 'resolved', label: 'Resolved' },
     { key: 'closed', label: 'Closed' },
@@ -474,7 +533,7 @@ export default function TicketsPage({
     { key: 'proxy', label: 'Proxy Requests' },
   ].filter(({ key }) => !personalRequestedOnly || key !== 'proxy');
   const selectedStatus = statusTabs.some(
-    ({ key }) => key === selectedTab && key !== 'all' && key !== 'proxy',
+    ({ key }) => key === selectedTab && key !== 'all' && key !== 'proxy' && key !== 'to_rate',
   )
     ? (selectedTab as TicketStatus)
     : undefined;
@@ -616,11 +675,40 @@ export default function TicketsPage({
     const timer = window.setTimeout(() => setSearchQuery(searchDraft.trim()), 300);
     return () => window.clearTimeout(timer);
   }, [searchDraft]);
+
+  const fetchMyRequestedStatusCounts = useCallback(
+    () =>
+      ticketsApi.getMyRequested({
+        ticketType: (filterType as TicketType) || undefined,
+        priority: filterPriority || undefined,
+        date: filterPeriodMode === 'day' ? filterDate : undefined,
+        includeCarryover: filterPeriodMode === 'day',
+        year: filterPeriodMode !== 'day' ? Number(filterYear) || undefined : undefined,
+        month: filterPeriodMode === 'month' ? Number(filterMonth) || undefined : undefined,
+        quarter: filterPeriodMode === 'quarter' ? Number(filterQuarter) || undefined : undefined,
+        semester: filterPeriodMode === 'semester' ? Number(filterSemester) || undefined : undefined,
+        search: searchQuery,
+        page: 1,
+        limit: 1,
+      }),
+    [
+      filterType,
+      filterPriority,
+      filterPeriodMode,
+      filterDate,
+      filterYear,
+      filterMonth,
+      filterQuarter,
+      filterSemester,
+      searchQuery,
+    ],
+  );
+
   const fetchTickets = useCallback(async () => {
     const requestId = ++ticketRequestRef.current;
     try {
       setLoading(true);
-      const [data, dashboardStats] = await Promise.all([
+      const [data, dashboardStats, baseMyRequestedCounts] = await Promise.all([
         personalRequestedOnly
           ? ticketsApi.getMyRequested({
               status: selectedStatus || (filterStatus as TicketStatus) || undefined,
@@ -651,62 +739,65 @@ export default function TicketsPage({
               limit: TICKETS_PAGE_SIZE,
             })
           : restrictedAssignedOnly
-          ? ticketsApi.getMyAssigned({
-              status: selectedStatus,
-              ticketType: (filterType as TicketType) || undefined,
-              priority: filterPriority || undefined,
-              date: filterPeriodMode === 'day' ? filterDate : undefined,
-              includeCarryover: filterPeriodMode === 'day',
-              year: filterPeriodMode !== 'day' ? Number(filterYear) || undefined : undefined,
-              month: filterPeriodMode === 'month' ? Number(filterMonth) || undefined : undefined,
-              quarter:
-                filterPeriodMode === 'quarter' ? Number(filterQuarter) || undefined : undefined,
-              semester:
-                filterPeriodMode === 'semester' ? Number(filterSemester) || undefined : undefined,
-              search: searchQuery,
-              proxyCreatedByMe: selectedTab === 'proxy',
-              page,
-              limit: TICKETS_PAGE_SIZE,
-            })
-          : ticketsApi.getAll({
-              status: selectedStatus || (filterStatus as TicketStatus) || undefined,
-              ticketType: (filterType as TicketType) || undefined,
-              priority: filterPriority || undefined,
-              date:
-                filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
-              includeCarryover: filterPeriodMode === 'day',
-              year:
-                filterPeriodMode !== 'day' && selectedTab !== 'to_rate'
-                  ? filterYear || undefined
-                  : undefined,
-              month:
-                filterPeriodMode === 'month' && selectedTab !== 'to_rate'
-                  ? filterMonth || undefined
-                  : undefined,
-              quarter:
-                filterPeriodMode === 'quarter' && selectedTab !== 'to_rate'
-                  ? filterQuarter || undefined
-                  : undefined,
-              semester:
-                filterPeriodMode === 'semester' && selectedTab !== 'to_rate'
-                  ? filterSemester || undefined
-                  : undefined,
-              slaState: filterSla || undefined,
-              assignedToMe: showMyTickets && !showEscalatedToMe,
-              proxyCreatedByMe: selectedTab === 'proxy',
-              pendingSatisfaction: selectedTab === 'to_rate',
-              escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
-              search: searchQuery,
-              page,
-              limit: TICKETS_PAGE_SIZE,
-            }),
+            ? ticketsApi.getMyAssigned({
+                status: selectedStatus,
+                ticketType: (filterType as TicketType) || undefined,
+                priority: filterPriority || undefined,
+                date: filterPeriodMode === 'day' ? filterDate : undefined,
+                includeCarryover: filterPeriodMode === 'day',
+                year: filterPeriodMode !== 'day' ? Number(filterYear) || undefined : undefined,
+                month: filterPeriodMode === 'month' ? Number(filterMonth) || undefined : undefined,
+                quarter:
+                  filterPeriodMode === 'quarter' ? Number(filterQuarter) || undefined : undefined,
+                semester:
+                  filterPeriodMode === 'semester' ? Number(filterSemester) || undefined : undefined,
+                search: searchQuery,
+                proxyCreatedByMe: selectedTab === 'proxy',
+                page,
+                limit: TICKETS_PAGE_SIZE,
+              })
+            : ticketsApi.getAll({
+                status: selectedStatus || (filterStatus as TicketStatus) || undefined,
+                ticketType: (filterType as TicketType) || undefined,
+                priority: filterPriority || undefined,
+                date:
+                  filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
+                includeCarryover: filterPeriodMode === 'day',
+                year:
+                  filterPeriodMode !== 'day' && selectedTab !== 'to_rate'
+                    ? filterYear || undefined
+                    : undefined,
+                month:
+                  filterPeriodMode === 'month' && selectedTab !== 'to_rate'
+                    ? filterMonth || undefined
+                    : undefined,
+                quarter:
+                  filterPeriodMode === 'quarter' && selectedTab !== 'to_rate'
+                    ? filterQuarter || undefined
+                    : undefined,
+                semester:
+                  filterPeriodMode === 'semester' && selectedTab !== 'to_rate'
+                    ? filterSemester || undefined
+                    : undefined,
+                slaState: filterSla || undefined,
+                assignedToMe: showMyTickets && !showEscalatedToMe,
+                proxyCreatedByMe: selectedTab === 'proxy',
+                pendingSatisfaction: selectedTab === 'to_rate',
+                escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
+                search: searchQuery,
+                page,
+                limit: TICKETS_PAGE_SIZE,
+              }),
         ticketsApi.getDashboardStats(),
+        personalRequestedOnly && selectedTab === 'to_rate'
+          ? fetchMyRequestedStatusCounts()
+          : Promise.resolve(null),
       ]);
       if (requestId !== ticketRequestRef.current) return;
       setTickets(data.data);
       setTotalPages(data.totalPages);
       setTotalTickets(data.total);
-      setStatusCounts(data.statusCounts ?? {});
+      setStatusCounts(baseMyRequestedCounts?.statusCounts ?? data.statusCounts ?? {});
       setPendingSatCount(dashboardStats.pendingSatisfactionTickets?.length ?? 0);
       setMyTicketsCount(dashboardStats.myTicketsCount ?? 0);
       setEscalatedToMeCount(dashboardStats.escalatedToMeCount ?? 0);
@@ -745,6 +836,7 @@ export default function TicketsPage({
     canManageAll,
     restrictedAssignedOnly,
     personalRequestedOnly,
+    fetchMyRequestedStatusCounts,
   ]);
 
   useEffect(() => {
@@ -777,7 +869,7 @@ export default function TicketsPage({
   const silentFetchTickets = useCallback(async () => {
     const requestId = ++ticketRequestRef.current;
     try {
-      const [data, dashboardStats] = await Promise.all([
+      const [data, dashboardStats, baseMyRequestedCounts] = await Promise.all([
         personalRequestedOnly
           ? ticketsApi.getMyRequested({
               status: selectedStatus || (filterStatus as TicketStatus) || undefined,
@@ -808,62 +900,65 @@ export default function TicketsPage({
               limit: TICKETS_PAGE_SIZE,
             })
           : restrictedAssignedOnly
-          ? ticketsApi.getMyAssigned({
-              status: selectedStatus,
-              ticketType: (filterType as TicketType) || undefined,
-              priority: filterPriority || undefined,
-              date: filterPeriodMode === 'day' ? filterDate : undefined,
-              includeCarryover: filterPeriodMode === 'day',
-              year: filterPeriodMode !== 'day' ? Number(filterYear) || undefined : undefined,
-              month: filterPeriodMode === 'month' ? Number(filterMonth) || undefined : undefined,
-              quarter:
-                filterPeriodMode === 'quarter' ? Number(filterQuarter) || undefined : undefined,
-              semester:
-                filterPeriodMode === 'semester' ? Number(filterSemester) || undefined : undefined,
-              search: searchQuery,
-              proxyCreatedByMe: selectedTab === 'proxy',
-              page,
-              limit: TICKETS_PAGE_SIZE,
-            })
-          : ticketsApi.getAll({
-              status: selectedStatus || (filterStatus as TicketStatus) || undefined,
-              ticketType: (filterType as TicketType) || undefined,
-              priority: filterPriority || undefined,
-              date:
-                filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
-              includeCarryover: filterPeriodMode === 'day',
-              year:
-                filterPeriodMode !== 'day' && selectedTab !== 'to_rate'
-                  ? filterYear || undefined
-                  : undefined,
-              month:
-                filterPeriodMode === 'month' && selectedTab !== 'to_rate'
-                  ? filterMonth || undefined
-                  : undefined,
-              quarter:
-                filterPeriodMode === 'quarter' && selectedTab !== 'to_rate'
-                  ? filterQuarter || undefined
-                  : undefined,
-              semester:
-                filterPeriodMode === 'semester' && selectedTab !== 'to_rate'
-                  ? filterSemester || undefined
-                  : undefined,
-              slaState: filterSla || undefined,
-              assignedToMe: showMyTickets && !showEscalatedToMe,
-              proxyCreatedByMe: selectedTab === 'proxy',
-              pendingSatisfaction: selectedTab === 'to_rate',
-              escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
-              search: searchQuery,
-              page,
-              limit: TICKETS_PAGE_SIZE,
-            }),
+            ? ticketsApi.getMyAssigned({
+                status: selectedStatus,
+                ticketType: (filterType as TicketType) || undefined,
+                priority: filterPriority || undefined,
+                date: filterPeriodMode === 'day' ? filterDate : undefined,
+                includeCarryover: filterPeriodMode === 'day',
+                year: filterPeriodMode !== 'day' ? Number(filterYear) || undefined : undefined,
+                month: filterPeriodMode === 'month' ? Number(filterMonth) || undefined : undefined,
+                quarter:
+                  filterPeriodMode === 'quarter' ? Number(filterQuarter) || undefined : undefined,
+                semester:
+                  filterPeriodMode === 'semester' ? Number(filterSemester) || undefined : undefined,
+                search: searchQuery,
+                proxyCreatedByMe: selectedTab === 'proxy',
+                page,
+                limit: TICKETS_PAGE_SIZE,
+              })
+            : ticketsApi.getAll({
+                status: selectedStatus || (filterStatus as TicketStatus) || undefined,
+                ticketType: (filterType as TicketType) || undefined,
+                priority: filterPriority || undefined,
+                date:
+                  filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
+                includeCarryover: filterPeriodMode === 'day',
+                year:
+                  filterPeriodMode !== 'day' && selectedTab !== 'to_rate'
+                    ? filterYear || undefined
+                    : undefined,
+                month:
+                  filterPeriodMode === 'month' && selectedTab !== 'to_rate'
+                    ? filterMonth || undefined
+                    : undefined,
+                quarter:
+                  filterPeriodMode === 'quarter' && selectedTab !== 'to_rate'
+                    ? filterQuarter || undefined
+                    : undefined,
+                semester:
+                  filterPeriodMode === 'semester' && selectedTab !== 'to_rate'
+                    ? filterSemester || undefined
+                    : undefined,
+                slaState: filterSla || undefined,
+                assignedToMe: showMyTickets && !showEscalatedToMe,
+                proxyCreatedByMe: selectedTab === 'proxy',
+                pendingSatisfaction: selectedTab === 'to_rate',
+                escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
+                search: searchQuery,
+                page,
+                limit: TICKETS_PAGE_SIZE,
+              }),
         ticketsApi.getDashboardStats(),
+        personalRequestedOnly && selectedTab === 'to_rate'
+          ? fetchMyRequestedStatusCounts()
+          : Promise.resolve(null),
       ]);
       if (requestId !== ticketRequestRef.current) return;
       setTickets(data.data);
       setTotalPages(data.totalPages);
       setTotalTickets(data.total);
-      setStatusCounts(data.statusCounts ?? {});
+      setStatusCounts(baseMyRequestedCounts?.statusCounts ?? data.statusCounts ?? {});
       setPendingSatCount(dashboardStats.pendingSatisfactionTickets?.length ?? 0);
       setMyTicketsCount(dashboardStats.myTicketsCount ?? 0);
       setEscalatedToMeCount(dashboardStats.escalatedToMeCount ?? 0);
@@ -894,6 +989,7 @@ export default function TicketsPage({
     user?.id,
     restrictedAssignedOnly,
     personalRequestedOnly,
+    fetchMyRequestedStatusCounts,
   ]);
   useSse(['TICKET_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
     if (ticketSseTimerRef.current) clearTimeout(ticketSseTimerRef.current);
@@ -1355,7 +1451,20 @@ export default function TicketsPage({
                 : 'Submit and track RICTMS support requests and specialized concerns'}
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.5}
+          sx={{ width: { xs: '100%', sm: 'auto' } }}
+        >
+          {canSendRatingInvitations && !showEscalations && (
+            <Button
+              variant="outlined"
+              startIcon={<MailOutlineIcon />}
+              onClick={openRatingInvitationDialog}
+            >
+              Send Rating Invitation
+            </Button>
+          )}
           {canViewEscalatedQueue && (
             <Button variant="outlined" onClick={() => setShowEscalations((value) => !value)}>
               {showEscalations
@@ -1370,6 +1479,88 @@ export default function TicketsPage({
           )}
         </Stack>
       </Box>
+
+      <Dialog
+        open={ratingInvitationOpen}
+        onClose={() => !sendingRatingInvitations && setRatingInvitationOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Send Rating Invitation</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select regular users with completed tickets awaiting feedback. Re-sending creates a new
+            seven-day link and immediately invalidates that recipient&apos;s earlier link.
+          </Typography>
+          <Autocomplete
+            multiple
+            loading={loadingRatingRecipients}
+            options={ratingInvitationRecipients}
+            value={selectedRatingRecipients}
+            onChange={(_, value) => setSelectedRatingRecipients(value)}
+            getOptionLabel={(option) =>
+              `${option.name} — ${option.eligibleTicketCount} ticket${
+                option.eligibleTicketCount === 1 ? '' : 's'
+              } awaiting rating`
+            }
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            noOptionsText={
+              loadingRatingRecipients
+                ? 'Loading eligible recipients...'
+                : 'No regular users currently have tickets awaiting feedback.'
+            }
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Eligible recipients"
+                placeholder="Search by name or email"
+              />
+            )}
+            renderOption={(props, option) => (
+              <li {...props} key={option.id}>
+                <Box>
+                  <Typography variant="body2" fontWeight={600}>
+                    {option.name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {option.email} • {option.eligibleTicketCount} awaiting rating
+                  </Typography>
+                </Box>
+              </li>
+            )}
+          />
+          {selectedRatingRecipients.length > 0 && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              {selectedRatingRecipients.length} recipient
+              {selectedRatingRecipients.length === 1 ? '' : 's'} selected with{' '}
+              {selectedRatingRecipients.reduce(
+                (total, recipient) => total + recipient.eligibleTicketCount,
+                0,
+              )}{' '}
+              eligible ticket(s).
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setRatingInvitationOpen(false)}
+            disabled={sendingRatingInvitations}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={sendRatingInvitations}
+            disabled={
+              sendingRatingInvitations ||
+              loadingRatingRecipients ||
+              selectedRatingRecipients.length === 0
+            }
+          >
+            {sendingRatingInvitations ? 'Sending...' : 'Send Invitation'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {!showEscalations && !canManageAll && (
         <Card sx={{ mb: 1 }}>
@@ -1823,7 +2014,7 @@ export default function TicketsPage({
         <Card sx={{ mb: 1 }}>
           <CardContent sx={{ pt: 0.5, px: 1, pb: '0 !important' }}>
             <Tabs
-              value={selectedTab === 'to_rate' ? false : selectedTab}
+              value={selectedTab}
               onChange={(_, value) => {
                 setSelectedTab(value);
                 setShowEscalations(false);
@@ -1839,22 +2030,11 @@ export default function TicketsPage({
                   label={
                     key === 'proxy'
                       ? label
-                      : `${label} (${key === 'all' ? allCount : (statusCounts[key] ?? 0)})`
+                      : `${label} (${key === 'to_rate' ? pendingSatCount : key === 'all' ? allCount : (statusCounts[key] ?? 0)})`
                   }
                 />
               ))}
             </Tabs>
-            {!restrictedAssignedOnly && (
-              <Button
-                size="small"
-                onClick={() => {
-                  setSelectedTab('to_rate');
-                  setShowEscalations(false);
-                }}
-              >
-                To Rate ({pendingSatCount})
-              </Button>
-            )}
           </CardContent>
         </Card>
       )}

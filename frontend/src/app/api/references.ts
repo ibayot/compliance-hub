@@ -356,6 +356,24 @@ export interface SubmitSatisfactionDto {
   formData?: CsatFormData;
 }
 
+export interface RatingInvitationRecipient {
+  id: number;
+  email: string;
+  name: string;
+  eligibleTicketCount: number;
+}
+
+export interface RatingInvitationSendResult {
+  sent: number;
+  failed: number;
+  skipped: number;
+  results: Array<{
+    requesterId: number;
+    status: 'sent' | 'failed' | 'skipped';
+    message: string;
+  }>;
+}
+
 export interface TechnicianOption {
   id: number;
   email: string;
@@ -709,6 +727,15 @@ export interface PaginatedTickets {
 
 // Tickets API (IT Help Desk)
 export const ticketsApi = {
+  getRatingInvitationRecipients: async (): Promise<RatingInvitationRecipient[]> => {
+    const response = await apiClient.get('/tickets/rating-invitations/eligible-recipients');
+    return response.data;
+  },
+
+  sendRatingInvitations: async (requesterIds: number[]): Promise<RatingInvitationSendResult> => {
+    const response = await apiClient.post('/tickets/rating-invitations/send', { requesterIds });
+    return response.data;
+  },
   // Global/Technician Pause Methods
   getMyRequested: async (filters?: {
     status?: TicketStatus;

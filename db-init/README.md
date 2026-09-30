@@ -26,3 +26,12 @@ in this order:
 
 Both scripts are repeatable. The changelog script refreshes only the v1.0.17 notes
 and preserves existing display and acknowledgement records.
+
+For application version 1.0.18, run these local files in this order:
+
+1. Run `20260930-add-manual-rating-invitations-ticketing.sql` against the Ticketing database.
+2. Run `20260930-add-application-changelog-v1.0.18-users.sql` against the Users database.
+
+Both scripts are repeatable. The ticketing migration creates the restricted rating-invitation,
+ticket-snapshot, and access-event tables. The changelog script refreshes only the v1.0.18 notes
+and preserves existing display and acknowledgement records.

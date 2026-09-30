@@ -62,6 +62,20 @@ export interface TicketRequesterCorrectedEmailData {
   requesterEmail: string;
 }
 
+export interface RatingInvitationEmailData {
+  recipientEmail: string;
+  recipientName: string;
+  eligibleTicketCount: number;
+  expiresAt: Date;
+  ratingUrl: string;
+}
+
+export interface RatingVerificationEmailData {
+  recipientEmail: string;
+  recipientName: string;
+  code: string;
+}
+
 @Injectable()
 export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
@@ -100,22 +114,30 @@ export class EmailService implements OnModuleInit {
 
   private normalizeFrontendUrl(value: string): string {
     const trimmed = value.trim().replace(/\/$/, '');
-    const withScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)
-      ? trimmed
-      : `https://${trimmed}`;
+    const withScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
     const isLocalDevelopmentUrl =
       this.configService.get<string>('NODE_ENV') !== 'production' &&
       /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(?:\/|$)/i.test(withScheme);
 
-    return isLocalDevelopmentUrl
-      ? withScheme
-      : withScheme.replace(/^http:\/\//i, 'https://');
+    return isLocalDevelopmentUrl ? withScheme : withScheme.replace(/^http:\/\//i, 'https://');
   }
 
   private formatFromAddress(name: string, address: string): string {
-    const safeName = name.replace(/[\r\n]+/g, ' ').replace(/["\\]/g, '').trim();
+    const safeName = name
+      .replace(/[\r\n]+/g, ' ')
+      .replace(/["\\]/g, '')
+      .trim();
     const safeAddress = address.replace(/[\r\n<>]+/g, '').trim();
     return `"${safeName || 'DSWD FO2 Compliance Hub'}" <${safeAddress}>`;
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   async onModuleInit() {
@@ -398,11 +420,12 @@ export class EmailService implements OnModuleInit {
   async sendTicketClosedOrRatedEmailToTechnician(
     data: TicketClosedOrRatedEmailData,
   ): Promise<void> {
-    const actionLabel = data.action === 'rated'
-      ? 'Rated by Requester'
-      : data.action === 'auto_closed'
-        ? 'Automatically Closed by the System'
-        : 'Closed by Requester';
+    const actionLabel =
+      data.action === 'rated'
+        ? 'Rated by Requester'
+        : data.action === 'auto_closed'
+          ? 'Automatically Closed by the System'
+          : 'Closed by Requester';
     const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — ${actionLabel}`;
     const ticketUrl = `${this.frontendUrl}/operations/tickets/${data.ticketId}`;
     const ratingLine =
@@ -570,7 +593,10 @@ export class EmailService implements OnModuleInit {
       return { sent: true, message: 'Test email sent successfully.' };
     } catch (err: any) {
       this.logger.error('[EMAIL-TEST] SMTP delivery failed.');
-      return { sent: false, message: 'SMTP delivery failed. Please verify the saved configuration.' };
+      return {
+        sent: false,
+        message: 'SMTP delivery failed. Please verify the saved configuration.',
+      };
     }
   }
 
@@ -578,16 +604,66 @@ export class EmailService implements OnModuleInit {
     await this.send(to, subject, html);
   }
 
-  private async send(to: string, subject: string, html: string): Promise<void> {
+  public async sendRatingInvitationEmail(data: RatingInvitationEmailData): Promise<boolean> {
+    const recipientName = this.escapeHtml(data.recipientName);
+    const ratingUrl = this.escapeHtml(data.ratingUrl);
+    const ticketLabel = data.eligibleTicketCount === 1 ? 'request' : 'requests';
+    const expiry = data.expiresAt.toLocaleString('en-PH', {
+      timeZone: 'Asia/Manila',
+      dateStyle: 'long',
+      timeStyle: 'short',
+    });
+    const subject = 'Service feedback requested for your completed support request(s)';
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
+  <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+    <div style="background:#1565c0;padding:20px 24px;color:#fff;">
+      <h1 style="margin:0;font-size:18px;">Service Feedback Request</h1>
+    </div>
+    <div style="padding:24px;">
+      <p>Hello <strong>${recipientName}</strong>,</p>
+      <p>You are invited to provide feedback for ${data.eligibleTicketCount} completed ${ticketLabel} that you previously submitted. This invitation opens only the feedback form for those requests.</p>
+      <div style="margin:24px 0;text-align:center;">
+        <a href="${ratingUrl}" style="background:#1565c0;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:600;display:inline-block;">Open Feedback Form</a>
+      </div>
+      <p style="font-size:13px;color:#555;">For your protection, you will be asked for a one-time verification code sent to this email address. This invitation expires on <strong>${this.escapeHtml(expiry)}</strong>.</p>
+      <p style="font-size:12px;color:#888;">Do not forward this email. If you did not expect this request, you may ignore it.</p>
+    </div>
+  </div>
+</body></html>`;
+    return this.send(data.recipientEmail, subject, html);
+  }
+
+  public async sendRatingVerificationCodeEmail(
+    data: RatingVerificationEmailData,
+  ): Promise<boolean> {
+    const subject = 'Your service feedback verification code';
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:560px;margin:0 auto;background:#f5f5f5;padding:20px;">
+  <div style="background:#fff;border-radius:8px;padding:24px;">
+    <p>Hello <strong>${this.escapeHtml(data.recipientName)}</strong>,</p>
+    <p>Enter this one-time code in the service feedback page:</p>
+    <p style="font-size:30px;letter-spacing:8px;font-weight:700;text-align:center;color:#1565c0;">${this.escapeHtml(data.code)}</p>
+    <p style="font-size:13px;color:#555;">The code expires in 10 minutes. Do not share it with anyone.</p>
+  </div>
+</body></html>`;
+    return this.send(data.recipientEmail, subject, html);
+  }
+
+  private async send(to: string, subject: string, html: string): Promise<boolean> {
     if (!this.emailEnabled) {
       this.logger.log('[EMAIL-DISABLED] Suppressed email because outbound email is disabled.');
-      return;
+      return false;
     }
 
     const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });
     if (dbConfig && dbConfig.isEmailNotificationsEnabled === false) {
-      this.logger.log('[EMAIL-DISABLED] Suppressed email because database email notifications are disabled.');
-      return;
+      this.logger.log(
+        '[EMAIL-DISABLED] Suppressed email because database email notifications are disabled.',
+      );
+      return false;
     }
 
     const override = dbConfig?.emailTestOverride || this.testOverrideTo;
@@ -598,7 +674,7 @@ export class EmailService implements OnModuleInit {
 
     if (!this.primaryTransporter && !this.fallbackTransporter) {
       this.logger.log('[EMAIL-LOG] Email delivery skipped because SMTP is unavailable.');
-      return;
+      return false;
     }
 
     try {
@@ -624,7 +700,7 @@ export class EmailService implements OnModuleInit {
 
       if (!activeTransporter) {
         this.logger.error('No valid SMTP transporter available to send email.');
-        return;
+        return false;
       }
 
       await activeTransporter.sendMail({
@@ -639,15 +715,23 @@ export class EmailService implements OnModuleInit {
       if (!usedFallback && dbConfig) {
         dbConfig.primarySmtpSentToday = sentToday + 1;
         dbConfig.primarySmtpLastSentDate = today;
-        await auditContext.run(
-          { email: 'SYSTEM', ipAddress: '127.0.0.1', sessionId: 'system-email-job' },
-          async () => {
-            await this.configRepo.save(dbConfig);
-          },
-        );
+        await auditContext
+          .run(
+            { email: 'SYSTEM', ipAddress: '127.0.0.1', sessionId: 'system-email-job' },
+            async () => {
+              await this.configRepo.save(dbConfig);
+            },
+          )
+          .catch(() => {
+            // Delivery already succeeded. A usage-counter write must not mark the
+            // recipient's valid invitation as an email delivery failure.
+            this.logger.warn('Email sent, but the SMTP usage counter could not be updated.');
+          });
       }
+      return true;
     } catch (err: any) {
       this.logger.error('Email delivery failed.');
+      return false;
     }
   }
 }

@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.18] - 2026-09-30 - Controlled Service Feedback Invitations
+
+### Added
+- Ticket administrators can manually select one or more eligible regular users and send a restricted service-feedback invitation without giving those recipients access to the Helpdesk application.
+- Each invitation snapshots only the recipient's currently completed unrated tickets, shows the assigned technician, and uses the existing Client Satisfaction Measurement Form and rating business rules.
+- Email links expire after seven days and require a one-time code sent to the intended recipient before any ticket details are returned. Successful verification creates a short-lived secure browser session and removes the invitation token from the visible URL.
+- Invitation creation, delivery result, opening, verification, rating submission, expiration, completion, and revocation are recorded for audit review.
+
+### Changed
+- Sending or re-sending an invitation revokes every earlier active invitation and browser rating session for that recipient before issuing a new token, preventing uncontrolled parallel links.
+- My Tickets now places To Rate directly in the status filters after In Progress, while preserving the other status totals when viewing tickets awaiting feedback.
+
+### Deployment Note
+- Run `db-init/20260930-add-manual-rating-invitations-ticketing.sql` against the Ticketing database before deploying this version, then run `db-init/20260930-add-application-changelog-v1.0.18-users.sql` against the Users database.
+
 ## [1.0.17] - 2026-09-29 - Layout, Knowledge Base, and Workflow Improvements
 
 ### Added

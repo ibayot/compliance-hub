@@ -14,6 +14,11 @@ import { EscalationFocalConfig } from './entities/escalation-focal-config.entity
 import { TicketingConfig } from './entities/ticketing-config.entity';
 import { KnowledgeArticle } from './entities/knowledge-article.entity';
 import { TicketNotification } from './entities/ticket-notification.entity';
+import {
+  RatingInvitation,
+  RatingInvitationEvent,
+  RatingInvitationTicket,
+} from './entities/rating-invitation.entity';
 import { DtrView } from './entities/dtr-view.entity';
 import { TicketService } from './services/ticket.service';
 import { TicketSettingsService } from './services/ticket-settings.service';
@@ -40,6 +45,11 @@ import { DutyAssignment, DutyDailyCoverage, DutyException, DutyMeetingReliever, 
 import { DutyService } from './services/duty.service';
 import { DutyController } from './controllers/duty.controller';
 import { NotificationService } from './services/notification.service';
+import {
+  PublicRatingController,
+  RatingInvitationController,
+} from './controllers/rating-invitation.controller';
+import { RatingInvitationService } from './services/rating-invitation.service';
 
 @Module({
   imports: [
@@ -60,6 +70,9 @@ import { NotificationService } from './services/notification.service';
       DtrView,
       TicketStatusJustification,
       TicketNotification,
+      RatingInvitation,
+      RatingInvitationTicket,
+      RatingInvitationEvent,
       User,
       Unit,
       RoleDefinitionEntity,
@@ -83,6 +96,8 @@ import { NotificationService } from './services/notification.service';
     NotificationController,
     SseController,
     DutyController,
+    RatingInvitationController,
+    PublicRatingController,
   ],
   providers: [
     TicketService,
@@ -98,6 +113,7 @@ import { NotificationService } from './services/notification.service';
     CapabilityGuard,
     DutyService,
     NotificationService,
+    RatingInvitationService,
   ],
   exports: [
     TicketService,
@@ -108,6 +124,7 @@ import { NotificationService } from './services/notification.service';
     KnowledgeBaseService,
     DutyService,
     NotificationService,
+    RatingInvitationService,
   ],
 })
 export class TicketsModule {
