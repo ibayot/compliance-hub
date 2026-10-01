@@ -20,6 +20,7 @@ import { RoleCapability } from './entities/role-capability.entity';
 import { SecurityConfig } from './entities/security-config.entity';
 import { SecurityConfigService } from './security-config.service';
 import { UserTrustedDevice } from './entities/user-trusted-device.entity';
+import { UserUnitOverride } from './entities/user-unit-override.entity';
 
 const DEFAULT_ROLE_DEFINITIONS: Array<
   Pick<RoleDefinitionEntity, 'value' | 'label' | 'description' | 'assignable' | 'isSystem'> & {
@@ -891,11 +892,12 @@ const previousValue = value;
   async update(
     id: number,
     updateUserDto: UpdateUserDto,
-    options: { requireUnit?: boolean } = {},
+    options: { requireUnit?: boolean; actorUserId?: number } = {},
   ): Promise<User> {
     const user = await this.findOne(id);
     const dto = updateUserDto as any;
     const targetRole = dto.role ?? user.role;
+    const previousUnitId = user.units?.[0]?.id ?? null;
 
     // Update basic fields
     if (dto.email) {
@@ -937,7 +939,11 @@ const previousValue = value;
     }
 
     if (dto.unitIds !== undefined) {
-      user.units = await this.resolveUnitSelection(dto.unitIds, targetRole, Boolean(options.requireUnit));
+      user.units = await this.resolveUnitSelection(
+        dto.unitIds,
+        targetRole,
+        Boolean(options.requireUnit),
+      );
     } else if (options.requireUnit) {
       user.units = await this.resolveUnitSelection(
         user.units?.map((unit) => unit.id) || [],
@@ -956,7 +962,24 @@ const previousValue = value;
       throw new BadRequestException('A user can be assigned to only one unit.');
     }
 
-    return await this.usersRepository.save(user);
+    const selectedUnitId = user.units?.[0]?.id ?? null;
+    const unitChanged = dto.unitIds !== undefined && selectedUnitId !== previousUnitId;
+
+    return this.usersRepository.manager.transaction(async (manager) => {
+      const saved = await manager.getRepository(User).save(user);
+      if (unitChanged && selectedUnitId !== null) {
+        await manager.getRepository(UserUnitOverride).upsert(
+          {
+            userId: saved.id,
+            unitId: selectedUnitId,
+            overriddenAt: new Date(),
+            overriddenBy: options.actorUserId ?? saved.id,
+          },
+          ['userId'],
+        );
+      }
+      return saved;
+    });
   }
 
   async remove(id: number): Promise<void> {

@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [1.0.18] - 2026-09-30 - Controlled Service Feedback Invitations
+## [1.0.18] - 2026-09-30 - Service Feedback and Ticket Experience
 
 ### Added
 - Ticket administrators can manually select one or more eligible regular users and send a restricted service-feedback invitation without giving those recipients access to the Helpdesk application.
@@ -15,9 +15,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 - Sending or re-sending an invitation revokes every earlier active invitation and browser rating session for that recipient before issuing a new token, preventing uncontrolled parallel links.
 - My Tickets now places To Rate directly in the status filters after In Progress, while preserving the other status totals when viewing tickets awaiting feedback.
+- Ticket-list search, status, period, SLA, scope, and related filter selections are remembered separately for each signed-in user and ticket view during the browser session. Reset now clears search and every active filter and saves that reset state.
+- Unit selections made by administrators or by users through Profile & Preferences now temporarily override stale UMS work-history data. UMS synchronization preserves that selection until the official record reports the same unit, then automatically returns the account to normal synchronization while retaining existing unit restrictions.
+- Web addresses entered in ticket descriptions and comments are now clickable when displayed. Knowledge Base articles also convert bare web addresses while retaining existing Markdown links; unsafe link schemes remain non-clickable.
+
+### Fixed
+- The emailed Service Feedback form now matches the in-application satisfaction form in wording, spacing, typography, field presentation, and rating controls, and uses the Compliance Hub ticketing icon.
+- Manually selected rating invitations and their verification codes are delivered directly to the selected recipients while general outbound ticket emails remain disabled, without being redirected by the automatic-email test override. The manual control is hidden and its API is blocked whenever automatic outbound emails are enabled; SMTP configuration and the system-level email safety flag remain enforced.
+- Send Rating Invitation and Escalation History now use distinct outlined colors while New Ticket remains the strongest primary action.
+- Mobile ticket cards now include the category, requester when applicable, assigned staff for authorized ticket managers, date, proxy indicator, unread indicator, and the same priority emphasis provided by the desktop ticket list.
+- The application now detects when a newly deployed frontend build becomes available and safely reloads the current page once, preserving its route while preventing repeated refresh loops.
+- Specialized Concerns now retain their explicitly selected support type, category, and issue instead of being redirected by unrelated keyword rules. Ticket creation, corrections, and keyword-rule maintenance also reject incompatible support-type, category, and issue combinations, while category or support-type corrections clear a stale issue safely.
 
 ### Deployment Note
-- Run `db-init/20260930-add-manual-rating-invitations-ticketing.sql` against the Ticketing database before deploying this version, then run `db-init/20260930-add-application-changelog-v1.0.18-users.sql` against the Users database.
+- Run `db-init/20260930-add-manual-rating-invitations-ticketing.sql` against the Ticketing database and `db-init/20261001-add-user-unit-overrides-users.sql` against the Users database before deploying this version. Then run `db-init/20260930-add-application-changelog-v1.0.18-users.sql` against the Users database.
+- Set `UMS_DB_DATABASE` to the environment's UMS database and `UMS_UNIT_SYNC_ENABLED=true` for the Users service. Its database account requires read access to `work_history` in that database.
 
 ## [1.0.17] - 2026-09-29 - Layout, Knowledge Base, and Workflow Improvements
 

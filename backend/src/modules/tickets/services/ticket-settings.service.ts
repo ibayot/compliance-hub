@@ -1,5 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNumber, IsBoolean, IsEnum, IsOptional, IsNotEmpty, IsArray, ValidateNested, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsNotEmpty,
+  IsArray,
+  ValidateNested,
+  Min,
+  Max,
+} from 'class-validator';
 
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -370,7 +381,10 @@ export class TicketSettingsService {
   }
 
   async listActiveCategories(ticketType?: string): Promise<TicketCategoryConfig[]> {
-    const qb = this.categoryRepo.createQueryBuilder('c').where('c.isDeleted = false').andWhere('c.isActive = true');
+    const qb = this.categoryRepo
+      .createQueryBuilder('c')
+      .where('c.isDeleted = false')
+      .andWhere('c.isActive = true');
     if (ticketType === 'it_support') qb.andWhere('c.isIt = true');
     else if (ticketType === 'desktop_support') qb.andWhere('c.isDesktop = true');
     else if (ticketType === 'pantawid_ict_support') qb.andWhere('c.isPantawid = true');
@@ -382,6 +396,62 @@ export class TicketSettingsService {
     const cat = await this.categoryRepo.findOne({ where: { id, isDeleted: false } });
     if (!cat) throw new NotFoundException(`Category ${id} not found`);
     return cat;
+  }
+
+  private categorySupportsTicketType(category: TicketCategoryConfig, ticketType: string): boolean {
+    if (ticketType === 'it_support') return Boolean(category.isIt);
+    if (ticketType === 'desktop_support') return Boolean(category.isDesktop);
+    if (ticketType === 'pantawid_ict_support') return Boolean(category.isPantawid);
+    if (ticketType === 'specialized_concerns') return Boolean(category.isSpecialized);
+    return false;
+  }
+
+  /**
+   * Validate the complete routing tuple at the API boundary. Dropdown filtering
+   * improves the UI, but cannot protect against stale forms or crafted requests.
+   */
+  async validateRoutingSelection(
+    ticketType: string,
+    categoryId: string,
+    issueTypeId?: string | null,
+    activeOnly = true,
+  ): Promise<{
+    category: TicketCategoryConfig;
+    issueType: TicketIssueType | null;
+  }> {
+    const category = await this.categoryRepo.findOne({
+      where: {
+        id: categoryId,
+        isDeleted: false,
+        ...(activeOnly ? { isActive: true } : {}),
+      },
+    });
+    if (!category) {
+      throw new BadRequestException('Selected category is invalid or inactive.');
+    }
+    if (!this.categorySupportsTicketType(category, ticketType)) {
+      throw new BadRequestException(
+        'Selected category does not belong to the selected support type.',
+      );
+    }
+
+    if (!issueTypeId) return { category, issueType: null };
+
+    const issueType = await this.issueTypeRepo.findOne({
+      where: {
+        id: issueTypeId,
+        isDeleted: false,
+        ...(activeOnly ? { isActive: true } : {}),
+      },
+    });
+    if (!issueType) {
+      throw new BadRequestException('Selected issue type is invalid or inactive.');
+    }
+    if (issueType.category_id !== category.id) {
+      throw new BadRequestException('Selected issue does not belong to the selected category.');
+    }
+
+    return { category, issueType };
   }
 
   async createCategory(dto: CreateCategoryDto, actorId: number): Promise<TicketCategoryConfig> {
@@ -450,7 +520,12 @@ export class TicketSettingsService {
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/(^_|_$)/g, '');
     }
-    if (dto.isIt !== undefined || dto.isDesktop !== undefined || dto.isPantawid !== undefined || dto.isSpecialized !== undefined) {
+    if (
+      dto.isIt !== undefined ||
+      dto.isDesktop !== undefined ||
+      dto.isPantawid !== undefined ||
+      dto.isSpecialized !== undefined
+    ) {
       const isIt = dto.isIt !== undefined ? dto.isIt : cat.isIt;
       const isDesktop = dto.isDesktop !== undefined ? dto.isDesktop : cat.isDesktop;
       const isPantawid = dto.isPantawid !== undefined ? dto.isPantawid : cat.isPantawid;
@@ -493,7 +568,10 @@ export class TicketSettingsService {
   }
 
   async getKeywordRuleById(id: string): Promise<TicketKeywordRule> {
-    const rule = await this.keywordRepo.findOne({ where: { id }, relations: ['targetCategory', 'targetIssueType'] });
+    const rule = await this.keywordRepo.findOne({
+      where: { id },
+      relations: ['targetCategory', 'targetIssueType'],
+    });
     if (!rule) throw new NotFoundException(`Keyword rule ${id} not found`);
     return rule;
   }
@@ -508,7 +586,11 @@ export class TicketSettingsService {
           : [];
 
     if (kwList.length === 0) throw new BadRequestException('At least one keyword is required');
-    if (!['desktop_support', 'it_support', 'pantawid_ict_support', 'specialized_concerns'].includes(dto.targetTicketType)) {
+    if (
+      !['desktop_support', 'it_support', 'pantawid_ict_support', 'specialized_concerns'].includes(
+        dto.targetTicketType,
+      )
+    ) {
       throw new BadRequestException(
         'targetTicketType must be desktop_support, it_support, pantawid_ict_support, or specialized_concerns',
       );
@@ -516,6 +598,13 @@ export class TicketSettingsService {
     if (!dto.targetCategoryId) {
       throw new BadRequestException('targetCategoryId is required when creating a keyword rule');
     }
+
+    await this.validateRoutingSelection(
+      dto.targetTicketType,
+      dto.targetCategoryId,
+      dto.targetIssueTypeId,
+      dto.isActive ?? true,
+    );
 
     const rule = this.keywordRepo.create({
       keyword: kwList[0],
@@ -534,6 +623,28 @@ export class TicketSettingsService {
   async updateKeywordRule(id: string, dto: UpdateKeywordRuleDto): Promise<TicketKeywordRule> {
     const rule = await this.getKeywordRuleById(id);
 
+    const nextTicketType = dto.targetTicketType ?? rule.targetTicketType;
+    const nextCategoryId = dto.targetCategoryId ?? rule.targetCategoryId;
+    const nextIssueTypeId =
+      dto.targetIssueTypeId !== undefined ? dto.targetIssueTypeId || null : rule.targetIssueTypeId;
+    const nextIsActive = dto.isActive ?? rule.isActive;
+
+    if (
+      !['desktop_support', 'it_support', 'pantawid_ict_support', 'specialized_concerns'].includes(
+        nextTicketType,
+      )
+    ) {
+      throw new BadRequestException(
+        'targetTicketType must be desktop_support, it_support, pantawid_ict_support, or specialized_concerns',
+      );
+    }
+    if (!nextCategoryId) {
+      throw new BadRequestException('targetCategoryId is required when updating a keyword rule');
+    }
+    if (nextIsActive) {
+      await this.validateRoutingSelection(nextTicketType, nextCategoryId, nextIssueTypeId, true);
+    }
+
     if (dto.keywords !== undefined && dto.keywords.length > 0) {
       const kwList = dto.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean);
       rule.keywords = JSON.stringify(kwList);
@@ -547,7 +658,9 @@ export class TicketSettingsService {
     }
     if (dto.targetTicketType !== undefined) {
       if (
-        !['desktop_support', 'it_support', 'pantawid_ict_support', 'specialized_concerns'].includes(dto.targetTicketType)
+        !['desktop_support', 'it_support', 'pantawid_ict_support', 'specialized_concerns'].includes(
+          dto.targetTicketType,
+        )
       ) {
         throw new BadRequestException(
           'targetTicketType must be desktop_support, it_support, pantawid_ict_support, or specialized_concerns',
@@ -557,12 +670,14 @@ export class TicketSettingsService {
     }
     if (dto.targetCategoryId !== undefined) {
       if (!dto.targetCategoryId) {
-        throw new BadRequestException('targetCategoryId cannot be empty when updating a keyword rule');
+        throw new BadRequestException(
+          'targetCategoryId cannot be empty when updating a keyword rule',
+        );
       }
       rule.targetCategoryId = dto.targetCategoryId;
     }
     if (dto.targetIssueTypeId !== undefined) {
-      rule.targetIssueTypeId = dto.targetIssueTypeId;
+      rule.targetIssueTypeId = dto.targetIssueTypeId || null;
     }
     if (dto.isActive !== undefined) rule.isActive = dto.isActive;
 
@@ -626,7 +741,8 @@ export class TicketSettingsService {
       .replace(/[^a-z0-9]+/g, '_')
       .replace(/(^_|_$)/g, '');
     const existing = await this.issueTypeRepo.findOne({ where: { key } });
-    if (existing && !existing.isDeleted) throw new BadRequestException(`Issue type key "${key}" already exists`);
+    if (existing && !existing.isDeleted)
+      throw new BadRequestException(`Issue type key "${key}" already exists`);
 
     if (dto.slaHours !== undefined && dto.slaHours !== null) {
       if (
@@ -642,19 +758,21 @@ export class TicketSettingsService {
       await this.getCategoryById(dto.categoryId);
     }
 
-    const issueType = existing ?? this.issueTypeRepo.create({
-      key,
-      name: dto.name.trim(),
-      description: dto.description?.trim() || null,
-      isActive: dto.isActive ?? (dto.slaHours ?? null) !== null,
-      isDeleted: false,
-      category_id: dto.categoryId || null,
-      slaHours: dto.slaHours ?? null,
-      allowablePauseHours: dto.allowablePauseHours ?? 48,
-      maxFreezeHours: dto.maxFreezeHours ?? null,
-      created_by: actorId,
-      updated_by: actorId,
-    });
+    const issueType =
+      existing ??
+      this.issueTypeRepo.create({
+        key,
+        name: dto.name.trim(),
+        description: dto.description?.trim() || null,
+        isActive: dto.isActive ?? (dto.slaHours ?? null) !== null,
+        isDeleted: false,
+        category_id: dto.categoryId || null,
+        slaHours: dto.slaHours ?? null,
+        allowablePauseHours: dto.allowablePauseHours ?? 48,
+        maxFreezeHours: dto.maxFreezeHours ?? null,
+        created_by: actorId,
+        updated_by: actorId,
+      });
 
     if (existing) {
       existing.key = key;
@@ -707,11 +825,9 @@ export class TicketSettingsService {
     if (dto.slaHours !== undefined) {
       if (
         dto.slaHours !== null &&
-        (
-          !Number.isFinite(dto.slaHours) ||
+        (!Number.isFinite(dto.slaHours) ||
           dto.slaHours < MIN_SLA_HOURS ||
-          dto.slaHours > MAX_SLA_HOURS
-        )
+          dto.slaHours > MAX_SLA_HOURS)
       ) {
         throw new BadRequestException('SLA must be between 1 minute and 168 hours');
       }
@@ -755,10 +871,35 @@ export class TicketSettingsService {
   }
 
   /** Find the first matching keyword rule for a given text (subject + description) */
-  async matchKeywordRules(text: string, currentTicketType?: string): Promise<TicketKeywordRule | null> {
-    const rules = await this.keywordRepo.find({
+  async matchKeywordRules(
+    text: string,
+    currentTicketType?: string,
+  ): Promise<TicketKeywordRule | null> {
+    const configuredRules = await this.keywordRepo.find({
       where: { isActive: true },
       relations: ['targetCategory', 'targetIssueType'],
+    });
+
+    // Ignore legacy or externally modified rules whose targets no longer form a
+    // valid support-type/category/issue tuple. A stale rule must never reroute a
+    // newly submitted ticket into an unrelated issue.
+    const rules = configuredRules.filter((rule) => {
+      const category = rule.targetCategory;
+      if (
+        !category ||
+        category.isDeleted ||
+        !category.isActive ||
+        !this.categorySupportsTicketType(category, rule.targetTicketType)
+      ) {
+        return false;
+      }
+      if (!rule.targetIssueTypeId) return true;
+      return Boolean(
+        rule.targetIssueType &&
+        !rule.targetIssueType.isDeleted &&
+        rule.targetIssueType.isActive &&
+        rule.targetIssueType.category_id === category.id,
+      );
     });
 
     const lower = text.toLowerCase();
@@ -771,7 +912,7 @@ export class TicketSettingsService {
         pairs.push({ rule, kw });
       }
     }
-    
+
     // Sort so longer keywords are matched first
     pairs.sort((a, b) => b.kw.length - a.kw.length);
 
@@ -787,7 +928,7 @@ export class TicketSettingsService {
           matrix[i][j] = Math.min(
             matrix[i - 1][j] + 1,
             matrix[i][j - 1] + 1,
-            matrix[i - 1][j - 1] + cost
+            matrix[i - 1][j - 1] + cost,
           );
         }
       }
@@ -810,7 +951,7 @@ export class TicketSettingsService {
           }
           const dist = levenshtein(kwWord, tWord);
           // Allow up to 1 typo for short words (>=4 chars), 2 for longer ones
-          const allowedTypos = kwWord.length >= 6 ? 2 : (kwWord.length >= 4 ? 1 : 0);
+          const allowedTypos = kwWord.length >= 6 ? 2 : kwWord.length >= 4 ? 1 : 0;
           if (dist <= allowedTypos) {
             bestMatch = true;
             break;
@@ -824,7 +965,7 @@ export class TicketSettingsService {
 
     let matchedKw: string | null = null;
     const matchedRules: TicketKeywordRule[] = [];
-    
+
     for (const { rule, kw } of pairs) {
       if (matchedKw && kw.length < matchedKw.length) {
         break; // Exhausted all keywords of the same length
@@ -837,21 +978,21 @@ export class TicketSettingsService {
         matchedRules.push(rule);
       }
     }
-    
+
     if (matchedRules.length === 0) return null;
 
     // 1. Direct Match: Keyword rule exists for the user's selected Support Type
     if (currentTicketType) {
-      const directMatch = matchedRules.find(r => r.targetTicketType === currentTicketType);
+      const directMatch = matchedRules.find((r) => r.targetTicketType === currentTicketType);
       if (directMatch) return directMatch;
     }
-    
+
     // 2. Unambiguous Mistake: Keyword only exists in exactly ONE other Support Type
-    const uniqueTypes = new Set(matchedRules.map(r => r.targetTicketType));
+    const uniqueTypes = new Set(matchedRules.map((r) => r.targetTicketType));
     if (uniqueTypes.size === 1) {
       return matchedRules[0];
     }
-    
+
     // 3. Ambiguous Mistake (uniqueTypes.size > 1):
     // The keyword belongs to multiple support types, and none of them is the user's selected type.
     // We cannot reliably guess which one they meant, so we do nothing.
@@ -909,7 +1050,13 @@ export class TicketSettingsService {
     dto: CreateEscalationFocalDto,
     actorId: number,
   ): Promise<EscalationFocalConfig> {
-    const validTypes = ['desktop_support', 'it_support', 'pantawid_ict_support', 'specialized_concerns', 'all'];
+    const validTypes = [
+      'desktop_support',
+      'it_support',
+      'pantawid_ict_support',
+      'specialized_concerns',
+      'all',
+    ];
     if (!validTypes.includes(dto.ticketType)) {
       throw new BadRequestException(`ticketType must be one of: ${validTypes.join(', ')}`);
     }
@@ -1055,31 +1202,50 @@ export class TicketSettingsService {
 
   // ── SLA Insights ───────────────────────────────────────────────────────
 
-  async getSlaInsights(filters: { year?: number; month?: number; quarter?: number; semester?: number } = {}): Promise<any[]> {
+  async getSlaInsights(
+    filters: { year?: number; month?: number; quarter?: number; semester?: number } = {},
+  ): Promise<any[]> {
     // Calculates the average resolution time in hours per issue
-    const qb = this.ticketRepo.createQueryBuilder('t')
+    const qb = this.ticketRepo
+      .createQueryBuilder('t')
       .innerJoin('t.issueTypeConfig', 'ti')
       .innerJoin('ti.category', 'tc')
       .select('ti.name', 'issueName')
       .addSelect('tc.name', 'categoryName')
       .addSelect('ti.slaHours', 'configuredSlaHours')
       .addSelect('COUNT(t.id)', 'resolvedTicketsCount')
-      .addSelect('AVG(TIMESTAMPDIFF(SECOND, t.createdAt, COALESCE(t.resolutionTimeOverride, t.resolvedAt))) / 3600', 'avgResolutionHours')
+      .addSelect(
+        'AVG(TIMESTAMPDIFF(SECOND, t.createdAt, COALESCE(t.resolutionTimeOverride, t.resolvedAt))) / 3600',
+        'avgResolutionHours',
+      )
       .where("LOWER(t.status) IN ('resolved', 'closed')")
       .andWhere('ti.slaHours IS NOT NULL')
       .andWhere('ti.slaHours > 0')
       .groupBy('ti.id');
 
     if (filters.year || filters.month || filters.quarter || filters.semester) {
-      if (filters.year) qb.andWhere('YEAR(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) = :year', { year: filters.year });
-      if (filters.month) qb.andWhere('MONTH(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) = :month', { month: filters.month });
-      if (filters.quarter) qb.andWhere('QUARTER(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) = :quarter', { quarter: filters.quarter });
+      if (filters.year)
+        qb.andWhere('YEAR(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) = :year', {
+          year: filters.year,
+        });
+      if (filters.month)
+        qb.andWhere('MONTH(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) = :month', {
+          month: filters.month,
+        });
+      if (filters.quarter)
+        qb.andWhere('QUARTER(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) = :quarter', {
+          quarter: filters.quarter,
+        });
       if (filters.semester) {
-        if (filters.semester === 1) qb.andWhere('MONTH(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) BETWEEN 1 AND 6');
-        else qb.andWhere('MONTH(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) BETWEEN 7 AND 12');
+        if (filters.semester === 1)
+          qb.andWhere('MONTH(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) BETWEEN 1 AND 6');
+        else
+          qb.andWhere('MONTH(COALESCE(t.resolutionTimeOverride, t.resolvedAt)) BETWEEN 7 AND 12');
       }
     } else {
-      qb.andWhere('COALESCE(t.resolutionTimeOverride, t.resolvedAt) >= DATE_SUB(NOW(), INTERVAL 30 DAY)');
+      qb.andWhere(
+        'COALESCE(t.resolutionTimeOverride, t.resolvedAt) >= DATE_SUB(NOW(), INTERVAL 30 DAY)',
+      );
     }
 
     const insights = await qb.getRawMany();

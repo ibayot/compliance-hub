@@ -727,6 +727,11 @@ export interface PaginatedTickets {
 
 // Tickets API (IT Help Desk)
 export const ticketsApi = {
+  getRatingInvitationAvailability: async (): Promise<{ available: boolean }> => {
+    const response = await apiClient.get('/tickets/rating-invitations/availability');
+    return response.data;
+  },
+
   getRatingInvitationRecipients: async (): Promise<RatingInvitationRecipient[]> => {
     const response = await apiClient.get('/tickets/rating-invitations/eligible-recipients');
     return response.data;

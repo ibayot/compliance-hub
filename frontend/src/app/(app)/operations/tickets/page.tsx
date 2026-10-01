@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import ReactMarkdown from 'react-markdown';
 import {
   Box,
   Button,
@@ -65,6 +64,7 @@ import {
 import { useSnackbar } from 'notistack';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { SafeMarkdown } from '@/components/SafeRichText';
 import {
   ticketsApi,
   Ticket,
@@ -111,6 +111,38 @@ function ticketTypeIcon(t: TicketType) {
 
 const effectiveResolvedAt = (ticket: Ticket) =>
   ticket.effectiveResolvedAt || ticket.resolutionTimeOverride || ticket.resolvedAt || null;
+
+type TicketFilterPeriodMode = 'day' | 'month' | 'quarter' | 'semester' | 'year';
+
+interface PersistedTicketListState {
+  filterStatus: string;
+  filterType: string;
+  filterPriority: string;
+  filterSla: '' | 'overdue' | 'nearing_sla' | 'on_track';
+  filterDate: string;
+  filterYear: string;
+  filterMonth: string;
+  filterQuarter: string;
+  filterSemester: string;
+  filterPeriodMode: TicketFilterPeriodMode;
+  searchDraft: string;
+  selectedTab: string;
+  showMyTickets: boolean;
+  showEscalatedToMe: boolean;
+  showEscalations: boolean;
+  escalationSearch: string;
+}
+
+const TICKET_LIST_STATE_STORAGE_PREFIX = 'compliance-hub:ticket-list-state:v1';
+const FILTER_PERIOD_MODES: TicketFilterPeriodMode[] = [
+  'day',
+  'month',
+  'quarter',
+  'semester',
+  'year',
+];
+const SLA_FILTER_VALUES = ['', 'overdue', 'nearing_sla', 'on_track'] as const;
+const todayInManila = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 
 const toDateTimeLocalValue = (value?: string | null) => {
   if (!value) return '';
@@ -164,7 +196,7 @@ export default function TicketsPage({
       : `/operations/tickets/${ticketId}`;
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { user, myCap } = useAuth();
+  const { user, myCap, loading: authLoading } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -185,7 +217,6 @@ export default function TicketsPage({
   const currentYear = now.getFullYear().toString();
   const yearOptions = Array.from({ length: 7 }, (_, index) => Number(currentYear) - 3 + index);
 
-  const todayInManila = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
   const [filterDate, setFilterDate] = useState(todayInManila);
   const [filterYear, setFilterYear] = useState(currentYear);
   const [filterMonth, setFilterMonth] = useState(currentMonth);
@@ -193,23 +224,9 @@ export default function TicketsPage({
   const [filterSemester, setFilterSemester] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchDraft, setSearchDraft] = useState('');
-  const [filterPeriodMode, setFilterPeriodMode] = useState<
-    'day' | 'month' | 'quarter' | 'semester' | 'year'
-  >('day');
+  const [filterPeriodMode, setFilterPeriodMode] = useState<TicketFilterPeriodMode>('day');
   const [showMyTickets, setShowMyTickets] = useState(false);
-
-  const initializedMyTickets = useRef(false);
-  useEffect(() => {
-    if (myCap && !initializedMyTickets.current) {
-      initializedMyTickets.current = true;
-      const isTech =
-        !!myCap.isDesktop || !!myCap.isItSupport || !!myCap.isPantawidIct || !!myCap.isIto;
-      const canManageAll = !!myCap.isAllTickets;
-      if (isTech && !canManageAll) {
-        setShowMyTickets(true);
-      }
-    }
-  }, [myCap]);
+  const [filtersHydrated, setFiltersHydrated] = useState(false);
   const [showEscalatedToMe, setShowEscalatedToMe] = useState(false);
   const [myTicketsCount, setMyTicketsCount] = useState(0);
   const [escalatedToMeCount, setEscalatedToMeCount] = useState(0);
@@ -234,6 +251,7 @@ export default function TicketsPage({
   const TICKETS_PAGE_SIZE = 25;
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [ratingInvitationOpen, setRatingInvitationOpen] = useState(false);
+  const [ratingInvitationsAvailable, setRatingInvitationsAvailable] = useState(false);
   const [ratingInvitationRecipients, setRatingInvitationRecipients] = useState<
     RatingInvitationRecipient[]
   >([]);
@@ -339,6 +357,33 @@ export default function TicketsPage({
     !personalRequestedOnly && !!myCap?.isTicketResolutionTimeOverride;
   const canSendRatingInvitations =
     !restrictedAssignedOnly && !personalRequestedOnly && !!myCap?.isTicketSettingsFocal;
+  const defaultShowMyTickets =
+    !restrictedAssignedOnly && !personalRequestedOnly && isTechnician && !canManageAll;
+  const ticketListViewScope = personalRequestedOnly
+    ? 'requested'
+    : restrictedAssignedOnly
+      ? 'assigned'
+      : 'all';
+  const ticketListStorageKey = user?.id
+    ? `${TICKET_LIST_STATE_STORAGE_PREFIX}:${user.id}:${ticketListViewScope}`
+    : null;
+
+  const refreshRatingInvitationAvailability = useCallback(() => {
+    if (!canSendRatingInvitations) {
+      setRatingInvitationsAvailable(false);
+      return;
+    }
+    ticketsApi
+      .getRatingInvitationAvailability()
+      .then(({ available }) => setRatingInvitationsAvailable(available))
+      .catch(() => setRatingInvitationsAvailable(false));
+  }, [canSendRatingInvitations]);
+
+  useEffect(() => {
+    refreshRatingInvitationAvailability();
+  }, [refreshRatingInvitationAvailability]);
+
+  useSse(['GLOBAL_SETTINGS_UPDATED'], refreshRatingInvitationAvailability);
   // Matrix-driven escalation eligibility:
   // show action for technician tracks plus ticket admin/assign/all-ticket capabilities.
   const canEscalate =
@@ -356,10 +401,19 @@ export default function TicketsPage({
   };
 
   const openRatingInvitationDialog = async () => {
-    setRatingInvitationOpen(true);
     setSelectedRatingRecipients([]);
     setLoadingRatingRecipients(true);
     try {
+      const { available } = await ticketsApi.getRatingInvitationAvailability();
+      setRatingInvitationsAvailable(available);
+      if (!available) {
+        enqueueSnackbar(
+          'Manual rating invitations are unavailable while automatic outbound emails are enabled.',
+          { variant: 'info' },
+        );
+        return;
+      }
+      setRatingInvitationOpen(true);
       setRatingInvitationRecipients(await ticketsApi.getRatingInvitationRecipients());
     } catch (error: any) {
       enqueueSnackbar(error?.response?.data?.message || 'Failed to load eligible recipients.', {
@@ -395,6 +449,10 @@ export default function TicketsPage({
       setRatingInvitationRecipients(await ticketsApi.getRatingInvitationRecipients());
       setSelectedRatingRecipients([]);
     } catch (error: any) {
+      if (error?.response?.status === 409) {
+        setRatingInvitationsAvailable(false);
+        setRatingInvitationOpen(false);
+      }
       enqueueSnackbar(error?.response?.data?.message || 'Failed to send rating invitations.', {
         variant: 'error',
       });
@@ -557,55 +615,200 @@ export default function TicketsPage({
   );
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('assignedToMe') === '1' || params.get('scope') === 'assigned_to_me') {
-        setShowMyTickets(true);
-        setShowEscalatedToMe(false);
+    if (authLoading || !ticketListStorageKey) return;
+
+    setFiltersHydrated(false);
+    let restored: Partial<PersistedTicketListState> = {};
+    try {
+      const parsed = JSON.parse(sessionStorage.getItem(ticketListStorageKey) || '{}');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        restored = parsed as Partial<PersistedTicketListState>;
+      } else {
+        sessionStorage.removeItem(ticketListStorageKey);
       }
-      if (params.get('filter') === 'pending_satisfaction') {
-        setSelectedTab('to_rate');
-      }
-      const status = params.get('status');
-      if (
-        status &&
-        [
-          'open',
-          'assigned',
-          'in_progress',
-          'pause',
-          'resolved',
-          'closed',
-          'freeze',
-          'duplicate',
-        ].includes(status)
-      ) {
-        setSelectedTab(status);
-      }
-      const period = params.get('period');
-      if (period === 'month' && params.get('year') && params.get('month')) {
-        setFilterPeriodMode('month');
-        setFilterDate('');
-        setFilterYear(params.get('year')!);
-        setFilterMonth(params.get('month')!);
-      } else if (period === 'day' && params.get('date')) {
-        setFilterPeriodMode('day');
-        setFilterDate(params.get('date')!);
-      }
-      const sla = params.get('sla');
-      if (sla === 'overdue' || sla === 'nearing_sla' || sla === 'on_track') {
-        setFilterSla(sla);
-        // Dashboard SLA cards represent every active ticket, not only tickets
-        // created during the ticket page's default current-month period.
-        setFilterYear('');
-        setFilterMonth('');
-        setFilterQuarter('');
-        setFilterSemester('');
-        setFilterPeriodMode('year');
-        setFilterDate('');
+    } catch {
+      try {
+        sessionStorage.removeItem(ticketListStorageKey);
+      } catch {
+        // Storage may be unavailable; the in-memory defaults remain usable.
       }
     }
-  }, []);
+
+    const validTabs = new Set([
+      'all',
+      'open',
+      'assigned',
+      'in_progress',
+      'pause',
+      'resolved',
+      'closed',
+      'freeze',
+      'duplicate',
+      ...(personalRequestedOnly ? ['to_rate'] : ['proxy']),
+    ]);
+    const restoredPeriod = FILTER_PERIOD_MODES.includes(
+      restored.filterPeriodMode as TicketFilterPeriodMode,
+    )
+      ? (restored.filterPeriodMode as TicketFilterPeriodMode)
+      : 'day';
+    const restoredSla = SLA_FILTER_VALUES.includes(
+      restored.filterSla as (typeof SLA_FILTER_VALUES)[number],
+    )
+      ? (restored.filterSla as PersistedTicketListState['filterSla'])
+      : '';
+
+    setFilterStatus(typeof restored.filterStatus === 'string' ? restored.filterStatus : '');
+    setFilterType(typeof restored.filterType === 'string' ? restored.filterType : '');
+    setFilterPriority(typeof restored.filterPriority === 'string' ? restored.filterPriority : '');
+    setFilterSla(restoredSla);
+    setFilterDate(
+      typeof restored.filterDate === 'string' ? restored.filterDate : todayInManila(),
+    );
+    setFilterYear(
+      typeof restored.filterYear === 'string' ? restored.filterYear : currentYear,
+    );
+    setFilterMonth(
+      typeof restored.filterMonth === 'string' ? restored.filterMonth : currentMonth,
+    );
+    setFilterQuarter(
+      typeof restored.filterQuarter === 'string' ? restored.filterQuarter : '',
+    );
+    setFilterSemester(
+      typeof restored.filterSemester === 'string' ? restored.filterSemester : '',
+    );
+    setFilterPeriodMode(restoredPeriod);
+    const restoredSearch =
+      typeof restored.searchDraft === 'string' ? restored.searchDraft.slice(0, 255) : '';
+    setSearchDraft(restoredSearch);
+    setSearchQuery(restoredSearch.trim());
+    setSelectedTab(
+      typeof restored.selectedTab === 'string' && validTabs.has(restored.selectedTab)
+        ? restored.selectedTab
+        : 'all',
+    );
+    setShowMyTickets(
+      defaultShowMyTickets
+        ? true
+        : typeof restored.showMyTickets === 'boolean'
+          ? restored.showMyTickets
+          : false,
+    );
+    setShowEscalatedToMe(
+      canViewEscalatedQueue && restored.showEscalatedToMe === true,
+    );
+    setShowEscalations(canViewEscalatedQueue && restored.showEscalations === true);
+    setEscalationSearch(
+      typeof restored.escalationSearch === 'string' ? restored.escalationSearch.slice(0, 255) : '',
+    );
+
+    // Explicit dashboard/deep-link parameters take precedence over the saved page state.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('assignedToMe') === '1' || params.get('scope') === 'assigned_to_me') {
+      setShowMyTickets(true);
+      setShowEscalatedToMe(false);
+    }
+    if (params.get('filter') === 'pending_satisfaction' && validTabs.has('to_rate')) {
+      setSelectedTab('to_rate');
+    }
+    const status = params.get('status');
+    if (status && validTabs.has(status)) setSelectedTab(status);
+
+    const period = params.get('period');
+    if (period === 'month' && params.get('year') && params.get('month')) {
+      setFilterPeriodMode('month');
+      setFilterDate('');
+      setFilterYear(params.get('year')!);
+      setFilterMonth(params.get('month')!);
+    } else if (period === 'day' && params.get('date')) {
+      setFilterPeriodMode('day');
+      setFilterDate(params.get('date')!);
+    }
+    const sla = params.get('sla');
+    if (sla === 'overdue' || sla === 'nearing_sla' || sla === 'on_track') {
+      setFilterSla(sla);
+      setFilterYear('');
+      setFilterMonth('');
+      setFilterQuarter('');
+      setFilterSemester('');
+      setFilterPeriodMode('year');
+      setFilterDate('');
+    }
+    const consumedKeys = [
+      'assignedToMe',
+      'scope',
+      'filter',
+      'status',
+      'period',
+      'date',
+      'year',
+      'month',
+      'sla',
+    ];
+    if (consumedKeys.some((key) => params.has(key))) {
+      consumedKeys.forEach((key) => params.delete(key));
+      const remainingQuery = params.toString();
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `${window.location.pathname}${remainingQuery ? `?${remainingQuery}` : ''}${window.location.hash}`,
+      );
+    }
+    setFiltersHydrated(true);
+  }, [
+    authLoading,
+    canViewEscalatedQueue,
+    currentMonth,
+    currentYear,
+    defaultShowMyTickets,
+    personalRequestedOnly,
+    ticketListStorageKey,
+  ]);
+
+  useEffect(() => {
+    if (!filtersHydrated || !ticketListStorageKey) return;
+    const state: PersistedTicketListState = {
+      filterStatus,
+      filterType,
+      filterPriority,
+      filterSla,
+      filterDate,
+      filterYear,
+      filterMonth,
+      filterQuarter,
+      filterSemester,
+      filterPeriodMode,
+      searchDraft,
+      selectedTab,
+      showMyTickets,
+      showEscalatedToMe,
+      showEscalations,
+      escalationSearch,
+    };
+    try {
+      sessionStorage.setItem(ticketListStorageKey, JSON.stringify(state));
+    } catch {
+      // Storage can be unavailable in restricted browser modes; filters still work in memory.
+    }
+  }, [
+    escalationSearch,
+    filterDate,
+    filterMonth,
+    filterPeriodMode,
+    filterPriority,
+    filterQuarter,
+    filterSemester,
+    filterSla,
+    filterStatus,
+    filterType,
+    filterYear,
+    filtersHydrated,
+    searchDraft,
+    selectedTab,
+    showEscalatedToMe,
+    showEscalations,
+    showMyTickets,
+    ticketListStorageKey,
+  ]);
 
   useEffect(() => {
     if (!newDialogOpen || !isTicketAdmin) return;
@@ -705,6 +908,7 @@ export default function TicketsPage({
   );
 
   const fetchTickets = useCallback(async () => {
+    if (!filtersHydrated) return;
     const requestId = ++ticketRequestRef.current;
     try {
       setLoading(true);
@@ -837,6 +1041,7 @@ export default function TicketsPage({
     restrictedAssignedOnly,
     personalRequestedOnly,
     fetchMyRequestedStatusCounts,
+    filtersHydrated,
   ]);
 
   useEffect(() => {
@@ -867,6 +1072,7 @@ export default function TicketsPage({
 
   // Silent auto-refresh — no loading spinner to avoid flicker on background polls
   const silentFetchTickets = useCallback(async () => {
+    if (!filtersHydrated) return;
     const requestId = ++ticketRequestRef.current;
     try {
       const [data, dashboardStats, baseMyRequestedCounts] = await Promise.all([
@@ -990,6 +1196,7 @@ export default function TicketsPage({
     restrictedAssignedOnly,
     personalRequestedOnly,
     fetchMyRequestedStatusCounts,
+    filtersHydrated,
   ]);
   useSse(['TICKET_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
     if (ticketSseTimerRef.current) clearTimeout(ticketSseTimerRef.current);
@@ -1402,6 +1609,25 @@ export default function TicketsPage({
     '& > *': { minWidth: 0, width: '100%' },
   } as const;
 
+  const resetTicketFilters = () => {
+    setFilterStatus('');
+    setFilterType('');
+    setFilterPriority('');
+    setFilterSla('');
+    setFilterYear(new Date().getFullYear().toString());
+    setFilterMonth((new Date().getMonth() + 1).toString());
+    setFilterQuarter('');
+    setFilterSemester('');
+    setFilterPeriodMode('day');
+    setFilterDate(todayInManila());
+    setSearchDraft('');
+    setSearchQuery('');
+    setSelectedTab('all');
+    setShowMyTickets(defaultShowMyTickets);
+    setShowEscalatedToMe(false);
+    setPage(1);
+  };
+
   const searchField = (
     <TextField
       fullWidth
@@ -1456,9 +1682,10 @@ export default function TicketsPage({
           spacing={1.5}
           sx={{ width: { xs: '100%', sm: 'auto' } }}
         >
-          {canSendRatingInvitations && !showEscalations && (
+          {canSendRatingInvitations && ratingInvitationsAvailable && !showEscalations && (
             <Button
               variant="outlined"
+              color="info"
               startIcon={<MailOutlineIcon />}
               onClick={openRatingInvitationDialog}
             >
@@ -1466,7 +1693,11 @@ export default function TicketsPage({
             </Button>
           )}
           {canViewEscalatedQueue && (
-            <Button variant="outlined" onClick={() => setShowEscalations((value) => !value)}>
+            <Button
+              variant="outlined"
+              color="warning"
+              onClick={() => setShowEscalations((value) => !value)}
+            >
               {showEscalations
                 ? 'Back to Tickets'
                 : `Escalation History (${allEscalations.length})`}
@@ -1680,18 +1911,7 @@ export default function TicketsPage({
               <Button
                 variant="outlined"
                 sx={{ minWidth: 0, height: 36 }}
-                onClick={() => {
-                  setFilterStatus('');
-                  setFilterType('');
-                  setFilterPriority('');
-                  setFilterYear(new Date().getFullYear().toString());
-                  setFilterMonth((new Date().getMonth() + 1).toString());
-                  setFilterQuarter('');
-                  setFilterSemester('');
-                  setFilterPeriodMode('day');
-                  setFilterDate(todayInManila());
-                  setSelectedTab('all');
-                }}
+                onClick={resetTicketFilters}
               >
                 Reset
               </Button>
@@ -1859,19 +2079,7 @@ export default function TicketsPage({
               <Button
                 variant="outlined"
                 sx={{ minWidth: 0, height: 36 }}
-                onClick={() => {
-                  setFilterStatus('');
-                  setFilterType('');
-                  setFilterPriority('');
-                  setFilterSla('');
-                  setFilterYear(new Date().getFullYear().toString());
-                  setFilterMonth((new Date().getMonth() + 1).toString());
-                  setFilterQuarter('');
-                  setFilterSemester('');
-                  setFilterPeriodMode('day');
-                  setFilterDate(todayInManila());
-                  setSelectedTab('all');
-                }}
+                onClick={resetTicketFilters}
               >
                 Reset
               </Button>
@@ -2154,6 +2362,9 @@ export default function TicketsPage({
                 (ticket.status === 'resolved' || ticket.status === 'closed') &&
                 ticket.requesterId === user?.id &&
                 !ticket.satisfactionSubmittedAt;
+              const hasUnread = canManageAll
+                ? ticket.hasUnreadTechnician
+                : ticket.hasUnreadUser;
 
               return (
                 <Card
@@ -2185,7 +2396,17 @@ export default function TicketsPage({
                       mb={1}
                     >
                       <Typography sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                        {ticket.ticketNumber}
+                        {hasUnread ? (
+                          <Badge
+                            color="error"
+                            variant="dot"
+                            sx={{ '& .MuiBadge-badge': { right: -6, top: 4 } }}
+                          >
+                            {ticket.ticketNumber}
+                          </Badge>
+                        ) : (
+                          ticket.ticketNumber
+                        )}
                       </Typography>
                       <Box>
                         {hasPendingSatisfaction && (
@@ -2217,10 +2438,10 @@ export default function TicketsPage({
                       {ticket.subject}
                     </Typography>
                     <Stack direction="row" flexWrap="wrap" gap={1} mb={2}>
-                      {ticket.requesterId !== user?.id && (
+                      {ticket.createdById && ticket.createdById !== ticket.requesterId && (
                         <Chip
                           size="small"
-                          label={`Requested for: ${ticket.requester ? formatPersonName(ticket.requester, ticket.requester.email || 'Unknown') : 'Unknown'}`}
+                          label="Proxy"
                           color="secondary"
                         />
                       )}
@@ -2234,6 +2455,18 @@ export default function TicketsPage({
                         size="small"
                         label={(ticket.priority ?? 'not set').toUpperCase()}
                         color={PRIORITY_COLOR[ticket.priority ?? ''] ?? 'default'}
+                        sx={{
+                          ...(ticket.priority === 'critical' && {
+                            bgcolor: '#000',
+                            color: '#fff',
+                            '& .MuiChip-label': { color: '#fff' },
+                          }),
+                          ...(ticket.priority === 'urgent' && {
+                            bgcolor: 'error.dark',
+                            color: '#fff',
+                            '& .MuiChip-label': { color: '#fff' },
+                          }),
+                        }}
                       />
                       {(() => {
                         const s = getSlaStatus(ticket);
@@ -2250,9 +2483,67 @@ export default function TicketsPage({
                         />
                       )}
                     </Stack>
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                        gap: 1.25,
+                        mb: 1.5,
+                      }}
+                    >
+                      <Box minWidth={0}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Category
+                        </Typography>
+                        <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                          {ticket.category?.name ?? '—'}
+                        </Typography>
+                      </Box>
+                      {(canManageAll || ticket.requesterId !== user?.id) && (
+                        <Box minWidth={0}>
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            Requester
+                          </Typography>
+                          <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                            {ticket.requester
+                              ? formatPersonName(ticket.requester, ticket.requester.email)
+                              : '—'}
+                          </Typography>
+                        </Box>
+                      )}
+                      {canManageAll && (
+                        <Box minWidth={0}>
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            Assigned To
+                          </Typography>
+                          <Box display="flex" alignItems="center" gap={0.5}>
+                            <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                              {ticket.assignedTo
+                                ? formatPersonName(ticket.assignedTo, ticket.assignedTo.email)
+                                : 'Unassigned'}
+                            </Typography>
+                            {ticket.assignedTechAbsent && (canAssign || canManageAll) && (
+                              <Tooltip title="Technician is absent today">
+                                <FiberManualRecord
+                                  sx={{ color: 'error.main', fontSize: 10, flexShrink: 0 }}
+                                />
+                              </Tooltip>
+                            )}
+                          </Box>
+                        </Box>
+                      )}
+                      <Box minWidth={0}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Date
+                        </Typography>
+                        <Typography variant="body2">
+                          {new Date(ticket.createdAt).toLocaleDateString()}
+                        </Typography>
+                      </Box>
+                    </Box>
                     <Box display="flex" justifyContent="space-between" alignItems="center">
                       <Typography variant="caption" color="text.secondary">
-                        {new Date(ticket.createdAt).toLocaleDateString()}
+                        Tap the card to view details
                       </Typography>
                       <Stack direction="row" spacing={0.5}>
                         <Tooltip title="View Details">
@@ -3070,7 +3361,7 @@ export default function TicketsPage({
                                 '& ul, & ol': { m: 0, pl: 2 },
                               }}
                             >
-                              <ReactMarkdown>{kb.content}</ReactMarkdown>
+                              <SafeMarkdown>{kb.content}</SafeMarkdown>
                             </Box>
                             <Box
                               display="flex"

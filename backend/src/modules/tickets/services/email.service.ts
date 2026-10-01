@@ -632,7 +632,9 @@ export class EmailService implements OnModuleInit {
     </div>
   </div>
 </body></html>`;
-    return this.send(data.recipientEmail, subject, html);
+    return this.send(data.recipientEmail, subject, html, {
+      bypassGeneralNotificationToggle: true,
+    });
   }
 
   public async sendRatingVerificationCodeEmail(
@@ -649,24 +651,48 @@ export class EmailService implements OnModuleInit {
     <p style="font-size:13px;color:#555;">The code expires in 10 minutes. Do not share it with anyone.</p>
   </div>
 </body></html>`;
-    return this.send(data.recipientEmail, subject, html);
+    return this.send(data.recipientEmail, subject, html, {
+      bypassGeneralNotificationToggle: true,
+    });
   }
 
-  private async send(to: string, subject: string, html: string): Promise<boolean> {
+  private async send(
+    to: string,
+    subject: string,
+    html: string,
+    options: { bypassGeneralNotificationToggle?: boolean } = {},
+  ): Promise<boolean> {
     if (!this.emailEnabled) {
       this.logger.log('[EMAIL-DISABLED] Suppressed email because outbound email is disabled.');
       return false;
     }
 
     const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });
-    if (dbConfig && dbConfig.isEmailNotificationsEnabled === false) {
+    if (
+      dbConfig &&
+      dbConfig.isEmailNotificationsEnabled === false &&
+      !options.bypassGeneralNotificationToggle
+    ) {
       this.logger.log(
         '[EMAIL-DISABLED] Suppressed email because database email notifications are disabled.',
       );
       return false;
     }
+    if (dbConfig?.isEmailNotificationsEnabled === false) {
+      this.logger.log(
+        '[EMAIL-CONTROLLED] Sending a manually selected rating email while general outbound notifications are disabled.',
+      );
+    }
 
-    const override = dbConfig?.emailTestOverride || this.testOverrideTo;
+    // A controlled rating invitation is an explicit delivery to recipients chosen by an
+    // administrator while automatic outbound email is off. Applying the test override here
+    // would silently send both the invitation and its OTP to the wrong mailbox.
+    const isControlledManualDelivery =
+      options.bypassGeneralNotificationToggle === true &&
+      dbConfig?.isEmailNotificationsEnabled === false;
+    const override = isControlledManualDelivery
+      ? null
+      : dbConfig?.emailTestOverride || this.testOverrideTo;
     const effectiveTo = override ?? to;
     if (override && override !== to) {
       this.logger.log('[EMAIL-OVERRIDE] Email test override is active.');

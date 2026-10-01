@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   HttpException,
   HttpStatus,
@@ -21,6 +22,7 @@ import {
   RatingInvitationTicket,
 } from '../entities/rating-invitation.entity';
 import { Ticket, TicketStatus } from '../entities/ticket.entity';
+import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { EmailService } from './email.service';
 import { SubmitSatisfactionDto, TicketService } from './ticket.service';
 
@@ -60,6 +62,8 @@ export class RatingInvitationService {
     private readonly eventRepo: Repository<RatingInvitationEvent>,
     @InjectRepository(Ticket)
     private readonly ticketRepo: Repository<Ticket>,
+    @InjectRepository(TicketingConfig)
+    private readonly configRepo: Repository<TicketingConfig>,
     private readonly usersHttpClient: UsersHttpClient,
     private readonly emailService: EmailService,
     private readonly ticketService: TicketService,
@@ -117,6 +121,20 @@ export class RatingInvitationService {
     });
   }
 
+  async getAvailability(): Promise<{ available: boolean }> {
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    return { available: config?.isEmailNotificationsEnabled === false };
+  }
+
+  private async assertManualInvitationsAvailable(): Promise<void> {
+    const { available } = await this.getAvailability();
+    if (!available) {
+      throw new ConflictException(
+        'Manual rating invitations are unavailable while automatic outbound emails are enabled.',
+      );
+    }
+  }
+
   async getEligibleRecipients(): Promise<
     Array<{
       id: number;
@@ -125,6 +143,7 @@ export class RatingInvitationService {
       eligibleTicketCount: number;
     }>
   > {
+    await this.assertManualInvitationsAvailable();
     const counts = await this.ticketRepo
       .createQueryBuilder('ticket')
       .select('ticket.requesterId', 'requesterId')
@@ -165,6 +184,7 @@ export class RatingInvitationService {
     skipped: number;
     results: Array<{ requesterId: number; status: 'sent' | 'failed' | 'skipped'; message: string }>;
   }> {
+    await this.assertManualInvitationsAvailable();
     const uniqueIds = [...new Set(requesterIds.map(Number).filter(Number.isInteger))];
     if (uniqueIds.length === 0 || uniqueIds.length > 50) {
       throw new BadRequestException('Select between 1 and 50 eligible recipients.');

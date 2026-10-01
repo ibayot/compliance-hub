@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import * as Joi from 'joi';
 import { AuthModule } from '../modules/auth/auth.module';
 import { UsersModule } from '../modules/users/users.module';
@@ -27,6 +28,14 @@ import { AuditVariableSubscriber } from '../shared/audit/audit.subscriber';
         DB_PASSWORD: Joi.string().allow('').optional(),
         DB_DATABASE: Joi.string().required(),
         USERS_DB_DATABASE: Joi.string().optional(),
+        UMS_DB_DATABASE: Joi.string()
+          .pattern(/^[A-Za-z0-9_]+$/)
+          .optional(),
+        UMS_DB_HOST: Joi.string().optional(),
+        UMS_DB_PORT: Joi.number().optional(),
+        UMS_DB_USERNAME: Joi.string().optional(),
+        UMS_DB_PASSWORD: Joi.string().allow('').optional(),
+        UMS_UNIT_SYNC_ENABLED: Joi.boolean().default(false),
         DB_SYNCHRONIZE: Joi.boolean().default(false),
         JWT_SECRET: Joi.string().min(16).required(),
         JWT_REFRESH_SECRET: Joi.string().min(16).required(),
@@ -36,6 +45,7 @@ import { AuditVariableSubscriber } from '../shared/audit/audit.subscriber';
         AUTH_REFRESH_COOKIE_NAME: Joi.string().pattern(/^[A-Za-z0-9_-]+$/).invalid('auth_refresh').required(),
       }),
     }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({

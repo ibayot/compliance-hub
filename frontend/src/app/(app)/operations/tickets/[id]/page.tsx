@@ -75,6 +75,7 @@ import {
 import { unitsApi } from '@/lib/api/units';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { LinkifiedText } from '@/components/SafeRichText';
 
 const effectiveResolvedAt = (ticket: Ticket) =>
   ticket.effectiveResolvedAt || ticket.resolutionTimeOverride || ticket.resolvedAt || null;
@@ -1746,9 +1747,9 @@ export default function TicketDetailPage() {
               <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                 Description
               </Typography>
-              <Typography variant="body2" whiteSpace="pre-wrap">
+              <LinkifiedText variant="body2">
                 {ticket.description}
-              </Typography>
+              </LinkifiedText>
 
               {ticket.status === 'duplicate' && ticket.duplicateOfId && (
                 <Box mt={2}>
@@ -2299,14 +2300,13 @@ export default function TicketDetailPage() {
                       }
                       secondary={
                         <Box>
-                          <Typography
+                          <LinkifiedText
                             variant="body2"
                             color="text.primary"
-                            whiteSpace="pre-wrap"
                             mt={0.5}
                           >
                             {c.comment}
-                          </Typography>
+                          </LinkifiedText>
                           <Box mt={1}>
                             <AuthenticatedImageGallery
                               images={[

@@ -41,6 +41,7 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { Ticket, TicketType, TicketStatus, TicketPriority } from '../entities/ticket.entity';
 import { TicketComment } from '../entities/ticket-comment.entity';
+import { TicketCategoryConfig } from '../entities/ticket-category.entity';
 import { TicketIssueType } from '../entities/ticket-issue-type.entity';
 import { TicketEvent } from '../entities/ticket-event.entity';
 import { TicketEscalation, EscalationStatus } from '../entities/ticket-escalation.entity';
@@ -391,7 +392,9 @@ export const assertValidDuplicateOriginal = (
     );
   }
   if (Number(original.requesterId) !== Number(ticket.requesterId)) {
-    throw new BadRequestException('The original and duplicate tickets must have the same requester.');
+    throw new BadRequestException(
+      'The original and duplicate tickets must have the same requester.',
+    );
   }
 };
 // --- Service -----------------------------------------------------------------
@@ -1167,44 +1170,40 @@ export class TicketService implements OnModuleInit {
     }
 
     // ── Auto-Shift based on keyword rules ─────────────────────────────────
-    // The selected support type is passed to the matcher so duplicate rules
-    // resolve to the closest support-type-specific category and issue type.
-    try {
-      const combinedText = dto.subject + ' ' + dto.description;
-      const matchedRule = await this.settingsService.matchKeywordRules(
-        combinedText,
-        dto.ticketType,
-      );
-      if (matchedRule) {
-        ticketType = matchedRule.targetTicketType as TicketType;
-        if (matchedRule.targetCategoryId) {
-          categoryId = matchedRule.targetCategoryId;
-        }
-        if (matchedRule.targetIssueTypeId) {
-          issueTypeId = matchedRule.targetIssueTypeId;
-          if (matchedRule.targetIssueType) {
-            issueTypeKey = matchedRule.targetIssueType.key;
-          } else {
-            const issueType = await this.issueTypeRepo.findOne({
-              where: { id: matchedRule.targetIssueTypeId, isDeleted: false, isActive: true },
-            });
-            if (issueType) issueTypeKey = issueType.key;
-          }
-        }
-        autoShifted = true;
-        this.logger.log(
-          'Auto-shift: keyword "' +
-            matchedRule.keyword +
-            '" -> type=' +
-            ticketType +
-            ', cat=' +
-            categoryId +
-            ', issueTypeId=' +
-            issueTypeId,
+    // Specialized Concerns are an explicit, manually routed workflow. Keyword
+    // rules must never replace their selected support type, category, or issue.
+    if (dto.ticketType !== TicketType.SPECIALIZED_CONCERNS) {
+      // The selected support type is passed to the matcher so duplicate rules
+      // resolve to the closest support-type-specific category and issue type.
+      try {
+        const combinedText = dto.subject + ' ' + dto.description;
+        const matchedRule = await this.settingsService.matchKeywordRules(
+          combinedText,
+          dto.ticketType,
         );
+        if (matchedRule) {
+          ticketType = matchedRule.targetTicketType as TicketType;
+          if (matchedRule.targetCategoryId) {
+            categoryId = matchedRule.targetCategoryId;
+          }
+          if (matchedRule.targetIssueTypeId) {
+            issueTypeId = matchedRule.targetIssueTypeId;
+          }
+          autoShifted = true;
+          this.logger.log(
+            'Auto-shift: keyword "' +
+              matchedRule.keyword +
+              '" -> type=' +
+              ticketType +
+              ', cat=' +
+              categoryId +
+              ', issueTypeId=' +
+              issueTypeId,
+          );
+        }
+      } catch (err: any) {
+        this.logger.warn('Auto-shift failed (non-fatal).');
       }
-    } catch (err: any) {
-      this.logger.warn('Auto-shift failed (non-fatal).');
     }
 
     if (!categoryId) {
@@ -1212,6 +1211,14 @@ export class TicketService implements OnModuleInit {
         'No matching category found. Please select an appropriate category',
       );
     }
+
+    const validatedRouting = await this.settingsService.validateRoutingSelection(
+      ticketType,
+      categoryId,
+      issueTypeId,
+      true,
+    );
+    issueTypeKey = validatedRouting.issueType?.key ?? 'other';
 
     // ── Auto-Assign based on attendance & workload ─────────────────────
     let assignedToId: number | null = null;
@@ -2555,104 +2562,118 @@ export class TicketService implements OnModuleInit {
     if (dto.subject) ticket.subject = dto.subject.trim();
     if (dto.description) ticket.description = dto.description.trim();
 
-    if (dto.ticketType) {
-      // const isSettingsFocal = this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
-      // const isAssigned = ticket.assignedToId === actorId;
-      // if (!isSettingsFocal && !isAssigned) {
-      //   throw new ForbiddenException('You do not have permission to change the ticket type.');
-      // }
-      // ticket.ticketType = dto.ticketType;
-      // If there is an active escalation (Pending or Accepted), restrict ticket type changes
-      if (latestEscalation && latestEscalation.status !== 'returned') {
-        const isSettingsFocal = this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
-        const isAcceptedFocal =
-          latestEscalation.status === 'accepted' && latestEscalation.escalatedToId === actorId;
-        if (!isSettingsFocal && !isAcceptedFocal) {
-          throw new ForbiddenException(
-            'You cannot change the ticket type while the ticket is escalated.',
-          );
-        }
-      } else {
-        const isSettingsFocal = this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
-        const isAssigned = ticket.assignedToId === actorId;
-        if (!isSettingsFocal && !isAssigned) {
-          throw new ForbiddenException('You do not have permission to change the ticket type.');
-        }
-      }
-      if (dto.ticketType === TicketType.SPECIALIZED_CONCERNS && ticket.assignedToId) {
-        const currentAssignee = await this.usersHttpClient.getUserById(ticket.assignedToId);
-        try {
-          this.assertSpecializedAssigneeEligibility(dto.ticketType, currentAssignee);
-        } catch {
-          throw new BadRequestException(
-            'Assign this ticket to an authorized Specialized Concerns assignee before changing its support type.',
-          );
-        }
-      }
-      if (ticket.ticketType !== dto.ticketType) {
-        ticket.ticketType = dto.ticketType;
-        if (dto.categoryId === undefined) {
-          // Clear category if not explicitly provided in the same request
-          ticket.categoryId = null;
-          ticket.category = null;
-        }
-      }
-    }
+    const routingUpdateRequested =
+      dto.ticketType !== undefined || dto.categoryId !== undefined || dto.issueTypeId !== undefined;
 
-    if (dto.issueTypeId !== undefined) {
-      let currentIssueType = null;
-      if (!dto.issueTypeId) {
-        ticket.issueTypeId = null;
-        ticket.issueType = 'other';
-      } else {
-        const issueType = await this.issueTypeRepo.findOne({
-          where: { id: dto.issueTypeId, isDeleted: false, isActive: true },
-        });
-        if (!issueType) {
-          throw new BadRequestException('Selected issue type is invalid or inactive.');
+    if (routingUpdateRequested) {
+      const previousTicketType = ticket.ticketType;
+      const previousCategoryId = ticket.categoryId;
+      const previousIssueTypeId = ticket.issueTypeId;
+      const nextTicketType = dto.ticketType ?? ticket.ticketType;
+      const ticketTypeChanged = nextTicketType !== ticket.ticketType;
+
+      if (dto.ticketType) {
+        // If there is an active escalation (Pending or Accepted), restrict ticket type changes.
+        if (latestEscalation && latestEscalation.status !== 'returned') {
+          const isSettingsFocal = this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
+          const isAcceptedFocal =
+            latestEscalation.status === 'accepted' && latestEscalation.escalatedToId === actorId;
+          if (!isSettingsFocal && !isAcceptedFocal) {
+            throw new ForbiddenException(
+              'You cannot change the ticket type while the ticket is escalated.',
+            );
+          }
+        } else {
+          const isSettingsFocal = this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
+          const isAssigned = ticket.assignedToId === actorId;
+          if (!isSettingsFocal && !isAssigned) {
+            throw new ForbiddenException('You do not have permission to change the ticket type.');
+          }
         }
-        ticket.issueTypeId = issueType.id;
-        ticket.issueType = issueType.key;
-        ticket.issueTypeConfig = issueType;
-        currentIssueType = issueType;
+        if (dto.ticketType === TicketType.SPECIALIZED_CONCERNS && ticket.assignedToId) {
+          const currentAssignee = await this.usersHttpClient.getUserById(ticket.assignedToId);
+          try {
+            this.assertSpecializedAssigneeEligibility(dto.ticketType, currentAssignee);
+          } catch {
+            throw new BadRequestException(
+              'Assign this ticket to an authorized Specialized Concerns assignee before changing its support type.',
+            );
+          }
+        }
       }
 
-      // Recalculate SLA if ticket has an SLA deadline or is being assigned one
-      if (currentIssueType?.slaHours) {
-        const config = await this.configRepo.findOne({ where: { id: 1 } });
-        if (config) {
-          const now = new Date();
-          const referenceTime = ticket.slaPausedAt ? new Date(ticket.slaPausedAt) : now;
-          const activeBusinessSeconds = await this.calculateBusinessSeconds(
-            new Date(ticket.createdAt),
-            referenceTime,
-            config as TicketingConfig,
-          );
-          const totalConsumedSeconds =
-            activeBusinessSeconds - (ticket.accumulatedPauseSeconds || 0);
-          const remainingHours = Math.max(
-            0,
-            currentIssueType.slaHours - totalConsumedSeconds / 3600,
-          );
-          ticket.slaDeadline = await this.calculateSlaDeadline(
-            referenceTime,
-            remainingHours,
-            config as TicketingConfig,
-          );
-        }
-      }
-    }
-
-    if (dto.categoryId !== undefined) {
-      if (!dto.categoryId) {
+      if (dto.categoryId !== undefined && !dto.categoryId) {
         throw new BadRequestException('Category is required.');
       }
-      const cat = await this.settingsService.getCategoryById(dto.categoryId).catch(() => null);
-      if (!cat) {
-        throw new BadRequestException('Selected category is invalid.');
+
+      const nextCategoryId =
+        dto.categoryId !== undefined
+          ? dto.categoryId
+          : ticketTypeChanged
+            ? null
+            : ticket.categoryId;
+      let nextIssueTypeId =
+        dto.issueTypeId !== undefined
+          ? dto.issueTypeId || null
+          : ticketTypeChanged
+            ? null
+            : ticket.issueTypeId;
+
+      let validatedCategory: TicketCategoryConfig | null = null;
+      let validatedIssueType: TicketIssueType | null = null;
+      if (nextCategoryId) {
+        try {
+          const validated = await this.settingsService.validateRoutingSelection(
+            nextTicketType,
+            nextCategoryId,
+            nextIssueTypeId,
+            true,
+          );
+          validatedCategory = validated.category;
+          validatedIssueType = validated.issueType;
+        } catch (error) {
+          const mayClearInheritedIssue =
+            Boolean(nextIssueTypeId) &&
+            dto.issueTypeId === undefined &&
+            (ticketTypeChanged || nextCategoryId !== previousCategoryId);
+          if (!mayClearInheritedIssue) throw error;
+
+          // A category/support-type correction must not retain an issue from the
+          // previous routing tuple. Clear it and use the no-issue fallback until
+          // staff selects the replacement issue.
+          nextIssueTypeId = null;
+          const validated = await this.settingsService.validateRoutingSelection(
+            nextTicketType,
+            nextCategoryId,
+            null,
+            true,
+          );
+          validatedCategory = validated.category;
+        }
+      } else if (nextIssueTypeId) {
+        throw new BadRequestException('Select a category before selecting an issue.');
       }
-      ticket.categoryId = cat.id;
-      ticket.category = cat;
+
+      ticket.ticketType = nextTicketType;
+      ticket.categoryId = nextCategoryId;
+      ticket.category = validatedCategory;
+      ticket.issueTypeId = nextIssueTypeId;
+      ticket.issueTypeConfig = validatedIssueType;
+      ticket.issueType = validatedIssueType?.key ?? 'other';
+
+      if (previousIssueTypeId !== nextIssueTypeId) {
+        await this.recalculateTicketSlaAfterRoutingChange(ticket, validatedIssueType);
+      }
+
+      if (
+        previousTicketType !== ticket.ticketType ||
+        previousCategoryId !== ticket.categoryId ||
+        previousIssueTypeId !== ticket.issueTypeId
+      ) {
+        this.logger.log(
+          `Ticket routing updated: type=${ticket.ticketType}, categoryId=${ticket.categoryId}, issueTypeId=${ticket.issueTypeId}`,
+        );
+      }
     }
 
     // Priority changes allowed for all technician-level roles and above
@@ -5864,8 +5885,10 @@ export class TicketService implements OnModuleInit {
     }
     if (
       referencedComment.isInternal &&
-      !((ticket as Ticket & { canViewInternalNotes?: boolean }).canViewInternalNotes ??
-        this.canViewInternalNotes(ticket, viewerRole, viewerId))
+      !(
+        (ticket as Ticket & { canViewInternalNotes?: boolean }).canViewInternalNotes ??
+        this.canViewInternalNotes(ticket, viewerRole, viewerId)
+      )
     ) {
       throw new ForbiddenException('You cannot view this internal note attachment.');
     }
@@ -6210,6 +6233,45 @@ export class TicketService implements OnModuleInit {
     }
     if (!slaHours && !ticket.issueTypeId) return 4;
     return slaHours;
+  }
+
+  private async recalculateTicketSlaAfterRoutingChange(
+    ticket: Ticket,
+    issueType: TicketIssueType | null,
+  ): Promise<void> {
+    if (!ticket.assignedToId) {
+      ticket.slaDeadline = null;
+      return;
+    }
+
+    const targetSlaHours = issueType ? Number(issueType.slaHours || 0) : 4;
+    if (targetSlaHours <= 0) {
+      ticket.slaDeadline = null;
+      return;
+    }
+
+    const referenceTime = ticket.slaPausedAt ? new Date(ticket.slaPausedAt) : new Date();
+    const config = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
+    let consumedSeconds: number;
+    if (config) {
+      const businessSeconds = await this.calculateBusinessSeconds(
+        new Date(ticket.createdAt),
+        referenceTime,
+        config,
+      );
+      consumedSeconds = Math.max(0, businessSeconds - (ticket.accumulatedPauseSeconds || 0));
+    } else {
+      consumedSeconds = Math.max(
+        0,
+        (referenceTime.getTime() - new Date(ticket.createdAt).getTime()) / 1000 -
+          (ticket.accumulatedPauseSeconds || 0),
+      );
+    }
+
+    const remainingHours = Math.max(0, targetSlaHours - consumedSeconds / 3600);
+    ticket.slaDeadline = config
+      ? await this.calculateSlaDeadline(referenceTime, remainingHours, config)
+      : new Date(referenceTime.getTime() + remainingHours * 60 * 60 * 1000);
   }
 
   private async calculateTicketSlaDeadline(

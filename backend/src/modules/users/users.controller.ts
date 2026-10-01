@@ -253,7 +253,10 @@ export class UsersController {
     }
 
     const previousRole = targetUser.role;
-    const updated = await this.usersService.update(parsedId, updateUserDto, { requireUnit: isSelf });
+    const updated = await this.usersService.update(parsedId, updateUserDto, {
+      requireUnit: isSelf,
+      actorUserId: Number(req.user.id ?? req.user.userId),
+    });
     if (updateUserDto.role && updateUserDto.role !== previousRole) {
       void this.eventBus.publish(APP_NOTIFICATION_REQUESTED_EVENT, {
         userIds: [parsedId],

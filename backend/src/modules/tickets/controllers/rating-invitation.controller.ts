@@ -42,6 +42,11 @@ function requestMetadata(req: any) {
 export class RatingInvitationController {
   constructor(private readonly ratingInvitations: RatingInvitationService) {}
 
+  @Get('availability')
+  async getAvailability() {
+    return this.ratingInvitations.getAvailability();
+  }
+
   @Get('eligible-recipients')
   async getEligibleRecipients() {
     return this.ratingInvitations.getEligibleRecipients();

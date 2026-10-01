@@ -43,7 +43,7 @@ import {
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { knowledgeBaseApi } from '@/app/api/references';
-import ReactMarkdown from 'react-markdown';
+import { SafeMarkdown } from '@/components/SafeRichText';
 
 interface KBArticle {
   id: number;
@@ -282,7 +282,7 @@ export default function KnowledgeBasePage() {
         }}
       >
         {editForm.content.trim() ? (
-          <ReactMarkdown>{editForm.content}</ReactMarkdown>
+          <SafeMarkdown>{editForm.content}</SafeMarkdown>
         ) : (
           <Typography color="text.secondary">Your formatted article will appear here.</Typography>
         )}
@@ -396,7 +396,7 @@ export default function KnowledgeBasePage() {
                   </AccordionSummary>
                   <AccordionDetails>
                     <Box sx={{ mb: 2, typography: 'body2', color: 'text.primary', '& p': { m: 0, mb: 1 }, '& ul, & ol': { m: 0, pl: 2 } }}>
-                      <ReactMarkdown>{art.content}</ReactMarkdown>
+                      <SafeMarkdown>{art.content}</SafeMarkdown>
                     </Box>
                     {art.tags &&
                       art.tags.split(',').map((tag) => (

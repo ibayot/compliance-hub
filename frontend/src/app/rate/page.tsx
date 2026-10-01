@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -26,6 +27,7 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
+import { LinkifiedText } from '@/components/SafeRichText';
 import {
   SentimentDissatisfied,
   SentimentNeutral,
@@ -39,14 +41,26 @@ import { publicRatingApi, PublicRatingSession, PublicRatingTicket } from '@/lib/
 const QUALITY_ITEMS = [
   'I am satisfied with the service that I availed.',
   'I spent a reasonable amount of time for my transaction.',
-  "The office followed the transaction's requirements and steps based on the information provided.",
-  'The steps I needed to complete for my transaction were easy and simple.',
+  "The office followed the transaction's requirements and steps based on the information provided",
+  'The steps (including payment) I need to do for my transaction were easy and simple.',
   'I easily found information about my transaction from the office or its website.',
-  'I paid a reasonable amount of fees for my transaction. (If the service was free, this is not applicable.)',
-  'I feel the office was fair to everyone during my transaction.',
-  'I was treated courteously by the staff, and the staff was helpful when I asked for assistance.',
-  'I received what I needed, or a denied request was sufficiently explained to me.',
+  "I paid a reasonable amount of fees for my transaction. (If services was free, mark the 'N/A' column) (You may skip this).",
+  'I feel the office was fair to everyone, or "walang palakasan", during my transaction.',
+  'I was treated courteously by the staff, and (if asked for help) the staff was helpful.',
+  'I got what I needed from the government office, or (if denied) denial of request was sufficiently explained to me.',
 ];
+
+const populatedFieldSx = (populated: boolean) =>
+  populated
+    ? {
+        '& .MuiInputBase-input': { color: '#000', fontStyle: 'italic' },
+        '& .MuiInputBase-input.Mui-disabled': {
+          color: '#000',
+          WebkitTextFillColor: '#000',
+          fontStyle: 'italic',
+        },
+      }
+    : undefined;
 
 const manilaDate = (value: string | null | undefined) =>
   value
@@ -59,7 +73,9 @@ const manilaDate = (value: string | null | undefined) =>
     : 'Not recorded';
 
 const transactionDate = (ticket: PublicRatingTicket) =>
-  new Date(ticket.createdAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  new Date(ticket.resolvedAt || ticket.createdAt).toLocaleDateString('en-CA', {
+    timeZone: 'Asia/Manila',
+  });
 
 function createForm(session: PublicRatingSession, ticket: PublicRatingTicket): CsatFormData {
   return {
@@ -214,8 +230,8 @@ export default function PublicRatingPage() {
             <Stack direction="row" spacing={2} alignItems="center">
               <Box
                 component="img"
-                src="/images/logos/dswd-logo.png"
-                alt="DSWD"
+                src="/images/logos/ticketing-logo.png"
+                alt="Compliance Hub Ticketing"
                 sx={{ height: 52 }}
               />
               <Box>
@@ -322,9 +338,9 @@ export default function PublicRatingPage() {
                       size="small"
                     />
                   </Stack>
-                  <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
+                  <LinkifiedText variant="body2" sx={{ mt: 1 }}>
                     {ticket.description}
-                  </Typography>
+                  </LinkifiedText>
                   <Divider sx={{ my: 2 }} />
                   <Stack spacing={0.5}>
                     <Typography variant="body2">
@@ -370,10 +386,10 @@ export default function PublicRatingPage() {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>
-          Client Satisfaction Measurement Form
-          <Typography variant="body2" color="text.secondary">
-            {selectedTicket?.ticketNumber}
+        <DialogTitle sx={{ fontWeight: 700, textAlign: 'center', pb: 0 }}>
+          CLIENT SATISFACTION MEASUREMENT FORM
+          <Typography variant="body2" color="text.secondary" fontWeight={400} mt={0.5}>
+            Ticket: <strong>{selectedTicket?.ticketNumber}</strong>
           </Typography>
         </DialogTitle>
         {form && (
@@ -387,61 +403,80 @@ export default function PublicRatingPage() {
                     onChange={(event) => setForm({ ...form, consentGiven: event.target.checked })}
                   />
                 }
-                label="I voluntarily consent to the use of this information solely to improve DSWD services. *"
+                label={
+                  <Typography variant="body2">
+                    I voluntarily give my consent for the use of my personal information. I confirm
+                    that I have read the provided information, or it has been read to me. I have had
+                    the opportunity to ask questions about it, and any inquiries I made were
+                    answered to my satisfaction. I understand that any information collected will be
+                    utilized solely to enhance the basic social services provided by the DSWD. *
+                  </Typography>
+                }
               />
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  label="Unit/Section *"
-                  value={form.unitSection}
-                  onChange={(event) => setForm({ ...form, unitSection: event.target.value })}
+              <Stack direction="row" spacing={2}>
+                <Autocomplete
+                  options={[] as string[]}
+                  freeSolo
                   fullWidth
+                  disabled={Boolean(session?.recipient.unitSection)}
+                  sx={populatedFieldSx(Boolean(session?.recipient.unitSection))}
+                  value={form.unitSection}
+                  onInputChange={(_, value) => setForm({ ...form, unitSection: value })}
+                  renderInput={(params) => <TextField {...params} label="Unit/Section *" />}
                 />
                 <TextField
                   label="Date of Transaction *"
                   type="date"
                   value={form.dateOfTransaction}
                   InputProps={{ readOnly: true }}
+                  disabled
                   InputLabelProps={{ shrink: true }}
                   fullWidth
+                  sx={populatedFieldSx(true)}
                 />
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
                   label="First Name *"
+                  disabled={Boolean(session?.recipient.firstName)}
                   value={form.clientFirstName}
-                  InputProps={{ readOnly: Boolean(session?.recipient.firstName) }}
                   onChange={(event) => setForm({ ...form, clientFirstName: event.target.value })}
                   fullWidth
+                  sx={populatedFieldSx(Boolean(session?.recipient.firstName))}
                 />
                 <TextField
                   label="M.I."
+                  disabled={Boolean(session?.recipient.middleInitial)}
                   value={form.clientMiddleInitial || ''}
-                  InputProps={{ readOnly: Boolean(session?.recipient.middleInitial) }}
                   onChange={(event) =>
                     setForm({ ...form, clientMiddleInitial: event.target.value.slice(0, 1) })
                   }
-                  sx={{ width: { sm: 120 } }}
+                  sx={{
+                    width: 140,
+                    ...populatedFieldSx(Boolean(session?.recipient.middleInitial)),
+                  }}
                 />
                 <TextField
                   label="Last Name *"
+                  disabled={Boolean(session?.recipient.lastName)}
                   value={form.clientLastName}
-                  InputProps={{ readOnly: Boolean(session?.recipient.lastName) }}
                   onChange={(event) => setForm({ ...form, clientLastName: event.target.value })}
                   fullWidth
+                  sx={populatedFieldSx(Boolean(session?.recipient.lastName))}
                 />
                 <TextField
                   label="Suffix"
+                  disabled={Boolean(session?.recipient.suffix)}
                   value={form.suffix || ''}
-                  InputProps={{ readOnly: Boolean(session?.recipient.suffix) }}
                   onChange={(event) => setForm({ ...form, suffix: event.target.value })}
-                  sx={{ width: { sm: 150 } }}
+                  sx={{ width: 200, ...populatedFieldSx(Boolean(session?.recipient.suffix)) }}
                 />
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
                   label="Age"
                   type="number"
-                  inputProps={{ min: 0, max: 120 }}
+                  inputProps={{ min: 20, max: 89 }}
                   value={form.age ?? ''}
                   onChange={(event) =>
                     setForm({
@@ -449,19 +484,20 @@ export default function PublicRatingPage() {
                       age: event.target.value ? Number(event.target.value) : undefined,
                     })
                   }
+                  sx={{ maxWidth: 100 }}
                 />
                 <TextField
                   label="Religion"
                   value={form.religion || ''}
                   onChange={(event) => setForm({ ...form, religion: event.target.value })}
-                  fullWidth
+                  sx={{ flex: 1 }}
                 />
                 <TextField
                   select
                   label="Sex *"
                   value={form.sex}
                   onChange={(event) => setForm({ ...form, sex: event.target.value })}
-                  sx={{ minWidth: 150 }}
+                  sx={{ minWidth: 120 }}
                 >
                   <MenuItem value="Male">Male</MenuItem>
                   <MenuItem value="Female">Female</MenuItem>
@@ -481,21 +517,35 @@ export default function PublicRatingPage() {
                     startAdornment: <InputAdornment position="start">+63</InputAdornment>,
                   }}
                   inputProps={{ inputMode: 'numeric' }}
-                  fullWidth
+                  sx={{ flex: 1 }}
                 />
               </Stack>
               <TextField
                 label="Technician Name *"
                 value={form.technicianName}
                 InputProps={{ readOnly: true }}
+                inputProps={{ tabIndex: -1 }}
                 fullWidth
+                sx={{
+                  '& .MuiInputBase-input': {
+                    color: 'text.primary',
+                    fontStyle: 'italic',
+                    cursor: 'default',
+                  },
+                  '& .MuiInputLabel-root': { color: 'text.primary' },
+                }}
               />
-              <Typography variant="subtitle2" fontWeight={700}>
-                Service Quality Ratings *
+              <Typography variant="subtitle2" fontWeight={700} mt={1}>
+                SERVICE QUALITY RATINGS *
+              </Typography>
+              <Typography variant="body2">
+                For Service Quality Dimension 0-8, please select the number that best corresponds to
+                your answer.
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                5 — Strongly Agree, 4 — Agree, 3 — Neither Agree nor Disagree, 2 — Disagree, 1 —
-                Strongly Disagree
+                {' '}
+                5-Strongly Agree, 4-Agree, 3-Neither Agree nor Disagree, 2-Disagree, 1-Strongly
+                Disagree, N/A-Not Applicable
               </Typography>
               {QUALITY_ITEMS.map((item, index) => {
                 const notApplicable = [3, 5, 8].includes(index);
@@ -506,20 +556,26 @@ export default function PublicRatingPage() {
                     sx={{
                       display: 'flex',
                       flexDirection: { xs: 'column', sm: 'row' },
-                      alignItems: { sm: 'center' },
+                      alignItems: { xs: 'flex-start', sm: 'center' },
                       gap: 1,
                     }}
                   >
-                    <Typography variant="body2" sx={{ flex: 1 }}>
+                    <Typography variant="body2" sx={{ flex: 1, minWidth: 0, mb: { xs: 1, sm: 0 } }}>
                       {index}. {item}
                     </Typography>
                     {notApplicable ? (
-                      <Chip size="small" label="N/A" />
+                      <Chip
+                        size="small"
+                        label="N/A"
+                        color="default"
+                        sx={{ minWidth: 64, alignSelf: { xs: 'flex-start', sm: 'auto' } }}
+                      />
                     ) : (
                       <ToggleButtonGroup
                         exclusive
                         size="small"
                         value={value === 0 ? null : value}
+                        sx={{ alignSelf: { xs: 'center', sm: 'auto' } }}
                         onChange={(_, next) => {
                           if (next === null) return;
                           const likert = [...form.likert] as Array<number | 'NA'>;
@@ -527,20 +583,80 @@ export default function PublicRatingPage() {
                           setForm({ ...form, likert });
                         }}
                       >
-                        <ToggleButton value={1}>
-                          <SentimentVeryDissatisfied color={value === 1 ? 'error' : 'disabled'} />
+                        <ToggleButton
+                          value={1}
+                          sx={{
+                            px: 0.5,
+                            border: 'none',
+                            '&.Mui-selected': { bgcolor: 'transparent' },
+                          }}
+                        >
+                          <SentimentVeryDissatisfied
+                            sx={{
+                              color: value === 1 ? '#d32f2f' : 'action.disabled',
+                              fontSize: 28,
+                            }}
+                          />
                         </ToggleButton>
-                        <ToggleButton value={2}>
-                          <SentimentDissatisfied color={value === 2 ? 'warning' : 'disabled'} />
+                        <ToggleButton
+                          value={2}
+                          sx={{
+                            px: 0.5,
+                            border: 'none',
+                            '&.Mui-selected': { bgcolor: 'transparent' },
+                          }}
+                        >
+                          <SentimentDissatisfied
+                            sx={{
+                              color: value === 2 ? '#ed6c02' : 'action.disabled',
+                              fontSize: 28,
+                            }}
+                          />
                         </ToggleButton>
-                        <ToggleButton value={3}>
-                          <SentimentNeutral color={value === 3 ? 'warning' : 'disabled'} />
+                        <ToggleButton
+                          value={3}
+                          sx={{
+                            px: 0.5,
+                            border: 'none',
+                            '&.Mui-selected': { bgcolor: 'transparent' },
+                          }}
+                        >
+                          <SentimentNeutral
+                            sx={{
+                              color: value === 3 ? '#f5a623' : 'action.disabled',
+                              fontSize: 28,
+                            }}
+                          />
                         </ToggleButton>
-                        <ToggleButton value={4}>
-                          <SentimentSatisfied color={value === 4 ? 'success' : 'disabled'} />
+                        <ToggleButton
+                          value={4}
+                          sx={{
+                            px: 0.5,
+                            border: 'none',
+                            '&.Mui-selected': { bgcolor: 'transparent' },
+                          }}
+                        >
+                          <SentimentSatisfied
+                            sx={{
+                              color: value === 4 ? '#2e7d32' : 'action.disabled',
+                              fontSize: 28,
+                            }}
+                          />
                         </ToggleButton>
-                        <ToggleButton value={5}>
-                          <SentimentVerySatisfied color={value === 5 ? 'primary' : 'disabled'} />
+                        <ToggleButton
+                          value={5}
+                          sx={{
+                            px: 0.5,
+                            border: 'none',
+                            '&.Mui-selected': { bgcolor: 'transparent' },
+                          }}
+                        >
+                          <SentimentVerySatisfied
+                            sx={{
+                              color: value === 5 ? '#1976d2' : 'action.disabled',
+                              fontSize: 28,
+                            }}
+                          />
                         </ToggleButton>
                       </ToggleButtonGroup>
                     )}
@@ -552,9 +668,14 @@ export default function PublicRatingPage() {
         )}
         <DialogActions>
           <Button onClick={() => setSelectedTicket(null)} disabled={busy}>
-            Cancel
+            Close
           </Button>
-          <Button variant="contained" onClick={submitRating} disabled={busy || !form?.consentGiven}>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={submitRating}
+            disabled={busy || !form?.consentGiven}
+          >
             {busy ? 'Submitting...' : 'Submit Feedback'}
           </Button>
         </DialogActions>

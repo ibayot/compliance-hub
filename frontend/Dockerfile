@@ -84,6 +84,13 @@ server { \
         add_header Pragma "no-cache"; \
         add_header Expires "0"; \
     } \
+    location = /app-version.json { \
+        include /etc/nginx/security-headers.conf; \
+        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
+        add_header Pragma "no-cache"; \
+        add_header Expires "0"; \
+        try_files $uri =404; \
+    } \
     location = /api/docs { \
         return 301 /api/docs/; \
     } \

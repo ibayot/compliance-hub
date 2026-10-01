@@ -6,6 +6,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeModeProvider } from '@/contexts/ThemeModeContext';
 import ReactQueryProvider from '@/components/providers/ReactQueryProvider';
 import App from '@/App';
+import AppVersionGuard from '@/components/AppVersionGuard';
 import '@/app/globals.css';
 
 const googleClientId = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
@@ -16,6 +17,7 @@ function AppProviders() {
       <ThemeModeProvider>
         <ReactQueryProvider>
           <AuthProvider>
+            <AppVersionGuard />
             <App />
           </AuthProvider>
         </ReactQueryProvider>

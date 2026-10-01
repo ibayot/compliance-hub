@@ -89,6 +89,12 @@ Use the following as a quick baseline for microservices deployments. Keep secret
 | `DB_USERNAME` | DB username | `ricms_user` |
 | `DB_PASSWORD` | DB password | `change_me` |
 | `USERS_DB_DATABASE` | Users service database | `compliance_hub_users` |
+| `UMS_DB_HOST` | UMS database host; defaults to `DB_HOST` when omitted | `127.0.0.1` |
+| `UMS_DB_PORT` | UMS database port; defaults to `DB_PORT` when omitted | `3306` |
+| `UMS_DB_USERNAME` | Read-only UMS database username; defaults to `DB_USERNAME` | `ums_reader` |
+| `UMS_DB_PASSWORD` | Read-only UMS database password; defaults to `DB_PASSWORD` | `change_me` |
+| `UMS_DB_DATABASE` | UMS database containing the active `work_history` records | `02_db_ums_prod` |
+| `UMS_UNIT_SYNC_ENABLED` | Enable startup and daily staff-unit synchronization from UMS | `false` |
 | `TICKETING_DB_DATABASE` | Ticketing service database | `compliance_hub_ticketing` |
 | `COMPLIANCE_DB_DATABASE` | Compliance service database | `compliance_hub` |
 | `JWT_SECRET` | Access token signing secret | `long_random_secret` |
@@ -99,6 +105,10 @@ Use the following as a quick baseline for microservices deployments. Keep secret
 | `COMPLIANCE_SERVICE_URL` | Gateway route target for compliance service | `http://compliance-service:4103` |
 | `NEXT_PUBLIC_API_URL` | Frontend API base URL | `http://localhost:4000/api` |
 | `GEMINI_API_KEY` | Gemini AI Key for Knowledge Base | `AIzaSy...` |
+
+When the Users service runs in Docker while UMS runs in XAMPP on the Windows
+host, set `UMS_DB_HOST=host.docker.internal`. A directly started Users service
+can use `UMS_DB_HOST=127.0.0.1` instead.
 
 ---
 

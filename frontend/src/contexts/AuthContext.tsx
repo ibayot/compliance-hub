@@ -70,6 +70,7 @@ interface AuthContextType {
   login: (email: string, password: string, redirectTo?: string) => Promise<void>;
   loginWithGoogle: (idToken: string, redirectTo?: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshSession: () => Promise<User>;
   isSessionLocked: boolean;
   requiresPasswordChange: boolean;
   unlockSession: (password: string) => Promise<void>;
@@ -97,6 +98,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const inactivityDeadlineRef = useRef<number | null>(null);
   const navigate = useNavigate();
   const authenticatedUserId = user?.id ?? null;
+
+  const refreshSession = useCallback(async (): Promise<User> => {
+    const response = await authApi.refresh(tokenStore.get('refreshToken') || '');
+    if (response.accessToken) tokenStore.set('accessToken', response.accessToken);
+    if (response.refreshToken) tokenStore.set('refreshToken', response.refreshToken);
+    const profile = await authApi.getProfile();
+    setUser(profile);
+    return profile;
+  }, []);
 
   useEffect(() => {
     authApi.getPublicConfig()
@@ -311,6 +321,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (err) { /* ignore */ }
 
         const roleChanged = jwtRole && jwtRole !== profile.role;
+        const currentUnitIds = (user.units || []).map((unit) => Number(unit.id)).sort((a, b) => a - b);
+        const profileUnitIds = (profile.units || []).map((unit) => Number(unit.id)).sort((a, b) => a - b);
+        const unitChanged = currentUnitIds.join(',') !== profileUnitIds.join(',');
 
         setUser(profile); // Immediately reflect visual changes to account
 
@@ -320,6 +333,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
           setTimeout(() => logout('role_changed'), 1500);
         } else {
+          if (unitChanged) {
+            await refreshSession();
+            enqueueSnackbar('Your unit access was updated from the personnel directory.', {
+              variant: 'info',
+            });
+          }
           try {
             const caps = await usersApi.getMyCapabilities();
             setMyCap(caps);
@@ -331,7 +350,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 60_000); // 60 s
 
     return () => clearInterval(id);
-  }, [user, enqueueSnackbar, isSessionLocked, requiresPasswordChange, logout]);
+  }, [user, enqueueSnackbar, isSessionLocked, requiresPasswordChange, logout, refreshSession]);
 
   const login = async (email: string, password: string, redirectTo?: string) => {
     sessionStorage.removeItem('changelog-prompt-checked');
@@ -462,6 +481,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           login,
           loginWithGoogle,
            logout,
+          refreshSession,
            isSessionLocked,
            requiresPasswordChange,
            unlockSession,

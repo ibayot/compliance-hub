@@ -2345,7 +2345,7 @@ function MobileSettingsCard() {
 
 
 function ProfilePreferencesCard() {
-  const { user } = useAuth();
+  const { user, refreshSession } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const [units, setUnits] = useState<{ id: number; name: string; hasReportorialRequirements?: boolean }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -2408,6 +2408,15 @@ function ProfilePreferencesCard() {
         positionFull: form.positionFull.trim() || null,
         designation: form.designation.trim() || null,
       });
+      try {
+        await refreshSession();
+      } catch {
+        enqueueSnackbar(
+          'Your profile was saved, but the session could not be refreshed. Sign in again to apply the updated unit access.',
+          { variant: 'warning' },
+        );
+        return;
+      }
       enqueueSnackbar('Profile information updated successfully.', { variant: 'success' });
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to update profile information.', { variant: 'error' });
@@ -2422,7 +2431,7 @@ function ProfilePreferencesCard() {
     <Card elevation={2}>
       <CardHeader
         title="Profile Information"
-        subheader="Update your contact, unit, and position details. Password changes are handled separately below."
+        subheader="Update your contact, unit, and position details. A unit you select remains in effect until the personnel directory reports the same unit. Password changes are handled separately below."
       />
       <CardContent>
         <Grid container spacing={2}>

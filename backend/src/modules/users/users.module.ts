@@ -16,6 +16,8 @@ import { SecurityConfig } from './entities/security-config.entity';
 import { SecurityConfigController } from './security-config.controller';
 import { SecurityConfigService } from './security-config.service';
 import { UserTrustedDevice } from './entities/user-trusted-device.entity';
+import { UserUnitOverride } from './entities/user-unit-override.entity';
+import { UnitSyncService } from './unit-sync.service';
 
 @Module({
   imports: [
@@ -27,11 +29,25 @@ import { UserTrustedDevice } from './entities/user-trusted-device.entity';
       Feedback,
       SecurityConfig,
       UserTrustedDevice,
+      UserUnitOverride,
     ]),
     EventBusModule,
   ],
   controllers: [SecurityConfigController, UsersController, FeedbackController],
-  providers: [UsersService, RoleCapabilitiesService, FeedbackService, SecurityConfigService, CapabilityGuard],
-  exports: [UsersService, RoleCapabilitiesService, FeedbackService, SecurityConfigService],
+  providers: [
+    UsersService,
+    UnitSyncService,
+    RoleCapabilitiesService,
+    FeedbackService,
+    SecurityConfigService,
+    CapabilityGuard,
+  ],
+  exports: [
+    UsersService,
+    UnitSyncService,
+    RoleCapabilitiesService,
+    FeedbackService,
+    SecurityConfigService,
+  ],
 })
 export class UsersModule {}

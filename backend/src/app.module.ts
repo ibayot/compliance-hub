@@ -37,6 +37,14 @@ import { AuditVariableSubscriber } from './shared/audit/audit.subscriber';
         DB_PASSWORD: Joi.string().allow('').optional(),
         DB_DATABASE: Joi.string().required(),
         DB_SYNCHRONIZE: Joi.boolean().default(false),
+        UMS_DB_DATABASE: Joi.string()
+          .pattern(/^[A-Za-z0-9_]+$/)
+          .optional(),
+        UMS_DB_HOST: Joi.string().optional(),
+        UMS_DB_PORT: Joi.number().optional(),
+        UMS_DB_USERNAME: Joi.string().optional(),
+        UMS_DB_PASSWORD: Joi.string().allow('').optional(),
+        UMS_UNIT_SYNC_ENABLED: Joi.boolean().default(false),
         REDIS_HOST: Joi.string().required(),
         REDIS_PORT: Joi.number().default(6379),
         JWT_SECRET: Joi.string().min(16).required(),
