@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.19] - 2026-10-06 - Ticket Update Permissions and Notification Read State
+
+### Fixed
+- Resolution details can now be updated only by the eligible assigned staff member, an authorized ticket manager, or the focal handling an accepted escalation. Staff requesters who can view a ticket can no longer change its resolution before assignment.
+- Assigned Specialized Concerns staff can use the status and resolution workflow when their role has the Specialized Support capability; ineligible assignees remain blocked.
+- Notifications remain unread and bold until the user selects them. Opening the notification list no longer marks every item read, selecting one item changes only that notification to regular text, and the badge continues to show the number of remaining unread notifications until none remain.
+
+### Deployment Note
+- No schema migration is required. Run `db-init/20261006-add-application-changelog-v1.0.19-users.sql` against the Users database to publish the capability-targeted and End User release notes.
+
 ## [1.0.18] - 2026-09-30 - Service Feedback and Ticket Experience
 
 ### Added

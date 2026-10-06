@@ -467,18 +467,23 @@ export default function TicketDetailPage() {
   // UI policy: if escalation is pending, no top action buttons are shown.
   // If escalation is accepted, only Update Status may appear.
   const hideTopActionButtons = !!hasPendingEscalation;
-  const acceptedEscalationOnlyStatusAction = !!hasAcceptedEscalation;
+  const isCurrentAssignee =
+    !isRegularUser &&
+    !!myCap?.isTicketModuleAccess &&
+    !!ticket?.assignedToId &&
+    Number(ticket.assignedToId) === Number(user?.id) &&
+    (ticket.ticketType !== 'specialized_concerns' || !!myCap?.isSpecializedSupport);
   const canUpdateStatusNow =
-    (canStaff && !hasAcceptedEscalation) || isEscalationAdmin || !!isAcceptedEscalationFocal;
+    !hasPendingEscalation &&
+    (hasAcceptedEscalation
+      ? !!myCap?.isTicketSettingsFocal || !!isAcceptedEscalationFocal
+      : isAdmin || isCurrentAssignee);
   const canShowStatusAction =
     !hideTopActionButtons &&
     !editingStatus &&
     !isDuplicate &&
     !['resolved', 'closed'].includes(ticket?.status || '') &&
-    ((!hasAcceptedEscalation &&
-      canUpdateStatusNow &&
-      (isTechnician || isSectionHead || isComplianceOfficer || !!myCap?.isTicketSettingsFocal)) ||
-      (hasAcceptedEscalation && (isAcceptedEscalationFocal || isEscalationAdmin)));
+    canUpdateStatusNow;
   // Matrix-driven reassign privilege: ticket admin/assign capability, constrained after accepted escalations.
   const canReassign = canAssignByCapability && (!hasAcceptedEscalation || isEscalationAdmin);
   // Ticket can be escalated again if there is no pending escalation.
@@ -613,6 +618,7 @@ export default function TicketDetailPage() {
       const data = await ticketsApi.getById(ticketId);
       setTicket(data);
       setNewStatus(data.status);
+      setNewPriority(data.priority || '');
       setResolutionNotes(data.resolutionNotes || '');
 
       if (!emailActionHandledRef.current) {
@@ -793,7 +799,9 @@ export default function TicketDetailPage() {
       if (newStatus && newStatus !== ticket?.status) {
         payload.status = newStatus as Ticket['status'];
       }
-      if (resolutionNotes) payload.resolutionNotes = resolutionNotes;
+      if (resolutionNotes !== (ticket?.resolutionNotes || '')) {
+        payload.resolutionNotes = resolutionNotes;
+      }
       if (statusJustification) payload.statusJustification = statusJustification;
       if (newPriority && newPriority !== ticket?.priority) payload.priority = newPriority as any;
       if (overrideDupOfId) payload.duplicateOfId = overrideDupOfId;
@@ -804,7 +812,7 @@ export default function TicketDetailPage() {
       setEditingStatus(false);
       setDupDialogOpen(false);
       setDupConfirmOpen(false);
-      setNewPriority('');
+      setNewPriority(updatedTicket.priority || '');
       await Promise.all([fetchTicket(), fetchEvents()]);
       enqueueSnackbar('Ticket updated.', { variant: 'success' });
       if (newStatus === 'resolved' && generateKb) {
@@ -1554,7 +1562,9 @@ export default function TicketDetailPage() {
                 const needsPriority =
                   newStatus === 'in_progress' && (!effectivePriority || !activeIssueTypeId);
                 const isStatusUnchanged =
-                  newStatus === ticket?.status && newPriority === ticket?.priority;
+                  newStatus === ticket?.status &&
+                  (newPriority || '') === (ticket?.priority || '') &&
+                  resolutionNotes === (ticket?.resolutionNotes || '');
                 const needsIssueForResolution = newStatus === 'resolved' && !activeIssueTypeId;
                 const isKbMissingNotes =
                   newStatus === 'resolved' && generateKb && !resolutionNotes.trim();

@@ -1657,4 +1657,8 @@ export const notificationsApi = {
     const response = await apiClient.post('/notifications/mark-read');
     return response.data;
   },
+  markRead: async (id: number): Promise<{ success: boolean }> => {
+    const response = await apiClient.post(`/notifications/${id}/mark-read`);
+    return response.data;
+  },
 };

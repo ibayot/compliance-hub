@@ -1,4 +1,13 @@
-import { Controller, Get, Logger, Post, Request, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Logger,
+  Param,
+  ParseIntPipe,
+  Post,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -30,7 +39,9 @@ export class NotificationController {
       ]);
       return { notifications, unreadCount };
     } catch (error: any) {
-      this.logger.error(`Failed to load notification summary for user ${userId}: ${error?.message || error}`);
+      this.logger.error(
+        `Failed to load notification summary for user ${userId}: ${error?.message || error}`,
+      );
       throw error;
     }
   }
@@ -58,10 +69,17 @@ export class NotificationController {
   @Post('mark-read')
   async markAllRead(@Request() req: any) {
     const userId = req.user.id ?? req.user.userId;
-    await this.notificationRepo.update(
-      { userId, isRead: false },
-      { isRead: true }
-    );
+    await this.notificationRepo.update({ userId, isRead: false }, { isRead: true });
     return { success: true };
+  }
+
+  @Post(':id/mark-read')
+  async markRead(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    const userId = req.user.id ?? req.user.userId;
+    const result = await this.notificationRepo.update(
+      { id, userId, isRead: false },
+      { isRead: true },
+    );
+    return { success: (result.affected ?? 0) > 0 };
   }
 }

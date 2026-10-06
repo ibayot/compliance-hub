@@ -2558,6 +2558,32 @@ export class TicketService implements OnModuleInit {
       );
     }
 
+    const isTicketStatusAdmin =
+      this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
+      this.roleCapSvc.isTicketFocal(actorRole as string);
+    const isAcceptedEscalationOperator =
+      !!acceptedEscalation &&
+      (this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
+        acceptedEscalation.escalatedToId === actorId);
+    const isEligibleAssignedOperator =
+      ticket.assignedToId === actorId &&
+      (ticket.ticketType !== TicketType.SPECIALIZED_CONCERNS ||
+        this.roleCapSvc.isSpecializedSupport(actorRole as string));
+    const canUpdateOperationalFields = acceptedEscalation
+      ? isAcceptedEscalationOperator
+      : isTicketStatusAdmin || isEligibleAssignedOperator;
+    const resolutionUpdateRequested =
+      dto.resolutionNotes !== undefined ||
+      dto.resolutionSteps !== undefined ||
+      dto.resolutionDate !== undefined ||
+      dto.generateKb !== undefined;
+
+    if (resolutionUpdateRequested && !canUpdateOperationalFields) {
+      throw new ForbiddenException(
+        'Only the eligible assigned staff member or an authorized ticket focal can update resolution details.',
+      );
+    }
+
     // Technicians / admins can update status + resolution
     if (dto.subject) ticket.subject = dto.subject.trim();
     if (dto.description) ticket.description = dto.description.trim();
@@ -2703,11 +2729,7 @@ export class TicketService implements OnModuleInit {
         }
       } else {
         // Enforce that only admins or the assigned technician can update status
-        const isStatusAdmin =
-          this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
-          this.roleCapSvc.isTicketFocal(actorRole as string);
-
-        if (!isStatusAdmin && ticket.assignedToId !== actorId) {
+        if (!isTicketStatusAdmin && !isEligibleAssignedOperator) {
           throw new ForbiddenException(
             'You can only update the status of tickets explicitly assigned to you.',
           );

@@ -46,6 +46,15 @@ interface AppBarProps {
   onOpenChangelog: () => void;
 }
 
+interface AppNotification {
+  id: number;
+  ticketId?: string | null;
+  targetPath?: string | null;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
 /** Detect UUID-like or numeric-id-like segments that shouldn't show verbatim in breadcrumbs */
 const isIdSegment = (s: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) || /^\d+$/.test(s);
@@ -69,7 +78,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   // Notifications
   const [notifAnchorEl, setNotifAnchorEl] = useState<null | HTMLElement>(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isNotifLoading, setIsNotifLoading] = useState(false);
   const [notifError, setNotifError] = useState<string | null>(null);
 
@@ -406,20 +415,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     setNotifAnchorEl(event.currentTarget);
     setIsNotifLoading(true);
     try {
-      const summary = await fetchNotificationSummary();
-      if (summary && summary.unreadCount > 0) {
-        try {
-          await notificationsApi.markAllRead();
-          setNotifications(
-            summary.notifications.map((notification) => ({ ...notification, isRead: true })),
-          );
-          prevUnreadCountRef.current = 0;
-          setUnreadCount(0);
-        } catch {
-          // Keep the summary count and list together if the read-state update fails.
-          setUnreadCount(summary.unreadCount);
-        }
-      }
+      await fetchNotificationSummary();
     } finally {
       setIsNotifLoading(false);
     }
@@ -429,7 +425,20 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     setNotifAnchorEl(null);
   };
 
-  const handleNotifClick = (notification: any) => {
+  const handleNotifClick = (notification: AppNotification) => {
+    if (!notification.isRead) {
+      setNotifications((current) =>
+        current.map((item) => (item.id === notification.id ? { ...item, isRead: true } : item)),
+      );
+      setUnreadCount((current) => Math.max(0, current - 1));
+      prevUnreadCountRef.current = Math.max(0, prevUnreadCountRef.current - 1);
+      void notificationsApi
+        .markRead(notification.id)
+        .then((result) => {
+          if (!result.success) void fetchNotificationSummary();
+        })
+        .catch(() => void fetchNotificationSummary());
+    }
     handleNotifClose();
     const target =
       notification.targetPath ||
