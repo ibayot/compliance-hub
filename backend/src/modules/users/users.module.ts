@@ -12,6 +12,7 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
 import { Feedback } from './entities/feedback.entity';
 import { FeedbackController } from './feedback.controller';
 import { FeedbackService } from './feedback.service';
+import { FeedbackAttachment } from './entities/feedback-attachment.entity';
 import { SecurityConfig } from './entities/security-config.entity';
 import { SecurityConfigController } from './security-config.controller';
 import { SecurityConfigService } from './security-config.service';
@@ -27,6 +28,7 @@ import { UnitSyncService } from './unit-sync.service';
       RoleDefinitionEntity,
       RoleCapability,
       Feedback,
+      FeedbackAttachment,
       SecurityConfig,
       UserTrustedDevice,
       UserUnitOverride,

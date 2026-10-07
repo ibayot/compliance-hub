@@ -65,7 +65,7 @@ const isAllowedImageFile = (file: File) => {
   return ALLOWED_IMAGE_EXTENSIONS.has(extension) && (!mime || ALLOWED_IMAGE_MIME_TYPES.has(mime));
 };
 
-type RegisterType = 'legal' | 'standards' | 'internal';
+type RegisterType = 'legal' | 'standards' | 'internal' | 'internal_operational';
 
 const PLAN_COLORS = [
   '#1565c0',
@@ -95,6 +95,15 @@ function parsePlanItems(entry: MovArtifact): string[] {
 
 function toBullets(items: string[]): string {
   return items.map((item) => `- ${item.trim()}`).join('\n');
+}
+
+function escapePrintHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function compressImageToBase64(file: File, maxPx = 400, quality = 0.75): Promise<string> {
@@ -137,14 +146,17 @@ export default function MovBuilderPage() {
 
   // ── Role Gate (render-time check) ─────────────────────────────────────────
   const allowed = !user || !!myCap?.isMovAccess;
+  const canManageMov = !!myCap?.isMovManage;
 
   const [year, setYear] = useState<number>(currentYear);
   const [quarter, setQuarter] = useState<number>(Math.floor((now.getMonth() + 3) / 3));
   const [scope, setScope] = useState('all');
+  const [registerScope, setRegisterScope] = useState<'core' | 'extended' | 'all'>('core');
   const [unitText, setUnitText] = useState('');
 
   const [reportTitle, setReportTitle] = useState('');
   const [reportHtml, setReportHtml] = useState('');
+  const [reportManifest, setReportManifest] = useState<Record<string, unknown> | Array<Record<string, unknown>> | null>(null);
 
   // ── Report Settings ────────────────────────────────────────────────────────
   const [headerImage1, setHeaderImage1] = useState('');
@@ -182,7 +194,7 @@ export default function MovBuilderPage() {
 
   const [kpiRemarks, setKpiRemarks] = useState<Record<string, string>>({});
   const [kpiGapRows, setKpiGapRows] = useState<
-    Array<{ code: string; name: string; recommendation: string }>
+    Array<{ key: string; code: string; name: string; unitName: string; recommendation: string }>
   >([]);
   const [additionalRemarks, setAdditionalRemarks] = useState('');
   const [lastReportKind, setLastReportKind] = useState<
@@ -204,11 +216,12 @@ export default function MovBuilderPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [artifacts, plans, schedule, actionPlans, presets] = await Promise.all([
+      const quarterMonths = [quarter * 3 - 2, quarter * 3 - 1, quarter * 3];
+      const [artifacts, plans, schedule, actionPlanPeriods, presets] = await Promise.all([
         movApi.list({ period_year: year, quarter }),
         movApi.list({ artifact_type: 'assessment_plan_year' }),
         movApi.list({ artifact_type: 'assessment_schedule_entry', period_year: year, quarter }),
-        kpiApi.actionPlans(year, quarter * 3),
+        Promise.all(quarterMonths.map((month) => kpiApi.actionPlans(year, month))),
         movApi.list({ artifact_type: 'print_settings' }),
       ]);
 
@@ -216,17 +229,28 @@ export default function MovBuilderPage() {
       setPlanEntries(plans);
       setScheduleEntries(schedule);
       setPrintPresets(presets);
-      const rows = (actionPlans.items || []).map((item: any) => ({
-        code: item.kpiCode,
-        name: item.kpiName,
-        recommendation: item.recommendation,
-      }));
+      const rows = Array.from(
+        new Map(
+          actionPlanPeriods
+            .flatMap((period) => period.items || [])
+            .map((item: any) => {
+              const key = `${item.unitId}:${item.kpiCode}`;
+              return [key, {
+                key,
+                code: item.kpiCode,
+                name: item.kpiName,
+                unitName: item.unitName,
+                recommendation: item.recommendation,
+              }] as const;
+            }),
+        ).values(),
+      );
       setKpiGapRows(rows);
 
       setKpiRemarks((prev) => {
         const next: Record<string, string> = {};
         rows.forEach((row: any) => {
-          next[row.code] = prev[row.code] || '';
+          next[row.key] = prev[row.key] || '';
         });
         return next;
       });
@@ -260,9 +284,11 @@ export default function MovBuilderPage() {
         scope: scope === 'all' ? undefined : scope,
         unit: unitText.trim() || undefined,
         register_type: registerType,
+        scope_profile: registerScope,
       });
       setReportTitle(report.title);
       setReportHtml(report.content_html || report.content_markdown);
+      setReportManifest({ generated_at: report.generated_at, sources: report.source_manifest });
       setLastReportKind('register');
       enqueueSnackbar(
         `${registerType[0].toUpperCase()}${registerType.slice(1)} register report generated.`,
@@ -283,9 +309,11 @@ export default function MovBuilderPage() {
         quarter,
         scope: scope === 'all' ? undefined : scope,
         unit: unitText.trim() || undefined,
+        scope_profile: registerScope,
       });
       setReportTitle(report.title);
       setReportHtml(report.content_html || report.content_markdown);
+      setReportManifest({ generated_at: report.generated_at, sources: report.source_manifest });
       setLastReportKind('monitoring');
       enqueueSnackbar('Register Monitoring Matrix generated.', { variant: 'success' });
     } catch (error: any) {
@@ -310,6 +338,7 @@ export default function MovBuilderPage() {
       });
       setReportTitle(report.title);
       setReportHtml(report.report_html || report.report_markdown);
+      setReportManifest({ generated_at: report.generated_at, sources: report.source_manifest });
       setLastReportKind('assessment');
       enqueueSnackbar('Assessment report generated.', { variant: 'success' });
       setTab(0);
@@ -321,6 +350,7 @@ export default function MovBuilderPage() {
   };
 
   const saveGeneratedReport = async () => {
+    if (!canManageMov) return;
     if (!reportTitle.trim() || !reportHtml.trim()) {
       enqueueSnackbar('Generate a report first before saving.', { variant: 'warning' });
       return;
@@ -333,9 +363,20 @@ export default function MovBuilderPage() {
         quarter,
         scope: scope === 'all' ? 'regional' : scope,
         content_markdown: reportHtml,
-        status: 'generated',
+        status: 'draft',
+        metadata_json: {
+          report_kind: lastReportKind,
+          report_parameters: {
+            year,
+            quarter,
+            scope,
+            register_scope: registerScope,
+            unit: unitText.trim() || null,
+          },
+          source_manifest: reportManifest,
+        },
       });
-      enqueueSnackbar('Generated report saved.', { variant: 'success' });
+      enqueueSnackbar('Generated report snapshot saved as Draft.', { variant: 'success' });
       await loadData();
     } catch (error: any) {
       enqueueSnackbar(error?.response?.data?.message || 'Failed to save generated report.', {
@@ -594,6 +635,7 @@ export default function MovBuilderPage() {
   };
 
   const addScheduleEntry = async () => {
+    if (!canManageMov) return;
     if (!scheduleTitle.trim()) {
       enqueueSnackbar('Schedule activity title is required.', { variant: 'warning' });
       return;
@@ -639,6 +681,7 @@ export default function MovBuilderPage() {
       due_date: string;
     }>,
   ) => {
+    if (!canManageMov) return;
     try {
       const metadata = {
         ...(entry.metadata_json || {}),
@@ -676,6 +719,7 @@ export default function MovBuilderPage() {
   };
 
   const savePlanEdit = async (entry: MovArtifact) => {
+    if (!canManageMov) return;
     const items = editingPlanItemsText
       .split('\n')
       .map((line) => line.trim())
@@ -709,6 +753,7 @@ export default function MovBuilderPage() {
   };
 
   const addPlanEntry = async () => {
+    if (!canManageMov) return;
     const items = newPlanItemsText
       .split('\n')
       .map((line) => line.trim())
@@ -749,6 +794,7 @@ export default function MovBuilderPage() {
   };
 
   const deletePlanEntry = async (entry: MovArtifact) => {
+    if (!canManageMov) return;
     try {
       await movApi.remove(entry.id);
       enqueueSnackbar('Assessment plan year deleted.', { variant: 'success' });
@@ -767,7 +813,7 @@ export default function MovBuilderPage() {
         const yearLabel = entry.metadata_json?.year_index
           ? `Y${entry.metadata_json.year_index}`
           : `Y${idx + 1}`;
-        return `<tr><td style="font-weight:600;white-space:nowrap;">${yearLabel} – ${entry.period_year}</td><td style="font-weight:600;">${entry.title}</td><td><ul style="margin:0;padding-left:18px;">${items.map((i) => `<li>${i}</li>`).join('')}</ul></td></tr>`;
+        return `<tr><td style="font-weight:600;white-space:nowrap;">${escapePrintHtml(yearLabel)} – ${escapePrintHtml(entry.period_year)}</td><td style="font-weight:600;">${escapePrintHtml(entry.title)}</td><td><ul style="margin:0;padding-left:18px;">${items.map((i) => `<li>${escapePrintHtml(i)}</li>`).join('')}</ul></td></tr>`;
       })
       .join('');
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>body{font-family:Arial,sans-serif;font-size:10pt;margin:24px;}h2{font-size:11pt;text-align:center;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ccc;padding:6px;vertical-align:top;}th{background:#f3f4f6;text-align:center;font-size:9pt;}td{font-size:10pt;}</style></head><body><h2>ICT COMPLIANCE ASSESSMENT PLAN</h2><table><thead><tr><th>Year</th><th>Title</th><th>Objectives / Activities</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
@@ -792,7 +838,7 @@ export default function MovBuilderPage() {
   const printSchedule = () => {
     const rows = scheduleEntries
       .map((entry) => {
-        return `<tr><td>${entry.title}</td><td>${entry.metadata_json?.owner || '-'}</td><td>${entry.metadata_json?.due_date || '-'}</td><td>${entry.status}</td><td>${entry.metadata_json?.remarks || '-'}</td></tr>`;
+        return `<tr><td>${escapePrintHtml(entry.title)}</td><td>${escapePrintHtml(entry.metadata_json?.owner || '-')}</td><td>${escapePrintHtml(entry.metadata_json?.due_date || '-')}</td><td>${escapePrintHtml(entry.status)}</td><td>${escapePrintHtml(entry.metadata_json?.remarks || '-')}</td></tr>`;
       })
       .join('');
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>body{font-family:Arial,sans-serif;font-size:10pt;margin:24px;}h2{font-size:11pt;text-align:center;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ccc;padding:6px;vertical-align:top;}th{background:#f3f4f6;text-align:center;font-size:9pt;}td{font-size:10pt;}</style></head><body><h2>ICT COMPLIANCE ASSESSMENT SCHEDULE – ${year} Q${quarter}</h2><table><thead><tr><th>Activity</th><th>Owner</th><th>Due Date</th><th>Status</th><th>Remarks</th></tr></thead><tbody>${rows || '<tr><td colspan="5">No entries.</td></tr>'}</tbody></table></body></html>`;
@@ -815,6 +861,7 @@ export default function MovBuilderPage() {
   };
 
   const saveArtifactStatus = async (artifact: MovArtifact) => {
+    if (!canManageMov) return;
     try {
       await movApi.update(artifact.id, { status: editingArtifactStatus });
       setEditingArtifactId(null);
@@ -846,6 +893,7 @@ export default function MovBuilderPage() {
   };
 
   const handleSavePreset = async () => {
+    if (!canManageMov) return;
     if (!presetName.trim()) {
       enqueueSnackbar('Enter a preset name.', { variant: 'warning' });
       return;
@@ -913,6 +961,7 @@ export default function MovBuilderPage() {
   };
 
   const handleDeletePreset = async () => {
+    if (!canManageMov) return;
     if (!selectedPresetId) {
       enqueueSnackbar('Select a preset to delete.', { variant: 'warning' });
       return;
@@ -960,6 +1009,20 @@ export default function MovBuilderPage() {
                 onChange={(e) => setYear(Number(e.target.value))}
                 fullWidth
               />
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <FormControl fullWidth>
+                <InputLabel>Register Scope</InputLabel>
+                <Select
+                  value={registerScope}
+                  label="Register Scope"
+                  onChange={(e) => setRegisterScope(e.target.value as 'core' | 'extended' | 'all')}
+                >
+                  <MenuItem value="core">Core ICT</MenuItem>
+                  <MenuItem value="extended">Extended ICT-Relevant</MenuItem>
+                  <MenuItem value="all">All Included</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12} sm={3}>
               <FormControl fullWidth>
@@ -1047,7 +1110,14 @@ export default function MovBuilderPage() {
                     size="small"
                     onClick={() => generateRegisterReport('internal')}
                   >
-                    Generate Internal Policy Register Report
+                    Generate Internal Issuances Register Report
+                  </Button>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={() => generateRegisterReport('internal_operational')}
+                  >
+                    Generate Internal Operational Documents Register
                   </Button>
                   <Button variant="outlined" size="small" onClick={generateMonitoringMatrix}>
                     Generate Register Monitoring Matrix
@@ -1060,9 +1130,11 @@ export default function MovBuilderPage() {
                     Generate Assessment Report
                   </Button>
                   <Divider />
-                  <Button variant="outlined" startIcon={<SaveIcon />} onClick={saveGeneratedReport}>
-                    Save Generated Report
-                  </Button>
+                  {canManageMov && (
+                    <Button variant="outlined" startIcon={<SaveIcon />} onClick={saveGeneratedReport}>
+                      Save Generated Report
+                    </Button>
+                  )}
                   <Button variant="outlined" startIcon={<PrintIcon />} onClick={printOrSavePdf}>
                     Print / Save PDF
                   </Button>
@@ -1087,11 +1159,11 @@ export default function MovBuilderPage() {
                     )}
                     {kpiGapRows.map((row) => (
                       <TextField
-                        key={row.code}
-                        label={`${row.code} – ${row.name}`}
-                        value={kpiRemarks[row.code] || ''}
+                        key={row.key}
+                        label={`${row.unitName} · ${row.code} – ${row.name}`}
+                        value={kpiRemarks[row.key] || ''}
                         onChange={(e) =>
-                          setKpiRemarks((prev) => ({ ...prev, [row.code]: e.target.value }))
+                          setKpiRemarks((prev) => ({ ...prev, [row.key]: e.target.value }))
                         }
                         multiline
                         minRows={2}
@@ -1149,14 +1221,16 @@ export default function MovBuilderPage() {
                       <Button variant="outlined" size="small" onClick={handleLoadPreset}>
                         Load
                       </Button>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        color="error"
-                        onClick={handleDeletePreset}
-                      >
-                        Delete
-                      </Button>
+                      {canManageMov && (
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          color="error"
+                          onClick={handleDeletePreset}
+                        >
+                          Delete
+                        </Button>
+                      )}
                     </Stack>
                   )}
 
@@ -1348,21 +1422,23 @@ export default function MovBuilderPage() {
                   <Divider />
 
                   {/* ── Save Preset ── */}
-                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                    <TextField
-                      size="small"
-                      label="Save as Preset"
-                      value={presetName}
-                      onChange={(e) => setPresetName(e.target.value)}
-                      placeholder="Preset name..."
-                      sx={{ minWidth: 200 }}
-                    />
-                    <Button variant="contained" size="small" onClick={handleSavePreset}>
-                      {printPresets.some((p) => p.title === presetName.trim())
-                        ? 'Update Preset'
-                        : 'Save Preset'}
-                    </Button>
-                  </Stack>
+                  {canManageMov && (
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                      <TextField
+                        size="small"
+                        label="Save as Preset"
+                        value={presetName}
+                        onChange={(e) => setPresetName(e.target.value)}
+                        placeholder="Preset name..."
+                        sx={{ minWidth: 200 }}
+                      />
+                      <Button variant="contained" size="small" onClick={handleSavePreset}>
+                        {printPresets.some((p) => p.title === presetName.trim())
+                          ? 'Update Preset'
+                          : 'Save Preset'}
+                      </Button>
+                    </Stack>
+                  )}
                 </Stack>
               </AccordionDetails>
             </Accordion>
@@ -1516,7 +1592,7 @@ export default function MovBuilderPage() {
                                   />
                                   <Chip label={entry.status} size="small" variant="outlined" />
                                 </Box>
-                                {isEditing ? (
+                                {isEditing && canManageMov ? (
                                   <Stack spacing={1.5}>
                                     <TextField
                                       label="Plan Title"
@@ -1575,7 +1651,7 @@ export default function MovBuilderPage() {
                                         ))
                                       )}
                                     </Box>
-                                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                                    {canManageMov && <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
                                       <Button
                                         size="small"
                                         variant="outlined"
@@ -1593,7 +1669,7 @@ export default function MovBuilderPage() {
                                       >
                                         Delete
                                       </Button>
-                                    </Stack>
+                                    </Stack>}
                                   </Stack>
                                 )}
                               </CardContent>
@@ -1608,7 +1684,7 @@ export default function MovBuilderPage() {
             </Card>
           </Grid>
 
-          <Grid item xs={12}>
+          {canManageMov && <Grid item xs={12}>
             <Card sx={{ borderTop: '3px solid', borderColor: 'primary.main' }}>
               <CardHeader
                 title="Add New Plan Year"
@@ -1657,7 +1733,7 @@ export default function MovBuilderPage() {
                 </Grid>
               </CardContent>
             </Card>
-          </Grid>
+          </Grid>}
         </Grid>
       )}
 
@@ -1683,7 +1759,7 @@ export default function MovBuilderPage() {
                 }
               />
               <CardContent>
-                <Grid container spacing={2} sx={{ mb: 2 }}>
+                {canManageMov && <Grid container spacing={2} sx={{ mb: 2 }}>
                   <Grid item xs={12} md={3}>
                     <TextField
                       fullWidth
@@ -1737,7 +1813,7 @@ export default function MovBuilderPage() {
                       Add
                     </Button>
                   </Grid>
-                </Grid>
+                </Grid>}
 
                 <Table size="small">
                   <TableHead>
@@ -1765,6 +1841,7 @@ export default function MovBuilderPage() {
                         <TableCell>
                           <TextField
                             size="small"
+                            disabled={!canManageMov}
                             value={entry.title}
                             onChange={(e) =>
                               setScheduleEntries((prev) =>
@@ -1778,6 +1855,7 @@ export default function MovBuilderPage() {
                         <TableCell>
                           <TextField
                             size="small"
+                            disabled={!canManageMov}
                             value={String(entry.metadata_json?.owner || '')}
                             onChange={(e) =>
                               setScheduleEntries((prev) =>
@@ -1800,6 +1878,7 @@ export default function MovBuilderPage() {
                           <TextField
                             size="small"
                             type="date"
+                            disabled={!canManageMov}
                             value={String(entry.metadata_json?.due_date || '')}
                             onChange={(e) =>
                               setScheduleEntries((prev) =>
@@ -1822,6 +1901,7 @@ export default function MovBuilderPage() {
                         <TableCell>
                           <FormControl size="small" fullWidth>
                             <Select
+                              disabled={!canManageMov}
                               value={entry.status}
                               onChange={(e) =>
                                 setScheduleEntries((prev) =>
@@ -1842,6 +1922,7 @@ export default function MovBuilderPage() {
                         <TableCell>
                           <TextField
                             size="small"
+                            disabled={!canManageMov}
                             value={String(entry.metadata_json?.remarks || '')}
                             onChange={(e) =>
                               setScheduleEntries((prev) =>
@@ -1861,21 +1942,23 @@ export default function MovBuilderPage() {
                           />
                         </TableCell>
                         <TableCell>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() =>
-                              updateScheduleEntry(entry, {
-                                title: entry.title,
-                                status: entry.status,
-                                owner: String(entry.metadata_json?.owner || ''),
-                                due_date: String(entry.metadata_json?.due_date || ''),
-                                remarks: String(entry.metadata_json?.remarks || ''),
-                              })
-                            }
-                          >
-                            Save
-                          </Button>
+                          {canManageMov ? (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() =>
+                                updateScheduleEntry(entry, {
+                                  title: entry.title,
+                                  status: entry.status,
+                                  owner: String(entry.metadata_json?.owner || ''),
+                                  due_date: String(entry.metadata_json?.due_date || ''),
+                                  remarks: String(entry.metadata_json?.remarks || ''),
+                                })
+                              }
+                            >
+                              Save
+                            </Button>
+                          ) : '—'}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1894,7 +1977,7 @@ export default function MovBuilderPage() {
         <Card>
           <CardHeader
             title={`Saved MoV Artifacts – ${year} Q${quarter}`}
-            subheader="View and edit artifact status."
+            subheader={canManageMov ? 'View and edit artifact status.' : 'View saved artifact status.'}
           />
           <CardContent>
             <Table size="small">
@@ -1947,16 +2030,26 @@ export default function MovBuilderPage() {
                     </TableCell>
                     <TableCell>{artifact.scope}</TableCell>
                     <TableCell>
-                      {editingArtifactId === artifact.id ? (
+                      {editingArtifactId === artifact.id && canManageMov ? (
                         <FormControl size="small" sx={{ minWidth: 130 }}>
                           <Select
                             value={editingArtifactStatus}
                             onChange={(e) => setEditingArtifactStatus(e.target.value)}
                           >
-                            <MenuItem value="draft">Draft</MenuItem>
-                            <MenuItem value="active">Active</MenuItem>
-                            <MenuItem value="generated">Generated</MenuItem>
-                            <MenuItem value="archived">Archived</MenuItem>
+                            {artifact.artifact_type === 'generated_report' ? [
+                              <MenuItem key="draft" value="draft">Draft</MenuItem>,
+                              <MenuItem key="reviewed" value="reviewed">Reviewed</MenuItem>,
+                              <MenuItem key="approved" value="approved">Approved</MenuItem>,
+                              ...(artifact.status === 'approved'
+                                ? [<MenuItem key="superseded" value="superseded">Superseded</MenuItem>]
+                                : []),
+                            ] : [
+                              <MenuItem key="draft" value="draft">Draft</MenuItem>,
+                              <MenuItem key="active" value="active">Active</MenuItem>,
+                              <MenuItem key="planned" value="planned">Planned</MenuItem>,
+                              <MenuItem key="completed" value="completed">Completed</MenuItem>,
+                              <MenuItem key="archived" value="archived">Archived</MenuItem>,
+                            ]}
                           </Select>
                         </FormControl>
                       ) : (
@@ -1977,7 +2070,7 @@ export default function MovBuilderPage() {
                       {new Date(artifact.updated_at).toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      {editingArtifactId === artifact.id ? (
+                      {editingArtifactId === artifact.id && canManageMov ? (
                         <Stack direction="row" spacing={0.5}>
                           <IconButton
                             size="small"
@@ -1990,7 +2083,7 @@ export default function MovBuilderPage() {
                             <CloseIcon fontSize="small" />
                           </IconButton>
                         </Stack>
-                      ) : (
+                      ) : canManageMov ? (
                         <IconButton
                           size="small"
                           onClick={() => {
@@ -2000,7 +2093,7 @@ export default function MovBuilderPage() {
                         >
                           <EditIcon fontSize="small" />
                         </IconButton>
-                      )}
+                      ) : '—'}
                     </TableCell>
                   </TableRow>
                 ))}

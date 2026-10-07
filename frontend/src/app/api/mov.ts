@@ -11,6 +11,8 @@ export interface MovArtifact {
   status: string;
   content_markdown: string;
   metadata_json?: Record<string, any> | null;
+  content_sha256?: string | null;
+  finalized_at?: string | null;
   created_by?: number | null;
   created_at: string;
   updated_at: string;
@@ -43,6 +45,8 @@ export interface RegisterReportResponse {
     ready: number;
     addedEntries: number;
   };
+  source_manifest: Array<Record<string, unknown>>;
+  generated_at: string;
 }
 
 export interface AssessmentReportResponse {
@@ -56,7 +60,12 @@ export interface AssessmentReportResponse {
     completed_schedule: number;
     kpi_rows: number;
     kpi_below_target: number;
+    issuance_assessments: number;
+    linked_evidence: number;
+    open_corrective_actions: number;
   };
+  source_manifest: Record<string, unknown>;
+  generated_at: string;
 }
 
 export interface MonitoringMatrixReportResponse {
@@ -64,6 +73,8 @@ export interface MonitoringMatrixReportResponse {
   content_html: string;
   content_markdown: string;
   summary: { total: number };
+  source_manifest: Array<Record<string, unknown>>;
+  generated_at: string;
 }
 
 export const movApi = {
@@ -127,7 +138,8 @@ export const movApi = {
     quarter: number;
     scope?: string;
     unit?: string;
-    register_type?: 'legal' | 'standards' | 'internal' | 'all';
+    register_type?: 'legal' | 'standards' | 'internal' | 'internal_operational' | 'all';
+    scope_profile?: 'core' | 'extended' | 'all';
   }): Promise<RegisterReportResponse> => {
     const response = await apiClient.get('/mov/reports/register', { params: query });
     return response.data;
@@ -138,6 +150,7 @@ export const movApi = {
     quarter: number;
     scope?: string;
     unit?: string;
+    scope_profile?: 'core' | 'extended' | 'all';
   }): Promise<MonitoringMatrixReportResponse> => {
     const response = await apiClient.get('/mov/reports/monitoring-matrix', { params: query });
     return response.data;

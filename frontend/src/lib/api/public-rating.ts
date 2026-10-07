@@ -37,7 +37,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(body?.message || 'The feedback request could not be completed.');
+    const responseMessage = Array.isArray(body?.message)
+      ? body.message.join(' ')
+      : body?.message;
+    const error = new Error(responseMessage || 'The feedback request could not be completed.');
     (error as Error & { status?: number }).status = response.status;
     throw error;
   }

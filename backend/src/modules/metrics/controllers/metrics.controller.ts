@@ -47,6 +47,7 @@ export class MetricsController {
   @RequireCapability('isMetricsAccess')
   async listMetricTemplates() {
     return this.metricTemplateRepo.find({
+      where: { is_active: true },
       relations: ['applicability'],
       order: { created_at: 'DESC' },
     });
@@ -203,15 +204,15 @@ export class MetricsController {
   @Delete(':id')
   @RequireCapability('isMetricsDelete')
   async deleteMetricTemplate(@Param('id') id: string, @Request() req: any) {
-    await this.metricTemplateRepo.delete(id);
+    await this.metricTemplateRepo.update(id, { is_active: false });
     this.logger.log(
       JSON.stringify({
-        action: 'metrics.template.delete',
+        action: 'metrics.template.deactivate',
         actorId: req.user?.id ?? req.user?.userId,
         templateId: id,
       }),
     );
-    return { message: 'Metric template deleted successfully' };
+    return { message: 'Metric template deactivated successfully' };
   }
 }
 

@@ -56,6 +56,9 @@ export class TicketCronService implements OnModuleInit {
     await this.processEndOfDayAbsences(config);
     // Attendance must be current before the CWW resume decision is made.
     await this.processSlaSchedules(config);
+    // Pause limits are minute-precise. Running this only hourly could grant up
+    // to 59 extra paused minutes beyond the configured allowance.
+    await this.processAutoUnpause();
     // Never promote queued work using a stale, pre-resume SLA deadline.
     await this.processOverdueTicketsUnpauseNext();
   }
@@ -64,7 +67,6 @@ export class TicketCronService implements OnModuleInit {
   async handleHourlyTasks() {
     this.logger.log('Running hourly ticketing cron tasks...');
     await this.processAutoClosure();
-    await this.processAutoUnpause();
     await this.processAutoUnfreeze();
     await this.processPercentageAlerts();
   }
@@ -172,6 +174,14 @@ export class TicketCronService implements OnModuleInit {
       return;
     }
 
+    // Lunch is outside the SLA business-time window for both schedule modes.
+    // Persisting the pause marker keeps the live timer and timeline aligned
+    // with the same 12:00–13:00 exclusion already used by deadline calculations.
+    if (currentTime >= '12:00:00' && currentTime < '13:00:00') {
+      await this.ticketService.pauseAllActiveTickets();
+      return;
+    }
+
     if (config.scheduleMode === 'OFFICE_HOURS') {
       if (currentTime >= config.officeClockin && currentTime < config.officeClockout) {
         const resumeAt = new Date(`${today}T${config.officeClockin}+08:00`);
@@ -242,9 +252,8 @@ export class TicketCronService implements OnModuleInit {
   private async processOverdueTicketsUnpauseNext() {
     const overdueActiveTickets = await this.ticketRepo
       .createQueryBuilder('ticket')
-      .where('ticket.status IN (:...statuses)', {
-        statuses: [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS],
-      })
+      .where('ticket.status = :status', { status: TicketStatus.IN_PROGRESS })
+      .andWhere('ticket.slaStartedAt IS NOT NULL')
       .andWhere('ticket.isSlaWaiting = :isWaiting', { isWaiting: false })
       .andWhere('(ticket.slaPausedAt IS NULL OR ticket.slaDeadline <= ticket.slaPausedAt)')
       .andWhere('ticket.slaDeadline < :now', { now: new Date() })
@@ -335,6 +344,10 @@ export class TicketCronService implements OnModuleInit {
             { status: TicketStatus.IN_PROGRESS },
             ticket.assignedToId || 1,
             UserRole.SUPER_ADMIN,
+            {
+              automaticStatusChange: true,
+              automaticSource: 'pause_limit_reached',
+            },
           );
 
           await this.ticketService.addComment(
@@ -373,11 +386,16 @@ export class TicketCronService implements OnModuleInit {
 
       if (frozenMs >= allowableMs) {
         try {
+          const returnStatus = await this.ticketService.getFrozenReturnStatus(ticket.id);
           await this.ticketService.updateTicket(
             ticket.id,
-            { status: TicketStatus.IN_PROGRESS },
+            { status: returnStatus },
             ticket.assignedToId || 1,
             UserRole.SUPER_ADMIN,
+            {
+              automaticStatusChange: true,
+              automaticSource: 'freeze_limit_reached',
+            },
           );
 
           await this.ticketService.addComment(
@@ -401,7 +419,7 @@ export class TicketCronService implements OnModuleInit {
   private async processPercentageAlerts() {
     const activeTickets = await this.ticketRepo.find({
       where: {
-        status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS]),
+        status: TicketStatus.IN_PROGRESS,
         assignedToId: Not(IsNull()),
       } as any,
       relations: ['category', 'issueTypeConfig'],
@@ -420,6 +438,7 @@ export class TicketCronService implements OnModuleInit {
         isPausedBeforeBreach ||
         ticket.isSlaWaiting ||
         !ticket.slaDeadline ||
+        !ticket.slaStartedAt ||
         !ticket.issueTypeConfig ||
         !ticket.createdAt ||
         !ticket.issueTypeConfig.slaHours
@@ -429,7 +448,7 @@ export class TicketCronService implements OnModuleInit {
       const now = new Date();
       const totalSlaSeconds = ticket.issueTypeConfig.slaHours * 60 * 60;
       // The persisted deadline is the authoritative SLA clock: it already
-      // includes assignment timing, office-hour boundaries, and extensions
+      // includes the In Progress start, office-hour boundaries, and extensions
       // applied when a paused clock resumes.
       const elapsedSeconds = now <= ticket.slaDeadline
         ? Math.max(

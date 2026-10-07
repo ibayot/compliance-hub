@@ -115,7 +115,15 @@ export interface RoleCapabilityRecord {
   isAttendanceManage: boolean;
   isReportsAccess: boolean;
   isReviewsAccess: boolean;
+  isReviewsManage: boolean;
+  isIncidentsAccess: boolean;
+  isIncidentsManage: boolean;
+  isIncidentsDelete: boolean;
+  isCybersecurityAccess: boolean;
+  isCybersecurityManage: boolean;
+  isCybersecurityDelete: boolean;
   isMovAccess: boolean;
+  isMovManage: boolean;
   isDocumentsAccess: boolean;
   isRepositoryAccess: boolean;
   isMetricsAccess: boolean;
@@ -137,6 +145,9 @@ export interface RoleCapabilityRecord {
   isDocumentsManage: boolean;
   isDocumentsDelete: boolean;
   isIssuancesManage: boolean;
+  isIssuancesReview: boolean;
+  isIssuancesAssessmentManage: boolean;
+  isIssuancesConfigure: boolean;
   isMetricsDelete: boolean;
   isChangelogManagement: boolean;
 }
@@ -164,7 +175,15 @@ export interface UpdateRoleCapabilityPayload {
   isAttendanceManage?: boolean;
   isReportsAccess?: boolean;
   isReviewsAccess?: boolean;
+  isReviewsManage?: boolean;
+  isIncidentsAccess?: boolean;
+  isIncidentsManage?: boolean;
+  isIncidentsDelete?: boolean;
+  isCybersecurityAccess?: boolean;
+  isCybersecurityManage?: boolean;
+  isCybersecurityDelete?: boolean;
   isMovAccess?: boolean;
+  isMovManage?: boolean;
   isDocumentsAccess?: boolean;
   isRepositoryAccess?: boolean;
   isMetricsAccess?: boolean;
@@ -186,6 +205,9 @@ export interface UpdateRoleCapabilityPayload {
   isDocumentsManage?: boolean;
   isDocumentsDelete?: boolean;
   isIssuancesManage?: boolean;
+  isIssuancesReview?: boolean;
+  isIssuancesAssessmentManage?: boolean;
+  isIssuancesConfigure?: boolean;
   isMetricsDelete?: boolean;
   isChangelogManagement?: boolean;
 }

@@ -66,6 +66,7 @@ import { UserRole } from '@/lib/types/auth';
 import { formatPersonName } from '@/lib/utils/person-name';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import AuthenticatedImageGallery from '@/app/shared/AuthenticatedImageGallery';
 
 const TYPE_LABELS: Record<string, string> = {
   it_support: 'IT Support',
@@ -1726,6 +1727,17 @@ export default function TicketSettingsPage() {
                         </TableCell>
                         <TableCell sx={{ maxWidth: 400, whiteSpace: 'pre-wrap' }}>
                           {f.suggestion}
+                          {!!f.attachments?.length && (
+                            <Box mt={1}>
+                              <AuthenticatedImageGallery
+                                images={f.attachments.map((attachment) => ({
+                                  url: feedbackApi.attachmentViewUrl(attachment.id),
+                                  alt: attachment.originalFileName,
+                                }))}
+                                thumbnailStyle={{ width: 72, height: 72 }}
+                              />
+                            </Box>
+                          )}
                         </TableCell>
                         <TableCell>
                           {f.submitter

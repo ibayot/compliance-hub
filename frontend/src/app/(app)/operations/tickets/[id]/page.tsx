@@ -381,7 +381,7 @@ export default function TicketDetailPage() {
   const canCorrectTicketRecord =
     !!myCap?.isTicketRequesterCorrection &&
     !!ticket &&
-    ['assigned', 'in_progress'].includes(ticket.status);
+    ['assigned', 'in_progress', 'resolved'].includes(ticket.status);
   const canCorrectAssignee =
     !!myCap?.isTicketRequesterCorrection &&
     !!ticket &&
@@ -533,6 +533,21 @@ export default function TicketDetailPage() {
         return eventPriority(a.eventType) - eventPriority(b.eventType);
       });
   }, [events]);
+  const frozenReturnStatus = useMemo(() => {
+    const validStatuses = new Set(['open', 'assigned', 'in_progress', 'resolved']);
+    const freezeIndex = timelineEvents.findIndex(
+      (event) => event.eventType === 'status_changed' && event.meta?.to === 'freeze',
+    );
+    if (freezeIndex >= 0) {
+      const recordedFrom = String(timelineEvents[freezeIndex].meta?.from || '');
+      if (validStatuses.has(recordedFrom)) return recordedFrom;
+      for (let index = freezeIndex + 1; index < timelineEvents.length; index += 1) {
+        const earlierStatus = String(timelineEvents[index].meta?.to || '');
+        if (validStatuses.has(earlierStatus)) return earlierStatus;
+      }
+    }
+    return ticket?.assignedToId ? 'in_progress' : 'open';
+  }, [ticket?.assignedToId, timelineEvents]);
 
   useEffect(() => {
     fetchTicket();
@@ -1544,7 +1559,7 @@ export default function TicketDetailPage() {
                       }
                       allowedValues = freezeValues;
                     } else {
-                      allowedValues = [];
+                      allowedValues = [frozenReturnStatus];
                     }
                     break;
                   }
@@ -2449,6 +2464,11 @@ export default function TicketDetailPage() {
                   escalation_returned: 'Escalation Returned',
                   satisfaction_submitted: 'Satisfaction Submitted',
                   rated: 'Rated',
+                  sla_alert_75: 'SLA 75% Warning',
+                  sla_alert_100: 'SLA Limit Reached',
+                  sla_alert_150: 'SLA 150% Alert',
+                  sla_schedule_paused: 'SLA Paused for Non-Work Time',
+                  sla_schedule_resumed: 'SLA Resumed for Work Time',
                   resolution_time_overridden: 'Resolution Time Corrected',
                   requester_corrected: 'Requested For Corrected',
                   assignee_corrected: 'Assigned To Corrected',
@@ -2456,7 +2476,8 @@ export default function TicketDetailPage() {
                 const label = EVENT_LABELS[ev.eventType] ?? ev.eventType.replace(/_/g, ' ');
                 const actorLine = ev.actorName
                   ? `by ${ev.actorName}`
-                  : ['auto_assigned', 'auto_reassigned', 'queue_promoted'].includes(ev.eventType)
+                  : ['auto_assigned', 'auto_reassigned', 'queue_promoted'].includes(ev.eventType) ||
+                      ev.eventType.startsWith('sla_alert_')
                     ? 'by System'
                     : '';
                 return (
@@ -2494,7 +2515,25 @@ export default function TicketDetailPage() {
                       )}
                       {ev.meta?.to && (
                         <Typography variant="caption" color="text.secondary" display="block">
-                          Status: {String(ev.meta.to).replace('_', ' ')}
+                          Status:{' '}
+                          {ev.meta?.from
+                            ? `${String(ev.meta.from).replace(/_/g, ' ')} → `
+                            : ''}
+                          {String(ev.meta.to).replace(/_/g, ' ')}
+                        </Typography>
+                      )}
+                      {typeof ev.meta?.automatic === 'boolean' && (
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            color={ev.meta.automatic ? 'info' : 'default'}
+                            label={ev.meta.automatic ? 'Automatic' : 'Manual'}
+                            sx={{ mt: 0.5 }}
+                          />
+                        )}
+                      {ev.eventType === 'sla_alert_75' && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          The ticket consumed 75% of its configured SLA and was approaching its deadline.
                         </Typography>
                       )}
                       {ev.meta?.justification && (

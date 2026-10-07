@@ -5,6 +5,7 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -53,6 +54,8 @@ export interface RatingRequestMetadata {
 
 @Injectable()
 export class RatingInvitationService {
+  private readonly logger = new Logger(RatingInvitationService.name);
+
   constructor(
     @InjectRepository(RatingInvitation)
     private readonly invitationRepo: Repository<RatingInvitation>,
@@ -623,46 +626,56 @@ export class RatingInvitationService {
       safeDto,
       invitation.requesterId,
     );
-    link.ratedAt = saved.satisfactionSubmittedAt || new Date();
-    await this.invitationTicketRepo.save(link);
-    await this.logEvent(invitation.id, 'rating_submitted', metadata, null, ticketId, {
-      rating: saved.satisfactionRating,
-    });
-
-    const remainingLinks = await this.invitationTicketRepo.find({
-      where: { invitationId: invitation.id, ratedAt: IsNull() },
-    });
-    if (remainingLinks.length > 0) {
-      const remainingTickets = await this.ticketRepo.find({
-        where: { id: In(remainingLinks.map((remaining) => remaining.ticketId)) },
-        select: ['id', 'satisfactionSubmittedAt'],
+    let invitationCompleted = false;
+    try {
+      link.ratedAt = saved.satisfactionSubmittedAt || new Date();
+      await this.invitationTicketRepo.save(link);
+      await this.logEvent(invitation.id, 'rating_submitted', metadata, null, ticketId, {
+        rating: saved.satisfactionRating,
       });
-      const ratedIds = new Set(
-        remainingTickets
-          .filter((remaining) => Boolean(remaining.satisfactionSubmittedAt))
-          .map((remaining) => remaining.id),
-      );
-      for (const remaining of remainingLinks.filter((item) => ratedIds.has(item.ticketId))) {
-        remaining.ratedAt = new Date();
-        await this.invitationTicketRepo.save(remaining);
+
+      const remainingLinks = await this.invitationTicketRepo.find({
+        where: { invitationId: invitation.id, ratedAt: IsNull() },
+      });
+      if (remainingLinks.length > 0) {
+        const remainingTickets = await this.ticketRepo.find({
+          where: { id: In(remainingLinks.map((remaining) => remaining.ticketId)) },
+          select: ['id', 'satisfactionSubmittedAt'],
+        });
+        const ratedIds = new Set(
+          remainingTickets
+            .filter((remaining) => Boolean(remaining.satisfactionSubmittedAt))
+            .map((remaining) => remaining.id),
+        );
+        for (const remaining of remainingLinks.filter((item) => ratedIds.has(item.ticketId))) {
+          remaining.ratedAt = new Date();
+          await this.invitationTicketRepo.save(remaining);
+        }
       }
-    }
-    const unratedCount = await this.invitationTicketRepo.count({
-      where: { invitationId: invitation.id, ratedAt: IsNull() },
-    });
-    if (unratedCount === 0) {
-      invitation.status = RatingInvitationStatus.COMPLETED;
-      invitation.completedAt = new Date();
-      invitation.sessionHash = null;
-      invitation.sessionExpiresAt = null;
-      await this.invitationRepo.save(invitation);
-      await this.logEvent(invitation.id, 'invitation_completed', metadata);
+      const unratedCount = await this.invitationTicketRepo.count({
+        where: { invitationId: invitation.id, ratedAt: IsNull() },
+      });
+      invitationCompleted = unratedCount === 0;
+      if (invitationCompleted) {
+        invitation.status = RatingInvitationStatus.COMPLETED;
+        invitation.completedAt = new Date();
+        invitation.sessionHash = null;
+        invitation.sessionExpiresAt = null;
+        await this.invitationRepo.save(invitation);
+        await this.logEvent(invitation.id, 'invitation_completed', metadata);
+      }
+    } catch (error: any) {
+      // The ticket feedback is already durably saved at this point. Invitation tracking is
+      // secondary bookkeeping and must not tell the requester that their valid rating failed.
+      this.logger.error(
+        `Feedback saved but rating invitation synchronization failed (${String(error?.code || 'unknown')}).`,
+      );
     }
     return {
       success: true,
       ratingItemId,
       ratingStatus: 'rated',
-      invitationCompleted: unratedCount === 0,
+      invitationCompleted,
     };
   }
 }

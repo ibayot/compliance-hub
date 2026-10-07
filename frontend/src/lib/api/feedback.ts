@@ -10,6 +10,13 @@ export interface Feedback {
   submitter?: User;
   actedById: number | null;
   actedBy?: User;
+  attachments?: Array<{
+    id: string;
+    originalFileName: string;
+    mimeType: string;
+    fileSize: number;
+    createdAt: string;
+  }>;
 }
 
 export const feedbackApi = {
@@ -17,6 +24,15 @@ export const feedbackApi = {
     const res = await api.post('/feedback', data);
     return res.data;
   },
+
+  uploadAttachments: async (feedbackId: number, files: File[]): Promise<void> => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    await api.post(`/feedback/${feedbackId}/attachments`, formData);
+  },
+
+  attachmentViewUrl: (attachmentId: string): string =>
+    `/feedback/attachments/${attachmentId}/view`,
 
   list: async (
     status: 'all' | 'pending' | 'accepted' | 'rejected' = 'all',

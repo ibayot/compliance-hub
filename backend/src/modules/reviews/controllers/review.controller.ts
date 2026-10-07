@@ -31,7 +31,7 @@ export class ReviewController {
    */
   @Post()
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isReviewsAccess')
+  @RequireCapability('isReviewsManage')
   @HttpCode(HttpStatus.CREATED)
   async submitReview(
     @Param('documentId') documentId: string,

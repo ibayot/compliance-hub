@@ -282,6 +282,7 @@ export class KnowledgeBaseService {
       performance_sla_chart: 'SLA performance',
       performance_sla_category_table: 'SLA by support type',
       performance_sla_assignee_table: 'SLA by assignee',
+      performance_weekly_technicians_table: 'Top ticket assignees this week',
       performance_assignee_table: 'Assignee performance detail',
     };
     const safeCharts = charts.map((chart) => ({
@@ -343,12 +344,15 @@ export class KnowledgeBaseService {
           : `Across the reported ${group}s, ${number(metCount)} resolved tickets met their SLA classification and ${number(missedCount)} missed it.`;
         return [chart.id, `${introduction} ${topMet?.label.replace(/ met$/, '') || 'No group'} had the most met outcomes among the reported comparisons at ${number(topMet?.value || 0)}. Compare each group's met and missed counts alongside its average resolution time before drawing conclusions about performance.`];
       }
+      if (chart.id === 'performance_weekly_technicians_table') {
+        return [chart.id, `This weekly ranking combines SLA compliance (50%), completed-ticket volume (30%), and active resolution efficiency (20%) for tickets resolved from Monday through the report date. ${highest.label} had the highest weighted score at ${number(highest.value)}. The score supports comparison but should be read with the resolved-ticket count and SLA outcomes, especially where an assignee handled only a small number of tickets.`];
+      }
       if (chart.id === 'sla_insights_chart') {
         const configured = chart.values.filter((item) => item.label.endsWith('configured SLA hours'));
-        const actual = chart.values.filter((item) => item.label.endsWith('average resolution hours'));
+        const actual = chart.values.filter((item) => item.label.endsWith('average active resolution hours'));
         const topConfigured = configured.reduce((best, current) => current.value > best.value ? current : best, configured[0]);
         const topActual = actual.reduce((best, current) => current.value > best.value ? current : best, actual[0]);
-        return [chart.id, `Configured SLA targets and actual average resolution times are compared in hours for the listed issues. ${topConfigured?.label.replace(/ — configured SLA hours$/, '') || 'No issue'} had the longest configured target at ${number(topConfigured?.value || 0)} hours, while ${topActual?.label.replace(/ — average resolution hours$/, '') || 'no issue'} had the longest actual average at ${number(topActual?.value || 0)} hours. Compare the target and actual time for the same issue before considering an SLA adjustment.`];
+        return [chart.id, `Configured SLA targets and average active resolution times are compared in hours for the listed issues. ${topConfigured?.label.replace(/ — configured SLA hours$/, '') || 'No issue'} had the longest configured target at ${number(topConfigured?.value || 0)} hours, while ${topActual?.label.replace(/ — average active resolution hours$/, '') || 'no issue'} had the longest active average at ${number(topActual?.value || 0)} hours. Active time excludes queue wait, lunch, non-work periods, pauses, and freezes. Compare the target and active average for the same issue before considering an SLA adjustment.`];
       }
       const subjects: Record<string, string> = {
         overview_support_type_chart: 'tickets were distributed among support types',
@@ -358,10 +362,11 @@ export class KnowledgeBaseService {
         overview_detailed_day_chart: 'requester ratings were averaged by day',
         overview_detailed_week_chart: 'requester ratings were averaged by week',
         overview_ratings_table: 'rated tickets were recorded individually',
-        sla_insights_chart: 'configured SLA targets and actual average resolution times were compared in hours',
-        sla_insights_table: 'actual resolution times were averaged for each issue',
+        sla_insights_chart: 'configured SLA targets and average active resolution times were compared in hours',
+        sla_insights_table: 'active resolution times were averaged for each issue',
         performance_sla_category_table: 'SLA outcomes were grouped by support type',
         performance_sla_assignee_table: 'SLA outcomes were grouped by assignee',
+        performance_weekly_technicians_table: 'weekly SLA, volume, and active-time performance were combined by assignee',
         performance_assignee_table: 'resolved ticket ratings were grouped by assignee',
       };
       const unit = chart.id.includes('rating') || chart.id === 'performance_assignee_table' || chart.id.startsWith('overview_detailed_') ? ' out of 5'

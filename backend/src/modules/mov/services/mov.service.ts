@@ -1,6 +1,7 @@
-import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
+import { createHash } from 'crypto';
 import { MovArtifact } from '../entities/mov-artifact.entity';
 import { CreateMovArtifactDto } from '../dto/create-mov-artifact.dto';
 import { UpdateMovArtifactDto } from '../dto/update-mov-artifact.dto';
@@ -15,6 +16,15 @@ export class MovService implements OnModuleInit {
 
   private isDbBootstrapEnabled(): boolean {
     return String(process.env.DB_BOOTSTRAP ?? 'false').toLowerCase() === 'true';
+  }
+
+  private validateReportPeriod(year: number, quarter: number): void {
+    if (!Number.isInteger(year) || year < 2000 || year > 2200) {
+      throw new BadRequestException('Report year is invalid');
+    }
+    if (!Number.isInteger(quarter) || quarter < 1 || quarter > 4) {
+      throw new BadRequestException('Report quarter must be between 1 and 4');
+    }
   }
 
   constructor(
@@ -200,14 +210,23 @@ export class MovService implements OnModuleInit {
   }
 
   create(dto: CreateMovArtifactDto, createdBy?: number) {
+    const isGeneratedReport = dto.artifact_type === 'generated_report';
+    const requestedStatus = dto.status || 'draft';
+    if (isGeneratedReport && !['draft', 'reviewed', 'approved'].includes(requestedStatus)) {
+      throw new BadRequestException('Generated reports must be Draft, Reviewed, or Approved');
+    }
     const row = this.movRepo.create({
       ...dto,
       scope: dto.scope || 'regional',
-      status: dto.status || 'draft',
+      status: requestedStatus,
       quarter: dto.quarter ?? null,
       unit_id: dto.unit_id ?? null,
       metadata_json: dto.metadata_json || null,
       created_by: createdBy ?? null,
+      content_sha256: isGeneratedReport
+        ? createHash('sha256').update(dto.content_markdown).digest('hex')
+        : null,
+      finalized_at: isGeneratedReport && requestedStatus === 'approved' ? new Date() : null,
     });
 
     return this.movRepo.save(row);
@@ -215,12 +234,31 @@ export class MovService implements OnModuleInit {
 
   async update(id: string, dto: UpdateMovArtifactDto) {
     const row = await this.getById(id);
+    if (row.artifact_type === 'generated_report' && row.status === 'approved') {
+      if (dto.status === 'superseded' && Object.keys(dto).every((key) => key === 'status')) {
+        row.status = 'superseded';
+        return this.movRepo.save(row);
+      }
+      throw new BadRequestException(
+        'Approved report snapshots are immutable. Create a new report or mark this one Superseded.',
+      );
+    }
     Object.assign(row, dto);
+    if (row.artifact_type === 'generated_report') {
+      if (!['draft', 'reviewed', 'approved', 'superseded'].includes(row.status)) {
+        throw new BadRequestException('Generated report status is invalid');
+      }
+      row.content_sha256 = createHash('sha256').update(row.content_markdown).digest('hex');
+      row.finalized_at = row.status === 'approved' ? new Date() : null;
+    }
     return this.movRepo.save(row);
   }
 
   async remove(id: string) {
     const row = await this.getById(id);
+    if (row.artifact_type === 'generated_report' && row.status === 'approved') {
+      throw new BadRequestException('Approved report snapshots cannot be deleted');
+    }
     await this.movRepo.remove(row);
     return { message: 'MoV artifact deleted' };
   }
@@ -228,28 +266,15 @@ export class MovService implements OnModuleInit {
   getRegisterColumns() {
     return [
       'Item No.',
-      'Requirement ID/Code',
       'Title',
-      'Requirement Family',
-      'Binding Nature',
-      'Adoption Basis',
-      'Issuing Entity',
-      'Date Issued',
-      'Effectivity/Review Date',
+      'Type',
       'Applicable Provisions',
-      'Applicability Scope',
-      'Relevance Notes',
-      'Compliance Obligations',
-      'Required Evidence (MoV)',
-      'Evidence Location/Link',
-      'Process Owner',
-      'Frequency/Cadence',
-      'Current Compliance Status',
-      'Gap Summary',
-      'Action Required',
-      'Target Date',
-      'Last Review Date',
-      'Quarterly Readiness',
+      'Issuing Entity',
+      'Compliance Requirements',
+      'Evidence of Compliance',
+      'Impact',
+      'Effectivity',
+      'Compliance Status',
     ];
   }
 
@@ -345,7 +370,15 @@ export class MovService implements OnModuleInit {
     return 'R';
   }
 
-  private resolveRegisterGroup(item: Issuance): 'legal' | 'standards' | 'internal' {
+  private resolveRegisterGroup(
+    item: Issuance,
+  ): 'legal' | 'standards' | 'internal' | 'internal_operational' {
+    if (item.primary_register === 'legal_regulatory') return 'legal';
+    if (item.primary_register === 'standards') return 'standards';
+    if (item.primary_register === 'internal_issuances') return 'internal';
+    if (item.primary_register === 'internal_operational') return 'internal_operational';
+
+    // Compatibility fallback for records not yet migrated.
     const type = this.normalizeIssuanceType(item.issuance_type);
     const number = (item.issuance_number || '').toLowerCase();
 
@@ -369,14 +402,34 @@ export class MovService implements OnModuleInit {
   }
 
   private implicationsEffectivity(item: Issuance): string {
+    if (!item.effectivity_date || item.effectivity_date_precision === 'unknown') return '-';
+    const date = new Date(item.effectivity_date);
+    if (Number.isNaN(date.getTime())) return '-';
+    if (item.effectivity_date_precision === 'year') return String(date.getUTCFullYear());
+    if (item.effectivity_date_precision === 'month') {
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
+    }
     return this.formatDateMmm(item.effectivity_date);
+  }
+
+  private statusLabel(value?: string | null): string {
+    if (!value) return '-';
+    return value
+      .split('_')
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
   }
 
   private quarterStatusScore(value?: string | null): string {
     const normalized = (value || '').toLowerCase();
     if (normalized === 'compliant') return '100';
-    if (normalized === 'partial') return '75';
-    if (normalized === 'non_compliant') return '50';
+    if (normalized === 'partial') return '50';
+    if (normalized === 'non_compliant') return '0';
     if (normalized === 'not_applicable') return 'N/A';
     return '-';
   }
@@ -389,11 +442,11 @@ export class MovService implements OnModuleInit {
     const rows = items.map((item, index) => {
       const requirements = this.escapeHtml(this.complianceRequirement(item));
       const applicableProvisions = this.escapeHtml(item.applicable_provisions || '-');
-      const evidence = this.escapeHtml(
-        [item.required_evidence, item.evidence_location].filter(Boolean).join('; ') || '-',
-      );
+      // The register asks for evidence actually available. Required-evidence guidance remains
+      // in the issuance detail instead of making every generated register row unnecessarily long.
+      const evidence = this.escapeHtml(item.evidence_location || '-');
       const impact = this.escapeHtml(item.applicability_scope || '-');
-      const status = this.escapeHtml(item.compliance_status || '-');
+      const status = this.escapeHtml(this.statusLabel(item.compliance_status));
       return `
         <tr>
           <td>${startingIndex + index}</td>
@@ -492,32 +545,61 @@ export class MovService implements OnModuleInit {
     scope?: string;
     unit?: string;
     register_type?: string;
+    scope_profile?: string;
   }) {
+    this.validateReportPeriod(Number(query.year), Number(query.quarter));
     const issuances = await this.issuanceRepo.find({
-      where: { is_active: true },
-      relations: ['documents'],
+      where: {
+        lifecycle_status: 'active',
+        register_decision: 'included',
+      },
+      relations: ['assessments', 'assessments.evidence', 'assessments.remediationActions'],
       order: { register_added_at: 'DESC', created_at: 'DESC' },
     });
 
     const scopeFilter = (query.scope || '').trim().toLowerCase();
     const unitFilter = (query.unit || '').trim().toLowerCase();
     const registerType = (query.register_type || 'all').toLowerCase();
+    const registerScope = (query.scope_profile || 'core').toLowerCase();
+    if (!['legal', 'standards', 'internal', 'internal_operational', 'all'].includes(registerType)) {
+      throw new BadRequestException('Register type is invalid');
+    }
+    if (!['core', 'extended', 'all'].includes(registerScope)) {
+      throw new BadRequestException('Register scope is invalid');
+    }
+
+    issuances.forEach((item) => {
+      const assessment = (item.assessments || [])
+        .filter(
+          (entry) =>
+            Number(entry.year) === Number(query.year) &&
+            (entry.quarter == null || Number(entry.quarter) === Number(query.quarter)),
+        )
+        .sort((a, b) => Number(b.quarter || 0) - Number(a.quarter || 0))[0];
+      if (assessment) {
+        item.compliance_status = assessment.status;
+        item.evidence_location = assessment.evidenceSummary || '';
+        item.gap_summary = assessment.gapSummary || '';
+        item.quarterly_readiness = assessment.readinessStatus || 'not_assessed';
+      } else {
+        item.compliance_status = 'not_assessed';
+        item.evidence_location = '';
+        item.gap_summary = '';
+        item.quarterly_readiness = 'not_assessed';
+      }
+    });
 
     const filtered = issuances.filter((item) => {
       const scopeValue = (item.applicability_scope || '').toLowerCase();
-      const ownerValue = (item.process_owner || '').toLowerCase();
-      const titleValue = (item.title || '').toLowerCase();
-      const authorityValue = (item.issuing_authority || '').toLowerCase();
 
       const scopeMatch =
         scopeFilter && scopeFilter !== 'all' ? scopeValue.includes(scopeFilter) : true;
-      const unitMatch = unitFilter
-        ? [scopeValue, ownerValue, titleValue, authorityValue].some((value) =>
-            value.includes(unitFilter),
-          )
-        : true;
+      const unitMatch = unitFilter ? scopeValue.includes(unitFilter) : true;
 
-      return scopeMatch && unitMatch;
+      const registerScopeMatch =
+        registerScope === 'all' || item.scope_profile === registerScope;
+
+      return scopeMatch && unitMatch && registerScopeMatch;
     });
 
     const legalEntries = filtered.filter((item) => this.resolveRegisterGroup(item) === 'legal');
@@ -527,6 +609,9 @@ export class MovService implements OnModuleInit {
     const internalEntries = filtered.filter(
       (item) => this.resolveRegisterGroup(item) === 'internal',
     );
+    const internalOperationalEntries = filtered.filter(
+      (item) => this.resolveRegisterGroup(item) === 'internal_operational',
+    );
 
     const selectedEntries =
       registerType === 'legal'
@@ -535,7 +620,9 @@ export class MovService implements OnModuleInit {
           ? standardsEntries
           : registerType === 'internal'
             ? internalEntries
-            : filtered;
+            : registerType === 'internal_operational'
+              ? internalOperationalEntries
+              : filtered;
 
     const quarterStartMonth = (Math.max(1, Math.min(4, Number(query.quarter || 1))) - 1) * 3 + 1;
     const quarterEndMonth = quarterStartMonth + 2;
@@ -576,7 +663,9 @@ export class MovService implements OnModuleInit {
     } else if (registerType === 'standards') {
       sectionHtml = `<h3 class="section-title">Standards Register</h3>${this.buildRegisterTable(standardsEntries, 1)}`;
     } else if (registerType === 'internal') {
-      sectionHtml = `<h3 class="section-title">Internal Policy Register</h3>${this.buildRegisterTable(internalEntries, 1)}`;
+      sectionHtml = `<h3 class="section-title">Internal Issuances Register</h3>${this.buildRegisterTable(internalEntries, 1)}`;
+    } else if (registerType === 'internal_operational') {
+      sectionHtml = `<h3 class="section-title">Internal Operational Documents Register</h3>${this.buildRegisterTable(internalOperationalEntries, 1)}`;
     } else {
       let indexCounter = 1;
       const legalTable = this.buildRegisterTable(legalEntries, indexCounter);
@@ -584,6 +673,11 @@ export class MovService implements OnModuleInit {
       const standardsTable = this.buildRegisterTable(standardsEntries, indexCounter);
       indexCounter += standardsEntries.length;
       const internalTable = this.buildRegisterTable(internalEntries, indexCounter);
+      indexCounter += internalEntries.length;
+      const internalOperationalTable = this.buildRegisterTable(
+        internalOperationalEntries,
+        indexCounter,
+      );
       sectionHtml = `
         <h3 class="section-title">Legal Register</h3>
         ${legalTable}
@@ -591,10 +685,24 @@ export class MovService implements OnModuleInit {
         <h3 class="section-title">Standards Register</h3>
         ${standardsTable}
 
-        <h3 class="section-title">Internal Policy Register</h3>
+        <h3 class="section-title">Internal Issuances Register</h3>
         ${internalTable}
+
+        <h3 class="section-title">Internal Operational Documents Register</h3>
+        ${internalOperationalTable}
       `;
     }
+
+    const reportHeading =
+      registerType === 'legal'
+        ? 'LEGAL AND REGULATORY REGISTER FOR INFORMATION SECURITY'
+        : registerType === 'standards'
+          ? 'STANDARDS REGISTER FOR INFORMATION SECURITY'
+          : registerType === 'internal'
+            ? 'INTERNAL ISSUANCES REGISTER FOR INFORMATION SECURITY'
+            : registerType === 'internal_operational'
+              ? 'INTERNAL OPERATIONAL DOCUMENTS REGISTER FOR INFORMATION SECURITY'
+              : 'INFORMATION SECURITY COMPLIANCE REGISTERS';
 
     const content_html = `
       <!DOCTYPE html>
@@ -604,7 +712,7 @@ export class MovService implements OnModuleInit {
         ${style}
       </head>
       <body>
-        <h2>INFORMATION SECURITY MANAGEMENT SYSTEM<br/>LIST OF LEGAL, REGULATORY AND STANDARD REQUIREMENTS FOR INFORMATION SECURITY</h2>
+        <h2>INFORMATION SECURITY MANAGEMENT SYSTEM<br/>${reportHeading}</h2>
         <p class="period">Period: ${query.year} Q${query.quarter}${query.unit ? ` · Unit: ${this.escapeHtml(query.unit)}` : ''}</p>
 
         <h3>Summary</h3>
@@ -621,9 +729,23 @@ export class MovService implements OnModuleInit {
     `;
 
     const content_markdown = content_html;
+    const source_manifest = selectedEntries.map((item) => {
+      const assessment = (item.assessments || []).
+        filter((entry) => Number(entry.year) === Number(query.year) &&
+          (Number(entry.quarter) === Number(query.quarter) || entry.quarter == null))
+        .sort((a, b) => Number(b.quarter || 0) - Number(a.quarter || 0))[0];
+      return {
+        issuance_id: item.id,
+        assessment_id: assessment?.id || null,
+        evidence_ids: assessment?.evidence?.map((entry) => entry.id) || [],
+        document_version_ids:
+          assessment?.evidence?.map((entry) => entry.documentVersionId).filter(Boolean) || [],
+        remediation_action_ids: assessment?.remediationActions?.map((entry) => entry.id) || [],
+      };
+    });
 
     return {
-      title: `${registerType === 'legal' ? 'Legal Register' : registerType === 'standards' ? 'Standards Register' : registerType === 'internal' ? 'Internal Policy Register' : 'Register'} Report ${query.year} Q${query.quarter}`,
+      title: `${registerType === 'legal' ? 'Legal & Regulatory Register' : registerType === 'standards' ? 'Standards Register' : registerType === 'internal' ? 'Internal Issuances Register' : registerType === 'internal_operational' ? 'Internal Operational Documents Register' : 'Register'} Report ${query.year} Q${query.quarter}`,
       content_html,
       content_markdown,
       summary: {
@@ -632,6 +754,8 @@ export class MovService implements OnModuleInit {
         ready,
         addedEntries,
       },
+      source_manifest,
+      generated_at: new Date().toISOString(),
     };
   }
 
@@ -640,25 +764,46 @@ export class MovService implements OnModuleInit {
     quarter: number;
     scope?: string;
     unit?: string;
+    scope_profile?: string;
   }) {
+    this.validateReportPeriod(Number(query.year), Number(query.quarter));
     const issuances = await this.issuanceRepo.find({
-      where: { is_active: true },
+      where: { lifecycle_status: 'active', register_decision: 'included' },
+      relations: ['assessments', 'assessments.evidence', 'assessments.remediationActions'],
       order: { register_added_at: 'DESC', created_at: 'DESC' },
     });
 
     const scopeFilter = (query.scope || '').trim().toLowerCase();
     const unitFilter = (query.unit || '').trim().toLowerCase();
+    const registerScope = (query.scope_profile || 'core').toLowerCase();
+    if (!['core', 'extended', 'all'].includes(registerScope)) {
+      throw new BadRequestException('Register scope is invalid');
+    }
+    issuances.forEach((item) => {
+      const quarterly = new Map(
+        (item.assessments || [])
+          .filter(
+            (entry) =>
+              Number(entry.year) === Number(query.year) &&
+              entry.quarter != null &&
+              Number(entry.quarter) >= 1 &&
+              Number(entry.quarter) <= 4,
+          )
+          .map((entry) => [Number(entry.quarter), entry.status]),
+      );
+      item.q1_compliance_status = quarterly.get(1) || 'not_assessed';
+      item.q2_compliance_status = query.quarter >= 2 ? quarterly.get(2) || 'not_assessed' : '';
+      item.q3_compliance_status = query.quarter >= 3 ? quarterly.get(3) || 'not_assessed' : '';
+      item.q4_compliance_status = query.quarter >= 4 ? quarterly.get(4) || 'not_assessed' : '';
+    });
     const filtered = issuances.filter((item) => {
       const scopeValue = (item.applicability_scope || '').toLowerCase();
-      const ownerValue = (item.process_owner || '').toLowerCase();
-      const titleValue = (item.title || '').toLowerCase();
-      const authorityValue = (item.issuing_authority || '').toLowerCase();
       const scopeMatch =
         scopeFilter && scopeFilter !== 'all' ? scopeValue.includes(scopeFilter) : true;
-      const unitMatch = unitFilter
-        ? [scopeValue, ownerValue, titleValue, authorityValue].some((v) => v.includes(unitFilter))
-        : true;
-      return scopeMatch && unitMatch;
+      const unitMatch = unitFilter ? scopeValue.includes(unitFilter) : true;
+      const registerScopeMatch =
+        registerScope === 'all' || item.scope_profile === registerScope;
+      return scopeMatch && unitMatch && registerScopeMatch;
     });
 
     const style = `
@@ -699,7 +844,7 @@ export class MovService implements OnModuleInit {
       <head><meta charset="utf-8" />${style}</head>
       <body>
         <h2>ICT COMPLIANCE REGISTER MONITORING</h2>
-        <p class="period">Period: ${query.year} Q${query.quarter}${query.unit ? ` · Unit: ${this.escapeHtml(query.unit)}` : ''}</p>
+        <p class="period">Year ${query.year}, status as of Q${query.quarter}${query.unit ? ` · Unit: ${this.escapeHtml(query.unit)}` : ''}</p>
         <table>
           <colgroup>
             <col class="col-basis" />
@@ -730,6 +875,13 @@ export class MovService implements OnModuleInit {
       content_html,
       content_markdown: content_html,
       summary: { total: filtered.length },
+      source_manifest: filtered.map((item) => ({
+        issuance_id: item.id,
+        assessment_ids: (item.assessments || [])
+          .filter((entry) => Number(entry.year) === Number(query.year) && Number(entry.quarter || 0) <= Number(query.quarter))
+          .map((entry) => entry.id),
+      })),
+      generated_at: new Date().toISOString(),
     };
   }
 
@@ -739,6 +891,7 @@ export class MovService implements OnModuleInit {
     unit_id?: number;
     manual_remarks?: Record<string, string>;
   }) {
+    this.validateReportPeriod(Number(query.year), Number(query.quarter));
     const plans = await this.movRepo.find({
       where: { artifact_type: 'assessment_plan_year' },
       order: { updated_at: 'ASC' },
@@ -749,15 +902,16 @@ export class MovService implements OnModuleInit {
         artifact_type: 'assessment_schedule_entry',
         period_year: query.year,
         quarter: query.quarter,
+        ...(query.unit_id ? { unit_id: query.unit_id } : {}),
       },
       order: { updated_at: 'ASC' },
     });
 
-    const periodMonth = query.quarter * 3;
+    const quarterMonths = [query.quarter * 3 - 2, query.quarter * 3 - 1, query.quarter * 3];
     const kpiRows = await this.kpiMonitoringRepo.find({
       where: {
         periodYear: query.year,
-        periodMonth,
+        periodMonth: In(quarterMonths),
         ...(query.unit_id ? { unitId: query.unit_id } : {}),
       },
       relations: ['kpiMaster'],
@@ -776,8 +930,10 @@ export class MovService implements OnModuleInit {
       ['completed', 'done'].includes((item.status || '').toLowerCase()),
     ).length;
 
-    const selectedPlan =
-      plans.find((item) => Number(item.period_year) === Number(query.year)) || plans[0];
+    const selectedPlan = plans.find((item) => Number(item.period_year) === Number(query.year));
+    if (!selectedPlan) {
+      throw new BadRequestException(`No assessment plan exists for ${query.year}`);
+    }
     const planItemsFromMeta = Array.isArray(selectedPlan?.metadata_json?.items)
       ? (selectedPlan?.metadata_json?.items as string[])
       : [];
@@ -791,15 +947,37 @@ export class MovService implements OnModuleInit {
       new Set([...planItemsFromMeta, ...planItemsFromContent]),
     ).filter(Boolean);
 
+    const normalizeActivity = (value: string) =>
+      value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const checklist = (
       planChecklistItems.length > 0
         ? planChecklistItems
         : ['Assessment plan activities defined for selected year']
-    ).map((item) => ({
-      item,
-      passed: schedule.length > 0 && kpiRows.length > 0,
-      evidence: `${schedule.length} schedule entries, ${kpiRows.length} KPI rows`,
-    }));
+    ).map((item) => {
+      const normalizedItem = normalizeActivity(item);
+      const matchingSchedule = schedule.filter((entry) => {
+        const explicitPlanItem = String(entry.metadata_json?.plan_item || '');
+        const candidates = [entry.title, entry.content_markdown, explicitPlanItem]
+          .map((value) => normalizeActivity(String(value || '')))
+          .filter(Boolean);
+        return candidates.some(
+          (candidate) =>
+            candidate === normalizedItem ||
+            candidate.includes(normalizedItem) ||
+            normalizedItem.includes(candidate),
+        );
+      });
+      const completed = matchingSchedule.filter((entry) =>
+        ['completed', 'done'].includes((entry.status || '').toLowerCase()),
+      );
+      return {
+        item,
+        passed: completed.length > 0,
+        evidence: matchingSchedule.length
+          ? `${completed.length} of ${matchingSchedule.length} linked schedule activities completed`
+          : 'No linked schedule activity',
+      };
+    });
 
     const scheduleRows = schedule.map((item) => {
       const owner = item.metadata_json?.owner || '-';
@@ -810,10 +988,35 @@ export class MovService implements OnModuleInit {
 
     const manualRemarks = query.manual_remarks || {};
     const kpiRowsText = kpiBelowTarget.map((row) => {
-      const key = `${row.kpiMasterCode}`;
-      const overridden = manualRemarks[key]?.trim();
+      const key = `${row.unitId}:${row.kpiMasterCode}`;
+      const overridden = manualRemarks[key]?.trim() || manualRemarks[row.kpiMasterCode]?.trim();
       return `| ${row.unit?.name || row.unitId} | ${row.kpiMasterCode} | ${row.kpiMaster?.name || '-'} | ${row.actualValue} | ${row.kpiMaster?.targetValue || '-'} | ${overridden || row.remarks || '-'} |`;
     });
+
+    const assessedIssuances = await this.issuanceRepo.find({
+      where: { lifecycle_status: 'active', register_decision: 'included' },
+      relations: ['assessments', 'assessments.evidence', 'assessments.remediationActions'],
+    });
+    const periodAssessments = assessedIssuances.flatMap((issuance) =>
+      (issuance.assessments || [])
+        .filter((assessment) =>
+          Number(assessment.year) === Number(query.year) &&
+          (Number(assessment.quarter) === Number(query.quarter) || assessment.quarter == null),
+        )
+        .map((assessment) => ({ issuance, assessment })),
+    );
+    const evidenceCount = periodAssessments.reduce(
+      (sum, row) => sum + (row.assessment.evidence?.length || 0),
+      0,
+    );
+    const openActions = periodAssessments.reduce(
+      (sum, row) =>
+        sum +
+        (row.assessment.remediationActions || []).filter((action) =>
+          ['open', 'in_progress'].includes(action.status),
+        ).length,
+      0,
+    );
 
     const report_html = `
       <!DOCTYPE html>
@@ -839,6 +1042,8 @@ export class MovService implements OnModuleInit {
         </p>
         <h3>Assessment Checklist</h3>
         <ul>${checklist.map((item) => `<li>${item.passed ? '✅' : '❌'} ${this.escapeHtml(item.item)} (${this.escapeHtml(item.evidence)})</li>`).join('')}</ul>
+        <h3>Issuance Assessment Evidence</h3>
+        <p>${periodAssessments.length} issuance assessments are recorded for this period, supported by ${evidenceCount} linked evidence records. ${openActions} corrective actions remain open or in progress.</p>
         <h3>Assessment Schedule</h3>
         <table>
           <thead><tr><th>Activity</th><th>Owner</th><th>Due Date</th><th>Status</th><th>Remarks</th></tr></thead>
@@ -890,7 +1095,22 @@ export class MovService implements OnModuleInit {
         completed_schedule: completedSchedule,
         kpi_rows: kpiRows.length,
         kpi_below_target: kpiBelowTarget.length,
+        issuance_assessments: periodAssessments.length,
+        linked_evidence: evidenceCount,
+        open_corrective_actions: openActions,
       },
+      source_manifest: {
+        plan_id: selectedPlan.id,
+        schedule_ids: schedule.map((entry) => entry.id),
+        kpi_monitoring_ids: kpiRows.map((entry) => entry.id),
+        issuance_assessments: periodAssessments.map(({ issuance, assessment }) => ({
+          issuance_id: issuance.id,
+          assessment_id: assessment.id,
+          evidence_ids: assessment.evidence?.map((entry) => entry.id) || [],
+          remediation_action_ids: assessment.remediationActions?.map((entry) => entry.id) || [],
+        })),
+      },
+      generated_at: new Date().toISOString(),
     };
   }
 }

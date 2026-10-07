@@ -54,21 +54,21 @@ export class MovController {
 
   @Post('artifacts')
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isMovAccess')
+  @RequireCapability('isMovManage')
   create(@Body() dto: CreateMovArtifactDto, @Request() req: any) {
     return this.movService.create(dto, req.user?.id ?? req.user?.userId);
   }
 
   @Put('artifacts/:id')
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isMovAccess')
+  @RequireCapability('isMovManage')
   update(@Param('id') id: string, @Body() dto: UpdateMovArtifactDto) {
     return this.movService.update(id, dto);
   }
 
   @Delete('artifacts/:id')
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isMovAccess')
+  @RequireCapability('isMovManage')
   remove(@Param('id') id: string) {
     return this.movService.remove(id);
   }
@@ -96,6 +96,7 @@ export class MovController {
     @Query('scope') scope?: string,
     @Query('unit') unit?: string,
     @Query('register_type') register_type?: string,
+    @Query('scope_profile') scope_profile?: string,
   ) {
     return this.movService.generateRegisterReport({
       year: Number(year),
@@ -103,6 +104,7 @@ export class MovController {
       scope,
       unit,
       register_type,
+      scope_profile,
     });
   }
 
@@ -114,12 +116,14 @@ export class MovController {
     @Query('quarter') quarter: string,
     @Query('scope') scope?: string,
     @Query('unit') unit?: string,
+    @Query('scope_profile') scope_profile?: string,
   ) {
     return this.movService.generateMonitoringMatrixReport({
       year: Number(year),
       quarter: Number(quarter),
       scope,
       unit,
+      scope_profile,
     });
   }
 

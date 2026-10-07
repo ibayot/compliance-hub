@@ -100,7 +100,39 @@ export class UpdateRoleCapabilityDto {
 
   @IsOptional()
   @IsBoolean()
+  isReviewsManage?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isIncidentsAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isIncidentsManage?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isIncidentsDelete?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isCybersecurityAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isCybersecurityManage?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isCybersecurityDelete?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   isMovAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isMovManage?: boolean;
 
   @IsOptional()
   @IsBoolean()
@@ -189,6 +221,18 @@ export class UpdateRoleCapabilityDto {
   @IsOptional()
   @IsBoolean()
   isIssuancesManage?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isIssuancesReview?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isIssuancesAssessmentManage?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isIssuancesConfigure?: boolean;
 
   @IsOptional()
   @IsBoolean()

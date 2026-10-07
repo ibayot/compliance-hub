@@ -372,6 +372,7 @@ export class DutyService {
         ? null
         : this.selectedReservation(meetingOverrides.reservations, dutyType);
       if (dutyType !== DutyType.OD && !reservation) {
+        const nextInRotation = rotation.find((row) => row.dutyType === dutyType && row.next && !row.excluded) ?? null;
         cards.push({
           dutyType,
           dutyPeriod: null,
@@ -379,6 +380,8 @@ export class DutyService {
           coverageId: null,
           userId: null,
           name: 'No scheduled duty',
+          nextInRotationUserId: nextInRotation?.userId ?? null,
+          nextInRotationName: nextInRotation?.name ?? null,
           daysSince: null,
           isOnDuty: false,
           isNext: false,

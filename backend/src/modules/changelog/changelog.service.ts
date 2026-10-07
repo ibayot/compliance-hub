@@ -7,24 +7,6 @@ import { AppRelease, AppReleaseDelivery, AppReleaseNote } from './changelog.enti
 const CATS = ['feature', 'enhancement', 'bug_fix'];
 const AUDIENCES = ['capability', 'end_user', 'staff'];
 const CATEGORY_ORDER = new Map(CATS.map((category, index) => [category, index]));
-const STAFF_CAPABILITIES = [
-  'isAttendanceEligible',
-  'isAllTickets',
-  'isTicketFocal',
-  'isTicketSettingsFocal',
-  'isKnowledgeBaseManage',
-  'isSpecializedSupport',
-  'isDesktop',
-  'isItSupport',
-  'isPantawidIct',
-  'isIto',
-  'isFocal',
-  'isUserManagementView',
-  'isUserManagementAdmin',
-  'isRoleCapabilitiesAccess',
-  'isSystemRolesAccess',
-  'isChangelogManagement',
-];
 type Input = {
   version: string;
   title: string;
@@ -117,9 +99,10 @@ export class ChangelogService {
     return r;
   }
   private isEndUser(c?: RoleCapability) {
-    return Boolean(
-      c?.isTicketModuleAccess && STAFF_CAPABILITIES.every((key) => !(c as any)?.[key]),
-    );
+    if (!c?.isTicketModuleAccess) return false;
+    return this.capabilityKeys()
+      .filter((key) => key !== 'isTicketModuleAccess')
+      .every((key) => !(c as any)?.[key]);
   }
   private notes(r: AppRelease, c?: RoleCapability) {
     const endUser = this.isEndUser(c);

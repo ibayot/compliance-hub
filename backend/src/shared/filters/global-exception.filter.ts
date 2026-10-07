@@ -29,7 +29,19 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     // Handle TypeORM QueryFailedError (often triggered by ZAP injecting invalid characters)
     // Map this to a 400 Bad Request instead of a 500 Internal Server Error.
     if (exception instanceof QueryFailedError) {
-      const code = String((exception as any).driverError?.code || '');
+      const driverError = (exception as any).driverError || {};
+      const code = String(driverError.code || '');
+      const errno = Number(driverError.errno || 0) || null;
+      const databaseMessage = String(driverError.sqlMessage || driverError.message || '');
+      const rejectedColumn = databaseMessage.match(/column\s+'([^']+)'/i)?.[1] || null;
+      const diagnostic = [
+        code || 'unknown',
+        errno ? `errno=${errno}` : null,
+        rejectedColumn ? `column=${rejectedColumn}` : null,
+        `${request.method} ${request.path}`,
+      ]
+        .filter(Boolean)
+        .join(', ');
       const clientInputCodes = new Set([
         'ER_DATA_TOO_LONG',
         'ER_TRUNCATED_WRONG_VALUE',
@@ -37,14 +49,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         'ER_WARN_DATA_OUT_OF_RANGE',
       ]);
       if (clientInputCodes.has(code)) {
-        this.logger.warn(`Invalid database input (${code})`);
+        // Record only structural diagnostics. Never log the SQL statement or rejected value,
+        // because feedback and other requests may contain personal information.
+        this.logger.warn(`Invalid database input (${diagnostic})`);
         return response.status(HttpStatus.BAD_REQUEST).json({
           statusCode: HttpStatus.BAD_REQUEST,
           message: 'Invalid input provided.',
           error: 'Bad Request',
         });
       }
-      this.logger.error(`Database failure (${code || 'unknown'})`);
+      this.logger.error(`Database failure (${diagnostic})`);
       return response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'A database error occurred. Please contact support.',

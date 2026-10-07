@@ -43,7 +43,15 @@ export interface RoleCapabilityStub {
   isAttendanceManage: boolean;
   isReportsAccess: boolean;
   isReviewsAccess: boolean;
+  isReviewsManage: boolean;
+  isIncidentsAccess: boolean;
+  isIncidentsManage: boolean;
+  isIncidentsDelete: boolean;
+  isCybersecurityAccess: boolean;
+  isCybersecurityManage: boolean;
+  isCybersecurityDelete: boolean;
   isMovAccess: boolean;
+  isMovManage: boolean;
   isDocumentsAccess: boolean;
   isRepositoryAccess: boolean;
   isIssuancesAccess: boolean;
@@ -62,6 +70,9 @@ export interface RoleCapabilityStub {
   isDocumentsManage: boolean;
   isDocumentsDelete: boolean;
   isIssuancesManage: boolean;
+  isIssuancesReview: boolean;
+  isIssuancesAssessmentManage: boolean;
+  isIssuancesConfigure: boolean;
   isMetricsDelete: boolean;
 }
 

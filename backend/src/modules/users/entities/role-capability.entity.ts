@@ -146,9 +146,40 @@ export class RoleCapability {
   @Column({ name: 'is_reviews_access', type: 'tinyint', width: 1, default: 0 })
   isReviewsAccess: boolean;
 
+  /** True for roles that can submit reviews and create version comparisons. */
+  @Column({ name: 'is_reviews_manage', type: 'tinyint', width: 1, default: 0 })
+  isReviewsManage: boolean;
+
+  /** True for roles that can view incident records and statistics. */
+  @Column({ name: 'is_incidents_access', type: 'tinyint', width: 1, default: 0 })
+  isIncidentsAccess: boolean;
+
+  /** True for roles that can create and update incidents. */
+  @Column({ name: 'is_incidents_manage', type: 'tinyint', width: 1, default: 0 })
+  isIncidentsManage: boolean;
+
+  /** True for roles that can delete incidents. */
+  @Column({ name: 'is_incidents_delete', type: 'tinyint', width: 1, default: 0 })
+  isIncidentsDelete: boolean;
+
+  /** True for roles that can view cybersecurity measurements. */
+  @Column({ name: 'is_cybersecurity_access', type: 'tinyint', width: 1, default: 0 })
+  isCybersecurityAccess: boolean;
+
+  /** True for roles that can create and update cybersecurity measurements. */
+  @Column({ name: 'is_cybersecurity_manage', type: 'tinyint', width: 1, default: 0 })
+  isCybersecurityManage: boolean;
+
+  /** True for roles that can delete cybersecurity measurements. */
+  @Column({ name: 'is_cybersecurity_delete', type: 'tinyint', width: 1, default: 0 })
+  isCybersecurityDelete: boolean;
+
   /** True for roles that can access MoV Builder. */
   @Column({ name: 'is_mov_access', type: 'tinyint', width: 1, default: 0 })
   isMovAccess: boolean;
+
+  @Column({ name: 'is_mov_manage', type: 'tinyint', width: 1, default: 0 })
+  isMovManage: boolean;
 
   /** True for roles that can access Documents module. */
   @Column({ name: 'is_documents_access', type: 'tinyint', width: 1, default: 0 })
@@ -229,6 +260,15 @@ export class RoleCapability {
 
   @Column({ name: 'is_issuances_manage', type: 'tinyint', width: 1, default: 0 })
   isIssuancesManage: boolean;
+
+  @Column({ name: 'is_issuances_review', type: 'tinyint', width: 1, default: 0 })
+  isIssuancesReview: boolean;
+
+  @Column({ name: 'is_issuances_assessment_manage', type: 'tinyint', width: 1, default: 0 })
+  isIssuancesAssessmentManage: boolean;
+
+  @Column({ name: 'is_issuances_configure', type: 'tinyint', width: 1, default: 0 })
+  isIssuancesConfigure: boolean;
 
   @Column({ name: 'is_metrics_delete', type: 'tinyint', width: 1, default: 0 })
   isMetricsDelete: boolean;

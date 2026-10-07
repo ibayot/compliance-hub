@@ -28,7 +28,7 @@ export class ComparisonController {
    */
   @Post()
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isReviewsAccess')
+  @RequireCapability('isReviewsManage')
   @HttpCode(HttpStatus.CREATED)
   async compareVersions(
     @Body() dto: Omit<CompareVersionsDto, 'compared_by_id'>,

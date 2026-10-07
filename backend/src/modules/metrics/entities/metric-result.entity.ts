@@ -31,6 +31,12 @@ export class MetricResult {
   @Column({ type: 'uuid' })
   metric_template_id: string;
 
+  @Column({ name: 'execution_id', type: 'char', length: 36, nullable: true })
+  execution_id: string | null;
+
+  @Column({ name: 'template_snapshot', type: 'json', nullable: true })
+  template_snapshot: Record<string, any> | null;
+
   @ManyToOne(() => MetricTemplate, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'metric_template_id' })
   metric_template: MetricTemplate;

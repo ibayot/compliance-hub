@@ -28,6 +28,7 @@ import {
   UpdateGlobalConfigDto,
 } from '../services/ticket-settings.service';
 import { EmailService } from '../services/email.service';
+import { TicketService } from '../services/ticket.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { TicketPriority, TicketType } from '../entities/ticket.entity';
 
@@ -38,6 +39,7 @@ import { TicketPriority, TicketType } from '../entities/ticket.entity';
 export class TicketSettingsController {
   constructor(
     private readonly settingsService: TicketSettingsService,
+    private readonly ticketService: TicketService,
     private readonly emailService: EmailService,
     private readonly roleCapSvc: RoleCapabilitiesService,
   ) {}
@@ -317,6 +319,6 @@ export class TicketSettingsController {
       quarter: quarter ? Number(quarter) : undefined,
       semester: semester ? Number(semester) : undefined,
     };
-    return this.settingsService.getSlaInsights(filters);
+    return this.ticketService.getSlaInsights(filters);
   }
 }

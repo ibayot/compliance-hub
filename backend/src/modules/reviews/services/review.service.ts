@@ -57,9 +57,11 @@ export class ReviewService {
     if (
       (dto.decision === ReviewDecision.NEEDS_REVISION ||
         dto.decision === ReviewDecision.NON_COMPLIANT) &&
-      document.status !== DocumentStatus.PENDING
+      ![DocumentStatus.PENDING, DocumentStatus.READY].includes(document.status)
     ) {
-      throw new BadRequestException('Only pending documents can be returned for revision.');
+      throw new BadRequestException(
+        'Only processed documents that are ready or pending review can be returned for revision.',
+      );
     }
 
     // Get the current version

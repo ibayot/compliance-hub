@@ -4,6 +4,46 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.20] - 2026-10-06 - Issuance Governance and Supporting Images
+
+- Corrected the document-review workflow so authorized reviewers can return processed documents for revision, while view-only review access can no longer submit decisions or comparisons.
+- Added separate capability controls for review decisions, incident viewing/management/deletion, and cybersecurity viewing/management/deletion.
+- Added period-specific issuance evidence links and corrective actions, including annual assessments, while retiring direct editing of legacy quarterly compliance fields.
+- Separated the durable owning unit or function from the currently accountable person on an issuance.
+- Improved MoV correctness by using all three months in a quarter, requiring a plan for the selected year, matching checklist items to their own schedule activities, and incorporating issuance evidence and open corrective actions.
+- Saved MoV reports now retain a source manifest and content hash; approved report snapshots cannot be edited or deleted.
+- Metric recalculation now preserves earlier execution results and captures the exact metric definition used for each run.
+- Frozen tickets can be returned to their previous status by the assigned staff member, while ticket administrators retain the broader correction workflow; only authorized ticket administrators can place tickets in Freeze.
+- RICTMS staff who are the actual requester can view Internal Notes for their ticket, while regular End Users remain excluded.
+- Requester correction is available after resolution, status history identifies automatic and manual transitions, and SLA warnings use clearer labels.
+- SLA timing now starts only when a ticket first enters In Progress. Manual pauses cannot exclude more business time than their configured limit, and one-hour pause limits are checked every minute instead of only once per hour.
+- Ticket Reports now calculate actual resolution time from active business time only, excluding queue wait, lunch, non-work periods, pauses, and freezes. Authorized report managers can also view a weekly assignee ranking weighted by SLA compliance, completed volume, and resolution efficiency.
+
+### Added
+- Four governed issuance registers with separate lifecycle, applicability, inclusion, scope, domain, source, relationship, and assessment information.
+- Search and a consolidated issuance detail view covering source provenance, related issuances, period assessments, and lifecycle history.
+- An applicability review queue that retains excluded and historical records without placing them in official registers.
+- Authorized assessors can record quarterly compliance status, readiness, evidence, and gaps for each issuance; the selected period is reflected in generated registers and the monitoring matrix.
+- Suggestions can include up to five images through selection, drag-and-drop, or clipboard paste.
+
+### Changed
+- MoV register reports now use explicit register classifications and provide Core ICT and Extended ICT-Relevant scope choices while retaining the established print layout.
+- MoV editing, saved-report, schedule, plan, and preset controls are shown only to users with the MoV management capability; read access continues to allow report generation, viewing, and printing.
+- Compliance domains can be maintained through capability-controlled Issuances settings.
+- The issuance catalog now includes verified current privacy, cybersecurity, digital-government, accessibility, risk, continuity, audit, supplier, network, storage, and ISMS references. Optional specialized references remain available for review without lengthening the default official registers.
+- Meeting-room duty cards now show the next person in rotation when no meeting is scheduled, without activating duty coverage or changing attendance and ticket availability.
+- Performance tables use alternating row shading and hover emphasis so assignee results are easier to follow across wide reports.
+
+### Fixed
+- Active source instruments outside ICT scope are no longer incorrectly represented as inactive issuances.
+- Review, official, and historical issuance views no longer overlap, and source changes retain earlier provenance without creating duplicate primary sources.
+- Duplicate records for the same ISO 22301:2019 edition were consolidated, and the Philippine Identification System Act reference was corrected to Republic Act No. 11055.
+- SLA results no longer count time before In Progress or understate a breach when a technician resumes after the maximum allowed pause time. Assigned tickets wait without an SLA clock, queued tickets receive a fresh clock when promoted to In Progress, and automatic lunch or non-work pauses and resumes are identified in ticket history.
+- Service-feedback forms now validate all submitted fields before saving, use storage sized for the complete form, and no longer report a failed submission when the rating was saved but invitation bookkeeping needs recovery.
+
+### Deployment Note
+- Run `db-init/20261006-refine-issuance-register.sql` against the Compliance database first. Next run `db-init/20261006-add-issuance-governance-architecture.sql` against the Users, Ticketing, and Compliance databases, then `db-init/20261007-deduplicate-and-expand-issuance-catalog.sql` against the Compliance database, followed by `db-init/20261007-strengthen-compliance-workflows.sql` against the Users, Ticketing, and Compliance databases. Run `db-init/20261007-add-in-progress-sla-origin-ticketing.sql` and `db-init/20261007-harden-rating-feedback-ticketing.sql` against the Ticketing database, review their audit results, and run `db-init/20261006-add-application-changelog-v1.0.20-users.sql` against the Users database last.
+
 ## [1.0.19] - 2026-10-06 - Ticket Update Permissions and Notification Read State
 
 ### Fixed

@@ -6,8 +6,10 @@ import {
   ManyToOne,
   JoinColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
 import { User } from './user.entity';
+import { FeedbackAttachment } from './feedback-attachment.entity';
 
 @Entity('feedback')
 export class Feedback {
@@ -39,4 +41,7 @@ export class Feedback {
 
   @Column({ name: 'acted_by_id', nullable: true })
   actedById: number | null;
+
+  @OneToMany(() => FeedbackAttachment, (attachment) => attachment.feedback)
+  attachments: FeedbackAttachment[];
 }

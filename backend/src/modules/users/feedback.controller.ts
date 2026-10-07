@@ -8,8 +8,15 @@ import {
   Query,
   ParseIntPipe,
   UseGuards,
+  UseInterceptors,
+  UploadedFiles,
+  Request,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { FeedbackService } from './feedback.service';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
 import { UpdateFeedbackStatusDto } from './dto/update-feedback-status.dto';
@@ -27,6 +34,38 @@ export class FeedbackController {
   @Post()
   async create(@CurrentUser() user: any, @Body() dto: CreateFeedbackDto) {
     return this.feedbackService.create(user.id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/attachments')
+  @UseInterceptors(FilesInterceptor('files', 5, { limits: { fileSize: 5 * 1024 * 1024 } }))
+  addAttachments(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    return this.feedbackService.addAttachments(id, user.id, files);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('attachments/:attachmentId/view')
+  async viewAttachment(
+    @Param('attachmentId') attachmentId: string,
+    @Request() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const file = await this.feedbackService.getAttachment(
+      attachmentId,
+      req.user?.id ?? req.user?.userId,
+      req.user?.role,
+    );
+    res.set({
+      'Content-Type': file.mimeType,
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
+      'Content-Length': file.buffer.length,
+      'Cache-Control': 'private, max-age=300',
+    });
+    return new StreamableFile(file.buffer);
   }
 
   @UseGuards(JwtAuthGuard, CapabilityGuard)

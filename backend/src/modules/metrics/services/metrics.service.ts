@@ -12,6 +12,7 @@ import { PropertyCheckEngine } from '../engines/property-check.engine';
 import { DateCheckEngine } from '../engines/date-check.engine';
 import { ManualReview, ReviewDecision } from '../../reviews/entities/manual-review.entity';
 import { IsNull } from 'typeorm';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class MetricsService {
@@ -151,14 +152,12 @@ export class MetricsService {
       `Found ${applicableMetrics.length} applicable metrics for version ${versionId}`,
     );
 
-    // Delete existing results for this version
-    await this.metricResultRepo.delete({ version_id: versionId });
-
     // Compute each metric
+    const executionId = randomUUID();
     const results: MetricResult[] = [];
     for (const metric of applicableMetrics) {
       try {
-        const result = await this.computeSingleMetric(version, document, metric);
+        const result = await this.computeSingleMetric(version, document, metric, executionId);
         results.push(result);
       } catch (error) {
         this.logger.error('Failed to compute a metric.');
@@ -166,6 +165,8 @@ export class MetricsService {
         const errorResult = this.metricResultRepo.create({
           version_id: versionId,
           metric_template_id: metric.id,
+          execution_id: executionId,
+          template_snapshot: this.metricTemplateSnapshot(metric),
           status: MetricStatus.ERROR,
           message: `Error computing metric: ${error.message}`,
           evidence: {},
@@ -244,6 +245,7 @@ export class MetricsService {
     version: DocumentVersion,
     document: Document,
     metric: MetricTemplate,
+    executionId: string,
   ): Promise<MetricResult> {
     let result: any;
     const extractedText = document.extracted_text || '';
@@ -304,6 +306,8 @@ export class MetricsService {
     const metricResult = this.metricResultRepo.create({
       version_id: version.id,
       metric_template_id: metric.id,
+      execution_id: executionId,
+      template_snapshot: this.metricTemplateSnapshot(metric),
       status: result.status,
       evidence: result.evidence,
       message: result.message,
@@ -524,11 +528,31 @@ export class MetricsService {
    * Get metric results for a version
    */
   async getMetricResults(versionId: string): Promise<MetricResult[]> {
-    return this.metricResultRepo.find({
+    const latest = await this.metricResultRepo.findOne({
       where: { version_id: versionId },
+      order: { computed_at: 'DESC' },
+    });
+    if (!latest) return [];
+    return this.metricResultRepo.find({
+      where: latest.execution_id
+        ? { version_id: versionId, execution_id: latest.execution_id }
+        : { version_id: versionId },
       relations: ['metric_template'],
       order: { computed_at: 'DESC' },
     });
+  }
+
+  private metricTemplateSnapshot(metric: MetricTemplate): Record<string, any> {
+    return {
+      id: metric.id,
+      name: metric.name,
+      description: metric.description,
+      metric_type: metric.metric_type,
+      rule_config: metric.rule_config,
+      pass_criteria: metric.pass_criteria,
+      weight: metric.weight,
+      captured_at: new Date().toISOString(),
+    };
   }
 
   /**

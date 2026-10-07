@@ -129,9 +129,13 @@ export class Ticket {
   @Column({ name: 'duplicate_of_id', type: 'varchar', length: 36, nullable: true })
   duplicateOfId: string | null;
 
-  /** SLA deadline — set at assignment time based on issueType.slaHours */
+  /** SLA deadline — set when the ticket first enters In Progress. */
   @Column({ name: 'sla_deadline', type: 'datetime', nullable: true })
   slaDeadline: Date | null;
+
+  /** Persistent origin of the SLA clock. Assigned tickets have no SLA start. */
+  @Column({ name: 'sla_started_at', type: 'datetime', nullable: true })
+  slaStartedAt: Date | null;
 
   @Column({ name: 'sla_paused_at', type: 'datetime', nullable: true })
   slaPausedAt: Date | null;
@@ -167,7 +171,7 @@ export class Ticket {
   satisfactionSubmittedAt: Date | null;
 
   /** Full CLIENT SATISFACTION MEASUREMENT FORM data stored as JSON */
-  @Column({ name: 'satisfaction_form_data', type: 'text', nullable: true })
+  @Column({ name: 'satisfaction_form_data', type: 'mediumtext', nullable: true })
   satisfactionFormData: string | null;
 
   /**

@@ -6,6 +6,13 @@ export interface Issuance {
   title: string;
   description?: string;
   issuance_type?: string;
+  primary_register: 'legal_regulatory' | 'standards' | 'internal_issuances' | 'internal_operational';
+  lifecycle_status: string;
+  applicability_status: string;
+  register_decision: 'pending' | 'included' | 'excluded';
+  scope_profile: 'core' | 'extended';
+  status_reason?: string;
+  domains?: ComplianceDomain[];
   applicability_scope?: string;
   relevance_notes?: string;
   binding_nature?: string;
@@ -15,6 +22,7 @@ export interface Issuance {
   required_evidence?: string;
   evidence_location?: string;
   process_owner?: string;
+  accountable_user_id?: number | null;
   frequency_cadence?: string;
   compliance_status?: string;
   gap_summary?: string;
@@ -31,8 +39,12 @@ export interface Issuance {
   amended_issuance_number?: string;
   ict_amendment_notes?: string;
   issuing_authority: string;
-  issue_date: string;
+  issue_date?: string;
+  issue_date_precision?: string;
+  approval_date?: string;
   effectivity_date?: string;
+  effectivity_date_precision?: string;
+  end_date?: string;
   source_url?: string;
   attachment_file_name?: string;
   attachment_mime_type?: string;
@@ -41,6 +53,105 @@ export interface Issuance {
   created_at: string;
   updated_at: string;
   documents?: Array<{ id: string }>;
+  sources?: Array<{
+    id: string;
+    sourceType: string;
+    url?: string | null;
+    sourceOrganization?: string | null;
+    externalDocumentId?: string | null;
+    originalFileName?: string | null;
+    isPrimary: boolean;
+    verifiedAt?: string | null;
+    verifiedBy?: number | null;
+  }>;
+  outgoingRelationships?: IssuanceRelationship[];
+  incomingRelationships?: IssuanceRelationship[];
+  lifecycleHistory?: IssuanceLifecycleHistory[];
+  recommendations?: IssuanceRecommendation[];
+  registerDecisionHistory?: IssuanceRegisterDecision[];
+  assessments?: IssuanceAssessment[];
+}
+
+export interface IssuanceRegisterDecision {
+  id: string;
+  decision: string;
+  applicabilityStatus: string;
+  reason: string;
+  decidedBy?: number | null;
+  decidedAt: string;
+}
+
+export interface IssuanceRelationship {
+  id: string;
+  sourceIssuanceId: string;
+  targetIssuanceId: string;
+  relationshipType: string;
+  notes?: string | null;
+  sourceIssuance?: Pick<Issuance, 'id' | 'issuance_number' | 'title'>;
+  targetIssuance?: Pick<Issuance, 'id' | 'issuance_number' | 'title'>;
+}
+
+export interface IssuanceLifecycleHistory {
+  id: string;
+  fromStatus?: string | null;
+  toStatus: string;
+  reason: string;
+  changedBy?: number | null;
+  changedAt: string;
+}
+
+export interface IssuanceRecommendation {
+  id: string;
+  status: string;
+  summary?: string | null;
+  rationale?: string | null;
+  applicableProvisions?: string | null;
+  uncertainties?: string | null;
+}
+
+export interface IssuanceAssessment {
+  id: string;
+  year: number;
+  quarter?: number | null;
+  status: string;
+  evidenceSummary?: string | null;
+  gapSummary?: string | null;
+  readinessStatus?: string | null;
+  assessedAt?: string | null;
+  evidence?: IssuanceAssessmentEvidence[];
+  remediationActions?: IssuanceRemediationAction[];
+}
+
+export interface IssuanceAssessmentEvidence {
+  id: string;
+  assessmentId: string;
+  label: string;
+  url?: string | null;
+  documentId?: string | null;
+  documentVersionId?: string | null;
+  originalFileName?: string | null;
+  createdAt: string;
+}
+
+export interface IssuanceRemediationAction {
+  id: string;
+  assessmentId: string;
+  action: string;
+  owner?: string | null;
+  targetDate?: string | null;
+  status: 'open' | 'in_progress' | 'completed' | 'cancelled';
+  completedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ComplianceDomain {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  isActive: boolean;
+  sortOrder: number;
 }
 
 export interface CreateIssuanceDto {
@@ -48,6 +159,13 @@ export interface CreateIssuanceDto {
   title: string;
   description?: string;
   issuance_type?: string;
+  primary_register?: string;
+  lifecycle_status?: string;
+  applicability_status?: string;
+  register_decision?: string;
+  scope_profile?: string;
+  status_reason?: string;
+  domain_ids?: number[];
   applicability_scope?: string;
   relevance_notes?: string;
   binding_nature?: string;
@@ -57,6 +175,7 @@ export interface CreateIssuanceDto {
   required_evidence?: string;
   evidence_location?: string;
   process_owner?: string;
+  accountable_user_id?: number | null;
   frequency_cadence?: string;
   compliance_status?: string;
   gap_summary?: string;
@@ -73,8 +192,12 @@ export interface CreateIssuanceDto {
   amended_issuance_number?: string;
   ict_amendment_notes?: string;
   issuing_authority: string;
-  issue_date: string;
+  issue_date?: string;
+  issue_date_precision?: string;
+  approval_date?: string;
   effectivity_date?: string;
+  effectivity_date_precision?: string;
+  end_date?: string;
   source_url?: string;
   attachment_file_name?: string;
   attachment_mime_type?: string;
@@ -489,6 +612,18 @@ export interface TicketReportResult {
     avgResolutionTimeHours: number;
     count: number;
   }>;
+  weeklyTechnicianPerformance: Array<{
+    techId: number;
+    techName: string;
+    resolvedTickets: number;
+    met: number;
+    missed: number;
+    slaRate: number;
+    avgActiveResolutionHours: number;
+    volumeScore: number;
+    efficiencyScore: number;
+    weightedScore: number;
+  }>;
 }
 
 export interface RatingsReportResult {
@@ -647,15 +782,208 @@ export const issuancesApi = {
     category?: string;
     search?: string;
     is_active?: boolean;
+    primary_register?: string;
+    lifecycle_status?: string;
+    applicability_status?: string;
+    register_decision?: string;
+    scope_profile?: string;
+    domain_id?: number;
   }): Promise<Issuance[]> => {
     const params = new URLSearchParams();
     if (filters?.authority) params.append('authority', filters.authority);
     if (filters?.category) params.append('category', filters.category);
     if (filters?.search) params.append('search', filters.search);
     if (filters?.is_active !== undefined) params.append('is_active', String(filters.is_active));
+    if (filters?.primary_register) params.append('primary_register', filters.primary_register);
+    if (filters?.lifecycle_status) params.append('lifecycle_status', filters.lifecycle_status);
+    if (filters?.applicability_status) params.append('applicability_status', filters.applicability_status);
+    if (filters?.register_decision) params.append('register_decision', filters.register_decision);
+    if (filters?.scope_profile) params.append('scope_profile', filters.scope_profile);
+    if (filters?.domain_id) params.append('domain_id', String(filters.domain_id));
 
     const response = await apiClient.get(`/issuances?${params}`);
     return response.data;
+  },
+
+  getPage: async (filters: {
+    page: number;
+    limit: number;
+    authority?: string;
+    category?: string;
+    search?: string;
+    primary_register?: string;
+    lifecycle_status?: string;
+    applicability_status?: string;
+    register_decision?: string;
+    scope_profile?: string;
+    domain_id?: number;
+  }): Promise<{ data: Issuance[]; total: number; page: number; limit: number }> => {
+    const response = await apiClient.get('/issuances', { params: filters });
+    return response.data;
+  },
+
+  getDomains: async (includeInactive = false): Promise<ComplianceDomain[]> => {
+    const response = await apiClient.get(`/issuances/meta/domains`, {
+      params: { include_inactive: includeInactive },
+    });
+    return response.data;
+  },
+
+  createDomain: async (data: {
+    code: string;
+    name: string;
+    description?: string;
+    sortOrder?: number;
+  }): Promise<ComplianceDomain> => {
+    const response = await apiClient.post('/issuances/meta/domains', data);
+    return response.data;
+  },
+
+  updateDomain: async (
+    id: number,
+    data: Partial<{ name: string; description: string; sortOrder: number; isActive: boolean }>,
+  ): Promise<ComplianceDomain> => {
+    const response = await apiClient.put(`/issuances/meta/domains/${id}`, data);
+    return response.data;
+  },
+
+  checkDuplicates: async (data: {
+    issuance_number?: string;
+    title?: string;
+    issuing_authority?: string;
+    source_url?: string;
+  }): Promise<Array<{ id: string; issuance_number: string; title: string; reason: string; blocking: boolean }>> => {
+    const response = await apiClient.post('/issuances/duplicates/check', data);
+    return response.data;
+  },
+
+  decideRegister: async (
+    id: string,
+    decision: 'included' | 'excluded',
+    data: { reason: string; applicabilityStatus?: string; domainIds?: number[] },
+  ): Promise<Issuance> => {
+    const response = await apiClient.post(`/issuances/${id}/register-decision/${decision}`, data);
+    return response.data;
+  },
+
+  saveAssessment: async (
+    id: string,
+    data: {
+      year: number;
+      quarter?: number | null;
+      status: string;
+      evidenceSummary?: string;
+      gapSummary?: string;
+      readinessStatus?: string;
+    },
+  ): Promise<IssuanceAssessment> => {
+    const response = await apiClient.post(`/issuances/${id}/assessments`, data);
+    return response.data;
+  },
+
+  listAssessmentEvidence: async (
+    issuanceId: string,
+    assessmentId: string,
+  ): Promise<IssuanceAssessmentEvidence[]> => {
+    const response = await apiClient.get(
+      `/issuances/${issuanceId}/assessments/${assessmentId}/evidence`,
+    );
+    return response.data;
+  },
+
+  addAssessmentEvidence: async (
+    issuanceId: string,
+    assessmentId: string,
+    data: { label: string; url?: string; documentId?: string; documentVersionId?: string },
+  ): Promise<IssuanceAssessmentEvidence> => {
+    const response = await apiClient.post(
+      `/issuances/${issuanceId}/assessments/${assessmentId}/evidence`,
+      data,
+    );
+    return response.data;
+  },
+
+  removeAssessmentEvidence: async (
+    issuanceId: string,
+    assessmentId: string,
+    evidenceId: string,
+  ): Promise<void> => {
+    await apiClient.delete(
+      `/issuances/${issuanceId}/assessments/${assessmentId}/evidence/${evidenceId}`,
+    );
+  },
+
+  listRemediationActions: async (
+    issuanceId: string,
+    assessmentId: string,
+  ): Promise<IssuanceRemediationAction[]> => {
+    const response = await apiClient.get(
+      `/issuances/${issuanceId}/assessments/${assessmentId}/actions`,
+    );
+    return response.data;
+  },
+
+  addRemediationAction: async (
+    issuanceId: string,
+    assessmentId: string,
+    data: { action: string; owner?: string; targetDate?: string; status?: string },
+  ): Promise<IssuanceRemediationAction> => {
+    const response = await apiClient.post(
+      `/issuances/${issuanceId}/assessments/${assessmentId}/actions`,
+      data,
+    );
+    return response.data;
+  },
+
+  updateRemediationAction: async (
+    issuanceId: string,
+    assessmentId: string,
+    actionId: string,
+    data: Partial<{ action: string; owner: string; targetDate: string | null; status: string }>,
+  ): Promise<IssuanceRemediationAction> => {
+    const response = await apiClient.put(
+      `/issuances/${issuanceId}/assessments/${assessmentId}/actions/${actionId}`,
+      data,
+    );
+    return response.data;
+  },
+
+  removeRemediationAction: async (
+    issuanceId: string,
+    assessmentId: string,
+    actionId: string,
+  ): Promise<void> => {
+    await apiClient.delete(
+      `/issuances/${issuanceId}/assessments/${assessmentId}/actions/${actionId}`,
+    );
+  },
+
+  addSource: async (
+    id: string,
+    data: {
+      sourceType: string;
+      url: string;
+      sourceOrganization?: string;
+      externalDocumentId?: string;
+      isPrimary?: boolean;
+    },
+  ): Promise<void> => {
+    await apiClient.post(`/issuances/${id}/sources`, data);
+  },
+
+  verifySource: async (issuanceId: string, sourceId: string): Promise<void> => {
+    await apiClient.put(`/issuances/${issuanceId}/sources/${sourceId}/verify`, {});
+  },
+
+  addRelationship: async (
+    id: string,
+    data: { targetIssuanceId: string; relationshipType: string; notes?: string },
+  ): Promise<void> => {
+    await apiClient.post(`/issuances/${id}/relationships`, data);
+  },
+
+  removeRelationship: async (id: string, relationshipId: string): Promise<void> => {
+    await apiClient.delete(`/issuances/${id}/relationships/${relationshipId}`);
   },
 
   getById: async (id: string): Promise<Issuance> => {

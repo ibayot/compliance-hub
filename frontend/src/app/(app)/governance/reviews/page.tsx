@@ -26,11 +26,11 @@ import { documentsApi, Document } from '@/lib/api/documents';
 import { reviewsApi, ReviewDecision } from '@/lib/api/reviews';
 import DocumentViewer from '@/components/documents/DocumentViewer';
 import { useAuth } from '@/contexts/AuthContext';
-import { UserRole } from '@/lib/types/auth';
 
 export default function ReviewsPage() {
   const { user, myCap } = useAuth();
   const isSuperOrReviewer = !!myCap?.isReviewsAccess;
+  const canManageReviews = !!myCap?.isReviewsManage;
   const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [latestReviewByDoc, setLatestReviewByDoc] = useState<Record<string, string>>({});
@@ -282,7 +282,7 @@ export default function ReviewsPage() {
                             size="small"
                             onClick={() => openReviewDialog(document.id)}
                           >
-                            Review
+                            {canManageReviews ? 'Review' : 'View'}
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -340,7 +340,12 @@ export default function ReviewsPage() {
                 Compliance Tagging
               </Typography>
 
-              {isSelectedDocumentAlreadyCompliant ? (
+              {!canManageReviews ? (
+                <Typography color="text.secondary">
+                  You can inspect this document and its latest review, but you do not have permission
+                  to submit a review decision.
+                </Typography>
+              ) : isSelectedDocumentAlreadyCompliant ? (
                 <Typography color="success.main">
                   This document is already tagged as compliant. No additional review tagging is
                   required.
@@ -392,7 +397,7 @@ export default function ReviewsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={closeDialog}>Cancel</Button>
-          {!isSelectedDocumentAlreadyCompliant && (
+          {canManageReviews && !isSelectedDocumentAlreadyCompliant && (
             <Button
               variant="contained"
               onClick={submitReview}

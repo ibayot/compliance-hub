@@ -38,6 +38,12 @@ export class MovArtifact {
   @Column({ type: 'json', nullable: true })
   metadata_json: Record<string, any> | null;
 
+  @Column({ name: 'content_sha256', type: 'char', length: 64, nullable: true })
+  content_sha256: string | null;
+
+  @Column({ name: 'finalized_at', type: 'datetime', nullable: true })
+  finalized_at: Date | null;
+
   @Column({ type: 'int', nullable: true })
   created_by: number | null;
 

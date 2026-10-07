@@ -12,24 +12,24 @@ import {
 @ApiTags('cybersecurity')
 @Controller('cybersecurity')
 @UseGuards(JwtAuthGuard, CapabilityGuard)
-@RequireCapability('isIto')
+@RequireCapability('isCybersecurityAccess')
 export class CybersecurityController {
   constructor(private readonly cybersecurityService: CybersecurityService) {}
 
   @Get('metrics')
-  @RequireCapability('isIto')
+  @RequireCapability('isCybersecurityAccess')
   async getAllMetrics() {
     return await this.cybersecurityService.findAll();
   }
 
   @Get('metrics/:id')
-  @RequireCapability('isIto')
+  @RequireCapability('isCybersecurityAccess')
   async getMetric(@Param('id') id: number) {
     return await this.cybersecurityService.findOne(id);
   }
 
   @Post('metrics')
-  @RequireCapability('isIto')
+  @RequireCapability('isCybersecurityManage')
   async createMetric(@Body() createDto: CreateCybersecurityMetricDto) {
     return await this.cybersecurityService.create({
       ...createDto,
@@ -38,7 +38,7 @@ export class CybersecurityController {
   }
 
   @Put('metrics/:id')
-  @RequireCapability('isIto')
+  @RequireCapability('isCybersecurityManage')
   async updateMetric(@Param('id') id: number, @Body() updateDto: UpdateCybersecurityMetricDto) {
     return await this.cybersecurityService.update(id, {
       ...updateDto,
@@ -47,7 +47,7 @@ export class CybersecurityController {
   }
 
   @Delete('metrics/:id')
-  @RequireCapability('isIto')
+  @RequireCapability('isCybersecurityDelete')
   async deleteMetric(@Param('id') id: number) {
     await this.cybersecurityService.delete(id);
     return { message: 'Metric deleted successfully' };

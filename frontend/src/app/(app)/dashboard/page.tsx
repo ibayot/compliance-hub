@@ -134,9 +134,8 @@ export default function DashboardPage() {
   // the staff dashboard and also receives its own requester ticket summary below.
   const isRequesterDashboard = isRegularUser;
   const isSectionHead = !!myCap?.isGlobalSettingsAccess && !!myCap?.isKpiManage;
-  const isCybersecurityOfficer = !!myCap?.isIto;
-  const canViewSecurityIncidents = !!myCap?.isReportsAccess;
-  const canViewCybersecurityMetrics = !!myCap?.isIto;
+  const canViewSecurityIncidents = !!myCap?.isIncidentsAccess;
+  const canViewCybersecurityMetrics = !!myCap?.isCybersecurityAccess;
   const canViewDuties = !!myCap?.isDutyViewerAccess || !!myCap?.isDutyAdminAccess;
 
   useEffect(() => {
@@ -718,7 +717,9 @@ export default function DashboardPage() {
                       </Typography>
                       <Typography variant="h6">{item.name}</Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {item.daysSince == null ? '' : `${item.daysSince} days since previous duty`}
+                        {item.nextInRotationName
+                          ? `Next in rotation: ${item.nextInRotationName}`
+                          : item.daysSince == null ? '' : `${item.daysSince} days since previous duty`}
                       </Typography>
                       {item.isSubstitute && <Chip size="small" color="warning" label="Substitute" sx={{ mt: 1 }} />}
                     </CardContent>
@@ -1047,7 +1048,7 @@ export default function DashboardPage() {
       )}
 
       {/* Incident Response Tracking — visible only to super_admin, CO, Section Head, and Cybersecurity Officer */}
-      {(isFullDashboard || isSectionHead || isCybersecurityOfficer) && incidentStats && appMode !== 'ticketing_only' && (
+      {canViewSecurityIncidents && incidentStats && appMode !== 'ticketing_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box display="flex" alignItems="center" gap={2} mb={3}>

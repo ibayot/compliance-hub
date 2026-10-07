@@ -10,7 +10,7 @@ import { CreateIncidentDto, UpdateIncidentDto } from '../dto/incident.dto';
 @ApiTags('incidents')
 @Controller('incidents')
 @UseGuards(JwtAuthGuard, CapabilityGuard)
-@RequireCapability('isReportsAccess')
+@RequireCapability('isIncidentsAccess')
 export class IncidentsController {
   constructor(
     private readonly incidentsService: IncidentsService,
@@ -18,25 +18,25 @@ export class IncidentsController {
   ) {}
 
   @Post()
-  @RequireCapability('isReportsAccess')
+  @RequireCapability('isIncidentsManage')
   async create(@Body() createDto: CreateIncidentDto) {
     return await this.incidentsService.create(createDto);
   }
 
   @Get()
-  @RequireCapability('isReportsAccess')
+  @RequireCapability('isIncidentsAccess')
   async findAll() {
     return await this.incidentsService.findAll();
   }
 
   @Get('statistics')
-  @RequireCapability('isReportsAccess')
+  @RequireCapability('isIncidentsAccess')
   async getStatistics() {
     return await this.incidentsService.getStatistics();
   }
 
   @Get('today-stats')
-  @RequireCapability('isReportsAccess')
+  @RequireCapability('isIncidentsAccess')
   async getTodayStats() {
     const now = new Date();
     const startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 0, 0);
@@ -46,31 +46,31 @@ export class IncidentsController {
   }
 
   @Get('period-stats')
-  @RequireCapability('isReportsAccess')
+  @RequireCapability('isIncidentsAccess')
   async getPeriodStats() {
     return await this.incidentsService.getPeriodStatistics();
   }
 
   @Get('snapshots/latest')
-  @RequireCapability('isReportsAccess')
+  @RequireCapability('isIncidentsAccess')
   async getLatestSnapshot() {
     return await this.snapshotService.getLatestSnapshot();
   }
 
   @Get('snapshots/:date')
-  @RequireCapability('isReportsAccess')
+  @RequireCapability('isIncidentsAccess')
   async getSnapshotsByDate(@Param('date') date: string) {
     return await this.snapshotService.getSnapshots(new Date(date));
   }
 
   @Get(':id')
-  @RequireCapability('isReportsAccess')
+  @RequireCapability('isIncidentsManage')
   async findOne(@Param('id') id: number) {
     return await this.incidentsService.findOne(id);
   }
 
   @Put(':id')
-  @RequireCapability('isReportsAccess')
+  @RequireCapability('isIncidentsDelete')
   async update(@Param('id') id: number, @Body() updateDto: UpdateIncidentDto) {
     return await this.incidentsService.update(id, {
       ...updateDto,

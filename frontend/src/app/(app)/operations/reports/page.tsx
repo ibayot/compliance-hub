@@ -431,6 +431,7 @@ export default function TicketReportsPage() {
     slaPieData.length > 0 ||
     (result?.slaByType?.length ?? 0) > 0 ||
     (result?.slaByTechnician?.length ?? 0) > 0 ||
+    (result?.weeklyTechnicianPerformance?.length ?? 0) > 0 ||
     (result?.avgRatingByTechnician?.length ?? 0) > 0;
 
   const sectionTitle = tab === 0 ? 'Overview & Ratings'
@@ -496,17 +497,18 @@ export default function TicketReportsPage() {
     ] as ReportVisualSpec[];
     if (tab === 1) return [{ id: 'issues_all_chart', title: 'Tickets by issue', kind: 'chart', values: allIssuesAggregated.map((row) => ({ label: row.name, value: Number(row.count || 0) })), headers: ['Category', 'Issue', 'Tickets'], rows: allIssuesAggregated.map((row) => [row.categoryName, row.issueName, String(row.count)]) }] as ReportVisualSpec[];
     if (tab === 2) return [
-      { id: 'sla_insights_chart', title: 'Configured versus actual SLA', kind: 'chart', values: slaInsights.flatMap((row: any) => [{ label: `${row.issueName || 'Unknown issue'} — configured SLA hours`, value: Number(row.configuredSlaHours || 0) }, { label: `${row.issueName || 'Unknown issue'} — average resolution hours`, value: Number(row.avgResolutionHours || 0) }]), headers: ['Issue and Metric', 'Hours'] },
-      { id: 'sla_insights_table', title: 'SLA insight details', kind: 'table', values: slaInsights.map((row: any) => ({ label: row.issueName || 'Unknown issue', value: Number(row.avgResolutionHours || 0) })), headers: ['Category', 'Issue', 'Resolved Tickets', 'Configured SLA', 'Avg Actual Resolution', 'Status', 'Interpretation'], rows: slaInsights.map((row: any) => [row.categoryName || 'Unknown', row.issueName, String(row.resolvedTicketsCount || 0), row.configuredSlaHours > 0 ? `${Number(row.configuredSlaHours).toFixed(1)}h` : 'None', row.avgResolutionHours ? `${Number(row.avgResolutionHours).toFixed(1)}h` : '—', row.configuredSlaHours > 0 ? (row.isFailingSla ? 'Failing' : 'Healthy') : 'Unmonitored', row.configuredSlaHours <= 0 ? '—' : row.isFailingSla ? 'Consider extending SLA' : row.avgResolutionHours < row.configuredSlaHours * 0.5 ? 'SLA is very generous, consider tightening' : 'SLA is balanced']) },
+      { id: 'sla_insights_chart', title: 'Configured versus actual SLA', kind: 'chart', values: slaInsights.flatMap((row: any) => [{ label: `${row.issueName || 'Unknown issue'} — configured SLA hours`, value: Number(row.configuredSlaHours || 0) }, { label: `${row.issueName || 'Unknown issue'} — average active resolution hours`, value: Number(row.avgResolutionHours || 0) }]), headers: ['Issue and Metric', 'Hours'] },
+      { id: 'sla_insights_table', title: 'SLA insight details', kind: 'table', values: slaInsights.map((row: any) => ({ label: row.issueName || 'Unknown issue', value: Number(row.avgResolutionHours || 0) })), headers: ['Category', 'Issue', 'Resolved Tickets', 'Configured SLA', 'Avg Active Resolution', 'Status', 'Interpretation'], rows: slaInsights.map((row: any) => [row.categoryName || 'Unknown', row.issueName, String(row.resolvedTicketsCount || 0), row.configuredSlaHours > 0 ? `${Number(row.configuredSlaHours).toFixed(1)}h` : 'None', row.avgResolutionHours ? `${Number(row.avgResolutionHours).toFixed(1)}h` : '—', row.configuredSlaHours > 0 ? (row.isFailingSla ? 'Failing' : 'Healthy') : 'Unmonitored', row.configuredSlaHours <= 0 ? '—' : row.isFailingSla ? 'Review the issue SLA or resolution process' : row.avgResolutionHours < row.configuredSlaHours * 0.5 ? 'The configured SLA may be more generous than the observed active work time' : 'Observed active work time is aligned with the configured SLA']) },
     ] as ReportVisualSpec[];
     if (tab === 3) return [
       { id: 'performance_sla_chart', title: 'SLA performance', kind: 'chart', values: slaPieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })), headers: ['SLA Outcome', 'Resolved Tickets'] },
-      { id: 'performance_sla_category_table', title: 'SLA by support type', kind: 'table', values: result.slaByType.flatMap((row) => [{ label: `${TYPE_LABELS[row.type] ?? row.type} met`, value: Number(row.met || 0) }, { label: `${TYPE_LABELS[row.type] ?? row.type} missed`, value: Number(row.missed || 0) }]), headers: ['Support Type', 'Met', 'Missed', 'Avg Time (hrs)'], rows: result.slaByType.map((row) => [TYPE_LABELS[row.type] ?? row.type, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
-      { id: 'performance_sla_assignee_table', title: 'SLA by assignee', kind: 'table', values: result.slaByTechnician.flatMap((row) => [{ label: `${row.techName || `Assignee #${row.techId}`} met`, value: Number(row.met || 0) }, { label: `${row.techName || `Assignee #${row.techId}`} missed`, value: Number(row.missed || 0) }]), headers: ['Assignee', 'Met', 'Missed', 'Avg Time (hrs)'], rows: result.slaByTechnician.map((row) => [row.techName || `Assignee #${row.techId}`, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
+      { id: 'performance_sla_category_table', title: 'SLA by support type', kind: 'table', values: result.slaByType.flatMap((row) => [{ label: `${TYPE_LABELS[row.type] ?? row.type} met`, value: Number(row.met || 0) }, { label: `${TYPE_LABELS[row.type] ?? row.type} missed`, value: Number(row.missed || 0) }]), headers: ['Support Type', 'Met', 'Missed', 'Avg Active Resolution (hrs)'], rows: result.slaByType.map((row) => [TYPE_LABELS[row.type] ?? row.type, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
+      { id: 'performance_sla_assignee_table', title: 'SLA by assignee', kind: 'table', values: result.slaByTechnician.flatMap((row) => [{ label: `${row.techName || `Assignee #${row.techId}`} met`, value: Number(row.met || 0) }, { label: `${row.techName || `Assignee #${row.techId}`} missed`, value: Number(row.missed || 0) }]), headers: ['Assignee', 'Met', 'Missed', 'Avg Active Resolution (hrs)'], rows: result.slaByTechnician.map((row) => [row.techName || `Assignee #${row.techId}`, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
+      ...(canManageReports && result.weeklyTechnicianPerformance?.length ? [{ id: 'performance_weekly_technicians_table', title: 'Top ticket assignees this week', kind: 'table' as const, values: result.weeklyTechnicianPerformance.map((row) => ({ label: row.techName || `Assignee #${row.techId}`, value: Number(row.weightedScore || 0) })), headers: ['Rank', 'Assignee', 'Resolved', 'SLA Met', 'SLA Missed', 'SLA Rate', 'Avg Active Time', 'Weighted Score'], rows: result.weeklyTechnicianPerformance.map((row, index) => [String(index + 1), row.techName || `Assignee #${row.techId}`, String(row.resolvedTickets), String(row.met), String(row.missed), `${row.slaRate.toFixed(1)}%`, `${row.avgActiveResolutionHours.toFixed(1)}h`, row.weightedScore.toFixed(1)]) }] : []),
       { id: 'performance_assignee_table', title: 'Assignee performance detail', kind: 'table', values: result.avgRatingByTechnician.map((row) => ({ label: row.techName || `Assignee #${row.techId}`, value: Number(row.avg || 0) })), headers: ['Assignee', 'Resolved Tickets', 'Rated Tickets', 'Average Rating'], rows: result.avgRatingByTechnician.map((row) => [row.techName || `Assignee #${row.techId}`, String(row.count), String(row.ratedCount || 0), Number(row.avg || 0).toFixed(2)]) },
     ];
     return chartSpecs;
-  }, [result, tab, issuesSubTab, categoryData, selectedCategoryName, drillDownData, allIssuesAggregated, slaInsights, slaPieData, chartSpecs]);
+  }, [result, tab, issuesSubTab, categoryData, selectedCategoryName, drillDownData, allIssuesAggregated, slaInsights, slaPieData, chartSpecs, canManageReports]);
 
   const handlePrint = async () => {
     if (loading || (tab === 2 && slaLoading) || printSpecs.length === 0) return;
@@ -519,7 +521,7 @@ export default function TicketReportsPage() {
     setPrintError('');
     const assigneeVisualIds = new Set([
       'overview_rating_assignee_chart', 'overview_volume_assignee_chart', 'overview_assignee_table',
-      'performance_sla_assignee_table', 'performance_assignee_table',
+      'performance_sla_assignee_table', 'performance_weekly_technicians_table', 'performance_assignee_table',
     ]);
     const explanationSpecs = printSpecs.map(({ id, title, values }) => {
       // Keep actual staff names in the printed chart/table, but never send them to AI.
@@ -575,14 +577,17 @@ export default function TicketReportsPage() {
         const opening = chart.totalValues > chart.values.length
           ? `SLA outcomes were reported across ${Math.ceil(chart.totalValues / 2)} ${group}s.`
           : `Across the reported ${group}s, ${number(met.reduce((sum, item) => sum + item.value, 0))} resolved tickets met their SLA classification and ${number(missed.reduce((sum, item) => sum + item.value, 0))} missed it.`;
-        return `${opening} ${topMet?.label.replace(/ met$/, '') || 'No group'} had the most met outcomes among the reported comparisons at ${number(topMet?.value || 0)}. Compare each group's met and missed counts alongside its average resolution time before drawing conclusions.`;
+        return `${opening} ${topMet?.label.replace(/ met$/, '') || 'No group'} had the most met outcomes among the reported comparisons at ${number(topMet?.value || 0)}. Compare each group's met and missed counts alongside its average active resolution time before drawing conclusions.`;
+      }
+      if (chart.id === 'performance_weekly_technicians_table') {
+        return `This weekly ranking combines SLA compliance (50%), completed-ticket volume (30%), and active resolution efficiency (20%) for tickets resolved from Monday through the report date. ${highest.label} had the highest weighted score at ${number(highest.value)}. Review the ticket count and SLA outcomes with the score, especially when an assignee handled only a small number of tickets.`;
       }
       if (chart.id === 'sla_insights_chart') {
         const configured = chart.values.filter((item) => item.label.endsWith('configured SLA hours'));
-        const actual = chart.values.filter((item) => item.label.endsWith('average resolution hours'));
+        const actual = chart.values.filter((item) => item.label.endsWith('average active resolution hours'));
         const topConfigured = configured.reduce((best, current) => current.value > best.value ? current : best, configured[0]);
         const topActual = actual.reduce((best, current) => current.value > best.value ? current : best, actual[0]);
-        return `Configured SLA targets and actual average resolution times are compared in hours for the listed issues. ${topConfigured?.label.replace(/ — configured SLA hours$/, '') || 'No issue'} had the longest target at ${number(topConfigured?.value || 0)} hours, while ${topActual?.label.replace(/ — average resolution hours$/, '') || 'no issue'} had the longest actual average at ${number(topActual?.value || 0)} hours. Compare the target and actual time for the same issue before considering an adjustment.`;
+        return `Configured SLA targets and average active resolution times are compared in hours for the listed issues. ${topConfigured?.label.replace(/ — configured SLA hours$/, '') || 'No issue'} had the longest target at ${number(topConfigured?.value || 0)} hours, while ${topActual?.label.replace(/ — average active resolution hours$/, '') || 'no issue'} had the longest active average at ${number(topActual?.value || 0)} hours. Active time excludes queue wait, lunch, non-work periods, pauses, and freezes. Compare the target and active time for the same issue before considering an adjustment.`;
       }
       const subjects: Record<string, string> = {
         overview_support_type_chart: 'tickets were distributed among support types',
@@ -1683,7 +1688,7 @@ export default function TicketReportsPage() {
                           <TableCell>Category</TableCell>
                           <TableCell align="right">Met SLA</TableCell>
                           <TableCell align="right">Missed SLA</TableCell>
-                          <TableCell align="right">Avg Time (hrs)</TableCell>
+                          <TableCell align="right">Avg Active Resolution (hrs)</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1716,7 +1721,7 @@ export default function TicketReportsPage() {
                           <TableCell>Assignee</TableCell>
                           <TableCell align="right">Met SLA</TableCell>
                           <TableCell align="right">Missed SLA</TableCell>
-                          <TableCell align="right">Avg Time (hrs)</TableCell>
+                          <TableCell align="right">Avg Active Resolution (hrs)</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1805,7 +1810,7 @@ export default function TicketReportsPage() {
                           <TableCell>Support Type</TableCell>
                           <TableCell align="right">Met</TableCell>
                           <TableCell align="right">Missed</TableCell>
-                          <TableCell align="right">Avg Time (hrs)</TableCell>
+                          <TableCell align="right">Avg Active Resolution (hrs)</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1815,6 +1820,55 @@ export default function TicketReportsPage() {
                             <TableCell align="right">{row.met}</TableCell>
                             <TableCell align="right">{row.missed}</TableCell>
                             <TableCell align="right">{row.avgResolutionTimeHours}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
+
+            {/* Weekly technician ranking */}
+            {canManageReports && result.weeklyTechnicianPerformance?.length > 0 && (
+              <Grid item xs={12}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                      Top Ticket Assignees This Week
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Ranking uses tickets resolved from Monday through today: 50% SLA compliance,
+                      30% completed-ticket volume, and 20% active resolution efficiency. Paused,
+                      frozen, lunch, non-workday, and other off-clock time are excluded from the
+                      average active time.
+                    </Typography>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Rank</TableCell>
+                          <TableCell>Assignee</TableCell>
+                          <TableCell align="right">Resolved</TableCell>
+                          <TableCell align="right">SLA Rate</TableCell>
+                          <TableCell align="right">Avg Active Time</TableCell>
+                          <TableCell align="right">Score</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {result.weeklyTechnicianPerformance.map((row, index) => (
+                          <TableRow
+                            key={row.techId}
+                            sx={{
+                              bgcolor: index % 2 ? 'action.hover' : 'background.paper',
+                              '&:hover': { bgcolor: 'action.selected' },
+                            }}
+                          >
+                            <TableCell>{index + 1}</TableCell>
+                            <TableCell>{row.techName}</TableCell>
+                            <TableCell align="right">{row.resolvedTickets}</TableCell>
+                            <TableCell align="right">{row.slaRate.toFixed(1)}%</TableCell>
+                            <TableCell align="right">{row.avgActiveResolutionHours.toFixed(1)}h</TableCell>
+                            <TableCell align="right">{row.weightedScore.toFixed(1)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -1836,12 +1890,18 @@ export default function TicketReportsPage() {
                           <TableCell>Assignee</TableCell>
                           <TableCell align="right">Met</TableCell>
                           <TableCell align="right">Missed</TableCell>
-                          <TableCell align="right">Avg Time (hrs)</TableCell>
+                          <TableCell align="right">Avg Active Resolution (hrs)</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {result.slaByTechnician.map((row) => (
-                          <TableRow key={row.techId}>
+                        {result.slaByTechnician.map((row, index) => (
+                          <TableRow
+                            key={row.techId}
+                            sx={{
+                              bgcolor: index % 2 ? 'action.hover' : 'background.paper',
+                              '&:hover': { bgcolor: 'action.selected' },
+                            }}
+                          >
                             <TableCell>{row.techName}</TableCell>
                             <TableCell align="right">{row.met}</TableCell>
                             <TableCell align="right">{row.missed}</TableCell>
@@ -1870,8 +1930,14 @@ export default function TicketReportsPage() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {result.avgRatingByTechnician.map((row) => (
-                        <TableRow key={row.techId}>
+                      {result.avgRatingByTechnician.map((row, index) => (
+                        <TableRow
+                          key={row.techId}
+                          sx={{
+                            bgcolor: index % 2 ? 'action.hover' : 'background.paper',
+                            '&:hover': { bgcolor: 'action.selected' },
+                          }}
+                        >
                           <TableCell>{row.techName}</TableCell>
                           <TableCell align="right">{row.count}</TableCell>
                           <TableCell align="right">{row.ratedCount ?? 0}</TableCell>
@@ -2115,7 +2181,7 @@ export default function TicketReportsPage() {
                     <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
                     <Legend verticalAlign="top" />
                     <Bar dataKey="configuredSlaHours" name="Configured SLA (hrs)" fill="#8884d8" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="avgResolutionHours" name="Actual Avg (hrs)" fill="#82ca9d" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="avgResolutionHours" name="Avg Active Resolution (hrs)" fill="#82ca9d" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}

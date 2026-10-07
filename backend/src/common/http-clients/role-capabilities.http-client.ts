@@ -37,7 +37,15 @@ export type CapabilityKey =
   | 'isAttendanceManage'
   | 'isReportsAccess'
   | 'isReviewsAccess'
+  | 'isReviewsManage'
+  | 'isIncidentsAccess'
+  | 'isIncidentsManage'
+  | 'isIncidentsDelete'
+  | 'isCybersecurityAccess'
+  | 'isCybersecurityManage'
+  | 'isCybersecurityDelete'
   | 'isMovAccess'
+  | 'isMovManage'
   | 'isDocumentsAccess'
   | 'isRepositoryAccess'
   | 'isIssuancesAccess'
@@ -56,6 +64,9 @@ export type CapabilityKey =
   | 'isDocumentsManage'
   | 'isDocumentsDelete'
   | 'isIssuancesManage'
+  | 'isIssuancesReview'
+  | 'isIssuancesAssessmentManage'
+  | 'isIssuancesConfigure'
   | 'isMetricsDelete';
 
 /**
@@ -229,8 +240,20 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
     return !!this.get(role)?.isReviewsAccess;
   }
 
+  isReviewsManage(role: string): boolean { return !!this.get(role)?.isReviewsManage; }
+  isIncidentsAccess(role: string): boolean { return !!this.get(role)?.isIncidentsAccess; }
+  isIncidentsManage(role: string): boolean { return !!this.get(role)?.isIncidentsManage; }
+  isIncidentsDelete(role: string): boolean { return !!this.get(role)?.isIncidentsDelete; }
+  isCybersecurityAccess(role: string): boolean { return !!this.get(role)?.isCybersecurityAccess; }
+  isCybersecurityManage(role: string): boolean { return !!this.get(role)?.isCybersecurityManage; }
+  isCybersecurityDelete(role: string): boolean { return !!this.get(role)?.isCybersecurityDelete; }
+
   isMovAccess(role: string): boolean {
     return !!this.get(role)?.isMovAccess;
+  }
+
+  isMovManage(role: string): boolean {
+    return !!this.get(role)?.isMovManage;
   }
 
   isDocumentsAccess(role: string): boolean {
@@ -280,6 +303,11 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
   isDocumentsManage(role: string): boolean { return !!this.get(role)?.isDocumentsManage; }
   isDocumentsDelete(role: string): boolean { return !!this.get(role)?.isDocumentsDelete; }
   isIssuancesManage(role: string): boolean { return !!this.get(role)?.isIssuancesManage; }
+  isIssuancesReview(role: string): boolean { return !!this.get(role)?.isIssuancesReview; }
+  isIssuancesAssessmentManage(role: string): boolean {
+    return !!this.get(role)?.isIssuancesAssessmentManage;
+  }
+  isIssuancesConfigure(role: string): boolean { return !!this.get(role)?.isIssuancesConfigure; }
   isMetricsDelete(role: string): boolean { return !!this.get(role)?.isMetricsDelete; }
 
   // ── Derived helpers ───────────────────────────────────────────────────────
