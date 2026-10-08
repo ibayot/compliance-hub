@@ -4130,7 +4130,13 @@ export class TicketService implements OnModuleInit {
     dto: SubmitSatisfactionDto,
     requesterId: number,
   ): Promise<Ticket> {
-    const ticket = await this.getTicketById(id, UserRole.USER, requesterId);
+    // Load only the ticket row. getTicketById also loads comments and removes
+    // Internal Notes for requester-facing responses; saving that filtered,
+    // cascaded relation can make TypeORM try to orphan hidden comments by
+    // setting their non-null ticket_id to NULL.
+    const ticket = await this.ticketRepo.findOne({ where: { id } });
+    if (!ticket) throw new NotFoundException('Ticket not found');
+    await this.enrichTicketsWithUsers([ticket]);
 
     if (ticket.requesterId !== requesterId) {
       throw new ForbiddenException('Only the requester can submit satisfaction.');

@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.21] - 2026-10-08 - Service Feedback Reliability
+
+### Fixed
+- Requesters can now submit service feedback for resolved tickets that already contain public comments or Internal Notes. Recording the rating preserves every existing conversation and closes the ticket normally.
+
+### Deployment Note
+- No schema migration is required. Run `db-init/20261008-add-application-changelog-v1.0.21-users.sql` against the Users database to publish the capability-targeted and End User release notes.
+
 ## [1.0.20] - 2026-10-06 - Issuance Governance and Supporting Images
 
 - Corrected the document-review workflow so authorized reviewers can return processed documents for revision, while view-only review access can no longer submit decisions or comparisons.
