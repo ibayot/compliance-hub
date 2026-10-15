@@ -62,11 +62,11 @@ export const STATUS_CHIP_SX: Record<string, TicketChipStyle> = {
 };
 
 export const SLA_CHIP: Record<string, { label: string; sx: TicketChipStyle }> = {
-  met: { label: 'SLA · Met', sx: outlinedChip('#E8F5E9', '#1B5E20', '#43A047') },
-  on_track: { label: 'SLA · On Track', sx: outlinedChip('#E0F2F1', '#004D40', '#00897B') },
-  nearing_sla: { label: 'SLA · Nearing', sx: outlinedChip('#FFF3E0', '#E65100', '#FB8C00') },
-  overdue: { label: 'SLA · Overdue', sx: outlinedChip('#FFEBEE', '#B71C1C', '#E53935') },
-  paused: { label: 'SLA · Paused', sx: outlinedChip('#ECEFF1', '#263238', '#607D8B') },
+  met: { label: 'Met', sx: outlinedChip('#E8F5E9', '#1B5E20', '#43A047') },
+  on_track: { label: 'On Track', sx: outlinedChip('#E0F2F1', '#004D40', '#00897B') },
+  nearing_sla: { label: 'Nearing', sx: outlinedChip('#FFF3E0', '#E65100', '#FB8C00') },
+  overdue: { label: 'Overdue', sx: outlinedChip('#FFEBEE', '#B71C1C', '#E53935') },
+  paused: { label: 'Paused', sx: outlinedChip('#ECEFF1', '#263238', '#607D8B') },
 };
 
 export const TICKET_TYPE_LABELS: Record<TicketType, string> = {
