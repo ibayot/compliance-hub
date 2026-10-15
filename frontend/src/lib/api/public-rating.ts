@@ -16,6 +16,7 @@ export interface PublicRatingTicket {
 
 export interface PublicRatingSession {
   expiresAt: string;
+  units: Array<{ id: number; name: string }>;
   recipient: {
     firstName: string;
     middleInitial: string;
@@ -64,12 +65,7 @@ export const publicRatingApi = {
     }),
   getSession: () => request<PublicRatingSession>('/session/tickets'),
   submit: (ratingItemId: string, data: SubmitSatisfactionDto) =>
-    request<{
-      success: boolean;
-      ratingItemId: string;
-      ratingStatus: 'rated';
-      invitationCompleted: boolean;
-    }>(`/session/tickets/${encodeURIComponent(ratingItemId)}`, {
+    request<{ success: true }>(`/session/tickets/${encodeURIComponent(ratingItemId)}`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),

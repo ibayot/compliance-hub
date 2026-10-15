@@ -12,6 +12,7 @@ import {
   HttpStatus,
   Logger,
   UploadedFiles,
+  UploadedFile,
   UseInterceptors,
   Res,
   BadRequestException,
@@ -22,7 +23,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CapabilityGuard } from '../../../common/guards/capability.guard';
 import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
@@ -35,6 +36,7 @@ import {
   CorrectTicketRequesterDto,
   CorrectTicketAssigneeDto,
   AddCommentDto,
+  ReplaceTicketImageDto,
   SubmitSatisfactionDto,
   EscalateTicketDto,
   ReturnEscalationDto,
@@ -243,6 +245,7 @@ export class TicketController {
     @Query('search') search?: string,
     @Query('pendingSatisfaction') pendingSatisfaction?: string,
     @Request() req?: any,
+    @Query('proxyCreatedByMe') proxyCreatedByMe?: string,
   ) {
     if (
       date &&
@@ -256,7 +259,8 @@ export class TicketController {
     }
     const viewerId = Number(req?.user?.id ?? req?.user?.userId);
     return this.ticketService.getTickets({
-      requestedOnly: true,
+      requestedOnly: proxyCreatedByMe !== 'true' && proxyCreatedByMe !== '1',
+      proxyCreatedByMe: proxyCreatedByMe === 'true' || proxyCreatedByMe === '1',
       viewerId,
       viewerRole: req?.user?.role,
       status,
@@ -560,14 +564,13 @@ export class TicketController {
 
   /** PATCH /tickets/:id */
   @Patch(':id')
-  @RequireCapability('isTicketModuleAccess')
   async updateTicket(@Param('id') id: string, @Body() dto: UpdateTicketDto, @Request() req: any) {
     return this.ticketService.updateTicket(id, dto, req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** GET /tickets/requester/:requesterId/open - open tickets for Duplicate picker */
   @Get('requester/:requesterId/open')
-  @RequireCapability('isTicketModuleAccess')
+  @RequireCapability('isTicketSettingsFocal')
   async getRequesterOpenTickets(
     @Param('requesterId') requesterId: string,
     @Query('sourceTicketId') sourceTicketId: string | undefined,
@@ -621,13 +624,22 @@ export class TicketController {
   }
 
   /** POST /tickets/:id/satisfaction */
+  @Patch(':id/comments/:commentId/image')
+  @UseInterceptors(FileInterceptor('replacement', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async replaceCommentImage(@Param('id') id: string, @Param('commentId') commentId: string,
+    @Body() dto: ReplaceTicketImageDto, @UploadedFile() file: Express.Multer.File, @Request() req: any) {
+    return this.ticketService.replaceCommentImage(id, commentId, dto, file, Number(req.user.id ?? req.user.userId));
+  }
+
+  /** POST /tickets/:id/satisfaction */
   @Post(':id/satisfaction')
   async submitSatisfaction(
     @Param('id') id: string,
     @Body() dto: SubmitSatisfactionDto,
     @Request() req: any,
   ) {
-    return this.ticketService.submitSatisfaction(id, dto, req.user.id ?? req.user.userId);
+    await this.ticketService.submitSatisfaction(id, dto, req.user.id ?? req.user.userId);
+    return { success: true };
   }
 
   /** POST /tickets/:id/rate — backward-compatible alias for satisfaction submission */
@@ -637,7 +649,8 @@ export class TicketController {
     @Body() dto: SubmitSatisfactionDto,
     @Request() req: any,
   ) {
-    return this.ticketService.submitSatisfaction(id, dto, req.user.id ?? req.user.userId);
+    await this.ticketService.submitSatisfaction(id, dto, req.user.id ?? req.user.userId);
+    return { success: true };
   }
 
   /** GET /tickets/satisfaction/unit-suggestions — distinct unit values from past CSAT forms */

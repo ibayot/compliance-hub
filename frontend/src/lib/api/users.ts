@@ -11,6 +11,9 @@ export interface UserRecord {
   phoneNumber?: string;
   sex?: string;
   staffId?: string;
+  /** Pending directory identities use a negative option ID, never an account ID. */
+  pendingStaffId?: string;
+  needsEmail?: boolean;
   position?: string;
   positionFull?: string;
   designation?: string;
@@ -24,6 +27,8 @@ export interface UserRecord {
   isDocumentsDelete?: boolean;
   isUserManagementAdmin?: boolean;
   units?: any[];
+  unitAssignmentSource?: 'manual' | 'ums' | null;
+  unitAssignmentUpdatedAt?: string | null;
 }
 
 export interface CreateUserPayload {
@@ -252,6 +257,14 @@ export const usersApi = {
 
   getProfileUnits: async (): Promise<Array<{ id: number; name: string; hasReportorialRequirements?: boolean }>> => {
     const response = await apiClient.get('/users/profile-units');
+    return response.data;
+  },
+
+  getUnitAssignmentSource: async (): Promise<{
+    source: 'manual' | 'ums' | null;
+    updatedAt: string | null;
+  }> => {
+    const response = await apiClient.get('/users/unit-assignment-source');
     return response.data;
   },
 

@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.22] - 2026-10-15 - Ticket Workflows and Feedback
+
+### Added
+- Replace existing description or comment images one at a time without adding or deleting attachments. Filers/requesters can replace description images; commenters can replace their own images. Regular users are limited to Open, Assigned, and In Progress; RICTMS staff may replace through Resolved, including Paused and Freeze. Prior images remain in the access-controlled timeline.
+- Mark All as Read clears all unread notifications for the signed-in account, including notifications beyond the visible list, and synchronizes read state across open tabs without playing the new-notification sound.
+- Requester searches include eligible staff from the personnel directory. When their email is missing, ticket creation and authorized requester correction require a valid email before saving.
+- Authorized account managers can preview and synchronize staff directory updates. Existing account roles, credentials, emails, and manual unit choices are retained; possible account matches are held for review.
+- A protected staff-directory integration returns only approved identity, position, and unit fields.
+
+### Fixed
+- Requester correction now checks ticket visibility and prevents the actual requester from also being the assigned technician on technician support tickets. Specialized Concerns and the proxy-filer correction exception remain supported.
+- Invitation feedback offers the same active units as the in-app feedback form.
+- Saving ticket details no longer cascades stale or visibility-filtered comment data, preventing newer image replacements from being overwritten by an unrelated ticket update.
+- Initial images are retained when a regular user files a proxy request; the initial-upload exception does not permit ordinary comments on another person's ticket.
+- Proxy Requests is available in My Tickets for every account and lists tickets that the signed-in person filed for someone else, using the selected search and date filters.
+- Duplicate tagging uses the explicit Ticket Admin button rather than the status dropdown. It requires a reason and an older, readable original for the same actual requester; different filers and support types remain allowed.
+- Overdue, resolved, closed, paused, or frozen source tickets and closed or duplicate originals are rejected. Transactional revalidation prevents stale saves and duplicate chains, and the timeline records the original and reason.
+- Duplicate tickets no longer display a misleading SLA Met result or a resolution timestamp, including historical duplicates. Genuine resolved and closed tickets retain their SLA results.
+- Assigned RICTMS staff can manage status, priority, and resolution on their own tickets without requiring full Tickets access. Specialized eligibility and requester restrictions remain enforced.
+- The forced-profile and personal-preferences forms show active units without the earlier reportorial-unit filter. Requested For options load after authentication, retry when ticket creation opens, and explain when an End User has no unit.
+- The redundant Global Settings form was removed from Ticket Settings; the supported form remains in Settings.
+- Priority, ticket status, and SLA badges use consistent, distinguishable styles in the desktop list, mobile cards, and ticket details.
+- Feedback submissions return a simple success confirmation, while detailed form responses are excluded from ordinary ticket responses.
+
+### Enhanced
+- Ticket details provide the requester's contact email, a copy-email action, and an available contact number.
+- Profile and User Management show whether a unit was selected in Compliance Hub or synchronized from UMS.
+- Invitation feedback provides searchable active units and reuses personal details across tickets during the same open feedback session. RICTMS requesters continue to rate through the application.
+
+### Deployment Note
+- Run `db-init/20261015-add-ums-staff-directory-users.sql` against the Users database before rebuilding. Keep `users.email` mandatory; incomplete staff remain in the separate directory. See `docs/ums-staff-directory.md` for synchronization, integration credentials, and cross-schema transaction permissions.
+- Publish the capability-targeted and End User notes with `db-init/20261014-add-application-changelog-v1.0.22-users.sql`, then `db-init/20261015-update-application-changelog-v1.0.22-users.sql`. Existing v1.0.21 notes and acknowledgements are preserved.
+
 ## [1.0.21] - 2026-10-08 - Service Feedback Reliability
 
 ### Fixed

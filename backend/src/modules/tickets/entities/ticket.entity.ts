@@ -8,6 +8,7 @@ import {
   JoinColumn,
   OneToMany,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
 import { UserRef } from '../../../shared/contracts/user-ref';
 import { TicketComment } from './ticket-comment.entity';
 import { TicketCategoryConfig } from './ticket-category.entity';
@@ -171,7 +172,13 @@ export class Ticket {
   satisfactionSubmittedAt: Date | null;
 
   /** Full CLIENT SATISFACTION MEASUREMENT FORM data stored as JSON */
-  @Column({ name: 'satisfaction_form_data', type: 'mediumtext', nullable: true })
+  @Exclude()
+  @Column({
+    name: 'satisfaction_form_data',
+    type: 'mediumtext',
+    nullable: true,
+    select: false,
+  })
   satisfactionFormData: string | null;
 
   /**
@@ -192,7 +199,9 @@ export class Ticket {
   hasUnreadTechnician: boolean;
 
   // --- Relations ---
-  @OneToMany(() => TicketComment, (c) => c.ticket, { cascade: true })
+  // Comments and their image references are persisted only through commentRepo.
+  // A stale/visibility-filtered ticket must never rewrite or orphan comments.
+  @OneToMany(() => TicketComment, (c) => c.ticket, { persistence: false })
   comments: TicketComment[];
 
   @CreateDateColumn({ name: 'created_at' })

@@ -34,7 +34,6 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Grid,
   Checkbox,
   FormGroup,
   InputAdornment,
@@ -45,24 +44,18 @@ import {
   Delete as DeleteIcon,
   ExpandMore as ExpandMoreIcon,
   WarningAmber as WarningIcon,
-  ErrorOutline as ErrorIcon,
-  CheckCircleOutline as CheckIcon,
   Search as SearchIcon,
   FilterAltOff as ClearFiltersIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
-import { useAuth } from '@/contexts/AuthContext';
 import {
   ticketSettingsApi,
-  knowledgeBaseApi,
   TicketCategory,
   TicketKeywordRule,
   TicketIssueType,
   EscalationFocalConfig,
-  ticketsApi,
 } from '@/app/api/references';
 import { feedbackApi, Feedback } from '@/lib/api/feedback';
-import { UserRole } from '@/lib/types/auth';
 import { formatPersonName } from '@/lib/utils/person-name';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -167,11 +160,8 @@ function SettingsFilterPanel({
 }
 
 export default function TicketSettingsPage() {
-  const { user, myCap } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
-  const canManageGlobalSettings = false;
-  const globalSettingsTabIndex = canManageGlobalSettings ? 4 : -1;
-  const userFeedbackTabIndex = canManageGlobalSettings ? 5 : 4;
+  const userFeedbackTabIndex = 4;
 
   const [tab, setTab] = useState(0);
   const [categoryPage, setCategoryPage] = useState(0);
@@ -302,98 +292,6 @@ export default function TicketSettingsPage() {
     }
   }, [feedbackFilter, enqueueSnackbar]);
 
-  // — Global Settings & SLA Insights —
-  const [globalConfig, setGlobalConfig] = useState<{
-    assignmentStrategy: string;
-    roundRobinCapHours: number;
-    autoCloseDays: number;
-    smtpHost?: string | null;
-    smtpPort?: number | null;
-    smtpUser?: string | null;
-    smtpPass?: string | null;
-    smtpFrom?: string | null;
-    smtpFromName?: string | null;
-    primarySmtpDailyLimit?: number;
-    scheduleMode?: string;
-    officeClockin?: string;
-    officeClockout?: string;
-    cwwClockinStart?: string;
-    cwwClockinEnd?: string;
-    cwwClockoutStart?: string;
-    cwwClockoutEnd?: string;
-    isFlagCeremonyPaused?: boolean;
-    isEmailNotificationsEnabled?: boolean;
-    emailTestOverride?: string | null;
-  }>({
-    assignmentStrategy: 'CURRENT_AUTO', roundRobinCapHours: 80, autoCloseDays: 3, smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', smtpFrom: '', smtpFromName: '', primarySmtpDailyLimit: 2000,
-    scheduleMode: 'OFFICE_HOURS',
-    officeClockin: '08:00:00',
-    officeClockout: '17:00:00',
-    cwwClockinStart: '07:00:00',
-    cwwClockinEnd: '08:00:00',
-    cwwClockoutStart: '18:00:00',
-    cwwClockoutEnd: '19:00:00',
-    isFlagCeremonyPaused: false,
-    isEmailNotificationsEnabled: true,
-    emailTestOverride: '',
-  });
-
-  const [globalLoading, setGlobalLoading] = useState(true);
-  const [smtpTestLoading, setSmtpTestLoading] = useState(false);
-  const [smtpTestEmail, setSmtpTestEmail] = useState('');
-
-  const fetchGlobalData = useCallback(async () => {
-    if (!canManageGlobalSettings) return;
-    try {
-      setGlobalLoading(true);
-      const [config] = await Promise.all([
-        ticketSettingsApi.getGlobalConfig(),
-      ]);
-      setGlobalConfig(config);
-    } catch {
-      enqueueSnackbar('Failed to load global config', { variant: 'error' });
-    } finally {
-      setGlobalLoading(false);
-    }
-  }, [enqueueSnackbar, canManageGlobalSettings]);
-
-  useEffect(() => {
-    if (canManageGlobalSettings) {
-      fetchGlobalData();
-    }
-  }, [canManageGlobalSettings, fetchGlobalData]);
-
-
-
-  const handleUpdateGlobalConfig = async () => {
-    try {
-      const { id, createdAt, updatedAt, primarySmtpSentToday, primarySmtpLastSentDate, ...payload } = globalConfig as any;
-      await ticketSettingsApi.updateGlobalConfig(payload);
-      enqueueSnackbar('Global settings updated', { variant: 'success' });
-      fetchGlobalData();
-    } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to update global settings', {
-        variant: 'error',
-      });
-    }
-  };
-
-  const handleTestSmtp = async () => {
-    if (!smtpTestEmail) {
-      enqueueSnackbar('Please enter an email address to test', { variant: 'warning' });
-      return;
-    }
-    setSmtpTestLoading(true);
-    try {
-      const res = await ticketSettingsApi.testEmail(smtpTestEmail);
-      enqueueSnackbar(res.message, { variant: res.sent ? 'success' : 'error' });
-    } catch (err: any) {
-      enqueueSnackbar(err?.response?.data?.message || 'Test email failed', { variant: 'error' });
-    } finally {
-      setSmtpTestLoading(false);
-    }
-  };
-
   const handleUpdateFeedbackStatus = async (id: number, status: 'accepted' | 'rejected') => {
     try {
       await feedbackApi.updateStatus(id, status);
@@ -498,9 +396,8 @@ export default function TicketSettingsPage() {
     fetchIssues();
     fetchFocals();
     fetchFeedbacks();
-    fetchGlobalData();
-  }, [fetchCategories, fetchRules, fetchFocals, fetchFeedbacks, fetchGlobalData]);
-  useSse(['TICKET_UPDATED', 'GLOBAL_SETTINGS_UPDATED'], silentFetchFeedbacks);
+  }, [fetchCategories, fetchRules, fetchIssues, fetchFocals, fetchFeedbacks]);
+  useSse(['TICKET_UPDATED'], silentFetchFeedbacks);
 
   // Category CRUD
   const openCatDialog = (cat?: TicketCategory) => {
@@ -817,7 +714,7 @@ export default function TicketSettingsPage() {
         Ticket Settings
       </Typography>
       <Typography variant="body2" color="text.secondary" mb={3}>
-        Manage support categories and keyword-based auto-shift rules
+        Manage ticket categories, issues, routing rules, escalation focals, and user feedback.
       </Typography>
 
       <Card>
@@ -833,7 +730,6 @@ export default function TicketSettingsPage() {
           <Tab label={`Issues (${issues.length})`} />
           <Tab label={`Keyword Rules (${rules.length})`} />
           <Tab label={`Escalation Focals (${focals.length})`} />
-          {canManageGlobalSettings && <Tab label={`Global Settings`} />}
           <Tab label={`User Feedback (${feedbacks.length})`} />
         </Tabs>
 
@@ -1395,278 +1291,6 @@ export default function TicketSettingsPage() {
                 rowsPerPageOptions={[PAGE_SIZE]}
               />
             )}
-          </CardContent>
-        )}
-
-        {/* ── Global Settings & SLA Insights Tab ── */}
-        {canManageGlobalSettings && tab === globalSettingsTabIndex && (
-          <CardContent>
-            <Typography variant="h6" fontWeight={600} mb={2}>
-              Routing Configuration
-            </Typography>
-            {globalLoading ? (
-              <Box textAlign="center" py={4}>
-                <CircularProgress size={30} />
-              </Box>
-            ) : (
-              <Stack spacing={3} maxWidth={500} mb={4}>
-                <TextField
-                  select
-                  label="Assignment Strategy"
-                  value={globalConfig.assignmentStrategy}
-                  onChange={(e) =>
-                    setGlobalConfig((prev) => ({ ...prev, assignmentStrategy: e.target.value }))
-                  }
-                  fullWidth
-                  helperText={
-                    globalConfig.assignmentStrategy === 'CURRENT_AUTO'
-                      ? 'Assigns tickets to the first eligible technician with exactly zero active tickets.'
-                      : 'Assigns tickets round-robin to the technician who has waited the longest, up to the defined SLA load capacity cap.'
-                  }
-                >
-                  <MenuItem value="CURRENT_AUTO">
-                    Zero-Active {globalConfig.assignmentStrategy === 'CURRENT_AUTO' ? ' - Active' : ''}
-                  </MenuItem>
-                  <MenuItem value="CAPPED_ROUND_ROBIN">
-                    Capped Round-Robin {globalConfig.assignmentStrategy === 'CAPPED_ROUND_ROBIN' ? ' - Active' : ''}
-                  </MenuItem>
-                </TextField>
-
-                <TextField
-                  label="Auto Close (Days)"
-                  type="number"
-                  value={globalConfig.autoCloseDays}
-                  onChange={(e) =>
-                    setGlobalConfig((prev) => ({
-                      ...prev,
-                      autoCloseDays: Number(e.target.value),
-                    }))
-                  }
-                  fullWidth
-                  helperText="Number of days before a resolved ticket is automatically closed."
-                />
-
-                {globalConfig.assignmentStrategy === 'CAPPED_ROUND_ROBIN' && (
-                  <TextField
-                    label="Round-Robin SLA Cap (hours)"
-                    type="number"
-                    value={globalConfig.roundRobinCapHours}
-                    onChange={(e) =>
-                      setGlobalConfig((prev) => ({
-                        ...prev,
-                        roundRobinCapHours: Number(e.target.value),
-                      }))
-                    }
-                    fullWidth
-                    helperText="A technician will not receive new tickets if the sum of SLA hours of their active tickets exceeds this cap."
-                  />
-                )}
-
-                <Box>
-                  <Button variant="contained" onClick={handleUpdateGlobalConfig}>
-                    Save Routing Settings
-                  </Button>
-                </Box>
-              </Stack>
-            )}
-
-            <Typography variant="h6" fontWeight={600} mb={2} mt={4}>
-              Work Hours & Schedule
-            </Typography>
-            {globalLoading ? (
-              <Box textAlign="center" py={4}>
-                <CircularProgress size={30} />
-              </Box>
-            ) : (
-              <Stack spacing={3} maxWidth={500} mb={4}>
-                <TextField
-                  select
-                  label="Schedule Mode"
-                  value={globalConfig.scheduleMode || 'OFFICE_HOURS'}
-                  onChange={(e) => setGlobalConfig((prev) => ({ ...prev, scheduleMode: e.target.value }))}
-                  fullWidth
-                >
-                  <MenuItem value="OFFICE_HOURS">
-                    Standard Office Hours {globalConfig.scheduleMode === 'OFFICE_HOURS' ? ' - Active' : ''}
-                  </MenuItem>
-                  <MenuItem value="CWW">
-                    Compressed Work Week (CWW) {globalConfig.scheduleMode === 'CWW' ? ' - Active' : ''}
-                  </MenuItem>
-                </TextField>
-
-                {globalConfig.scheduleMode === 'OFFICE_HOURS' && (
-                  <>
-                    <TextField
-                      label="Office Clock-in"
-                      type="time"
-                      value={globalConfig.officeClockin || '08:00:00'}
-                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, officeClockin: e.target.value }))}
-                      fullWidth
-                      InputLabelProps={{ shrink: true }}
-                    />
-                    <TextField
-                      label="Office Clock-out"
-                      type="time"
-                      value={globalConfig.officeClockout || '17:00:00'}
-                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, officeClockout: e.target.value }))}
-                      fullWidth
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </>
-                )}
-
-                {globalConfig.scheduleMode === 'CWW' && (
-                  <>
-                    <TextField
-                      label="CWW Clock-in Start"
-                      type="time"
-                      value={globalConfig.cwwClockinStart || '07:00:00'}
-                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, cwwClockinStart: e.target.value }))}
-                      fullWidth
-                      InputLabelProps={{ shrink: true }}
-                    />
-                    <TextField
-                      label="CWW Clock-in End"
-                      type="time"
-                      value={globalConfig.cwwClockinEnd || '08:00:00'}
-                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, cwwClockinEnd: e.target.value }))}
-                      fullWidth
-                      InputLabelProps={{ shrink: true }}
-                    />
-                    <TextField
-                      label="CWW Clock-out Start"
-                      type="time"
-                      value={globalConfig.cwwClockoutStart || '18:00:00'}
-                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, cwwClockoutStart: e.target.value }))}
-                      fullWidth
-                      InputLabelProps={{ shrink: true }}
-                    />
-                    <TextField
-                      label="CWW Clock-out End"
-                      type="time"
-                      value={globalConfig.cwwClockoutEnd || '19:00:00'}
-                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, cwwClockoutEnd: e.target.value }))}
-                      fullWidth
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </>
-                )}
-
-                <Box>
-                  <Button variant="contained" onClick={handleUpdateGlobalConfig}>
-                    Save Work Hours
-                  </Button>
-                </Box>
-              </Stack>
-            )}
-
-            {false && (
-              <>
-                <Typography variant="h6" fontWeight={600} mb={2} mt={4}>
-                  SMTP Configuration
-                </Typography>
-                <Typography variant="body2" color="text.secondary" mb={3}>
-                  Manage corporate email credentials for outbound ticket notifications.
-                </Typography>
-                {globalLoading ? (
-                  <Box textAlign="center" py={4}>
-                    <CircularProgress size={30} />
-                  </Box>
-                ) : (
-                  <Stack spacing={3} maxWidth={500} mb={4}>
-                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                      <Typography variant="subtitle1" fontWeight={600}>Enable Outbound Emails</Typography>
-                      <Switch
-                        checked={globalConfig.isEmailNotificationsEnabled ?? true}
-                        onChange={(e) => setGlobalConfig((prev) => ({ ...prev, isEmailNotificationsEnabled: e.target.checked }))}
-                        color="primary"
-                      />
-                    </Box>
-
-                    {globalConfig.isEmailNotificationsEnabled && (
-                      <TextField
-                        label="Test Override Email"
-                        value={globalConfig.emailTestOverride || ''}
-                        onChange={(e) => setGlobalConfig((prev) => ({ ...prev, emailTestOverride: e.target.value }))}
-                          inputProps={{ maxLength: 100 }}
-                        fullWidth
-                        helperText="If set, all system emails will be rerouted to this address. Leave blank for normal behavior."
-                      />
-                    )}
-
-                    <Divider sx={{ my: 2 }} />
-
-                    <TextField
-                      label="SMTP Host"
-                      value={globalConfig.smtpHost || ''}
-                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpHost: e.target.value }))}
-                        inputProps={{ maxLength: 100 }}
-                      fullWidth
-                    />
-                    <TextField
-                      label="SMTP Port"
-                      type="number"
-                      value={globalConfig.smtpPort || ''}
-                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpPort: Number(e.target.value) }))}
-                      fullWidth
-                    />
-                    <TextField
-                      label="SMTP Username"
-                      value={globalConfig.smtpUser || ''}
-                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpUser: e.target.value }))}
-                        inputProps={{ maxLength: 100 }}
-                      fullWidth
-                    />
-                    <TextField
-                      label="SMTP Password"
-                      type="password"
-                      value={globalConfig.smtpPass || ''}
-                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpPass: e.target.value }))}
-                        inputProps={{ maxLength: 100 }}
-                      fullWidth
-                      helperText="Leave blank to keep existing password"
-                    />
-                    <TextField
-                      label="From Email Address"
-                      value={globalConfig.smtpFrom || ''}
-                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpFrom: e.target.value }))}
-                        inputProps={{ maxLength: 100 }}
-                      fullWidth
-                    />
-                    <TextField
-                      label="From Name"
-                      value={globalConfig.smtpFromName || ''}
-                      onChange={(e) => setGlobalConfig((prev) => ({ ...prev, smtpFromName: e.target.value }))}
-                        inputProps={{ maxLength: 100 }}
-                      fullWidth
-                    />
-                    <Box display="flex" gap={2} alignItems="flex-start">
-                      <Button variant="contained" onClick={handleUpdateGlobalConfig}>
-                        Save SMTP Settings
-                      </Button>
-                    </Box>
-                    <Box display="flex" gap={2} alignItems="center" mt={2} p={2} border={1} borderColor="divider" borderRadius={1}>
-                      <TextField
-                        size="small"
-                        label="Test Recipient Email"
-                        value={smtpTestEmail}
-                        onChange={(e) => setSmtpTestEmail(e.target.value)}
-                        sx={{ flexGrow: 1 }}
-                      />
-                      <Button
-                        variant="outlined"
-                        onClick={handleTestSmtp}
-                        disabled={smtpTestLoading}
-                      >
-                        {smtpTestLoading ? 'Sending...' : 'Test Connection'}
-                      </Button>
-                    </Box>
-                  </Stack>
-                )}
-              </>
-            )}
-
-
           </CardContent>
         )}
 

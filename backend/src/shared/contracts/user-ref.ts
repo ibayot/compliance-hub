@@ -7,5 +7,7 @@ export interface UserRef {
   suffix?: string | null;
   role: string;
   staff_id?: string | null;
+  /** Included only in authorized detail responses, never in ticket-list enrichment. */
+  phoneNumber?: string | null;
 
 }

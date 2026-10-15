@@ -311,6 +311,7 @@ export interface Ticket {
     middleName?: string;
     lastName?: string;
     suffix?: string;
+    phoneNumber?: string | null;
   };
   createdById?: number | null;
   createdBy?: {
@@ -430,6 +431,8 @@ export interface CreateTicketDto {
   issueType?: string;
   /** Staff only: override the requester (for walk-ins / phone calls) */
   requesterId?: number;
+  pendingStaffId?: string;
+  requesterEmail?: string;
   assignedToId?: number;
 }
 
@@ -1082,6 +1085,7 @@ export const ticketsApi = {
     priority?: string;
     search?: string;
     pendingSatisfaction?: boolean;
+    proxyCreatedByMe?: boolean;
     page?: number;
     limit?: number;
   }): Promise<PaginatedTickets> => {
@@ -1097,6 +1101,7 @@ export const ticketsApi = {
     if (filters?.priority) params.set('priority', filters.priority);
     if (filters?.search) params.set('search', filters.search);
     if (filters?.pendingSatisfaction) params.set('pendingSatisfaction', 'true');
+    if (filters?.proxyCreatedByMe) params.set('proxyCreatedByMe', 'true');
     if (filters?.page) params.set('page', String(filters.page));
     if (filters?.limit) params.set('limit', String(filters.limit));
     const query = params.toString();
@@ -1250,9 +1255,10 @@ export const ticketsApi = {
     id: string,
     requesterId: number,
     expectedUpdatedAt: string,
+    pending?: { pendingStaffId: string; requesterEmail: string },
   ): Promise<Ticket> => {
     const response = await apiClient.patch(`/tickets/${id}/requester`, {
-      requesterId,
+      ...(pending ? pending : { requesterId }),
       expectedUpdatedAt,
     });
     return response.data;
@@ -1305,7 +1311,10 @@ export const ticketsApi = {
     return response.data;
   },
 
-  submitSatisfaction: async (id: string, data: SubmitSatisfactionDto): Promise<Ticket> => {
+  submitSatisfaction: async (
+    id: string,
+    data: SubmitSatisfactionDto,
+  ): Promise<{ success: true }> => {
     const response = await apiClient.post(`/tickets/${id}/satisfaction`, data);
     return response.data;
   },
@@ -1376,6 +1385,16 @@ export const ticketsApi = {
   /** Mark ticket as viewed by the assigned technician — auto-transitions assigned→in_progress */
   markViewed: async (id: string): Promise<Ticket | null> => {
     const response = await apiClient.patch(`/tickets/${id}/mark-viewed`);
+    return response.data;
+  },
+
+  /** Get ticket timeline events */
+  replaceCommentImage: async (ticketId: string, commentId: string, expectedPath: string, replacement: File): Promise<{success: boolean}> => {
+    const payload = new FormData();
+    payload.append('expectedPath', expectedPath);
+    payload.append('replacement', replacement);
+    const response = await apiClient.patch(`/tickets/${ticketId}/comments/${commentId}/image`, payload,
+      {headers: {'Content-Type': 'multipart/form-data'}});
     return response.data;
   },
 

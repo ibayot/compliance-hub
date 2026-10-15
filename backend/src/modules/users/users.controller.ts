@@ -13,6 +13,7 @@ import {
   UseInterceptors,
   BadRequestException,
   ForbiddenException,
+  Optional,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
@@ -36,6 +37,7 @@ import {
   CAPABILITIES_UPDATED_EVENT,
 } from '../../common/events/event-bus.service';
 import { SSE_EVENT_CHANNEL } from '../../common/events/sse.service';
+import { StaffDirectoryStore } from '../../shared/staff-directory/staff-directory.store';
 
 @ApiTags('users')
 @Controller('users')
@@ -46,6 +48,7 @@ export class UsersController {
     private readonly usersService: UsersService,
     private readonly roleCapabilitiesService: RoleCapabilitiesService,
     private readonly eventBus: EventBusService,
+    @Optional() private readonly staffDirectory?: StaffDirectoryStore,
   ) {}
 
   private emitUserDirectoryUpdated(userId: number, action: 'created' | 'updated' | 'disabled') {
@@ -104,7 +107,10 @@ export class UsersController {
       createUserDto.role = UserRole.USER;
     }
 
-    const created = await this.usersService.create(createUserDto);
+    const created = await this.usersService.create(
+      createUserDto,
+      Number(req.user.id ?? req.user.userId),
+    );
     this.emitUserDirectoryUpdated(created.id, 'created');
     return created;
   }
@@ -119,10 +125,12 @@ export class UsersController {
   /** Returns safe active-user options for ticket proxy creation. */
   @Get('ticket-requesters')
   @UseGuards(CapabilityGuard)
-  @RequireCapability('isTicketModuleAccess')
-  getTicketRequesters(@Request() req: any) {
+  @RequireCapability(['isTicketModuleAccess', 'isTicketRequesterCorrection'])
+  async getTicketRequesters(@Request() req: any) {
     const userId = Number(req.user.id ?? req.user.userId);
-    return this.usersService.findTicketRequesters(userId, req.user.role);
+    const users = await this.usersService.findTicketRequesters(userId, req.user.role);
+    const pending = this.staffDirectory ? await this.staffDirectory.options(userId, req.user.role) : [];
+    return [...users, ...pending];
   }
 
   @Get()
@@ -190,8 +198,13 @@ export class UsersController {
   }
 
   @Get('profile-units')
-  getProfileUnits(@Request() req: any) {
-    return this.usersService.getProfileUnits(req.user.role);
+  getProfileUnits() {
+    return this.usersService.getProfileUnits();
+  }
+
+  @Get('unit-assignment-source')
+  getUnitAssignmentSource(@Request() req: any) {
+    return this.usersService.getUnitAssignmentSource(Number(req.user.id ?? req.user.userId));
   }
 
   @Get('validate-staff-id')

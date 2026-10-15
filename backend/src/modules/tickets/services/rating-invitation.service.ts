@@ -14,6 +14,7 @@ import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsString, Length } from 'cl
 import { createHmac, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { UsersHttpClient, UserStub } from '../../../common/http-clients/users.http-client';
+import { UnitsHttpClient } from '../../../common/http-clients/units.http-client';
 import { formatPersonName } from '../../../shared/utils/person-name';
 import {
   RatingInvitation,
@@ -68,6 +69,7 @@ export class RatingInvitationService {
     @InjectRepository(TicketingConfig)
     private readonly configRepo: Repository<TicketingConfig>,
     private readonly usersHttpClient: UsersHttpClient,
+    private readonly unitsHttpClient: UnitsHttpClient,
     private readonly emailService: EmailService,
     private readonly ticketService: TicketService,
     private readonly dataSource: DataSource,
@@ -529,6 +531,7 @@ export class RatingInvitationService {
 
   async getSessionTickets(sessionToken: string | null, metadata: RatingRequestMetadata) {
     const { invitation, requester: user } = await this.getInvitationBySession(sessionToken);
+    const units = await this.unitsHttpClient.getUnits();
     const links = await this.invitationTicketRepo.find({
       where: { invitationId: invitation.id },
       order: { createdAt: 'ASC' },
@@ -558,6 +561,10 @@ export class RatingInvitationService {
         suffix: user.suffix || '',
         unitSection: user.units?.[0]?.name || '',
       },
+      // The internal units endpoint already limits this to active units. Rating
+      // a service must offer the same units as the signed-in feedback form;
+      // account-creation restrictions do not apply to a feedback answer.
+      units: units.map((unit) => ({ id: unit.id, name: unit.name })),
       tickets: links
         .map((link) => {
           const ticket = ticketById.get(link.ticketId);
@@ -671,11 +678,6 @@ export class RatingInvitationService {
         `Feedback saved but rating invitation synchronization failed (${String(error?.code || 'unknown')}).`,
       );
     }
-    return {
-      success: true,
-      ratingItemId,
-      ratingStatus: 'rated',
-      invitationCompleted,
-    };
+    return { success: true };
   }
 }

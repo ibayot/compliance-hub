@@ -22,6 +22,12 @@ import { SecurityConfigService } from './security-config.service';
 import { UserTrustedDevice } from './entities/user-trusted-device.entity';
 import { UserUnitOverride } from './entities/user-unit-override.entity';
 
+export type UnitAssignmentSource = 'manual' | 'ums';
+export type UserWithUnitAssignmentSource = User & {
+  unitAssignmentSource: UnitAssignmentSource | null;
+  unitAssignmentUpdatedAt: Date | null;
+};
+
 const DEFAULT_ROLE_DEFINITIONS: Array<
   Pick<RoleDefinitionEntity, 'value' | 'label' | 'description' | 'assignable' | 'isSystem'> & {
   }
@@ -220,6 +226,8 @@ export class UsersService {
     private readonly configRepository: Repository<SecurityConfig>,
     @InjectRepository(UserTrustedDevice)
     private readonly trustedDeviceRepository: Repository<UserTrustedDevice>,
+    @InjectRepository(UserUnitOverride)
+    private readonly unitOverridesRepository: Repository<UserUnitOverride>,
     private readonly securityConfigService: SecurityConfigService,
   ) {
     if (!this.isDbBootstrapEnabled()) {
@@ -401,7 +409,7 @@ const previousValue = value;
     return units;
   }
 
-  async create(createUserDto: CreateUserDto): Promise<User> {
+  async create(createUserDto: CreateUserDto, actorUserId?: number): Promise<User> {
     createUserDto.email = createUserDto.email.trim().toLowerCase();
     if (!(await this.securityConfigService.isEmailDomainAllowed(createUserDto.email))) {
       throw new BadRequestException('Email domain is not allowed by Security Settings.');
@@ -443,7 +451,22 @@ const previousValue = value;
             false,
           );
         }
-        return this.usersRepository.save(existingUser);
+        return this.usersRepository.manager.transaction(async (manager) => {
+          const saved = await manager.getRepository(User).save(existingUser);
+          const selectedUnitId = existingUser.units?.[0]?.id;
+          if (createUserDto.unitIds !== undefined && selectedUnitId) {
+            await manager.getRepository(UserUnitOverride).upsert(
+              {
+                userId: saved.id,
+                unitId: selectedUnitId,
+                overriddenAt: new Date(),
+                overriddenBy: actorUserId ?? saved.id,
+              },
+              ['userId'],
+            );
+          }
+          return saved;
+        });
       }
       throw new ConflictException('User with this email already exists');
     }
@@ -496,14 +519,46 @@ const previousValue = value;
       units,
     } as any) as unknown as User;
 
-    return await this.usersRepository.save(user);
+    return this.usersRepository.manager.transaction(async (manager) => {
+      const saved = await manager.getRepository(User).save(user);
+      const selectedUnitId = units[0]?.id;
+      if (selectedUnitId) {
+        await manager.getRepository(UserUnitOverride).upsert(
+          {
+            userId: saved.id,
+            unitId: selectedUnitId,
+            overriddenAt: new Date(),
+            overriddenBy: actorUserId ?? saved.id,
+          },
+          ['userId'],
+        );
+      }
+      return saved;
+    });
   }
 
-  async findAll(): Promise<User[]> {
-    const decorate = async (users: User[]): Promise<User[]> => {
-      const capabilityRows = await this.roleCapabilitiesRepository.find({
-        select: ['roleValue', 'isAttendanceEligible', 'isDesktop', 'isItSupport', 'isPantawidIct', 'isIssuancesManage', 'isDocumentsDelete', 'isUserManagementAdmin'],
-      });
+  async findAll(): Promise<UserWithUnitAssignmentSource[]> {
+    const decorate = async (users: User[]): Promise<UserWithUnitAssignmentSource[]> => {
+      const [capabilityRows, overrides] = await Promise.all([
+        this.roleCapabilitiesRepository.find({
+          select: [
+            'roleValue',
+            'isAttendanceEligible',
+            'isDesktop',
+            'isItSupport',
+            'isPantawidIct',
+            'isIssuancesManage',
+            'isDocumentsDelete',
+            'isUserManagementAdmin',
+          ],
+        }),
+        users.length
+          ? this.unitOverridesRepository.find({
+              where: { userId: In(users.map((user) => user.id)) },
+            })
+          : Promise.resolve([]),
+      ]);
+      const overrideByUserId = new Map(overrides.map((override) => [override.userId, override]));
       const eligibleByRole = new Map(
         capabilityRows.map((row) => [row.roleValue, Boolean(row.isAttendanceEligible)]),
       );
@@ -513,14 +568,24 @@ const previousValue = value;
           Boolean(row.isDesktop || row.isItSupport || row.isPantawidIct),
         ]),
       );
-      return users.map((user) => ({
-        ...user,
-        attendanceEligible: eligibleByRole.get(user.role) ?? false,
-        technicianEligible: technicianByRole.get(user.role) ?? false,
-        isIssuancesManage: Boolean(capabilityRows.find((row) => row.roleValue === user.role)?.isIssuancesManage),
-        isDocumentsDelete: Boolean(capabilityRows.find((row) => row.roleValue === user.role)?.isDocumentsDelete),
-        isUserManagementAdmin: Boolean(capabilityRows.find((row) => row.roleValue === user.role)?.isUserManagementAdmin),
-      })) as User[];
+      return users.map((user) => {
+        const override = overrideByUserId.get(user.id);
+        return Object.assign(user, {
+          attendanceEligible: eligibleByRole.get(user.role) ?? false,
+          technicianEligible: technicianByRole.get(user.role) ?? false,
+          isIssuancesManage: Boolean(
+            capabilityRows.find((row) => row.roleValue === user.role)?.isIssuancesManage,
+          ),
+          isDocumentsDelete: Boolean(
+            capabilityRows.find((row) => row.roleValue === user.role)?.isDocumentsDelete,
+          ),
+          isUserManagementAdmin: Boolean(
+            capabilityRows.find((row) => row.roleValue === user.role)?.isUserManagementAdmin,
+          ),
+          unitAssignmentSource: user.units?.length ? (override ? 'manual' : 'ums') : null,
+          unitAssignmentUpdatedAt: override?.overriddenAt ?? null,
+        }) as UserWithUnitAssignmentSource;
+      });
     };
 
     try {
@@ -705,14 +770,25 @@ const previousValue = value;
   }
 
   /** Units available for self-service profile selection. This is not the Units administration endpoint. */
-  async getProfileUnits(role: string): Promise<Unit[]> {
+  async getProfileUnits(): Promise<Unit[]> {
     return this.unitsRepository.find({
-      where: {
-        active: true,
-        hasReportorialRequirements: role !== UserRole.USER,
-      },
+      where: { active: true },
       order: { name: 'ASC' },
     });
+  }
+
+  async getUnitAssignmentSource(userId: number): Promise<{
+    source: UnitAssignmentSource | null;
+    updatedAt: Date | null;
+  }> {
+    const user = await this.findOne(userId);
+    if (!user.units?.[0]) return { source: null, updatedAt: null };
+
+    const override = await this.unitOverridesRepository.findOne({ where: { userId } });
+    return {
+      source: override ? 'manual' : 'ums',
+      updatedAt: override?.overriddenAt ?? null,
+    };
   }
 
   async validateStaffId(staffId: string): Promise<{ valid: boolean }> {

@@ -477,7 +477,7 @@ export default function DashboardPage() {
               color="warning"
               onClick={() => {
                 setPendingSatReminderOpen(false);
-                router.push('/operations/tickets?filter=pending_satisfaction');
+                router.push('/operations/my-tickets?filter=pending_satisfaction');
               }}
             >
               Rate Now
@@ -585,7 +585,7 @@ export default function DashboardPage() {
                   size="small"
                   color="warning"
                   startIcon={<StarIcon />}
-                  onClick={() => router.push('/operations/tickets?filter=pending_satisfaction')}
+                  onClick={() => router.push('/operations/my-tickets?filter=pending_satisfaction')}
                 >
                   Rate Now
                 </Button>
@@ -605,7 +605,7 @@ export default function DashboardPage() {
                 variant="contained"
                 fullWidth
                 startIcon={<TicketIcon />}
-                onClick={() => router.push('/operations/tickets')}
+                onClick={() => router.push('/operations/my-tickets')}
               >
                 My Tickets
               </Button>
@@ -615,7 +615,7 @@ export default function DashboardPage() {
                   fullWidth
                   color="warning"
                   startIcon={<StarIcon />}
-                  onClick={() => router.push('/operations/tickets?filter=pending_satisfaction')}
+                  onClick={() => router.push('/operations/my-tickets?filter=pending_satisfaction')}
                 >
                   Fill Client Satisfaction ({pendingCount})
                 </Button>

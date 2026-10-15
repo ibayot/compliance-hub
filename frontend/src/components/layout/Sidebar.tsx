@@ -95,7 +95,6 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       icon: TicketsIcon,
       path: '/operations/my-tickets',
       service: 'ticketing',
-      staffOnly: true,
     },
     {
       label: 'Knowledge Base',

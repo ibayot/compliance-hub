@@ -73,6 +73,7 @@ export class InternalController {
       attendanceEligible: (user as any).attendanceEligible === true,
       technicianEligible: (user as any).technicianEligible === true,
       staff_id: (user as any).staff_id ?? null,
+      phone_number: user.phoneNumber ?? null,
 
       units: user.units || [],
     };

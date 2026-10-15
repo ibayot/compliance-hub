@@ -24,6 +24,7 @@ interface AuthenticatedImageGalleryProps {
   images: AuthenticatedImageItem[];
   thumbnailStyle?: React.CSSProperties;
   emptyText?: string;
+  onReplace?: (image: AuthenticatedImageItem, index: number) => void;
 }
 
 type LoadedImage = { objectUrl?: string; error?: boolean };
@@ -32,6 +33,7 @@ export default function AuthenticatedImageGallery({
   images,
   thumbnailStyle,
   emptyText,
+  onReplace,
 }: AuthenticatedImageGalleryProps) {
   const [loaded, setLoaded] = useState<Record<string, LoadedImage>>({});
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -97,46 +99,56 @@ export default function AuthenticatedImageGallery({
         {images.map((image, index) => {
           const state = loaded[image.url];
           return (
-            <Box
-              key={`${image.url}-${index}`}
-              component="button"
-              type="button"
-              aria-label={`Open ${image.alt || `image ${index + 1}`}`}
-              onClick={() => state?.objectUrl && setOpenIndex(index)}
-              sx={{
-                p: 0,
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                bgcolor: 'transparent',
-                overflow: 'hidden',
-                cursor: state?.objectUrl ? 'pointer' : 'default',
-                minWidth: 80,
-                minHeight: 80,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {state?.objectUrl ? (
-                <Box
-                  component="img"
-                  src={state.objectUrl}
-                  alt={image.alt || `Image ${index + 1}`}
-                  sx={{
-                    width: 120,
-                    height: 120,
-                    objectFit: 'cover',
-                    display: 'block',
-                    ...thumbnailStyle,
-                  }}
-                />
-              ) : state?.error ? (
-                <Typography color="error" variant="caption" px={1}>
-                  Failed to load
-                </Typography>
-              ) : (
-                <CircularProgress size={22} />
+            <Box key={`${image.url}-${index}`}>
+              <Box
+                component="button"
+                type="button"
+                aria-label={`Open ${image.alt || `image ${index + 1}`}`}
+                onClick={() => state?.objectUrl && setOpenIndex(index)}
+                sx={{
+                  p: 0,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  bgcolor: 'transparent',
+                  overflow: 'hidden',
+                  cursor: state?.objectUrl ? 'pointer' : 'default',
+                  minWidth: 80,
+                  minHeight: 80,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {state?.objectUrl ? (
+                  <Box
+                    component="img"
+                    src={state.objectUrl}
+                    alt={image.alt || `Image ${index + 1}`}
+                    sx={{
+                      width: 120,
+                      height: 120,
+                      objectFit: 'cover',
+                      display: 'block',
+                      ...thumbnailStyle,
+                    }}
+                  />
+                ) : state?.error ? (
+                  <Typography color="error" variant="caption" px={1}>
+                    Failed to load
+                  </Typography>
+                ) : (
+                  <CircularProgress size={22} />
+                )}
+              </Box>
+              {onReplace && (
+                <Button
+                  size="small"
+                  onClick={() => onReplace(image, index)}
+                  aria-label={`Replace ${image.alt || `image ${index + 1}`}`}
+                >
+                  Replace
+                </Button>
               )}
             </Box>
           );

@@ -59,6 +59,9 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      - UMS_STAFF_SYNC_ENABLED=${UMS_STAFF_SYNC_ENABLED:-true}
+      - UMS_STAFF_VIEW=${UMS_STAFF_VIEW:-vStaffBasicInfo}
+      - UMS_DB_DATABASE=${UMS_DB_DATABASE:-02_db_ums_prod}
       - TZ=Asia/Manila
       - DB_HOST=db
       - DB_PASSWORD=admin

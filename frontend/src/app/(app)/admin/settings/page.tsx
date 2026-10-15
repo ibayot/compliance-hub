@@ -1829,7 +1829,7 @@ function FocalUserManagementCard() {
                   </Box>
                 )}
                 <TableContainer ref={tableContainerRef} onScroll={handleTableScroll}>
-                  <Table size="small" sx={{ minWidth: 800 }}>
+                  <Table size="small" sx={{ minWidth: 980 }}>
                   <TableHead>
                     <TableRow>
                       <TableCell>
@@ -1840,6 +1840,9 @@ function FocalUserManagementCard() {
                           <strong>Staff ID</strong>
                         </TableCell>
                       )}
+                      <TableCell>
+                        <strong>Unit / Source</strong>
+                      </TableCell>
                       <TableCell>
                         <strong>Role</strong>
                       </TableCell>
@@ -1869,6 +1872,22 @@ function FocalUserManagementCard() {
                             <Typography variant="body2">{u.staffId || ''}</Typography>
                           </TableCell>
                         )}
+                        <TableCell>
+                          <Typography variant="body2">{u.units?.[0]?.name || 'Not assigned'}</Typography>
+                          {u.unitAssignmentSource && (
+                            <Chip
+                              label={
+                                u.unitAssignmentSource === 'manual'
+                                  ? 'Selected in Compliance Hub'
+                                  : 'Synchronized from UMS'
+                              }
+                              size="small"
+                              color={u.unitAssignmentSource === 'manual' ? 'info' : 'success'}
+                              variant="outlined"
+                              sx={{ mt: 0.5 }}
+                            />
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Chip
                             label={String(u.role || u.roleValue || u.role_value || u.userRole || '—').replace(/_/g, ' ').toUpperCase()}
@@ -2361,6 +2380,10 @@ function ProfilePreferencesCard() {
   const { enqueueSnackbar } = useSnackbar();
   const [units, setUnits] = useState<{ id: number; name: string; hasReportorialRequirements?: boolean }[]>([]);
   const [saving, setSaving] = useState(false);
+  const [unitSource, setUnitSource] = useState<{
+    source: 'manual' | 'ums' | null;
+    updatedAt: string | null;
+  }>({ source: null, updatedAt: null });
   const [form, setForm] = useState({
     phoneNumber: '',
     sex: '',
@@ -2380,9 +2403,14 @@ function ProfilePreferencesCard() {
       positionFull: user.positionFull || '',
       designation: user.designation || '',
     });
-    usersApi.getProfileUnits().then(setUnits).catch(() => {
-      enqueueSnackbar('Unable to load unit options.', { variant: 'error' });
-    });
+    Promise.all([usersApi.getProfileUnits(), usersApi.getUnitAssignmentSource()])
+      .then(([availableUnits, source]) => {
+        setUnits(availableUnits);
+        setUnitSource(source);
+      })
+      .catch(() => {
+        enqueueSnackbar('Unable to load unit information.', { variant: 'error' });
+      });
   }, [user?.id, enqueueSnackbar]);
 
   const handleSave = async () => {
@@ -2422,6 +2450,7 @@ function ProfilePreferencesCard() {
       });
       try {
         await refreshSession();
+        setUnitSource(await usersApi.getUnitAssignmentSource());
       } catch {
         enqueueSnackbar(
           'Your profile was saved, but the session could not be refreshed. Sign in again to apply the updated unit access.',
@@ -2437,7 +2466,7 @@ function ProfilePreferencesCard() {
     }
   };
 
-  const availableUnits = unitsForUserRole(units, user?.role);
+  const availableUnits = units;
 
   return (
     <Card elevation={2}>
@@ -2478,6 +2507,25 @@ function ProfilePreferencesCard() {
               onChange={(unitId) => setForm((prev) => ({ ...prev, unitId: unitId ?? '' }))}
               placeholder="Search units"
             />
+            {unitSource.source && (
+              <Stack direction="row" spacing={1} alignItems="center" mt={1} flexWrap="wrap">
+                <Chip
+                  label={
+                    unitSource.source === 'manual'
+                      ? 'Selected in Compliance Hub'
+                      : 'Synchronized from UMS'
+                  }
+                  size="small"
+                  color={unitSource.source === 'manual' ? 'info' : 'success'}
+                  variant="outlined"
+                />
+                {unitSource.source === 'manual' && unitSource.updatedAt && (
+                  <Typography variant="caption" color="text.secondary">
+                    Updated {new Date(unitSource.updatedAt).toLocaleString('en-PH')}
+                  </Typography>
+                )}
+              </Stack>
+            )}
           </Grid>
           <Grid item xs={12} md={4}>
             <TextField label="Position" value={form.position} onChange={(e) => setForm((prev) => ({ ...prev, position: e.target.value }))} inputProps={{ maxLength: 12 }} fullWidth />

@@ -67,6 +67,9 @@ import { EventBusService } from '../../../common/events/event-bus.service';
 import { KnowledgeBaseService } from './knowledge-base.service';
 import { AttendanceStatus } from '../entities/tech-attendance.entity';
 import { NotificationService } from './notification.service';
+import { StaffDirectoryStore } from '../../../shared/staff-directory/staff-directory.store';
+import { SSE_EVENT_CHANNEL } from '../../../common/events/sse.service';
+import { assertImageReplacementAllowed, commentImagePaths, isDescriptionAttachment } from './ticket-attachment-policy';
 import { formatPersonName } from '../../../shared/utils/person-name';
 
 // --- DTOs --------------------------------------------------------------------
@@ -101,6 +104,14 @@ export class CreateTicketDto {
   @IsNumber()
   @ApiPropertyOptional()
   requesterId?: number;
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{1,6}$/)
+  pendingStaffId?: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  requesterEmail?: string;
   /** Ticket Admin only: bypass automatic routing and assign during creation. */
   @IsOptional()
   @Transform(({ value }) =>
@@ -195,10 +206,20 @@ export class AssignTicketDto {
 }
 
 export class CorrectTicketRequesterDto {
-  @IsNotEmpty()
+  @IsOptional()
   @IsNumber()
   @ApiProperty()
-  requesterId: number;
+  requesterId?: number;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{1,6}$/)
+  pendingStaffId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  requesterEmail?: string;
 
   @IsNotEmpty()
   @IsString()
@@ -264,6 +285,13 @@ export class AddCommentDto {
   @IsInt({ each: true })
   @ApiPropertyOptional({ type: [Number] })
   mentionedUserIds?: number[];
+}
+
+export class ReplaceTicketImageDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  expectedPath: string;
 }
 
 export class CsatFormData {
@@ -429,22 +457,45 @@ export const resolveTicketReportTechnicianId = (
   requestedTechnicianId?: number,
 ): number | undefined => (canManageReports ? requestedTechnicianId : viewerId);
 
+export const assertValidDuplicateSource = (
+  ticket: Pick<Ticket, 'status'> & Partial<Pick<Ticket, 'resolvedAt' | 'resolutionTimeOverride'>>,
+  isOverdue: boolean,
+): void => {
+  if (
+    ![TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(ticket.status) ||
+    ticket.resolvedAt || ticket.resolutionTimeOverride
+  ) {
+    throw new BadRequestException('Only unresolved Open, Assigned, or In Progress tickets can be marked as Duplicate.');
+  }
+  if (isOverdue) {
+    throw new BadRequestException('An overdue ticket cannot be marked as Duplicate.');
+  }
+};
+
 export const assertValidDuplicateOriginal = (
-  ticket: Pick<Ticket, 'id' | 'requesterId'>,
-  original: Pick<Ticket, 'id' | 'requesterId' | 'status'>,
+  ticket: Pick<Ticket, 'id' | 'requesterId' | 'createdAt'>,
+  original: Pick<Ticket, 'id' | 'requesterId' | 'status' | 'createdAt'> & Partial<Pick<Ticket, 'duplicateOfId'>>,
 ): void => {
   if (original.id === ticket.id) {
     throw new BadRequestException('A ticket cannot be marked as a duplicate of itself.');
   }
-  if (original.status === TicketStatus.DUPLICATE) {
+  if (original.status === TicketStatus.DUPLICATE || original.duplicateOfId) {
     throw new BadRequestException(
       'The selected original ticket is itself a duplicate. Select its original ticket instead.',
     );
+  }
+  if (original.status === TicketStatus.CLOSED) {
+    throw new BadRequestException('A closed ticket cannot be selected as the original.');
   }
   if (Number(original.requesterId) !== Number(ticket.requesterId)) {
     throw new BadRequestException(
       'The original and duplicate tickets must have the same requester.',
     );
+  }
+  const sourceTime = new Date(ticket.createdAt).getTime();
+  const originalTime = new Date(original.createdAt).getTime();
+  if (!Number.isFinite(sourceTime) || !Number.isFinite(originalTime) || originalTime >= sourceTime) {
+    throw new BadRequestException('The original ticket must have been created before the duplicate ticket.');
   }
 };
 // --- Service -----------------------------------------------------------------
@@ -486,6 +537,7 @@ export class TicketService implements OnModuleInit {
     private readonly sseService: SseService,
     private readonly notificationService: NotificationService,
     @Optional() private readonly eventBus?: EventBusService,
+    @Optional() private readonly staffDirectory?: StaffDirectoryStore,
   ) {}
 
   /**
@@ -580,6 +632,10 @@ export class TicketService implements OnModuleInit {
   }> {
     let isOverdue = false;
     let isNearingSLA = false;
+    // Duplicate is an administrative outcome, not a successful resolution.
+    if (ticket.status === TicketStatus.DUPLICATE) {
+      return { isOverdue, isNearingSLA, slaPaused: false, slaResumeAt: null, slaResumeCanBeEarly: false };
+    }
     const breachedBeforeSchedulePause = Boolean(
       ticket.slaPausedAt &&
       ticket.slaDeadline &&
@@ -975,7 +1031,7 @@ export class TicketService implements OnModuleInit {
         (e) =>
           ((ticket as Ticket & { canViewInternalNotes?: boolean }).canViewInternalNotes ??
             this.canViewInternalNotes(ticket, viewerRole, viewerId)) ||
-          !(e.eventType === 'comment_added' && e.meta && JSON.parse(e.meta)?.isInternal),
+          !(['comment_added', 'attachment_replaced'].includes(e.eventType) && e.meta && JSON.parse(e.meta)?.isInternal),
       )
       .map((e) => {
         const meta = e.meta ? JSON.parse(e.meta) : null;
@@ -1234,9 +1290,14 @@ export class TicketService implements OnModuleInit {
   ): Promise<
     Ticket & { autoShifted?: boolean; autoAssigned?: boolean; noTechAvailable?: boolean }
   > {
-    const requesterId = dto.requesterId ? dto.requesterId : callerId;
+    this.staffDirectory?.validateFields(dto.requesterId, dto.pendingStaffId, dto.requesterEmail);
+    if (dto.pendingStaffId && !this.staffDirectory) throw new BadRequestException('Staff requester completion is unavailable.');
+    let requesterId = dto.requesterId ? dto.requesterId : callerId;
 
-    let requester = await this.usersHttpClient.getUserById(requesterId);
+    let requester = dto.pendingStaffId
+      ? await this.staffDirectory!.preview(dto.pendingStaffId, dto.requesterEmail!, callerId)
+      : await this.usersHttpClient.getUserById(requesterId);
+    if (dto.pendingStaffId) requesterId = requester.id;
     // A short users-service outage or an open circuit must not turn a valid
     // requester into a false 400. The ticketing DB exposes a read-only users
     // view; use it only as a bounded identity fallback.
@@ -1603,7 +1664,16 @@ export class TicketService implements OnModuleInit {
     //   );
     // }
 
-    const saved = await this.ticketRepo.save(ticket);
+    const saved = dto.pendingStaffId
+      ? await this.dataSource.transaction(async (manager) => {
+          requester = await this.staffDirectory!.complete(manager, dto.pendingStaffId!, dto.requesterEmail!, callerId);
+          requesterId = Number(requester.id);
+          if (assignedToId) this.assertRequesterAssignmentSeparation(ticketType, assignedToId, requesterId, callerId);
+          ticket.requesterId = requesterId;
+          return manager.getRepository(Ticket).save(ticket);
+        })
+      : await this.ticketRepo.save(ticket);
+    if (dto.pendingStaffId) this.emitRequesterDirectoryUpdated(requesterId);
     const persisted = await this.ticketRepo.findOneByOrFail({ id: saved.id });
 
     // Refresh open ticket pages immediately after the ticket is persisted.
@@ -1687,6 +1757,7 @@ export class TicketService implements OnModuleInit {
         callerId,
         callerRole || UserRole.USER,
         images,
+        true,
       ).catch((err) => {
         this.logger.error('Failed to attach initial ticket image.');
       });
@@ -1776,6 +1847,18 @@ export class TicketService implements OnModuleInit {
       // tickets requested for them without gaining access to anyone else's queue.
       qb.where('t.requesterId = :requestedViewerId', {
         requestedViewerId: filters.viewerId,
+      });
+      if (filters.ticketType) {
+        qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+      }
+    } else if (filters.proxyCreatedByMe) {
+      if (!filters.viewerId) {
+        throw new ForbiddenException('An authenticated proxy filer is required.');
+      }
+      // Proxy Requests is a filer-owned queue. It must not be intersected with
+      // the restricted staff member's assigned-ticket queue.
+      qb.where('t.createdById = :proxyCreatorId AND t.requesterId <> :proxyCreatorId', {
+        proxyCreatorId: filters.viewerId,
       });
       if (filters.ticketType) {
         qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
@@ -1913,11 +1996,6 @@ export class TicketService implements OnModuleInit {
         })
         .andWhere('t.satisfactionSubmittedAt IS NULL');
     }
-    if (filters.proxyCreatedByMe) {
-      qb.andWhere('t.createdById = :proxyCreatorId AND t.requesterId <> :proxyCreatorId', {
-        proxyCreatorId: filters.viewerId,
-      });
-    }
     if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
 
     const page = filters.page && filters.page > 0 ? Math.floor(filters.page) : undefined;
@@ -2014,7 +2092,7 @@ export class TicketService implements OnModuleInit {
       relations: ['category', 'issueTypeConfig', 'comments'],
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
-    await this.enrichTicketsWithUsers([ticket]);
+    await this.enrichTicketsWithUsers([ticket], true);
     await this.assertTicketReadAccess(ticket, viewerId, viewerRole);
     const resolutionTimeOverrides = await this.getResolutionTimeOverrideHistory(ticket.id);
 
@@ -2078,7 +2156,12 @@ export class TicketService implements OnModuleInit {
       throw new ForbiddenException('Ticket Requester Correction capability is required.');
     }
 
-    const requester = await this.usersHttpClient.getUserById(dto.requesterId);
+    this.staffDirectory?.validateFields(dto.requesterId, dto.pendingStaffId, dto.requesterEmail);
+    if (!dto.pendingStaffId && (!dto.requesterId || dto.requesterId < 1)) throw new BadRequestException('A requester is required.');
+    if (dto.pendingStaffId && !this.staffDirectory) throw new BadRequestException('Staff requester completion is unavailable.');
+    let requester = dto.pendingStaffId
+      ? await this.staffDirectory!.preview(dto.pendingStaffId, dto.requesterEmail!, actorId, 'correct')
+      : await this.usersHttpClient.getUserById(dto.requesterId!);
     if (!requester || requester.active === false) {
       throw new BadRequestException('The selected requester does not exist or is inactive.');
     }
@@ -2107,11 +2190,33 @@ export class TicketService implements OnModuleInit {
           'Requester correction is only available for Assigned, In Progress, or Resolved tickets.',
         );
       }
-      if (Number(ticket.requesterId) === Number(dto.requesterId)) {
+      if (Number(ticket.requesterId) === Number(requester.id)) {
         throw new BadRequestException('The selected person is already the ticket requester.');
       }
 
       const previousRequesterId = ticket.requesterId;
+      await this.assertTicketReadAccess(ticket, actorId, actorRole);
+      // A factual requester correction must not bypass the actual-requester
+      // restriction. Keep proxy filers eligible to be the recorded assignee.
+      if (ticket.assignedToId) {
+        this.assertRequesterAssignmentSeparation(ticket.ticketType, ticket.assignedToId, requester.id);
+      }
+      if (dto.pendingStaffId) {
+        return this.dataSource.transaction(async (manager) => {
+          const locked = await manager.getRepository(Ticket).findOne({where:{id:ticketId},lock:{mode:'pessimistic_write'}});
+          if (!locked || new Date(locked.updatedAt).getTime() !== new Date(dto.expectedUpdatedAt).getTime()) throw new ConflictException('This ticket changed. Refresh and try again.');
+          if (![TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED].includes(locked.status)) {
+            throw new BadRequestException('Requester correction is only available for Assigned, In Progress, or Resolved tickets.');
+          }
+          await this.assertTicketReadAccess(locked, actorId, actorRole);
+          requester = await this.staffDirectory!.complete(manager, dto.pendingStaffId!, dto.requesterEmail!, actorId, 'correct');
+          if (Number(locked.requesterId) === Number(requester.id)) throw new BadRequestException('The selected person is already the ticket requester.');
+          if (locked.assignedToId) this.assertRequesterAssignmentSeparation(locked.ticketType, locked.assignedToId, requester.id);
+          await manager.getRepository(Ticket).update(locked.id,{requesterId:Number(requester.id)});
+          await manager.getRepository(TicketEvent).save(manager.getRepository(TicketEvent).create({ticketId:locked.id,actorId,eventType:'requester_corrected',meta:JSON.stringify({previousRequesterId,requesterId:requester.id,requesterName:formatPersonName(requester,requester.email)})}));
+          return manager.getRepository(Ticket).findOneByOrFail({id:locked.id});
+        });
+      }
       ticket.requesterId = Number(dto.requesterId);
       const updated = await this.ticketRepo.save(ticket);
       await this.logEvent(updated.id, 'requester_corrected', actorId, {
@@ -2122,6 +2227,7 @@ export class TicketService implements OnModuleInit {
       return updated;
     });
 
+    if (dto.pendingStaffId) this.emitRequesterDirectoryUpdated(requester.id);
     this.sendNotification(
       [requester.id],
       saved.id,
@@ -2411,6 +2517,13 @@ export class TicketService implements OnModuleInit {
     return this.getTicketById(saved.id, actorRole, actorId);
   }
 
+  private emitRequesterDirectoryUpdated(userId: number): void {
+    void this.eventBus?.publish(SSE_EVENT_CHANNEL, {
+      sourceId: 'ticketing-requester-completion',
+      event: { type: 'USER_DIRECTORY_UPDATED', payload: { userId, action: 'created' } },
+    });
+  }
+
   private async assertProxyRequesterAllowed(
     actorId: number,
     actorRole: UserRole | undefined,
@@ -2601,6 +2714,79 @@ export class TicketService implements OnModuleInit {
 
   // --- Update --------------------------------------------------------------
 
+  private async persistDuplicateTicket(
+    ticket: Ticket,
+    expectedUpdatedAt: Date,
+    actorId: number,
+    actorRole: UserRole,
+    reason: string,
+  ): Promise<Ticket> {
+    return this.dataSource.transaction(async (manager) => {
+      const repository = manager.getRepository(Ticket);
+      const locked = new Map<string, Ticket>();
+      // Stable lock ordering also serializes attempts to turn an original into a duplicate.
+      for (const id of [ticket.id, ticket.duplicateOfId!].sort()) {
+        const current = await repository.findOne({
+          where: { id }, lock: { mode: 'pessimistic_write' },
+        });
+        if (!current) throw new BadRequestException('The source or original ticket no longer exists.');
+        locked.set(id, current);
+      }
+      const source = locked.get(ticket.id)!;
+      const original = locked.get(ticket.duplicateOfId!)!;
+      if (new Date(source.updatedAt).getTime() !== new Date(expectedUpdatedAt).getTime()) {
+        throw new ConflictException('The ticket changed. Refresh it before marking it as Duplicate.');
+      }
+      await this.assertTicketReadAccess(source, actorId, actorRole);
+      await this.assertTicketReadAccess(original, actorId, actorRole);
+      assertValidDuplicateOriginal(source, original);
+      if (source.issueTypeId) {
+        source.issueTypeConfig = await manager.getRepository(TicketIssueType).findOne({ where: { id: source.issueTypeId } });
+      }
+      // Apply the same legacy clock projection used by getTicketById before
+      // the final overdue check; relation reads do not lock shared issue rows.
+      if (source.status === TicketStatus.IN_PROGRESS) {
+        if (source.isSlaWaiting) {
+          source.isSlaWaiting = false;
+          source.slaPausedAt = null;
+        }
+        if (!source.slaStartedAt) source.slaStartedAt = new Date(source.lastAssignedAt || source.createdAt);
+        if (!source.slaDeadline && source.assignedToId) {
+          source.slaDeadline = await this.calculateTicketSlaDeadline(source, source.slaStartedAt);
+        }
+      }
+      const escalation = await manager.getRepository(TicketEscalation).findOne({
+        where: { ticketId: source.id }, order: { createdAt: 'DESC' },
+      });
+      if (escalation && [EscalationStatus.PENDING, EscalationStatus.ACCEPTED].includes(escalation.status)) {
+        throw new BadRequestException('Return the active escalation before marking this ticket as Duplicate.');
+      }
+      const dependants = await repository.count({ where: { duplicateOfId: source.id } });
+      if (dependants > 0) {
+        throw new BadRequestException('This ticket is already an original for other duplicates and cannot itself become a duplicate.');
+      }
+      const config = await manager.getRepository(TicketingConfig).findOne({ where: { id: 1 } });
+      const state = await this.projectTicketSlaState(source, config, new Date());
+      assertValidDuplicateSource(source, state.isOverdue);
+      const updatedAt = new Date();
+      // Scalar update avoids saving a filtered/partially loaded comments relation.
+      await repository.update(source.id, {
+        status: TicketStatus.DUPLICATE, duplicateOfId: original.id,
+        slaPausedAt: null, isSlaWaiting: false, updatedAt,
+      });
+      const events = manager.getRepository(TicketEvent);
+      await events.save(events.create({
+        ticketId: source.id, actorId, eventType: 'status_changed',
+        meta: JSON.stringify({
+          from: source.status, to: TicketStatus.DUPLICATE,
+          originalTicketId: original.id, originalTicketNumber: original.ticketNumber,
+          justification: reason, automatic: false,
+        }),
+      }));
+      return Object.assign(ticket, { updatedAt, resolvedAt: null, effectiveResolvedAt: null, isOverdue: false, isNearingSLA: false });
+    });
+  }
+
   async updateTicket(
     id: string,
     dto: UpdateTicketDto,
@@ -2613,6 +2799,7 @@ export class TicketService implements OnModuleInit {
     } = {},
   ): Promise<Ticket> {
     const ticket = await this.getTicketById(id, actorRole, actorId);
+    const expectedUpdatedAt = ticket.updatedAt;
     const originalStatusForLogging = ticket.status as TicketStatus;
     const frozenReturnStatus =
       ticket.status === TicketStatus.FREEZE
@@ -2647,6 +2834,23 @@ export class TicketService implements OnModuleInit {
     if (actorRole === UserRole.USER) {
       if (ticket.requesterId !== actorId) {
         throw new ForbiddenException('You can only update your own tickets.');
+      }
+      const requesterOperationalUpdateRequested =
+        dto.priority !== undefined ||
+        (dto.status !== undefined && dto.status !== TicketStatus.CLOSED) ||
+        dto.resolutionNotes !== undefined ||
+        dto.resolutionSteps !== undefined ||
+        dto.resolutionDate !== undefined ||
+        dto.issueTypeId !== undefined ||
+        dto.duplicateOfId !== undefined ||
+        dto.ticketType !== undefined ||
+        dto.generateKb !== undefined ||
+        dto.categoryId !== undefined ||
+        dto.statusJustification !== undefined;
+      if (requesterOperationalUpdateRequested) {
+        throw new ForbiddenException(
+          'End Users cannot update ticket status, priority, routing, or resolution details.',
+        );
       }
       // QA #10: User can only close their own ticket when it is in Resolved status
       if (dto.status === TicketStatus.CLOSED) {
@@ -2701,6 +2905,7 @@ export class TicketService implements OnModuleInit {
     const isTicketStatusAdmin =
       this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
       this.roleCapSvc.isTicketFocal(actorRole as string);
+    const canMarkDuplicate = this.roleCapSvc.isTicketSettingsFocal(actorRole as string);
     const isAcceptedEscalationOperator =
       !!acceptedEscalation &&
       (this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
@@ -2712,6 +2917,25 @@ export class TicketService implements OnModuleInit {
     const canUpdateOperationalFields = acceptedEscalation
       ? isAcceptedEscalationOperator
       : isTicketStatusAdmin || isEligibleAssignedOperator;
+    const hasTicketModuleAccess = this.roleCapSvc.isTicketModuleAccess(actorRole as string);
+    if (!hasTicketModuleAccess && !isTicketStatusAdmin && !isAcceptedEscalationOperator) {
+      if (!isEligibleAssignedOperator) {
+        throw new ForbiddenException(
+          'Only the assigned RICTMS staff member can update this ticket.',
+        );
+      }
+      const restrictedFieldRequested =
+        dto.subject !== undefined ||
+        dto.description !== undefined ||
+        dto.ticketType !== undefined ||
+        dto.categoryId !== undefined ||
+        dto.issueTypeId !== undefined;
+      if (restrictedFieldRequested) {
+        throw new ForbiddenException(
+          'Assigned-ticket access is limited to status, priority, and resolution updates.',
+        );
+      }
+    }
     const resolutionUpdateRequested =
       dto.resolutionNotes !== undefined ||
       dto.resolutionSteps !== undefined ||
@@ -2842,19 +3066,26 @@ export class TicketService implements OnModuleInit {
       }
     }
 
-    // Priority changes allowed for all technician-level roles and above
+    // Every eligible assigned RICTMS staff member can manage operational priority.
     if (dto.priority !== undefined) {
-      if (
-        !this.roleCapSvc.isFocal(actorRole as string) &&
-        !this.roleCapSvc.isIto(actorRole as string) &&
-        !this.roleCapSvc.isTechnician(actorRole as string)
-      ) {
-        throw new ForbiddenException('Only technicians and above can change ticket priority.');
+      if (!canUpdateOperationalFields) {
+        throw new ForbiddenException(
+          'Only the assigned RICTMS staff member or an authorized ticket focal can change priority.',
+        );
       }
       ticket.priority = dto.priority;
     }
 
     if (dto.status) {
+      if (dto.status === TicketStatus.DUPLICATE && !canMarkDuplicate) {
+        throw new ForbiddenException('Only a Ticket Admin can mark a ticket as Duplicate.');
+      }
+      if (
+        dto.status === TicketStatus.DUPLICATE && latestEscalation &&
+        [EscalationStatus.PENDING, EscalationStatus.ACCEPTED].includes(latestEscalation.status)
+      ) {
+        throw new BadRequestException('Return the active escalation before marking this ticket as Duplicate.');
+      }
       if (latestEscalation && latestEscalation.status === 'pending') {
         throw new ForbiddenException('Cannot change ticket status while an escalation is pending.');
       }
@@ -2881,18 +3112,18 @@ export class TicketService implements OnModuleInit {
         [TicketStatus.OPEN]:
           this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
           this.roleCapSvc.isTicketFocal(actorRole as string)
-            ? [TicketStatus.FREEZE, TicketStatus.DUPLICATE]
-            : [TicketStatus.DUPLICATE],
+            ? [TicketStatus.FREEZE, ...(canMarkDuplicate ? [TicketStatus.DUPLICATE] : [])]
+            : [],
         [TicketStatus.ASSIGNED]:
           this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
           this.roleCapSvc.isTicketFocal(actorRole as string)
             ? [
                 TicketStatus.IN_PROGRESS,
                 TicketStatus.FREEZE,
-                TicketStatus.DUPLICATE,
+                ...(canMarkDuplicate ? [TicketStatus.DUPLICATE] : []),
                 TicketStatus.OPEN,
               ]
-            : [TicketStatus.IN_PROGRESS, TicketStatus.DUPLICATE],
+            : [TicketStatus.IN_PROGRESS],
         [TicketStatus.IN_PROGRESS]:
           this.roleCapSvc.isTicketSettingsFocal(actorRole as string) ||
           this.roleCapSvc.isTicketFocal(actorRole as string)
@@ -2900,9 +3131,9 @@ export class TicketService implements OnModuleInit {
                 TicketStatus.RESOLVED,
                 TicketStatus.PAUSE,
                 TicketStatus.FREEZE,
-                TicketStatus.DUPLICATE,
+                ...(canMarkDuplicate ? [TicketStatus.DUPLICATE] : []),
               ]
-            : [TicketStatus.RESOLVED, TicketStatus.PAUSE, TicketStatus.DUPLICATE],
+            : [TicketStatus.RESOLVED, TicketStatus.PAUSE],
         [TicketStatus.PAUSE]: [TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED],
         [TicketStatus.RESOLVED]: [TicketStatus.CLOSED],
         [TicketStatus.FREEZE]: isTicketStatusAdmin
@@ -2942,6 +3173,17 @@ export class TicketService implements OnModuleInit {
       }
 
       if (dto.status === TicketStatus.DUPLICATE) {
+        const extraFields = Object.keys(dto).filter(
+          (key) => !['status', 'duplicateOfId', 'statusJustification'].includes(key) &&
+            dto[key as keyof UpdateTicketDto] !== undefined,
+        );
+        if (extraFields.length > 0) {
+          throw new BadRequestException('Mark Duplicate cannot be combined with other ticket changes.');
+        }
+        assertValidDuplicateSource(ticket, Boolean((ticket as any).isOverdue));
+        if (!dto.statusJustification?.trim() || dto.statusJustification.trim().length > 2000) {
+          throw new BadRequestException('A reason of 1 to 2000 characters is required when marking a ticket as Duplicate.');
+        }
         if (!dto.duplicateOfId) {
           throw new BadRequestException(
             'duplicateOfId is required when marking a ticket as Duplicate.',
@@ -2951,45 +3193,9 @@ export class TicketService implements OnModuleInit {
         if (!original) throw new BadRequestException('Original ticket not found.');
         assertValidDuplicateOriginal(ticket, original);
         ticket.duplicateOfId = dto.duplicateOfId;
-
-        // --- SLA Freezing Logic for Terminal DUPLICATE State ---
-        if (
-          [TicketStatus.FREEZE, TicketStatus.PAUSE, TicketStatus.OPEN].includes(
-            ticket.status as TicketStatus,
-          ) &&
-          ticket.slaPausedAt
-        ) {
-          const now = new Date();
-          const config = await this.configRepo.findOne({ where: { id: 1 } });
-          let businessSecondsElapsed = await this.calculateBusinessSeconds(
-            ticket.slaPausedAt,
-            now,
-            config as TicketingConfig,
-          );
-          businessSecondsElapsed = capManualPauseBusinessSeconds(
-            originalStatusForLogging,
-            businessSecondsElapsed,
-            ticket.issueTypeConfig?.allowablePauseHours,
-          );
-          ticket.accumulatedPauseSeconds =
-            (ticket.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
-
-          if (ticket.slaDeadline && ticket.issueTypeConfig?.slaHours) {
-            ticket.slaDeadline = await this.calculateSlaDeadline(
-              getSlaClockStartedAt(ticket),
-              getSlaHoursIncludingCreditedPause(
-                ticket.issueTypeConfig.slaHours,
-                ticket.accumulatedPauseSeconds,
-              ),
-              config as TicketingConfig,
-            );
-          }
-          ticket.slaPausedAt = null;
-        }
-
         ticket.status = TicketStatus.DUPLICATE;
-        // Duplicate tickets are terminal — treat like closed
-        if (!ticket.resolvedAt) ticket.resolvedAt = new Date();
+        ticket.slaPausedAt = null;
+        ticket.isSlaWaiting = false;
       } else {
         // Guard: ticket must have a priority before it can be resolved
         if (
@@ -3264,7 +3470,9 @@ export class TicketService implements OnModuleInit {
       ticket.isKbGenerationPending = true;
     }
 
-    const saved = await this.ticketRepo.save(ticket);
+    const saved = dto.status === TicketStatus.DUPLICATE
+      ? await this.persistDuplicateTicket(ticket, expectedUpdatedAt, actorId, actorRole, dto.statusJustification!.trim())
+      : await this.ticketRepo.save(ticket);
     this.sseService.emitTicketUpdated(saved.id);
 
     if (automaticAssignmentDuringUpdate) {
@@ -3321,7 +3529,7 @@ export class TicketService implements OnModuleInit {
           },
           false,
         ).catch(() => {});
-      } else {
+      } else if (dto.status !== TicketStatus.DUPLICATE) {
         this.logEvent(
           saved.id,
           'status_changed',
@@ -3928,6 +4136,57 @@ export class TicketService implements OnModuleInit {
   }
   // --- Comments ------------------------------------------------------------
 
+  async replaceCommentImage(ticketId: string, commentId: string, dto: ReplaceTicketImageDto,
+    file: Express.Multer.File | undefined, actorId: number): Promise<{ success: boolean }> {
+    if (!file || !file.buffer?.length) throw new BadRequestException('Select one replacement image.');
+    if (file.buffer.length > 10 * 1024 * 1024) throw new BadRequestException('Images must not exceed 10 MB.');
+    this.validateImageUpload(file);
+    const actor = await this.usersHttpClient.getUserById(actorId);
+    if (!actor || actor.active === false) throw new ForbiddenException('An active account is required.');
+    let stagedFile: string | undefined;
+    let committed = false;
+    try {
+      await this.dataSource.transaction(async (manager) => {
+        const ticket = await manager.getRepository(Ticket).findOne({ where: { id: ticketId }, lock: { mode: 'pessimistic_write' } });
+        if (!ticket) throw new NotFoundException('Ticket not found');
+        await this.assertTicketReadAccess(ticket, actorId, actor.role as UserRole);
+        const comments = manager.getRepository(TicketComment);
+        const comment = await comments.findOne({ where: { id: commentId, ticketId }, lock: { mode: 'pessimistic_write' } });
+        if (!comment) throw new NotFoundException('Comment not found on this ticket.');
+        assertImageReplacementAllowed(ticket, comment, actorId, actor.role);
+        const escalation = comment.isInternal ? await this.getLatestActiveEscalation(ticketId) : null;
+        if (comment.isInternal && !this.canViewInternalNotes(ticket, actor.role as UserRole, actorId, escalation)) throw new ForbiddenException('You cannot replace an image in this internal note.');
+        const paths = commentImagePaths(comment);
+        const index = paths.indexOf(dto.expectedPath);
+        if (index < 0) throw new ConflictException('This image changed or is no longer attached. Refresh the ticket and try again.');
+        const directory = path.resolve(this.commentAttachmentStorageRoot(), ticketId);
+        fs.mkdirSync(directory, { recursive: true });
+        const filename = this.createSafeImageFilename(file);
+        const candidate = path.join(directory, filename);
+        const descriptor = fs.openSync(candidate, 'wx');
+        stagedFile = candidate; // Ownership starts only after exclusive creation succeeds.
+        try { fs.writeFileSync(descriptor, file.buffer); } finally { fs.closeSync(descriptor); }
+        const replacementPath = `comment-attachments/${ticketId}/${filename}`;
+        const next = [...paths]; next[index] = replacementPath;
+        // Replace exactly one slot; never delete an attachment or cascade-save comments.
+        await comments.update(comment.id, { attachmentPath: null, attachmentPaths: next });
+        const events = manager.getRepository(TicketEvent);
+        await events.save(events.create({ ticketId, actorId, eventType: 'attachment_replaced', meta: JSON.stringify({
+          commentId, scope: isDescriptionAttachment(ticket, comment) ? 'description' : 'comment',
+          imageNumber: index + 1, oldPath: dto.expectedPath, newPath: replacementPath,
+          imageCount: next.length, isInternal: comment.isInternal, automatic: false,
+        }) }));
+      });
+      committed = true;
+      this.sseService.emitTicketUpdated(ticketId);
+      return { success: true };
+    } catch (error) {
+      // Only an uncommitted new upload is cleaned up. Old attached/audit images are never deleted.
+      if (!committed && stagedFile) { try { fs.unlinkSync(stagedFile); } catch {} }
+      throw error;
+    }
+  }
+
   async getInternalNoteMentionCandidates(
     ticketId: string,
     actorRole: UserRole,
@@ -3971,6 +4230,7 @@ export class TicketService implements OnModuleInit {
     actorId: number,
     actorRole: UserRole,
     attachments: Express.Multer.File[] = [],
+    trustedInitialUpload = false,
   ): Promise<TicketComment> {
     const ticket = await this.getTicketById(ticketId, actorRole, actorId);
 
@@ -3983,7 +4243,10 @@ export class TicketService implements OnModuleInit {
     }
 
     // Regular users can only comment on their own tickets
-    if (actorRole === UserRole.USER && ticket.requesterId !== actorId) {
+    const initialUploadByFiler = trustedInitialUpload &&
+      Number(ticket.createdById ?? ticket.requesterId) === Number(actorId) &&
+      dto.content === '[Initial Ticket Attachment]' && !isInternal;
+    if (actorRole === UserRole.USER && ticket.requesterId !== actorId && !initialUploadByFiler) {
       throw new ForbiddenException('You can only comment on your own tickets.');
     }
 
@@ -4359,7 +4622,7 @@ export class TicketService implements OnModuleInit {
   }> {
     const qb = this.ticketRepo
       .createQueryBuilder('t')
-
+      .addSelect('t.satisfactionFormData')
       .where('t.satisfactionRating IS NOT NULL');
 
     if (filters.year) {
@@ -4848,35 +5111,44 @@ export class TicketService implements OnModuleInit {
     return results;
   }
 
-  /** Returns all non-closed, non-duplicate tickets for a given requester (used in Duplicate picker) */
+  /** Only ticket administrators can select older, readable originals for a visible source. */
   async getOpenTicketsForRequester(
     requesterId: number,
     viewerId?: number,
     viewerRole?: UserRole,
     sourceTicketId?: string,
   ): Promise<Ticket[]> {
-    if (viewerRole && viewerId && !this.canViewAllTicketsInTicketing(viewerRole as string)) {
-      if (viewerId !== requesterId) {
-        if (!sourceTicketId) {
-          throw new ForbiddenException(
-            "A visible source ticket is required to load another requester's duplicate choices.",
-          );
-        }
-        const source = await this.getTicketById(sourceTicketId, viewerRole, viewerId);
-        if (Number(source.requesterId) !== Number(requesterId)) {
-          throw new ForbiddenException('The source ticket does not belong to this requester.');
-        }
-      }
+    if (!viewerId || !viewerRole || !this.roleCapSvc.isTicketSettingsFocal(viewerRole)) {
+      throw new ForbiddenException('Only a Ticket Admin can select an original ticket.');
     }
+    if (!sourceTicketId) {
+      throw new BadRequestException('The source ticket is required to select an original.');
+    }
+    const source = await this.getTicketById(sourceTicketId, viewerRole, viewerId);
+    if (Number(source.requesterId) !== Number(requesterId)) {
+      throw new ForbiddenException('The source ticket does not belong to this requester.');
+    }
+    assertValidDuplicateSource(source, Boolean((source as any).isOverdue));
 
-    return this.ticketRepo
+    const candidates = await this.ticketRepo
       .createQueryBuilder('t')
       .where('t.requesterId = :rid', { rid: requesterId })
       .andWhere('t.status NOT IN (:...terminal)', {
         terminal: [TicketStatus.CLOSED, TicketStatus.DUPLICATE],
       })
+      .andWhere('t.createdAt < :sourceCreatedAt', { sourceCreatedAt: source.createdAt })
       .orderBy('t.createdAt', 'DESC')
       .getMany();
+    const visible: Ticket[] = [];
+    for (const candidate of candidates) {
+      try {
+        await this.assertTicketReadAccess(candidate, viewerId, viewerRole);
+        visible.push(candidate);
+      } catch (error) {
+        if (!(error instanceof ForbiddenException)) throw error;
+      }
+    }
+    return visible;
   }
 
   /**
@@ -6201,13 +6473,23 @@ export class TicketService implements OnModuleInit {
 
     const safeFilename = path.basename(filename);
     const comments = await this.commentRepo.find({ where: { ticketId } });
-    const referencedComment = comments.find(
+    let referencedComment = comments.find(
       (c) =>
         (c.attachmentPath && path.basename(String(c.attachmentPath)) === safeFilename) ||
         (c.attachmentPaths ?? []).some(
           (attachmentPath) => path.basename(String(attachmentPath)) === safeFilename,
         ),
     );
+    if (!referencedComment) {
+      const replacements = await this.eventRepo.find({ where: { ticketId, eventType: 'attachment_replaced' } });
+      for (const event of replacements) {
+        let meta: any; try { meta = event.meta ? JSON.parse(event.meta) : null; } catch { continue; }
+        if ([meta?.oldPath, meta?.newPath].some(value => value && path.basename(String(value)) === safeFilename)) {
+          referencedComment = comments.find(comment => comment.id === meta?.commentId);
+          if (referencedComment) break;
+        }
+      }
+    }
     if (!referencedComment) {
       throw new NotFoundException('Comment attachment not found');
     }
@@ -6462,7 +6744,10 @@ export class TicketService implements OnModuleInit {
     return resumedCount;
   }
 
-  public async enrichTicketsWithUsers(tickets: Ticket[]): Promise<Ticket[]> {
+  public async enrichTicketsWithUsers(
+    tickets: Ticket[],
+    includeRequesterContact = false,
+  ): Promise<Ticket[]> {
     if (!tickets?.length) return tickets;
 
     // Fix: Re-assign & Escalating Incorrect AssignedTo
@@ -6503,12 +6788,15 @@ export class TicketService implements OnModuleInit {
     if (userIds.size === 0) return tickets;
 
     const userMap = new Map<number, any>();
+    const contactNumberByUserId = new Map<number, string | null>();
     await Promise.all(
       Array.from(userIds).map(async (id) => {
         const user = await this.usersHttpClient.getUserById(id);
         if (user) {
+          contactNumberByUserId.set(id, user.phone_number?.trim() || null);
+          const { phone_number: _phoneNumber, ...safeUser } = user;
           userMap.set(id, {
-            ...user,
+            ...safeUser,
             firstName: user.first_name,
             middleName: user.middle_name,
             lastName: user.last_name,
@@ -6519,7 +6807,12 @@ export class TicketService implements OnModuleInit {
     );
 
     for (const t of tickets) {
-      if (t.requesterId) t.requester = userMap.get(t.requesterId);
+      if (t.requesterId) {
+        t.requester = userMap.get(t.requesterId);
+        if (includeRequesterContact && t.requester) {
+          t.requester.phoneNumber = contactNumberByUserId.get(t.requesterId) ?? null;
+        }
+      }
       if (t.createdById) t.createdBy = userMap.get(t.createdById);
       if (t.assignedToId) t.assignedTo = userMap.get(t.assignedToId);
       if (t.comments) {

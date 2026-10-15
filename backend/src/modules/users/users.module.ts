@@ -19,6 +19,9 @@ import { SecurityConfigService } from './security-config.service';
 import { UserTrustedDevice } from './entities/user-trusted-device.entity';
 import { UserUnitOverride } from './entities/user-unit-override.entity';
 import { UnitSyncService } from './unit-sync.service';
+import { StaffDirectoryStore } from '../../shared/staff-directory/staff-directory.store';
+import { StaffDirectorySyncService } from './staff-directory-sync.service';
+import { StaffDirectoryManagementController, StaffDirectoryIntegrationController, StaffDirectoryKeyGuard } from './staff-directory.controller';
 
 @Module({
   imports: [
@@ -35,10 +38,13 @@ import { UnitSyncService } from './unit-sync.service';
     ]),
     EventBusModule,
   ],
-  controllers: [SecurityConfigController, UsersController, FeedbackController],
+  controllers: [SecurityConfigController, UsersController, FeedbackController, StaffDirectoryManagementController, StaffDirectoryIntegrationController],
   providers: [
     UsersService,
     UnitSyncService,
+    StaffDirectoryStore,
+    StaffDirectorySyncService,
+    StaffDirectoryKeyGuard,
     RoleCapabilitiesService,
     FeedbackService,
     SecurityConfigService,

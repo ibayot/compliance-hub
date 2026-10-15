@@ -50,6 +50,7 @@ import {
   RatingInvitationController,
 } from './controllers/rating-invitation.controller';
 import { RatingInvitationService } from './services/rating-invitation.service';
+import { StaffDirectoryStore } from '../../shared/staff-directory/staff-directory.store';
 
 @Module({
   imports: [
@@ -100,6 +101,7 @@ import { RatingInvitationService } from './services/rating-invitation.service';
     PublicRatingController,
   ],
   providers: [
+    StaffDirectoryStore,
     TicketService,
     TicketSettingsService,
     AttendanceService,

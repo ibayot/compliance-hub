@@ -31,12 +31,15 @@ import {
   InputAdornment,
   Paper,
   ListItemButton,
+  IconButton,
+  Link,
 } from '@mui/material';
 import { useParams, useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSse } from '@/lib/utils/useSse';
 import { formatPersonName } from '@/lib/utils/person-name';
+import { getTicketSlaStatus as getSlaStatus } from '@/lib/utils/ticket-sla-status';
 import {
   ticketsApi,
   ticketSettingsApi,
@@ -67,12 +70,12 @@ import {
   ContentCopy as DuplicateIcon,
 } from '@mui/icons-material';
 import {
-  PRIORITY_COLOR,
-  STATUS_COLOR,
+  PRIORITY_CHIP_SX,
+  SLA_CHIP,
+  STATUS_CHIP_SX,
   TICKET_TYPE_LABELS as TYPE_LABELS,
 } from '@/lib/utils/ticket-colors';
 
-import { unitsApi } from '@/lib/api/units';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { LinkifiedText } from '@/components/SafeRichText';
@@ -87,10 +90,12 @@ const STATUS_OPTS = [
   { value: 'resolved', label: 'Resolved' },
   { value: 'freeze', label: 'Freeze' },
   { value: 'pause', label: 'Pause' },
-  { value: 'duplicate', label: 'Duplicate' },
 ];
 
 const COMMENTS_PAGE_SIZE = 5;
+const ticketCommentImages = (comment: any): string[] => [...new Set<string>([
+  ...(comment.attachmentPaths ?? []), ...(comment.attachmentPath ? [comment.attachmentPath] : []),
+])];
 
 const formatElapsedHoursMinutes = (milliseconds: number) => {
   const totalMinutes = Math.max(0, Math.floor(milliseconds / (1000 * 60)));
@@ -187,36 +192,6 @@ function SlaCountdownTimer({
   );
 }
 
-function getSlaStatus(
-  ticket: Ticket,
-): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | 'paused' | null {
-  if (!ticket.slaDeadline) return null;
-  const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
-  if (isTerminal) {
-    const deadline = new Date(ticket.slaDeadline).getTime();
-    const resolvedValue = effectiveResolvedAt(ticket);
-    const resolvedTime = resolvedValue ? new Date(resolvedValue).getTime() : Date.now();
-    return resolvedTime <= deadline ? 'met' : 'overdue';
-  }
-  if (ticket.slaPaused) return 'paused';
-  if (ticket.isSlaWaiting && ticket.status !== 'in_progress') return null;
-  // Re-evaluate locally while this page remains open. The server-provided
-  // flags reflect the last fetch and do not change merely because time passed.
-  if (Date.now() >= new Date(ticket.slaDeadline).getTime()) return 'overdue';
-  if (ticket.isOverdue) return 'overdue';
-  if (ticket.isNearingSLA) return 'nearing_sla';
-  return 'on_track';
-}
-
-const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'warning' | 'error' }> =
-  {
-    met: { label: 'Met', color: 'success' },
-    on_track: { label: 'On Track', color: 'info' },
-    nearing_sla: { label: 'Nearing SLA', color: 'warning' },
-    overdue: { label: 'Overdue', color: 'error' },
-    paused: { label: 'SLA Paused', color: 'info' },
-  };
-
 export default function TicketDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -256,6 +231,10 @@ export default function TicketDetailPage() {
   const [mentionedUserIds, setMentionedUserIds] = useState<number[]>([]);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [visibleCommentCount, setVisibleCommentCount] = useState(COMMENTS_PAGE_SIZE);
+  const [imageReplacement, setImageReplacement] = useState<{commentId: string; path: string} | null>(null);
+  const [replacementFiles, setReplacementFiles] = useState<File[]>([]);
+  const [replacingImage, setReplacingImage] = useState(false);
+  const [imageHistory, setImageHistory] = useState<{oldPath: string; newPath: string} | null>(null);
 
   // Status/resolution update (staff)
   const [editingStatus, setEditingStatus] = useState(false);
@@ -283,6 +262,7 @@ export default function TicketDetailPage() {
 
   const [requesterDialogOpen, setRequesterDialogOpen] = useState(false);
   const [requesterOptions, setRequesterOptions] = useState<UserRecord[]>([]);
+  const [pendingRequesterEmail, setPendingRequesterEmail] = useState('');
   const [correctedRequesterId, setCorrectedRequesterId] = useState<number | ''>('');
   const [requesterSnapshotUpdatedAt, setRequesterSnapshotUpdatedAt] = useState('');
   const [savingRequesterCorrection, setSavingRequesterCorrection] = useState(false);
@@ -360,6 +340,8 @@ export default function TicketDetailPage() {
   // Duplicate picker + confirmation
   const [dupConfirmOpen, setDupConfirmOpen] = useState(false);
   const [dupDialogOpen, setDupDialogOpen] = useState(false);
+  const [duplicateReason, setDuplicateReason] = useState('');
+  const [savingDuplicate, setSavingDuplicate] = useState(false);
   const [requesterOpenTickets, setRequesterOpenTickets] = useState<Ticket[]>([]);
   const [selectedDupOfId, setSelectedDupOfId] = useState('');
 
@@ -389,8 +371,6 @@ export default function TicketDetailPage() {
     (ticket.ticketType === 'specialized_concerns' ||
       (Number(user?.id) !== Number(ticket.requesterId) &&
         Number(user?.id) !== Number(ticket.createdById)));
-  const canPriority = canStaff;
-
   useEffect(() => {
     if (!canViewInternalNotes || !isInternal || !ticket?.id) return;
     let cancelled = false;
@@ -469,7 +449,6 @@ export default function TicketDetailPage() {
   const hideTopActionButtons = !!hasPendingEscalation;
   const isCurrentAssignee =
     !isRegularUser &&
-    !!myCap?.isTicketModuleAccess &&
     !!ticket?.assignedToId &&
     Number(ticket.assignedToId) === Number(user?.id) &&
     (ticket.ticketType !== 'specialized_concerns' || !!myCap?.isSpecializedSupport);
@@ -507,7 +486,8 @@ export default function TicketDetailPage() {
     !ticket?.satisfactionSubmittedAt;
   const sortedComments = useMemo(() => {
     const comments = [...(((ticket as any)?.comments ?? []) as any[])].filter(
-      (c) => c.comment !== '[Initial Ticket Attachment]',
+      (c) => !(c.comment === '[Initial Ticket Attachment]' && !c.isInternal &&
+        Number(c.userId) === Number(ticket?.createdById ?? ticket?.requesterId)),
     );
     return comments.sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
@@ -552,6 +532,35 @@ export default function TicketDetailPage() {
   useEffect(() => {
     fetchTicket();
   }, [ticketId]);
+
+  const canReplaceImage = (comment: any) => {
+    if (!ticket || !user) return false;
+    const statuses = user.role === 'user' ? ['open', 'assigned', 'in_progress'] : ['open', 'assigned', 'in_progress', 'pause', 'freeze', 'resolved'];
+    if (!statuses.includes(ticket.status)) return false;
+    const initial = comment.comment === '[Initial Ticket Attachment]' && !comment.isInternal &&
+      Number(comment.userId) === Number(ticket.createdById ?? ticket.requesterId);
+    return initial
+      ? [ticket.createdById ?? ticket.requesterId, ticket.requesterId].some(id => Number(id) === Number(user.id))
+      : Number(comment.userId) === Number(user.id);
+  };
+
+  const openImageReplacement = (comment: any, index: number) => {
+    setReplacementFiles([]);
+    setImageReplacement({commentId: comment.id, path: ticketCommentImages(comment)[index]});
+  };
+
+  const handleImageReplacement = async () => {
+    if (!imageReplacement || replacementFiles.length !== 1 || replacingImage) return;
+    setReplacingImage(true);
+    try {
+      await ticketsApi.replaceCommentImage(ticketId, imageReplacement.commentId, imageReplacement.path, replacementFiles[0]);
+      setImageReplacement(null); setReplacementFiles([]);
+      await Promise.all([fetchTicket(), fetchEvents()]);
+      enqueueSnackbar('Image replaced. The number of attached images is unchanged.', {variant: 'success'});
+    } catch (error: any) {
+      enqueueSnackbar(error?.response?.data?.message || 'Image could not be replaced.', {variant:'error'});
+    } finally { setReplacingImage(false); }
+  };
 
   const fetchEvents = async () => {
     try {
@@ -797,6 +806,7 @@ export default function TicketDetailPage() {
   };
 
   const handleUpdateStatus = async (overrideDupOfId?: string) => {
+    if (savingDuplicate) return;
     if (!canUpdateStatusNow) {
       enqueueSnackbar('You cannot change status while this ticket has an accepted escalation.', {
         variant: 'warning',
@@ -804,23 +814,22 @@ export default function TicketDetailPage() {
       return;
     }
 
-    // Step 1: If marking as duplicate, show a confirmation dialog first
-    if (newStatus === 'duplicate' && !overrideDupOfId) {
-      setDupConfirmOpen(true);
-      return;
-    }
     try {
-      const payload: UpdateTicketDto = {};
-      if (newStatus && newStatus !== ticket?.status) {
-        payload.status = newStatus as Ticket['status'];
+      const payload: UpdateTicketDto = overrideDupOfId
+        ? { status: 'duplicate', duplicateOfId: overrideDupOfId, statusJustification: duplicateReason.trim() }
+        : {};
+      if (overrideDupOfId) setSavingDuplicate(true);
+      if (!overrideDupOfId) {
+        if (newStatus && newStatus !== ticket?.status) {
+          payload.status = newStatus as Ticket['status'];
+        }
+        if (resolutionNotes !== (ticket?.resolutionNotes || '')) {
+          payload.resolutionNotes = resolutionNotes;
+        }
+        if (statusJustification) payload.statusJustification = statusJustification;
+        if (newPriority && newPriority !== ticket?.priority) payload.priority = newPriority as any;
+        if (newStatus === 'resolved') payload.generateKb = generateKb;
       }
-      if (resolutionNotes !== (ticket?.resolutionNotes || '')) {
-        payload.resolutionNotes = resolutionNotes;
-      }
-      if (statusJustification) payload.statusJustification = statusJustification;
-      if (newPriority && newPriority !== ticket?.priority) payload.priority = newPriority as any;
-      if (overrideDupOfId) payload.duplicateOfId = overrideDupOfId;
-      if (newStatus === 'resolved') payload.generateKb = generateKb;
       const updatedTicket = await ticketsApi.update(ticketId, payload);
       setTicket(updatedTicket);
       setNewStatus(updatedTicket.status);
@@ -843,6 +852,8 @@ export default function TicketDetailPage() {
       enqueueSnackbar(err.response?.data?.message || 'Failed to update ticket', {
         variant: 'error',
       });
+    } finally {
+      setSavingDuplicate(false);
     }
   };
 
@@ -854,8 +865,9 @@ export default function TicketDetailPage() {
         ticketId,
       );
       setRequesterOpenTickets(open.filter((t) => t.id !== ticketId));
-    } catch {
-      setRequesterOpenTickets([]);
+    } catch (err: any) {
+      enqueueSnackbar(err.response?.data?.message || 'Unable to load eligible original tickets.', { variant: 'error' });
+      return;
     }
     setSelectedDupOfId('');
     setDupConfirmOpen(false);
@@ -863,7 +875,7 @@ export default function TicketDetailPage() {
   };
 
   const openDuplicateFlow = () => {
-    setNewStatus('duplicate');
+    setDuplicateReason('');
     setDupConfirmOpen(true);
   };
 
@@ -890,6 +902,7 @@ export default function TicketDetailPage() {
     if (!ticket) return;
     setRequesterSnapshotUpdatedAt(ticket.updatedAt);
     setCorrectedRequesterId('');
+    setPendingRequesterEmail('');
     try {
       const users = await usersApi.listTicketRequesters();
       setRequesterOptions(
@@ -905,12 +918,22 @@ export default function TicketDetailPage() {
 
   const handleRequesterCorrection = async () => {
     if (!correctedRequesterId || !requesterSnapshotUpdatedAt) return;
+    const pending = requesterOptions.find((option) => option.id === correctedRequesterId && option.pendingStaffId);
+    if (Number(correctedRequesterId) < 0 && !pending) {
+      enqueueSnackbar('The requester list changed. Please reopen the correction window.', { variant: 'warning' });
+      return;
+    }
+    if (pending && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pendingRequesterEmail.trim())) {
+      enqueueSnackbar('Enter a valid email for the selected requester.', { variant: 'warning' });
+      return;
+    }
     setSavingRequesterCorrection(true);
     try {
       const updated = await ticketsApi.correctRequester(
         ticketId,
         Number(correctedRequesterId),
         requesterSnapshotUpdatedAt,
+        pending ? {pendingStaffId: pending.pendingStaffId!, requesterEmail: pendingRequesterEmail.trim()} : undefined,
       );
       setTicket(updated);
       setRequesterDialogOpen(false);
@@ -1120,8 +1143,7 @@ export default function TicketDetailPage() {
     }
     try {
       setCsatSubmitting(true);
-      const updatedTicket = await ticketsApi.submitSatisfaction(ticketId, { formData: csatForm });
-      setTicket(updatedTicket);
+      await ticketsApi.submitSatisfaction(ticketId, { formData: csatForm });
       setSatDialogOpen(false);
       await Promise.all([fetchTicket(), fetchEvents()]);
       enqueueSnackbar('Thank you for your feedback!', { variant: 'success' });
@@ -1351,21 +1373,19 @@ export default function TicketDetailPage() {
                       ? `Priority: ${ticket.priority.toUpperCase()}`
                       : 'Priority: Not Set'
                   }
-                  color={
-                    ticket.priority ? (PRIORITY_COLOR[ticket.priority] ?? 'default') : 'default'
-                  }
+                  sx={PRIORITY_CHIP_SX[ticket.priority ?? 'unset']}
                   size="small"
                 />
                 <Chip
                   label={ticket.status.replace('_', ' ').toUpperCase()}
-                  color={STATUS_COLOR[ticket.status] ?? 'default'}
+                  sx={STATUS_CHIP_SX[ticket.status]}
                   size="small"
                 />
                 {(() => {
                   const slaStatus = getSlaStatus(ticket);
                   if (!slaStatus) return null;
                   const chipData = SLA_CHIP[slaStatus];
-                  return <Chip label={chipData.label} color={chipData.color as any} size="small" />;
+                  return <Chip label={chipData.label} sx={chipData.sx} size="small" />;
                 })()}
               </Box>
             </Box>
@@ -1377,17 +1397,20 @@ export default function TicketDetailPage() {
                   Update Status
                 </Button>
               )}
-              {canShowStatusAction && ['assigned', 'in_progress'].includes(ticket.status) && (
+              {!!myCap?.isTicketSettingsFocal &&
+                canShowStatusAction &&
+                ['open', 'assigned', 'in_progress'].includes(ticket.status) && (
                 <Button
                   variant="outlined"
                   size="small"
                   color="warning"
                   startIcon={<DuplicateIcon />}
+                  disabled={getSlaStatus(ticket) === 'overdue'}
                   onClick={openDuplicateFlow}
                 >
                   Mark as Duplicate
                 </Button>
-              )}
+                )}
               {ticket.category?.name?.toLowerCase().includes('disposal') && (
                 <>
                   <Button
@@ -1492,8 +1515,8 @@ export default function TicketDetailPage() {
                     //   .getUnitSuggestions()
                     //   .then(setUnitSuggestions)
                     //   .catch(() => { });
-                    unitsApi
-                      .listAll()
+                    usersApi
+                      .getProfileUnits()
                       .then((units) => setUnitSuggestions(units.map((u) => u.name)))
                       .catch(() => {});
                     setSatDialogOpen(true);
@@ -1528,11 +1551,11 @@ export default function TicketDetailPage() {
                   case 'open':
                     allowedValues =
                       myCap?.isTicketSettingsFocal || myCap?.isTicketFocal
-                        ? ['freeze', 'duplicate']
-                        : ['duplicate'];
+                        ? ['freeze']
+                        : [];
                     break;
                   case 'assigned': {
-                    const assignedValues = ['in_progress', 'duplicate'];
+                    const assignedValues = ['in_progress'];
                     if (myCap?.isTicketSettingsFocal || myCap?.isTicketFocal) {
                       assignedValues.push('freeze');
                     }
@@ -1797,31 +1820,31 @@ export default function TicketDetailPage() {
               )}
 
               {(() => {
-                const initialAttachmentComment = ticket.comments?.find(
+                const initialAttachmentComments = ticket.comments?.filter(
                   (c) =>
                     c.comment === '[Initial Ticket Attachment]' &&
+                    !c.isInternal && Number(c.userId) === Number(ticket.createdById ?? ticket.requesterId) &&
                     ((c.attachmentPaths?.length ?? 0) > 0 || c.attachmentPath),
                 );
-                if (!initialAttachmentComment) return null;
-                const attachmentPaths = [
-                  ...(initialAttachmentComment.attachmentPaths ?? []),
-                  ...(initialAttachmentComment.attachmentPath
-                    ? [initialAttachmentComment.attachmentPath]
-                    : []),
-                ].filter((path, index, paths) => paths.indexOf(path) === index);
+                if (!initialAttachmentComments?.length) return null;
 
                 return (
                   <Box mt={2}>
                     <Typography variant="subtitle2" gutterBottom>
                       Attached Images
                     </Typography>
+                    {initialAttachmentComments.map((initialAttachmentComment) => (
+                    <Box key={initialAttachmentComment.id} mb={1}>
                     <AuthenticatedImageGallery
-                      images={attachmentPaths.map((attachmentPath, index) => ({
+                      onReplace={canReplaceImage(initialAttachmentComment) ? (_, index) => openImageReplacement(initialAttachmentComment, index) : undefined}
+                      images={ticketCommentImages(initialAttachmentComment).map((attachmentPath, index) => ({
                         url: `/tickets/comment-attachment/${ticket.id}/${encodeURIComponent(attachmentPath.split('/').pop() || attachmentPath)}`,
                         alt: `Initial attachment ${index + 1}`,
                       }))}
                       thumbnailStyle={{ width: 160, height: 120 }}
                     />
+                    </Box>
+                    ))}
                   </Box>
                 );
               })()}
@@ -1892,7 +1915,7 @@ export default function TicketDetailPage() {
                       ? 'Requested For'
                       : 'Requested By'}
                   </Typography>
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
                     <Typography variant="body2">
                       {(ticket as any).requester
                         ? formatPersonName((ticket as any).requester, `User #${ticket.requesterId}`)
@@ -1902,6 +1925,29 @@ export default function TicketDetailPage() {
                       <Button size="small" onClick={openRequesterCorrection}>
                         Correct
                       </Button>
+                    )}
+                    {ticket.requester?.email && (
+                      <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                          {ticket.requester.email}
+                        </Typography>
+                        <IconButton size="small" aria-label="Copy requester email"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(ticket.requester!.email);
+                              enqueueSnackbar('Requester email copied.', { variant: 'success' });
+                            } catch {
+                              enqueueSnackbar('Could not copy the email. Select the address and copy it manually.', { variant: 'warning' });
+                            }
+                          }}>
+                          <DuplicateIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    )}
+                    {ticket.requester?.phoneNumber && (
+                      <Link href={`tel:${ticket.requester.phoneNumber}`} underline="hover" variant="body2">
+                        {ticket.requester.phoneNumber}
+                      </Link>
                     )}
                   </Stack>
                 </Box>
@@ -1959,7 +2005,7 @@ export default function TicketDetailPage() {
                     {new Date(ticket.createdAt).toLocaleString()}
                   </Typography>
                 </Box>
-                {ticket.resolvedAt && (
+                {ticket.status !== 'duplicate' && ticket.resolvedAt && (
                   <Box>
                     <Typography variant="caption" color="text.secondary">
                       {ticket.resolutionTimeOverride ? 'Recorded Resolution Time' : 'Resolved'}
@@ -1969,7 +2015,7 @@ export default function TicketDetailPage() {
                     </Typography>
                   </Box>
                 )}
-                {ticket.resolutionTimeOverride && (
+                {ticket.status !== 'duplicate' && ticket.resolutionTimeOverride && (
                   <Box>
                     <Typography variant="caption" color="text.secondary">
                       Verified Completion Time
@@ -1982,7 +2028,7 @@ export default function TicketDetailPage() {
                     </Stack>
                   </Box>
                 )}
-                {ticket.slaDeadline &&
+                {ticket.status !== 'duplicate' && ticket.slaDeadline &&
                   (!ticket.isSlaWaiting || ticket.status === 'in_progress') && (
                     <>
                       <Divider sx={{ my: 1 }} />
@@ -2334,10 +2380,8 @@ export default function TicketDetailPage() {
                           </LinkifiedText>
                           <Box mt={1}>
                             <AuthenticatedImageGallery
-                              images={[
-                                ...(c.attachmentPaths ?? []),
-                                ...(c.attachmentPath ? [c.attachmentPath] : []),
-                              ].map((attachmentPath, attachmentIndex) => ({
+                              onReplace={canReplaceImage(c) ? (_, index) => openImageReplacement(c, index) : undefined}
+                              images={ticketCommentImages(c).map((attachmentPath, attachmentIndex) => ({
                                 url: `/tickets/comment-attachment/${c.ticketId}/${encodeURIComponent(attachmentPath.split('/').pop() || attachmentPath)}`,
                                 alt: `Comment attachment ${attachmentIndex + 1}`,
                               }))}
@@ -2472,6 +2516,7 @@ export default function TicketDetailPage() {
                   resolution_time_overridden: 'Resolution Time Corrected',
                   requester_corrected: 'Requested For Corrected',
                   assignee_corrected: 'Assigned To Corrected',
+                  attachment_replaced: 'Image Replaced',
                 };
                 const label = EVENT_LABELS[ev.eventType] ?? ev.eventType.replace(/_/g, ' ');
                 const actorLine = ev.actorName
@@ -2507,6 +2552,14 @@ export default function TicketDetailPage() {
                         <Typography variant="caption" color="text.secondary">
                           {actorLine}
                         </Typography>
+                      )}
+                      {ev.eventType === 'attachment_replaced' && (
+                        <Box mt={1}>
+                          <Typography variant="caption" display="block">
+                            {ev.meta?.scope === 'description' ? 'Description' : 'Comment'} image {ev.meta?.imageNumber} replaced. Attached image count: {ev.meta?.imageCount}.
+                          </Typography>
+                          <Button size="small" onClick={() => setImageHistory({oldPath:String(ev.meta?.oldPath || ''),newPath:String(ev.meta?.newPath || '')})}>View Image History</Button>
+                        </Box>
                       )}
                       {ev.meta?.technicianName && (
                         <Typography variant="caption" color="text.secondary" display="block">
@@ -2635,6 +2688,37 @@ export default function TicketDetailPage() {
         </DialogActions>
       </Dialog>
 
+      <Dialog open={imageHistory !== null} onClose={() => setImageHistory(null)} maxWidth="md" fullWidth>
+        <DialogTitle>Image Replacement History</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" mb={2}>Previous image, followed by its replacement. These are history records, not additional attachments.</Typography>
+          {imageHistory && <AuthenticatedImageGallery images={[
+            {url:`/tickets/comment-attachment/${ticketId}/${encodeURIComponent(imageHistory.oldPath.split('/').pop() || '')}`,alt:'Previous image'},
+            {url:`/tickets/comment-attachment/${ticketId}/${encodeURIComponent(imageHistory.newPath.split('/').pop() || '')}`,alt:'Replacement image'},
+          ]} thumbnailStyle={{width:160,height:120}} />}
+        </DialogContent>
+        <DialogActions><Button onClick={() => setImageHistory(null)}>Close</Button></DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={imageReplacement !== null}
+        onClose={() => !replacingImage && setImageReplacement(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Replace Image</DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{mb:2}}>Replace this image with one new image. No attached images will be added or deleted; the previous image is retained in the ticket history.</Alert>
+          {imageReplacement && <AuthenticatedImageGallery images={[{url:`/tickets/comment-attachment/${ticketId}/${encodeURIComponent(imageReplacement.path.split('/').pop() || '')}`,alt:'Current image'}]} />}
+          <Box mt={2} sx={{pointerEvents: replacingImage ? 'none' : 'auto'}}>
+            <TicketImageDropzone files={replacementFiles} onFilesChange={setReplacementFiles}
+              multiple={false} maxFiles={1} buttonLabel="Select Replacement"
+              label="Select, drag/drop, or paste one replacement image (up to 10 MB)." />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={replacingImage} onClick={() => setImageReplacement(null)}>Cancel</Button>
+          <Button variant="contained" disabled={replacingImage || replacementFiles.length !== 1} onClick={handleImageReplacement}>{replacingImage ? 'Replacing…' : 'Replace'}</Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog
         open={requesterDialogOpen}
         onClose={() => !savingRequesterCorrection && setRequesterDialogOpen(false)}
@@ -2648,12 +2732,17 @@ export default function TicketDetailPage() {
           </Alert>
           <Autocomplete
             options={requesterOptions}
-            getOptionLabel={(option) => formatPersonName(option, option.email)}
+            getOptionLabel={(option) => `${formatPersonName(option, option.email)}${option.needsEmail ? ' — email required' : ''}`}
             value={requesterOptions.find((option) => option.id === correctedRequesterId) ?? null}
-            onChange={(_, option) => setCorrectedRequesterId(option?.id ?? '')}
+            onChange={(_, option) => { setCorrectedRequesterId(option?.id ?? ''); setPendingRequesterEmail(''); }}
             isOptionEqualToValue={(option, value) => option.id === value.id}
             renderInput={(params) => <TextField {...params} label="Requested For" required />}
           />
+          {requesterOptions.some((option) => option.id === correctedRequesterId && option.pendingStaffId) && (
+            <TextField label="Requester Email" type="email" required fullWidth sx={{ mt: 2 }}
+              value={pendingRequesterEmail} onChange={(event) => setPendingRequesterEmail(event.target.value)}
+              inputProps={{ maxLength: 100 }} helperText="A valid, allowed email is required to save this requester correction." />
+          )}
         </DialogContent>
         <DialogActions>
           <Button
@@ -2885,11 +2974,11 @@ export default function TicketDetailPage() {
         <DialogTitle>Mark as Duplicate Of…</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" gutterBottom>
-            Select the original ticket that this is a duplicate of.
+            Select an older ticket for the same requester. Closed tickets cannot be selected.
           </Typography>
           {requesterOpenTickets.length === 0 ? (
             <Alert severity="info" sx={{ mt: 1 }}>
-              No other open tickets found for this requester.
+              No eligible older tickets found for this requester.
             </Alert>
           ) : (
             <Autocomplete
@@ -2903,6 +2992,14 @@ export default function TicketDetailPage() {
               fullWidth
             />
           )}
+          <TextField
+            label="Reason for marking as duplicate"
+            value={duplicateReason}
+            onChange={(event) => setDuplicateReason(event.target.value)}
+            required fullWidth multiline minRows={2}
+            inputProps={{ maxLength: 2000 }}
+            sx={{ mt: 2 }}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDupDialogOpen(false)}>Cancel</Button>
@@ -2910,7 +3007,7 @@ export default function TicketDetailPage() {
             variant="contained"
             color="warning"
             onClick={() => handleUpdateStatus(selectedDupOfId)}
-            disabled={!selectedDupOfId}
+            disabled={!selectedDupOfId || !duplicateReason.trim() || savingDuplicate}
           >
             Confirm Duplicate
           </Button>
@@ -2952,12 +3049,11 @@ export default function TicketDetailPage() {
               <Stack direction="row" spacing={2}>
                 <Autocomplete
                   options={unitSuggestions}
-                  freeSolo
                   fullWidth
-                  disabled={!!user?.units?.[0]?.name}
-                  sx={populatedFieldSx(!!user?.units?.[0]?.name)}
-                  value={csatForm.unitSection}
-                  onInputChange={(_, v) => setCsatForm((f) => ({ ...f, unitSection: v }))}
+                  value={csatForm.unitSection || null}
+                  onChange={(_, value) =>
+                    setCsatForm((form) => ({ ...form, unitSection: value || '' }))
+                  }
                   renderInput={(params) => <TextField {...params} label="Unit/Section *" />}
                 />
                 <TextField

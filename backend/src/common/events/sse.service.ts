@@ -163,6 +163,10 @@ export class SseService implements OnModuleInit {
     });
   }
 
+  emitNotificationsRead(targetUserId: number) {
+    this.emit({ type: 'NOTIFICATIONS_READ', targetUserId });
+  }
+
   emitDutyUpdated() {
     this.emit({ type: 'DUTY_UPDATED' });
   }

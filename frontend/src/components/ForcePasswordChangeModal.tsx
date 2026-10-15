@@ -27,7 +27,6 @@ import { usersApi } from '@/lib/api/users';
 import type { User } from '@/lib/types/auth';
 import { authApi } from '@/lib/api/auth';
 import { useSnackbar } from 'notistack';
-import { unitsForUserRole } from '@/lib/utils/unit-visibility';
 import { SearchableSelect } from '@/components/SearchableSelect';
 
 interface Props {
@@ -107,7 +106,7 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [privacyNoticeAccepted, setPrivacyNoticeAccepted] = useState(false);
-  const availableUnits = unitsForUserRole(units, user.role);
+  const availableUnits = units;
 
   useEffect(() => {
     if (open) {

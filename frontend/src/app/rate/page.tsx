@@ -77,18 +77,36 @@ const transactionDate = (ticket: PublicRatingTicket) =>
     timeZone: 'Asia/Manila',
   });
 
-function createForm(session: PublicRatingSession, ticket: PublicRatingTicket): CsatFormData {
+type ReusableRatingProfile = Pick<
+  CsatFormData,
+  | 'unitSection'
+  | 'clientFirstName'
+  | 'clientMiddleInitial'
+  | 'clientLastName'
+  | 'suffix'
+  | 'religion'
+  | 'age'
+  | 'sex'
+  | 'contactNumber'
+>;
+
+function createForm(
+  session: PublicRatingSession,
+  ticket: PublicRatingTicket,
+  profile?: ReusableRatingProfile | null,
+): CsatFormData {
   return {
     consentGiven: false,
-    unitSection: session.recipient.unitSection,
+    unitSection: profile?.unitSection || session.recipient.unitSection,
     dateOfTransaction: transactionDate(ticket),
-    clientFirstName: session.recipient.firstName,
-    clientMiddleInitial: session.recipient.middleInitial,
-    clientLastName: session.recipient.lastName,
-    suffix: session.recipient.suffix,
-    religion: '',
-    sex: '',
-    contactNumber: '',
+    clientFirstName: profile?.clientFirstName || session.recipient.firstName,
+    clientMiddleInitial: profile?.clientMiddleInitial || session.recipient.middleInitial,
+    clientLastName: profile?.clientLastName || session.recipient.lastName,
+    suffix: profile?.suffix || session.recipient.suffix,
+    religion: profile?.religion || '',
+    age: profile?.age,
+    sex: profile?.sex || '',
+    contactNumber: profile?.contactNumber || '',
     technicianName: ticket.technicianName,
     likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
   };
@@ -106,6 +124,7 @@ export default function PublicRatingPage() {
   const [session, setSession] = useState<PublicRatingSession | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<PublicRatingTicket | null>(null);
   const [form, setForm] = useState<CsatFormData | null>(null);
+  const [reusableProfile, setReusableProfile] = useState<ReusableRatingProfile | null>(null);
 
   const loadSession = useCallback(async () => {
     const loaded = await publicRatingApi.getSession();
@@ -183,7 +202,7 @@ export default function PublicRatingPage() {
   const openRating = (ticket: PublicRatingTicket) => {
     if (!session || ticket.ratingStatus !== 'eligible') return;
     setSelectedTicket(ticket);
-    setForm(createForm(session, ticket));
+    setForm(createForm(session, ticket, reusableProfile));
     setMessage('');
   };
 
@@ -205,10 +224,25 @@ export default function PublicRatingPage() {
     setBusy(true);
     setMessage('');
     try {
-      const result = await publicRatingApi.submit(selectedTicket.id, { formData: form });
+      await publicRatingApi.submit(selectedTicket.id, { formData: form });
+      setReusableProfile({
+        unitSection: form.unitSection,
+        clientFirstName: form.clientFirstName,
+        clientMiddleInitial: form.clientMiddleInitial,
+        clientLastName: form.clientLastName,
+        suffix: form.suffix,
+        religion: form.religion,
+        age: form.age,
+        sex: form.sex,
+        contactNumber: form.contactNumber,
+      });
+      const hasRemainingEligibleTickets =
+        session?.tickets.some(
+          (ticket) => ticket.id !== selectedTicket.id && ticket.ratingStatus === 'eligible',
+        ) ?? false;
       setSelectedTicket(null);
       setForm(null);
-      if (result.invitationCompleted) {
+      if (!hasRemainingEligibleTickets) {
         setPhase('complete');
         setSession(null);
       } else {
@@ -415,13 +449,10 @@ export default function PublicRatingPage() {
               />
               <Stack direction="row" spacing={2}>
                 <Autocomplete
-                  options={[] as string[]}
-                  freeSolo
+                  options={session?.units.map((unit) => unit.name) ?? []}
                   fullWidth
-                  disabled={Boolean(session?.recipient.unitSection)}
-                  sx={populatedFieldSx(Boolean(session?.recipient.unitSection))}
-                  value={form.unitSection}
-                  onInputChange={(_, value) => setForm({ ...form, unitSection: value })}
+                  value={form.unitSection || null}
+                  onChange={(_, value) => setForm({ ...form, unitSection: value || '' })}
                   renderInput={(params) => <TextField {...params} label="Unit/Section *" />}
                 />
                 <TextField

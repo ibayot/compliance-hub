@@ -15,6 +15,7 @@ import {
   Divider,
   Badge,
   Switch,
+  Button,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -81,6 +82,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isNotifLoading, setIsNotifLoading] = useState(false);
   const [notifError, setNotifError] = useState<string | null>(null);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
+  const notificationRequestRef = React.useRef(0);
 
   const fetchMyShift = React.useCallback(() => {
     if (myCap?.isAttendanceEligible) {
@@ -340,8 +343,10 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const fetchNotificationSummary = React.useCallback(
     async (playSound = false) => {
       if (!user) return null;
+      const requestId = ++notificationRequestRef.current;
       try {
         const summary = await notificationsApi.getSummary();
+        if (requestId !== notificationRequestRef.current) return null;
         if (playSound && summary.unreadCount > prevUnreadCountRef.current) {
           playNotificationSound();
         }
@@ -351,6 +356,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         setNotifError(null);
         return summary;
       } catch {
+        if (requestId !== notificationRequestRef.current) return null;
         setNotifError(
           navigator.onLine
             ? 'Notifications could not be loaded. Select here to retry.'
@@ -406,6 +412,23 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     void fetchNotificationSummary();
   });
 
+  useSse(['NOTIFICATIONS_READ'], () => { void fetchNotificationSummary(); });
+
+  const handleMarkAllRead = async () => {
+    if (markingAllRead || unreadCount === 0) return;
+    setMarkingAllRead(true);
+    ++notificationRequestRef.current;
+    try {
+      await notificationsApi.markAllRead();
+      // Refetch rather than assuming zero: a new notification may arrive during the write.
+      await fetchNotificationSummary();
+    } catch {
+      setNotifError(navigator.onLine
+        ? 'Notifications could not be marked as read. Please try again.'
+        : 'You are offline. Reconnect before marking notifications as read.');
+    } finally { setMarkingAllRead(false); }
+  };
+
   useSse(['ATTENDANCE_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
     fetchMyShift();
   });
@@ -427,6 +450,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
 
   const handleNotifClick = (notification: AppNotification) => {
     if (!notification.isRead) {
+      ++notificationRequestRef.current;
       setNotifications((current) =>
         current.map((item) => (item.id === notification.id ? { ...item, isRead: true } : item)),
       );
@@ -668,10 +692,14 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
             transformOrigin={{ horizontal: 'right', vertical: 'top' }}
             anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
           >
-            <Box sx={{ px: 2, py: 1 }}>
+            <Box sx={{ px: 2, py: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
               <Typography variant="subtitle1" fontWeight="bold">
                 Notifications
               </Typography>
+              <Button size="small" onClick={handleMarkAllRead}
+                disabled={markingAllRead || isNotifLoading || unreadCount === 0 || !navigator.onLine}>
+                {markingAllRead ? 'Marking…' : 'Mark All as Read'}
+              </Button>
             </Box>
             <Divider />
             {isNotifLoading ? (

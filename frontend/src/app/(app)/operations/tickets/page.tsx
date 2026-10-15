@@ -86,10 +86,15 @@ import TicketImageDropzone from '@/components/TicketImageDropzone';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useSse } from '@/lib/utils/useSse';
 import { formatPersonName } from '@/lib/utils/person-name';
+import { getTicketSlaStatus as getSlaStatus } from '@/lib/utils/ticket-sla-status';
 
-import { PRIORITY_COLOR, STATUS_COLOR, TICKET_TYPE_LABELS } from '@/lib/utils/ticket-colors';
+import {
+  PRIORITY_CHIP_SX,
+  SLA_CHIP,
+  STATUS_CHIP_SX,
+  TICKET_TYPE_LABELS,
+} from '@/lib/utils/ticket-colors';
 
-import { unitsApi } from '@/lib/api/units';
 
 const populatedFieldSx = (populated: boolean) =>
   populated
@@ -150,37 +155,6 @@ const toDateTimeLocalValue = (value?: string | null) => {
   const offset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 };
-
-function getSlaStatus(
-  ticket: Ticket,
-): 'met' | 'on_track' | 'nearing_sla' | 'overdue' | 'paused' | null {
-  if (!ticket.slaDeadline) return null;
-  const isTerminal = ['resolved', 'closed', 'duplicate'].includes(ticket.status);
-  if (isTerminal) {
-    const deadline = new Date(ticket.slaDeadline).getTime();
-    const resolvedValue = effectiveResolvedAt(ticket);
-    const resolvedTime = resolvedValue ? new Date(resolvedValue).getTime() : Date.now();
-    return resolvedTime <= deadline ? 'met' : 'overdue';
-  }
-  if (ticket.slaPaused) return 'paused';
-  if (ticket.isSlaWaiting && ticket.status !== 'in_progress') return null;
-  // The API flags are calculated when the ticket is fetched. Re-check the
-  // deadline locally so an open page cannot keep showing "Nearing SLA" after
-  // the deadline has passed.
-  if (Date.now() >= new Date(ticket.slaDeadline).getTime()) return 'overdue';
-  if (ticket.isOverdue) return 'overdue';
-  if (ticket.isNearingSLA) return 'nearing_sla';
-  return 'on_track';
-}
-
-const SLA_CHIP: Record<string, { label: string; color: 'success' | 'info' | 'warning' | 'error' }> =
-  {
-    met: { label: 'Met', color: 'success' },
-    on_track: { label: 'On Track', color: 'info' },
-    nearing_sla: { label: 'Nearing SLA', color: 'warning' },
-    overdue: { label: 'Overdue', color: 'error' },
-    paused: { label: 'SLA Paused', color: 'info' },
-  };
 
 export default function TicketsPage({
   restrictedAssignedOnly = false,
@@ -276,6 +250,9 @@ export default function TicketsPage({
   const [submitting, setSubmitting] = useState(false);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [allUsers, setAllUsers] = useState<UserRecord[]>([]);
+  const [requesterOptionsLoading, setRequesterOptionsLoading] = useState(false);
+  const [requesterOptionsError, setRequesterOptionsError] = useState(false);
+  const [pendingRequesterEmail, setPendingRequesterEmail] = useState('');
   const [categories, setCategories] = useState<TicketCategory[]>([]);
   const [issues, setIssues] = useState<TicketIssueType[]>([]);
   const [kbSuggestions, setKbSuggestions] = useState<any[]>([]);
@@ -344,6 +321,7 @@ export default function TicketsPage({
   const isItoRole = !!myCap?.isIto;
   const isTechnician = isFocalTech || isLowerLevelTech || isJuniorTech || isItoRole;
   const isFocal = !!myCap?.isFocal;
+  const requesterUnitMissing = user?.role === 'user' && (user.units?.length ?? 0) === 0;
   // DB-driven: is_all_tickets column
   const canManageAll = !restrictedAssignedOnly && !personalRequestedOnly && !!myCap?.isAllTickets;
   // Matrix-driven: Escalated To Me tab is visible when Escalation capability is ticked.
@@ -588,8 +566,8 @@ export default function TicketsPage({
     { key: 'closed', label: 'Closed' },
     { key: 'freeze', label: 'Frozen' },
     { key: 'duplicate', label: 'Duplicate' },
-    { key: 'proxy', label: 'Proxy Requests' },
-  ].filter(({ key }) => !personalRequestedOnly || key !== 'proxy');
+    ...(personalRequestedOnly ? [{ key: 'proxy', label: 'Proxy Requests' }] : []),
+  ];
   const selectedStatus = statusTabs.some(
     ({ key }) => key === selectedTab && key !== 'all' && key !== 'proxy' && key !== 'to_rate',
   )
@@ -644,7 +622,7 @@ export default function TicketsPage({
       'closed',
       'freeze',
       'duplicate',
-      ...(personalRequestedOnly ? ['to_rate'] : ['proxy']),
+      ...(personalRequestedOnly ? ['to_rate', 'proxy'] : []),
     ]);
     const restoredPeriod = FILTER_PERIOD_MODES.includes(
       restored.filterPeriodMode as TicketFilterPeriodMode,
@@ -938,6 +916,7 @@ export default function TicketsPage({
                   ? Number(filterSemester) || undefined
                   : undefined,
               pendingSatisfaction: selectedTab === 'to_rate',
+              proxyCreatedByMe: selectedTab === 'proxy',
               search: searchQuery,
               page,
               limit: TICKETS_PAGE_SIZE,
@@ -1101,6 +1080,7 @@ export default function TicketsPage({
                   ? Number(filterSemester) || undefined
                   : undefined,
               pendingSatisfaction: selectedTab === 'to_rate',
+              proxyCreatedByMe: selectedTab === 'proxy',
               search: searchQuery,
               page,
               limit: TICKETS_PAGE_SIZE,
@@ -1213,18 +1193,34 @@ export default function TicketsPage({
     [],
   );
 
-  const refreshRequesterOptions = useCallback(() => {
-    if (restrictedAssignedOnly || personalRequestedOnly) return;
-    usersApi
-      .listTicketRequesters()
-      .then((users) => setAllUsers(users.filter((u) => u.active && u.role !== 'super_admin')))
-      .catch(() => {});
-  }, [restrictedAssignedOnly, personalRequestedOnly]);
+  const refreshRequesterOptions = useCallback(async () => {
+    if (restrictedAssignedOnly || personalRequestedOnly || !user?.id) return;
+
+    setRequesterOptionsLoading(true);
+    setRequesterOptionsError(false);
+    try {
+      const users = await usersApi.listTicketRequesters();
+      setAllUsers(users.filter((u) => u.active && u.role !== 'super_admin'));
+    } catch {
+      setAllUsers([]);
+      setRequesterOptionsError(true);
+    } finally {
+      setRequesterOptionsLoading(false);
+    }
+  }, [restrictedAssignedOnly, personalRequestedOnly, user?.id]);
 
   useEffect(() => {
-    // Load the restricted requester list for ticket proxy creation.
-    refreshRequesterOptions();
+    // Wait for the authenticated session before loading the proxy requester list.
+    // A page refresh can render this component before AuthContext finishes restoring
+    // the user; including user.id in the callback dependencies guarantees a retry.
+    void refreshRequesterOptions();
   }, [refreshRequesterOptions]);
+
+  useEffect(() => {
+    // Refresh again when the form opens so a transient startup/authentication failure
+    // cannot leave the Requested For selector empty for the rest of the session.
+    if (newDialogOpen) void refreshRequesterOptions();
+  }, [newDialogOpen, refreshRequesterOptions]);
 
   useSse(['USER_DIRECTORY_UPDATED'], refreshRequesterOptions);
 
@@ -1303,6 +1299,15 @@ export default function TicketsPage({
   };
 
   const handleSubmitTicket = async (confirmedForSelf = false) => {
+    const pendingRequester = allUsers.find((u) => u.id === form.requesterId && u.pendingStaffId);
+    if ((form.requesterId ?? 0) < 0 && !pendingRequester) {
+      enqueueSnackbar('The requester list changed. Please select Requested For again.', { variant: 'warning' });
+      return;
+    }
+    if (pendingRequester && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pendingRequesterEmail.trim())) {
+      enqueueSnackbar('Enter a valid email for the selected requester before continuing.', { variant: 'warning' });
+      return;
+    }
     if (!form.subject.trim() || !form.description.trim()) {
       enqueueSnackbar('Subject and description are required.', { variant: 'warning' });
       return;
@@ -1340,13 +1345,19 @@ export default function TicketsPage({
         if (form.issueType) formData.append('issueType', form.issueType);
         if (user?.role !== 'user' && form.issueTypeId)
           formData.append('issueTypeId', form.issueTypeId);
-        if (form.requesterId) formData.append('requesterId', form.requesterId.toString());
+        if (pendingRequester) {
+          formData.append('pendingStaffId', pendingRequester.pendingStaffId!);
+          formData.append('requesterEmail', pendingRequesterEmail.trim());
+        } else if (form.requesterId) formData.append('requesterId', form.requesterId.toString());
         if (form.assignedToId) formData.append('assignedToId', form.assignedToId.toString());
         selectedImages.forEach((image) => formData.append('attachments', image));
         payload = formData;
       } else {
         payload = {
           ...form,
+          requesterId: pendingRequester ? undefined : form.requesterId,
+          pendingStaffId: pendingRequester?.pendingStaffId,
+          requesterEmail: pendingRequester ? pendingRequesterEmail.trim() : undefined,
           description: finalDescription,
           issueTypeId: user?.role === 'user' ? undefined : form.issueTypeId,
         };
@@ -1542,8 +1553,8 @@ export default function TicketsPage({
     //   .getUnitSuggestions()
     //   .then(setUnitSuggestions)
     //   .catch(() => { });
-    unitsApi
-      .listAll()
+    usersApi
+      .getProfileUnits()
       .then((units) => setUnitSuggestions(units.map((u) => u.name)))
       .catch(() => {});
     setSatDialogOpen(true);
@@ -1673,7 +1684,9 @@ export default function TicketsPage({
             {showEscalations
               ? 'Review ticket escalations, outcomes, and the staff involved.'
               : personalRequestedOnly
-                ? 'Track and rate tickets requested for you, including requests filed on your behalf.'
+                ? selectedTab === 'proxy'
+                  ? 'Track tickets you filed on behalf of someone else.'
+                  : 'Track and rate tickets requested for you, or select Proxy Requests for tickets you filed for someone else.'
                 : 'Submit and track RICTMS support requests and specialized concerns'}
           </Typography>
         </Box>
@@ -2421,7 +2434,7 @@ export default function TicketsPage({
                         <Chip
                           size="small"
                           label={ticket.status.replace('_', ' ').toUpperCase()}
-                          color={STATUS_COLOR[ticket.status] ?? 'default'}
+                          sx={STATUS_CHIP_SX[ticket.status]}
                         />
                       </Box>
                     </Box>
@@ -2454,24 +2467,12 @@ export default function TicketsPage({
                       <Chip
                         size="small"
                         label={(ticket.priority ?? 'not set').toUpperCase()}
-                        color={PRIORITY_COLOR[ticket.priority ?? ''] ?? 'default'}
-                        sx={{
-                          ...(ticket.priority === 'critical' && {
-                            bgcolor: '#000',
-                            color: '#fff',
-                            '& .MuiChip-label': { color: '#fff' },
-                          }),
-                          ...(ticket.priority === 'urgent' && {
-                            bgcolor: 'error.dark',
-                            color: '#fff',
-                            '& .MuiChip-label': { color: '#fff' },
-                          }),
-                        }}
+                        sx={PRIORITY_CHIP_SX[ticket.priority ?? 'unset']}
                       />
                       {(() => {
                         const s = getSlaStatus(ticket);
                         return s ? (
-                          <Chip size="small" label={SLA_CHIP[s].label} color={SLA_CHIP[s].color} />
+                          <Chip size="small" label={SLA_CHIP[s].label} sx={SLA_CHIP[s].sx} />
                         ) : null;
                       })()}
                       {ticket.resolutionTimeOverride && (
@@ -2855,23 +2856,9 @@ export default function TicketsPage({
                             <Chip
                               size="small"
                               label={ticket.priority.toUpperCase()}
-                              color={
-                                ticket.priority === 'critical'
-                                  ? 'default'
-                                  : (PRIORITY_COLOR[ticket.priority] ?? 'default')
-                              }
                               sx={{
                                 width: '100%',
-                                ...(ticket.priority === 'critical' && {
-                                  bgcolor: '#000',
-                                  color: '#fff',
-                                  '& .MuiChip-label': { color: '#fff' },
-                                }),
-                                ...(ticket.priority === 'urgent' && {
-                                  bgcolor: 'error.dark',
-                                  color: '#fff',
-                                  '& .MuiChip-label': { color: '#fff' },
-                                }),
+                                ...PRIORITY_CHIP_SX[ticket.priority],
                               }}
                             />
                           ) : (
@@ -2886,8 +2873,7 @@ export default function TicketsPage({
                             <Chip
                               size="small"
                               label={ticket.status.replace(/_/g, ' ').toUpperCase()}
-                              color={STATUS_COLOR[ticket.status] ?? 'default'}
-                              sx={{ width: '100%' }}
+                              sx={{ width: '100%', ...STATUS_CHIP_SX[ticket.status] }}
                             />
                             {hasPendingSatisfaction && (
                               <Chip
@@ -2909,8 +2895,7 @@ export default function TicketsPage({
                                 <Chip
                                   size="small"
                                   label={SLA_CHIP[s].label}
-                                  color={SLA_CHIP[s].color}
-                                  sx={{ width: '100%' }}
+                                  sx={{ width: '100%', ...SLA_CHIP[s].sx }}
                                 />
                                 {ticket.resolutionTimeOverride && (
                                   <Chip
@@ -3420,23 +3405,46 @@ export default function TicketsPage({
             />
             <Autocomplete
               options={allUsers.filter((u) => u.role !== 'super_admin')}
-              getOptionLabel={(u) => formatPersonName(u, u.email)}
-              value={allUsers.find((u) => u.id === form.requesterId) ?? null}
-              onChange={(_, newValue) =>
-                setForm({ ...form, requesterId: newValue?.id ?? undefined })
+              loading={requesterOptionsLoading}
+              disabled={requesterUnitMissing}
+              noOptionsText={
+                requesterOptionsError
+                  ? 'Unable to load users. Close and reopen New Ticket to retry.'
+                  : requesterUnitMissing
+                    ? 'Set your Unit in Profile & Preferences to select someone in your unit.'
+                  : 'No active users found'
               }
+              getOptionLabel={(u) => `${formatPersonName(u, u.email)}${u.needsEmail ? ' — email required' : ''}`}
+              value={allUsers.find((u) => u.id === form.requesterId) ?? null}
+              onChange={(_, newValue) => {
+                setForm({ ...form, requesterId: newValue?.id ?? undefined });
+                setPendingRequesterEmail('');
+              }}
               isOptionEqualToValue={(option, value) => option.id === value.id}
               renderInput={(params) => (
                 <TextField
                   {...params}
                   label="Requested For (Optional)"
-                  helperText="Leave blank if you are requesting for yourself. Select a user to request on their behalf."
+                  helperText={
+                    requesterOptionsError
+                      ? 'The requester list could not be loaded. Close and reopen New Ticket to retry.'
+                      : requesterUnitMissing
+                        ? 'Set your Unit in Settings > Profile & Preferences before filing a request for someone else.'
+                      : 'Leave blank if you are requesting for yourself. Select a user to request on their behalf.'
+                  }
+                  error={requesterOptionsError}
                   fullWidth
                 />
               )}
               clearOnEscape
               fullWidth
             />
+            {allUsers.some((u) => u.id === form.requesterId && u.pendingStaffId) && (
+              <TextField label="Requester Email" type="email" required fullWidth value={pendingRequesterEmail}
+                onChange={(event) => setPendingRequesterEmail(event.target.value)}
+                inputProps={{ maxLength: 100 }}
+                helperText="This staff member has no account email yet. A valid, allowed email is required to submit the ticket." />
+            )}
             {isTicketAdmin && (
               <Autocomplete
                 options={technicians}
@@ -3798,12 +3806,11 @@ export default function TicketsPage({
               <Stack direction="row" spacing={2}>
                 <Autocomplete
                   options={unitSuggestions}
-                  freeSolo
                   fullWidth
-                  disabled={!!user?.units?.[0]?.name}
-                  sx={populatedFieldSx(!!user?.units?.[0]?.name)}
-                  value={csatForm.unitSection}
-                  onInputChange={(_, v) => setCsatForm((f) => ({ ...f, unitSection: v }))}
+                  value={csatForm.unitSection || null}
+                  onChange={(_, value) =>
+                    setCsatForm((form) => ({ ...form, unitSection: value || '' }))
+                  }
                   renderInput={(params) => <TextField {...params} label="Unit/Section *" />}
                 />
                 <TextField
