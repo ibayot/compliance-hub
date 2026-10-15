@@ -67,9 +67,16 @@ async function bootstrap() {
     .setDescription('User management, authentication, role definitions, and role capability matrix')
     .setVersion(serviceVersion)
     .addBearerAuth()
+    .addApiKey({
+      type: 'apiKey',
+      in: 'header',
+      name: 'X-Staff-Directory-Key',
+      description: 'Dedicated staff directory secret configured in users-service. Enter the secret only, without Bearer. This is not a login token.',
+    }, 'staff-directory-key')
     .addSecurityRequirements('bearer')
     .addTag('auth', 'Authentication endpoints')
     .addTag('users', 'User CRUD and profile management')
+    .addTag('staff-directory', 'Read-only staff directory integration using its dedicated API key')
     .addTag('units', 'Organisational unit management')
     .addTag('role-capabilities', 'Role capability matrix administration')
     .addTag('audit-logs', 'System-wide audit logging and tracking')

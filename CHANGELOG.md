@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - A protected staff-directory integration returns only approved identity, position, and unit fields.
 
 ### Fixed
+- Requested For and requester correction retain existing eligible accounts when the optional staff directory is unavailable; requester loading can be retried without closing ticket creation. Legacy directory text collations no longer break requester matching or staff-directory responses.
+- Staff-directory API documentation now offers its dedicated header-based authorization instead of relying on the unrelated Bearer token field.
 - Requester correction now checks ticket visibility and prevents the actual requester from also being the assigned technician on technician support tickets. Specialized Concerns and the proxy-filer correction exception remain supported.
 - Invitation feedback offers the same active units as the in-app feedback form.
 - Saving ticket details no longer cascades stale or visibility-filtered comment data, preventing newer image replacements from being overwritten by an unrelated ticket update.

@@ -252,6 +252,7 @@ export default function TicketsPage({
   const [allUsers, setAllUsers] = useState<UserRecord[]>([]);
   const [requesterOptionsLoading, setRequesterOptionsLoading] = useState(false);
   const [requesterOptionsError, setRequesterOptionsError] = useState(false);
+  const requesterOptionsRequestRef = useRef(0);
   const [pendingRequesterEmail, setPendingRequesterEmail] = useState('');
   const [categories, setCategories] = useState<TicketCategory[]>([]);
   const [issues, setIssues] = useState<TicketIssueType[]>([]);
@@ -1196,16 +1197,19 @@ export default function TicketsPage({
   const refreshRequesterOptions = useCallback(async () => {
     if (restrictedAssignedOnly || personalRequestedOnly || !user?.id) return;
 
+    const requestId = ++requesterOptionsRequestRef.current;
     setRequesterOptionsLoading(true);
     setRequesterOptionsError(false);
     try {
       const users = await usersApi.listTicketRequesters();
+      if (requestId !== requesterOptionsRequestRef.current) return;
       setAllUsers(users.filter((u) => u.active && u.role !== 'super_admin'));
     } catch {
+      if (requestId !== requesterOptionsRequestRef.current) return;
       setAllUsers([]);
       setRequesterOptionsError(true);
     } finally {
-      setRequesterOptionsLoading(false);
+      if (requestId === requesterOptionsRequestRef.current) setRequesterOptionsLoading(false);
     }
   }, [restrictedAssignedOnly, personalRequestedOnly, user?.id]);
 
@@ -3409,7 +3413,7 @@ export default function TicketsPage({
               disabled={requesterUnitMissing}
               noOptionsText={
                 requesterOptionsError
-                  ? 'Unable to load users. Close and reopen New Ticket to retry.'
+                  ? 'Unable to load users. Use Retry below.'
                   : requesterUnitMissing
                     ? 'Set your Unit in Profile & Preferences to select someone in your unit.'
                   : 'No active users found'
@@ -3427,7 +3431,13 @@ export default function TicketsPage({
                   label="Requested For (Optional)"
                   helperText={
                     requesterOptionsError
-                      ? 'The requester list could not be loaded. Close and reopen New Ticket to retry.'
+                      ? <>
+                          The requester list could not be loaded.{' '}
+                          <Button size="small" disabled={requesterOptionsLoading}
+                            onClick={() => void refreshRequesterOptions()} sx={{ minWidth: 0, py: 0 }}>
+                            Retry
+                          </Button>
+                        </>
                       : requesterUnitMissing
                         ? 'Set your Unit in Settings > Profile & Preferences before filing a request for someone else.'
                       : 'Leave blank if you are requesting for yourself. Select a user to request on their behalf.'

@@ -38,7 +38,7 @@ import { AuditVariableSubscriber } from '../shared/audit/audit.subscriber';
         UMS_UNIT_SYNC_ENABLED: Joi.boolean().default(false),
         UMS_STAFF_SYNC_ENABLED: Joi.boolean().default(false),
         UMS_STAFF_VIEW: Joi.string().pattern(/^[A-Za-z0-9_]+$/).default('vStaffBasicInfo'),
-        STAFF_DIRECTORY_API_KEY: Joi.string().min(32).optional(),
+        STAFF_DIRECTORY_API_KEY: Joi.string().min(32).allow('').optional(),
         DB_SYNCHRONIZE: Joi.boolean().default(false),
         JWT_SECRET: Joi.string().min(16).required(),
         JWT_REFRESH_SECRET: Joi.string().min(16).required(),

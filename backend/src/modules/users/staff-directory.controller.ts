@@ -8,8 +8,6 @@ import {
   ExecutionContext,
   UnauthorizedException,
   Query,
-  DefaultValuePipe,
-  ParseIntPipe,
   BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -20,6 +18,7 @@ import { CapabilityGuard } from '../../common/guards/capability.guard';
 import { RequireCapability } from '../../common/decorators/require-capability.decorator';
 import { StaffDirectoryStore } from '../../shared/staff-directory/staff-directory.store';
 import { StaffDirectorySyncService } from './staff-directory-sync.service';
+import { ApiOperation, ApiQuery, ApiSecurity, ApiTags } from '@nestjs/swagger';
 
 @Controller('users/staff-directory')
 @UseGuards(JwtAuthGuard, CapabilityGuard)
@@ -57,6 +56,8 @@ export class StaffDirectoryKeyGuard implements CanActivate {
 }
 
 @Controller('integrations/staff')
+@ApiTags('staff-directory')
+@ApiSecurity('staff-directory-key')
 @UseGuards(StaffDirectoryKeyGuard)
 export class StaffDirectoryIntegrationController {
   constructor(
@@ -64,21 +65,43 @@ export class StaffDirectoryIntegrationController {
     private readonly store: StaffDirectoryStore,
   ) {}
   @Get()
+  @ApiOperation({
+    summary: 'Read the staff directory',
+    description: 'Requires the dedicated X-Staff-Directory-Key header. Enter the configured secret in the staff-directory-key authorization field, without a Bearer prefix. Returns only approved directory fields; this does not synchronize UMS or create accounts.',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Integer 1–100000; defaults to 1.' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Integer 1–200; defaults to 100.' })
   async list(
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(100), ParseIntPipe) limit: number,
+    @Query('page') pageValue?: string,
+    @Query('limit') limitValue?: string,
   ) {
-    if (page < 1 || page > 100000 || limit < 1 || limit > 200)
-      throw new BadRequestException('Page must be positive and limit must be 1–200.');
+    // Keep raw query values as strings: global numeric transformation followed
+    // by DefaultValuePipe would silently replace invalid text/NaN with defaults.
+    const integer = (value: string | undefined, fallback: number, max: number) => {
+      if (value === undefined) return fallback;
+      const parsed = Number(value);
+      if (typeof value !== 'string' || !/^\d+$/.test(value) || !Number.isSafeInteger(parsed) || parsed < 1 || parsed > max)
+        throw new BadRequestException('Page must be an integer from 1–100000 and limit an integer from 1–200.');
+      return parsed;
+    };
+    const page = integer(pageValue, 1, 100000);
+    const limit = integer(limitValue, 100, 200);
     const s = this.store.schema();
-    const query = `SELECT u.staff_id,u.last_name,u.first_name,u.middle_name,u.suffix,u.position_full,
+    // Legacy users tables may not share the directory migration's collation.
+    // Normalize UNION text and compare numeric staff IDs as bytes, without
+    // changing existing table collations or broadening identity matching.
+    const fields = (alias: 'u' | 'd') =>
+      ['staff_id', 'last_name', 'first_name', 'middle_name', 'suffix', 'position_full']
+        .map((column) => `CONVERT(${alias}.${column} USING utf8mb4) COLLATE utf8mb4_unicode_ci AS ${column}`)
+        .join(',');
+    const query = `SELECT ${fields('u')},
        COALESCE((SELECT un.name FROM ${s}.user_unit_access a JOIN ${s}.units un ON un.id=a.unit_id WHERE a.user_id=u.id ORDER BY a.unit_id LIMIT 1),dun.name) unit
-      FROM ${s}.users u LEFT JOIN ${s}.ums_staff_directory d ON d.staff_id=u.staff_id LEFT JOIN ${s}.units dun ON dun.id=d.unit_id
+      FROM ${s}.users u LEFT JOIN ${s}.ums_staff_directory d ON BINARY d.staff_id=BINARY u.staff_id LEFT JOIN ${s}.units dun ON dun.id=d.unit_id
       WHERE u.staff_id IS NOT NULL AND TRIM(u.staff_id)<>''
       UNION ALL
-      SELECT d.staff_id,d.last_name,d.first_name,d.middle_name,d.suffix,d.position_full,un.name unit
+      SELECT ${fields('d')},un.name unit
       FROM ${s}.ums_staff_directory d LEFT JOIN ${s}.units un ON un.id=d.unit_id
-      WHERE d.available=1 AND d.review_reason IS NULL AND NOT EXISTS(SELECT 1 FROM ${s}.users u WHERE u.staff_id=d.staff_id)`;
+      WHERE d.available=1 AND d.review_reason IS NULL AND NOT EXISTS(SELECT 1 FROM ${s}.users u WHERE BINARY u.staff_id=BINARY d.staff_id)`;
     const [count] = await this.db.query(`SELECT COUNT(*) total FROM (${query}) directory`);
     const rows = await this.db.query(
       `SELECT * FROM (${query}) directory ORDER BY last_name,first_name,staff_id LIMIT ? OFFSET ?`,

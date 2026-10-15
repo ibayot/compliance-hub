@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -27,6 +28,8 @@ export type PendingRequester = {
 
 @Injectable()
 export class StaffDirectoryStore {
+  private readonly logger = new Logger(StaffDirectoryStore.name);
+
   constructor(
     private readonly db: DataSource,
     private readonly config: ConfigService,
@@ -45,16 +48,27 @@ export class StaffDirectoryStore {
   }
 
   async options(actorId: number, role: string): Promise<PendingRequester[]> {
-    const s = this.schema();
-    const rows = await this.db.query(
-      `SELECT p.* FROM ${s}.ums_staff_directory p
+    let rows: any[];
+    try {
+      const s = this.schema();
+      rows = await this.db.query(
+        `SELECT p.* FROM ${s}.ums_staff_directory p
       JOIN ${s}.units u ON u.id=p.unit_id AND u.active=1 AND u.has_reportorial_requirements=0
       WHERE p.available=1 AND p.review_reason IS NULL
-        AND NOT EXISTS (SELECT 1 FROM ${s}.users a WHERE a.staff_id=p.staff_id)
+        AND NOT EXISTS (SELECT 1 FROM ${s}.users a WHERE BINARY a.staff_id=BINARY p.staff_id)
         ${role === 'user' ? `AND EXISTS (SELECT 1 FROM ${s}.user_unit_access x WHERE x.user_id=? AND x.unit_id=p.unit_id)` : ''}
       ORDER BY p.last_name,p.first_name,p.staff_id`,
-      role === 'user' ? [actorId] : [],
-    );
+        role === 'user' ? [actorId] : [],
+      );
+    } catch (error: any) {
+      // Pending identities supplement existing accounts; a missing migration,
+      // directory grant, or unavailable database must not break proxy filing.
+      // Do not expose SQL, staff data, credentials, or connection details.
+      const code = String(error?.driverError?.code || error?.code || 'unavailable');
+      const safeCode = /^[A-Z0-9_]+$/.test(code) ? code : 'unavailable';
+      this.logger.warn(`Pending requester directory unavailable (${safeCode}); existing requester accounts remain available.`);
+      return [];
+    }
     return rows.map((p: any) => ({
       id: -Number(p.id),
       staffId: p.staff_id,
