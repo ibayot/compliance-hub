@@ -32,6 +32,7 @@ import {
   TicketService,
   CreateTicketDto,
   UpdateTicketDto,
+  CancelTicketDto,
   AssignTicketDto,
   CorrectTicketRequesterDto,
   CorrectTicketAssigneeDto,
@@ -560,6 +561,14 @@ export class TicketController {
       req.user.id ?? req.user.userId,
       req.user.role,
     );
+  }
+
+  /** PATCH /tickets/:id */
+  @Post(':id/cancel')
+  @RequireCapability('isTicketCancellation')
+  @HttpCode(HttpStatus.OK)
+  async cancelTicket(@Param('id') id: string, @Body() dto: CancelTicketDto, @Request() req: any) {
+    return this.ticketService.cancelTicket(id, dto, Number(req.user.id ?? req.user.userId), req.user.role);
   }
 
   /** PATCH /tickets/:id */

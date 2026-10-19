@@ -567,7 +567,7 @@ export default function TicketReportsPage() {
         const opening = chart.totalValues > chart.values.length
           ? `Tickets with configured issues were counted across ${chart.totalValues} ${subject}.`
           : `${number(total)} tickets with configured issues were counted across ${chart.totalValues} ${subject}.`;
-        return `${opening} ${highest.label} accounted for ${number(highest.value)} tickets, while ${lowest.label} accounted for ${number(lowest.value)}. Tickets without an issue and duplicates are excluded from these counts.`;
+        return `${opening} ${highest.label} accounted for ${number(highest.value)} tickets, while ${lowest.label} accounted for ${number(lowest.value)}. Tickets without an issue, duplicates, and cancelled tickets are excluded from these counts.`;
       }
       if (chart.id === 'performance_sla_category_table' || chart.id === 'performance_sla_assignee_table') {
         const met = chart.values.filter((item) => item.label.endsWith(' met'));
@@ -653,7 +653,7 @@ export default function TicketReportsPage() {
     const assigneeLabel = assignee ? formatPersonName(assignee, `Assignee #${assignee.id}`) : canManageReports ? 'All assignees' : 'My tickets';
     const printUsesStaffAndTypeFilters = tab === 0 || tab === 3;
     add('div', `${periodLabel} ${year} • ${printUsesStaffAndTypeFilters && ticketType ? TYPE_LABELS[ticketType] ?? ticketType : 'All support types'} • ${printUsesStaffAndTypeFilters ? assigneeLabel : 'All assignees'} • Generated ${new Date().toLocaleString()}`, doc.body).className = 'meta';
-    if (tab === 1) add('p', 'These counts include tickets with configured issues and exclude duplicate tickets. Category totals are the sum of their listed issues.');
+    if (tab === 1) add('p', 'These counts include tickets with configured issues and exclude duplicate and cancelled tickets. Category totals are the sum of their listed issues.');
     const addBarChart = (values: Array<{ label: string; value: number }>, parent: HTMLElement, visualId: string) => {
       const maxValue = Math.max(1, ...values.map((row) => Number(row.value) || 0));
       const chart = doc.createElement('div');
@@ -2106,7 +2106,7 @@ export default function TicketReportsPage() {
                     Tickets by Issue
                   </Typography>
                   <Typography variant="body2" color="text.secondary" mb={2}>
-                    Every configured issue is listed with its category and ticket count. Tickets without an issue and duplicate tickets are excluded.
+                    Every configured issue is listed with its category and ticket count. Tickets without an issue, duplicate tickets, and cancelled tickets are excluded.
                   </Typography>
                   {allIssuesAggregated.length === 0 ? (
                     <Box display="flex" justifyContent="center" alignItems="center" minHeight={300}>

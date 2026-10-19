@@ -299,6 +299,10 @@ export class RoleCapabilitiesService implements OnModuleInit {
     return !!this.get(role)?.isTicketRequesterCorrection;
   }
 
+  isTicketCancellation(role: string): boolean {
+    return !!this.get(role)?.isTicketCancellation;
+  }
+
   isAttendanceEligible(role: string): boolean {
     return !!this.get(role)?.isAttendanceEligible;
   }
@@ -369,6 +373,7 @@ export class RoleCapabilitiesService implements OnModuleInit {
       | 'isDutyAdminAccess'
       | 'isTicketResolutionTimeOverride'
       | 'isTicketRequesterCorrection'
+      | 'isTicketCancellation'
       | 'isAttendanceEligible'
       | 'isAuditAccess'
       | 'isUnitsAccess'

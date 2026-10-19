@@ -38,6 +38,7 @@ import {
 } from '../../common/events/event-bus.service';
 import { SSE_EVENT_CHANNEL } from '../../common/events/sse.service';
 import { StaffDirectoryStore } from '../../shared/staff-directory/staff-directory.store';
+import { CompletePendingStaffDto } from './dto/complete-pending-staff.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -120,6 +121,22 @@ export class UsersController {
   @RequireCapability(['isUserManagementView', 'isUserManagementAdmin'])
   searchEmail(@Query('q') q: string) {
     return this.usersService.searchEmails(q);
+  }
+
+  @Get('pending-staff')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability(['isUserManagementView', 'isUserManagementAdmin'])
+  listPendingStaff(@Request() req: any) {
+    return this.usersService.listPendingStaff(this.roleCapabilitiesService.isUserManagementAdmin(req.user.role));
+  }
+
+  @Post('pending-staff/:staffId/complete')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability(['isUserManagementView', 'isUserManagementAdmin'])
+  async completePendingStaff(@Param('staffId') staffId: string, @Body() dto: CompletePendingStaffDto, @Request() req: any) {
+    const created = await this.usersService.completePendingStaff(staffId, dto.email, dto.role, Number(req.user.id ?? req.user.userId));
+    this.emitUserDirectoryUpdated(created.id, 'created');
+    return { success: true, userId: created.id };
   }
 
   /** Returns safe active-user options for ticket proxy creation. */

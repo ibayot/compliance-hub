@@ -45,7 +45,7 @@ export function assertImageReplacementAllowed(
     throw new ForbiddenException(
       role === 'user'
         ? 'Regular users can replace images only on Open, Assigned, or In Progress tickets.'
-        : 'Images cannot be replaced on Closed or Duplicate tickets.',
+        : 'Images cannot be replaced on Closed, Duplicate or Cancelled tickets.',
     );
   const owns = isDescriptionAttachment(ticket, comment)
     ? [ticket.createdById ?? ticket.requesterId, ticket.requesterId].some(

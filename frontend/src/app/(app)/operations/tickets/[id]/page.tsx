@@ -1,5 +1,7 @@
 'use client';
 
+import TicketCancelButton from '@/components/TicketCancelButton';
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Box,
@@ -358,7 +360,7 @@ export default function TicketDetailPage() {
   const canStaff = isAdmin || isTechnician || canAssignByCapability || !!myCap?.isAllTickets;
   const canViewInternalNotes = ticket?.canViewInternalNotes === true;
   // Duplicate is terminal — no further modifications allowed.
-  const isDuplicate = ticket?.status === 'duplicate';
+  const isDuplicate = ['duplicate', 'cancelled'].includes(ticket?.status || '');
   const canOverrideResolutionTime = !!myCap?.isTicketResolutionTimeOverride;
   const canCorrectTicketRecord =
     !!myCap?.isTicketRequesterCorrection &&
@@ -446,7 +448,7 @@ export default function TicketDetailPage() {
       (latestEscalation as any)?.escalated_to_id) === (user as any)?.id;
   // UI policy: if escalation is pending, no top action buttons are shown.
   // If escalation is accepted, only Update Status may appear.
-  const hideTopActionButtons = !!hasPendingEscalation;
+  const hideTopActionButtons = !!hasPendingEscalation || ticket?.status === 'cancelled';
   const isCurrentAssignee =
     !isRegularUser &&
     !!ticket?.assignedToId &&
@@ -1216,7 +1218,7 @@ export default function TicketDetailPage() {
                     size="small"
                     value={ticket.ticketType}
                     disabled={
-                      ['resolved', 'closed'].includes(ticket.status) || isTypeLockedByEscalation
+                      ['resolved', 'closed', 'cancelled'].includes(ticket.status) || isTypeLockedByEscalation
                     }
                     onChange={async (e) => {
                       try {
@@ -1269,7 +1271,7 @@ export default function TicketDetailPage() {
                     clearable={false}
                     fullWidth={false}
                     disabled={
-                      ['resolved', 'closed'].includes(ticket.status) || isTypeLockedByEscalation
+                      ['resolved', 'closed', 'cancelled'].includes(ticket.status) || isTypeLockedByEscalation
                     }
                     onChange={async (categoryId) => {
                       if (!categoryId) return;
@@ -1315,7 +1317,7 @@ export default function TicketDetailPage() {
                       clearable={false}
                       fullWidth={false}
                       disabled={
-                        ['resolved', 'closed'].includes(ticket.status) || isTypeLockedByEscalation
+                        ['resolved', 'closed', 'cancelled'].includes(ticket.status) || isTypeLockedByEscalation
                       }
                       onChange={async (issueTypeId) => {
                         if (!issueTypeId) return;
@@ -1392,6 +1394,12 @@ export default function TicketDetailPage() {
 
             {/* Actions */}
             <Box display="flex" flexDirection="column" gap={1} minWidth={160}>
+              <TicketCancelButton ticket={ticket} onCancelled={() => { void fetchTicket(); void fetchEvents(); }} />
+              {ticket.status === 'cancelled' && <Alert severity="info">
+                <Typography variant="subtitle2">Ticket cancelled</Typography>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{ticket.cancellationReason}</Typography>
+                {ticket.cancelledAt && <Typography variant="caption">{new Date(ticket.cancelledAt).toLocaleString()}</Typography>}
+              </Alert>}
               {canShowStatusAction && (
                 <Button variant="outlined" size="small" onClick={() => setEditingStatus(true)}>
                   Update Status
@@ -2028,7 +2036,7 @@ export default function TicketDetailPage() {
                     </Stack>
                   </Box>
                 )}
-                {ticket.status !== 'duplicate' && ticket.slaDeadline &&
+                {!['duplicate', 'cancelled'].includes(ticket.status) && ticket.slaDeadline &&
                   (!ticket.isSlaWaiting || ticket.status === 'in_progress') && (
                     <>
                       <Divider sx={{ my: 1 }} />

@@ -14,7 +14,7 @@ export type TicketSlaStatus = 'met' | 'on_track' | 'nearing_sla' | 'overdue' | '
 
 /** Duplicate tagging is not a resolution and must never count as SLA Met. */
 export function getTicketSlaStatus(ticket: SlaTicket, now = Date.now()): TicketSlaStatus | null {
-  if (ticket.status === 'duplicate' || !ticket.slaDeadline) return null;
+  if (['duplicate', 'cancelled'].includes(ticket.status) || !ticket.slaDeadline) return null;
   const deadline = new Date(ticket.slaDeadline).getTime();
   if (!Number.isFinite(deadline)) return null;
   if (['resolved', 'closed'].includes(ticket.status)) {

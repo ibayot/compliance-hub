@@ -218,7 +218,8 @@ export type TicketStatus =
   | 'closed'
   | 'freeze'
   | 'pause'
-  | 'duplicate';
+  | 'duplicate'
+  | 'cancelled';
 export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent' | 'critical';
 
 export interface TicketEvent {
@@ -299,6 +300,9 @@ export interface Ticket {
   ticketType: TicketType;
   status: TicketStatus;
   priority: TicketPriority | null;
+  cancelledAt?: string | null;
+  cancelledById?: number | null;
+  cancellationReason?: string | null;
   categoryId?: string | null;
   category?: TicketCategory | null;
   issueTypeId?: string | null;
@@ -1233,6 +1237,11 @@ export const ticketsApi = {
 
   update: async (id: string, data: UpdateTicketDto): Promise<Ticket> => {
     const response = await apiClient.patch(`/tickets/${id}`, data);
+    return response.data;
+  },
+
+  cancel: async (id: string, reason: string, expectedUpdatedAt: string): Promise<{ success: boolean; queueHandoffPending?: boolean }> => {
+    const response = await apiClient.post(`/tickets/${id}/cancel`, { reason, expectedUpdatedAt });
     return response.data;
   },
 

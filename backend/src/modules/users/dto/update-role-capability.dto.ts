@@ -184,6 +184,10 @@ export class UpdateRoleCapabilityDto {
 
   @IsOptional()
   @IsBoolean()
+  isTicketCancellation?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   isAttendanceEligible?: boolean;
 
   @IsOptional()

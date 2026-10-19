@@ -140,6 +140,7 @@ export interface RoleCapabilityRecord {
   isDutyAdminAccess: boolean;
   isTicketResolutionTimeOverride: boolean;
   isTicketRequesterCorrection: boolean;
+  isTicketCancellation: boolean;
   isAuditAccess: boolean;
   isUnitsAccess: boolean;
   isUnitsManage: boolean;
@@ -200,6 +201,7 @@ export interface UpdateRoleCapabilityPayload {
   isDutyAdminAccess?: boolean;
   isTicketResolutionTimeOverride?: boolean;
   isTicketRequesterCorrection?: boolean;
+  isTicketCancellation?: boolean;
   isAuditAccess?: boolean;
   isUnitsAccess?: boolean;
   isUnitsManage?: boolean;
@@ -217,7 +219,21 @@ export interface UpdateRoleCapabilityPayload {
   isChangelogManagement?: boolean;
 }
 
+export interface PendingStaffRecord {
+  staffId: string; firstName: string; middleName?: string; lastName: string; suffix?: string;
+  positionFull?: string; unitId?: number; unit?: string; unitActive: number;
+  reportorial: number; reviewReason?: string; linkedUserId?: number;
+}
+
 export const usersApi = {
+  listPendingStaff: async (): Promise<{staff: PendingStaffRecord[]; roles: Array<{value: string; label: string}>}> => {
+    const response = await apiClient.get('/users/pending-staff');
+    return response.data;
+  },
+  completePendingStaff: async (staffId: string, email: string, role: string): Promise<{success: boolean; userId: number}> => {
+    const response = await apiClient.post(`/users/pending-staff/${encodeURIComponent(staffId)}/complete`, { email, role });
+    return response.data;
+  },
   getSecurityConfig: async () => {
     const response = await apiClient.get('/users/security-config');
     return response.data;

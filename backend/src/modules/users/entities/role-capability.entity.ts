@@ -229,6 +229,10 @@ export class RoleCapability {
   @Column({ name: 'is_ticket_requester_correction', type: 'tinyint', width: 1, default: 0 })
   isTicketRequesterCorrection: boolean;
 
+  /** Regular requesters: own tickets; enabled RICTMS roles: any ticket. */
+  @Column({ name: 'is_ticket_cancellation', type: 'tinyint', width: 1, default: 0 })
+  isTicketCancellation: boolean;
+
   /** True for accounts eligible to appear in attendance views. */
   @Column({ name: 'is_attendance_eligible', type: 'tinyint', width: 1, default: 0 })
   isAttendanceEligible: boolean;

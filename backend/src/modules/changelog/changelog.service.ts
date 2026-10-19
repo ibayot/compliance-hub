@@ -101,7 +101,7 @@ export class ChangelogService {
   private isEndUser(c?: RoleCapability) {
     if (!c?.isTicketModuleAccess) return false;
     return this.capabilityKeys()
-      .filter((key) => key !== 'isTicketModuleAccess')
+      .filter((key) => !['isTicketModuleAccess', 'isTicketCancellation'].includes(key))
       .every((key) => !(c as any)?.[key]);
   }
   private notes(r: AppRelease, c?: RoleCapability) {

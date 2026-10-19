@@ -59,6 +59,7 @@ export const STATUS_CHIP_SX: Record<string, TicketChipStyle> = {
   closed: filledChip('#455A64', '#fff', 1.5),
   freeze: filledChip('#3949AB', '#fff', 1.5),
   duplicate: filledChip('#616161', '#fff', 1.5),
+  cancelled: filledChip('#AD1457', '#fff', 1.5),
 };
 
 export const SLA_CHIP: Record<string, { label: string; sx: TicketChipStyle }> = {

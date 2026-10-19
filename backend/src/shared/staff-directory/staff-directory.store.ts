@@ -56,6 +56,9 @@ export class StaffDirectoryStore {
       JOIN ${s}.units u ON u.id=p.unit_id AND u.active=1 AND u.has_reportorial_requirements=0
       WHERE p.available=1 AND p.review_reason IS NULL
         AND NOT EXISTS (SELECT 1 FROM ${s}.users a WHERE BINARY a.staff_id=BINARY p.staff_id)
+        AND NOT EXISTS (SELECT 1 FROM ${s}.users a WHERE (a.staff_id IS NULL OR TRIM(a.staff_id)='')
+          AND BINARY LOWER(TRIM(a.first_name))=BINARY LOWER(TRIM(p.first_name))
+          AND BINARY LOWER(TRIM(a.last_name))=BINARY LOWER(TRIM(p.last_name)))
         ${role === 'user' ? `AND EXISTS (SELECT 1 FROM ${s}.user_unit_access x WHERE x.user_id=? AND x.unit_id=p.unit_id)` : ''}
       ORDER BY p.last_name,p.first_name,p.staff_id`,
         role === 'user' ? [actorId] : [],

@@ -3,9 +3,11 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, EntityManager } from 'typeorm';
+import { staffNameKey } from '../../shared/staff-directory/staff-directory.store';
 import * as bcrypt from 'bcrypt';
 import { User, UserRole, AuthProvider } from './entities/user.entity';
 import {
@@ -409,7 +411,58 @@ const previousValue = value;
     return units;
   }
 
-  async create(createUserDto: CreateUserDto, actorUserId?: number): Promise<User> {
+  async listPendingStaff(canManageStaff = false) {
+    const staff = await this.usersRepository.manager.query(`
+      SELECT d.staff_id AS staffId,d.first_name AS firstName,d.middle_name AS middleName,
+        d.last_name AS lastName,d.suffix,d.position_full AS positionFull,
+        d.unit_id AS unitId,u.name AS unit,u.active AS unitActive,
+        u.has_reportorial_requirements AS reportorial,
+        CASE WHEN EXISTS(SELECT 1 FROM users a WHERE (a.staff_id IS NULL OR TRIM(a.staff_id)='')
+          AND BINARY LOWER(TRIM(a.first_name))=BINARY LOWER(TRIM(d.first_name))
+          AND BINARY LOWER(TRIM(a.last_name))=BINARY LOWER(TRIM(d.last_name)))
+          THEN 'Possible existing account without staff ID.' ELSE d.review_reason END AS reviewReason,
+        d.linked_user_id AS linkedUserId
+      FROM ums_staff_directory d LEFT JOIN units u ON u.id=d.unit_id
+      WHERE d.available=1 AND NOT EXISTS(SELECT 1 FROM users a WHERE BINARY a.staff_id=BINARY d.staff_id)
+      ORDER BY d.last_name,d.first_name,d.staff_id`);
+    const roles = await this.roleDefinitionsRepository.find({ where: { assignable: true }, order: { label: 'ASC' } });
+    return { staff, roles: roles.filter((role) => canManageStaff || role.value === UserRole.USER)
+      .map(({ value, label }) => ({ value, label })) };
+  }
+
+  async completePendingStaff(staffId: string, email: string, role: string, actorId: number): Promise<User> {
+    if (!/^\d{1,6}$/.test(staffId)) throw new BadRequestException('Invalid staff ID.');
+    return this.usersRepository.manager.transaction(async (manager) => {
+      // Recheck current permissions, rather than trusting the supplied role or a stale browser session.
+      const [actor] = await manager.query(`SELECT u.id,c.is_user_management_admin AS admin,
+        c.is_user_management_view AS viewer FROM users u
+        LEFT JOIN role_capabilities c ON c.role_value=u.role WHERE u.id=? AND u.active=1`, [actorId]);
+      if (!actor || (!actor.admin && !actor.viewer)) throw new ForbiddenException('User Management access is required.');
+      if (!actor.admin && role !== UserRole.USER) throw new ForbiddenException('You can only create regular user accounts.');
+      const [pending] = await manager.query('SELECT * FROM ums_staff_directory WHERE staff_id=? FOR UPDATE', [staffId]);
+      const authorizedSetup = pending?.review_reason === 'Reportorial-unit staff require authorized account setup.' && actor.admin;
+      if (!pending || !pending.available || (pending.review_reason && !authorizedSetup) || pending.linked_user_id)
+        throw new ConflictException('This staff record needs reconciliation or has already been completed. Refresh the list.');
+      const existing = await manager.query('SELECT id FROM users WHERE staff_id=? LIMIT 1', [staffId]);
+      if (existing.length) throw new ConflictException('This staff member already has an account. Update that account instead.');
+      const names = await manager.query("SELECT first_name,last_name FROM users WHERE staff_id IS NULL OR TRIM(staff_id)=''");
+      if (names.some((person: any) => staffNameKey(person) === staffNameKey(pending)))
+        throw new ConflictException('A possible existing account needs staff ID reconciliation before proceeding.');
+      if (!pending.unit_id) throw new BadRequestException('Synchronize an active unit for this staff member first.');
+      const saved = await this.create({
+        email, role, firstName: pending.first_name, lastName: pending.last_name,
+        middleName: pending.middle_name ?? undefined, suffix: pending.suffix ?? undefined,
+        staffId: pending.staff_id, positionFull: pending.position_full ?? undefined,
+        unitIds: [Number(pending.unit_id)], autoAssignmentEligible: false,
+      }, actorId, { manager, requireNew: true, unitSource: 'ums' });
+      await manager.query('UPDATE ums_staff_directory SET linked_user_id=? WHERE id=?', [saved.id, pending.id]);
+      return saved;
+    });
+  }
+
+  async create(createUserDto: CreateUserDto, actorUserId?: number, options?: {
+    manager: EntityManager; requireNew: boolean; unitSource: 'ums';
+  }): Promise<User> {
     createUserDto.email = createUserDto.email.trim().toLowerCase();
     if (!(await this.securityConfigService.isEmailDomainAllowed(createUserDto.email))) {
       throw new BadRequestException('Email domain is not allowed by Security Settings.');
@@ -421,6 +474,7 @@ const previousValue = value;
     });
 
     if (existingUser) {
+      if (options?.requireNew) throw new ConflictException('That email already belongs to an account. No existing account was changed.');
       // If no password supplied, we're adding/updating an existing account (e.g. Google SSO walk-in)
       if (!createUserDto.password) {
         // Update profile fields only; role changes should go through the explicit admin update flow.
@@ -519,10 +573,10 @@ const previousValue = value;
       units,
     } as any) as unknown as User;
 
-    return this.usersRepository.manager.transaction(async (manager) => {
+    const persist = async (manager: EntityManager) => {
       const saved = await manager.getRepository(User).save(user);
       const selectedUnitId = units[0]?.id;
-      if (selectedUnitId) {
+      if (selectedUnitId && options?.unitSource !== 'ums') {
         await manager.getRepository(UserUnitOverride).upsert(
           {
             userId: saved.id,
@@ -534,7 +588,8 @@ const previousValue = value;
         );
       }
       return saved;
-    });
+    };
+    return options ? persist(options.manager) : this.usersRepository.manager.transaction(persist);
   }
 
   async findAll(): Promise<UserWithUnitAssignmentSource[]> {

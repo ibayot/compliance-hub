@@ -33,6 +33,7 @@ export enum TicketStatus {
   PAUSE = 'pause',
   /** Ticket is a duplicate of an existing open ticket — auto-closes */
   DUPLICATE = 'duplicate',
+  CANCELLED = 'cancelled',
 }
 
 export enum TicketPriority {
@@ -68,6 +69,15 @@ export class Ticket {
 
   @Column({ type: 'varchar', length: 20, default: TicketStatus.OPEN })
   status: TicketStatus;
+
+  @Column({ name: 'cancelled_at', type: 'datetime', nullable: true })
+  cancelledAt: Date | null;
+
+  @Column({ name: 'cancelled_by_id', type: 'int', nullable: true })
+  cancelledById: number | null;
+
+  @Column({ name: 'cancellation_reason', type: 'text', nullable: true })
+  cancellationReason: string | null;
 
   @Column({ type: 'varchar', length: 10, nullable: true, default: null })
   priority: TicketPriority | null;

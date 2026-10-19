@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsString,
+  IsDateString,
   IsNumber,
   IsBoolean,
   IsEnum,
@@ -70,9 +71,23 @@ import { NotificationService } from './notification.service';
 import { StaffDirectoryStore } from '../../../shared/staff-directory/staff-directory.store';
 import { SSE_EVENT_CHANNEL } from '../../../common/events/sse.service';
 import { assertImageReplacementAllowed, commentImagePaths, isDescriptionAttachment } from './ticket-attachment-policy';
+import { assertTicketCancellationAllowed } from './ticket-cancellation-policy';
 import { formatPersonName } from '../../../shared/utils/person-name';
 
 // --- DTOs --------------------------------------------------------------------
+
+export class CancelTicketDto {
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(1500)
+  @ApiProperty({ maxLength: 1500 })
+  reason: string;
+
+  @IsDateString()
+  @ApiProperty({ description: 'updatedAt from the ticket being cancelled; prevents stale actions.' })
+  expectedUpdatedAt: string;
+}
 
 export class CreateTicketDto {
   @IsNotEmpty()
@@ -484,8 +499,8 @@ export const assertValidDuplicateOriginal = (
       'The selected original ticket is itself a duplicate. Select its original ticket instead.',
     );
   }
-  if (original.status === TicketStatus.CLOSED) {
-    throw new BadRequestException('A closed ticket cannot be selected as the original.');
+  if ([TicketStatus.CLOSED, TicketStatus.CANCELLED].includes(original.status)) {
+    throw new BadRequestException('A closed or cancelled ticket cannot be selected as the original.');
   }
   if (Number(original.requesterId) !== Number(ticket.requesterId)) {
     throw new BadRequestException(
@@ -633,7 +648,7 @@ export class TicketService implements OnModuleInit {
     let isOverdue = false;
     let isNearingSLA = false;
     // Duplicate is an administrative outcome, not a successful resolution.
-    if (ticket.status === TicketStatus.DUPLICATE) {
+    if ([TicketStatus.DUPLICATE, TicketStatus.CANCELLED].includes(ticket.status)) {
       return { isOverdue, isNearingSLA, slaPaused: false, slaResumeAt: null, slaResumeCanBeEarly: false };
     }
     const breachedBeforeSchedulePause = Boolean(
@@ -2714,6 +2729,83 @@ export class TicketService implements OnModuleInit {
 
   // --- Update --------------------------------------------------------------
 
+  async cancelTicket(id: string, dto: CancelTicketDto, actorId: number, _actorRole: UserRole) {
+    const reason = typeof dto.reason === 'string' ? dto.reason.trim() : '';
+    if (!reason || reason.length > 1500) throw new BadRequestException('A cancellation reason of 1–1500 characters is required.');
+    const expected = new Date(dto.expectedUpdatedAt).getTime();
+    if (!Number.isFinite(expected)) throw new BadRequestException('A valid ticket version is required.');
+    // Re-read the actor and capabilities instead of accepting client role/ownership flags.
+    const actor = await this.usersHttpClient.getUserById(actorId);
+    if (!actor || Number(actor.active) !== 1) throw new ForbiddenException('An active account is required.');
+    await this.roleCapSvc.reload();
+    const allowed = this.roleCapSvc.isTicketCancellation(actor.role);
+
+    return this.withAutoAssignmentLock(async () => {
+      const result = await this.dataSource.transaction(async manager => {
+        const repo = manager.getRepository(Ticket);
+        const ticket = await repo.findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
+        if (!ticket) throw new NotFoundException('Ticket not found.');
+        assertTicketCancellationAllowed(ticket, actorId, actor.role, allowed);
+        if (new Date(ticket.updatedAt).getTime() !== expected)
+          throw new ConflictException('This ticket changed. Refresh it before cancelling.');
+        const cancelledAt = new Date();
+        await repo.update(id, {
+          status: TicketStatus.CANCELLED, cancelledAt, cancelledById: actorId,
+          cancellationReason: reason, slaPausedAt: null, isSlaWaiting: false,
+          isKbGenerationPending: false,
+        });
+        const escalations = await manager.getRepository(TicketEscalation).find({
+          where: { ticketId: id, status: In([EscalationStatus.PENDING, EscalationStatus.ACCEPTED]) },
+        });
+        if (escalations.length) await manager.getRepository(TicketEscalation).update(
+          { ticketId: id, status: In([EscalationStatus.PENDING, EscalationStatus.ACCEPTED]) },
+          { status: EscalationStatus.CANCELLED },
+        );
+        const events = manager.getRepository(TicketEvent);
+        await events.save(events.create({
+          ticketId: id, actorId, eventType: 'status_changed',
+          meta: JSON.stringify({ from: ticket.status, to: TicketStatus.CANCELLED,
+            justification: reason, reason, automatic: false,
+            cancelledEscalationIds: escalations.map(e => e.id) }),
+        }));
+        return { ticket, escalations, cancelledAt };
+      });
+      // Commit cancellation before emitting updates or freeing a queue slot.
+      this.sseService.emitTicketUpdated(id);
+      const { ticket, escalations } = result;
+      let queueHandoffPending = false;
+      try {
+        if (ticket.assignedToId) {
+          const running = await this.ticketRepo.count({ where: {
+            assignedToId: ticket.assignedToId, status: TicketStatus.IN_PROGRESS, isSlaWaiting: false,
+          } });
+          if (!running) await this.unpauseNextWaitingTicketAndSetInProgress(ticket.assignedToId, 'ticket_cancelled');
+        }
+      } catch {
+        // Never report a committed cancellation as failed and invite a duplicate retry.
+        queueHandoffPending = true;
+        this.logger.error('Cancellation committed but queue handoff requires attention.');
+      }
+      const recipients = [...new Set([ticket.requesterId, ticket.createdById, ticket.assignedToId,
+        ...escalations.flatMap(e => [e.escalatedById, e.escalatedToId])]
+        .filter((userId): userId is number => !!userId && Number(userId) !== actorId))];
+      await this.sendNotification(recipients, id, 'ticket_cancelled', `Ticket ${ticket.ticketNumber} was cancelled. Open the ticket to view the reason.`);
+      return { success: true, ticketId: id, status: TicketStatus.CANCELLED, cancelledAt: result.cancelledAt, queueHandoffPending };
+    });
+  }
+
+  private async persistTicketUpdate(ticket: Ticket, expectedUpdatedAt: Date): Promise<Ticket> {
+    return this.dataSource.transaction(async manager => {
+      const repo = manager.getRepository(Ticket);
+      const current = await repo.findOne({ where: { id: ticket.id }, lock: { mode: 'pessimistic_write' } });
+      if (!current || current.status === TicketStatus.CANCELLED)
+        throw new ConflictException('This ticket is no longer editable. Refresh the ticket.');
+      if (new Date(current.updatedAt).getTime() !== new Date(expectedUpdatedAt).getTime())
+        throw new ConflictException('This ticket changed. Refresh it before saving.');
+      return repo.save(ticket);
+    });
+  }
+
   private async persistDuplicateTicket(
     ticket: Ticket,
     expectedUpdatedAt: Date,
@@ -2799,6 +2891,8 @@ export class TicketService implements OnModuleInit {
     } = {},
   ): Promise<Ticket> {
     const ticket = await this.getTicketById(id, actorRole, actorId);
+    if (ticket.status === TicketStatus.CANCELLED) throw new ForbiddenException('Cancelled tickets cannot be updated.');
+    if (dto.status === TicketStatus.CANCELLED) throw new BadRequestException('Use Cancel Ticket and supply a cancellation reason.');
     const expectedUpdatedAt = ticket.updatedAt;
     const originalStatusForLogging = ticket.status as TicketStatus;
     const frozenReturnStatus =
@@ -2892,13 +2986,13 @@ export class TicketService implements OnModuleInit {
       }
       if (dto.subject) ticket.subject = dto.subject.trim();
       if (dto.description) ticket.description = dto.description.trim();
-      return this.ticketRepo.save(ticket);
+      return this.persistTicketUpdate(ticket, expectedUpdatedAt);
     }
 
     // Terminal state: DUPLICATE tickets cannot be modified further
-    if (ticket.status === TicketStatus.DUPLICATE) {
+    if ([TicketStatus.DUPLICATE, TicketStatus.CANCELLED].includes(ticket.status)) {
       throw new ForbiddenException(
-        'Duplicate tickets are in a terminal state and cannot be updated.',
+        'Duplicate or cancelled tickets are in a terminal state and cannot be updated.',
       );
     }
 
@@ -3148,6 +3242,7 @@ export class TicketService implements OnModuleInit {
             : [],
         [TicketStatus.CLOSED]: [],
         [TicketStatus.DUPLICATE]: [],
+        [TicketStatus.CANCELLED]: [],
       };
       const canManuallyReopen = actorRole === UserRole.SUPER_ADMIN;
       const allowed = [...(ALLOWED_TRANSITIONS[ticket.status as TicketStatus] ?? [])];
@@ -3472,7 +3567,7 @@ export class TicketService implements OnModuleInit {
 
     const saved = dto.status === TicketStatus.DUPLICATE
       ? await this.persistDuplicateTicket(ticket, expectedUpdatedAt, actorId, actorRole, dto.statusJustification!.trim())
-      : await this.ticketRepo.save(ticket);
+      : await this.persistTicketUpdate(ticket, expectedUpdatedAt);
     this.sseService.emitTicketUpdated(saved.id);
 
     if (automaticAssignmentDuringUpdate) {
@@ -3807,7 +3902,7 @@ export class TicketService implements OnModuleInit {
       latestEscalation?.status === EscalationStatus.ACCEPTED ? latestEscalation : null;
 
     // Duplicate, Resolved, and Closed tickets are terminal – assignment is not allowed
-    if (ticket.status === TicketStatus.DUPLICATE) {
+    if ([TicketStatus.DUPLICATE, TicketStatus.CANCELLED].includes(ticket.status)) {
       throw new ForbiddenException(
         'Cannot assign a technician to a ticket that is marked as Duplicate.',
       );
@@ -4917,6 +5012,7 @@ export class TicketService implements OnModuleInit {
     closed: number;
     frozen: number;
     duplicate: number;
+    cancelled: number;
     ratedCount: number;
     satisfactionAvg: number | null;
   }> {
@@ -4936,7 +5032,8 @@ export class TicketService implements OnModuleInit {
       resolved = 0,
       closed = 0,
       frozen = 0,
-      duplicate = 0;
+      duplicate = 0,
+      cancelled = 0;
     let totalSat = 0,
       countSat = 0;
 
@@ -4948,6 +5045,7 @@ export class TicketService implements OnModuleInit {
       else if (t.status === TicketStatus.CLOSED) closed++;
       else if (t.status === TicketStatus.FREEZE) frozen++;
       else if (t.status === TicketStatus.DUPLICATE) duplicate++;
+      else if (t.status === TicketStatus.CANCELLED) cancelled++;
 
       if (t.satisfactionRating) {
         totalSat += t.satisfactionRating;
@@ -4964,6 +5062,7 @@ export class TicketService implements OnModuleInit {
       closed,
       frozen,
       duplicate,
+      cancelled,
       ratedCount: countSat,
       satisfactionAvg: countSat > 0 ? roundRating(totalSat / countSat) : null,
     };
@@ -5134,7 +5233,7 @@ export class TicketService implements OnModuleInit {
       .createQueryBuilder('t')
       .where('t.requesterId = :rid', { rid: requesterId })
       .andWhere('t.status NOT IN (:...terminal)', {
-        terminal: [TicketStatus.CLOSED, TicketStatus.DUPLICATE],
+        terminal: [TicketStatus.CLOSED, TicketStatus.DUPLICATE, TicketStatus.CANCELLED],
       })
       .andWhere('t.createdAt < :sourceCreatedAt', { sourceCreatedAt: source.createdAt })
       .orderBy('t.createdAt', 'DESC')
@@ -6137,6 +6236,10 @@ export class TicketService implements OnModuleInit {
     actorId: number,
     actorRole: UserRole,
   ): Promise<TicketEscalation> {
+    return this.withAutoAssignmentLock(() => this.escalateTicketInternal(ticketId, dto, proofFiles, actorId, actorRole));
+  }
+
+  private async escalateTicketInternal(ticketId: string, dto: EscalateTicketDto, proofFiles: Express.Multer.File[], actorId: number, actorRole: UserRole): Promise<TicketEscalation> {
     if (
       !this.roleCapSvc.isTicketFocal(actorRole as string) &&
       !this.roleCapSvc.isTicketSettingsFocal(actorRole as string) &&
@@ -6160,11 +6263,11 @@ export class TicketService implements OnModuleInit {
 
     // Terminal tickets cannot be escalated
     if (
-      [TicketStatus.CLOSED, TicketStatus.DUPLICATE, TicketStatus.RESOLVED].includes(
+      [TicketStatus.CLOSED, TicketStatus.DUPLICATE, TicketStatus.RESOLVED, TicketStatus.CANCELLED].includes(
         ticket.status as TicketStatus,
       )
     ) {
-      throw new ForbiddenException('Resolved, closed, or duplicate tickets cannot be escalated.');
+      throw new ForbiddenException('Resolved, closed, duplicate or cancelled tickets cannot be escalated.');
     }
 
     // Verify target is a valid escalation focal for this ticket type
@@ -6276,6 +6379,10 @@ export class TicketService implements OnModuleInit {
     escalationId: string,
     actorId: number,
   ): Promise<TicketEscalation> {
+    return this.withAutoAssignmentLock(() => this.acceptEscalationInternal(ticketId, escalationId, actorId));
+  }
+
+  private async acceptEscalationInternal(ticketId: string, escalationId: string, actorId: number): Promise<TicketEscalation> {
     const escalation = await this.escalationRepo.findOne({ where: { id: escalationId, ticketId } });
     if (!escalation) throw new NotFoundException('Escalation record not found.');
     if (escalation.escalatedToId !== actorId) {
@@ -6289,6 +6396,7 @@ export class TicketService implements OnModuleInit {
 
     const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
     if (!ticket) throw new NotFoundException('Ticket not found');
+    if (ticket.status === TicketStatus.CANCELLED) throw new BadRequestException('Cancelled tickets cannot accept escalation.');
     let acceptingUser = await this.usersHttpClient.getUserById(actorId);
     if (!acceptingUser && ticket.ticketType === TicketType.SPECIALIZED_CONCERNS) {
       const rows = await this.dataSource.query(
@@ -6380,6 +6488,10 @@ export class TicketService implements OnModuleInit {
     dto: ReturnEscalationDto,
     actorId: number,
   ): Promise<TicketEscalation> {
+    return this.withAutoAssignmentLock(() => this.returnEscalationInternal(ticketId, escalationId, dto, actorId));
+  }
+
+  private async returnEscalationInternal(ticketId: string, escalationId: string, dto: ReturnEscalationDto, actorId: number): Promise<TicketEscalation> {
     const escalation = await this.escalationRepo.findOne({ where: { id: escalationId, ticketId } });
     if (!escalation) throw new NotFoundException('Escalation record not found.');
     if (escalation.escalatedToId !== actorId) {
@@ -6765,7 +6877,7 @@ export class TicketService implements OnModuleInit {
       const latestEsc = escalationMap.get(t.id);
       // Only override assignedToId for active tickets — resolved/closed tickets should show
       // the actual resolver (who resolved the ticket), not the escalation focal.
-      const isTerminal = ['resolved', 'closed', 'duplicate'].includes(t.status);
+      const isTerminal = ['resolved', 'closed', 'duplicate', 'cancelled'].includes(t.status);
       if (latestEsc && !isTerminal) t.assignedToId = latestEsc.escalatedToId;
     }
 
@@ -7499,7 +7611,7 @@ export class TicketService implements OnModuleInit {
     const qb = this.ticketRepo
       .createQueryBuilder('ticket')
       .leftJoinAndSelect('ticket.issueTypeConfig', 'performanceIssueType')
-      .where("ticket.status != 'duplicate'");
+      .where("ticket.status NOT IN ('duplicate', 'cancelled')");
 
     if (filters.year) qb.andWhere('YEAR(ticket.createdAt) = :year', { year: filters.year });
     if (filters.month) qb.andWhere('MONTH(ticket.createdAt) = :month', { month: filters.month });
@@ -7681,7 +7793,7 @@ export class TicketService implements OnModuleInit {
       .addGroupBy('category.name')
       .addGroupBy('ticket.status');
 
-    qb.andWhere("ticket.status != 'duplicate'");
+    qb.andWhere("ticket.status NOT IN ('duplicate', 'cancelled')");
 
     if (filters.year) {
       qb.andWhere('YEAR(ticket.createdAt) = :year', { year: filters.year });

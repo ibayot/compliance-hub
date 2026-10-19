@@ -80,6 +80,7 @@ import {
 } from '@/lib/auth/biometric';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import PendingStaffPanel from '@/components/PendingStaffPanel';
 
 // --- Change Password Card ---------------------------------------------------
 
@@ -710,6 +711,7 @@ const CAPABILITY_CATEGORIES = [
       { key: 'isDutyAdminAccess', label: 'Duty Administrator', description: 'Manage duty rosters, logs, exceptions, meetings, and attendance release' },
       { key: 'isTicketResolutionTimeOverride', label: 'Ticket Resolution Time Override', description: 'Correct the effective resolution time of resolved or closed tickets using required proof' },
       { key: 'isTicketRequesterCorrection', label: 'Ticket Record Correction', description: 'Correct the Requested For or Assigned To person on an existing ticket' },
+      { key: 'isTicketCancellation', label: 'Cancel Tickets', description: 'Cancel Open, Assigned or In Progress tickets with a reason. Regular requesters are limited to their own requests/filings; enabled RICTMS roles may cancel any ticket.' },
       { key: 'isSecuritySettingsAccess', label: 'Security Settings Admin', description: 'Manage the default password in Security Settings' },
       { key: 'isSmtpSettingsAccess', label: 'SMTP Admin', description: 'Manage SMTP credentials in Settings' },
       { key: 'isChangelogManagement', label: 'Changelog Admin', description: 'Create and publish capability-targeted user-visible release notes' },
@@ -1442,7 +1444,7 @@ function FocalUserManagementCard() {
   useEffect(() => {
     reload();
   }, [reload]);
-  useSse(['GLOBAL_SETTINGS_UPDATED'], reload);
+  useSse(['GLOBAL_SETTINGS_UPDATED', 'USER_DIRECTORY_UPDATED'], reload);
 
   const resetForm = () => {
     setForm({
@@ -1721,6 +1723,8 @@ function FocalUserManagementCard() {
         >
           <Tabs
             value={userTab}
+            variant="scrollable"
+            scrollButtons="auto"
             onChange={(_, v) => {
               setUserTab(v);
               setPage(0);
@@ -1733,7 +1737,9 @@ function FocalUserManagementCard() {
             <Tab
               label={`Regular Users (${focalUsers.filter((u: any) => u.role === 'user').length})`}
             />
+            <Tab label="Pending Staff" />
           </Tabs>
+          {userTab !== 2 && (
           <TextField
             size="small"
             placeholder="Search staff by name or email..."
@@ -1752,8 +1758,10 @@ function FocalUserManagementCard() {
             inputProps={{ maxLength: 100 }}
             sx={{ width: { xs: '100%', sm: 300 } }}
           />
+          )}
         </Box>
 
+        {userTab === 2 ? <PendingStaffPanel onCompleted={reload} /> : <>
         {(() => {
           let displayUsers =
             userTab === 0
@@ -1996,6 +2004,7 @@ function FocalUserManagementCard() {
             </>
           );
         })()}
+        </>}
 
         <Dialog open={Boolean(editUser)} onClose={() => setEditUser(null)} maxWidth="md" fullWidth>
           <DialogTitle>Edit User Profile</DialogTitle>

@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.23] - 2026-10-19 - Ticket Cancellation and Pending Staff
+
+### Added
+- Pending Staff in User Management lists synchronized staff without accounts. Authorized account managers can add an email and create the account from existing staff details without overwriting existing accounts. Regular-account limits, permitted email domains, unit classification and duplicate checks remain enforced.
+- Capability-controlled cancellation of Open, Assigned and In Progress tickets with a required reason. Regular requesters are limited to requests they own or filed; enabled RICTMS roles may cancel other tickets. Cancelled tickets retain their attachments, reason, actor, timestamp and history.
+- Cancel Ticket actions in desktop/mobile lists and ticket details, plus a Cancelled status/filter. Cancellation ends active escalation actions, notifies participants and releases the assignee queue when no other ticket is running.
+
+### Fixed
+- Cancelled tickets cannot be reopened through generic edits, assignment, escalation or stale ticket saves, and are excluded from active SLA, rating and resolution-performance processing.
+- Native requester cancellation does not expose staff-only changelog notes to regular users.
+
 ## [1.0.22] - 2026-10-15 - Ticket Workflows and Feedback
 
 ### Added

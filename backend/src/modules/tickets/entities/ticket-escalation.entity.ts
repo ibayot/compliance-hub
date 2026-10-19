@@ -14,6 +14,7 @@ export enum EscalationStatus {
   PENDING = 'pending',
   ACCEPTED = 'accepted',
   RETURNED = 'returned',
+  CANCELLED = 'cancelled',
 }
 
 /**

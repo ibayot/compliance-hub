@@ -54,6 +54,7 @@ export type CapabilityKey =
   | 'isDutyAdminAccess'
   | 'isTicketResolutionTimeOverride'
   | 'isTicketRequesterCorrection'
+  | 'isTicketCancellation'
   | 'isAttendanceEligible'
   | 'isAuditAccess'
   | 'isUnitsAccess'
@@ -286,6 +287,10 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
 
   isTicketRequesterCorrection(role: string): boolean {
     return !!this.get(role)?.isTicketRequesterCorrection;
+  }
+
+  isTicketCancellation(role: string): boolean {
+    return !!this.get(role)?.isTicketCancellation;
   }
 
   isAttendanceEligible(role: string): boolean {

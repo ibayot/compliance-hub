@@ -83,6 +83,7 @@ import {
   RatingInvitationRecipient,
 } from '@/app/api/references';
 import TicketImageDropzone from '@/components/TicketImageDropzone';
+import TicketCancelButton from '@/components/TicketCancelButton';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useSse } from '@/lib/utils/useSse';
 import { formatPersonName } from '@/lib/utils/person-name';
@@ -567,6 +568,7 @@ export default function TicketsPage({
     { key: 'closed', label: 'Closed' },
     { key: 'freeze', label: 'Frozen' },
     { key: 'duplicate', label: 'Duplicate' },
+    { key: 'cancelled', label: 'Cancelled' },
     ...(personalRequestedOnly ? [{ key: 'proxy', label: 'Proxy Requests' }] : []),
   ];
   const selectedStatus = statusTabs.some(
@@ -623,6 +625,7 @@ export default function TicketsPage({
       'closed',
       'freeze',
       'duplicate',
+      'cancelled',
       ...(personalRequestedOnly ? ['to_rate', 'proxy'] : []),
     ]);
     const restoredPeriod = FILTER_PERIOD_MODES.includes(
@@ -809,7 +812,7 @@ export default function TicketsPage({
     async (rows: Ticket[]) => {
       if (!canEscalate) return;
       const candidates = rows
-        .filter((t) => !['duplicate', 'closed', 'resolved'].includes(t.status))
+        .filter((t) => !['duplicate', 'closed', 'resolved', 'cancelled'].includes(t.status))
         .slice(0, 80);
       if (candidates.length === 0) return;
 
@@ -2551,6 +2554,7 @@ export default function TicketsPage({
                         Tap the card to view details
                       </Typography>
                       <Stack direction="row" spacing={0.5}>
+                        <TicketCancelButton ticket={ticket} onCancelled={() => void fetchTickets()} />
                         <Tooltip title="View Details">
                           <IconButton
                             size="small"
@@ -2562,7 +2566,7 @@ export default function TicketsPage({
                             <ViewIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        {canAssign && ticket.status !== 'duplicate' && (
+                        {canAssign && !['duplicate', 'cancelled'].includes(ticket.status) && (
                           <Tooltip
                             title={
                               ['resolved', 'closed'].includes(ticket.status)
@@ -2587,7 +2591,7 @@ export default function TicketsPage({
                         )}
                         {canEscalate &&
                           escalationStateByTicket[ticket.id] !== 'active' &&
-                          !['duplicate', 'closed', 'resolved'].includes(ticket.status) && (
+                          !['duplicate', 'closed', 'resolved', 'cancelled'].includes(ticket.status) && (
                             <Tooltip title="Escalate Ticket">
                               <IconButton
                                 size="small"
@@ -2956,6 +2960,7 @@ export default function TicketsPage({
                         </TableCell>
                         <TableCell align="right">
                           <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                            <TicketCancelButton ticket={ticket} onCancelled={() => void fetchTickets()} />
                             <Tooltip title="View Details">
                               <IconButton
                                 size="small"
@@ -2964,7 +2969,7 @@ export default function TicketsPage({
                                 <ViewIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                            {canAssign && ticket.status !== 'duplicate' && (
+                            {canAssign && !['duplicate', 'cancelled'].includes(ticket.status) && (
                               <Tooltip
                                 title={
                                   ['resolved', 'closed'].includes(ticket.status)
@@ -2988,7 +2993,7 @@ export default function TicketsPage({
                             )}
                             {canEscalate &&
                               escalationStateByTicket[ticket.id] !== 'active' &&
-                              !['duplicate', 'closed', 'resolved'].includes(ticket.status) && (
+                              !['duplicate', 'closed', 'resolved', 'cancelled'].includes(ticket.status) && (
                                 <Tooltip title="Escalate Ticket">
                                   <IconButton
                                     size="small"
