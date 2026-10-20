@@ -31,6 +31,8 @@ export type CapabilityKey =
   | 'isTicketModuleAccess'
   | 'isTicketReportsAccess'
   | 'isTicketReportsManage'
+  | 'isTicketPerformanceAccess'
+  | 'isStaffDirectoryAccess'
   | 'isKpiAccess'
   | 'isKpiManage'
   | 'isAttendanceAccess'
@@ -216,6 +218,8 @@ export class RoleCapabilitiesHttpClient implements OnModuleInit {
   isTicketModuleAccess(role: string): boolean { return !!this.get(role)?.isTicketModuleAccess; }
   isTicketReportsAccess(role: string): boolean { return !!this.get(role)?.isTicketReportsAccess; }
   isTicketReportsManage(role: string): boolean { return !!this.get(role)?.isTicketReportsManage; }
+  isTicketPerformanceAccess(role: string): boolean { return !!this.get(role)?.isTicketPerformanceAccess; }
+  isStaffDirectoryAccess(role: string): boolean { return !!this.get(role)?.isStaffDirectoryAccess; }
 
   isKpiAccess(role: string): boolean {
     return !!this.get(role)?.isKpiAccess;

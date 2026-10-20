@@ -16,6 +16,7 @@ import IssuancesPage from '@/app/(app)/governance/issuances/page';
 import TicketsPage from '@/app/(app)/operations/tickets/page';
 import TicketDetailPage from '@/app/(app)/operations/tickets/[id]/page';
 import UnitsPage from '@/app/(app)/admin/units/page';
+import StaffDirectoryPage from '@/app/(app)/operations/staff-directory/page';
 import MetricsPage from '@/app/(app)/governance/metrics/page';
 import ReviewsPage from '@/app/(app)/governance/reviews/page';
 import KpiPage from '@/app/(app)/governance/kpi/page';
@@ -183,6 +184,9 @@ export default function App() {
           </ProtectedDashboard>
         }
       />
+      <Route path="/operations/staff-directory" element={
+        <ProtectedDashboard requiredCapability="isStaffDirectoryAccess"><StaffDirectoryPage /></ProtectedDashboard>
+      } />
       <Route
         path="/governance/metrics"
         element={

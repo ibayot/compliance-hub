@@ -619,6 +619,7 @@ export interface TicketReportResult {
     avgResolutionTimeHours: number;
     count: number;
   }>;
+  performancePeriod: { startAt: string; endAt: string; excludedTickets: number };
   weeklyTechnicianPerformance: Array<{
     techId: number;
     techName: string;
@@ -631,6 +632,15 @@ export interface TicketReportResult {
     efficiencyScore: number;
     weightedScore: number;
   }>;
+}
+
+export interface WeeklyPerformanceSummary {
+  startAt: string;
+  endAt: string;
+  timeZone: 'Asia/Manila';
+  weights: { sla: number; volume: number; efficiency: number };
+  excludedTickets: number;
+  rows: TicketReportResult['weeklyTechnicianPerformance'];
 }
 
 export interface RatingsReportResult {
@@ -1062,6 +1072,10 @@ export interface PaginatedTickets {
 
 // Tickets API (IT Help Desk)
 export const ticketsApi = {
+  getWeeklyPerformance: async (): Promise<WeeklyPerformanceSummary> => {
+    const response = await apiClient.get<WeeklyPerformanceSummary>('/tickets/weekly-performance');
+    return response.data;
+  },
   getRatingInvitationAvailability: async (): Promise<{ available: boolean }> => {
     const response = await apiClient.get('/tickets/rating-invitations/availability');
     return response.data;

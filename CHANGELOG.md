@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.24] - 2026-10-20 - Staff Directory and Ticket Workflows
+
+### Added
+- Read-only Staff Directory lets authorized staff search people by name, position and unit, with staff counts and registered/directory-only indicators. It respects current application unit selections and does not grant account-management access.
+- Weekly Ticket Performance on the dashboard, controlled by its own capability, shows the top five assignees with expandable rankings and score details: 50% SLA compliance, 30% relative completed volume and 20% active-time efficiency. Results follow the Philippine Monday-to-date week and refresh after ticket updates.
+
+### Changed
+- Requested For shows units and supports searching by name, email or unit during ticket creation and authorized requester correction. Existing requester-selection restrictions are unchanged.
+- Desktop ticket rows open details directly, with operational actions grouped under an ellipsis menu. Mobile retains action icons with a compact cancellation control. Ticket details use a vertical action menu, a requester-first heading and an initially collapsed Details panel that keeps an available SLA deadline and timing summary visible in two columns.
+- Support Type, Category and Issue have matching labeled, more prominent fields. Assigned to Me distinguishes the assigned-work filter from the My Tickets page. All screen sizes keep New Ticket visible while grouping permitted secondary actions in a vertical ellipsis menu.
+- Ticket filters use roomier controls and spacing that adapt to the available panel width, while search retains the largest shared field.
+- Role Capabilities Matrix groups related controls by workflow and exposes previously omitted existing capability flags without changing stored permissions.
+
+### Fixed
+- Performance rankings in Ticket Reports now follow the selected reporting period instead of always showing the current week. Dashboard week boundaries use Philippine time; tickets without usable SLA timing are identified as excluded rather than treated as zero-duration completions.
+- Dashboard View All Tickets and Quick Actions View Tickets no longer return authorized users to Dashboard while capabilities are loading. Entering a ticket list clears prior filters and applies only the selected shortcut's intended scope, status and period.
+
 ## [1.0.23] - 2026-10-19 - Ticket Cancellation and Pending Staff
 
 ### Added

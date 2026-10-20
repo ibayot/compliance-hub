@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSse } from '@/lib/utils/useSse';
+import WeeklyTicketPerformance from '@/components/WeeklyTicketPerformance';
 import {
   Box,
   Typography,
@@ -932,6 +933,8 @@ export default function DashboardPage() {
         </Card>
       )}
 
+      {/* Independent summary access does not grant report-management permissions. */}
+      {ticketingEnabled && myCap?.isTicketPerformanceAccess && <WeeklyTicketPerformance key={user?.id} />}
       {/* Main Stats — hidden for all technicians */}
       {!isTechnicianAny && complianceEnabled && canViewDocuments && (
         <Grid container spacing={3} mb={4}>
@@ -1220,7 +1223,13 @@ export default function DashboardPage() {
                   </Select>
                 )}
 
-                <Button variant="outlined" size="small" href="/operations/tickets">
+                <Button variant="outlined" size="small" onClick={() => {
+                  const params = new URLSearchParams({ period: itStatsMode, year: String(itStatsYear) });
+                  if (itStatsMode === 'semester') params.set('semester', String(itStatsSemester));
+                  if (itStatsMode === 'quarter') params.set('quarter', String(itStatsQuarter));
+                  if (itStatsMode === 'month') params.set('month', String(itStatsMonth));
+                  router.push(`/operations/tickets?${params.toString()}`);
+                }}>
                   View All Tickets
                 </Button>
               </Box>
@@ -1740,7 +1749,7 @@ export default function DashboardPage() {
                     </>
                   )}
                   {appMode !== 'compliance_only' && (
-                    <Button variant="outlined" href="/operations/tickets" fullWidth>
+                    <Button variant="outlined" onClick={() => router.push('/operations/tickets')} fullWidth>
                       View Tickets
                     </Button>
                   )}

@@ -1,5 +1,7 @@
 'use client';
 
+import { requesterOptionLabel, filterRequesterOptions } from '@/lib/utils/requester-options';
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
@@ -59,10 +61,10 @@ import {
   ChevronLeft,
   ChevronRight,
   EditCalendar as ResolutionTimeIcon,
-  MailOutline as MailOutlineIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useRouter } from 'next/navigation';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { SafeMarkdown } from '@/components/SafeRichText';
 import {
@@ -84,6 +86,10 @@ import {
 } from '@/app/api/references';
 import TicketImageDropzone from '@/components/TicketImageDropzone';
 import TicketCancelButton from '@/components/TicketCancelButton';
+import TicketActionsMenu, { TicketMenuAction } from '@/components/TicketActionsMenu';
+import TicketPageActions from '@/components/TicketPageActions';
+import { resolveTicketListEntry, TICKET_ENTRY_QUERY_KEYS } from '@/lib/utils/ticket-list-entry';
+import { ticketFilterPanelSx, ticketFilterGridSx, ticketSearchSx, ticketFilterShortcutsSx } from '@/lib/utils/ticket-filter-layout';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useSse } from '@/lib/utils/useSse';
 import { formatPersonName } from '@/lib/utils/person-name';
@@ -120,34 +126,7 @@ const effectiveResolvedAt = (ticket: Ticket) =>
 
 type TicketFilterPeriodMode = 'day' | 'month' | 'quarter' | 'semester' | 'year';
 
-interface PersistedTicketListState {
-  filterStatus: string;
-  filterType: string;
-  filterPriority: string;
-  filterSla: '' | 'overdue' | 'nearing_sla' | 'on_track';
-  filterDate: string;
-  filterYear: string;
-  filterMonth: string;
-  filterQuarter: string;
-  filterSemester: string;
-  filterPeriodMode: TicketFilterPeriodMode;
-  searchDraft: string;
-  selectedTab: string;
-  showMyTickets: boolean;
-  showEscalatedToMe: boolean;
-  showEscalations: boolean;
-  escalationSearch: string;
-}
-
 const TICKET_LIST_STATE_STORAGE_PREFIX = 'compliance-hub:ticket-list-state:v1';
-const FILTER_PERIOD_MODES: TicketFilterPeriodMode[] = [
-  'day',
-  'month',
-  'quarter',
-  'semester',
-  'year',
-];
-const SLA_FILTER_VALUES = ['', 'overdue', 'nearing_sla', 'on_track'] as const;
 const todayInManila = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 
 const toDateTimeLocalValue = (value?: string | null) => {
@@ -165,6 +144,7 @@ export default function TicketsPage({
   personalRequestedOnly?: boolean;
 }) {
   const router = useRouter();
+  const location = useLocation();
   const ticketDetailsHref = (ticketId: string) =>
     personalRequestedOnly
       ? `/operations/tickets/${ticketId}?source=my-tickets`
@@ -201,7 +181,7 @@ export default function TicketsPage({
   const [searchDraft, setSearchDraft] = useState('');
   const [filterPeriodMode, setFilterPeriodMode] = useState<TicketFilterPeriodMode>('day');
   const [showMyTickets, setShowMyTickets] = useState(false);
-  const [filtersHydrated, setFiltersHydrated] = useState(false);
+  const [hydratedEntryKey, setHydratedEntryKey] = useState<string | null>(null);
   const [showEscalatedToMe, setShowEscalatedToMe] = useState(false);
   const [myTicketsCount, setMyTicketsCount] = useState(0);
   const [escalatedToMeCount, setEscalatedToMeCount] = useState(0);
@@ -347,6 +327,8 @@ export default function TicketsPage({
   const ticketListStorageKey = user?.id
     ? `${TICKET_LIST_STATE_STORAGE_PREFIX}:${user.id}:${ticketListViewScope}`
     : null;
+  const ticketListEntryKey = user?.id ? `${user.id}:${ticketListViewScope}:${location.key}` : null;
+  const filtersHydrated = !!ticketListEntryKey && hydratedEntryKey === ticketListEntryKey;
 
   const refreshRatingInvitationAvailability = useCallback(() => {
     if (!canSendRatingInvitations) {
@@ -596,201 +578,42 @@ export default function TicketsPage({
   );
 
   useEffect(() => {
-    if (authLoading || !ticketListStorageKey) return;
-
-    setFiltersHydrated(false);
-    let restored: Partial<PersistedTicketListState> = {};
+    if (authLoading || !ticketListEntryKey || hydratedEntryKey === ticketListEntryKey) return;
+    // New navigation clears legacy filters before applying the link's explicit intent.
     try {
-      const parsed = JSON.parse(sessionStorage.getItem(ticketListStorageKey) || '{}');
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        restored = parsed as Partial<PersistedTicketListState>;
-      } else {
-        sessionStorage.removeItem(ticketListStorageKey);
-      }
-    } catch {
-      try {
-        sessionStorage.removeItem(ticketListStorageKey);
-      } catch {
-        // Storage may be unavailable; the in-memory defaults remain usable.
-      }
-    }
-
-    const validTabs = new Set([
-      'all',
-      'open',
-      'assigned',
-      'in_progress',
-      'pause',
-      'resolved',
-      'closed',
-      'freeze',
-      'duplicate',
-      'cancelled',
-      ...(personalRequestedOnly ? ['to_rate', 'proxy'] : []),
-    ]);
-    const restoredPeriod = FILTER_PERIOD_MODES.includes(
-      restored.filterPeriodMode as TicketFilterPeriodMode,
-    )
-      ? (restored.filterPeriodMode as TicketFilterPeriodMode)
-      : 'day';
-    const restoredSla = SLA_FILTER_VALUES.includes(
-      restored.filterSla as (typeof SLA_FILTER_VALUES)[number],
-    )
-      ? (restored.filterSla as PersistedTicketListState['filterSla'])
-      : '';
-
-    setFilterStatus(typeof restored.filterStatus === 'string' ? restored.filterStatus : '');
-    setFilterType(typeof restored.filterType === 'string' ? restored.filterType : '');
-    setFilterPriority(typeof restored.filterPriority === 'string' ? restored.filterPriority : '');
-    setFilterSla(restoredSla);
-    setFilterDate(
-      typeof restored.filterDate === 'string' ? restored.filterDate : todayInManila(),
-    );
-    setFilterYear(
-      typeof restored.filterYear === 'string' ? restored.filterYear : currentYear,
-    );
-    setFilterMonth(
-      typeof restored.filterMonth === 'string' ? restored.filterMonth : currentMonth,
-    );
-    setFilterQuarter(
-      typeof restored.filterQuarter === 'string' ? restored.filterQuarter : '',
-    );
-    setFilterSemester(
-      typeof restored.filterSemester === 'string' ? restored.filterSemester : '',
-    );
-    setFilterPeriodMode(restoredPeriod);
-    const restoredSearch =
-      typeof restored.searchDraft === 'string' ? restored.searchDraft.slice(0, 255) : '';
-    setSearchDraft(restoredSearch);
-    setSearchQuery(restoredSearch.trim());
-    setSelectedTab(
-      typeof restored.selectedTab === 'string' && validTabs.has(restored.selectedTab)
-        ? restored.selectedTab
-        : 'all',
-    );
-    setShowMyTickets(
-      defaultShowMyTickets
-        ? true
-        : typeof restored.showMyTickets === 'boolean'
-          ? restored.showMyTickets
-          : false,
-    );
-    setShowEscalatedToMe(
-      canViewEscalatedQueue && restored.showEscalatedToMe === true,
-    );
-    setShowEscalations(canViewEscalatedQueue && restored.showEscalations === true);
-    setEscalationSearch(
-      typeof restored.escalationSearch === 'string' ? restored.escalationSearch.slice(0, 255) : '',
-    );
-
-    // Explicit dashboard/deep-link parameters take precedence over the saved page state.
+      if (ticketListStorageKey) sessionStorage.removeItem(ticketListStorageKey);
+    } catch { /* Fresh in-memory state works even when storage is unavailable. */ }
+    ++ticketRequestRef.current;
+    if (ticketSseTimerRef.current) clearTimeout(ticketSseTimerRef.current);
+    ticketSseTimerRef.current = null;
     const params = new URLSearchParams(window.location.search);
-    if (params.get('assignedToMe') === '1' || params.get('scope') === 'assigned_to_me') {
-      setShowMyTickets(true);
-      setShowEscalatedToMe(false);
-    }
-    if (params.get('filter') === 'pending_satisfaction' && validTabs.has('to_rate')) {
-      setSelectedTab('to_rate');
-    }
-    const status = params.get('status');
-    if (status && validTabs.has(status)) setSelectedTab(status);
-
-    const period = params.get('period');
-    if (period === 'month' && params.get('year') && params.get('month')) {
-      setFilterPeriodMode('month');
-      setFilterDate('');
-      setFilterYear(params.get('year')!);
-      setFilterMonth(params.get('month')!);
-    } else if (period === 'day' && params.get('date')) {
-      setFilterPeriodMode('day');
-      setFilterDate(params.get('date')!);
-    }
-    const sla = params.get('sla');
-    if (sla === 'overdue' || sla === 'nearing_sla' || sla === 'on_track') {
-      setFilterSla(sla);
-      setFilterYear('');
-      setFilterMonth('');
-      setFilterQuarter('');
-      setFilterSemester('');
-      setFilterPeriodMode('year');
-      setFilterDate('');
-    }
-    const consumedKeys = [
-      'assignedToMe',
-      'scope',
-      'filter',
-      'status',
-      'period',
-      'date',
-      'year',
-      'month',
-      'sla',
-    ];
-    if (consumedKeys.some((key) => params.has(key))) {
-      consumedKeys.forEach((key) => params.delete(key));
+    const entry = resolveTicketListEntry(params, { today: todayInManila(), defaultAssignedToMe: defaultShowMyTickets, personalRequestedOnly });
+    setFilterStatus(entry.filterStatus);
+    setFilterType(entry.filterType);
+    setFilterPriority(entry.filterPriority);
+    setFilterSla(entry.filterSla);
+    setFilterDate(entry.filterDate);
+    setFilterYear(entry.filterYear);
+    setFilterMonth(entry.filterMonth);
+    setFilterQuarter(entry.filterQuarter);
+    setFilterSemester(entry.filterSemester);
+    setFilterPeriodMode(entry.filterPeriodMode);
+    setSearchDraft(entry.searchDraft);
+    setSearchQuery(entry.searchQuery);
+    setSelectedTab(entry.selectedTab);
+    setShowMyTickets(entry.showMyTickets);
+    setShowEscalatedToMe(entry.showEscalatedToMe);
+    setShowEscalations(entry.showEscalations);
+    setEscalationSearch(entry.escalationSearch);
+    setPage(entry.page);
+    if (TICKET_ENTRY_QUERY_KEYS.some(key => params.has(key))) {
+      TICKET_ENTRY_QUERY_KEYS.forEach(key => params.delete(key));
       const remainingQuery = params.toString();
-      window.history.replaceState(
-        window.history.state,
-        '',
-        `${window.location.pathname}${remainingQuery ? `?${remainingQuery}` : ''}${window.location.hash}`,
-      );
+      window.history.replaceState(window.history.state, '',
+        `${window.location.pathname}${remainingQuery ? `?${remainingQuery}` : ''}${window.location.hash}`);
     }
-    setFiltersHydrated(true);
-  }, [
-    authLoading,
-    canViewEscalatedQueue,
-    currentMonth,
-    currentYear,
-    defaultShowMyTickets,
-    personalRequestedOnly,
-    ticketListStorageKey,
-  ]);
-
-  useEffect(() => {
-    if (!filtersHydrated || !ticketListStorageKey) return;
-    const state: PersistedTicketListState = {
-      filterStatus,
-      filterType,
-      filterPriority,
-      filterSla,
-      filterDate,
-      filterYear,
-      filterMonth,
-      filterQuarter,
-      filterSemester,
-      filterPeriodMode,
-      searchDraft,
-      selectedTab,
-      showMyTickets,
-      showEscalatedToMe,
-      showEscalations,
-      escalationSearch,
-    };
-    try {
-      sessionStorage.setItem(ticketListStorageKey, JSON.stringify(state));
-    } catch {
-      // Storage can be unavailable in restricted browser modes; filters still work in memory.
-    }
-  }, [
-    escalationSearch,
-    filterDate,
-    filterMonth,
-    filterPeriodMode,
-    filterPriority,
-    filterQuarter,
-    filterSemester,
-    filterSla,
-    filterStatus,
-    filterType,
-    filterYear,
-    filtersHydrated,
-    searchDraft,
-    selectedTab,
-    showEscalatedToMe,
-    showEscalations,
-    showMyTickets,
-    ticketListStorageKey,
-  ]);
+    setHydratedEntryKey(ticketListEntryKey);
+  }, [authLoading, ticketListEntryKey, hydratedEntryKey, defaultShowMyTickets, personalRequestedOnly, ticketListStorageKey]);
 
   useEffect(() => {
     if (!newDialogOpen || !isTicketAdmin) return;
@@ -991,12 +814,12 @@ export default function TicketsPage({
 
       if (canViewEscalatedQueue) {
         const escalations = await ticketsApi.getAllEscalations();
-        setAllEscalations(escalations);
+        if (requestId === ticketRequestRef.current) setAllEscalations(escalations);
       }
     } catch {
-      enqueueSnackbar('Failed to load tickets', { variant: 'error' });
+      if (requestId === ticketRequestRef.current) enqueueSnackbar('Failed to load tickets', { variant: 'error' });
     } finally {
-      setLoading(false);
+      if (requestId === ticketRequestRef.current) setLoading(false);
     }
   }, [
     filterStatus,
@@ -1614,19 +1437,6 @@ export default function TicketsPage({
     }
   };
 
-  const filterGridSx = {
-    display: 'grid',
-    gridTemplateColumns: {
-      xs: 'repeat(2, minmax(0, 1fr))',
-      sm: 'repeat(4, minmax(0, 1fr))',
-      md: 'repeat(6, minmax(0, 1fr))',
-      lg: 'minmax(0, 2.5fr) repeat(9, minmax(0, 1fr))',
-    },
-    gap: 1,
-    alignItems: 'center',
-    '& > *': { minWidth: 0, width: '100%' },
-  } as const;
-
   const resetTicketFilters = () => {
     setFilterStatus('');
     setFilterType('');
@@ -1656,7 +1466,7 @@ export default function TicketsPage({
         setSearchDraft(e.target.value);
         setPage(1);
       }}
-      sx={{ gridColumn: { xs: '1 / -1', sm: 'span 2', md: 'span 2', lg: 'span 1' } }}
+      sx={ticketSearchSx}
       InputProps={{
         startAdornment: (
           <InputAdornment position="start">
@@ -1671,13 +1481,13 @@ export default function TicketsPage({
     <Box>
       <Box
         display="flex"
-        flexDirection={{ xs: 'column', sm: 'row' }}
-        gap={{ xs: 2, sm: 0 }}
+        flexWrap="wrap"
+        gap={2}
         justifyContent="space-between"
         alignItems={{ xs: 'flex-start', sm: 'center' }}
         mb={2}
       >
-        <Box>
+        <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
           <Typography variant="h4" fontWeight={700}>
             {showEscalations
               ? 'Escalation History'
@@ -1697,38 +1507,16 @@ export default function TicketsPage({
                 : 'Submit and track RICTMS support requests and specialized concerns'}
           </Typography>
         </Box>
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={1.5}
-          sx={{ width: { xs: '100%', sm: 'auto' } }}
-        >
-          {canSendRatingInvitations && ratingInvitationsAvailable && !showEscalations && (
-            <Button
-              variant="outlined"
-              color="info"
-              startIcon={<MailOutlineIcon />}
-              onClick={openRatingInvitationDialog}
-            >
-              Send Rating Invitation
-            </Button>
-          )}
-          {canViewEscalatedQueue && (
-            <Button
-              variant="outlined"
-              color="warning"
-              onClick={() => setShowEscalations((value) => !value)}
-            >
-              {showEscalations
-                ? 'Back to Tickets'
-                : `Escalation History (${allEscalations.length})`}
-            </Button>
-          )}
-          {!restrictedAssignedOnly && !personalRequestedOnly && !showEscalations && (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenNewTicket}>
-              New Ticket
-            </Button>
-          )}
-        </Stack>
+        <TicketPageActions
+          canCreate={!restrictedAssignedOnly && !personalRequestedOnly && !showEscalations}
+          canInvite={canSendRatingInvitations && ratingInvitationsAvailable && !showEscalations}
+          canViewEscalations={canViewEscalatedQueue}
+          showingEscalations={showEscalations}
+          escalationCount={allEscalations.length}
+          onCreate={handleOpenNewTicket}
+          onInvite={openRatingInvitationDialog}
+          onToggleEscalations={() => setShowEscalations(value => !value)}
+        />
       </Box>
 
       <Dialog
@@ -1814,9 +1602,9 @@ export default function TicketsPage({
       </Dialog>
 
       {!showEscalations && !canManageAll && (
-        <Card sx={{ mb: 1 }}>
-          <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-            <Box sx={filterGridSx}>
+        <Card sx={{ mb: 2 }}>
+          <CardContent sx={ticketFilterPanelSx}>
+            <Box sx={ticketFilterGridSx}>
               {searchField}
               <TextField
                 select
@@ -1836,6 +1624,7 @@ export default function TicketsPage({
               <TextField
                 select
                 label="Period"
+                className="ticket-filter-period"
                 value={filterPeriodMode}
                 onChange={(e) => {
                   const mode = e.target.value as 'day' | 'month' | 'quarter' | 'semester' | 'year';
@@ -1870,6 +1659,7 @@ export default function TicketsPage({
               {filterPeriodMode === 'day' && (
                 <TextField
                   type="date"
+                  className="ticket-filter-date"
                   label="Date"
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
@@ -1930,8 +1720,9 @@ export default function TicketsPage({
               )}
               <Button
                 variant="outlined"
-                sx={{ minWidth: 0, height: 36 }}
+                sx={{ minWidth: 0, height: 44 }}
                 onClick={resetTicketFilters}
+                className="ticket-filter-reset"
               >
                 Reset
               </Button>
@@ -1941,9 +1732,9 @@ export default function TicketsPage({
       )}
 
       {!showEscalations && canManageAll && (
-        <Card sx={{ mb: 1 }}>
-          <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-            <Box sx={filterGridSx}>
+        <Card sx={{ mb: 2 }}>
+          <CardContent sx={ticketFilterPanelSx}>
+            <Box sx={ticketFilterGridSx}>
               {searchField}
               <TextField
                 inputProps={{ maxLength: 255 }}
@@ -2004,6 +1795,7 @@ export default function TicketsPage({
               <TextField
                 select
                 label="Period"
+                className="ticket-filter-period"
                 value={filterPeriodMode}
                 onChange={(e) => {
                   const mode = e.target.value as 'day' | 'month' | 'quarter' | 'semester' | 'year';
@@ -2038,6 +1830,7 @@ export default function TicketsPage({
               {filterPeriodMode === 'day' && (
                 <TextField
                   type="date"
+                  className="ticket-filter-date"
                   label="Date"
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
@@ -2098,19 +1891,14 @@ export default function TicketsPage({
               )}
               <Button
                 variant="outlined"
-                sx={{ minWidth: 0, height: 36 }}
+                sx={{ minWidth: 0, height: 44 }}
                 onClick={resetTicketFilters}
+                className="ticket-filter-reset"
               >
                 Reset
               </Button>
               <Box
-                sx={{
-                  gridColumn: { xs: '1 / -1', sm: 'span 2', md: 'span 2', lg: 'span 2' },
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                  gap: 1,
-                  minWidth: 0,
-                }}
+                sx={ticketFilterShortcutsSx}
               >
                 {!restrictedAssignedOnly && (isFocalTech || canManageAll) && (
                   <Badge
@@ -2120,7 +1908,7 @@ export default function TicketsPage({
                     sx={{
                       width: '100%',
                       minWidth: 0,
-                      height: 36,
+                      height: 44,
                       '& .MuiBadge-badge': { zIndex: 1 },
                     }}
                   >
@@ -2128,6 +1916,7 @@ export default function TicketsPage({
                       fullWidth
                       size="small"
                       variant={showMyTickets ? 'contained' : 'outlined'}
+                      aria-pressed={showMyTickets}
                       color="primary"
                       sx={{ height: '100%', whiteSpace: 'nowrap', px: 1 }}
                       onClick={() => {
@@ -2135,7 +1924,7 @@ export default function TicketsPage({
                         setShowEscalatedToMe(false);
                       }}
                     >
-                      {showMyTickets ? 'My Tickets ✓' : 'My Tickets'}
+                      Assigned to Me
                     </Button>
                   </Badge>
                 )}
@@ -2147,7 +1936,7 @@ export default function TicketsPage({
                     sx={{
                       width: '100%',
                       minWidth: 0,
-                      height: 36,
+                      height: 44,
                       '& .MuiBadge-badge': { zIndex: 1 },
                     }}
                   >
@@ -2175,13 +1964,10 @@ export default function TicketsPage({
         !restrictedAssignedOnly &&
         !canManageAll &&
         (isFocalTech || canViewEscalatedQueue) && (
-          <Card sx={{ mb: 1 }}>
-            <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{ '& > *': { flex: 1, maxWidth: { xs: '100%', md: '50%', lg: '33%' } } }}
-              >
+          <Card sx={{ mb: 2 }}>
+            <CardContent sx={ticketFilterPanelSx}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}
+                sx={{ '& > *': { flex: 1, minWidth: 0 }, '& .MuiBadge-root': { minHeight: 44 } }}>
                 {(isFocalTech || canManageAll) && (
                   <Badge
                     badgeContent={myTicketsCount}
@@ -2193,13 +1979,14 @@ export default function TicketsPage({
                       fullWidth
                       size="small"
                       variant={showMyTickets ? 'contained' : 'outlined'}
+                      aria-pressed={showMyTickets}
                       color="primary"
                       onClick={() => {
                         setShowMyTickets((v) => !v);
                         setShowEscalatedToMe(false);
                       }}
                     >
-                      {showMyTickets ? 'My Assigned Tickets ✓' : 'All Tickets'}
+                      Assigned to Me
                     </Button>
                   </Badge>
                 )}
@@ -2239,8 +2026,8 @@ export default function TicketsPage({
         </Card>
       )}
       {!showEscalations && (
-        <Card sx={{ mb: 1 }}>
-          <CardContent sx={{ pt: 0.5, px: 1, pb: '0 !important' }}>
+        <Card sx={{ mb: 2 }}>
+          <CardContent sx={{ px: { xs: 1, sm: 2 }, py: 1, '&:last-child': { pb: 1 } }}>
             <Tabs
               value={selectedTab}
               onChange={(_, value) => {
@@ -2250,6 +2037,7 @@ export default function TicketsPage({
               variant="scrollable"
               scrollButtons="auto"
               allowScrollButtonsMobile
+              sx={{ minHeight: 48, '& .MuiTab-root': { minHeight: 48, px: { xs: 1.5, sm: 2 }, fontSize: '0.875rem' } }}
             >
               {statusTabs.map(({ key, label }) => (
                 <Tab
@@ -2721,7 +2509,7 @@ export default function TicketsPage({
                   <TableCell sx={{ width: 140, ...populatedFieldSx(!!user?.middleName) }}>
                     Date
                   </TableCell>
-                  <TableCell sx={{ width: 120 }}>Actions</TableCell>
+                  <TableCell align="right" sx={{ width: 80 }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2754,8 +2542,18 @@ export default function TicketsPage({
                       <TableRow
                         key={ticket.id}
                         hover
+                        tabIndex={0}
+                        aria-label={`Open ticket ${ticket.ticketNumber}`}
+                        onClick={() => router.push(ticketDetailsHref(ticket.id))}
+                        onKeyDown={(event) => {
+                          if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) {
+                            event.preventDefault();
+                            router.push(ticketDetailsHref(ticket.id));
+                          }
+                        }}
                         className="ticket-row"
-                        sx={[{ '&:hover .ticket-cell::after': { opacity: 1 } }]}
+                        sx={[{ cursor: 'pointer', '&:hover .ticket-cell::after': { opacity: 1 },
+                          '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 } }]}
                       >
                         {/* Ticket # */}
                         <TableCell
@@ -2959,77 +2757,33 @@ export default function TicketsPage({
                           {new Date(ticket.createdAt).toLocaleDateString()}
                         </TableCell>
                         <TableCell align="right">
-                          <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                            <TicketCancelButton ticket={ticket} onCancelled={() => void fetchTickets()} />
-                            <Tooltip title="View Details">
-                              <IconButton
-                                size="small"
-                                onClick={() => router.push(ticketDetailsHref(ticket.id))}
-                              >
-                                <ViewIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            {canAssign && !['duplicate', 'cancelled'].includes(ticket.status) && (
-                              <Tooltip
-                                title={
-                                  ['resolved', 'closed'].includes(ticket.status)
-                                    ? 'Reassign disabled for resolved/closed tickets'
-                                    : ticket.assignedToId
-                                      ? 'Reassign Ticket'
-                                      : 'Assign Ticket'
-                                }
-                              >
-                                <span>
-                                  <IconButton
-                                    size="small"
-                                    color="primary"
-                                    onClick={() => openAssignDialog(ticket)}
-                                    disabled={['resolved', 'closed'].includes(ticket.status)}
-                                  >
-                                    <AssignIcon fontSize="small" />
-                                  </IconButton>
-                                </span>
-                              </Tooltip>
-                            )}
-                            {canEscalate &&
-                              escalationStateByTicket[ticket.id] !== 'active' &&
-                              !['duplicate', 'closed', 'resolved', 'cancelled'].includes(ticket.status) && (
-                                <Tooltip title="Escalate Ticket">
-                                  <IconButton
-                                    size="small"
-                                    color="warning"
-                                    onClick={() => openEscalateDialog(ticket)}
-                                  >
-                                    <AssignIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                            {(ticket.status === 'resolved' || ticket.status === 'closed') &&
-                              ticket.requesterId === user?.id &&
-                              !ticket.satisfactionSubmittedAt && (
-                                <Tooltip title="Rate this resolution">
-                                  <IconButton
-                                    size="small"
-                                    color="success"
-                                    onClick={() => openSatDialog(ticket)}
-                                  >
-                                    <SatisfactionIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                            {canOverrideResolutionTime &&
-                              ['resolved', 'closed'].includes(ticket.status) && (
-                                <Tooltip title="Correct resolution time">
-                                  <IconButton
-                                    size="small"
-                                    color="secondary"
-                                    onClick={() => openResolutionOverrideDialog(ticket)}
-                                  >
-                                    <ResolutionTimeIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                          </Stack>
+                          <TicketActionsMenu ticket={ticket} onCancelled={() => void fetchTickets()}
+                            actions={(() => {
+                              const actions: TicketMenuAction[] = [{
+                                label: 'View Details', icon: <ViewIcon fontSize="small" />,
+                                onClick: () => router.push(ticketDetailsHref(ticket.id)),
+                              }];
+                              if (canAssign && !['duplicate', 'cancelled'].includes(ticket.status)) actions.push({
+                                label: ticket.assignedToId ? 'Reassign Ticket' : 'Assign Ticket',
+                                icon: <AssignIcon fontSize="small" color="primary" />,
+                                disabled: ['resolved', 'closed'].includes(ticket.status),
+                                onClick: () => openAssignDialog(ticket),
+                              });
+                              if (canEscalate && escalationStateByTicket[ticket.id] !== 'active' &&
+                                !['duplicate', 'closed', 'resolved', 'cancelled'].includes(ticket.status)) actions.push({
+                                label: 'Escalate Ticket', icon: <AssignIcon fontSize="small" color="warning" />,
+                                onClick: () => openEscalateDialog(ticket),
+                              });
+                              if (hasPendingSatisfaction) actions.push({
+                                label: 'Rate this resolution', icon: <SatisfactionIcon fontSize="small" color="success" />,
+                                onClick: () => openSatDialog(ticket),
+                              });
+                              if (canOverrideResolutionTime && ['resolved', 'closed'].includes(ticket.status)) actions.push({
+                                label: 'Correct resolution time', icon: <ResolutionTimeIcon fontSize="small" color="secondary" />,
+                                onClick: () => openResolutionOverrideDialog(ticket),
+                              });
+                              return actions;
+                            })()} />
                         </TableCell>
                       </TableRow>
                     );
@@ -3423,7 +3177,8 @@ export default function TicketsPage({
                     ? 'Set your Unit in Profile & Preferences to select someone in your unit.'
                   : 'No active users found'
               }
-              getOptionLabel={(u) => `${formatPersonName(u, u.email)}${u.needsEmail ? ' — email required' : ''}`}
+              getOptionLabel={requesterOptionLabel}
+              filterOptions={filterRequesterOptions}
               value={allUsers.find((u) => u.id === form.requesterId) ?? null}
               onChange={(_, newValue) => {
                 setForm({ ...form, requesterId: newValue?.id ?? undefined });
@@ -3445,7 +3200,7 @@ export default function TicketsPage({
                         </>
                       : requesterUnitMissing
                         ? 'Set your Unit in Settings > Profile & Preferences before filing a request for someone else.'
-                      : 'Leave blank if you are requesting for yourself. Select a user to request on their behalf.'
+                      : 'Search by name, email or unit. Leave blank if you are requesting for yourself.'
                   }
                   error={requesterOptionsError}
                   fullWidth
@@ -3576,7 +3331,7 @@ export default function TicketsPage({
             color="warning"
             onClick={() => {
               setReminderOpen(false);
-              router.push('/operations/tickets?filter=pending_satisfaction');
+              router.push('/operations/my-tickets?filter=pending_satisfaction');
             }}
           >
             Go To Tickets

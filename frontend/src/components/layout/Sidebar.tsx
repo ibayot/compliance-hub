@@ -111,6 +111,13 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       capabilityKeys: ['isDutyViewerAccess', 'isDutyAdminAccess'],
     },
     {
+      label: 'Staff Directory',
+      icon: UnitsIcon,
+      path: '/operations/staff-directory',
+      service: 'users',
+      capabilityKeys: ['isStaffDirectoryAccess'],
+    },
+    {
       label: 'Documents',
       icon: DocumentsIcon,
       path: '/governance/documents',

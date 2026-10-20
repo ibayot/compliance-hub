@@ -375,6 +375,13 @@ export class TicketController {
     }
   }
 
+  // Summary-only access is separate from the broader report endpoints.
+  @Get('weekly-performance')
+  @RequireCapability('isTicketPerformanceAccess')
+  async getWeeklyPerformance(@Request() req: any) {
+    return this.ticketService.getWeeklyPerformance(req.user?.role || '');
+  }
+
   @Get('reports')
   @RequireCapability('isTicketReportsAccess')
   async getTicketReports(

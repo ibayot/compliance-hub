@@ -229,10 +229,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             });
             setTimeout(() => logout('role_changed'), 1500);
           } else {
-            usersApi
+            await usersApi
               .getMyCapabilities()
               .then(setMyCap)
-              .catch(() => { });
+              .catch(() => { setMyCap(null); });
           }
         } catch (error) {
           tokenStore.remove('accessToken');
@@ -382,10 +382,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       // Non-blocking: login response user data is still valid
     }
-    usersApi
+    await usersApi
       .getMyCapabilities()
       .then(setMyCap)
-      .catch(() => { });
+      .catch(() => { setMyCap(null); });
 
     navigate(redirectTo ?? '/dashboard');
   };
@@ -409,10 +409,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const profile = await authApi.getProfile();
       setUser(profile);
     } catch (err) { /* ignore */ }
-    usersApi
+    await usersApi
       .getMyCapabilities()
       .then(setMyCap)
-      .catch(() => { });
+      .catch(() => { setMyCap(null); });
 
     if (response.requiresMfa) {
       navigate('/mfa-verify');

@@ -28,6 +28,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  ServiceUnavailableException,
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
@@ -73,6 +74,7 @@ import { SSE_EVENT_CHANNEL } from '../../../common/events/sse.service';
 import { assertImageReplacementAllowed, commentImagePaths, isDescriptionAttachment } from './ticket-attachment-policy';
 import { assertTicketCancellationAllowed } from './ticket-cancellation-policy';
 import { formatPersonName } from '../../../shared/utils/person-name';
+import { AssigneePerformanceRow, PerformancePeriod, PerformanceSummary, weeklyPerformancePeriod, reportPerformancePeriod, scoreAssignees } from './ticket-performance';
 
 // --- DTOs --------------------------------------------------------------------
 
@@ -5811,9 +5813,14 @@ export class TicketService implements OnModuleInit {
       efficiencyScore: number;
       weightedScore: number;
     }>;
+    performancePeriod: { startAt: string; endAt: string; excludedTickets: number };
   }> {
     const now = new Date();
     const year = filters.year ?? now.getFullYear();
+
+    let rankingPeriod: PerformancePeriod;
+    try { rankingPeriod = reportPerformancePeriod(filters, now); }
+    catch { throw new BadRequestException('Invalid performance report period.'); }
 
     const canManageReports = this.roleCapSvc.isTicketReportsManage(filters.viewerRole || '');
     const techIdFilter = resolveTicketReportTechnicianId(
@@ -5873,9 +5880,9 @@ export class TicketService implements OnModuleInit {
     const allTickets = await totalQb.getMany();
     await this.enrichTicketsWithUsers(allTickets);
     const totalTickets = allTickets.length;
-    const weeklyTechnicianPerformance = canManageReports
-      ? await this.getWeeklyTechnicianPerformance(filters.ticketType)
-      : [];
+    const ranking = canManageReports ? await this.getAssigneePerformance(rankingPeriod, filters.ticketType) : { rows: [], excludedTickets: 0 };
+    const weeklyTechnicianPerformance = ranking.rows;
+    const performancePeriod = { startAt: rankingPeriod.start.toISOString(), endAt: rankingPeriod.end.toISOString(), excludedTickets: ranking.excludedTickets };
 
     if (tickets.length === 0 && allTickets.length === 0) {
       return {
@@ -5891,6 +5898,7 @@ export class TicketService implements OnModuleInit {
         slaByType: [],
         slaByTechnician: [],
         weeklyTechnicianPerformance,
+        performancePeriod,
       };
     }
 
@@ -6106,116 +6114,46 @@ export class TicketService implements OnModuleInit {
       slaByType,
       slaByTechnician,
       weeklyTechnicianPerformance,
+      performancePeriod,
     };
   }
 
-  private async getWeeklyTechnicianPerformance(ticketType?: string): Promise<
-    Array<{
-      techId: number;
-      techName: string;
-      resolvedTickets: number;
-      met: number;
-      missed: number;
-      slaRate: number;
-      avgActiveResolutionHours: number;
-      volumeScore: number;
-      efficiencyScore: number;
-      weightedScore: number;
-    }>
-  > {
-    const now = new Date();
-    const today = this.getManilaDateString(now);
-    const manilaMidnight = new Date(`${today}T00:00:00+08:00`);
-    const daysSinceMonday = (manilaMidnight.getUTCDay() + 6) % 7;
-    const weekStart = new Date(manilaMidnight.getTime() - daysSinceMonday * 24 * 60 * 60 * 1000);
+  async getWeeklyPerformance(viewerRole: string): Promise<PerformanceSummary> {
+    if (!this.roleCapSvc.isTicketPerformanceAccess(viewerRole)) throw new ForbiddenException('Performance summary access is required.');
+    const period = weeklyPerformancePeriod();
+    const result = await this.getAssigneePerformance(period);
+    return { startAt: period.start.toISOString(), endAt: period.end.toISOString(), timeZone: 'Asia/Manila',
+      weights: { sla: 50, volume: 30, efficiency: 20 }, ...result };
+  }
 
-    let qb = this.ticketRepo
-      .createQueryBuilder('ticket')
-      .leftJoinAndSelect('ticket.issueTypeConfig', 'weeklyIssueType')
-      .where('ticket.status IN (:...terminalStatuses)', {
-        terminalStatuses: [TicketStatus.RESOLVED, TicketStatus.CLOSED],
-      })
-      .andWhere('ticket.assignedToId IS NOT NULL')
-      .andWhere('ticket.slaStartedAt IS NOT NULL')
-      .andWhere(
-        'COALESCE(ticket.resolutionTimeOverride, ticket.resolvedAt) BETWEEN :weekStart AND :now',
-        { weekStart, now },
-      );
+  private async getAssigneePerformance(period: PerformancePeriod, ticketType?: string): Promise<{ rows: AssigneePerformanceRow[]; excludedTickets: number }> {
+    let qb = this.ticketRepo.createQueryBuilder('ticket')
+      .leftJoinAndSelect('ticket.issueTypeConfig', 'performanceIssueType')
+      .where('ticket.status IN (:...terminalStatuses)', { terminalStatuses: [TicketStatus.RESOLVED, TicketStatus.CLOSED] })
+      .andWhere('COALESCE(ticket.resolutionTimeOverride, ticket.resolvedAt) BETWEEN :start AND :end', { start: period.start, end: period.end });
     if (ticketType) qb = qb.andWhere('ticket.ticketType = :ticketType', { ticketType });
-
     const tickets = await qb.getMany();
-    if (tickets.length === 0) return [];
-
+    if (!tickets.length) return { rows: [], excludedTickets: 0 };
     const [users, config] = await Promise.all([
       this.usersHttpClient.getUsers(),
-      this.configRepo.findOne({ where: { id: 1 } }).catch(() => null),
+      this.configRepo.findOne({ where: { id: 1 } }),
     ]);
-    const usersById = new Map(users.map((user) => [Number(user.id), user]));
+    if (!config) throw new ServiceUnavailableException('SLA calendar settings are unavailable. Please retry.');
+    const usersById = new Map(users.map(user => [Number(user.id), user]));
     const officeDayCache = new Map<string, boolean>();
-    const stats = new Map<
-      number,
-      {
-        techName: string;
-        resolvedTickets: number;
-        met: number;
-        missed: number;
-        totalHours: number;
-        efficiencyTotal: number;
-      }
-    >();
-
+    const samples: Array<{ techId: number; techName: string; activeHours: number; slaHours: number }> = [];
+    let excludedTickets = 0;
     for (const ticket of tickets) {
-      const techId = Number(ticket.assignedToId);
-      const resolvedAt = getEffectiveResolvedAt(ticket);
-      if (!techId || !resolvedAt) continue;
-      const activeHours = await this.calculateTicketActiveResolutionHours(
-        ticket,
-        resolvedAt,
-        config,
-        officeDayCache,
-      );
-      if (activeHours === null) continue;
+      const techId = Number(ticket.assignedToId), resolvedAt = getEffectiveResolvedAt(ticket);
+      const startedAt = ticket.slaStartedAt ? new Date(ticket.slaStartedAt) : null;
+      if (!techId || !resolvedAt || !Number.isFinite(resolvedAt.getTime()) || !startedAt || !Number.isFinite(startedAt.getTime()) || resolvedAt < startedAt) { excludedTickets++; continue; }
+      const activeHours = await this.calculateTicketActiveResolutionHours(ticket, resolvedAt, config, officeDayCache);
+      const slaHours = Number(await this.getTicketSlaHours(ticket));
+      if (activeHours === null || !Number.isFinite(activeHours) || activeHours < 0 || !Number.isFinite(slaHours) || slaHours <= 0) { excludedTickets++; continue; }
       const user = usersById.get(techId);
-      const stat = stats.get(techId) ?? {
-        techName: user ? formatPersonName(user, user.email) : `Assignee #${techId}`,
-        resolvedTickets: 0,
-        met: 0,
-        missed: 0,
-        totalHours: 0,
-        efficiencyTotal: 0,
-      };
-      const configuredHours = await this.getTicketSlaHours(ticket);
-      const met = activeHours <= configuredHours;
-      stat.resolvedTickets += 1;
-      stat.met += met ? 1 : 0;
-      stat.missed += met ? 0 : 1;
-      stat.totalHours += activeHours;
-      stat.efficiencyTotal +=
-        activeHours <= 0 ? 100 : Math.min(100, (configuredHours / activeHours) * 100);
-      stats.set(techId, stat);
+      samples.push({ techId, techName: user ? formatPersonName(user, `Assignee #${techId}`) : `Assignee #${techId}`, activeHours, slaHours });
     }
-
-    const maxVolume = Math.max(1, ...Array.from(stats.values()).map((stat) => stat.resolvedTickets));
-    return Array.from(stats.entries())
-      .map(([techId, stat]) => {
-        const slaRate = (stat.met / stat.resolvedTickets) * 100;
-        const volumeScore = (stat.resolvedTickets / maxVolume) * 100;
-        const efficiencyScore = stat.efficiencyTotal / stat.resolvedTickets;
-        return {
-          techId,
-          techName: stat.techName,
-          resolvedTickets: stat.resolvedTickets,
-          met: stat.met,
-          missed: stat.missed,
-          slaRate: Math.round(slaRate * 10) / 10,
-          avgActiveResolutionHours:
-            Math.round((stat.totalHours / stat.resolvedTickets) * 10) / 10,
-          volumeScore: Math.round(volumeScore * 10) / 10,
-          efficiencyScore: Math.round(efficiencyScore * 10) / 10,
-          weightedScore: Math.round((slaRate * 0.5 + volumeScore * 0.3 + efficiencyScore * 0.2) * 10) / 10,
-        };
-      })
-      .sort((a, b) => b.weightedScore - a.weightedScore || b.resolvedTickets - a.resolvedTickets);
+    return { rows: scoreAssignees(samples), excludedTickets };
   }
 
   // --- Escalation ----------------------------------------------------------

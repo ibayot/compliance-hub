@@ -76,6 +76,14 @@ export class UpdateRoleCapabilityDto {
 
   @IsOptional()
   @IsBoolean()
+  isTicketPerformanceAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isStaffDirectoryAccess?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   isKpiAccess?: boolean;
 
   @IsOptional()

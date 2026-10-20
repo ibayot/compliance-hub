@@ -122,6 +122,13 @@ export class RoleCapability {
   @Column({ name: 'is_ticket_reports_manage', type: 'tinyint', width: 1, default: 0 })
   isTicketReportsManage: boolean;
 
+  /** View the staff-wide performance summary without granting report management. */
+  @Column({ name: 'is_ticket_performance_access', type: 'tinyint', width: 1, default: 0 })
+  isTicketPerformanceAccess: boolean;
+
+  @Column({ name: 'is_staff_directory_access', type: 'tinyint', width: 1, default: 0 })
+  isStaffDirectoryAccess: boolean;
+
   /** True for roles that can access the KPI module pages and read endpoints. */
   @Column({ name: 'is_kpi_access', type: 'tinyint', width: 1, default: 0 })
   isKpiAccess: boolean;

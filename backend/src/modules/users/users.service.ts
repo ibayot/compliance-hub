@@ -664,7 +664,7 @@ const previousValue = value;
    * This deliberately does not expose the full user-management payload.
    */
   async findTicketRequesters(currentUserId: number, currentRole: string): Promise<
-    Array<Pick<User, 'id' | 'email' | 'firstName' | 'middleName' | 'lastName' | 'suffix' | 'role' | 'active'>>
+    Array<Pick<User, 'id' | 'email' | 'firstName' | 'middleName' | 'lastName' | 'suffix' | 'role' | 'active'> & { units: Array<{ id: number; name: string }> }>
   > {
     let users: User[];
     if (currentRole === UserRole.USER) {
@@ -678,6 +678,7 @@ const previousValue = value;
       users = await this.usersRepository
         .createQueryBuilder('user')
         .innerJoin('user.units', 'unit', 'unit.id = :unitId', { unitId })
+        .leftJoinAndSelect('user.units', 'requesterUnit', 'requesterUnit.active = :unitActive', { unitActive: true })
         .where('user.active = :active', { active: true })
         .andWhere('user.id != :currentUserId', { currentUserId })
         .orderBy('user.lastName', 'ASC')
@@ -687,6 +688,7 @@ const previousValue = value;
     } else {
       users = await this.usersRepository
         .createQueryBuilder('user')
+        .leftJoinAndSelect('user.units', 'requesterUnit', 'requesterUnit.active = :unitActive', { unitActive: true })
         .where('user.active = :active', { active: true })
         .andWhere('user.id != :currentUserId', { currentUserId })
         .orderBy('user.lastName', 'ASC')
@@ -697,7 +699,7 @@ const previousValue = value;
 
     return users
       .filter((user) => user.role !== UserRole.SUPER_ADMIN)
-      .map(({ id, email, firstName, middleName, lastName, suffix, role, active }) => ({
+      .map(({ id, email, firstName, middleName, lastName, suffix, role, active, units }) => ({
         id,
         email,
         firstName,
@@ -706,6 +708,7 @@ const previousValue = value;
         suffix,
         role,
         active,
+        units: (units || []).filter(unit => unit.active !== false).map(unit => ({ id: unit.id, name: unit.name })),
       }));
   }
 

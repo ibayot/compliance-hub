@@ -24,6 +24,7 @@ export type PendingRequester = {
   role: string;
   active: boolean;
   needsEmail: boolean;
+  units: Array<{ id: number; name: string }>;
 };
 
 @Injectable()
@@ -52,7 +53,7 @@ export class StaffDirectoryStore {
     try {
       const s = this.schema();
       rows = await this.db.query(
-        `SELECT p.* FROM ${s}.ums_staff_directory p
+        `SELECT p.*,u.name AS unit_name FROM ${s}.ums_staff_directory p
       JOIN ${s}.units u ON u.id=p.unit_id AND u.active=1 AND u.has_reportorial_requirements=0
       WHERE p.available=1 AND p.review_reason IS NULL
         AND NOT EXISTS (SELECT 1 FROM ${s}.users a WHERE BINARY a.staff_id=BINARY p.staff_id)
@@ -84,6 +85,7 @@ export class StaffDirectoryStore {
       role: 'user',
       active: true,
       needsEmail: true,
+      units: p.unit_id && p.unit_name ? [{ id: Number(p.unit_id), name: String(p.unit_name) }] : [],
     }));
   }
 

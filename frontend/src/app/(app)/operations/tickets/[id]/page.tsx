@@ -1,10 +1,17 @@
 'use client';
 
-import TicketCancelButton from '@/components/TicketCancelButton';
+import { requesterOptionLabel, filterRequesterOptions } from '@/lib/utils/requester-options';
+
+import TicketActionsMenu, { TicketMenuAction } from '@/components/TicketActionsMenu';
+import { getTicketDetailActionKeys, TicketDetailActionKey } from '@/lib/utils/ticket-detail-actions';
+import { getTicketSlaSummary } from '@/lib/utils/ticket-sla-summary';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Box,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
   Card,
   CardContent,
   Typography,
@@ -70,6 +77,13 @@ import {
   SentimentVeryDissatisfied,
   EditCalendar as ResolutionTimeIcon,
   ContentCopy as DuplicateIcon,
+  ExpandMore as ExpandMoreIcon,
+  Edit as EditIcon,
+  AssignmentInd as AssignIcon,
+  NorthEast as EscalateIcon,
+  Print as PrintIcon,
+  CheckCircleOutline as CloseTicketIcon,
+  ManageAccounts as CorrectionIcon,
 } from '@mui/icons-material';
 import {
   PRIORITY_CHIP_SX,
@@ -118,6 +132,12 @@ const populatedFieldSx = (populated: boolean) =>
         },
       }
     : undefined;
+const classificationFieldSx = {
+  minWidth: 0, width: '100%',
+  '& .MuiInputLabel-root': { fontWeight: 600 },
+  '& .MuiInputBase-root': { height: 44, fontSize: '0.875rem', fontWeight: 600, borderRadius: 1, bgcolor: 'background.paper' },
+  '& .MuiOutlinedInput-notchedOutline': { borderWidth: 1.5, borderColor: 'text.secondary' },
+};
 function OverdueTimer({ targetDate }: { targetDate: string }) {
   const [elapsed, setElapsed] = useState('');
 
@@ -206,6 +226,8 @@ export default function TicketDetailPage() {
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  useEffect(() => { setDetailsExpanded(false); }, [ticketId]);
   const [, setSlaClock] = useState(Date.now());
   const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -1183,6 +1205,49 @@ export default function TicketDetailPage() {
     );
   }
 
+  const requesterLabel = ticket.createdById && Number(ticket.createdById) !== Number(ticket.requesterId)
+    ? 'Requested For' : 'Requestor';
+  const requesterName = ticket.requester ? formatPersonName(ticket.requester, `User #${ticket.requesterId}`) : `User #${ticket.requesterId}`;
+  const slaSummary = getTicketSlaSummary(ticket);
+  const detailActions: Record<TicketDetailActionKey, TicketMenuAction> = {
+    updateStatus: { label: 'Update Status', icon: <EditIcon fontSize="small" />, onClick: () => setEditingStatus(true) },
+    duplicate: { label: 'Mark as Duplicate', icon: <DuplicateIcon fontSize="small" />, disabled: getSlaStatus(ticket) === 'overdue', onClick: openDuplicateFlow },
+    printDisposal: { label: 'Print Disposal Form', icon: <PrintIcon fontSize="small" />, onClick: () => window.print() },
+    printInspection: { label: 'Print Inspection Form', icon: <PrintIcon fontSize="small" />, onClick: () => window.print() },
+    assign: { label: ticket.assignedToId ? 'Reassign Ticket' : 'Assign Technician', icon: <AssignIcon fontSize="small" />, onClick: async () => {
+      setIsEscalateMode(false);
+      setAssignToId('');
+      setAssignmentSnapshot({ updatedAt: ticket.updatedAt, assignedToId: ticket.assignedToId ?? null, status: ticket.status });
+      await fetchTechnicians();
+      setAssignDialogOpen(true);
+    } },
+    escalate: { label: 'Escalate Ticket', icon: <EscalateIcon fontSize="small" />, onClick: openEscalateDialog },
+    close: { label: 'Close Ticket', icon: <CloseTicketIcon fontSize="small" />, onClick: handleSelfClose },
+    rate: { label: 'Rate Resolution', icon: <StarIcon fontSize="small" />, onClick: () => {
+      const assignedName = ticket.assignedTo ? formatPersonName(ticket.assignedTo, ticket.assignedTo.email) : '';
+      setCsatForm({
+        consentGiven: false, unitSection: user?.units?.[0]?.name || '', clientFirstName: user?.firstName || '',
+        clientMiddleInitial: user?.middleName ? user.middleName.charAt(0).toUpperCase() : '',
+        clientLastName: user?.lastName || '', suffix: user?.suffix || '', religion: '', sex: user?.sex || '',
+        contactNumber: user?.phoneNumber || '', technicianName: assignedName,
+        dateOfTransaction: effectiveResolvedAt(ticket) ? new Date(effectiveResolvedAt(ticket) as string).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
+      });
+      usersApi.getProfileUnits().then(units => setUnitSuggestions(units.map(u => u.name))).catch(() => {});
+      setSatDialogOpen(true);
+    } },
+    resolutionTime: { label: 'Correct Resolution Time', icon: <ResolutionTimeIcon fontSize="small" />, onClick: openResolutionOverrideDialog },
+    requester: { label: `Correct ${requesterLabel}`, icon: <CorrectionIcon fontSize="small" />, onClick: openRequesterCorrection },
+    assignee: { label: 'Correct Assigned To', icon: <CorrectionIcon fontSize="small" />, onClick: openAssigneeCorrection },
+  };
+  const detailActionKeys = getTicketDetailActionKeys({
+    status: ticket.status, canShowStatusAction, isTicketAdmin: !!myCap?.isTicketSettingsFocal,
+    isDisposal: !!ticket.category?.name?.toLowerCase().includes('disposal'), isTechnician,
+    hideTopActionButtons, hasAcceptedEscalation: !!hasAcceptedEscalation, isAcceptedEscalationFocal: !!isAcceptedEscalationFocal,
+    canReassign: !!canReassign, canEscalateNow: !!canEscalateNow, isRegularUser, isRequester,
+    canSatisfaction, canOverrideResolutionTime, canCorrectTicketRecord, canCorrectAssignee: canCorrectAssignee && !!ticket.assignedToId,
+  });
+
   return (
     <Box>
       <Button
@@ -1197,25 +1262,31 @@ export default function TicketDetailPage() {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box
-            display="flex"
-            justifyContent="space-between"
+            display="grid"
+            gridTemplateColumns="minmax(0, 1fr) auto"
             alignItems="flex-start"
-            flexWrap="wrap"
             gap={2}
           >
-            <Box flexGrow={1}>
-              <Typography variant="overline" color="text.secondary">
-                {ticket.ticketNumber}
+            <Box minWidth={0}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, overflowWrap: 'anywhere' }}>
+                {requesterLabel}: <strong>{requesterName}</strong>
               </Typography>
-              <Typography variant="h5" gutterBottom>
+              <Typography variant="h5" gutterBottom sx={{ overflowWrap: 'anywhere' }}>
                 {ticket.subject}
               </Typography>
-              <Box display="flex" flexWrap="wrap" gap={1}>
+              <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 1 }}>
+                {ticket.ticketNumber}
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 2,
+                p: 2, mt: 2, mb: 1.5, bgcolor: 'action.hover', border: 1, borderColor: 'divider', borderRadius: 2 }}>
                 {!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id ? (
                   <TextField
                     inputProps={{ maxLength: 255 }}
                     select
                     size="small"
+                    label="Support Type"
+                    placeholder="Select support type"
+                    InputLabelProps={{ shrink: true }}
                     value={ticket.ticketType}
                     disabled={
                       ['resolved', 'closed', 'cancelled'].includes(ticket.status) || isTypeLockedByEscalation
@@ -1234,14 +1305,7 @@ export default function TicketDetailPage() {
                         );
                       }
                     }}
-                    sx={{
-                      minWidth: 160,
-                      '& .MuiInputBase-root': {
-                        height: 26,
-                        fontSize: '0.8125rem',
-                        borderRadius: '16px',
-                      },
-                    }}
+                    sx={classificationFieldSx}
                   >
                     {Object.entries(TYPE_LABELS).map(([val, label]) => (
                       <MenuItem key={val} value={val} sx={{ fontSize: '0.8125rem' }}>
@@ -1263,6 +1327,8 @@ export default function TicketDetailPage() {
                   <SearchableSelect
                     size="small"
                     label="Category"
+                    placeholder="Select category"
+                    textFieldProps={{ InputLabelProps: { shrink: true } }}
                     value={ticket.categoryId || null}
                     options={categories.map((category: any) => ({
                       value: category.id,
@@ -1288,13 +1354,7 @@ export default function TicketDetailPage() {
                         );
                       }
                     }}
-                    sx={{
-                      minWidth: 190,
-                      '& .MuiInputBase-root': {
-                        fontSize: '0.8125rem',
-                        borderRadius: '16px',
-                      },
-                    }}
+                    sx={classificationFieldSx}
                   />
                 ) : ticket.category ? (
                   <Chip
@@ -1312,6 +1372,8 @@ export default function TicketDetailPage() {
                     <SearchableSelect
                       size="small"
                       label="Issue"
+                      placeholder="Select issue"
+                      textFieldProps={{ InputLabelProps: { shrink: true } }}
                       value={ticket.issueTypeId || (ticket as any).issueTypeConfig?.id || null}
                       options={issues.map((issue) => ({ value: issue.id, label: issue.name }))}
                       clearable={false}
@@ -1348,13 +1410,7 @@ export default function TicketDetailPage() {
                           fetchTicket(); // Revert on failure
                         }
                       }}
-                      sx={{
-                        minWidth: 190,
-                        '& .MuiInputBase-root': {
-                          fontSize: '0.8125rem',
-                          borderRadius: '16px',
-                        },
-                      }}
+                      sx={classificationFieldSx}
                     />
                   ) : ticket.issueTypeId || (ticket as any).issueTypeConfig?.id ? (
                     <Chip
@@ -1369,6 +1425,8 @@ export default function TicketDetailPage() {
                       variant="outlined"
                     />
                   ) : null)}
+              </Box>
+              <Box display="flex" flexWrap="wrap" gap={1}>
                 <Chip
                   label={
                     ticket.priority
@@ -1392,160 +1450,17 @@ export default function TicketDetailPage() {
               </Box>
             </Box>
 
-            {/* Actions */}
-            <Box display="flex" flexDirection="column" gap={1} minWidth={160}>
-              <TicketCancelButton ticket={ticket} onCancelled={() => { void fetchTicket(); void fetchEvents(); }} />
-              {ticket.status === 'cancelled' && <Alert severity="info">
-                <Typography variant="subtitle2">Ticket cancelled</Typography>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{ticket.cancellationReason}</Typography>
-                {ticket.cancelledAt && <Typography variant="caption">{new Date(ticket.cancelledAt).toLocaleString()}</Typography>}
-              </Alert>}
-              {canShowStatusAction && (
-                <Button variant="outlined" size="small" onClick={() => setEditingStatus(true)}>
-                  Update Status
-                </Button>
-              )}
-              {!!myCap?.isTicketSettingsFocal &&
-                canShowStatusAction &&
-                ['open', 'assigned', 'in_progress'].includes(ticket.status) && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  color="warning"
-                  startIcon={<DuplicateIcon />}
-                  disabled={getSlaStatus(ticket) === 'overdue'}
-                  onClick={openDuplicateFlow}
-                >
-                  Mark as Duplicate
-                </Button>
-                )}
-              {ticket.category?.name?.toLowerCase().includes('disposal') && (
-                <>
-                  <Button
-                    variant="contained"
-                    size="small"
-                    color="secondary"
-                    onClick={() => window.print()}
-                  >
-                    Print Disposal Form
-                  </Button>
-                  {(isTechnician || !!myCap?.isTicketSettingsFocal) && (
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      color="secondary"
-                      onClick={() => window.print()}
-                    >
-                      Print Inspection Form
-                    </Button>
-                  )}
-                </>
-              )}
-
-              {!hideTopActionButtons &&
-                (!hasAcceptedEscalation || isAcceptedEscalationFocal) &&
-                canReassign &&
-                !isDuplicate &&
-                !['resolved', 'closed'].includes(ticket.status) && (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={async () => {
-                      setIsEscalateMode(false);
-                      setAssignToId('');
-                      setAssignmentSnapshot({
-                        updatedAt: ticket.updatedAt,
-                        assignedToId: ticket.assignedToId ?? null,
-                        status: ticket.status,
-                      });
-                      await fetchTechnicians();
-                      // Pre-select current assignee only if still available
-                      setAssignDialogOpen(true);
-                    }}
-                  >
-                    {ticket.assignedToId ? 'Reassign Ticket' : 'Assign Technician'}
-                  </Button>
-                )}
-              {!hideTopActionButtons &&
-                !isDuplicate &&
-                !['closed', 'resolved'].includes(ticket.status) &&
-                ((!hasAcceptedEscalation && canEscalateNow) ||
-                  (hasAcceptedEscalation && isAcceptedEscalationFocal)) && (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    color="warning"
-                    onClick={openEscalateDialog}
-                  >
-                    Escalate Ticket
-                  </Button>
-                )}
-              {/* Self-close: requester can close their own ticket once it is Resolved */}
-              {!hideTopActionButtons &&
-                isRegularUser &&
-                isRequester &&
-                ticket.status === 'resolved' && (
-                  <Button variant="outlined" size="small" color="error" onClick={handleSelfClose}>
-                    Close Ticket
-                  </Button>
-                )}
-              {!hideTopActionButtons && canSatisfaction && (
-                <Button
-                  variant="contained"
-                  size="small"
-                  color="warning"
-                  startIcon={<StarIcon />}
-                  onClick={() => {
-                    const assignedName = ticket.assignedTo
-                      ? formatPersonName(ticket.assignedTo, ticket.assignedTo.email)
-                      : '';
-                    setCsatForm({
-                      consentGiven: false,
-                      unitSection: user?.units?.[0]?.name || '',
-                      clientFirstName: user?.firstName || '',
-                      clientMiddleInitial: user?.middleName
-                        ? user.middleName.charAt(0).toUpperCase()
-                        : '',
-                      clientLastName: user?.lastName || '',
-                      suffix: user?.suffix || '',
-                      religion: '',
-                      sex: user?.sex || '',
-                      contactNumber: user?.phoneNumber || '',
-                      technicianName: assignedName,
-                      dateOfTransaction: effectiveResolvedAt(ticket)
-                        ? new Date(effectiveResolvedAt(ticket) as string)
-                            .toISOString()
-                            .split('T')[0]
-                        : new Date().toISOString().split('T')[0],
-                      likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
-                    });
-                    // ticketsApi
-                    //   .getUnitSuggestions()
-                    //   .then(setUnitSuggestions)
-                    //   .catch(() => { });
-                    usersApi
-                      .getProfileUnits()
-                      .then((units) => setUnitSuggestions(units.map((u) => u.name)))
-                      .catch(() => {});
-                    setSatDialogOpen(true);
-                  }}
-                >
-                  Rate Resolution
-                </Button>
-              )}
-              {canOverrideResolutionTime && ['resolved', 'closed'].includes(ticket.status) && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  color="secondary"
-                  startIcon={<ResolutionTimeIcon />}
-                  onClick={openResolutionOverrideDialog}
-                >
-                  Correct Resolution Time
-                </Button>
-              )}
-            </Box>
+            {/* Actions retain the same guards and open the existing forms/dialogs. */}
+            <TicketActionsMenu orientation="vertical" ticket={ticket}
+              actions={detailActionKeys.map(key => detailActions[key])}
+              onCancelled={() => { void fetchTicket(); void fetchEvents(); }} />
           </Box>
+
+          {ticket.status === 'cancelled' && <Alert severity="info" sx={{ mt: 2 }}>
+            <Typography variant="subtitle2">Ticket cancelled</Typography>
+            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{ticket.cancellationReason}</Typography>
+            {ticket.cancelledAt && <Typography variant="caption">{new Date(ticket.cancelledAt).toLocaleString()}</Typography>}
+          </Alert>}
 
           {editingStatus && !hideTopActionButtons && canUpdateStatusNow && (
             <Box mt={3} p={2} bgcolor="action.hover" borderRadius={1}>
@@ -1904,24 +1819,33 @@ export default function TicketDetailPage() {
         </Grid>
 
         <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                Details
-              </Typography>
+          <Accordion expanded={detailsExpanded} onChange={(_, expanded) => setDetailsExpanded(expanded)} disableGutters sx={{ '&:before': { display: 'none' } }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />} id="ticket-details-summary" aria-controls="ticket-details-content">
+              <Box sx={{ width: '100%', minWidth: 0, py: 0.5 }}>
+                <Typography variant="subtitle1" fontWeight={600}>Details</Typography>
+                {!detailsExpanded && slaSummary && <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 2, mt: 1 }}>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="caption" color="text.secondary">{slaSummary.deadlineLabel}</Typography>
+                    <Typography variant="body2" fontWeight={600} sx={{ overflowWrap: 'anywhere' }}>{new Date(ticket.slaDeadline!).toLocaleString()}</Typography>
+                  </Box>
+                  <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                    <Typography variant="caption" color="text.secondary">{slaSummary.timerLabel}</Typography>
+                    {slaSummary.state === 'countdown' ? <SlaCountdownTimer targetDate={ticket.slaDeadline!} isNearingSLA={!!ticket.isNearingSLA} isOverdue={!!ticket.isOverdue} />
+                      : <Typography variant="body2" fontWeight={600} color={['overdue', 'missed'].includes(slaSummary.state) ? 'error.main' : slaSummary.state === 'met' ? 'success.main' : 'text.primary'}>
+                        {slaSummary.state === 'overdue' ? <OverdueTimer targetDate={ticket.slaDeadline!} />
+                          : slaSummary.state === 'paused' ? 'Paused'
+                          : slaSummary.state === 'met' ? 'Met SLA'
+                          : slaSummary.state === 'missed' ? `Missed by ${formatElapsedHoursMinutes(slaSummary.missedMilliseconds)}` : 'Completed'}
+                      </Typography>}
+                  </Box>
+                </Box>}
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails id="ticket-details-content" sx={{ pt: 0 }}>
               <Box display="flex" flexDirection="column" gap={1.5}>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
-                    Ticket Number
-                  </Typography>
-                  <Typography variant="body2">{ticket.ticketNumber}</Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    {(ticket as any).createdById &&
-                    (ticket as any).createdById !== ticket.requesterId
-                      ? 'Requested For'
-                      : 'Requested By'}
+                    {requesterLabel}
                   </Typography>
                   <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
                     <Typography variant="body2">
@@ -1929,11 +1853,6 @@ export default function TicketDetailPage() {
                         ? formatPersonName((ticket as any).requester, `User #${ticket.requesterId}`)
                         : `User #${ticket.requesterId}`}
                     </Typography>
-                    {canCorrectTicketRecord && (
-                      <Button size="small" onClick={openRequesterCorrection}>
-                        Correct
-                      </Button>
-                    )}
                     {ticket.requester?.email && (
                       <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
                         <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
@@ -1983,6 +1902,10 @@ export default function TicketDetailPage() {
                     {(ticket as any).requester?.units?.[0]?.name || '—'}
                   </Typography>
                 </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Ticket Number</Typography>
+                  <Typography variant="body2">{ticket.ticketNumber}</Typography>
+                </Box>
                 {ticket.assignedToId && (
                   <Box>
                     <Typography variant="caption" color="text.secondary">
@@ -1997,11 +1920,6 @@ export default function TicketDetailPage() {
                             )
                           : `User #${ticket.assignedToId}`}
                       </Typography>
-                      {canCorrectAssignee && (
-                        <Button size="small" onClick={openAssigneeCorrection}>
-                          Correct
-                        </Button>
-                      )}
                     </Stack>
                   </Box>
                 )}
@@ -2036,7 +1954,7 @@ export default function TicketDetailPage() {
                     </Stack>
                   </Box>
                 )}
-                {!['duplicate', 'cancelled'].includes(ticket.status) && ticket.slaDeadline &&
+                {detailsExpanded && !['duplicate', 'cancelled'].includes(ticket.status) && ticket.slaDeadline &&
                   (!ticket.isSlaWaiting || ticket.status === 'in_progress') && (
                     <>
                       <Divider sx={{ my: 1 }} />
@@ -2119,8 +2037,8 @@ export default function TicketDetailPage() {
                     </>
                   )}
               </Box>
-            </CardContent>
-          </Card>
+            </AccordionDetails>
+          </Accordion>
         </Grid>
       </Grid>
 
@@ -2740,11 +2658,12 @@ export default function TicketDetailPage() {
           </Alert>
           <Autocomplete
             options={requesterOptions}
-            getOptionLabel={(option) => `${formatPersonName(option, option.email)}${option.needsEmail ? ' — email required' : ''}`}
+            getOptionLabel={requesterOptionLabel}
+            filterOptions={filterRequesterOptions}
             value={requesterOptions.find((option) => option.id === correctedRequesterId) ?? null}
             onChange={(_, option) => { setCorrectedRequesterId(option?.id ?? ''); setPendingRequesterEmail(''); }}
             isOptionEqualToValue={(option, value) => option.id === value.id}
-            renderInput={(params) => <TextField {...params} label="Requested For" required />}
+            renderInput={(params) => <TextField {...params} label="Requested For" helperText="Search by name, email or unit." required />}
           />
           {requesterOptions.some((option) => option.id === correctedRequesterId && option.pendingStaffId) && (
             <TextField label="Requester Email" type="email" required fullWidth sx={{ mt: 2 }}

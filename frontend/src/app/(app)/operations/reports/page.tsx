@@ -504,7 +504,7 @@ export default function TicketReportsPage() {
       { id: 'performance_sla_chart', title: 'SLA performance', kind: 'chart', values: slaPieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })), headers: ['SLA Outcome', 'Resolved Tickets'] },
       { id: 'performance_sla_category_table', title: 'SLA by support type', kind: 'table', values: result.slaByType.flatMap((row) => [{ label: `${TYPE_LABELS[row.type] ?? row.type} met`, value: Number(row.met || 0) }, { label: `${TYPE_LABELS[row.type] ?? row.type} missed`, value: Number(row.missed || 0) }]), headers: ['Support Type', 'Met', 'Missed', 'Avg Active Resolution (hrs)'], rows: result.slaByType.map((row) => [TYPE_LABELS[row.type] ?? row.type, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
       { id: 'performance_sla_assignee_table', title: 'SLA by assignee', kind: 'table', values: result.slaByTechnician.flatMap((row) => [{ label: `${row.techName || `Assignee #${row.techId}`} met`, value: Number(row.met || 0) }, { label: `${row.techName || `Assignee #${row.techId}`} missed`, value: Number(row.missed || 0) }]), headers: ['Assignee', 'Met', 'Missed', 'Avg Active Resolution (hrs)'], rows: result.slaByTechnician.map((row) => [row.techName || `Assignee #${row.techId}`, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
-      ...(canManageReports && result.weeklyTechnicianPerformance?.length ? [{ id: 'performance_weekly_technicians_table', title: 'Top ticket assignees this week', kind: 'table' as const, values: result.weeklyTechnicianPerformance.map((row) => ({ label: row.techName || `Assignee #${row.techId}`, value: Number(row.weightedScore || 0) })), headers: ['Rank', 'Assignee', 'Resolved', 'SLA Met', 'SLA Missed', 'SLA Rate', 'Avg Active Time', 'Weighted Score'], rows: result.weeklyTechnicianPerformance.map((row, index) => [String(index + 1), row.techName || `Assignee #${row.techId}`, String(row.resolvedTickets), String(row.met), String(row.missed), `${row.slaRate.toFixed(1)}%`, `${row.avgActiveResolutionHours.toFixed(1)}h`, row.weightedScore.toFixed(1)]) }] : []),
+      ...(canManageReports && result.weeklyTechnicianPerformance?.length ? [{ id: 'performance_weekly_technicians_table', title: 'Ticket assignee ranking — selected period', kind: 'table' as const, values: result.weeklyTechnicianPerformance.map((row) => ({ label: row.techName || `Assignee #${row.techId}`, value: Number(row.weightedScore || 0) })), headers: ['Rank', 'Assignee', 'Resolved', 'SLA Met', 'SLA Missed', 'SLA Rate', 'Avg Active Time', 'Weighted Score'], rows: result.weeklyTechnicianPerformance.map((row, index) => [String(index + 1), row.techName || `Assignee #${row.techId}`, String(row.resolvedTickets), String(row.met), String(row.missed), `${row.slaRate.toFixed(1)}%`, `${row.avgActiveResolutionHours.toFixed(1)}h`, row.weightedScore.toFixed(1)]) }] : []),
       { id: 'performance_assignee_table', title: 'Assignee performance detail', kind: 'table', values: result.avgRatingByTechnician.map((row) => ({ label: row.techName || `Assignee #${row.techId}`, value: Number(row.avg || 0) })), headers: ['Assignee', 'Resolved Tickets', 'Rated Tickets', 'Average Rating'], rows: result.avgRatingByTechnician.map((row) => [row.techName || `Assignee #${row.techId}`, String(row.count), String(row.ratedCount || 0), Number(row.avg || 0).toFixed(2)]) },
     ];
     return chartSpecs;
@@ -580,7 +580,7 @@ export default function TicketReportsPage() {
         return `${opening} ${topMet?.label.replace(/ met$/, '') || 'No group'} had the most met outcomes among the reported comparisons at ${number(topMet?.value || 0)}. Compare each group's met and missed counts alongside its average active resolution time before drawing conclusions.`;
       }
       if (chart.id === 'performance_weekly_technicians_table') {
-        return `This weekly ranking combines SLA compliance (50%), completed-ticket volume (30%), and active resolution efficiency (20%) for tickets resolved from Monday through the report date. ${highest.label} had the highest weighted score at ${number(highest.value)}. Review the ticket count and SLA outcomes with the score, especially when an assignee handled only a small number of tickets.`;
+        return `This ranking combines SLA compliance (50%), completed-ticket volume (30%), and active resolution efficiency (20%) for tickets completed within the selected reporting period. ${highest.label} had the highest weighted score at ${number(highest.value)}. Volume is relative to the busiest assignee; efficiency compares SLA allowance with active time and is capped at 100%. Review ticket counts and SLA outcomes with the score, especially when an assignee handled only a small number of tickets.`;
       }
       if (chart.id === 'sla_insights_chart') {
         const configured = chart.values.filter((item) => item.label.endsWith('configured SLA hours'));
@@ -1835,13 +1835,15 @@ export default function TicketReportsPage() {
                 <Card>
                   <CardContent>
                     <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                      Top Ticket Assignees This Week
+                      Ticket Assignee Ranking — Selected Period
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      Ranking uses tickets resolved from Monday through today: 50% SLA compliance,
+                      Ranking uses tickets completed within the selected reporting period: 50% SLA compliance,
                       30% completed-ticket volume, and 20% active resolution efficiency. Paused,
                       frozen, lunch, non-workday, and other off-clock time are excluded from the
-                      average active time.
+                      average active time according to the credited SLA clock. Volume is relative to the busiest
+                      assignee and efficiency is capped at 100%. Compare ticket counts when reading scores.
+                      {!!result.performancePeriod?.excludedTickets && ` ${result.performancePeriod.excludedTickets} ticket(s) excluded because assignee or usable SLA timing is unavailable.`}
                     </Typography>
                     <Table size="small">
                       <TableHead>

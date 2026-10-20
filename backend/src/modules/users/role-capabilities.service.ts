@@ -210,6 +210,8 @@ export class RoleCapabilitiesService implements OnModuleInit {
   isTicketModuleAccess(role: string): boolean { return !!this.get(role)?.isTicketModuleAccess; }
   isTicketReportsAccess(role: string): boolean { return !!this.get(role)?.isTicketReportsAccess; }
   isTicketReportsManage(role: string): boolean { return !!this.get(role)?.isTicketReportsManage; }
+  isTicketPerformanceAccess(role: string): boolean { return !!this.get(role)?.isTicketPerformanceAccess; }
+  isStaffDirectoryAccess(role: string): boolean { return !!this.get(role)?.isStaffDirectoryAccess; }
 
   isKpiAccess(role: string): boolean {
     return !!this.get(role)?.isKpiAccess;
@@ -346,6 +348,8 @@ export class RoleCapabilitiesService implements OnModuleInit {
       | 'isTicketModuleAccess'
       | 'isTicketReportsAccess'
       | 'isTicketReportsManage'
+      | 'isTicketPerformanceAccess'
+      | 'isStaffDirectoryAccess'
       | 'isKpiAccess'
       | 'isKpiManage'
       | 'isAttendanceAccess'

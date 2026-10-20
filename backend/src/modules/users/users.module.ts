@@ -21,6 +21,8 @@ import { UserUnitOverride } from './entities/user-unit-override.entity';
 import { UnitSyncService } from './unit-sync.service';
 import { StaffDirectoryStore } from '../../shared/staff-directory/staff-directory.store';
 import { StaffDirectorySyncService } from './staff-directory-sync.service';
+import { StaffUnitDirectoryService } from './staff-unit-directory.service';
+import { StaffUnitDirectoryController } from './staff-unit-directory.controller';
 import { StaffDirectoryManagementController, StaffDirectoryIntegrationController, StaffDirectoryKeyGuard } from './staff-directory.controller';
 
 @Module({
@@ -38,12 +40,14 @@ import { StaffDirectoryManagementController, StaffDirectoryIntegrationController
     ]),
     EventBusModule,
   ],
-  controllers: [SecurityConfigController, UsersController, FeedbackController, StaffDirectoryManagementController, StaffDirectoryIntegrationController],
+  // Register the one-segment static directory route before UsersController's /users/:id.
+  controllers: [SecurityConfigController, StaffUnitDirectoryController, UsersController, FeedbackController, StaffDirectoryManagementController, StaffDirectoryIntegrationController],
   providers: [
     UsersService,
     UnitSyncService,
     StaffDirectoryStore,
     StaffDirectorySyncService,
+    StaffUnitDirectoryService,
     StaffDirectoryKeyGuard,
     RoleCapabilitiesService,
     FeedbackService,

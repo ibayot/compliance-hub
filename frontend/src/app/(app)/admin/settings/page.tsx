@@ -81,6 +81,7 @@ import {
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import PendingStaffPanel from '@/components/PendingStaffPanel';
+import { CAPABILITY_CATEGORIES } from '@/lib/capability-categories';
 
 // --- Change Password Card ---------------------------------------------------
 
@@ -630,94 +631,6 @@ function GlobalSettingsCard() {
 }
 
 // --- Role Capabilities Card ------------------------------------------------
-
-const CAPABILITY_CATEGORIES = [
-  {
-    name: 'Ticketing & Support Operations',
-    columns: [
-      { key: 'isFocal', label: 'Focal', description: 'Compliance document & focal-level access' },
-      { key: 'isDesktop', label: 'Desktop', description: 'Handle desktop/hardware support tickets' },
-      { key: 'isItSupport', label: 'IT Support', description: 'Handle IT/software support tickets' },
-      { key: 'isPantawidIct', label: 'Pantawid ICT', description: 'Handle Pantawid ICT support tickets' },
-      { key: 'isSpecializedSupport', label: 'Specialized', description: 'May be manually assigned Specialized Concerns tickets' },
-      { key: 'isIto', label: 'ITO Staff', description: 'Non-technician ITO professional staff group' },
-      { key: 'isEscalationFocal', label: 'Escalation', description: 'Can receive escalated tickets' },
-      { key: 'isTicketSettingsFocal', label: 'Ticket Admin', description: 'Full ticket settings & reports access' },
-      { key: 'isKnowledgeBaseManage', label: 'Knowledge Base Manage', description: 'Create and edit Knowledge Base articles' },
-      { key: 'isAllTickets', label: 'See All Tickets', description: 'View all tickets system-wide (not just own)' },
-      { key: 'isTicketFocal', label: 'Assign Tickets', description: 'Manually assign/reassign tickets to technicians' },
-      { key: 'isTicketReportsAccess', label: 'Ticket Reports View', description: 'View own technician Overview, Ratings, and Performance' },
-      { key: 'isTicketReportsManage', label: 'Ticket Reports Manage', description: 'View all technicians, Issues, and SLA Insights' },
-    ]
-  },
-  {
-    name: 'User & Role Management',
-    columns: [
-      { key: 'isUserManagementAdmin', label: 'User Mgt Admin', description: 'Create/Edit/Deactivate all users' },
-      { key: 'isUserManagementView', label: 'User Mgt View', description: 'Create/Edit regular users only' },
-      { key: 'isSystemRolesAccess', label: 'System Roles Admin', description: 'Access System Role Definitions' },
-      { key: 'isRoleCapabilitiesAccess', label: 'Capabilities Admin', description: 'Access Role Capabilities Matrix' },
-      { key: 'isUserManagementRolesManage', label: 'Role Definition Manage', description: 'Create, edit, and delete role definitions' },
-    ]
-  },
-  {
-    name: 'Compliance',
-    columns: [
-      { key: 'isKpiAccess', label: 'KPI View', description: 'Access KPI dashboard/read endpoints' },
-      { key: 'isKpiManage', label: 'KPI Manage', description: 'Create/update KPI master and monitoring records' },
-      { key: 'isReviewsAccess', label: 'Reviews View', description: 'View document reviews and comparisons' },
-      { key: 'isReviewsManage', label: 'Reviews Manage', description: 'Submit reviews and create version comparisons' },
-      { key: 'isIncidentsAccess', label: 'Incidents View', description: 'View incident records and statistics' },
-      { key: 'isIncidentsManage', label: 'Incidents Manage', description: 'Create and update incident records' },
-      { key: 'isIncidentsDelete', label: 'Incidents Delete', description: 'Delete incident records' },
-      { key: 'isCybersecurityAccess', label: 'Cybersecurity View', description: 'View cybersecurity measurements' },
-      { key: 'isCybersecurityManage', label: 'Cybersecurity Manage', description: 'Create and update cybersecurity measurements' },
-      { key: 'isCybersecurityDelete', label: 'Cybersecurity Delete', description: 'Delete cybersecurity measurements' },
-      { key: 'isMetricsAccess', label: 'Metrics', description: 'Access Metrics module' },
-      { key: 'isMetricsManage', label: 'Metrics Manage', description: 'Create, edit, and delete metric templates' },
-    ]
-  },
-  {
-    name: 'Attendance',
-    columns: [
-      { key: 'isAttendanceAccess', label: 'Attendance View', description: 'Access attendance and office-day views' },
-      { key: 'isAttendanceManage', label: 'Attendance Manage', description: 'Mutate attendance and office-day records' },
-    ]
-  },
-  {
-    name: 'Documents & Records',
-    columns: [
-      { key: 'isReportsAccess', label: 'Reports', description: 'Access consolidated compliance reports' },
-      { key: 'isMovAccess', label: 'MoV', description: 'Access MoV Builder' },
-      { key: 'isMovManage', label: 'MoV Manage', description: 'Save, edit, and delete MoV artifacts' },
-      { key: 'isDocumentsAccess', label: 'Documents', description: 'Access Documents module' },
-      { key: 'isRepositoryAccess', label: 'Repository', description: 'Access Repository module' },
-      { key: 'isIssuancesAccess', label: 'Issuances', description: 'Access Issuances module' },
-      { key: 'isIssuancesManage', label: 'Issuances Manage', description: 'Manage issuance records, sources, relationships, and lifecycle' },
-      { key: 'isIssuancesReview', label: 'Issuances Review', description: 'Include or exclude applicability candidates' },
-      { key: 'isIssuancesAssessmentManage', label: 'Issuances Assess', description: 'Manage compliance assessments and evidence' },
-      { key: 'isIssuancesConfigure', label: 'Issuances Configure', description: 'Manage controlled compliance domains' },
-      { key: 'isDocumentTypesManage', label: 'Document Types Manage', description: 'Manage reportorial document types' },
-      { key: 'isAuditAccess', label: 'Audit Logs', description: 'Access audit log records' },
-      { key: 'isUnitsAccess', label: 'Units View', description: 'View organizational units' },
-      { key: 'isUnitsManage', label: 'Units Manage', description: 'Create, edit, and delete organizational units' },
-    ]
-  },
-  {
-    name: 'Global, Security & SMTP Settings',
-    columns: [
-      { key: 'isGlobalSettingsAccess', label: 'Global Settings Admin', description: 'Manage routing, work hours, schedules, and SMTP in Settings' },
-      { key: 'isDutyViewerAccess', label: 'Duty Viewer', description: 'View Duty dashboard cards and monthly Duty map' },
-      { key: 'isDutyAdminAccess', label: 'Duty Administrator', description: 'Manage duty rosters, logs, exceptions, meetings, and attendance release' },
-      { key: 'isTicketResolutionTimeOverride', label: 'Ticket Resolution Time Override', description: 'Correct the effective resolution time of resolved or closed tickets using required proof' },
-      { key: 'isTicketRequesterCorrection', label: 'Ticket Record Correction', description: 'Correct the Requested For or Assigned To person on an existing ticket' },
-      { key: 'isTicketCancellation', label: 'Cancel Tickets', description: 'Cancel Open, Assigned or In Progress tickets with a reason. Regular requesters are limited to their own requests/filings; enabled RICTMS roles may cancel any ticket.' },
-      { key: 'isSecuritySettingsAccess', label: 'Security Settings Admin', description: 'Manage the default password in Security Settings' },
-      { key: 'isSmtpSettingsAccess', label: 'SMTP Admin', description: 'Manage SMTP credentials in Settings' },
-      { key: 'isChangelogManagement', label: 'Changelog Admin', description: 'Create and publish capability-targeted user-visible release notes' },
-    ]
-  }
-];
 
 function CapabilityCategoryAccordion({ category, caps, saving, handleToggle, canEdit }: { category: any, caps: any[], saving: string | null, handleToggle: (role: string, field: any, val: boolean) => void, canEdit: boolean }) {
   return (
