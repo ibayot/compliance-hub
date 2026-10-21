@@ -96,6 +96,12 @@ frontend/playwright*.ts
 frontend/scripts/run-e2e-loop.mjs
 frontend/scripts/run-visible-e2e-loop.ps1
 
+# Local-only test runners under the otherwise visible scripts directory.
+scripts/*test*
+scripts/*smoke*
+scripts/*regression*
+scripts/simulate-sqa.*
+
 # Logs
 npm-debug.log*
 yarn-debug.log*
@@ -121,3 +127,14 @@ frontend/test-results/**/*.png
 !/context/**/
 !/context/**/*.md
 !/context/tools/validate-context.mjs
+
+# Generated audit records and disposable diagnostics stay local-only.
+/context/audits/
+/backend/audit.json
+/frontend/audit.json
+/ddos-report.json
+/frontend/ddos-report.json
+/frontend/lint-report.txt
+/output/
+/ppt-output/
+/tmp/

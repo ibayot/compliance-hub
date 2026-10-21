@@ -85,21 +85,6 @@ Compliance_Hub_Postman_Collection.json
 
 # Disposable test-only folders
 frontend/tests/
-!frontend/tests/
-frontend/tests/*
-!frontend/tests/e2e/
-frontend/tests/e2e/*
-!frontend/tests/e2e/13-capability-visibility.spec.ts
-!frontend/tests/e2e/v1-ticketing-ui.spec.ts
-!frontend/tests/e2e/v1-helpers.ts
-!frontend/tests/e2e/v1-ticketing-admin-crud.spec.ts
-!frontend/tests/e2e/v1-ticketing-duties-crud.spec.ts
-!frontend/tests/e2e/v1-ticketing-lifecycle.spec.ts
-!frontend/tests/e2e/v1-ticketing-capabilities.spec.ts
-!frontend/tests/e2e/v1-ticketing-feedback.spec.ts
-!frontend/tests/e2e/v1-ticketing-reports.spec.ts
-!frontend/tests/e2e/v1-ticketing-escalation.spec.ts
-!frontend/tests/e2e/v1-ticketing-account-settings.spec.ts
 backend/test/
 
 # Logs
@@ -140,9 +125,21 @@ frontend/scripts/run-visible-e2e-loop.ps1
 scripts/*test*
 scripts/*smoke*
 scripts/*regression*
+scripts/simulate-sqa.*
 
 # Version the project context library, including paths matched by broad rules above.
 !/context/
 !/context/**/
 !/context/**/*.md
 !/context/tools/validate-context.mjs
+
+# Generated audit records and disposable diagnostics stay local-only.
+/context/audits/
+/backend/audit.json
+/frontend/audit.json
+/ddos-report.json
+/frontend/ddos-report.json
+/frontend/lint-report.txt
+/output/
+/ppt-output/
+/tmp/

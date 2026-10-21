@@ -1011,7 +1011,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Reviewed
 - Repository cleanup candidates were reviewed:
   - `regulatory-issuances/` remains intentionally tracked because it is an active source corpus for issuance deep-dive classification workflows.
-  - `scripts/classify_issuance_drop.py` and `scripts/quick-escalation-smoke.mjs` remain as maintained utility scripts.
+  - `scripts/classify_issuance_drop.py` remains a maintained assessment utility.
 
 ### Versioning
 - Patch version bump only: `0.0.37` -> `0.0.38`.

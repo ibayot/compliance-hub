@@ -18,8 +18,6 @@ Documented -> implementation identified -> review enforced -> automatically chec
 
 INV-COVER-001 MUST record actual enforcement and evidence rather than marking every baseline automatically checked. INV-COVER-002 MUST track remaining consumers for partial migrations. INV-COVER-003 SHOULD record repeated audit failures as candidates for component/API/type/test enforcement.
 
-## Scoped evidence
+## Evidence storage
 
-- [2026-10-21 ticketing audit](../audits/2026-10-21-ticketing.md): full owned-source inventory and route enumeration, targeted semantic review and isolated probes, local build/regression evidence, open defects and explicitly unverified boundaries. This is not a pass for every rule or every endpoint. Recheck hashes and affected rules before reusing its findings.
-- [Prepared 1.0.25 re-audit](../audits/2026-10-21-ticketing-reaudit.md) supersedes affected source findings with 599 local backend tests, 10 mocked-browser scenarios, 22 targeted read-only checks, SQL repeatability, and native/web transport probes. Remaining concurrency/device/runtime/visual and formatting limits are explicit; broader application adoption remains partial.
-- [Ticketing UI re-audit at 1.0.25](../audits/2026-10-21-ticketing-ui/REPORT.md): dedicated UI inventory and 85 exercised isolated browser probes across queues, detail actions, supporting ticketing screens, responsive/theme, keyboard, and failure states. Records 29 findings/adoption gaps, including the missing requester creation entry point and unreachable feedback pages; fixes remain unimplemented and runtime coverage is bounded by its ledger.
+Generated audit reports and test evidence are local-only, not versioned. This map does not certify implementation compliance; obtain current scoped evidence before reporting assurance.

@@ -30,7 +30,6 @@ Start with [MASTER.md](MASTER.md), which selects context by request. This catalo
 - [Delivery and release guidance](delivery/INDEX.md)
 - [Workflows](workflows/INDEX.md)
 - [Implementation and coverage inventories](inventory/INDEX.md)
-- [Dated audit evidence and unresolved findings](audits/INDEX.md)
 - [Architecture decisions](decisions/INDEX.md) and [record guidance](decisions/README.md)
 - [Exceptions](exceptions/INDEX.md) and [record guidance](exceptions/README.md)
 - [Authoring templates](templates/INDEX.md)

@@ -152,7 +152,7 @@ Use strong secrets outside local development. Do not commit `.env` files.
 ## Repository Notes
 
 - `regulatory-issuances/` is intentionally tracked as source corpus for issuance deep-dive classification workflows.
-- `scripts/classify_issuance_drop.py` and `scripts/quick-escalation-smoke.mjs` are maintained utility scripts for assessment and smoke testing.
+- `scripts/classify_issuance_drop.py` is a maintained assessment utility.
 
 ## Documentation Index
 
