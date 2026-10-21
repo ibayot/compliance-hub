@@ -19,6 +19,11 @@ if (Capacitor.isNativePlatform()) {
   }
 }
 
+/** Shared HTTP/SSE origin contract, including bundled native applications. */
+export function apiUrl(endpoint: string): string {
+  return `${API_URL.replace(/\/+$/, '')}/${endpoint.replace(/^\/+/, '')}`;
+}
+
 export const tokenStore = {
   browserTokens: {} as Partial<Record<'accessToken' | 'refreshToken', string>>,
   get: (key: 'accessToken' | 'refreshToken'): string | null => {

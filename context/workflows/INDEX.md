@@ -1,0 +1,10 @@
+# Workflows
+- [Feature or bug fix](feature-change-workflow.md)
+- [Consistency edit](consistency-edit-workflow.md)
+- [Schema change](schema-change-workflow.md)
+- [Security change](security-change-workflow.md)
+- [Dependency upgrade](dependency-upgrade-workflow.md)
+- [Container change](container-change-workflow.md)
+- [Release](release-workflow.md)
+- [Emergency fix](emergency-fix-workflow.md)
+- [Context maintenance](context-change-workflow.md)

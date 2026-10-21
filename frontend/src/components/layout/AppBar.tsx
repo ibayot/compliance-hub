@@ -407,8 +407,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   }, [fetchNotificationSummary]);
 
   // Live updates – listen for SSE changes
-  useSse(['NOTIFICATION_CREATED'], () => {
-    playNotificationSound();
+  useSse(['NOTIFICATION_CREATED'], (payload) => {
+    if (!payload?.reconnected) playNotificationSound();
     void fetchNotificationSummary();
   });
 

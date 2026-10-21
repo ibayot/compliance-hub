@@ -88,7 +88,7 @@ import TicketImageDropzone from '@/components/TicketImageDropzone';
 import TicketCancelButton from '@/components/TicketCancelButton';
 import TicketActionsMenu, { TicketMenuAction } from '@/components/TicketActionsMenu';
 import TicketPageActions from '@/components/TicketPageActions';
-import { resolveTicketListEntry, TICKET_ENTRY_QUERY_KEYS } from '@/lib/utils/ticket-list-entry';
+import { resolveTicketListEntry, restoreTicketListEntry, TICKET_ENTRY_QUERY_KEYS } from '@/lib/utils/ticket-list-entry';
 import { ticketFilterPanelSx, ticketFilterGridSx, ticketSearchSx, ticketFilterShortcutsSx } from '@/lib/utils/ticket-filter-layout';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useSse } from '@/lib/utils/useSse';
@@ -138,7 +138,7 @@ const toDateTimeLocalValue = (value?: string | null) => {
 
 export default function TicketsPage({
   restrictedAssignedOnly = false,
-  personalRequestedOnly = false,
+  personalRequestedOnly: requestedOnly = false,
 }: {
   restrictedAssignedOnly?: boolean;
   personalRequestedOnly?: boolean;
@@ -152,6 +152,8 @@ export default function TicketsPage({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user, myCap, loading: authLoading } = useAuth();
+  // Old bookmarks to Tickets must use the same requester view as My Tickets.
+  const personalRequestedOnly = requestedOnly || user?.role === 'user';
   const { enqueueSnackbar } = useSnackbar();
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -579,15 +581,15 @@ export default function TicketsPage({
 
   useEffect(() => {
     if (authLoading || !ticketListEntryKey || hydratedEntryKey === ticketListEntryKey) return;
-    // New navigation clears legacy filters before applying the link's explicit intent.
-    try {
-      if (ticketListStorageKey) sessionStorage.removeItem(ticketListStorageKey);
-    } catch { /* Fresh in-memory state works even when storage is unavailable. */ }
     ++ticketRequestRef.current;
     if (ticketSseTimerRef.current) clearTimeout(ticketSseTimerRef.current);
     ticketSseTimerRef.current = null;
     const params = new URLSearchParams(window.location.search);
-    const entry = resolveTicketListEntry(params, { today: todayInManila(), defaultAssignedToMe: defaultShowMyTickets, personalRequestedOnly });
+    let entry = resolveTicketListEntry(params, { today: todayInManila(), defaultAssignedToMe: defaultShowMyTickets, personalRequestedOnly });
+    if (!TICKET_ENTRY_QUERY_KEYS.some(key => params.has(key)) && ticketListStorageKey) {
+      try { entry = restoreTicketListEntry(sessionStorage.getItem(ticketListStorageKey), entry); }
+      catch { /* Storage is optional; retain the documented defaults. */ }
+    }
     setFilterStatus(entry.filterStatus);
     setFilterType(entry.filterType);
     setFilterPriority(entry.filterPriority);
@@ -614,6 +616,17 @@ export default function TicketsPage({
     }
     setHydratedEntryKey(ticketListEntryKey);
   }, [authLoading, ticketListEntryKey, hydratedEntryKey, defaultShowMyTickets, personalRequestedOnly, ticketListStorageKey]);
+
+  useEffect(() => {
+    if (!filtersHydrated || !ticketListStorageKey) return;
+    try {
+      sessionStorage.setItem(ticketListStorageKey, JSON.stringify({ filterStatus, filterType, filterPriority, filterSla,
+        filterDate, filterYear, filterMonth, filterQuarter, filterSemester, filterPeriodMode,
+        searchDraft, searchQuery, selectedTab, showMyTickets, showEscalatedToMe, showEscalations, escalationSearch }));
+    } catch { /* Navigation still works when browser storage is unavailable. */ }
+  }, [filtersHydrated, ticketListStorageKey, filterStatus, filterType, filterPriority, filterSla, filterDate,
+    filterYear, filterMonth, filterQuarter, filterSemester, filterPeriodMode, searchDraft, searchQuery,
+    selectedTab, showMyTickets, showEscalatedToMe, showEscalations, escalationSearch]);
 
   useEffect(() => {
     if (!newDialogOpen || !isTicketAdmin) return;

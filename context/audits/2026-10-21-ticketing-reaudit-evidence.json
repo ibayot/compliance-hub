@@ -1,0 +1,625 @@
+{
+  "version": "1.0.25",
+  "scope": "Full listed-source inventory; targeted semantic/behavior review, not exhaustive certification",
+  "totals": {
+    "files": 101,
+    "lines": 64162
+  },
+  "checks": [
+    {
+      "name": "Concrete PATCH DTOs, no erased Partial body",
+      "result": "pass"
+    },
+    {
+      "name": "No raw duty body mass assignment",
+      "result": "pass"
+    },
+    {
+      "name": "Server duty provenance, history and active-state guards",
+      "result": "pass"
+    },
+    {
+      "name": "Feedback runtime DTO receives boolean body",
+      "result": "pass"
+    },
+    {
+      "name": "Shared native/web SSE token and stream transport",
+      "result": "pass"
+    },
+    {
+      "name": "Aborted remount request not reused; reconnect and cleanup present",
+      "result": "pass"
+    },
+    {
+      "name": "Reconnect does not announce a new notification sound",
+      "result": "pass"
+    },
+    {
+      "name": "Proxy accommodates five 10-MiB files plus multipart overhead",
+      "result": "pass"
+    },
+    {
+      "name": "Search publication and settlement guarded by current generation",
+      "result": "pass"
+    },
+    {
+      "name": "Profile native confirm removed",
+      "result": "pass"
+    },
+    {
+      "name": "Requester legacy route has a canonical redirect",
+      "result": "pass"
+    },
+    {
+      "name": "Filter restoration and scoped persistence present",
+      "result": "pass"
+    },
+    {
+      "name": "Initial attachment audit/notification separated from comments",
+      "result": "pass"
+    },
+    {
+      "name": "No 365-step partial business calculation",
+      "result": "pass"
+    },
+    {
+      "name": "Shared timing explanation: frontend/src/components/WeeklyTicketPerformance.tsx",
+      "result": "pass"
+    },
+    {
+      "name": "Shared timing explanation: frontend/src/app/(app)/operations/reports/page.tsx",
+      "result": "pass"
+    },
+    {
+      "name": "Shared timing explanation: frontend/src/app/(app)/operations/tickets/[id]/page.tsx",
+      "result": "pass"
+    },
+    {
+      "name": "Version aligned: backend/package.json",
+      "result": "pass"
+    },
+    {
+      "name": "Version aligned: frontend/package-lock.json",
+      "result": "pass"
+    },
+    {
+      "name": "Version aligned: backend/package-lock.json",
+      "result": "pass"
+    },
+    {
+      "name": "Android package version aligned",
+      "result": "pass"
+    },
+    {
+      "name": "Timing render contains pause count, deduction and honest estimate",
+      "result": "pass"
+    }
+  ],
+  "lint": [
+    {
+      "area": "backend",
+      "files": 8,
+      "errors": 1076,
+      "warnings": 77,
+      "formattingMessages": 1076,
+      "semanticErrors": 0,
+      "unresolved": []
+    },
+    {
+      "area": "frontend",
+      "files": 17,
+      "errors": 0,
+      "warnings": 290,
+      "formattingMessages": 0,
+      "semanticErrors": 0,
+      "unresolved": []
+    }
+  ],
+  "inventory": [
+    {
+      "file": "backend/Dockerfile",
+      "lines": 53,
+      "sha256": "be87321946685600019b5227b01005c966cfe82031bd6ead7cccfc8ad79db96c"
+    },
+    {
+      "file": "backend/package-lock.json",
+      "lines": 11846,
+      "sha256": "56a0a0937d4ec7313be8b04c828e7a82a3f1e1f146c2262f0eeb3dd94295412d"
+    },
+    {
+      "file": "backend/package.json",
+      "lines": 119,
+      "sha256": "fae10d929ced34ad5df10e40276c6a72628cce09e82e36901a4baf02cc7bf06f"
+    },
+    {
+      "file": "backend/src/apps/gateway.main.ts",
+      "lines": 432,
+      "sha256": "e74a6593a538f5ccb1ce9aa41a5c886ae5a6d1cd960da0e64465f74828c1c4b2"
+    },
+    {
+      "file": "backend/src/apps/ticketing-jwt.strategy.ts",
+      "lines": 40,
+      "sha256": "629b222e2ace3ac17499280a8232d76ecf47eb50c2e94f82671f7951d6191f47"
+    },
+    {
+      "file": "backend/src/apps/ticketing-service.main.ts",
+      "lines": 115,
+      "sha256": "8bc01b1e5970bfe3d93cd52ae3e8944ab1d91f7bfa33c9430ea0128d4c9d362a"
+    },
+    {
+      "file": "backend/src/apps/ticketing-service.module.ts",
+      "lines": 73,
+      "sha256": "fae9d63685b720a597ed698611bde922f2ef0f551baeea14a9c79f1993cf5594"
+    },
+    {
+      "file": "backend/src/common/events/sse.service.ts",
+      "lines": 180,
+      "sha256": "2085548809d13fdfed30d400b2844c0ede02187a9653f21bb833117a516b6192"
+    },
+    {
+      "file": "backend/src/common/guards/capability.guard.ts",
+      "lines": 108,
+      "sha256": "de5a4f420c8bbb000062ebc31bba538f2ae437e5c354eafd776e17e00b254388"
+    },
+    {
+      "file": "backend/src/common/guards/internal-service.guard.ts",
+      "lines": 111,
+      "sha256": "65cbcc33413c966a334447f282743f78921b4942dfa2d16c76d37d50e9917cfa"
+    },
+    {
+      "file": "backend/src/common/interceptors/upload-bulkhead.interceptor.ts",
+      "lines": 44,
+      "sha256": "482979480a6aabf9f46a469789cb5a52550c908d8101d18fe4b2b6d192f5a0ab"
+    },
+    {
+      "file": "backend/src/common/security/security-validators.ts",
+      "lines": 53,
+      "sha256": "e54657965de9eae9ba59a9f1776c6215a7fa71158cc4ff382f35ffcb04cabfda"
+    },
+    {
+      "file": "backend/src/modules/tickets/controllers/attendance.controller.ts",
+      "lines": 213,
+      "sha256": "1d768acb8607b9358bd36e69863fd568b0cd1073f5b49e1d1d20fce0e661c37e"
+    },
+    {
+      "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+      "lines": 103,
+      "sha256": "a6285bee907985de269df3fe1e41bc2a5910d8b44466f3f31cbef580d478c5a9"
+    },
+    {
+      "file": "backend/src/modules/tickets/controllers/knowledge-base.controller.ts",
+      "lines": 69,
+      "sha256": "ec08d946bf4b5a16462b31dc776bda9ba6cc636b3b575690265418af414ca739"
+    },
+    {
+      "file": "backend/src/modules/tickets/controllers/notification.controller.ts",
+      "lines": 98,
+      "sha256": "a37597f0cc5c17d402c5f60db298bce0d225a59a3e6000d06c2c7a877bdbb2c4"
+    },
+    {
+      "file": "backend/src/modules/tickets/controllers/rating-invitation.controller.ts",
+      "lines": 119,
+      "sha256": "aba88207cb576a394a25c927d1f29eabba6a9039b37d449f18c734b7d8804772"
+    },
+    {
+      "file": "backend/src/modules/tickets/controllers/sse.controller.ts",
+      "lines": 31,
+      "sha256": "7c05349a19501218fbe38bc68fedd5d70569c219eff17fa49e61a21e5f638ae6"
+    },
+    {
+      "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+      "lines": 325,
+      "sha256": "4191ec14543167d2ddc7969ce7f085569dc5cebf138f0da56035e9b6ce7e80da"
+    },
+    {
+      "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+      "lines": 864,
+      "sha256": "e1041a278c861fb77e694a203de2a7bd74c2ced4a1bfa25765f941aeceb0aab4"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/date.transformer.ts",
+      "lines": 18,
+      "sha256": "fdb6260080b5ebf63b2b9f472477eccf76ec29cce99ae79b5840049c2309757f"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/dtr-view.entity.ts",
+      "lines": 17,
+      "sha256": "71d2e2b65c2b0a442cde1a53fd41e3b21c94b7c0cdacae7d0f6f090d5ad52c20"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/duty.entity.ts",
+      "lines": 142,
+      "sha256": "19b91c4ed09a9bd06408b390b8ae46c808707674b8d86010b23f98ebf4f54dd0"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/escalation-focal-config.entity.ts",
+      "lines": 100,
+      "sha256": "d2f9186428c7343816bb52a5442f326aba6342b7c3545be26e9d82dd24206cf8"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/knowledge-article.entity.ts",
+      "lines": 35,
+      "sha256": "d89ded36f911762b4586dda1c46cf381458168e60f72fd2613ddcb24e668d6e3"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/office-day.entity.ts",
+      "lines": 37,
+      "sha256": "f386adcce144802a1f404d0525b1bfc3adbe368fc664d44a4d6264187670ae78"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/rating-invitation.entity.ts",
+      "lines": 144,
+      "sha256": "7a9e93fb9c5717c774cc54f688737b2816dc3f2ba61a864cc4156691db76550a"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/tech-attendance.entity.ts",
+      "lines": 59,
+      "sha256": "a818c3ec11a6c9662e7d82a70ba641bced6b7cbaba415d653deee031c38da40e"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/ticket-category.entity.ts",
+      "lines": 53,
+      "sha256": "a76d597ac487de5307c29d8037930c72ad40a183a7b7a32b27d378728966ec23"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/ticket-comment.entity.ts",
+      "lines": 45,
+      "sha256": "fed7c0c263061eccc68043c5a43e0540770984d39059f54e035dddbe54bbfa98"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/ticket-escalation.entity.ts",
+      "lines": 78,
+      "sha256": "b29ec52ea96119e14a9f5dbea0365a5410a8789a5f1e0b382fb68d2f60010d6a"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/ticket-event.entity.ts",
+      "lines": 45,
+      "sha256": "b9c5d0241480a51dd3ff77d6574adcd04fe1e2c260db0a727706f1022431775c"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/ticket-issue-type.entity.ts",
+      "lines": 76,
+      "sha256": "3125bd00d853999118bee298f20d1b8ea1835135597be78ad97b6a39b2279c6a"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/ticket-keyword-rule.entity.ts",
+      "lines": 59,
+      "sha256": "31618e25f7d83997791dc17233b9b5cdf974351eead5e35e7ff6ca3685e8a328"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/ticket-notification.entity.ts",
+      "lines": 29,
+      "sha256": "4482b43390b0163261a010ab1fc540e531f4b7ce979a02063df6f143e110ad9f"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/ticket-resolution-time-override.entity.ts",
+      "lines": 39,
+      "sha256": "c28073f8cda8193984e7ef564c9187a2609944d7225525b121bde7ced29f5894"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/ticket-status-justification.entity.ts",
+      "lines": 28,
+      "sha256": "efb09dd063c286034aaa9f1c06a3a117b33a205a79aa7723db89d95301c09bf8"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/ticket.entity.ts",
+      "lines": 231,
+      "sha256": "a05830c69734aa7eb2d7e2540e6f91da14b13c7dfdd267cc3b33b977e9c5e84a"
+    },
+    {
+      "file": "backend/src/modules/tickets/entities/ticketing-config.entity.ts",
+      "lines": 77,
+      "sha256": "5ffcc8a7fae2fb031e5ba9e9366d6ef4c44caa4944cf45dd2ac289ccce767eb9"
+    },
+    {
+      "file": "backend/src/modules/tickets/interceptors/attendance-sse.interceptor.ts",
+      "lines": 25,
+      "sha256": "ecfb6ae69fba42f6164d63d5c542a2064365d50cd281954572dfd15bfc3c9ae9"
+    },
+    {
+      "file": "backend/src/modules/tickets/interceptors/settings-sse.interceptor.ts",
+      "lines": 24,
+      "sha256": "637c66896985521394201499c9f2061aa9760f7ac9e2b3ae1e43d8e91662e52a"
+    },
+    {
+      "file": "backend/src/modules/tickets/services/attendance.service.ts",
+      "lines": 879,
+      "sha256": "e00129fd43872ca8acaf275cbc3345c229701663910c99b86edac1ad35defaa4"
+    },
+    {
+      "file": "backend/src/modules/tickets/services/duty.service.ts",
+      "lines": 1547,
+      "sha256": "12d7e229b07d5c40a9c7f330d2d1f4c4aadb118206c0f71b4222ab9e5ac8f8f6"
+    },
+    {
+      "file": "backend/src/modules/tickets/services/email.service.ts",
+      "lines": 764,
+      "sha256": "90941beccb3c203da37c26406689d21288aef77b1524a7f9b81038d5f1062ce9"
+    },
+    {
+      "file": "backend/src/modules/tickets/services/knowledge-base.service.ts",
+      "lines": 596,
+      "sha256": "40bcc3c7131681e0a8f85271041398f884f1c304f7ff3e6a86185deded00593a"
+    },
+    {
+      "file": "backend/src/modules/tickets/services/notification.service.ts",
+      "lines": 95,
+      "sha256": "8c178c369fd88904a07cd0e1785f4292a1e58c1a26c69366c74a181856864c43"
+    },
+    {
+      "file": "backend/src/modules/tickets/services/rating-invitation.service.ts",
+      "lines": 684,
+      "sha256": "d4af544445391fe0669f0a1f354dd5a8f75575c9381f49ecbc7054c39343bd5b"
+    },
+    {
+      "file": "backend/src/modules/tickets/services/sse.service.ts",
+      "lines": 2,
+      "sha256": "0a842a7491b748cb9be23f34de2bad7243c6539a0f48af0fd2845e758f32c38e"
+    },
+    {
+      "file": "backend/src/modules/tickets/services/ticket-attachment-policy.ts",
+      "lines": 60,
+      "sha256": "d9ab387dee74afdb9f38817e4fc8f689ae39a36e837b74edd788ad875bce4d83"
+    },
+    {
+      "file": "backend/src/modules/tickets/services/ticket-cancellation-policy.ts",
+      "lines": 16,
+      "sha256": "7d02477d79f4a3f8ea1b7fa6c91a409401e9f75dde8ebe476ddf9799b5e6f56e"
+    },
+    {
+      "file": "backend/src/modules/tickets/services/ticket-cron.service.ts",
+      "lines": 501,
+      "sha256": "bf9d2b85ba88d5a947d8e305c814c57eefeb65041c1e0a7f048d13df9d890a98"
+    },
+    {
+      "file": "backend/src/modules/tickets/services/ticket-performance.ts",
+      "lines": 66,
+      "sha256": "ce38d058fc9b18f11053ec248f0247646d496c829da1e31efbdb3f61f36df69e"
+    },
+    {
+      "file": "backend/src/modules/tickets/services/ticket-settings.service.ts",
+      "lines": 1204,
+      "sha256": "0aa1a197d5aeed2b4dc0557e356e39d07e0d6440b04d6f76cafcf72cf4c703b3"
+    },
+    {
+      "file": "backend/src/modules/tickets/services/ticket-sla-pause.ts",
+      "lines": 72,
+      "sha256": "e52a31f4747d8c4c39f9f8e691ac82af5d0c35b703e94f1134738a9137ebdbce"
+    },
+    {
+      "file": "backend/src/modules/tickets/services/ticket.service.ts",
+      "lines": 7798,
+      "sha256": "f9ad53d0da2262a027e5c5fbdf9a3cebf93481caf2b3b31792510b865eca22dc"
+    },
+    {
+      "file": "backend/src/modules/tickets/tickets.module.ts",
+      "lines": 135,
+      "sha256": "ee82e5021d674b96655dca1c0fb3956c5e33275faa005e8fdeddc6e34529408f"
+    },
+    {
+      "file": "backend/src/shared/filters/global-exception.filter.ts",
+      "lines": 87,
+      "sha256": "6b35ca4081475a4abeaadee009ece3cc4af1851de8ed033ad85cbe4a324ca0c7"
+    },
+    {
+      "file": "docker-compose.yml",
+      "lines": 243,
+      "sha256": "a5ce06d979c6c2cf222406025a88f29927a21062f7f2149148cf5a89c3b1d540"
+    },
+    {
+      "file": "frontend/Dockerfile",
+      "lines": 124,
+      "sha256": "215ee445a38e9dd47f29e42d214b7a4e6ee38cd3cb952468c776a8332a8ecd64"
+    },
+    {
+      "file": "frontend/android/app/build.gradle",
+      "lines": 55,
+      "sha256": "c76730ae63350155a58ee24da8e45354b9a329c9c4d03bc1fa2a9d1ed46f8b83"
+    },
+    {
+      "file": "frontend/capacitor.config.ts",
+      "lines": 21,
+      "sha256": "296091cf951d462dbcccce1c835f906c8c1f42bae8beb58f62c452e6cb77b69a"
+    },
+    {
+      "file": "frontend/package-lock.json",
+      "lines": 7917,
+      "sha256": "a6bb20c9d77d0a6e94f4cc86ec9cc5f5ab6f4d9ded86971c280c299320b8de65"
+    },
+    {
+      "file": "frontend/package.json",
+      "lines": 67,
+      "sha256": "474d85ba218e459de2cf7a5039218029918ffd3f1d9b785c49a33a2a2b6dad3f"
+    },
+    {
+      "file": "frontend/src/App.tsx",
+      "lines": 315,
+      "sha256": "83080a509716211dd77e9f835028039d51bd97d4ed5fd3cd13d354ec6b009bc0"
+    },
+    {
+      "file": "frontend/src/app/(app)/admin/attendance/page.tsx",
+      "lines": 857,
+      "sha256": "2d97df5fb6c7aec52bdeda81801ba76680c61c2874f845ab29343605162e8f66"
+    },
+    {
+      "file": "frontend/src/app/(app)/admin/settings/page.tsx",
+      "lines": 2629,
+      "sha256": "589da7274eff56c379cc5081985664fdf59e7bb49bbb6ac672bffa946c34f678"
+    },
+    {
+      "file": "frontend/src/app/(app)/admin/user-manual/page.tsx",
+      "lines": 527,
+      "sha256": "2618d87d5249bfe9e1dda45459c3dfef347576a04b636f631812742d206fc602"
+    },
+    {
+      "file": "frontend/src/app/(app)/dashboard/page.tsx",
+      "lines": 1850,
+      "sha256": "f41a01f18de045a9ee27c68d03e0d82e4a18a84d10c270bfa67ee7217f438038"
+    },
+    {
+      "file": "frontend/src/app/(app)/operations/duties/page.tsx",
+      "lines": 241,
+      "sha256": "0e98f5ea895d719daf38c15e627a27fb0252177a0dc8f995c481de2e30a38604"
+    },
+    {
+      "file": "frontend/src/app/(app)/operations/knowledge-base/page.tsx",
+      "lines": 466,
+      "sha256": "a4e32d75b670f8d17670651989ddd3342ff1351f5a5b99820e6266122a7c000d"
+    },
+    {
+      "file": "frontend/src/app/(app)/operations/reports/page.tsx",
+      "lines": 2284,
+      "sha256": "db7da9051e720806f88483d99ced15b6fd910b4a6939ab7b6c2120c943c02e96"
+    },
+    {
+      "file": "frontend/src/app/(app)/operations/settings/page.tsx",
+      "lines": 1849,
+      "sha256": "bd4763a9153aeccfec4e53c90c7fc9f8563b9408beee76e7a4aa640c1b6f9c30"
+    },
+    {
+      "file": "frontend/src/app/(app)/operations/tickets/[id]/page.tsx",
+      "lines": 3405,
+      "sha256": "fc9201de95b0c9a3a2001bc9e890e3c9c0bdfc924c925b672d08f6fb10958fe4"
+    },
+    {
+      "file": "frontend/src/app/(app)/operations/tickets/page.tsx",
+      "lines": 3856,
+      "sha256": "e5413c861f8be253dc14af1ed10877dfffb375e6ca63306f176b3ae122f28738"
+    },
+    {
+      "file": "frontend/src/app/api/references.ts",
+      "lines": 2041,
+      "sha256": "c095c2d880b14f5893f0473e2f7484bf7f5cbf79acb92085ab7f1016f84d3f1b"
+    },
+    {
+      "file": "frontend/src/app/rate/page.tsx",
+      "lines": 717,
+      "sha256": "70369f1e3e6e5d2b52319e59fbd4148da9c116872beba7c8f28f4817d369e3ed"
+    },
+    {
+      "file": "frontend/src/components/AuthImage.tsx",
+      "lines": 77,
+      "sha256": "d2faea76a52931bbbbb3926e0825a825f95fe2e4d85f3ee84ea7504c159382ae"
+    },
+    {
+      "file": "frontend/src/components/ResolutionTimingSummary.tsx",
+      "lines": 19,
+      "sha256": "9766a5a286e0517036216a57fb107203d8f4d33f9c4327a7cc2b95da9405680a"
+    },
+    {
+      "file": "frontend/src/components/SafeRichText.tsx",
+      "lines": 171,
+      "sha256": "bcd80dd25a24e40e7f7fd5913d807a987f93b6855d081758f0210e26e5fb0681"
+    },
+    {
+      "file": "frontend/src/components/SearchableSelect.tsx",
+      "lines": 136,
+      "sha256": "bdc4d0c682a0b19aace562b3b9b553c56affb79a7f37791ccd9a4e9e8f7ead5a"
+    },
+    {
+      "file": "frontend/src/components/TicketActionsMenu.tsx",
+      "lines": 48,
+      "sha256": "e3d32251c1c2bf6882d227225f4bec209cbc8ac83c28a1664e6599362add98ff"
+    },
+    {
+      "file": "frontend/src/components/TicketCancelButton.tsx",
+      "lines": 65,
+      "sha256": "f772cc714bcfef60c8977b73c13ebbe19585cd9c496dfe5b49f174b377a81169"
+    },
+    {
+      "file": "frontend/src/components/TicketImageDropzone.tsx",
+      "lines": 129,
+      "sha256": "5e2fac99d357591b0f1d0621224a49ff3f78fe68eb6daa711153498873bea7f8"
+    },
+    {
+      "file": "frontend/src/components/TicketPageActions.tsx",
+      "lines": 42,
+      "sha256": "456414cc345a2f76d92441814aaf44dacd75fff5ccd3e0fe1cbb97a47e3eb7e3"
+    },
+    {
+      "file": "frontend/src/components/WeeklyTicketPerformance.tsx",
+      "lines": 131,
+      "sha256": "76423a1c1da7a955434e0e8e0515ece6ce2f850c45d8483027bbf4d03fa9382b"
+    },
+    {
+      "file": "frontend/src/components/layout/AppBar.tsx",
+      "lines": 861,
+      "sha256": "73c4f498a0fff3c8234dd57589672407a18f73d8d21fb8a7d7a2e7eb9997d657"
+    },
+    {
+      "file": "frontend/src/components/layout/ResponsiveTable.tsx",
+      "lines": 122,
+      "sha256": "437b6882dd392f9945477d379dbc476b6a7c2832415b34d23df9986993eb08c0"
+    },
+    {
+      "file": "frontend/src/components/layout/Sidebar.tsx",
+      "lines": 451,
+      "sha256": "f000f2288f36072703840a29cda3b6a726a0e778e9c818801cf62657430672fb"
+    },
+    {
+      "file": "frontend/src/contexts/AuthContext.tsx",
+      "lines": 588,
+      "sha256": "749fe1785dcfc29eacfde5ece89cd36dfd19cc260185c51fa0630fd5a7f912ce"
+    },
+    {
+      "file": "frontend/src/lib/api/client.ts",
+      "lines": 190,
+      "sha256": "a97652a87c24534aaa6f1f78fab289b3415f58d5d7263590804483b50876ef51"
+    },
+    {
+      "file": "frontend/src/lib/api/public-rating.ts",
+      "lines": 73,
+      "sha256": "09e06e3629c94fe477df5ffc4af411e8792a57faa3b7b669787838d243d655b2"
+    },
+    {
+      "file": "frontend/src/lib/theme.ts",
+      "lines": 129,
+      "sha256": "4f5e104f97c6b21aa525301c1544bc04b772472de205d35cf6a1d66837b1b841"
+    },
+    {
+      "file": "frontend/src/lib/types/ticket-timing.ts",
+      "lines": 10,
+      "sha256": "56de1362d12b08f466d5fa4b9fce3a397761a53e37e3f53081f8fedd6ef1e65a"
+    },
+    {
+      "file": "frontend/src/lib/utils/requester-options.ts",
+      "lines": 28,
+      "sha256": "b70956856442315493f886b164e1e88796c52bf339762d406b406d6b426e8525"
+    },
+    {
+      "file": "frontend/src/lib/utils/ticket-colors.ts",
+      "lines": 84,
+      "sha256": "bca6f0e810047ae414c1c8be5fc170923a4d931fc9453363fbe29de56ecb4311"
+    },
+    {
+      "file": "frontend/src/lib/utils/ticket-detail-actions.ts",
+      "lines": 47,
+      "sha256": "03fdcf515db88b374388afe59a065a9ef82d85edb31ecc5b57ddc9381e4b77a8"
+    },
+    {
+      "file": "frontend/src/lib/utils/ticket-filter-layout.ts",
+      "lines": 33,
+      "sha256": "e8b1deaca323b30559f7575f4a6719e5137c644dc8b968d0013132717137048c"
+    },
+    {
+      "file": "frontend/src/lib/utils/ticket-list-entry.ts",
+      "lines": 69,
+      "sha256": "7c3a31a6a312044fd02b82aa2ac960da5084038e6951899d4711efc4f5d0c123"
+    },
+    {
+      "file": "frontend/src/lib/utils/ticket-sla-status.ts",
+      "lines": 32,
+      "sha256": "23ec8432c276e0ca85471a6547bee7a75cb1a667ecded6d2c216441ac1919ed0"
+    },
+    {
+      "file": "frontend/src/lib/utils/ticket-sla-summary.ts",
+      "lines": 30,
+      "sha256": "05f73e9375c837b494d396fdb312aebd08fac8cc545c81719756c6c530604739"
+    },
+    {
+      "file": "frontend/src/lib/utils/useSse.ts",
+      "lines": 270,
+      "sha256": "1bcbf3b364ed8ae617d421f98038ef87f1666e35c2cea7d791cadf80c652ac33"
+    }
+  ]
+}

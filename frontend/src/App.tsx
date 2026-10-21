@@ -75,6 +75,14 @@ function ProtectedDashboard({
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
+function TicketListEntry() {
+  const { user } = useAuth();
+  const location = useLocation();
+  return user?.role === 'user'
+    ? <Navigate to={`/operations/my-tickets${location.search}${location.hash}`} replace />
+    : <TicketsPage />;
+}
+
 function UnknownRouteRedirect() {
   const { isAuthenticated, loading } = useAuth();
   if (loading) {
@@ -148,7 +156,7 @@ export default function App() {
         path="/operations/tickets"
         element={
           <ProtectedDashboard requiredCapability="isTicketModuleAccess">
-            <TicketsPage />
+            <TicketListEntry />
           </ProtectedDashboard>
         }
       />

@@ -3,6 +3,7 @@ import { Alert, Box, Button, Card, CardContent, CircularProgress, Stack, Typogra
 import { ticketsApi, WeeklyPerformanceSummary } from '@/app/api/references';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSse } from '@/lib/utils/useSse';
+import ResolutionTimingSummary from './ResolutionTimingSummary';
 
 export function formatActiveTime(hours: number): string {
   const minutes = Math.round(hours * 60);
@@ -106,6 +107,12 @@ export default function WeeklyTicketPerformance() {
               SLA: {row.met} met / {row.missed} missed · Volume: {row.volumeScore.toFixed(1)} / 100 · Efficiency: {row.efficiencyScore.toFixed(1)} / 100.
               {' '}Each component is weighted at 50%, 30%, and 20% respectively; totals use unrounded values.
             </Typography>}
+            {breakdown && <ResolutionTimingSummary average estimatedTickets={row.estimatedTickets} timing={{
+              elapsedCalendarHours: row.avgCalendarResolutionHours,
+              elapsedBusinessHours: row.avgBusinessResolutionHours ?? row.avgActiveResolutionHours,
+              creditedPauseHours: row.avgCreditedPauseHours ?? 0, activeHours: row.avgActiveResolutionHours,
+              pauseCount: row.pauseCount ?? null, estimated: !!row.estimatedTickets,
+            }} />}
           </Box>)}
           <Stack direction="row" spacing={1} flexWrap="wrap">
             {(summary?.rows.length ?? 0) > 5 && <Button onClick={() => setShowAll(v => !v)} aria-expanded={showAll}>

@@ -2302,6 +2302,7 @@ function ProfilePreferencesCard() {
   const { enqueueSnackbar } = useSnackbar();
   const [units, setUnits] = useState<{ id: number; name: string; hasReportorialRequirements?: boolean }[]>([]);
   const [saving, setSaving] = useState(false);
+  const [clearConfirmation, setClearConfirmation] = useState<string[]>([]);
   const [unitSource, setUnitSource] = useState<{
     source: 'manual' | 'ums' | null;
     updatedAt: string | null;
@@ -2335,8 +2336,8 @@ function ProfilePreferencesCard() {
       });
   }, [user?.id, enqueueSnackbar]);
 
-  const handleSave = async () => {
-    if (!user) return;
+  const handleSave = async (confirmed = false) => {
+    if (!user || saving) return;
     const phoneNumber = form.phoneNumber.replace(/\D/g, '').slice(0, 10);
     if (form.unitId === '') {
       enqueueSnackbar('A unit is required before saving your profile.', { variant: 'warning' });
@@ -2351,14 +2352,11 @@ function ProfilePreferencesCard() {
       !form.designation.trim() && user.designation ? 'Designation' : null,
     ].filter((field): field is string => Boolean(field));
 
-    if (
-      fieldsBeingCleared.length > 0 &&
-      !window.confirm(
-        `The following fields are blank: ${fieldsBeingCleared.join(', ')}.\n\nSaving them as blank will remove their existing data. Do you want to continue?`,
-      )
-    ) {
+    if (fieldsBeingCleared.length > 0 && !confirmed) {
+      setClearConfirmation(fieldsBeingCleared);
       return;
     }
+    setClearConfirmation([]);
 
     try {
       setSaving(true);
@@ -2460,11 +2458,16 @@ function ProfilePreferencesCard() {
           </Grid>
         </Grid>
         <Box mt={2} display="flex" justifyContent="flex-end">
-          <Button variant="contained" onClick={handleSave} disabled={saving}>
+          <Button variant="contained" onClick={() => void handleSave()} disabled={saving}>
             {saving ? 'Saving...' : 'Save Profile Information'}
           </Button>
         </Box>
       </CardContent>
+      <Dialog open={clearConfirmation.length > 0} onClose={() => !saving && setClearConfirmation([])} aria-labelledby="clear-profile-title" fullWidth maxWidth="sm">
+        <DialogTitle id="clear-profile-title">Save profile with blank fields?</DialogTitle>
+        <DialogContent><Alert severity="warning">Saving will remove the existing values for: {clearConfirmation.join(', ')}. Cancel to keep editing.</Alert></DialogContent>
+        <DialogActions><Button onClick={() => setClearConfirmation([])} disabled={saving}>Cancel</Button><Button variant="contained" onClick={() => void handleSave(true)} disabled={saving}>Save and clear fields</Button></DialogActions>
+      </Dialog>
     </Card>
   );
 }

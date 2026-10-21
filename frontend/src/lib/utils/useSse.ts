@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { useAuth, tokenStore } from '@/contexts/AuthContext';
+import { apiClient, apiUrl } from '@/lib/api/client';
 
 export type SseEventType =
   | 'TICKET_UPDATED'
@@ -52,7 +53,8 @@ async function connectSse(authKey: string, accessToken?: string, force = false) 
     masterEventSource.readyState !== EventSource.CLOSED;
 
   if (!force && hasLiveConnection) return;
-  if (!force && connectionPromise && connectionPromiseAuthKey === authKey) return connectionPromise;
+  if (!force && connectionPromise && connectionPromiseAuthKey === authKey &&
+    currentAuthKey === authKey && !connectionAbortController?.signal.aborted) return connectionPromise;
 
   const generation = ++connectionGeneration;
 
@@ -73,13 +75,10 @@ async function connectSse(authKey: string, accessToken?: string, force = false) 
 
   currentAuthKey = authKey;
   const attempt = (async () => {
-    const ticketResponse = await fetch('/api/events/token', {
-      credentials: 'include',
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    const ticketResponse = await apiClient.get('/events/token', {
       signal: abortController.signal,
     });
-    if (!ticketResponse.ok) throw new Error('Unable to obtain SSE connection ticket.');
-    const { token: ticket } = await ticketResponse.json();
+    const { token: ticket } = ticketResponse.data;
     // The component may have unmounted, logged out, or changed users while the
     // connection ticket was loading. Do not create a listener-less EventSource
     // from that stale async attempt.
@@ -91,11 +90,20 @@ async function connectSse(authKey: string, accessToken?: string, force = false) 
     ) {
       return;
     }
-    const source = new EventSource(`/api/events?ticket=${encodeURIComponent(ticket)}`);
+    const source = new EventSource(apiUrl(`/events?ticket=${encodeURIComponent(ticket)}`), {
+      withCredentials: !Capacitor.isNativePlatform(),
+    });
     masterEventSource = source;
 
     source.onopen = () => {
       console.log('[SSE] Connected', new Date().toISOString());
+      // Reconcile missed changes after backgrounding or a disconnected interval.
+      // Notify each query owner once; it remains responsible for authorized refetch.
+      for (const listener of [...activeListeners]) {
+        try {
+          void Promise.resolve(listener.callback({ reconnected: true })).catch(() => console.warn('[SSE] Reconciliation failed.'));
+        } catch { console.warn('[SSE] Reconciliation failed.'); }
+      }
     };
 
     source.onmessage = (event) => {
@@ -164,6 +172,9 @@ async function connectSse(authKey: string, accessToken?: string, force = false) 
 function disconnectSse() {
   // Invalidate any in-flight ticket request before closing the current stream.
   connectionGeneration += 1;
+  // A remount must not reuse a token request that this disconnect aborts.
+  connectionPromise = null;
+  connectionPromiseAuthKey = null;
   connectionAbortController?.abort();
   connectionAbortController = null;
   if (reconnectTimer) {
@@ -185,6 +196,14 @@ function disconnectSse() {
 
 // Global listener for token refresh
 if (typeof window !== 'undefined') {
+  const reconnectVisibleSession = () => {
+    if (!activeListeners.size || document.visibilityState === 'hidden') return;
+    const native = Capacitor.isNativePlatform(), token = tokenStore.get('accessToken');
+    if (native && !token) return;
+    void connectSse(native ? `native:${token}` : 'browser-cookie', native ? token! : undefined, true).catch(() => undefined);
+  };
+  window.addEventListener('online', reconnectVisibleSession);
+  document.addEventListener('visibilitychange', reconnectVisibleSession);
   window.addEventListener('auth:tokenChanged', (e: any) => {
       const newToken = e.detail;
       // If we have active listeners, immediately reconnect with new token

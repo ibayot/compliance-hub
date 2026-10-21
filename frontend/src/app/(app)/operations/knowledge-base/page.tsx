@@ -62,6 +62,8 @@ export default function KnowledgeBasePage() {
 
   const [articles, setArticles] = useState<KBArticle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const requestGeneration = useRef(0);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Shared Add/Edit Dialog State
@@ -77,20 +79,19 @@ export default function KnowledgeBasePage() {
   const contentInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
 
   const fetchArticles = useCallback(async (query = '') => {
+    const generation = ++requestGeneration.current;
     try {
       setLoading(true);
+      setLoadError('');
       const data = await knowledgeBaseApi.search(query);
+      if (generation !== requestGeneration.current) return;
       setArticles(data);
     } catch {
-      enqueueSnackbar('Failed to load knowledge base articles', { variant: 'error' });
+      if (generation === requestGeneration.current) setLoadError('Failed to load knowledge base articles. Please retry.');
     } finally {
-      setLoading(false);
+      if (generation === requestGeneration.current) setLoading(false);
     }
-  }, [enqueueSnackbar]);
-
-  useEffect(() => {
-    fetchArticles();
-  }, [fetchArticles]);
+  }, []);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
@@ -99,10 +100,12 @@ export default function KnowledgeBasePage() {
 
   // Debounced search trigger
   useEffect(() => {
+    // Invalidate a pending response immediately, not only after the debounce.
+    ++requestGeneration.current;
     const delayDebounceFn = setTimeout(() => {
       fetchArticles(searchQuery);
     }, 400);
-    return () => clearTimeout(delayDebounceFn);
+    return () => { clearTimeout(delayDebounceFn); ++requestGeneration.current; };
   }, [searchQuery, fetchArticles]);
 
   const openEditDialog = (article: KBArticle) => {
@@ -332,6 +335,8 @@ export default function KnowledgeBasePage() {
             <Box textAlign="center" py={4}>
               <CircularProgress size={30} />
             </Box>
+          ) : loadError ? (
+            <Box role="alert"><Typography color="error">{loadError}</Typography><Button onClick={() => void fetchArticles(searchQuery)}>Retry</Button></Box>
           ) : articles.length === 0 ? (
             <Box textAlign="center" py={4}>
               <HelpIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />

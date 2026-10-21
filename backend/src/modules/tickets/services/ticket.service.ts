@@ -75,6 +75,7 @@ import { assertImageReplacementAllowed, commentImagePaths, isDescriptionAttachme
 import { assertTicketCancellationAllowed } from './ticket-cancellation-policy';
 import { formatPersonName } from '../../../shared/utils/person-name';
 import { AssigneePerformanceRow, PerformancePeriod, PerformanceSummary, weeklyPerformancePeriod, reportPerformancePeriod, scoreAssignees } from './ticket-performance';
+import { creditTicketPause, resolutionTiming, ResolutionTiming } from './ticket-sla-pause';
 
 // --- DTOs --------------------------------------------------------------------
 
@@ -457,6 +458,26 @@ export const getEffectiveResolvedAt = (
 ): Date | null => {
   const value = ticket.resolutionTimeOverride ?? ticket.resolvedAt;
   return value ? new Date(value) : null;
+};
+
+/** Match the completed ticket badge; active hours remain the efficiency input. */
+export const hasMetResolvedTicketSla = (
+  ticket: Pick<Ticket, 'resolvedAt' | 'resolutionTimeOverride' | 'slaDeadline'>,
+  activeHours: number,
+  slaHours: number,
+): boolean => {
+  const resolvedAt = getEffectiveResolvedAt(ticket);
+  const deadline = ticket.slaDeadline ? new Date(ticket.slaDeadline) : null;
+  if (
+    resolvedAt &&
+    Number.isFinite(resolvedAt.getTime()) &&
+    deadline &&
+    Number.isFinite(deadline.getTime())
+  ) {
+    return resolvedAt.getTime() <= deadline.getTime();
+  }
+  // Preserve historical reporting for legacy tickets without a usable deadline.
+  return activeHours <= slaHours;
 };
 
 export const deriveSatisfactionRating = (likert: Array<number | string | 'NA'>): number | null => {
@@ -2147,6 +2168,10 @@ export class TicketService implements OnModuleInit {
     // Add SLA indicators, including schedule-paused display information.
     const config = await this.configRepo.findOne({ where: { id: 1 } });
     const slaState = await this.projectTicketSlaState(ticket, config, new Date());
+    const completedAt = getEffectiveResolvedAt(ticket);
+    if ([TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(ticket.status) && completedAt && config) {
+      await this.calculateTicketActiveResolutionHours(ticket, completedAt, config);
+    }
     return Object.assign(ticket, {
       effectiveResolvedAt: getEffectiveResolvedAt(ticket),
       canViewInternalNotes,
@@ -3360,8 +3385,7 @@ export class TicketService implements OnModuleInit {
             businessSecondsElapsed,
             ticket.issueTypeConfig?.allowablePauseHours,
           );
-          ticket.accumulatedPauseSeconds =
-            (ticket.accumulatedPauseSeconds || 0) + businessSecondsElapsed;
+          creditTicketPause(ticket, new Date(ticket.slaPausedAt), now, businessSecondsElapsed);
 
           if (ticket.issueTypeConfig?.slaHours) {
             ticket.slaDeadline = await this.calculateSlaDeadline(
@@ -3529,8 +3553,7 @@ export class TicketService implements OnModuleInit {
               ticket.issueTypeConfig?.allowablePauseHours,
             );
 
-            ticket.accumulatedPauseSeconds =
-              (ticket.accumulatedPauseSeconds || 0) + pausedTimeSeconds;
+            creditTicketPause(ticket, new Date(ticket.slaPausedAt), now, pausedTimeSeconds);
             if (ticket.slaDeadline && ticket.issueTypeConfig?.slaHours) {
               ticket.slaDeadline = await this.calculateSlaDeadline(
                 getSlaClockStartedAt(ticket),
@@ -4395,6 +4418,7 @@ export class TicketService implements OnModuleInit {
     });
 
     const savedComment = await this.commentRepo.save(comment);
+    const descriptionUpload = trustedInitialUpload && isDescriptionAttachment(ticket, savedComment);
 
     // Return the same user shape used by ticket reads so the newly-added
     // comment can display the commenter immediately instead of User #<id>.
@@ -4411,19 +4435,20 @@ export class TicketService implements OnModuleInit {
       };
     }
 
-    if (actorRole === UserRole.USER) {
+    if (!descriptionUpload && actorRole === UserRole.USER) {
       ticket.hasUnreadTechnician = true;
       await this.ticketRepo.update(ticket.id, { hasUnreadTechnician: true });
-    } else if (!isInternal) {
+    } else if (!descriptionUpload && !isInternal) {
       ticket.hasUnreadUser = true;
       await this.ticketRepo.update(ticket.id, { hasUnreadUser: true });
     }
 
     this.logEvent(
       ticket.id,
-      'comment_added',
+      descriptionUpload ? 'description_attachment_added' : 'comment_added',
       actorId,
       {
+        commentId: savedComment.id,
         isInternal,
         hasAttachment: attachments.length > 0,
       },
@@ -4432,6 +4457,10 @@ export class TicketService implements OnModuleInit {
     // Comment insertion changes the ticket view for every open ticket screen.
     // Emit explicitly instead of relying on the asynchronous event-log write.
     this.sseService.emitTicketUpdated(ticket.id);
+
+    // Initial images are displayed with the ticket description, not Comments.
+    // Ticket creation/assignment notifications already announce the new request.
+    if (descriptionUpload) return savedComment;
 
     // Internal note notifications must never reveal the note to the regular requester.
     if (isInternal) {
@@ -4979,7 +5008,7 @@ export class TicketService implements OnModuleInit {
           config,
           officeDayCache,
         );
-        if (activeHours !== null && activeHours > (await this.getTicketSlaHours(t))) {
+        if (activeHours !== null && !hasMetResolvedTicketSla(t, activeHours, await this.getTicketSlaHours(t))) {
           breachedResolved++;
         }
       }
@@ -6008,7 +6037,7 @@ export class TicketService implements OnModuleInit {
           );
           if (hours === null) continue;
           const configuredSlaHours = await this.getTicketSlaHours(t);
-          const metSla = hours <= configuredSlaHours;
+          const metSla = hasMetResolvedTicketSla(t, hours, configuredSlaHours);
 
           // Global metrics
           totalResolutionHours += hours;
@@ -6141,7 +6170,7 @@ export class TicketService implements OnModuleInit {
     if (!config) throw new ServiceUnavailableException('SLA calendar settings are unavailable. Please retry.');
     const usersById = new Map(users.map(user => [Number(user.id), user]));
     const officeDayCache = new Map<string, boolean>();
-    const samples: Array<{ techId: number; techName: string; activeHours: number; slaHours: number }> = [];
+    const samples: Array<{ techId: number; techName: string; activeHours: number; slaHours: number; metSla: boolean; timing?: ResolutionTiming | null }> = [];
     let excludedTickets = 0;
     for (const ticket of tickets) {
       const techId = Number(ticket.assignedToId), resolvedAt = getEffectiveResolvedAt(ticket);
@@ -6151,7 +6180,8 @@ export class TicketService implements OnModuleInit {
       const slaHours = Number(await this.getTicketSlaHours(ticket));
       if (activeHours === null || !Number.isFinite(activeHours) || activeHours < 0 || !Number.isFinite(slaHours) || slaHours <= 0) { excludedTickets++; continue; }
       const user = usersById.get(techId);
-      samples.push({ techId, techName: user ? formatPersonName(user, `Assignee #${techId}`) : `Assignee #${techId}`, activeHours, slaHours });
+      samples.push({ techId, techName: user ? formatPersonName(user, `Assignee #${techId}`) : `Assignee #${techId}`, activeHours, slaHours,
+        metSla: hasMetResolvedTicketSla(ticket, activeHours, slaHours), timing: ticket.resolutionTiming });
     }
     return { rows: scoreAssignees(samples), excludedTickets };
   }
@@ -6635,7 +6665,7 @@ export class TicketService implements OnModuleInit {
       effectiveResumeAt,
       config,
     );
-    ticket.accumulatedPauseSeconds = (ticket.accumulatedPauseSeconds || 0) + pausedBusinessSeconds;
+    creditTicketPause(ticket, pausedAt, effectiveResumeAt, pausedBusinessSeconds);
 
     if (ticket.slaDeadline && ticket.issueTypeConfig?.slaHours) {
       ticket.slaDeadline = await this.calculateSlaDeadline(
@@ -7029,10 +7059,13 @@ export class TicketService implements OnModuleInit {
 
     let current = new Date(start);
     let remainingHours = slaHours;
-    let guard = 0; // safety guard to avoid infinite loops
+    let guard = 0;
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(slaHours) || shiftStartHour < 0 || shiftEndHour > 24 || shiftStartHour >= shiftEndHour || (shiftStartHour >= 12 && shiftEndHour <= 13)) {
+      throw new BadRequestException('Invalid SLA clock or working schedule.');
+    }
 
-    while (remainingHours > 0 && guard < 365) {
-      guard++;
+    while (remainingHours > 0) {
+      if (++guard > 200000) throw new ServiceUnavailableException('The SLA calendar could not produce a complete deadline.');
       const dateString = getManilaDateString(current);
       const isOfficeDay = await this.attendanceService.isOfficeDay(dateString);
 
@@ -7192,9 +7225,12 @@ export class TicketService implements OnModuleInit {
     let current = new Date(start);
     let seconds = 0;
     let guard = 0;
-
-    while (current < end && guard < 365) {
-      guard++;
+    const maxIterations = Math.ceil((end.getTime() - start.getTime()) / 86400000) * 5 + 10;
+    if (!Number.isFinite(maxIterations) || shiftStartHour < 0 || shiftEndHour > 24 || shiftStartHour >= shiftEndHour || (shiftStartHour >= 12 && shiftEndHour <= 13)) {
+      throw new BadRequestException('Invalid SLA interval or working schedule.');
+    }
+    while (current < end) {
+      if (++guard > maxIterations) throw new ServiceUnavailableException('The SLA calendar did not progress through the complete interval.');
       const dateString = getManilaDateString(current);
       let isOfficeDay = officeDayCache?.get(dateString);
       if (isOfficeDay === undefined) {
@@ -7254,22 +7290,16 @@ export class TicketService implements OnModuleInit {
   }
 
   private async calculateTicketActiveResolutionHours(
-    ticket: Pick<Ticket, 'slaStartedAt' | 'accumulatedPauseSeconds'>,
+    ticket: Pick<Ticket, 'slaStartedAt' | 'accumulatedPauseSeconds'> & Partial<Pick<Ticket, 'slaPauseLedger' | 'resolutionTimeOverride' | 'resolutionTiming'>>,
     resolvedAt: Date,
     config: TicketingConfig | null,
     officeDayCache?: Map<string, boolean>,
   ): Promise<number | null> {
-    if (!ticket.slaStartedAt) return null;
-    const startedAt = new Date(ticket.slaStartedAt);
-    if (resolvedAt <= startedAt) return 0;
-    const elapsedBusinessSeconds = config
-      ? await this.calculateBusinessSeconds(startedAt, resolvedAt, config, officeDayCache)
-      : Math.round((resolvedAt.getTime() - startedAt.getTime()) / 1000);
-    const activeSeconds = Math.max(
-      0,
-      elapsedBusinessSeconds - Math.max(0, Number(ticket.accumulatedPauseSeconds || 0)),
-    );
-    return activeSeconds / 3600;
+    const timing = await resolutionTiming(ticket, resolvedAt, (start, end) => config
+      ? this.calculateBusinessSeconds(start, end, config, officeDayCache)
+      : Promise.resolve(Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000))));
+    ticket.resolutionTiming = timing;
+    return timing?.activeHours ?? null;
   }
 
   async getSlaInsights(
@@ -7618,7 +7648,7 @@ export class TicketService implements OnModuleInit {
           slaComplianceByMonthMap.set(monthLabel, { met: 0, missed: 0 });
         }
         const configuredSlaHours = await this.getTicketSlaHours(t);
-        if (activeResolutionHours > configuredSlaHours) {
+        if (!hasMetResolvedTicketSla(t, activeResolutionHours, configuredSlaHours)) {
           slaComplianceByMonthMap.get(monthLabel)!.missed += 1;
         } else {
           slaComplianceByMonthMap.get(monthLabel)!.met += 1;

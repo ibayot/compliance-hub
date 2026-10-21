@@ -1,0 +1,1829 @@
+[
+  {
+    "file": "backend/src/modules/tickets/controllers/attendance.controller.ts",
+    "line": 70,
+    "method": "getSystemStatus",
+    "classDecorators": [
+      "@ApiTags('attendance')",
+      "@Controller('attendance')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)",
+      "@UseInterceptors(AttendanceSseInterceptor)"
+    ],
+    "decorators": [
+      "@Get('system-status')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/attendance.controller.ts",
+    "line": 76,
+    "method": "getMyShift",
+    "classDecorators": [
+      "@ApiTags('attendance')",
+      "@Controller('attendance')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)",
+      "@UseInterceptors(AttendanceSseInterceptor)"
+    ],
+    "decorators": [
+      "@Get('my-shift')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/attendance.controller.ts",
+    "line": 85,
+    "method": "getAttendance",
+    "classDecorators": [
+      "@ApiTags('attendance')",
+      "@Controller('attendance')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)",
+      "@UseInterceptors(AttendanceSseInterceptor)"
+    ],
+    "decorators": [
+      "@Get()",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isAttendanceAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/attendance.controller.ts",
+    "line": 104,
+    "method": "setAttendance",
+    "classDecorators": [
+      "@ApiTags('attendance')",
+      "@Controller('attendance')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)",
+      "@UseInterceptors(AttendanceSseInterceptor)"
+    ],
+    "decorators": [
+      "@Post()",
+      "@RequireCapability('isAttendanceManage')",
+      "@HttpCode(HttpStatus.OK)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/attendance.controller.ts",
+    "line": 124,
+    "method": "restoreAttendanceFromDtr",
+    "classDecorators": [
+      "@ApiTags('attendance')",
+      "@Controller('attendance')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)",
+      "@UseInterceptors(AttendanceSseInterceptor)"
+    ],
+    "decorators": [
+      "@Post(':userId/:date/restore-dtr')",
+      "@RequireCapability('isAttendanceManage')",
+      "@HttpCode(HttpStatus.OK)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/attendance.controller.ts",
+    "line": 141,
+    "method": "deleteAttendance",
+    "classDecorators": [
+      "@ApiTags('attendance')",
+      "@Controller('attendance')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)",
+      "@UseInterceptors(AttendanceSseInterceptor)"
+    ],
+    "decorators": [
+      "@Delete(':userId/:date')",
+      "@RequireCapability('isAttendanceManage')",
+      "@HttpCode(HttpStatus.OK)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/attendance.controller.ts",
+    "line": 150,
+    "method": "listTechnicians",
+    "classDecorators": [
+      "@ApiTags('attendance')",
+      "@Controller('attendance')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)",
+      "@UseInterceptors(AttendanceSseInterceptor)"
+    ],
+    "decorators": [
+      "@Get('technicians')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isAttendanceAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/attendance.controller.ts",
+    "line": 161,
+    "method": "getOfficeDays",
+    "classDecorators": [
+      "@ApiTags('attendance')",
+      "@Controller('attendance')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)",
+      "@UseInterceptors(AttendanceSseInterceptor)"
+    ],
+    "decorators": [
+      "@Get('office-days')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isAttendanceAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/attendance.controller.ts",
+    "line": 177,
+    "method": "setOfficeDay",
+    "classDecorators": [
+      "@ApiTags('attendance')",
+      "@Controller('attendance')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)",
+      "@UseInterceptors(AttendanceSseInterceptor)"
+    ],
+    "decorators": [
+      "@Post('office-days')",
+      "@RequireCapability('isAttendanceManage')",
+      "@HttpCode(HttpStatus.OK)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/attendance.controller.ts",
+    "line": 186,
+    "method": "getStaffLogins",
+    "classDecorators": [
+      "@ApiTags('attendance')",
+      "@Controller('attendance')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)",
+      "@UseInterceptors(AttendanceSseInterceptor)"
+    ],
+    "decorators": [
+      "@Get('staff-logins')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isAttendanceAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/attendance.controller.ts",
+    "line": 196,
+    "method": "getStaffLoginsMonthly",
+    "classDecorators": [
+      "@ApiTags('attendance')",
+      "@Controller('attendance')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)",
+      "@UseInterceptors(AttendanceSseInterceptor)"
+    ],
+    "decorators": [
+      "@Get('staff-logins-monthly')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isAttendanceAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 52,
+    "method": "access",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Get('access')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 53,
+    "method": "dashboard",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Get('dashboard')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 54,
+    "method": "rotation",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Get('rotation')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 55,
+    "method": "map",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Get('map')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 56,
+    "method": "staff",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Get('staff')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 57,
+    "method": "reconcile",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Post('reconcile')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 59,
+    "method": "logs",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Get('logs')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 63,
+    "method": "createLog",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Post('logs')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 64,
+    "method": "updateLog",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Patch('logs/:id')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 65,
+    "method": "deleteLog",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Delete('logs/:id')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 67,
+    "method": "exceptions",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Get('exceptions')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 71,
+    "method": "createException",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Post('exceptions')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 72,
+    "method": "updateException",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Patch('exceptions/:id')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 73,
+    "method": "deleteException",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Delete('exceptions/:id')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 75,
+    "method": "roster",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Get('roster')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 76,
+    "method": "rosterConfig",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Get('roster-config')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 77,
+    "method": "replaceRoster",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Post('roster')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 81,
+    "method": "reservations",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Get('reservations')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 82,
+    "method": "createReservation",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Post('reservations')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 83,
+    "method": "updateReservation",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Patch('reservations/:id')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 84,
+    "method": "deleteReservation",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Delete('reservations/:id')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 85,
+    "method": "saveRelievers",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Post('reservations/:id/relievers')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 88,
+    "method": "clearRelievers",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Delete('reservations/:id/relievers')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 91,
+    "method": "completeReservation",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Post('reservations/:id/complete')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 94,
+    "method": "release",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Post('coverages/:id/release')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 95,
+    "method": "activate",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Post('coverages/:id/activate')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/duty.controller.ts",
+    "line": 96,
+    "method": "skip",
+    "classDecorators": [
+      "@ApiTags('duties')",
+      "@Controller('duties')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Post('coverages/:id/skip')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/knowledge-base.controller.ts",
+    "line": 32,
+    "method": "getArticles",
+    "classDecorators": [
+      "@ApiTags('knowledge-base')",
+      "@Controller('knowledge-base')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get()",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/knowledge-base.controller.ts",
+    "line": 41,
+    "method": "createArticle",
+    "classDecorators": [
+      "@ApiTags('knowledge-base')",
+      "@Controller('knowledge-base')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post()",
+      "@RequireCapability('isKnowledgeBaseManage')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/knowledge-base.controller.ts",
+    "line": 47,
+    "method": "rateArticle",
+    "classDecorators": [
+      "@ApiTags('knowledge-base')",
+      "@Controller('knowledge-base')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post(':id/rate')",
+      "@RequireCapability('isTicketModuleAccess')",
+      "@ApiBody({ schema: { type: 'object', properties: { isHelpful: { type: 'boolean' } }, required: ['isHelpful'] } })"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/knowledge-base.controller.ts",
+    "line": 54,
+    "method": "updateArticle",
+    "classDecorators": [
+      "@ApiTags('knowledge-base')",
+      "@Controller('knowledge-base')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Put(':id')",
+      "@RequireCapability('isKnowledgeBaseManage')",
+      "@ApiBody({ schema: { type: 'object', properties: { title: { type: 'string' }, tags: { type: 'string' }, content: { type: 'string' } }, required: ['title', 'content'] } })"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/notification.controller.ts",
+    "line": 38,
+    "method": "getMyNotificationSummary",
+    "classDecorators": [
+      "@ApiTags('notifications')",
+      "@Controller('notifications')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Get('summary')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/notification.controller.ts",
+    "line": 59,
+    "method": "getMyNotifications",
+    "classDecorators": [
+      "@ApiTags('notifications')",
+      "@Controller('notifications')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Get('mine')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/notification.controller.ts",
+    "line": 70,
+    "method": "getUnreadCount",
+    "classDecorators": [
+      "@ApiTags('notifications')",
+      "@Controller('notifications')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Get('unread-count')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/notification.controller.ts",
+    "line": 79,
+    "method": "markAllRead",
+    "classDecorators": [
+      "@ApiTags('notifications')",
+      "@Controller('notifications')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Post('mark-read')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/notification.controller.ts",
+    "line": 87,
+    "method": "markRead",
+    "classDecorators": [
+      "@ApiTags('notifications')",
+      "@Controller('notifications')",
+      "@UseGuards(JwtAuthGuard)"
+    ],
+    "decorators": [
+      "@Post(':id/mark-read')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/rating-invitation.controller.ts",
+    "line": 45,
+    "method": "getAvailability",
+    "classDecorators": [
+      "@ApiTags('rating-invitations')",
+      "@Controller('tickets/rating-invitations')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')"
+    ],
+    "decorators": [
+      "@Get('availability')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/rating-invitation.controller.ts",
+    "line": 50,
+    "method": "getEligibleRecipients",
+    "classDecorators": [
+      "@ApiTags('rating-invitations')",
+      "@Controller('tickets/rating-invitations')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')"
+    ],
+    "decorators": [
+      "@Get('eligible-recipients')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/rating-invitation.controller.ts",
+    "line": 55,
+    "method": "sendInvitations",
+    "classDecorators": [
+      "@ApiTags('rating-invitations')",
+      "@Controller('tickets/rating-invitations')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')"
+    ],
+    "decorators": [
+      "@Post('send')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/rating-invitation.controller.ts",
+    "line": 69,
+    "method": "getStatus",
+    "classDecorators": [
+      "@ApiTags('public-rating')",
+      "@Controller('tickets/rating-access')"
+    ],
+    "decorators": [
+      "@Get(':token/status')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/rating-invitation.controller.ts",
+    "line": 74,
+    "method": "requestCode",
+    "classDecorators": [
+      "@ApiTags('public-rating')",
+      "@Controller('tickets/rating-access')"
+    ],
+    "decorators": [
+      "@Post(':token/request-code')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/rating-invitation.controller.ts",
+    "line": 79,
+    "method": "verify",
+    "classDecorators": [
+      "@ApiTags('public-rating')",
+      "@Controller('tickets/rating-access')"
+    ],
+    "decorators": [
+      "@Post(':token/verify')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/rating-invitation.controller.ts",
+    "line": 97,
+    "method": "getSessionTickets",
+    "classDecorators": [
+      "@ApiTags('public-rating')",
+      "@Controller('tickets/rating-access')"
+    ],
+    "decorators": [
+      "@Get('session/tickets')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/rating-invitation.controller.ts",
+    "line": 105,
+    "method": "submitRating",
+    "classDecorators": [
+      "@ApiTags('public-rating')",
+      "@Controller('tickets/rating-access')"
+    ],
+    "decorators": [
+      "@Post('session/tickets/:ratingItemId')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/sse.controller.ts",
+    "line": 13,
+    "method": "issueConnectionToken",
+    "classDecorators": [
+      "@ApiTags('events')",
+      "@ApiBearerAuth()",
+      "@Controller('events')"
+    ],
+    "decorators": [
+      "@Get('token')",
+      "@UseGuards(JwtAuthGuard)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/sse.controller.ts",
+    "line": 19,
+    "method": "subscribeToEvents",
+    "classDecorators": [
+      "@ApiTags('events')",
+      "@ApiBearerAuth()",
+      "@Controller('events')"
+    ],
+    "decorators": [
+      "@ApiOperation({ summary: 'Subscribe to Server-Sent Events' })",
+      "@Header('Cache-Control', 'no-cache, no-transform')",
+      "@Header('X-Accel-Buffering', 'no')",
+      "@Header('Connection', 'keep-alive')",
+      "@Sse()"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 48,
+    "method": "testEmail",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@ApiTags('test-only')",
+      "@Post('email-test')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isGlobalSettingsAccess')",
+      "@HttpCode(HttpStatus.OK)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 64,
+    "method": "getTicketSettingsSnapshot",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get()",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 92,
+    "method": "listCategories",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('categories')",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 107,
+    "method": "getCategory",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('categories/:id')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 114,
+    "method": "createCategory",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post('categories')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')",
+      "@HttpCode(HttpStatus.CREATED)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 122,
+    "method": "updateCategory",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Patch('categories/:id')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 133,
+    "method": "deleteCategory",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Delete('categories/:id')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')",
+      "@HttpCode(HttpStatus.NO_CONTENT)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 143,
+    "method": "listKeywordRules",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('keyword-rules')",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 149,
+    "method": "getKeywordRule",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('keyword-rules/:id')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 156,
+    "method": "createKeywordRule",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post('keyword-rules')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')",
+      "@HttpCode(HttpStatus.CREATED)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 164,
+    "method": "updateKeywordRule",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Patch('keyword-rules/:id')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 171,
+    "method": "deleteKeywordRule",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Delete('keyword-rules/:id')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')",
+      "@HttpCode(HttpStatus.NO_CONTENT)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 181,
+    "method": "listIssueTypes",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('issue-types')",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 194,
+    "method": "getIssueType",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('issue-types/:id')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 201,
+    "method": "createIssueType",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post('issue-types')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')",
+      "@HttpCode(HttpStatus.CREATED)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 209,
+    "method": "updateIssueType",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Patch('issue-types/:id')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 220,
+    "method": "deleteIssueType",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Delete('issue-types/:id')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')",
+      "@HttpCode(HttpStatus.NO_CONTENT)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 231,
+    "method": "listEscalationFocals",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('escalation-focals')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability([\n    'isEscalationFocal',\n    'isTicketSettingsFocal',\n    'isTicketFocal',\n    'isAllTickets',\n    'isDesktop',\n    'isItSupport',\n    'isPantawidIct',\n  ])"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 250,
+    "method": "listAvailableEscalationUsers",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('escalation-available-users')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 258,
+    "method": "addEscalationFocal",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post('escalation-focals')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')",
+      "@HttpCode(HttpStatus.CREATED)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 267,
+    "method": "removeEscalationFocal",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Delete('escalation-focals/:id')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')",
+      "@HttpCode(HttpStatus.NO_CONTENT)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 277,
+    "method": "getGlobalConfig",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('global-config')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isGlobalSettingsAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 284,
+    "method": "updateGlobalConfig",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Patch('global-config')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isGlobalSettingsAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket-settings.controller.ts",
+    "line": 307,
+    "method": "getSlaInsights",
+    "classDecorators": [
+      "@ApiTags('ticket-settings')",
+      "@Controller('ticket-settings')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('sla-insights')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketReportsManage')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 62,
+    "method": "createTicket",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post()",
+      "@RequireCapability('isTicketModuleAccess')",
+      "@HttpCode(HttpStatus.CREATED)",
+      "@UseInterceptors(FilesInterceptor('attachments', 5, { limits: { fileSize: 10 * 1024 * 1024 } }))"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 77,
+    "method": "globalPauseTickets",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post('global-pause')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 86,
+    "method": "globalResumeTickets",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post('global-resume')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketSettingsFocal')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 100,
+    "method": "getTickets",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get()",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 181,
+    "method": "getMyAssignedTickets",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('my-assigned')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 233,
+    "method": "getMyRequestedTickets",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('my-requested')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 284,
+    "method": "getSlaSummary",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('sla/summary')",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 291,
+    "method": "getStatistics",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('statistics')",
+      "@RequireCapability('isReportsAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 308,
+    "method": "getTechnicians",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('technicians')",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 315,
+    "method": "getAssigneeCorrectionOptions",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('assignee-correction-options')",
+      "@RequireCapability('isTicketRequesterCorrection')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 323,
+    "method": "getGeneralOverviewStats",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('general-overview-stats')",
+      "@RequireCapability('isReportsAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 334,
+    "method": "getDashboardStats",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('dashboard')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 340,
+    "method": "getAssignedStats",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('assigned-stats')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 358,
+    "method": "explainReportCharts",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post('reports/explanations')",
+      "@RequireCapability('isTicketReportsAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 379,
+    "method": "getWeeklyPerformance",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('weekly-performance')",
+      "@RequireCapability('isTicketPerformanceAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 385,
+    "method": "getTicketReports",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('reports')",
+      "@RequireCapability('isTicketReportsAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 408,
+    "method": "getPerformanceMetrics",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('performance-metrics')",
+      "@RequireCapability('isTicketReportsAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 432,
+    "method": "getRatingsReport",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('ratings-report')",
+      "@RequireCapability('isTicketReportsAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 456,
+    "method": "getReportTechnicians",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('report-technicians')",
+      "@RequireCapability('isTicketReportsManage')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 475,
+    "method": "getAttendanceAssignmentAlerts",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('attendance-assignment-alerts')",
+      "@RequireCapability(['isTicketFocal', 'isTicketSettingsFocal'])"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 482,
+    "method": "getInternalNoteMentionCandidates",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get(':id/internal-note-mentions')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 492,
+    "method": "autoReassignAttendanceAlertTickets",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post('attendance-assignment-alerts/:userId/auto-reassign')",
+      "@RequireCapability(['isTicketFocal', 'isTicketSettingsFocal'])"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 503,
+    "method": "correctTicketRequester",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Patch(':id/requester')",
+      "@RequireCapability('isTicketRequesterCorrection')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 519,
+    "method": "correctTicketAssignee",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Patch(':id/assignee-correction')",
+      "@RequireCapability('isTicketRequesterCorrection')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 535,
+    "method": "getTicket",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get(':id')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 545,
+    "method": "overrideResolutionTime",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post(':id/resolution-time-override')",
+      "@RequireCapability('isTicketResolutionTimeOverride')",
+      "@UseInterceptors(FilesInterceptor('proofFiles', 5, { limits: { fileSize: 10 * 1024 * 1024 } }))"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 563,
+    "method": "getResolutionTimeOverrides",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get(':id/resolution-time-overrides')",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 574,
+    "method": "cancelTicket",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post(':id/cancel')",
+      "@RequireCapability('isTicketCancellation')",
+      "@HttpCode(HttpStatus.OK)"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 582,
+    "method": "updateTicket",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Patch(':id')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 588,
+    "method": "getRequesterOpenTickets",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('requester/:requesterId/open')",
+      "@RequireCapability('isTicketSettingsFocal')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 604,
+    "method": "assignTicket",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Patch(':id/assign')",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 611,
+    "method": "markTicketViewed",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Patch(':id/mark-viewed')",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 618,
+    "method": "getTicketEvents",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get(':id/events')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 624,
+    "method": "addComment",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post(':id/comments')",
+      "@UseInterceptors(FilesInterceptor('attachments', 5, { limits: { fileSize: 10 * 1024 * 1024 } }))"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 643,
+    "method": "replaceCommentImage",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Patch(':id/comments/:commentId/image')",
+      "@UseInterceptors(FileInterceptor('replacement', { limits: { fileSize: 10 * 1024 * 1024 } }))"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 651,
+    "method": "submitSatisfaction",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post(':id/satisfaction')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 662,
+    "method": "submitSatisfactionAlias",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post(':id/rate')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 673,
+    "method": "getSatisfactionUnitSuggestions",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('satisfaction/unit-suggestions')",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 682,
+    "method": "getAllEscalations",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('escalations/all')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isEscalationFocal')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 690,
+    "method": "getEscalations",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get(':id/escalations')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 696,
+    "method": "escalateTicket",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post(':id/escalate')",
+      "@RequireCapability('isTicketModuleAccess')",
+      "@UseInterceptors(FilesInterceptor('proofFiles', 5, { limits: { fileSize: 10 * 1024 * 1024 } }))"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 719,
+    "method": "acceptEscalation",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Patch(':id/escalation/:eid/accept')",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 726,
+    "method": "returnEscalation",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Patch(':id/escalation/:eid/return')",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 742,
+    "method": "updateEscalationProof",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Patch(':id/escalation/:eid/update-proof')",
+      "@RequireCapability('isTicketModuleAccess')",
+      "@UseInterceptors(FilesInterceptor('proofFiles', 5, { limits: { fileSize: 10 * 1024 * 1024 } }))"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 762,
+    "method": "serveResolutionTimeProof",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('resolution-time-proof/:ticketId/:overrideId/:filename')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 786,
+    "method": "serveProofFile",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('proof/:ticketId/:filename')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 811,
+    "method": "serveCommentAttachmentFile",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('comment-attachment/:ticketId/:filename')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 835,
+    "method": "technicianPauseTickets",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Post('technician-pause')",
+      "@RequireCapability('isTicketModuleAccess')"
+    ]
+  },
+  {
+    "file": "backend/src/modules/tickets/controllers/ticket.controller.ts",
+    "line": 843,
+    "method": "getIssueCountsReport",
+    "classDecorators": [
+      "@ApiTags('tickets')",
+      "@Controller('tickets')",
+      "@UseGuards(JwtAuthGuard, CapabilityGuard)"
+    ],
+    "decorators": [
+      "@Get('reports/issue-counts')",
+      "@UseGuards(CapabilityGuard)",
+      "@RequireCapability('isTicketReportsManage')"
+    ]
+  }
+]

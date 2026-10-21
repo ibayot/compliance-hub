@@ -34,7 +34,17 @@ type ManualItem = {
 
 const capabilityManuals: ManualItem[] = [
   {
-    title: 'General Support Ticketing',
+    title: 'Dashboard', path: 'global', details: {
+      purpose: 'See a summary of your activity and open the workflows available to your account.',
+      activities: [
+        { name: 'Review your summary', description: 'Open Dashboard to view your available ticket summaries and reminders. Cards depend on your access.' },
+        { name: 'Open a related list', description: 'Select a summary or reminder to open the relevant ticket list. Explicit dashboard filters take priority over your saved list filters.' },
+      ],
+      results: [{ name: 'Continue your work', description: 'Use My Tickets to track requests made for you, review comments, and rate resolved requests.' }],
+    },
+  },
+  {
+    title: 'My Tickets',
     path: 'global',
     details: {
       purpose: 'As a system user I need a centralized support portal to report technical issues so that the service team can resolve problems efficiently.',
@@ -51,7 +61,7 @@ const capabilityManuals: ManualItem[] = [
   },
   {
     title: 'Knowledge Base Access',
-    path: 'global',
+    path: 'isTicketModuleAccess',
     details: {
       purpose: 'As a system user I need a centralized repository of troubleshooting guides so that I can resolve common technical issues independently.',
       activities: [
@@ -63,12 +73,13 @@ const capabilityManuals: ManualItem[] = [
     }
   },
   {
-    title: 'Account Profile',
+    title: 'Settings & Profile',
     path: 'global',
     details: {
       purpose: 'As a system user I need to view my account information so that I can confirm my identity and contact details.',
       activities: [
-        { name: 'Review account details', description: 'As a system user I need to check my assigned role and unit so that my support requests are categorized accurately.' }
+        { name: 'Update profile information', description: 'Open Settings, then Profile & Preferences. Review your contact details, unit, position, and designation, and select Save Profile Information. Clearing an existing value asks for confirmation inside the application.' },
+        { name: 'Manage preferences and password', description: 'Use the available appearance and notification preferences. Change your password in the separate password section; changing profile information does not change your password.' }
       ],
       results: [
         { name: 'Verify identity information', description: 'As a system user I need to confirm my profile settings so that my access levels remain correct.' }
@@ -374,12 +385,12 @@ export default function UserManualPage() {
 
   const hasCapabilityAccess = (capKey: string): boolean => {
     if (!user) return false;
-    if (capKey === 'global') return Boolean(myCap?.isGlobalSettingsAccess);
+    if (capKey === 'global') return true;
 
     if (capKey === 'isSupportStaff') {
       if (!myCap) return false;
       return Boolean(
-        myCap.isFocal || myCap.isDesktop || myCap.isItSupport || myCap.isPantawidIct || myCap.isIto || myCap.isTicketFocal || myCap.isAllTickets || myCap.isTicketModuleAccess
+        myCap.isFocal || myCap.isDesktop || myCap.isItSupport || myCap.isPantawidIct || myCap.isIto || myCap.isTicketFocal || myCap.isAllTickets
       );
     }
 
@@ -450,6 +461,7 @@ export default function UserManualPage() {
             <DialogTitle sx={{ pr: 6, fontWeight: 700 }}>
               {selectedManual.title}
               <IconButton
+                aria-label="Close user manual topic"
                 onClick={() => setSelectedManual(null)}
                 sx={{ position: 'absolute', right: 8, top: 8 }}
               >

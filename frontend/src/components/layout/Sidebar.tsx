@@ -88,6 +88,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       icon: TicketsIcon,
       path: '/operations/tickets',
       service: 'ticketing',
+      staffOnly: true,
       capabilityKeys: ['isTicketModuleAccess'],
     },
     {

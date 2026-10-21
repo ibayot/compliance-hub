@@ -1,7 +1,7 @@
 export type TicketFilterPeriodMode = 'day' | 'month' | 'quarter' | 'semester' | 'year';
 export const TICKET_ENTRY_QUERY_KEYS = ['assignedToMe', 'scope', 'filter', 'status', 'period', 'date', 'year', 'month', 'quarter', 'semester', 'sla'] as const;
 
-/** Each navigation starts clean. Only explicit link intent overrides today's default. */
+/** Defaults and explicit deep-link intent; saved state is restored separately. */
 export function resolveTicketListEntry(params: URLSearchParams, context: {
   today: string;
   defaultAssignedToMe: boolean;
@@ -45,4 +45,24 @@ export function resolveTicketListEntry(params: URLSearchParams, context: {
     state.selectedTab = 'to_rate'; state.filterSla = ''; state.filterYear = ''; state.filterMonth = ''; state.filterQuarter = ''; state.filterSemester = ''; state.filterPeriodMode = 'year'; state.filterDate = '';
   }
   return state;
+}
+
+export function restoreTicketListEntry(raw: string | null, defaults: ReturnType<typeof resolveTicketListEntry>) {
+  if (!raw) return defaults;
+  try {
+    const saved: unknown = JSON.parse(raw);
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return defaults;
+    const restored = { ...defaults };
+    for (const key of Object.keys(defaults) as Array<keyof typeof defaults>) {
+      if (key === 'page') continue;
+      const value = (saved as Record<string, unknown>)[key];
+      if (typeof value === typeof defaults[key] &&
+        (typeof value === 'boolean' || (typeof value === 'string' && value.length <= 500))) {
+        Object.assign(restored, { [key]: value });
+      }
+    }
+    if (!['day', 'month', 'quarter', 'semester', 'year'].includes(restored.filterPeriodMode)) return defaults;
+    if (!['', 'overdue', 'nearing_sla', 'on_track'].includes(restored.filterSla)) return defaults;
+    return restored;
+  } catch { return defaults; }
 }

@@ -1,10 +1,15 @@
-import { Controller, Get, Post, Put, Param, Body, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Param, Body, UseGuards, Query, ParseIntPipe } from '@nestjs/common';
 import { ApiTags, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CapabilityGuard } from '../../../common/guards/capability.guard';
 import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { KnowledgeBaseService } from '../services/knowledge-base.service';
-import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+
+export class RateKnowledgeArticleDto {
+  @IsBoolean()
+  isHelpful: boolean;
+}
 
 class SaveKnowledgeArticleDto {
   @IsString()
@@ -47,8 +52,8 @@ export class KnowledgeBaseController {
   @Post(':id/rate')
   @RequireCapability('isTicketModuleAccess')
   @ApiBody({ schema: { type: 'object', properties: { isHelpful: { type: 'boolean' } }, required: ['isHelpful'] } })
-  async rateArticle(@Param('id') id: string, @Body('isHelpful') isHelpful: boolean) {
-    return this.kbService.rateArticle(Number(id), isHelpful);
+  async rateArticle(@Param('id', ParseIntPipe) id: number, @Body() dto: RateKnowledgeArticleDto) {
+    return this.kbService.rateArticle(id, dto.isHelpful);
   }
 
   @Put(':id')

@@ -81,6 +81,29 @@ export class DutyService {
     return value as DutyType;
   }
 
+  private assertWritableFields(body: object, fields: string[]): void {
+    if (Object.keys(body).some((key) => !fields.includes(key))) {
+      throw new BadRequestException('The request contains fields that cannot be edited.');
+    }
+  }
+
+  private isManualLog(row: Partial<DutyAssignment>): boolean {
+    return row.source === 'manual' && !row.coverageId;
+  }
+
+  private async reservationRestrictions(row: DutyMeetingReservation) {
+    const [hasDutyLogs, coverageActive, relievers] = await Promise.all([
+      this.assignmentRepo.exist({ where: { reservationId: row.id } }),
+      this.coverageRepo.exist({ where: { reservationId: row.id, status: DutyCoverageStatus.ACTIVE } }),
+      this.relieverRepo.find({ where: { reservationId: row.id } }),
+    ]);
+    const hasActiveDuty = coverageActive || (row.meetingDate === this.today() &&
+      row.status === DutyReservationStatus.CONFIRMED && relievers.length > 0);
+    const purposeOnly = hasDutyLogs || row.status === DutyReservationStatus.COMPLETED;
+    return { hasDutyLogs, hasActiveDuty, purposeOnly, scheduleLocked: purposeOnly || hasActiveDuty,
+      canDelete: !purposeOnly && !hasActiveDuty };
+  }
+
   private async isOdOverrideEnabled(): Promise<boolean> {
     const config = await this.configRepo.findOne({ where: { id: 1 } });
     return config?.odOverrideEnabled === true;
@@ -551,7 +574,7 @@ export class DutyService {
       this.usersById(),
     ]);
     return {
-      items: rows.map((x) => ({ ...x, name: users.get(x.userId) ? formatPersonName(users.get(x.userId)!) : `User #${x.userId}` })),
+      items: rows.map((x) => ({ ...x, canModify: this.isManualLog(x), name: users.get(x.userId) ? formatPersonName(users.get(x.userId)!) : `User #${x.userId}` })),
       total,
       ...pagination,
       totalPages: Math.ceil(total / pagination.limit),
@@ -560,8 +583,10 @@ export class DutyService {
 
   async saveAssignment(actor: Actor, body: Partial<DutyAssignment>, id?: string) {
     this.assertAdmin(actor);
+    this.assertWritableFields(body, ['dutyDate', 'userId', 'dutyType', 'dutyPeriod', 'remarks']);
     const existing = id ? await this.assignmentRepo.findOne({ where: { id } }) : null;
     if (id && !existing) throw new NotFoundException('Duty log entry not found.');
+    if (existing && !this.isManualLog(existing)) throw new BadRequestException('Application-activated duty logs cannot be edited.');
     const dutyDate = String(body.dutyDate ?? existing?.dutyDate ?? '');
     const userId = Number(body.userId ?? existing?.userId);
     const dutyType = this.assertDutyType(String(body.dutyType ?? existing?.dutyType));
@@ -571,7 +596,7 @@ export class DutyService {
     if (!users.has(userId)) throw new BadRequestException('Select an active RICTMS staff member.');
     const row = this.assignmentRepo.create({
       ...existing,
-      ...body,
+      remarks: body.remarks !== undefined ? body.remarks : existing?.remarks ?? null,
       dutyDate,
       userId,
       dutyType,
@@ -592,6 +617,7 @@ export class DutyService {
     this.assertAdmin(actor);
     const existing = await this.assignmentRepo.findOne({ where: { id } });
     if (!existing) throw new NotFoundException('Duty log entry not found. It may have already been deleted.');
+    if (!this.isManualLog(existing)) throw new BadRequestException('Application-activated duty logs cannot be deleted.');
     await this.assignmentRepo.delete(id);
     this.sse.emitDutyUpdated();
     this.notifyDutyUsers([existing.userId], `Your ${existing.dutyType} duty assignment for ${existing.dutyDate} was removed.`);
@@ -608,6 +634,7 @@ export class DutyService {
   }
   async saveException(actor: Actor, body: Partial<DutyException>, id?: string) {
     this.assertAdmin(actor);
+    this.assertWritableFields(body, ['exceptionDate', 'userId', 'dutyType', 'type', 'remarks']);
     const existing = id ? await this.exceptionRepo.findOne({ where: { id } }) : null;
     if (id && !existing) throw new NotFoundException('Duty exception not found.');
     const exceptionDate = String(body.exceptionDate ?? existing?.exceptionDate ?? '');
@@ -626,7 +653,11 @@ export class DutyService {
     if (duplicate && duplicate.id !== existing?.id) {
       throw new BadRequestException(`This technician already has an exception for ${dutyType || 'all duties'} on ${exceptionDate}.`);
     }
-    const saved = await this.exceptionRepo.save(this.exceptionRepo.create({ ...existing, ...body, exceptionDate, userId, dutyType, createdById: existing?.createdById ?? actor.id }));
+    const type = body.type ?? existing?.type;
+    if (!Object.values(DutyExceptionType).includes(type as DutyExceptionType)) throw new BadRequestException('Invalid exception type.');
+    const saved = await this.exceptionRepo.save(this.exceptionRepo.create({ ...existing, exceptionDate, userId, dutyType,
+      type, remarks: body.remarks !== undefined ? body.remarks : existing?.remarks ?? null,
+      createdById: existing?.createdById ?? actor.id }));
     if (exceptionDate === this.today()) await this.reconcileToday();
     this.sse.emitDutyUpdated();
     this.notifyDutyUsers([userId], `Your duty exception for ${exceptionDate} was updated.`);
@@ -733,8 +764,9 @@ export class DutyService {
       this.usersById(),
     ]);
     return {
-      items: items.map((item) => ({
+      items: await Promise.all(items.map(async (item) => ({
         ...item,
+        restrictions: await this.reservationRestrictions(item),
         relievers: relievers
           .filter((reliever) => reliever.reservationId === item.id)
           .map((reliever) => {
@@ -744,7 +776,7 @@ export class DutyService {
               name: user ? formatPersonName(user) : `User #${reliever.userId}`,
             };
           }),
-      })),
+      }))),
       total,
       ...pagination,
       totalPages: Math.ceil(total / pagination.limit),
@@ -753,15 +785,51 @@ export class DutyService {
   async saveReservation(actor: Actor, body: Partial<DutyMeetingReservation>, id?: string) {
     const access = await this.getAccess(actor);
     if (!access.canSchedule) throw new ForbiddenException('Only a Duty Administrator or the current OD can manage meeting schedules.');
+    this.assertWritableFields(body, ['venueType', 'meetingDate', 'status', 'startTime', 'endTime', 'purpose', 'remarks']);
     const existing = id ? await this.reservationRepo.findOne({ where: { id } }) : null;
     if (id && !existing) throw new NotFoundException('Meeting reservation not found.');
+    if (existing && !access.admin && existing.meetingDate < this.today()) {
+      throw new ForbiddenException('Only a Duty Administrator can edit historical meetings.');
+    }
+    if (existing) {
+      const restrictions = await this.reservationRestrictions(existing);
+      const changed = Object.keys(body).filter((key) =>
+        (body as any)[key] !== undefined && ((body as any)[key] ?? null) !== ((existing as any)[key] ?? null));
+      if (restrictions.purposeOnly && changed.some((key) => key !== 'purpose')) {
+        throw new BadRequestException('A completed or logged meeting can only have its purpose edited.');
+      }
+      if (restrictions.purposeOnly) {
+        if (!access.admin && existing.meetingDate < this.today()) throw new ForbiddenException('Only a Duty Administrator can correct a historical meeting purpose.');
+        existing.purpose = body.purpose !== undefined ? body.purpose : existing.purpose;
+        const saved = await this.reservationRepo.save(existing);
+        this.sse.emitDutyUpdated();
+        return saved;
+      }
+      if (restrictions.hasActiveDuty && changed.some((key) => !['purpose', 'remarks'].includes(key))) {
+        throw new BadRequestException('Finish active meeting duty before changing its venue, date, period, or status.');
+      }
+      if (existing.status === DutyReservationStatus.CANCELLED && body.status && body.status !== existing.status) {
+        throw new BadRequestException('A cancelled meeting cannot be reopened. Create a new schedule.');
+      }
+    }
     const venueType = this.assertDutyType(String(body.venueType ?? existing?.venueType), true);
     const meetingDate = String(body.meetingDate ?? existing?.meetingDate ?? '');
     if (!access.admin && meetingDate < this.today()) {
       throw new BadRequestException('The current OD can only add or edit meetings from today onwards.');
     }
     const status = body.status ?? existing?.status ?? (meetingDate === this.today() ? DutyReservationStatus.CONFIRMED : DutyReservationStatus.SCHEDULED);
-    const slot = this.meetingSlot(body.startTime ?? existing?.startTime, body.endTime ?? existing?.endTime);
+    if (!Object.values(DutyReservationStatus).includes(status)) throw new BadRequestException('Invalid meeting status.');
+    if (status === DutyReservationStatus.COMPLETED && existing?.status !== status) {
+      throw new BadRequestException('Use Finish Duty to complete a meeting and preserve its duty log.');
+    }
+    const startTime = body.startTime !== undefined ? body.startTime : existing?.startTime ?? null;
+    const endTime = body.endTime !== undefined ? body.endTime : existing?.endTime ?? null;
+    if ((startTime === null) !== (endTime === null)) throw new BadRequestException('Provide both meeting times or select Whole Day.');
+    const timeSeconds = (value: string) => value.split(':').reduce((total, part, index) => total + Number(part) * [3600, 60, 1][index], 0);
+    if (startTime && endTime && (!/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(startTime) || !/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(endTime) || timeSeconds(startTime) >= timeSeconds(endTime))) {
+      throw new BadRequestException('Meeting start time must be before its end time.');
+    }
+    const slot = this.meetingSlot(startTime, endTime);
     const sameDayReservations = await this.reservationRepo.find({ where: { meetingDate, venueType } });
     for (const reservation of sameDayReservations) {
       if (reservation.id === existing?.id || reservation.status === DutyReservationStatus.CANCELLED) continue;
@@ -770,7 +838,10 @@ export class DutyService {
         throw new BadRequestException(`${venueType} already has a ${otherSlot.replace('_', ' ')} meeting on ${meetingDate}. Only one AM and one PM meeting are allowed per duty area.`);
       }
     }
-    const saved = await this.reservationRepo.save(this.reservationRepo.create({ ...existing, ...body, venueType, meetingDate, status, createdById: existing?.createdById ?? actor.id }));
+    const saved = await this.reservationRepo.save(this.reservationRepo.create({ ...existing, venueType, meetingDate, status, startTime, endTime,
+      purpose: body.purpose !== undefined ? body.purpose : existing?.purpose ?? null,
+      remarks: body.remarks !== undefined ? body.remarks : existing?.remarks ?? null,
+      createdById: existing?.createdById ?? actor.id }));
     if (existing && (existing.meetingDate !== meetingDate || existing.venueType !== venueType)) {
       await this.relieverRepo.delete({ reservationId: saved.id });
     }
@@ -916,6 +987,9 @@ export class DutyService {
     if (!access.admin) throw new ForbiddenException('Only a Duty Administrator can delete meeting schedules.');
     const row = await this.reservationRepo.findOne({ where: { id } });
     if (!row) return;
+    if (!(await this.reservationRestrictions(row)).canDelete) {
+      throw new BadRequestException('Meetings with active duty, completed duty, or a related duty log cannot be deleted.');
+    }
     await this.relieverRepo.delete({ reservationId: id });
     await this.reservationRepo.delete(id);
     this.sse.emitDutyUpdated();

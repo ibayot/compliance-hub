@@ -1,4 +1,5 @@
 'use client';
+import ResolutionTimingSummary from '@/components/ResolutionTimingSummary';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -1869,7 +1870,14 @@ export default function TicketReportsPage() {
                             <TableCell>{row.techName}</TableCell>
                             <TableCell align="right">{row.resolvedTickets}</TableCell>
                             <TableCell align="right">{row.slaRate.toFixed(1)}%</TableCell>
-                            <TableCell align="right">{row.avgActiveResolutionHours.toFixed(1)}h</TableCell>
+                            <TableCell align="right">{row.avgActiveResolutionHours.toFixed(1)}h
+                              <ResolutionTimingSummary average estimatedTickets={row.estimatedTickets} timing={{
+                                elapsedCalendarHours: row.avgCalendarResolutionHours,
+                                elapsedBusinessHours: row.avgBusinessResolutionHours ?? row.avgActiveResolutionHours,
+                                creditedPauseHours: row.avgCreditedPauseHours ?? 0, activeHours: row.avgActiveResolutionHours,
+                                pauseCount: row.pauseCount ?? null, estimated: !!row.estimatedTickets,
+                              }} />
+                            </TableCell>
                             <TableCell align="right">{row.weightedScore.toFixed(1)}</TableCell>
                           </TableRow>
                         ))}

@@ -340,6 +340,7 @@ export interface Ticket {
   resolvedAt?: string | null;
   resolutionTimeOverride?: string | null;
   effectiveResolvedAt?: string | null;
+  resolutionTiming?: import('@/lib/types/ticket-timing').ResolutionTimingView | null;
   resolutionTimeOverrides?: TicketResolutionTimeOverride[];
   satisfactionRating?: number | null;
   satisfactionComment?: string | null;
@@ -628,6 +629,11 @@ export interface TicketReportResult {
     missed: number;
     slaRate: number;
     avgActiveResolutionHours: number;
+    avgBusinessResolutionHours?: number;
+    avgCalendarResolutionHours?: number;
+    avgCreditedPauseHours?: number;
+    pauseCount?: number | null;
+    estimatedTickets?: number;
     volumeScore: number;
     efficiencyScore: number;
     weightedScore: number;

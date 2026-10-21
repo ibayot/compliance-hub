@@ -5,6 +5,7 @@ import { Type } from 'class-transformer';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { DutyExceptionType, DutyPeriod, DutyReservationStatus, DutyType } from '../entities/duty.entity';
 import { DutyService } from '../services/duty.service';
+import { PartialType } from '@nestjs/mapped-types';
 
 class DutyLogDto {
   @IsDateString() dutyDate: string;
@@ -43,6 +44,10 @@ class DutyReservationDto {
   @IsOptional() @IsEnum(DutyReservationStatus) status?: DutyReservationStatus;
 }
 
+export class UpdateDutyLogDto extends PartialType(DutyLogDto) {}
+export class UpdateDutyExceptionDto extends PartialType(DutyExceptionDto) {}
+export class UpdateDutyReservationDto extends PartialType(DutyReservationDto) {}
+
 @ApiTags('duties')
 @Controller('duties')
 @UseGuards(JwtAuthGuard)
@@ -61,7 +66,7 @@ export class DutyController {
     return this.duty.listAssignments(Number(page), Number(limit));
   }
   @Post('logs') createLog(@Request() req: any, @Body() dto: DutyLogDto) { return this.duty.saveAssignment(req.user, dto); }
-  @Patch('logs/:id') updateLog(@Request() req: any, @Param('id') id: string, @Body() dto: Partial<DutyLogDto>) { return this.duty.saveAssignment(req.user, dto, id); }
+  @Patch('logs/:id') updateLog(@Request() req: any, @Param('id') id: string, @Body() dto: UpdateDutyLogDto) { return this.duty.saveAssignment(req.user, dto, id); }
   @Delete('logs/:id') deleteLog(@Request() req: any, @Param('id') id: string) { return this.duty.deleteAssignment(req.user, id); }
 
   @Get('exceptions') async exceptions(@Request() req: any, @Query('page') page = '1', @Query('limit') limit = '10') {
@@ -69,7 +74,7 @@ export class DutyController {
     return this.duty.listExceptions(Number(page), Number(limit));
   }
   @Post('exceptions') createException(@Request() req: any, @Body() dto: DutyExceptionDto) { return this.duty.saveException(req.user, dto); }
-  @Patch('exceptions/:id') updateException(@Request() req: any, @Param('id') id: string, @Body() dto: Partial<DutyExceptionDto>) { return this.duty.saveException(req.user, dto, id); }
+  @Patch('exceptions/:id') updateException(@Request() req: any, @Param('id') id: string, @Body() dto: UpdateDutyExceptionDto) { return this.duty.saveException(req.user, dto, id); }
   @Delete('exceptions/:id') deleteException(@Request() req: any, @Param('id') id: string) { return this.duty.deleteException(req.user, id); }
 
   @Get('roster') async roster(@Request() req: any) { await this.duty.assertRead(req.user); return this.duty.getRoster(); }
@@ -80,7 +85,7 @@ export class DutyController {
 
   @Get('reservations') async reservations(@Request() req: any, @Query('page') page = '1', @Query('limit') limit = '10') { await this.duty.assertRead(req.user); return this.duty.listReservations(Number(page), Number(limit)); }
   @Post('reservations') createReservation(@Request() req: any, @Body() dto: DutyReservationDto) { return this.duty.saveReservation(req.user, dto); }
-  @Patch('reservations/:id') updateReservation(@Request() req: any, @Param('id') id: string, @Body() dto: Partial<DutyReservationDto>) { return this.duty.saveReservation(req.user, dto, id); }
+  @Patch('reservations/:id') updateReservation(@Request() req: any, @Param('id') id: string, @Body() dto: UpdateDutyReservationDto) { return this.duty.saveReservation(req.user, dto, id); }
   @Delete('reservations/:id') deleteReservation(@Request() req: any, @Param('id') id: string) { return this.duty.deleteReservation(req.user, id); }
   @Post('reservations/:id/relievers') saveRelievers(@Request() req: any, @Param('id') id: string, @Body() dto: DutyMeetingRelieversDto) {
     return this.duty.replaceMeetingRelievers(req.user, id, dto.userIds, dto.reason);

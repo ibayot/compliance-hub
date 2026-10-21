@@ -115,3 +115,9 @@ frontend/test-results/**/*.png
 # Keep important context docs visible
 !MASTER-CONTEXT.md
 !AGENTS.md
+
+# Keep the project context library discoverable by Codex.
+!/context/
+!/context/**/
+!/context/**/*.md
+!/context/tools/validate-context.mjs

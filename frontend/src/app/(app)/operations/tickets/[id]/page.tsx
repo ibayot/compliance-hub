@@ -5,6 +5,7 @@ import { requesterOptionLabel, filterRequesterOptions } from '@/lib/utils/reques
 import TicketActionsMenu, { TicketMenuAction } from '@/components/TicketActionsMenu';
 import { getTicketDetailActionKeys, TicketDetailActionKey } from '@/lib/utils/ticket-detail-actions';
 import { getTicketSlaSummary } from '@/lib/utils/ticket-sla-summary';
+import ResolutionTimingSummary from '@/components/ResolutionTimingSummary';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
@@ -1842,6 +1843,7 @@ export default function TicketDetailPage() {
               </Box>
             </AccordionSummary>
             <AccordionDetails id="ticket-details-content" sx={{ pt: 0 }}>
+              {ticket.resolutionTiming && <ResolutionTimingSummary timing={ticket.resolutionTiming} />}
               <Box display="flex" flexDirection="column" gap={1.5}>
                 <Box>
                   <Typography variant="caption" color="text.secondary">

@@ -543,6 +543,9 @@ Output strictly JSON:
   }
 
   async rateArticle(id: number, isHelpful: boolean): Promise<KnowledgeArticle> {
+    if (!Number.isInteger(id) || id <= 0 || typeof isHelpful !== 'boolean') {
+      throw new BadRequestException('Select an article and submit a boolean helpful value.');
+    }
     const article = await this.kbRepo.findOne({ where: { id } });
     if (!article) throw new Error('Article not found');
 

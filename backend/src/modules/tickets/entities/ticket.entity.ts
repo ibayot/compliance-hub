@@ -13,6 +13,7 @@ import { UserRef } from '../../../shared/contracts/user-ref';
 import { TicketComment } from './ticket-comment.entity';
 import { TicketCategoryConfig } from './ticket-category.entity';
 import { TicketIssueType } from './ticket-issue-type.entity';
+import type { ResolutionTiming, SlaPauseLedger } from '../services/ticket-sla-pause';
 
 export enum TicketType {
   DESKTOP_SUPPORT = 'desktop_support',
@@ -153,6 +154,13 @@ export class Ticket {
 
   @Column({ name: 'accumulated_pause_seconds', type: 'int', default: 0 })
   accumulatedPauseSeconds: number;
+
+  /** Nullable for pre-ledger tickets; never fabricate historical pause intervals. */
+  @Column({ name: 'sla_pause_ledger', type: 'simple-json', nullable: true })
+  slaPauseLedger: SlaPauseLedger | null;
+
+  /** Calculated read projection, not a stored column. */
+  resolutionTiming?: ResolutionTiming | null;
 
   @Column({ name: 'is_sla_waiting', type: 'boolean', default: false })
   isSlaWaiting: boolean;

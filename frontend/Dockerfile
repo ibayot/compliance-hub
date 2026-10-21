@@ -70,7 +70,7 @@ server { \
     ssl_certificate /etc/nginx/ssl/nginx-selfsigned.crt; \
     ssl_certificate_key /etc/nginx/ssl/nginx-selfsigned.key; \
     \
-    client_max_body_size 10M; \
+    client_max_body_size 55M; \
     root /usr/share/nginx/html; \
     index index.html; \
     \
