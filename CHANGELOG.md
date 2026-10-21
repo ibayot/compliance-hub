@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.25] - 2026-10-21 - Ticket Workflow Improvements
+
+### Changed
+- Ticket details show Update Status as a directly visible primary button beside the secondary-actions menu, including on narrow screens. Existing status-update permissions and restrictions are unchanged.
+
 ## [1.0.24] - 2026-10-20 - Staff Directory and Ticket Workflows
 
 ### Added

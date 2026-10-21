@@ -1264,7 +1264,7 @@ export default function TicketDetailPage() {
         <CardContent>
           <Box
             display="grid"
-            gridTemplateColumns="minmax(0, 1fr) auto"
+            gridTemplateColumns={{ xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) auto' }}
             alignItems="flex-start"
             gap={2}
           >
@@ -1451,10 +1451,18 @@ export default function TicketDetailPage() {
               </Box>
             </Box>
 
-            {/* Actions retain the same guards and open the existing forms/dialogs. */}
-            <TicketActionsMenu orientation="vertical" ticket={ticket}
-              actions={detailActionKeys.map(key => detailActions[key])}
-              onCancelled={() => { void fetchTicket(); void fetchEvents(); }} />
+            {/* Keep the main action visible; secondary actions retain the same guards. */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifySelf: { xs: 'start', sm: 'end' } }}>
+              {detailActionKeys.includes('updateStatus') && (
+                <Button variant="contained" size="small" startIcon={<EditIcon />}
+                  onClick={detailActions.updateStatus.onClick} sx={{ whiteSpace: 'nowrap' }}>
+                  Update Status
+                </Button>
+              )}
+              <TicketActionsMenu orientation="vertical" ticket={ticket}
+                actions={detailActionKeys.filter(key => key !== 'updateStatus').map(key => detailActions[key])}
+                onCancelled={() => { void fetchTicket(); void fetchEvents(); }} />
+            </Box>
           </Box>
 
           {ticket.status === 'cancelled' && <Alert severity="info" sx={{ mt: 2 }}>
@@ -1540,6 +1548,7 @@ export default function TicketDetailPage() {
                         select
                         fullWidth
                         label="Status"
+                        autoFocus
                         value={newStatus}
                         onChange={(e) => setNewStatus(e.target.value)}
                         size="small"

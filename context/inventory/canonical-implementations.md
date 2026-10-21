@@ -9,7 +9,7 @@ Source presence reviewed on 2026-10-20. Existing shared code is a starting point
 | Ticket images | [TicketImageDropzone](../../frontend/src/components/TicketImageDropzone.tsx) | Ticket-specific limits; not a universal document-upload component |
 | Document upload | [DocumentUpload](../../frontend/src/components/documents/DocumentUpload.tsx) | Domain-specific workflow; verify permission/version behavior |
 | Responsive table | [ResponsiveTable](../../frontend/src/components/layout/ResponsiveTable.tsx) | Shared overflow controls; audit semantics and consumers |
-| Ticket action menus | [TicketActionsMenu](../../frontend/src/components/TicketActionsMenu.tsx), [action selector](../../frontend/src/lib/utils/ticket-detail-actions.ts) | Presentation only; backend policies remain authoritative |
+| Ticket actions | [TicketActionsMenu](../../frontend/src/components/TicketActionsMenu.tsx), [action selector](../../frontend/src/lib/utils/ticket-detail-actions.ts), [ticket details](../../frontend/src/app/%28app%29/operations/tickets/%5Bid%5D/page.tsx) | Ticket details expose Update Status as the primary button and keep secondary actions in the menu. Both use the existing action selector; backend policies remain authoritative. |
 | Authenticated transport | [API client](../../frontend/src/lib/api/client.ts) | Existing refresh/session owner; inspect native behavior before changes |
 | Query cache | [ReactQueryProvider](../../frontend/src/components/providers/ReactQueryProvider.tsx) | Existing server-state provider; local fetches may still exist |
 | Rich text | [SafeRichText](../../frontend/src/components/SafeRichText.tsx) | Review permitted content and sanitization before reuse |
