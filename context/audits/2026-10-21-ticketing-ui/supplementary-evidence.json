@@ -1,0 +1,2062 @@
+{
+  "results": [
+    {
+      "name": "supplement-correction-dialogs",
+      "completed": true,
+      "evidence": [
+        {
+          "name": "/Correct Requestor|Correct Requested For/",
+          "dialogText": "Correct Requested For\nThis changes the ticket owner. The original staff member remains recorded as Filed By.\nRequested For *\nRequested For *\n\nSearch by name, email or unit.\n\nCancel\nSave Correction",
+          "viewport": 1440,
+          "pageWidth": 1425,
+          "headings": [
+            "Fixture printer and network request with a realistic long subject for responsive layout checks",
+            "Description",
+            "Resolution Notes",
+            "Details",
+            "Escalation Details ",
+            "Comments (1)",
+            "Timeline"
+          ],
+          "buttons": [
+            {
+              "text": "Back to Tickets",
+              "width": 134,
+              "height": 37
+            },
+            {
+              "text": "Replace",
+              "width": 64,
+              "height": 31
+            },
+            {
+              "text": "Select Images",
+              "width": 126,
+              "height": 31
+            },
+            {
+              "text": "Add Comment",
+              "width": 1017,
+              "height": 31
+            }
+          ],
+          "unnamedButtons": 0,
+          "unnamedTextboxes": 0,
+          "unnamedComboboxes": 0,
+          "unnamedDialogs": 0
+        },
+        {
+          "name": "/Correct Assigned To/",
+          "dialogText": "Correct Assigned To\nThis corrects the responsible staff record only. For a resolved ticket, its status, SLA details, resolution time, assignment timestamp, and staff queues remain unchanged.\nCorrect Assigned To *\nCorrect Assigned To *\nCancel\nSave Correction",
+          "viewport": 1440,
+          "pageWidth": 1425,
+          "headings": [
+            "Fixture printer and network request with a realistic long subject for responsive layout checks",
+            "Description",
+            "Resolution Notes",
+            "Details",
+            "Escalation Details ",
+            "Comments (1)",
+            "Timeline"
+          ],
+          "buttons": [
+            {
+              "text": "Back to Tickets",
+              "width": 134,
+              "height": 37
+            },
+            {
+              "text": "Replace",
+              "width": 64,
+              "height": 31
+            },
+            {
+              "text": "Select Images",
+              "width": 126,
+              "height": 31
+            },
+            {
+              "text": "Add Comment",
+              "width": 1017,
+              "height": 31
+            }
+          ],
+          "unnamedButtons": 0,
+          "unnamedTextboxes": 0,
+          "unnamedComboboxes": 0,
+          "unnamedDialogs": 0
+        },
+        {
+          "name": "/Correct Resolution Time/",
+          "dialogText": "Correct Resolution Time\nThe recorded system resolution time will remain unchanged. The verified time will be used for SLA displays and reports.\n\nTicket: ICT-2026-00001\n\nRecorded system resolution time\nRecorded system resolution time\nVerified completion date and time *\nVerified completion date and time *\nReason for correction *\nReason for correction *\n\nRequired, minimum 10 characters. Explain why the recorded time differs from the actual completion time.\n\nProof image with visible timestamp (required, max 5 files, 10 MB each). Select, drag and drop, or focus here and paste from the clipboard.\nSelect Proof Image(s)\nI confirm that the attached proof visibly supports the verified completion time.\nCancel\nSave Correction",
+          "viewport": 1440,
+          "pageWidth": 1425,
+          "headings": [
+            "Fixture printer and network request with a realistic long subject for responsive layout checks",
+            "Description",
+            "Resolution Notes",
+            "Details",
+            "Escalation Details ",
+            "Comments (1)",
+            "Timeline"
+          ],
+          "buttons": [
+            {
+              "text": "Back to Tickets",
+              "width": 134,
+              "height": 37
+            },
+            {
+              "text": "Replace",
+              "width": 64,
+              "height": 31
+            },
+            {
+              "text": "Select Images",
+              "width": 126,
+              "height": 31
+            },
+            {
+              "text": "Add Comment",
+              "width": 1017,
+              "height": 31
+            }
+          ],
+          "unnamedButtons": 0,
+          "unnamedTextboxes": 0,
+          "unnamedComboboxes": 0,
+          "unnamedDialogs": 0
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "name": "supplement-public-validation-tone",
+      "completed": true,
+      "evidence": {
+        "inDialog": "Sex is required.",
+        "successStyledMessages": [
+          "Sex is required."
+        ]
+      },
+      "pageErrors": []
+    },
+    {
+      "name": "supplement-create-validation",
+      "completed": false,
+      "failure": "locator.click: Timeout 6500ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'New Ticket', exact: true })\u001b[22m\n",
+      "pageErrors": []
+    },
+    {
+      "name": "supplement-escalation-dialogs",
+      "completed": true,
+      "evidence": {
+        "buttons": [
+          {
+            "text": "Back to Tickets",
+            "width": 134,
+            "height": 37
+          },
+          {
+            "text": "Accept",
+            "width": 64,
+            "height": 31
+          },
+          {
+            "text": "Return",
+            "width": 64,
+            "height": 31
+          },
+          {
+            "text": "Replace",
+            "width": 64,
+            "height": 31
+          },
+          {
+            "text": "Select Images",
+            "width": 126,
+            "height": 31
+          },
+          {
+            "text": "Add Comment",
+            "width": 1017,
+            "height": 31
+          }
+        ],
+        "dialog": "Return Ticket\nReason for returning *\nReason for returning *\nCancel\nReturn Ticket",
+        "viewport": 1440,
+        "pageWidth": 1425,
+        "headings": [
+          "Fixture printer and network request with a realistic long subject for responsive layout checks",
+          "Description",
+          "Resolution Notes",
+          "Details",
+          "Escalation Details (1)",
+          "Comments (1)",
+          "Timeline"
+        ],
+        "unnamedButtons": 0,
+        "unnamedTextboxes": 0,
+        "unnamedComboboxes": 0,
+        "unnamedDialogs": 0
+      },
+      "pageErrors": []
+    },
+    {
+      "name": "supplement-settings-form-dialogs",
+      "completed": true,
+      "evidence": [
+        {
+          "expected": "Add Category",
+          "labels": [
+            "Add Category"
+          ],
+          "dialog": "Add Category\nCategory Name *\nCategory Name *\nSupport Types\nIT Support\nDesktop Support\nPantawid ICT Support\nSpecialized Concerns\nActive\nCancel\nSave",
+          "viewport": 1440,
+          "pageWidth": 1425,
+          "headings": [
+            "Ticket Settings"
+          ],
+          "buttons": [
+            {
+              "text": "Add Category",
+              "width": 124,
+              "height": 31
+            }
+          ],
+          "unnamedButtons": 0,
+          "unnamedTextboxes": 0,
+          "unnamedComboboxes": 0,
+          "unnamedDialogs": 0
+        },
+        {
+          "expected": "Add Issue",
+          "labels": [
+            "Add Issue"
+          ],
+          "dialog": "Add Issue\nCategory * *\nCategory * *\nIssue Name\nIssue Name\nDescription (Optional)\nDescription (Optional)\nSLA Time Limit\nSLA Time Limit\n\nMinimum 1 minute; maximum 168 hours.\n\nUnit\nHours\nUnit\nMax Pause Hours *\nMax Pause Hours *\n\nMaximum allowed cumulative pause hours before SLA pause is rejected.\n\nMax Freeze Hours\nMax Freeze Hours\n\nOptional. Max hours a ticket can stay frozen. Leave blank for unlimited.\n\nActive\nCancel\nSave",
+          "viewport": 1440,
+          "pageWidth": 1425,
+          "headings": [
+            "Ticket Settings"
+          ],
+          "buttons": [
+            {
+              "text": "Add Issue",
+              "width": 102,
+              "height": 31
+            }
+          ],
+          "unnamedButtons": 0,
+          "unnamedTextboxes": 0,
+          "unnamedComboboxes": 0,
+          "unnamedDialogs": 0
+        },
+        {
+          "expected": "Add Keyword Rule",
+          "labels": [
+            "Add Rule"
+          ],
+          "dialog": "Add Keyword Rule\nKeywords *\nKeywords *\n\nType a keyword and press Enter or comma to add. Multiple keywords can map to the same category.\n\nSupport Type *\nIT Support\nSupport Type *\nTarget Category * *\nTarget Category * *\nTarget Issue * *\nTarget Issue * *\nActive\nCancel\nSave",
+          "viewport": 1440,
+          "pageWidth": 1425,
+          "headings": [
+            "Ticket Settings"
+          ],
+          "buttons": [
+            {
+              "text": "Add Rule",
+              "width": 97,
+              "height": 31
+            }
+          ],
+          "unnamedButtons": 0,
+          "unnamedTextboxes": 0,
+          "unnamedComboboxes": 0,
+          "unnamedDialogs": 0
+        },
+        {
+          "expected": "Add Focal",
+          "labels": [
+            "Add Focal"
+          ],
+          "dialog": "Add Escalation Focal\nTicket Type *\nAll Types\nTicket Type *\nSelect Focal User * *\nSelect Focal User * *\nCancel\nAdd",
+          "viewport": 1440,
+          "pageWidth": 1425,
+          "headings": [
+            "Ticket Settings"
+          ],
+          "buttons": [
+            {
+              "text": "Add Focal",
+              "width": 103,
+              "height": 31
+            }
+          ],
+          "unnamedButtons": 0,
+          "unnamedTextboxes": 0,
+          "unnamedComboboxes": 0,
+          "unnamedDialogs": 0
+        }
+      ],
+      "pageErrors": []
+    }
+  ],
+  "errors": [],
+  "requests": [
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/events",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/escalations",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/changelog/prompt",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/events/token",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/events",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/escalations",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/comment-attachment/ticket-a/fixture-image.png",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/ticket-settings/categories",
+      "method": "GET",
+      "query": "?ticketType=desktop_support&activeOnly=true"
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/ticket-settings/issue-types",
+      "method": "GET",
+      "query": "?categoryId=cat-a"
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/technicians",
+      "method": "GET",
+      "query": "?ticketType=desktop_support"
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/comment-attachment/ticket-a/fixture-image.png",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/events",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/escalations",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/users/ticket-requesters",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/events",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/escalations",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/events/token",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/events",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/escalations",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/comment-attachment/ticket-a/fixture-image.png",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/ticket-settings/categories",
+      "method": "GET",
+      "query": "?ticketType=desktop_support&activeOnly=true"
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/ticket-settings/issue-types",
+      "method": "GET",
+      "query": "?categoryId=cat-a"
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/technicians",
+      "method": "GET",
+      "query": "?ticketType=desktop_support"
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/comment-attachment/ticket-a/fixture-image.png",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/events",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/escalations",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/assignee-correction-options",
+      "method": "GET",
+      "query": "?ticketId=ticket-a"
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/events",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/escalations",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/events/token",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/events",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/escalations",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/comment-attachment/ticket-a/fixture-image.png",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/ticket-settings/categories",
+      "method": "GET",
+      "query": "?ticketType=desktop_support&activeOnly=true"
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/ticket-settings/issue-types",
+      "method": "GET",
+      "query": "?categoryId=cat-a"
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/technicians",
+      "method": "GET",
+      "query": "?ticketType=desktop_support"
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/comment-attachment/ticket-a/fixture-image.png",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/events",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/ticket-a/escalations",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-correction-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-public-validation-tone",
+      "ep": "/tickets/rating-access/session/tickets",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-public-validation-tone",
+      "ep": "/tickets/rating-access/session/tickets",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-public-validation-tone",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-public-validation-tone",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-public-validation-tone",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-public-validation-tone",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-public-validation-tone",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-public-validation-tone",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/events/token",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/tickets/my-requested",
+      "method": "GET",
+      "query": "?date=2026-10-21&includeCarryover=true&page=1&limit=25"
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/tickets/dashboard",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/tickets/my-requested",
+      "method": "GET",
+      "query": "?date=2026-10-21&includeCarryover=true&page=1&limit=25"
+    },
+    {
+      "case": "supplement-create-validation",
+      "ep": "/tickets/dashboard",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/tickets/ticket-a",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/tickets/ticket-a/events",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/tickets/ticket-a/escalations",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/events/token",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/tickets/ticket-a",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/tickets/ticket-a/events",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/tickets/ticket-a/escalations",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/tickets/comment-attachment/ticket-a/fixture-image.png",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/ticket-settings/categories",
+      "method": "GET",
+      "query": "?ticketType=desktop_support&activeOnly=true"
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/ticket-settings/issue-types",
+      "method": "GET",
+      "query": "?categoryId=cat-a"
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/tickets/comment-attachment/ticket-a/fixture-image.png",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/tickets/ticket-a",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/tickets/ticket-a/events",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-escalation-dialogs",
+      "ep": "/tickets/ticket-a/escalations",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/categories",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/keyword-rules",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/issue-types",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/escalation-focals",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/feedback",
+      "method": "GET",
+      "query": "?status=all&page=1&limit=10"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/events/token",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/categories",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/keyword-rules",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/issue-types",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/escalation-focals",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/feedback",
+      "method": "GET",
+      "query": "?status=all&page=1&limit=10"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/feedback",
+      "method": "GET",
+      "query": "?status=all&page=1&limit=10"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/categories",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/keyword-rules",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/issue-types",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/escalation-focals",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/feedback",
+      "method": "GET",
+      "query": "?status=all&page=1&limit=10"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/events/token",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/categories",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/keyword-rules",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/issue-types",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/escalation-focals",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/feedback",
+      "method": "GET",
+      "query": "?status=all&page=1&limit=10"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/feedback",
+      "method": "GET",
+      "query": "?status=all&page=1&limit=10"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/categories",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/keyword-rules",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/issue-types",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/escalation-focals",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/feedback",
+      "method": "GET",
+      "query": "?status=all&page=1&limit=10"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/events/token",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/categories",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/keyword-rules",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/issue-types",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/escalation-focals",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/feedback",
+      "method": "GET",
+      "query": "?status=all&page=1&limit=10"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/feedback",
+      "method": "GET",
+      "query": "?status=all&page=1&limit=10"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/public-config",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/auth/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/role-capabilities/me",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/categories",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/keyword-rules",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/issue-types",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/escalation-focals",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/feedback",
+      "method": "GET",
+      "query": "?status=all&page=1&limit=10"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/events/token",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/users/security-config/app-mode",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/categories",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/keyword-rules",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/issue-types",
+      "method": "GET",
+      "query": "?activeOnly=false"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/escalation-focals",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/feedback",
+      "method": "GET",
+      "query": "?status=all&page=1&limit=10"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/health",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/notifications/summary",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/attendance/my-shift",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/feedback",
+      "method": "GET",
+      "query": "?status=all&page=1&limit=10"
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/tickets/attendance-assignment-alerts",
+      "method": "GET",
+      "query": ""
+    },
+    {
+      "case": "supplement-settings-form-dialogs",
+      "ep": "/ticket-settings/escalation-available-users",
+      "method": "GET",
+      "query": ""
+    }
+  ],
+  "productionAccess": false,
+  "realDevice": false
+}

@@ -4,6 +4,7 @@ This log records changes to the context organization. It is separate from the ap
 
 ## 2026-10-21 — Ticketing SLA semantics and scoped audit evidence
 
+- Published the [dedicated ticketing UI re-audit](audits/2026-10-21-ticketing-ui/REPORT.md), generated JSON evidence and coverage ledger. It records open UI defects separately from earlier logic verification; no application behavior was changed by publishing the audit.
 - Added CH-TICKET-006/007 to distinguish effective completion, saved-deadline SLA classification, and active-time efficiency.
 - Linked the shared completed-ticket classification from the canonical implementation map.
 - Added a [dated ticketing audit](audits/2026-10-21-ticketing.md), source hashes, controller-handler inventory, isolated reproductions, open findings, and explicit coverage limits.
