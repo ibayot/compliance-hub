@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 - Ticket details show Update Status as a directly visible primary button beside the secondary-actions menu, including on narrow screens. Existing status-update permissions and restrictions are unchanged.
+- Security settings and sign-in verification use the consistent label Temporary MFA Mode. Existing verification behavior and attempt limits are unchanged.
+
+### Fixed
+- Automatic ticket routing consistently requires an active, available, opted-in staff member with the appropriate support capabilities. Attendance-only staff no longer enter fallback routing, and eligibility is checked again before a new automatic assignment. Authorized manual assignment and existing assigned queues are unchanged.
 
 ## [1.0.24] - 2026-10-20 - Staff Directory and Ticket Workflows
 

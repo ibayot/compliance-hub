@@ -35,7 +35,7 @@ export default function MfaVerifyPage() {
       
       const testCode = sessionStorage.getItem('mfaTestModeCode');
       if (testCode) {
-        enqueueSnackbar(`[TEST MODE] Your MFA Code is: ${testCode}`, {
+        enqueueSnackbar(`Temporary MFA Mode — Your MFA code is: ${testCode}`, {
           variant: 'info',
           persist: true,
           anchorOrigin: { vertical: 'top', horizontal: 'center' }

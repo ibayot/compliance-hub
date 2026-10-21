@@ -394,7 +394,7 @@ function SecuritySettingsCard() {
                     color="primary"
                   />
                 }
-                label="Enable MFA Test Mode"
+                label="Enable Temporary MFA Mode"
               />
             </Grid>
             {vaptSettingsEnabled && (

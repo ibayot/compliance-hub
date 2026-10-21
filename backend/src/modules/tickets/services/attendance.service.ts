@@ -338,9 +338,9 @@ export class AttendanceService implements OnModuleInit {
 
 
   /** Get technicians who are available (present or half_day) for a ticket type on a given date */
-  async getAvailableTechnicians(ticketType: string, date: string): Promise<User[]> {
+  async getAvailableTechnicians(ticketType: string, date: string, eligibleRoles?: string[]): Promise<User[]> {
     const groups = await this.getRoleGroups();
-    const roles = groups[ticketType] || groups.all;
+    const roles = eligibleRoles ?? (groups[ticketType] || groups.all);
 
     // Avoid generating invalid empty IN clauses when the capability cache/schema
     // has no matching technician roles yet.
@@ -384,8 +384,8 @@ export class AttendanceService implements OnModuleInit {
    * Strict availability for auto-assignment: only technicians with explicit PRESENT attendance.
    * No attendance record and HALF_DAY are treated as not eligible for automatic assignment.
    */
-  async getPresentTechnicians(ticketType: string, date: string): Promise<User[]> {
-    const available = await this.getAvailableTechnicians(ticketType, date);
+  async getPresentTechnicians(ticketType: string, date: string, eligibleRoles?: string[]): Promise<User[]> {
+    const available = await this.getAvailableTechnicians(ticketType, date, eligibleRoles);
     this.logger.log(`[getPresentTechnicians] available technician count: ${available.length}.`);
     if (available.length === 0) return [];
 
@@ -455,10 +455,20 @@ export class AttendanceService implements OnModuleInit {
    * selected explicitly by an authorized user.
    */
   async getAutoAssignmentTechnicians(ticketType: string, date: string): Promise<User[]> {
-    const presentTechs = await this.getPresentTechnicians(ticketType, date);
+    // Attendance eligibility alone is not a ticket-handling capability. In
+    // particular, the broad fallback must not route tickets to attendance-only staff.
+    const groups = await this.getRoleGroups();
+    if (!['all', 'desktop_support', 'it_support', 'pantawid_ict_support'].includes(ticketType)) return [];
+    const eligibleRoles = ticketType === 'all'
+      ? this.roleCapSvc.getTechnicianRoles().filter(role => role !== UserRole.SUPER_ADMIN)
+      : groups[ticketType];
+    if (!eligibleRoles.length) return [];
+    const presentTechs = await this.getPresentTechnicians(ticketType, date, eligibleRoles);
     const dutyBlockedIds = new Set(this.dutyService ? await this.dutyService.blockedTechnicianIds(date) : []);
     return presentTechs.filter((technician) =>
-      !dutyBlockedIds.has(technician.id) && technician.autoAssignmentEligible !== false,
+      technician.active === true && technician.autoAssignmentEligible === true &&
+      eligibleRoles.includes(technician.role) && !this.roleCapSvc.isSeniorTech(technician.role) &&
+      !dutyBlockedIds.has(technician.id),
     );
   }
 

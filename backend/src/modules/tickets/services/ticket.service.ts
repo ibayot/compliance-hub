@@ -1288,6 +1288,16 @@ export class TicketService implements OnModuleInit {
 
   // --- Create (with Auto-Shift, Auto-Assign, Email) -------------------------
 
+  private async canAutomaticallyAssign(
+    technicianId: number, poolType: string, date: string, requesterId: number,
+  ): Promise<boolean> {
+    if (Number(technicianId) === Number(requesterId)) return false;
+    // Re-read the pool after workload/SLA lookups rather than trusting the
+    // selected account's earlier eligibility snapshot. Manual assignments do not use this gate.
+    const current = await this.attendanceService.getAutoAssignmentTechnicians(poolType, date);
+    return current.some(technician => Number(technician.id) === Number(technicianId));
+  }
+
   async withAutoAssignmentLock<T>(work: () => Promise<T>): Promise<T> {
     const queryRunner = this.dataSource.createQueryRunner();
     const lockName = 'compliance_hub_ticket_auto_assignment';
@@ -1435,6 +1445,7 @@ export class TicketService implements OnModuleInit {
     let noTechAvailable = false;
     let isSlaWaiting = false;
     let shouldStartInProgress = false;
+    let automaticAssignmentPool: string | null = null;
 
     if (dto.assignedToId != null) {
       if (!callerRole || !this.roleCapSvc.isTicketSettingsFocal(callerRole as string)) {
@@ -1602,6 +1613,7 @@ export class TicketService implements OnModuleInit {
             }
 
             if (assignedTech) {
+              automaticAssignmentPool = tType;
               assignedToId = assignedTech.id;
 
               // Determine if tech is currently busy
@@ -1701,6 +1713,16 @@ export class TicketService implements OnModuleInit {
     //     'Failed to create ticket due to ticket number allocation conflict.',
     //   );
     // }
+
+    if (dto.assignedToId == null && assignedToId && automaticAssignmentPool &&
+      !await this.canAutomaticallyAssign(assignedToId, automaticAssignmentPool,
+        new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }), requesterId)) {
+      assignedToId = null;
+      assignedTech = null;
+      noTechAvailable = true;
+      Object.assign(ticket, { assignedToId: null, status: TicketStatus.OPEN,
+        lastAssignedAt: null, slaStartedAt: null, slaDeadline: null, isSlaWaiting: true });
+    }
 
     const saved = dto.pendingStaffId
       ? await this.dataSource.transaction(async (manager) => {
@@ -3590,6 +3612,14 @@ export class TicketService implements OnModuleInit {
       ticket.isKbGenerationPending = true;
     }
 
+    if (automaticAssignmentDuringUpdate && !await this.canAutomaticallyAssign(
+      automaticAssignmentDuringUpdate.technicianId, ticket.ticketType,
+      new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }), ticket.requesterId,
+    )) {
+      Object.assign(ticket, { assignedToId: null, status: TicketStatus.OPEN, lastAssignedAt: null });
+      automaticAssignmentDuringUpdate = null;
+    }
+
     const saved = dto.status === TicketStatus.DUPLICATE
       ? await this.persistDuplicateTicket(ticket, expectedUpdatedAt, actorId, actorRole, dto.statusJustification!.trim())
       : await this.persistTicketUpdate(ticket, expectedUpdatedAt);
@@ -3830,6 +3860,9 @@ export class TicketService implements OnModuleInit {
                       activatedAt,
                     );
 
+                    if (!await this.canAutomaticallyAssign(
+                      assignedTechnicianId, 'all', today, nextTicket.requesterId,
+                    )) return;
                     await this.ticketRepo.save(nextTicket);
                     this.sseService.emitTicketUpdated(nextTicket.id);
 
@@ -3905,6 +3938,7 @@ export class TicketService implements OnModuleInit {
     dto: AssignTicketDto,
     actorRole: UserRole,
     actorId?: number,
+    automaticPool?: { ticketType: string; date: string },
   ): Promise<Ticket> {
     if (
       !this.roleCapSvc.isTicketFocal(actorRole as string) &&
@@ -4066,6 +4100,11 @@ export class TicketService implements OnModuleInit {
       }
     }
 
+    if (automaticPool && !await this.canAutomaticallyAssign(
+      dto.assignedToId, automaticPool.ticketType, automaticPool.date, ticket.requesterId,
+    )) {
+      throw new ConflictException('The selected staff member is no longer eligible for automatic assignment.');
+    }
     const assigned = await this.ticketRepo.save(ticket);
     this.sseService.emitTicketUpdated(assigned.id);
 
@@ -5376,6 +5415,7 @@ export class TicketService implements OnModuleInit {
         pending.slaStartedAt = null;
         pending.slaDeadline = null;
       }
+      if (!await this.canAutomaticallyAssign(techId, ticketType, today, pending.requesterId)) return;
       await this.ticketRepo.save(pending);
 
       this.logEvent(pending.id, 'auto_assigned', null, {
@@ -5490,7 +5530,9 @@ export class TicketService implements OnModuleInit {
                 { assignedToId: tech.id, status: TicketStatus.IN_PROGRESS },
               ],
             });
-            if (openCount === 0) {
+            if (openCount === 0 && await this.canAutomaticallyAssign(
+              tech.id, ticket.ticketType, today, ticket.requesterId,
+            )) {
               ticket.assignedToId = tech.id;
               ticket.status = TicketStatus.ASSIGNED;
               ticket.lastAssignedAt = new Date();
@@ -5689,6 +5731,7 @@ export class TicketService implements OnModuleInit {
           },
           actorRole,
           actorId,
+          { ticketType: ticket.ticketType, date: today },
         );
         reassigned++;
       } catch (error: any) {
