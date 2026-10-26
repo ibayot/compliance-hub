@@ -24,6 +24,13 @@ export class SecurityConfigController {
     return { appMode: config.appMode || 'full' };
   }
 
+  /** Share only the screen-lock duration; privileged security settings remain protected. */
+  @Get('session-policy')
+  async getSessionPolicy(): Promise<{ idleLockMinutes: number }> {
+    const config = await this.securityConfigService.getConfig();
+    return { idleLockMinutes: config.idleLockMinutes };
+  }
+
   @Put()
   @RequireCapability('isSecuritySettingsAccess')
   async updateConfig(
@@ -34,6 +41,7 @@ export class SecurityConfigController {
       appMode?: string;
       googleSignInEnabled?: boolean;
       allowedEmailDomains?: string[];
+      idleLockMinutes?: number;
     },
   ): Promise<SecurityConfig> {
     return this.securityConfigService.updateConfig(body);

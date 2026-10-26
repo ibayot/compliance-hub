@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { Box, CircularProgress } from '@mui/material';
+import { Box, Button, CircularProgress, Typography } from '@mui/material';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import type { RoleCapabilityRecord } from '@/lib/api/users';
@@ -42,13 +42,19 @@ function ProtectedDashboard({
   requiredCapability?: keyof RoleCapabilityRecord | Array<keyof RoleCapabilityRecord>;
 
 }) {
-  const { isAuthenticated, loading, myCap } = useAuth();
+  const { isAuthenticated, loading, myCap, reconnecting, retrySession, logout } = useAuth();
   const location = useLocation();
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
-        <CircularProgress />
+      <Box display="flex" flexDirection="column" gap={2} justifyContent="center" alignItems="center" minHeight="100vh" p={3} role="status">
+        <CircularProgress aria-label={reconnecting ? 'Reconnecting' : 'Checking session'} />
+        {reconnecting && <>
+          <Typography variant="h6">Reconnecting to the application</Typography>
+          <Typography color="text.secondary" textAlign="center">The server is temporarily unavailable. We will retry without signing you out.</Typography>
+          <Button variant="contained" onClick={retrySession}>Retry now</Button>
+          <Button onClick={() => void logout()}>Sign out</Button>
+        </>}
       </Box>
     );
   }

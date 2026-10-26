@@ -82,6 +82,7 @@ import ResponsiveTable from '@/components/layout/ResponsiveTable';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import PendingStaffPanel from '@/components/PendingStaffPanel';
 import { CAPABILITY_CATEGORIES } from '@/lib/capability-categories';
+import { DEFAULT_IDLE_LOCK_MINUTES, MIN_IDLE_LOCK_MINUTES, MAX_IDLE_LOCK_MINUTES, isValidIdleLockMinutes } from '@/lib/utils/session-policy';
 
 // --- Change Password Card ---------------------------------------------------
 
@@ -303,32 +304,44 @@ function SecuritySettingsCard() {
   const [appMode, setAppMode] = useState('full');
   const [googleSignInEnabled, setGoogleSignInEnabled] = useState(true);
   const [allowedEmailDomains, setAllowedEmailDomains] = useState('');
+  const [idleLockMinutes, setIdleLockMinutes] = useState(String(DEFAULT_IDLE_LOCK_MINUTES));
+  const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const canManage = Boolean(myCap?.isSecuritySettingsAccess);
   const vaptSettingsEnabled = String(import.meta.env.VITE_VAPT_SETTINGS_ENABLED || '').trim().toLowerCase() === 'true';
 
-  useEffect(() => {
-    if (canManage) {
-      usersApi.getSecurityConfig().then(config => {
+  const loadSecurityConfig = useCallback(async () => {
+    if (!canManage) return;
+    setLoading(true);
+    setLoadError(false);
+    try {
+        const config = await usersApi.getSecurityConfig();
         setDefaultPassword(config.defaultPassword || '');
         setMfaTestMode(Boolean((config as any).mfaTestMode));
         setVaptMode(Boolean((config as any).vaptMode));
         setAppMode((config as any).appMode || 'full');
         setGoogleSignInEnabled((config as any).googleSignInEnabled !== false);
+        setIdleLockMinutes(String(isValidIdleLockMinutes(config.idleLockMinutes) ? config.idleLockMinutes : DEFAULT_IDLE_LOCK_MINUTES));
         setAllowedEmailDomains(Array.isArray((config as any).allowedEmailDomains)
           ? (config as any).allowedEmailDomains.join(', ')
           : 'dswd.gov.ph, gmail.com, yahoo.com, yahoomail.com, hotmail.com, rocketmail.com, outlook.com, icloud.com, aol.com');
-        setLoading(false);
-      }).catch(err => {
+    } catch {
+        setLoadError(true);
         enqueueSnackbar('Failed to load security config', { variant: 'error' });
-        setLoading(false);
-      });
-    }
+    } finally { setLoading(false); }
   }, [canManage, enqueueSnackbar]);
+  useEffect(() => { void loadSecurityConfig(); }, [loadSecurityConfig]);
+
+  const validIdleMinutes = /^\d+$/.test(idleLockMinutes) && isValidIdleLockMinutes(Number(idleLockMinutes));
 
   const handleSave = async () => {
+    if (saving || loading || loadError) return;
+    if (!validIdleMinutes) {
+      enqueueSnackbar('Enter a whole number from 1 to 1440 minutes.', { variant: 'error' });
+      return;
+    }
     if (!defaultPassword) {
       enqueueSnackbar('Default password cannot be empty', { variant: 'error' });
       return;
@@ -349,6 +362,7 @@ function SecuritySettingsCard() {
         appMode,
         googleSignInEnabled,
         allowedEmailDomains: domains,
+        idleLockMinutes: Number(idleLockMinutes),
       };
       if (vaptSettingsEnabled) payload.vaptMode = vaptMode;
       await usersApi.updateSecurityConfig(payload as any);
@@ -373,8 +387,25 @@ function SecuritySettingsCard() {
       <CardContent>
         {loading ? (
           <Typography>Loading...</Typography>
+        ) : loadError ? (
+          <Alert severity="error" action={<Button onClick={() => void loadSecurityConfig()}>Retry</Button>}>Unable to load security settings.</Alert>
         ) : (
           <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Idle password prompt (minutes)"
+                value={idleLockMinutes}
+                onChange={(event) => setIdleLockMinutes(event.target.value)}
+                disabled={saving}
+                error={!validIdleMinutes}
+                inputProps={{ min: MIN_IDLE_LOCK_MINUTES, max: MAX_IDLE_LOCK_MINUTES, step: 1, inputMode: 'numeric' }}
+                helperText={validIdleMinutes
+                  ? 'Applies to all users. Enter whole minutes from 1 to 1440; 60 means 1 hour and 1440 means 1 day. Default: 15 minutes.'
+                  : 'Enter a whole number from 1 to 1440 minutes.'}
+              />
+            </Grid>
             <Grid item xs={12}>
               <TextField
                 fullWidth
@@ -452,7 +483,7 @@ function SecuritySettingsCard() {
               <Button
                 variant="contained"
                 onClick={handleSave}
-                disabled={saving || !defaultPassword}
+                disabled={saving || !defaultPassword || !validIdleMinutes}
               >
                 {saving ? 'Saving...' : 'Save Settings'}
               </Button>

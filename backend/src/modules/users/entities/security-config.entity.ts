@@ -20,6 +20,9 @@ export class SecurityConfig {
   @Column({ name: 'google_sign_in_enabled', default: true })
   googleSignInEnabled: boolean;
 
+  @Column({ name: 'idle_lock_minutes', type: 'int', default: 15 })
+  idleLockMinutes: number;
+
   @Column({ name: 'allowed_email_domains', type: 'simple-json', nullable: true })
   allowedEmailDomains: string[] | null;
 }

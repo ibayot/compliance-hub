@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { apiClient } from '@/lib/api/client';
+import { isApplicationPath } from '@/lib/auth/session-recovery';
 
 interface AppVersionManifest {
   buildId?: string;
@@ -82,6 +84,12 @@ export default function AppVersionGuard() {
           }
         }
 
+        // A new frontend can be ready before the API services finish restarting.
+        if (isApplicationPath(window.location.pathname)) {
+          const health = await apiClient.get('/health', { timeout: 5000 });
+          const services = health.data?.services;
+          if (disposed || (services && Object.values(services).some(ready => ready !== true))) return;
+        }
         reloadRequested = true;
         writeReloadGuard(deployedBuildId);
         const reloadUrl = new URL(window.location.href);

@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.27] - 2026-10-26 - Session Recovery and Idle Password Prompt
+
+### Added
+- Security Settings administrators can configure the idle password prompt in whole minutes from 1 to 1440. The default remains 15 minutes; entering 60 means one hour and 1440 means one day. The duration applies to all users, and the lock prompt displays the configured time.
+- Open sessions refresh the duration without treating background requests as activity. Locked sessions still require verification to unlock.
+
+### Fixed
+- Valid sessions inside the application reconnect after temporary service interruptions without being sent to login. Expired or revoked sessions still require sign-in; login and public pages do not restore accounts automatically.
+- Explicit logout stays effective during downtime and cancels pending recovery. New-build page refreshes wait for the application services to be ready.
+
 ## [1.0.26] - 2026-10-26 - Overtime Requests and Immediate Relievers
 
 ### Added

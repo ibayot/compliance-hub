@@ -9,7 +9,7 @@ import React, {
   useState,
   ReactNode,
 } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -26,18 +26,18 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { CredentialResponse, GoogleLogin } from '@react-oauth/google';
-import { useSnackbar } from 'notistack';
+import { closeSnackbar, useSnackbar } from 'notistack';
 import { User } from '@/lib/types/auth';
 import { authApi } from '@/lib/api/auth';
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { usersApi, RoleCapabilityRecord } from '@/lib/api/users';
 import ForcePasswordChangeModal from '@/components/ForcePasswordChangeModal';
-import { tokenStore } from '@/lib/api/client';
+import { cancelSessionRenewal, tokenStore } from '@/lib/api/client';
+import { DEFAULT_IDLE_LOCK_MINUTES, isValidIdleLockMinutes } from '@/lib/utils/session-policy';
+import { canRecoverSession, completeInteractiveSignIn, hasSignedOut, isApplicationPath, isRejectedSession, isSignOutStorageEvent, markSessionSignedOut, observeSessionSignOut, recoveryGeneration } from '@/lib/auth/session-recovery';
 
 export { tokenStore } from '@/lib/api/client';
-
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 
 function parseJwt(token: string) {
   try {
@@ -67,6 +67,8 @@ interface AuthContextType {
   user: User | null;
   myCap: RoleCapabilityRecord | null;
   loading: boolean;
+  reconnecting: boolean;
+  retrySession: () => void;
   login: (email: string, password: string, redirectTo?: string) => Promise<void>;
   loginWithGoogle: (idToken: string, redirectTo?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -86,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [myCap, setMyCap] = useState<RoleCapabilityRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reconnecting, setReconnecting] = useState(false);
   const [requiresPasswordChange, setRequiresPasswordChange] = useState(false);
   const [requiresMfa, setRequiresMfa] = useState(false);
   const [isSessionLocked, setIsSessionLocked] = useState(false);
@@ -94,16 +97,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
   const [googleSignInEnabled, setGoogleSignInEnabled] = useState(false);
+  const [idleLockMinutes, setIdleLockMinutes] = useState(DEFAULT_IDLE_LOCK_MINUTES);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inactivityDeadlineRef = useRef<number | null>(null);
+  const lastActivityRef = useRef(Date.now());
+  const currentUserRef = useRef<User | null>(null);
+  const retrySessionRef = useRef<() => void>(() => {});
   const navigate = useNavigate();
+  const location = useLocation();
+  const insideApplication = isApplicationPath(location.pathname);
   const authenticatedUserId = user?.id ?? null;
+  useEffect(() => { currentUserRef.current = user; }, [user]);
+  const retrySession = useCallback(() => retrySessionRef.current(), []);
 
   const refreshSession = useCallback(async (): Promise<User> => {
-    const response = await authApi.refresh(tokenStore.get('refreshToken') || '');
-    if (response.accessToken) tokenStore.set('accessToken', response.accessToken);
-    if (response.refreshToken) tokenStore.set('refreshToken', response.refreshToken);
+    const generation = recoveryGeneration();
+    await authApi.refresh(tokenStore.get('refreshToken') || '');
     const profile = await authApi.getProfile();
+    if (!canRecoverSession() || generation !== recoveryGeneration()) throw new Error('Session recovery cancelled.');
     setUser(profile);
     return profile;
   }, []);
@@ -113,6 +123,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((config) => setGoogleSignInEnabled(config.googleSignInEnabled !== false))
       .catch(() => setGoogleSignInEnabled(false));
   }, [isSessionLocked]);
+
+  useEffect(() => {
+    let active = true;
+    let pending = false;
+    lastActivityRef.current = Date.now();
+    setIdleLockMinutes(DEFAULT_IDLE_LOCK_MINUTES);
+    if (!authenticatedUserId) return;
+    const refreshPolicy = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        const policy = await usersApi.getSessionPolicy();
+        if (active) setIdleLockMinutes(isValidIdleLockMinutes(policy.idleLockMinutes)
+          ? policy.idleLockMinutes : DEFAULT_IDLE_LOCK_MINUTES);
+      } catch { /* Retain the last known policy; initial failures keep the 15-minute default. */ }
+      finally { pending = false; }
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') void refreshPolicy(); };
+    void refreshPolicy();
+    const interval = setInterval(() => void refreshPolicy(), 60_000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { active = false; clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
+  }, [authenticatedUserId]);
 
   
   const saveTokensToPreferences = async (accessToken: string, refreshToken: string) => {
@@ -127,7 +160,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(inactivityTimerRef.current);
       inactivityTimerRef.current = null;
     }
-    inactivityDeadlineRef.current = null;
   }, []);
 
   const scheduleInactivityLock = useCallback(() => {
@@ -140,11 +172,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUnlockPassword('');
       setShowUnlockPassword(false);
       setUnlockError(null);
-      inactivityDeadlineRef.current = null;
     };
 
-    const deadline = Date.now() + INACTIVITY_TIMEOUT_MS;
-    inactivityDeadlineRef.current = deadline;
+    // Policy refreshes and heartbeat responses must never count as user activity.
+    const deadline = lastActivityRef.current + idleLockMinutes * 60_000;
     const checkDeadline = () => {
       const remaining = deadline - Date.now();
       if (remaining <= 0) {
@@ -154,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       inactivityTimerRef.current = setTimeout(checkDeadline, Math.min(remaining, 60_000));
     };
     checkDeadline();
-  }, [authenticatedUserId, clearInactivityTimer, isSessionLocked, requiresPasswordChange]);
+  }, [authenticatedUserId, clearInactivityTimer, idleLockMinutes, isSessionLocked, requiresPasswordChange]);
 
   const unlockSession = useCallback(
     async (password: string) => {
@@ -164,6 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Password is required');
       }
       await authApi.reauthenticate({ password: trimmed });
+      lastActivityRef.current = Date.now();
       sessionStorage.removeItem('isSessionLocked');
       setIsSessionLocked(false);
       setUnlockPassword('');
@@ -173,12 +205,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [scheduleInactivityLock, user],
   );
-  const logout = useCallback(async (reason?: string) => {
-    try {
-      await authApi.logout();
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
+  const clearLocalSession = useCallback((reason?: string) => {
+      cancelSessionRenewal();
       tokenStore.remove('accessToken');
       tokenStore.remove('refreshToken');
       sessionStorage.removeItem('isSessionLocked');
@@ -187,65 +215,107 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMyCap(null);
       setIsSessionLocked(false);
       setRequiresMfa(false);
+      setRequiresPasswordChange(false);
+      setLoading(false);
+      setReconnecting(false);
       clearInactivityTimer();
+      if (Capacitor.isNativePlatform()) {
+        void Promise.all([Preferences.remove({ key: 'accessToken' }), Preferences.remove({ key: 'refreshToken' })]).catch(() => undefined);
+      }
       navigate(reason ? `/login?reason=${reason}` : '/login');
-    }
   }, [clearInactivityTimer, navigate]);
 
+  const logout = useCallback(async (reason?: string) => {
+    markSessionSignedOut();
+    const request = authApi.logout();
+    clearLocalSession(reason);
+    try { await request; } catch { /* Local sign-out remains final during an outage. */ }
+  }, [clearLocalSession]);
+
   useEffect(() => {
-    // Check for existing token and fetch user profile
-    const initAuth = async () => {
-      const token = tokenStore.get('accessToken');
-        if (token || !Capacitor.isNativePlatform()) {
-        if (sessionStorage.getItem('isSessionLocked') === 'true') {
-          setIsSessionLocked(true);
-        }
+    const onSignOut = (event: StorageEvent) => { if (isSignOutStorageEvent(event)) { observeSessionSignOut(); clearLocalSession(); } };
+    window.addEventListener('storage', onSignOut);
+    return () => window.removeEventListener('storage', onSignOut);
+  }, [clearLocalSession]);
+
+  useEffect(() => {
+    if (!insideApplication || hasSignedOut()) { setLoading(false); setReconnecting(false); return; }
+    let disposed = false;
+    let pending = false;
+    let retryDelay = 2000;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const generation = recoveryGeneration();
+    const current = () => !disposed && canRecoverSession() && generation === recoveryGeneration();
+    if (!currentUserRef.current) setLoading(true);
+    if (sessionStorage.getItem('isSessionLocked') === 'true') setIsSessionLocked(true);
+    const verifySession = async () => {
+      if (pending || !current()) return;
+      pending = true;
+      clearTimeout(retryTimer);
+      try {
+        const token = tokenStore.get('accessToken');
+        let profile = await authApi.getProfile();
+        const capabilities = await usersApi.getMyCapabilities();
+        if (!current()) return;
+        const previous = currentUserRef.current;
+        let previousRole = previous?.role;
         try {
-          const profile = await authApi.getProfile();
-
-            let jwtRole = null;
-          try {
-            if (token) {
-              const payload = parseJwt(token);
-              if (payload) jwtRole = payload.role;
-            }
-          } catch (err) { /* ignore */ }
-
-            const roleChanged = jwtRole && jwtRole !== profile.role;
-
-          setUser(profile);
-
-          if (profile.requiresPasswordChange) {
-            setRequiresPasswordChange(true);
-          }
-
-          if (profile.requiresMfa) {
-            setRequiresMfa(true);
-          }
-
-          if (roleChanged) {
-            enqueueSnackbar('Your role has been updated. Please log in again to apply changes.', {
-              variant: 'info',
-            });
-            setTimeout(() => logout('role_changed'), 1500);
-          } else {
-            await usersApi
-              .getMyCapabilities()
-              .then(setMyCap)
-              .catch(() => { setMyCap(null); });
-          }
-        } catch (error) {
-          tokenStore.remove('accessToken');
-          tokenStore.remove('refreshToken');
-          sessionStorage.removeItem('isSessionLocked');
-          setIsSessionLocked(false);
+          if (token) previousRole = parseJwt(token)?.role || previousRole;
+        } catch { /* Identity authority remains with the server. */ }
+        if (previousRole && previousRole !== profile.role) {
+          enqueueSnackbar('Your role has been updated. Please log in again to apply changes.', { variant: 'info' });
+          await logout('role_changed');
+          return;
         }
-      }
-      setLoading(false);
+        if (previous) {
+          const oldUnits = (previous.units || []).map(unit => Number(unit.id)).sort((a, b) => a - b).join(',');
+          const newUnits = (profile.units || []).map(unit => Number(unit.id)).sort((a, b) => a - b).join(',');
+          if (oldUnits !== newUnits) {
+            profile = await refreshSession();
+            if (!current()) return;
+            enqueueSnackbar('Your unit access was updated from the personnel directory.', { variant: 'info' });
+          }
+        }
+        setUser(profile);
+        setMyCap(capabilities);
+        setRequiresPasswordChange(!!profile.requiresPasswordChange);
+        setRequiresMfa(!!profile.requiresMfa);
+        setLoading(false);
+        setReconnecting(false);
+        retryDelay = 2000;
+      } catch (error) {
+        if (!current()) return;
+        if (isRejectedSession(error)) { await logout('session_expired'); return; }
+        setReconnecting(true);
+        retryTimer = setTimeout(() => void verifySession(), retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 30_000);
+      } finally { pending = false; }
     };
+    const retry = () => { void verifySession(); };
+    retrySessionRef.current = retry;
+    void verifySession();
+    const heartbeat = setInterval(retry, 60_000);
+    window.addEventListener('online', retry);
+    window.addEventListener('focus', retry);
+    return () => {
+      disposed = true;
+      clearTimeout(retryTimer);
+      clearInterval(heartbeat);
+      window.removeEventListener('online', retry);
+      window.removeEventListener('focus', retry);
+      if (retrySessionRef.current === retry) retrySessionRef.current = () => {};
+    };
+  }, [insideApplication, enqueueSnackbar, logout, refreshSession]);
 
-    initAuth();
-  }, [enqueueSnackbar, logout]);
+  useEffect(() => {
+    if (reconnecting && user) {
+      enqueueSnackbar('Connection temporarily unavailable. Reconnecting without signing you out.', {
+        key: 'session-reconnecting', variant: 'warning', persist: true,
+        action: <Button color="inherit" onClick={retrySession}>Retry</Button>,
+      });
+    } else closeSnackbar('session-reconnecting');
+    return () => closeSnackbar('session-reconnecting');
+  }, [reconnecting, !!user, enqueueSnackbar, retrySession]);
 
   useEffect(() => {
     if (!authenticatedUserId || loading || requiresPasswordChange) {
@@ -255,22 +325,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const activityHandler = () => {
       if (!isSessionLocked && !requiresPasswordChange) {
+        if (Date.now() < lastActivityRef.current + idleLockMinutes * 60_000) {
+          lastActivityRef.current = Date.now();
+        }
         scheduleInactivityLock();
       }
     };
 
     const visibilityHandler = () => {
       if (document.visibilityState !== 'visible' || isSessionLocked || requiresPasswordChange) return;
-      if (inactivityDeadlineRef.current && Date.now() >= inactivityDeadlineRef.current) {
-        clearInactivityTimer();
-        sessionStorage.setItem('isSessionLocked', 'true');
-        setIsSessionLocked(true);
-        setUnlockPassword('');
-        setShowUnlockPassword(false);
-        setUnlockError(null);
-      } else {
-        scheduleInactivityLock();
-      }
+      scheduleInactivityLock();
     };
 
     const events: Array<keyof WindowEventMap> = [
@@ -294,63 +358,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [
     authenticatedUserId,
     clearInactivityTimer,
+    idleLockMinutes,
     isSessionLocked,
     loading,
     requiresPasswordChange,
     scheduleInactivityLock,
   ]);
-
-  // ── Heartbeat: verify session every 60 s while logged in ─────────────────
-  // If the account is deactivated server-side, getProfile() returns 401 →
-  // the axios interceptor attempts a token refresh → refresh also fails for
-  // deactivated users → tokens are cleared and the user is redirected to
-  // /login?reason=session_expired automatically.
-  useEffect(() => {
-    if (!user || requiresPasswordChange || isSessionLocked) return;
-
-    const id = setInterval(async () => {
-      try {
-        const profile = await authApi.getProfile();
-        let jwtRole = user?.role;
-        const token = tokenStore.get('accessToken');
-        try {
-          if (token) {
-            const payload = parseJwt(token);
-            if (payload) jwtRole = payload.role;
-          }
-        } catch (err) { /* ignore */ }
-
-        const roleChanged = jwtRole && jwtRole !== profile.role;
-        const currentUnitIds = (user.units || []).map((unit) => Number(unit.id)).sort((a, b) => a - b);
-        const profileUnitIds = (profile.units || []).map((unit) => Number(unit.id)).sort((a, b) => a - b);
-        const unitChanged = currentUnitIds.join(',') !== profileUnitIds.join(',');
-
-        setUser(profile); // Immediately reflect visual changes to account
-
-        if (roleChanged) {
-          enqueueSnackbar('Your role has been updated. Please log in again to apply changes.', {
-            variant: 'info',
-          });
-          setTimeout(() => logout('role_changed'), 1500);
-        } else {
-          if (unitChanged) {
-            await refreshSession();
-            enqueueSnackbar('Your unit access was updated from the personnel directory.', {
-              variant: 'info',
-            });
-          }
-          try {
-            const caps = await usersApi.getMyCapabilities();
-            setMyCap(caps);
-          } catch (err) { /* ignore */ }
-        }
-      } catch (err) {
-        // 401 is handled by the axios interceptor; other errors are safe to ignore
-      }
-    }, 60_000); // 60 s
-
-    return () => clearInterval(id);
-  }, [user, enqueueSnackbar, isSessionLocked, requiresPasswordChange, logout, refreshSession]);
 
   const login = async (email: string, password: string, redirectTo?: string) => {
     sessionStorage.removeItem('changelog-prompt-checked');
@@ -370,6 +383,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenStore.set('refreshToken', response.refreshToken);
       saveTokensToPreferences(response.accessToken, response.refreshToken);
     }
+    completeInteractiveSignIn();
     // Set user from login response first (includes units now)
     setUser(response.user as any);
     if (response.requiresPasswordChange) {
@@ -398,6 +412,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenStore.set('refreshToken', response.refreshToken);
       saveTokensToPreferences(response.accessToken, response.refreshToken);
     }
+    if (!response.requiresMfa) completeInteractiveSignIn();
     setUser(response.user as any);
     if (response.requiresPasswordChange) {
       setRequiresPasswordChange(true);
@@ -461,6 +476,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tokenStore.set('accessToken', res.accessToken);
         tokenStore.set('refreshToken', res.refreshToken);
       }
+      lastActivityRef.current = Date.now();
       sessionStorage.removeItem('isSessionLocked');
       setIsSessionLocked(false);
       scheduleInactivityLock();
@@ -478,6 +494,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user,
           myCap,
           loading,
+          reconnecting,
+          retrySession,
           login,
           loginWithGoogle,
            logout,
@@ -497,7 +515,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         <DialogTitle>Session Locked</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            For security, your session was locked after 15 minutes of inactivity.
+            For security, your session was locked after {idleLockMinutes} {idleLockMinutes === 1 ? 'minute' : 'minutes'} of inactivity.
           </Typography>
           <Box mt={2} mb={2} display="flex" flexDirection="column" alignItems="center">
             <Alert severity="info" sx={{ width: '100%', mb: 2 }}>

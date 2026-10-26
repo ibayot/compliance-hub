@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import axios, { AxiosError, AxiosInstance } from 'axios';
+import { canRecoverSession, markSessionSignedOut, recoveryGeneration, isRejectedSession } from '../auth/session-recovery';
 
 // Use Vite proxy in dev (/api is proxied to localhost:4000/api by vite.config.ts).
 // VITE_API_URL can override for production deployments if necessary, but we force '/api' 
@@ -59,18 +60,58 @@ export const tokenStore = {
 
 class ApiClient {
   private client: AxiosInstance;
-  /** Guard: only one token-refresh attempt runs at a time */
-  private isRefreshing = false;
-  /** Queue of request callbacks waiting for the refresh to complete */
-  private failedQueue: Array<{ resolve: (token: string | null) => void; reject: (err: unknown) => void }> =
-    [];
+  private refreshFlight: Promise<{ accessToken?: string; refreshToken?: string }> | null = null;
+  private refreshGeneration = -1;
+  private refreshAbort: AbortController | null = null;
 
-  private processQueue(error: unknown, token: string | null) {
-    this.failedQueue.forEach((prom) => {
-      if (error) prom.reject(error);
-      else prom.resolve(token!);
-    });
-    this.failedQueue = [];
+  cancelRenewal(): void { this.refreshAbort?.abort(); }
+
+  private rejectSession(): void {
+    if (!canRecoverSession()) return;
+    markSessionSignedOut();
+    tokenStore.remove('accessToken');
+    tokenStore.remove('refreshToken');
+    window.location.replace('/login?reason=session_expired');
+  }
+
+  refreshAuthentication(): Promise<{ accessToken?: string; refreshToken?: string }> {
+    const generation = recoveryGeneration();
+    if (this.refreshFlight && this.refreshGeneration === generation) return this.refreshFlight;
+    const renew = async () => {
+      if (!canRecoverSession() || generation !== recoveryGeneration()) throw new Error('Session recovery cancelled.');
+      const native = Capacitor.isNativePlatform();
+      const refreshToken = tokenStore.get('refreshToken');
+      if (native && !refreshToken) {
+        throw Object.assign(new Error('No refresh credential.'), { response: { status: 401 } });
+      }
+      const controller = new AbortController();
+      this.refreshAbort = controller;
+      let response;
+      try {
+        response = await axios.post(
+          apiUrl('/auth/refresh'), native ? { refreshToken } : {},
+          { withCredentials: true, timeout: 15_000, signal: controller.signal, headers: { 'X-Client-Platform': native ? 'mobile' : 'browser' } },
+        );
+      } finally { if (this.refreshAbort === controller) this.refreshAbort = null; }
+      if (!canRecoverSession() || generation !== recoveryGeneration()) throw new Error('Session recovery cancelled.');
+      const tokens = response.data || {};
+      if (native && (!tokens.accessToken || !tokens.refreshToken)) throw new Error('Incomplete session renewal response.');
+      if (tokens.accessToken) tokenStore.set('accessToken', tokens.accessToken);
+      else if (!native) tokenStore.remove('accessToken');
+      if (tokens.refreshToken) tokenStore.set('refreshToken', tokens.refreshToken);
+      else if (!native) tokenStore.remove('refreshToken');
+      return tokens;
+    };
+    // Serialize browser-cookie rotation across tabs when Web Locks are supported.
+    const request = !Capacitor.isNativePlatform() && typeof navigator !== 'undefined' && navigator.locks
+      ? navigator.locks.request('compliance-hub:session-refresh', renew) : renew();
+    const flight = request.catch(error => {
+      if (generation === recoveryGeneration() && isRejectedSession(error)) this.rejectSession();
+      throw error;
+    }).finally(() => { if (this.refreshFlight === flight) this.refreshFlight = null; });
+    this.refreshGeneration = generation;
+    this.refreshFlight = flight;
+    return flight;
   }
 
   constructor() {
@@ -109,73 +150,31 @@ class ApiClient {
       async (error: AxiosError) => {
         const originalRequest = error.config as any;
 
-        if (error.response?.status !== 401 || originalRequest._retry) {
+        if (!originalRequest || error.response?.status !== 401) {
           return Promise.reject(error);
         }
-
-        // Skip interceptor for authentication endpoints
-        const url = originalRequest.url || '';
-        if (url.includes('/auth/')) {
-          return Promise.reject(error);
-        }
-
-        originalRequest._retry = true;
 
         if (typeof window === 'undefined') return Promise.reject(error);
-
-        const refreshToken = tokenStore.get('refreshToken');
-        // No refresh token at all — clear access token and redirect immediately
-        const isBrowser = !Capacitor.isNativePlatform();
-        const isAuthPage = window.location.pathname === '/login'
-          || window.location.pathname.startsWith('/mfa-verify')
-          || window.location.pathname === '/rate'
-          || window.location.pathname.startsWith('/rate/');
-        // Browser refresh tokens are HttpOnly cookies and invisible to JavaScript.
-        if (!refreshToken && !isBrowser) {
-          tokenStore.remove('accessToken');
-          if (!isAuthPage) window.location.href = '/login?reason=session_expired';
+        const path = new URL(originalRequest.url || '', window.location.origin).pathname;
+        // Password/MFA/login errors never renew a session. The profile probe may renew once.
+        if ((path.includes('/auth/') && !path.endsWith('/auth/me')) || !canRecoverSession()) {
           return Promise.reject(error);
         }
-
-        // If a refresh is already in flight, queue this request
-        if (this.isRefreshing) {
-            return new Promise<string | null>((resolve, reject) => {
-              this.failedQueue.push({ resolve, reject });
-            })
-            .then((token) => {
-              if (token) originalRequest.headers.Authorization = `Bearer ${token}`;
-              else delete originalRequest.headers.Authorization;
-              return this.client(originalRequest);
-            })
-            .catch(() => Promise.reject(error));
+        if (originalRequest._retry) {
+          this.rejectSession();
+          return Promise.reject(error);
         }
-
-        this.isRefreshing = true;
-
+        originalRequest._retry = true;
         try {
-            const response = await axios.post(
-              `${API_URL}/auth/refresh`,
-              Capacitor.isNativePlatform() ? { refreshToken } : {},
-              { withCredentials: true, headers: { 'X-Client-Platform': Capacitor.isNativePlatform() ? 'mobile' : 'browser' } },
-            );
-            const { accessToken, refreshToken: rotatedRefreshToken } = response.data || {};
-            if (accessToken) tokenStore.set('accessToken', accessToken);
-            if (rotatedRefreshToken) tokenStore.set('refreshToken', rotatedRefreshToken);
-          if (accessToken) originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+          await this.refreshAuthentication();
+          if (!canRecoverSession()) return Promise.reject(error);
+          const token = tokenStore.get('accessToken');
+          if (token) originalRequest.headers.Authorization = `Bearer ${token}`;
           else delete originalRequest.headers.Authorization;
-          this.processQueue(null, accessToken || null);
           return this.client(originalRequest);
         } catch (refreshError) {
-          // Refresh failed (e.g. user deactivated) — log out and notify
-          this.processQueue(refreshError, null);
-          tokenStore.remove('accessToken');
-          tokenStore.remove('refreshToken');
-          const errorMessage = (refreshError as any)?.response?.data?.message || '';
-          const reason = errorMessage.includes('deactivated') ? 'deactivated' : 'session_expired';
-          if (!isAuthPage) window.location.href = `/login?reason=${reason}`;
+          // A timeout, network error or 5xx is an outage, not proof of revoked credentials.
           return Promise.reject(refreshError);
-        } finally {
-          this.isRefreshing = false;
         }
       },
     );
@@ -186,4 +185,7 @@ class ApiClient {
   }
 }
 
-export const apiClient = new ApiClient().instance;
+const owner = new ApiClient();
+export const apiClient = owner.instance;
+export const refreshAuthentication = () => owner.refreshAuthentication();
+export const cancelSessionRenewal = () => owner.cancelRenewal();

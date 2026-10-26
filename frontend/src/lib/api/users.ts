@@ -248,6 +248,11 @@ export const usersApi = {
     return response.data;
   },
 
+  getSessionPolicy: async (): Promise<{ idleLockMinutes: number }> => {
+    const response = await apiClient.get('/users/security-config/session-policy');
+    return response.data;
+  },
+
   updateSecurityConfig: async (payload: {
     defaultPassword?: string;
     mfaTestMode?: boolean;
@@ -255,6 +260,7 @@ export const usersApi = {
     appMode?: string;
     googleSignInEnabled?: boolean;
     allowedEmailDomains?: string[];
+    idleLockMinutes?: number;
   }) => {
     const response = await apiClient.put('/users/security-config', payload);
     return response.data;

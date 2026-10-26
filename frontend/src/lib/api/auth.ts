@@ -1,5 +1,12 @@
-import { apiClient } from './client';
+import { apiClient, cancelSessionRenewal, refreshAuthentication, tokenStore } from './client';
 import { LoginCredentials, AuthResponse, User } from '../types/auth';
+
+let pendingLogout: Promise<void> | null = null;
+
+async function prepareInteractiveSignIn(): Promise<void> {
+  await pendingLogout;
+  cancelSessionRenewal();
+}
 
 export const authApi = {
   getPublicConfig: async (): Promise<{ googleSignInEnabled: boolean }> => {
@@ -8,6 +15,7 @@ export const authApi = {
   },
 
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
+    await prepareInteractiveSignIn();
     let deviceToken = localStorage.getItem('deviceToken');
     if (!deviceToken) {
       deviceToken =
@@ -24,6 +32,7 @@ export const authApi = {
   },
 
   loginWithGoogle: async (payload: { idToken: string }): Promise<AuthResponse> => {
+    await prepareInteractiveSignIn();
     let deviceToken = localStorage.getItem('deviceToken');
     if (!deviceToken) {
       deviceToken =
@@ -40,7 +49,12 @@ export const authApi = {
   },
 
   logout: async (): Promise<void> => {
-    await apiClient.post('/auth/logout');
+    cancelSessionRenewal();
+    const token = tokenStore.get('accessToken');
+    const request = apiClient.post('/auth/logout', {}, { timeout: 15_000, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    const settled = request.then(() => undefined, () => undefined);
+    pendingLogout = settled;
+    try { await request; } finally { if (pendingLogout === settled) pendingLogout = null; }
   },
 
   sendMfaCode: async (): Promise<{ message: string }> => {
@@ -49,6 +63,7 @@ export const authApi = {
   },
 
   verifyMfaCode: async (tempToken: string, code: string, rememberDevice: boolean): Promise<any> => {
+    await prepareInteractiveSignIn();
     let deviceToken = localStorage.getItem('deviceToken');
     if (!deviceToken) {
       deviceToken =
@@ -73,9 +88,8 @@ export const authApi = {
     return response.data;
   },
 
-  refresh: async (refreshToken: string): Promise<{ accessToken?: string; refreshToken?: string }> => {
-    const response = await apiClient.post('/auth/refresh', { refreshToken });
-    return response.data;
+  refresh: async (_refreshToken: string): Promise<{ accessToken?: string; refreshToken?: string }> => {
+    return refreshAuthentication();
   },
 
   changePassword: async (payload: {

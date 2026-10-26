@@ -17,6 +17,7 @@ import {
 import { authApi } from '@/lib/api/auth';
 import { enqueueSnackbar } from 'notistack';
 import { tokenStore } from '@/lib/api/client';
+import { completeInteractiveSignIn } from '@/lib/auth/session-recovery';
 
 export default function MfaVerifyPage() {
   const navigate = useNavigate();
@@ -56,6 +57,7 @@ export default function MfaVerifyPage() {
     setError(null);
     try {
       const response = await authApi.verifyMfaCode(tempToken, code, rememberDevice);
+      completeInteractiveSignIn();
       enqueueSnackbar('MFA Verification successful.', { variant: 'success' });
       
       // Native clients receive bearer tokens; browser clients use HttpOnly cookies.

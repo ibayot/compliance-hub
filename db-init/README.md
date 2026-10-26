@@ -14,6 +14,16 @@ ticket-routing reference data, while transactional ticket data is empty.
 
 ## Incremental release updates
 
+For prepared version **1.0.27**, after the 1.0.26 prerequisites:
+
+1. Verify the Users target in `20261026-add-idle-lock-minutes-users.sql` and apply it before deploying the updated Users service. The additive, repeatable migration defaults existing and new configurations to 15 minutes without overwriting a configured value on repeated apply. Fresh installs apply it after the Users base schema.
+2. Verify the Users target and apply `20261026-add-application-changelog-v1.0.27-users.sql`. Reapplying preserves publication dates and acknowledgment history and supplies separate End User notes.
+3. Rebuild the backend/frontend and rebuild the native bundle if distributing the mobile application. These SQL files are environment-managed and local-only; Git pull does not include them. They have not been applied to production.
+
+The new duration controls the existing client screen lock, not token lifetime. Existing sessions refresh it within a minute while running and on returning to the application; locked sessions remain locked. Retain the additive column during rollback: older clients continue using their fixed 15-minute limit. No data reset or backfill is needed.
+
+This release also corrects session recovery during service restarts. Deploy the Users service fix and frontend together: temporary renewal failures return 503, while actual invalid/revoked credentials still return 401. The frontend retries verification only inside protected routes and waits for service readiness before a build refresh. Keep existing JWT signing secrets, issuer/audience and cookie names stable across routine deployments; retain durable database/revocation data. Do not regenerate credentials or recreate volumes as a deployment step. Users already at the login screen sign in normally once; the update does not resurrect signed-out sessions. No production configuration has been changed or verified by this preparation.
+
 For prepared version **1.0.26**, after the 1.0.25 prerequisites:
 
 1. Verify the target database in `20261026-add-overtime-routing-ticketing.sql` and apply it before deploying the updated ticketing service. This repeatable additive migration adds OT calendar and ticket provenance fields; no historical tickets are backfilled or reassigned.

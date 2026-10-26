@@ -370,7 +370,8 @@ const capabilityManuals: ManualItem[] = [
     details: {
       purpose: 'As a security administrator I need to manage application-wide security controls so that compliance and access protocols are enforced.',
       activities: [
-        { name: 'Configure default passwords', description: 'As a security administrator I need to set the default password that is assigned to newly created or reset user accounts so that standard onboarding security is maintained.' }
+        { name: 'Configure default passwords', description: 'As a security administrator I need to set the default password that is assigned to newly created or reset user accounts so that standard onboarding security is maintained.' },
+        { name: 'Configure the idle password prompt', description: 'Set Idle password prompt (minutes) from 1 to 1440 for all users. Enter 60 for one hour or 1440 for one day; the default is 15 minutes. Save Settings to apply the duration. Users are still required to verify their password when their session is locked.' }
       ],
       results: [
         { name: 'Apply security controls', description: 'As a security administrator I need to ensure that any user whose password matches the default password is required to change it upon their next login.' }

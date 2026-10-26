@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, HttpException, HttpStatus, Optional } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, HttpException, HttpStatus, Optional, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -467,15 +467,19 @@ export class AuthService {
         throw new UnauthorizedException('Account has been deactivated.');
       }
 
+      const tokens = await this.generateTokens(user);
       await this.tokenBlacklistRepo.save({
         tokenJti: payload.jti,
         expiresAt: new Date(payload.exp * 1000),
       });
 
-      const tokens = await this.generateTokens(user);
       return { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
     } catch (error) {
-      throw new UnauthorizedException('Invalid refresh token');
+      if (error instanceof UnauthorizedException || error instanceof NotFoundException ||
+        ['TokenExpiredError', 'JsonWebTokenError', 'NotBeforeError'].includes(error?.name)) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+      throw new ServiceUnavailableException('Session verification is temporarily unavailable. Please retry.');
     }
   }
 

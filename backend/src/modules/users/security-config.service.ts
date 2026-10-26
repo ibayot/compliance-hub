@@ -32,12 +32,16 @@ export class SecurityConfigService {
         id: 1,
         defaultPassword: 'Changeme123!@#',
         googleSignInEnabled: true,
+        idleLockMinutes: 15,
         allowedEmailDomains: SecurityConfigService.DEFAULT_ALLOWED_EMAIL_DOMAINS,
       });
       await this.configRepository.save(config);
     }
     if (!Array.isArray(config.allowedEmailDomains) || config.allowedEmailDomains.length === 0) {
       config.allowedEmailDomains = [...SecurityConfigService.DEFAULT_ALLOWED_EMAIL_DOMAINS];
+    }
+    if (!Number.isInteger(config.idleLockMinutes) || config.idleLockMinutes < 1 || config.idleLockMinutes > 1440) {
+      config.idleLockMinutes = 15;
     }
     return config;
   }
@@ -63,8 +67,14 @@ export class SecurityConfigService {
     appMode?: string;
     googleSignInEnabled?: boolean;
     allowedEmailDomains?: string[];
+    idleLockMinutes?: number;
   }): Promise<SecurityConfig> {
+    if (dto.idleLockMinutes !== undefined &&
+      (!Number.isInteger(dto.idleLockMinutes) || dto.idleLockMinutes < 1 || dto.idleLockMinutes > 1440)) {
+      throw new BadRequestException('Idle password prompt must be a whole number from 1 to 1440 minutes.');
+    }
     const config = await this.getConfig();
+    if (dto.idleLockMinutes !== undefined) config.idleLockMinutes = dto.idleLockMinutes;
     if (dto.defaultPassword !== undefined) config.defaultPassword = dto.defaultPassword;
     if (dto.mfaTestMode !== undefined) config.mfaTestMode = dto.mfaTestMode;
     if (dto.vaptMode !== undefined) {
