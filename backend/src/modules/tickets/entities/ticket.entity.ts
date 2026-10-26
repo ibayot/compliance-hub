@@ -14,6 +14,7 @@ import { TicketComment } from './ticket-comment.entity';
 import { TicketCategoryConfig } from './ticket-category.entity';
 import { TicketIssueType } from './ticket-issue-type.entity';
 import type { ResolutionTiming, SlaPauseLedger } from '../services/ticket-sla-pause';
+import { dateTransformer } from './date.transformer';
 
 export enum TicketType {
   DESKTOP_SUPPORT = 'desktop_support',
@@ -67,6 +68,15 @@ export class Ticket {
    */
   @Column({ name: 'ticket_type', type: 'varchar', length: 30, default: TicketType.IT_SUPPORT })
   ticketType: TicketType;
+
+  /** Immutable filing-day provenance; changing the calendar never rewrites ticket ownership. */
+  @Column({ name: 'overtime_date', type: 'date', nullable: true, transformer: dateTransformer })
+  overtimeDate: string | null;
+
+  @Column({ name: 'overtime_sla_date', type: 'date', nullable: true, transformer: dateTransformer })
+  overtimeSlaDate: string | null;
+
+  canClaimOvertime?: boolean;
 
   @Column({ type: 'varchar', length: 20, default: TicketStatus.OPEN })
   status: TicketStatus;

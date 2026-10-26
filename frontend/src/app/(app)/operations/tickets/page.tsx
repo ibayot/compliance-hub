@@ -92,6 +92,7 @@ import { resolveTicketListEntry, restoreTicketListEntry, TICKET_ENTRY_QUERY_KEYS
 import { ticketFilterPanelSx, ticketFilterGridSx, ticketSearchSx, ticketFilterShortcutsSx } from '@/lib/utils/ticket-filter-layout';
 import { usersApi, UserRecord } from '@/lib/api/users';
 import { useSse } from '@/lib/utils/useSse';
+import OvertimeTicketQueue from '@/components/OvertimeTicketQueue';
 import { formatPersonName } from '@/lib/utils/person-name';
 import { getTicketSlaStatus as getSlaStatus } from '@/lib/utils/ticket-sla-status';
 
@@ -1492,6 +1493,7 @@ export default function TicketsPage({
 
   return (
     <Box>
+      {personalRequestedOnly && user?.role !== 'user' && <OvertimeTicketQueue key={user?.id} />}
       <Box
         display="flex"
         flexWrap="wrap"
@@ -3273,7 +3275,8 @@ export default function TicketsPage({
             )}
 
             <Alert severity="info" sx={{ fontSize: '0.82rem' }}>
-              Tickets are auto-assigned to available technicians.
+              On regular office days, tickets are automatically routed to available staff. During OT,
+              staff-filed proxy requests belong to the filer; personal requests stay Open for another OT participant.
               {globalConfig &&
                 (globalConfig.isEmailNotificationsEnabled === false ? (
                   <strong style={{ display: 'block', marginTop: '4px', color: '#d32f2f' }}>

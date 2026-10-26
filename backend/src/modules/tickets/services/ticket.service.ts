@@ -62,6 +62,7 @@ import { UserRole } from '../../shared/entities';
 import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
 import { TicketSettingsService } from './ticket-settings.service';
 import { AttendanceService } from './attendance.service';
+import { isOvertimeStaff, overtimeReadScope } from './overtime-ticket-policy';
 import { EmailService, TicketEmailData } from './email.service';
 import { SseService } from './sse.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
@@ -641,7 +642,7 @@ export class TicketService implements OnModuleInit {
       config.scheduleMode === 'CWW' ? config.cwwClockoutEnd : config.officeClockout;
     const today = this.getManilaDateString(now);
     const currentTime = this.getManilaTimeString(now);
-    const todayIsOfficeDay = await this.attendanceService.isOfficeDay(today);
+    const todayIsOfficeDay = config.overtimeSlaDate === today || await this.attendanceService.isOfficeDay(today);
 
     if (todayIsOfficeDay && currentTime < clockoutTime) {
       return this.createManilaDate(today, resumeTime);
@@ -649,7 +650,7 @@ export class TicketService implements OnModuleInit {
 
     for (let dayOffset = 1; dayOffset <= 14; dayOffset++) {
       const date = this.addManilaDays(today, dayOffset);
-      if (await this.attendanceService.isOfficeDay(date)) {
+      if (config.overtimeSlaDate === date || await this.attendanceService.isOfficeDay(date)) {
         return this.createManilaDate(date, resumeTime);
       }
     }
@@ -668,6 +669,8 @@ export class TicketService implements OnModuleInit {
     slaResumeAt: Date | null;
     slaResumeCanBeEarly: boolean;
   }> {
+    config = this.ticketCalendar(config, ticket);
+    if (ticket.overtimeSlaDate) scheduledResumeAt = undefined;
     let isOverdue = false;
     let isNearingSLA = false;
     // Duplicate is an administrative outcome, not a successful resolution.
@@ -1038,6 +1041,17 @@ export class TicketService implements OnModuleInit {
 
   async sendNotification(userIds: number[], ticketId: string, eventType: string, message: string) {
     try {
+      if (!userIds.length) return;
+      const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
+      if (ticket?.overtimeDate) {
+        const users = await this.usersHttpClient.getUsers();
+        const readableIds: number[] = [];
+        for (const user of users.filter(user => userIds.includes(Number(user.id)))) {
+          try { await this.assertTicketReadAccess(ticket, user.id, user.role as UserRole); readableIds.push(user.id); }
+          catch { /* No ticket details are disclosed to former OT pool viewers. */ }
+        }
+        userIds = readableIds;
+      }
       await this.notificationService.create(userIds, { ticketId, eventType, message });
     } catch (e) {
       this.logger.error('Failed to send ticket notification.');
@@ -1194,6 +1208,15 @@ export class TicketService implements OnModuleInit {
     viewerRole?: UserRole,
   ): Promise<void> {
     if (!viewerRole || !viewerId) return;
+    if (ticket.overtimeDate) {
+      if (this.isOvertimeAdministrator(viewerRole)) return;
+      const own = [ticket.requesterId, ticket.createdById, ticket.assignedToId].some(id => Number(id) === Number(viewerId));
+      if (own) return;
+      if (ticket.status === TicketStatus.OPEN && !ticket.assignedToId && isOvertimeStaff(viewerRole) &&
+        await this.attendanceService.hasOvertimeClockIn(viewerId, ticket.overtimeDate)) return;
+      if (isOvertimeStaff(viewerRole) && await this.canAccessTicketByEscalation(ticket.id, Number(viewerId))) return;
+      throw new ForbiddenException('This overtime ticket is not available to you.');
+    }
     if (this.canViewAllTicketsInTicketing(viewerRole as string)) return;
     const vId = Number(viewerId);
     // Allow access to: requester, assigned tech, the person who created it (proxy filer)
@@ -1287,6 +1310,68 @@ export class TicketService implements OnModuleInit {
   }
 
   // --- Create (with Auto-Shift, Auto-Assign, Email) -------------------------
+
+  private isOvertimeAdministrator(role?: string): boolean {
+    if (role === UserRole.USER) return false;
+    return role === UserRole.SUPER_ADMIN || !!role &&
+      (this.roleCapSvc.isTicketSettingsFocal(role) || this.roleCapSvc.isTicketFocal(role));
+  }
+
+  private applyOvertimeReadScope(qb: SelectQueryBuilder<Ticket>, alias: string, viewerId?: number, role?: string): void {
+    if (!viewerId || !role || this.isOvertimeAdministrator(role)) return;
+    qb.andWhere(overtimeReadScope(alias, viewerId, isOvertimeStaff(role)), { otViewerId: viewerId });
+  }
+
+  private async canClaimOvertime(ticket: Ticket, userId: number, role: string): Promise<boolean> {
+    return !!ticket.overtimeDate && ticket.status === TicketStatus.OPEN && !ticket.assignedToId &&
+      Number(ticket.requesterId) !== Number(userId) && isOvertimeStaff(role) &&
+      (ticket.ticketType !== TicketType.SPECIALIZED_CONCERNS || this.roleCapSvc.isSpecializedSupport(role)) &&
+      await this.attendanceService.hasOvertimeClockIn(userId, ticket.overtimeDate);
+  }
+
+  async getOvertimeOpenTickets(userId: number, role: string, page = 1) {
+    if (!isOvertimeStaff(role) && !this.isOvertimeAdministrator(role)) throw new ForbiddenException('Staff access is required.');
+    if (!Number.isInteger(page) || page < 1) throw new BadRequestException('Invalid page.');
+    const qb = this.ticketRepo.createQueryBuilder('t')
+      .where('t.overtime_date IS NOT NULL AND t.status = :status AND t.assigned_to_id IS NULL', { status: TicketStatus.OPEN })
+      .orderBy('t.createdAt', 'ASC').skip((page - 1) * 25).take(25);
+    this.applyOvertimeReadScope(qb, 't', userId, role);
+    const [tickets, total] = await qb.getManyAndCount();
+    for (const ticket of tickets) ticket.canClaimOvertime = await this.canClaimOvertime(ticket, userId, role);
+    return { data: tickets, total, page, totalPages: Math.max(1, Math.ceil(total / 25)) };
+  }
+
+  async claimOvertimeTicket(id: string, userId: number, role: string): Promise<Ticket> {
+    await this.withAutoAssignmentLock(async () => this.dataSource.transaction(async manager => {
+      const repository = manager.getRepository(Ticket);
+      const ticket = await repository.findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
+      if (!ticket) throw new NotFoundException('Ticket not found.');
+      if (!ticket.overtimeDate || ticket.status !== TicketStatus.OPEN || ticket.assignedToId) {
+        throw new ConflictException('This ticket has already been acquired or is no longer Open.');
+      }
+      const staff = await manager.query('SELECT id, role FROM users WHERE id = ? AND active = 1', [userId]);
+      if (!staff[0] || staff[0].role !== role || !await this.canClaimOvertime(ticket, userId, role)) {
+        throw new ForbiddenException('A valid clock-in on the original OT day is required; you cannot acquire your own request.');
+      }
+      const busy = await repository.count({ where: { assignedToId: userId, status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE]) } });
+      const now = new Date();
+      const today = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+      ticket.assignedToId = userId;
+      ticket.lastAssignedAt = now;
+      ticket.overtimeSlaDate = today === ticket.overtimeDate ? today : null;
+      ticket.status = busy ? TicketStatus.ASSIGNED : TicketStatus.IN_PROGRESS;
+      ticket.isSlaWaiting = busy > 0;
+      ticket.slaStartedAt = busy ? null : now;
+      ticket.slaDeadline = busy ? null : await this.calculateTicketSlaDeadline(ticket, now);
+      await repository.save(ticket);
+    }));
+    this.sseService.emitTicketUpdated(id);
+    this.logEvent(id, 'manually_assigned', userId, { technicianId: userId, source: 'overtime_claim' }).catch(() => undefined);
+    const acquired = await this.getTicketById(id, role as UserRole, userId);
+    this.sendNotification([userId, acquired.requesterId], id, 'ticket_assigned',
+      `Ticket ${acquired.ticketNumber} has been acquired and assigned.`).catch(() => undefined);
+    return acquired;
+  }
 
   private async canAutomaticallyAssign(
     technicianId: number, poolType: string, date: string, requesterId: number,
@@ -1446,8 +1531,24 @@ export class TicketService implements OnModuleInit {
     let isSlaWaiting = false;
     let shouldStartInProgress = false;
     let automaticAssignmentPool: string | null = null;
+    const filingDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    const overtimeDate = await this.attendanceService.isOvertimeDay(filingDate) ? filingDate : null;
+    const overtimeFiler = overtimeDate && isOvertimeStaff(callerRole) && Number(requesterId) !== Number(callerId);
 
-    if (dto.assignedToId != null) {
+    if (overtimeDate) {
+      if (dto.assignedToId != null && (!overtimeFiler || Number(dto.assignedToId) !== Number(callerId))) {
+        throw new BadRequestException('OT proxy requests belong to the staff filer; personal requests remain Open for another OT participant.');
+      }
+      if (overtimeFiler) {
+        assignedTech = await this.usersHttpClient.getUserById(callerId);
+        if (!assignedTech || assignedTech.active === false) throw new ForbiddenException('The filer is not an active staff member.');
+        this.assertSpecializedAssigneeEligibility(ticketType, assignedTech);
+        assignedToId = callerId;
+        const busy = await this.ticketRepo.count({ where: { assignedToId: callerId, status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE]) } });
+        shouldStartInProgress = busy === 0;
+        isSlaWaiting = busy > 0;
+      }
+    } else if (dto.assignedToId != null) {
       if (!callerRole || !this.roleCapSvc.isTicketSettingsFocal(callerRole as string)) {
         throw new ForbiddenException(
           'Only Ticket Administrators can assign a technician during ticket creation.',
@@ -1665,7 +1766,7 @@ export class TicketService implements OnModuleInit {
 
     const slaStartedAt = status === TicketStatus.IN_PROGRESS ? new Date() : null;
     const slaDeadline = slaStartedAt
-      ? await this.calculateTicketSlaDeadline({ issueTypeId, categoryId }, slaStartedAt)
+      ? await this.calculateTicketSlaDeadline({ issueTypeId, categoryId, overtimeSlaDate: overtimeFiler ? overtimeDate : null }, slaStartedAt)
       : null;
 
     const ticket = this.ticketRepo.create({
@@ -1673,6 +1774,8 @@ export class TicketService implements OnModuleInit {
       subject: dto.subject.trim(),
       description: dto.description.trim(),
       ticketType: ticketType,
+      overtimeDate,
+      overtimeSlaDate: overtimeFiler ? overtimeDate : null,
       priority: dto.priority ?? null,
       status,
       categoryId,
@@ -1755,7 +1858,7 @@ export class TicketService implements OnModuleInit {
     ).catch(() => {});
 
     if (assignedToId && assignedTech) {
-      const manuallySelected = dto.assignedToId != null;
+      const manuallySelected = dto.assignedToId != null || !!overtimeFiler;
       this.logEvent(
         saved.id,
         manuallySelected ? 'manually_assigned' : 'auto_assigned',
@@ -1764,7 +1867,7 @@ export class TicketService implements OnModuleInit {
           previousAssigneeId: null,
           technicianId: assignedTech.id,
           technicianName: formatPersonName(assignedTech, assignedTech.email),
-          source: manuallySelected ? 'ticket_creation_manual' : 'ticket_creation_auto',
+          source: overtimeFiler ? 'overtime_filer' : manuallySelected ? 'ticket_creation_manual' : 'ticket_creation_auto',
         },
       ).catch(() => {});
     }
@@ -1826,7 +1929,7 @@ export class TicketService implements OnModuleInit {
     // return Object.assign(saved, { autoShifted, autoAssigned: !!assignedToId, noTechAvailable });
     return Object.assign(persisted, {
       autoShifted,
-      autoAssigned: !!assignedToId,
+      autoAssigned: !!assignedToId && !overtimeDate,
       noTechAvailable,
     });
   }
@@ -1963,7 +2066,9 @@ export class TicketService implements OnModuleInit {
           qb.andWhere('t.assignedToId = :aid', { aid: filters.assignedToId });
       } else {
         // Other staff may see their assignments and tickets they requested or filed as proxy.
-        qb.where('(t.assignedToId = :uid OR t.requesterId = :uid OR t.createdById = :uid)', {
+        qb.where(`(t.assignedToId = :uid OR t.requesterId = :uid OR t.createdById = :uid OR
+          (t.overtime_date IS NOT NULL AND t.status = 'open' AND t.assigned_to_id IS NULL AND
+          EXISTS (SELECT 1 FROM attendance ota WHERE ota.user_id = :uid AND ota.date = t.overtime_date AND ota.status = 'present' AND ota.clock_in_time IS NOT NULL)))`, {
           uid: filters.viewerId,
         });
         if (filters.ticketType)
@@ -1973,6 +2078,7 @@ export class TicketService implements OnModuleInit {
       }
     }
 
+    this.applyOvertimeReadScope(qb, 't', filters.viewerId, filters.viewerRole);
     if (filters.priority) qb.andWhere('t.priority = :priority', { priority: filters.priority });
 
     // Apply optional text search before pagination so totals remain accurate.
@@ -2154,6 +2260,8 @@ export class TicketService implements OnModuleInit {
     if (!ticket) throw new NotFoundException('Ticket not found');
     await this.enrichTicketsWithUsers([ticket], true);
     await this.assertTicketReadAccess(ticket, viewerId, viewerRole);
+
+    if (ticket.overtimeDate) ticket.canClaimOvertime = !!viewerId && !!viewerRole && await this.canClaimOvertime(ticket, viewerId, viewerRole);
     const resolutionTimeOverrides = await this.getResolutionTimeOverrideHistory(ticket.id);
 
     // IN_PROGRESS tickets are active; repair legacy rows that still carry the queue flag.
@@ -3400,7 +3508,7 @@ export class TicketService implements OnModuleInit {
           let businessSecondsElapsed = await this.calculateBusinessSeconds(
             ticket.slaPausedAt,
             now,
-            config as TicketingConfig,
+            this.ticketCalendar(config, ticket) as TicketingConfig,
           );
           businessSecondsElapsed = capManualPauseBusinessSeconds(
             originalStatusForLogging,
@@ -3416,7 +3524,7 @@ export class TicketService implements OnModuleInit {
                 ticket.issueTypeConfig.slaHours,
                 ticket.accumulatedPauseSeconds,
               ),
-              config as TicketingConfig,
+              this.ticketCalendar(config, ticket) as TicketingConfig,
             );
           }
           ticket.slaPausedAt = null;
@@ -3567,7 +3675,7 @@ export class TicketService implements OnModuleInit {
             let pausedTimeSeconds = await this.calculateBusinessSeconds(
               ticket.slaPausedAt,
               now,
-              config as TicketingConfig,
+              this.ticketCalendar(config, ticket) as TicketingConfig,
             );
             pausedTimeSeconds = capManualPauseBusinessSeconds(
               originalStatusForLogging,
@@ -3583,7 +3691,7 @@ export class TicketService implements OnModuleInit {
                   ticket.issueTypeConfig.slaHours,
                   ticket.accumulatedPauseSeconds,
                 ),
-                config as TicketingConfig,
+                this.ticketCalendar(config, ticket) as TicketingConfig,
               );
             }
           }
@@ -3791,6 +3899,7 @@ export class TicketService implements OnModuleInit {
           if (!isSeniorTech) {
             // Check technician is available today before assigning
             const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+            const isPickupOfficeDay = await this.attendanceService.isOfficeDay(today);
             const presentTechs = await this.attendanceService.getAutoAssignmentTechnicians(
               'all',
               today,
@@ -3823,13 +3932,15 @@ export class TicketService implements OnModuleInit {
                     .createQueryBuilder('t')
                     .where('t.status = :status', { status: TicketStatus.OPEN })
                     .andWhere('t.assignedToId IS NULL')
+                    .andWhere('(t.overtime_date IS NULL OR (t.overtime_date < :pickupDate AND :pickupOfficeDay = 1))', { pickupDate: today, pickupOfficeDay: isPickupOfficeDay ? 1 : 0 })
                     .andWhere('t.ticketType != :specializedType', {
                       specializedType: TicketType.SPECIALIZED_CONCERNS,
                     })
                     .andWhere('t.requesterId != :assignedToId', {
                       assignedToId: assignedTechnicianId,
                     })
-                    .orderBy('t.createdAt', 'ASC')
+                    .orderBy('CASE WHEN t.overtime_date IS NULL THEN 1 ELSE 0 END', 'ASC')
+                    .addOrderBy('t.createdAt', 'ASC')
                     .getOne();
                   if (nextTicket) {
                     const assignmentConfig = await this.configRepo.findOne({ where: { id: 1 } });
@@ -4067,6 +4178,7 @@ export class TicketService implements OnModuleInit {
 
     ticket.assignedToId = dto.assignedToId;
     ticket.lastAssignedAt = new Date();
+    if (ticket.overtimeDate === todayStr && !ticket.overtimeSlaDate) ticket.overtimeSlaDate = todayStr;
     // The first active ticket assigned to a staff member starts immediately.
     // Keep the existing queue behavior when that staff member already has work.
     if (
@@ -4361,7 +4473,15 @@ export class TicketService implements OnModuleInit {
     }
 
     const users = await this.usersHttpClient.getUsers();
-    return users
+    const readableUsers = [];
+    for (const user of users) {
+      if (ticket.overtimeDate) {
+        try { await this.assertTicketReadAccess(ticket, Number(user.id), user.role as UserRole); }
+        catch { continue; }
+      }
+      readableUsers.push(user);
+    }
+    return readableUsers
       .filter(
         (user) =>
           user.active !== false &&
@@ -4702,6 +4822,8 @@ export class TicketService implements OnModuleInit {
     month?: number;
     quarter?: number;
     semester?: number;
+    viewerId?: number;
+    viewerRole?: string;
   }): Promise<{
     total: number;
     byStatus: Record<string, number>;
@@ -4730,6 +4852,7 @@ export class TicketService implements OnModuleInit {
       }
     }
 
+    this.applyOvertimeReadScope(qb, 't', filters?.viewerId, filters?.viewerRole);
     const all = await qb.getMany();
     const byStatus: Record<string, number> = {};
     const byType: Record<string, number> = {};
@@ -4819,6 +4942,7 @@ export class TicketService implements OnModuleInit {
       qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
     }
 
+    this.applyOvertimeReadScope(qb, 't', filters.viewerId, filters.viewerRole);
     const tickets = await qb.orderBy('t.satisfactionSubmittedAt', 'DESC').getMany();
     await this.enrichTicketsWithUsers(tickets);
 
@@ -5009,6 +5133,7 @@ export class TicketService implements OnModuleInit {
     } else if (viewerRole && !this.canViewAllTicketsInTicketing(viewerRole as string)) {
       qb.andWhere('(t.requesterId = :viewerId OR t.assignedToId = :viewerId)', { viewerId });
     }
+    this.applyOvertimeReadScope(qb, 't', viewerId, viewerRole);
 
     const tickets = await qb.getMany();
     await this.enrichTicketsWithUsers(tickets);
@@ -5073,6 +5198,8 @@ export class TicketService implements OnModuleInit {
   async getGeneralOverviewStats(
     year: number,
     month: number,
+    viewerId?: number,
+    viewerRole?: string,
   ): Promise<{
     total: number;
     open: number;
@@ -5089,11 +5216,12 @@ export class TicketService implements OnModuleInit {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
-    const tickets = await this.ticketRepo
+    const query = this.ticketRepo
       .createQueryBuilder('t')
       .where('t.createdAt >= :startDate', { startDate })
-      .andWhere('t.createdAt <= :endDate', { endDate })
-      .getMany();
+      .andWhere('t.createdAt <= :endDate', { endDate });
+    this.applyOvertimeReadScope(query, 't', viewerId, viewerRole);
+    const tickets = await query.getMany();
     await this.enrichTicketsWithUsers(tickets);
 
     let open = 0,
@@ -5384,11 +5512,21 @@ export class TicketService implements OnModuleInit {
             ? [TicketType.IT_SUPPORT, TicketType.DESKTOP_SUPPORT, TicketType.PANTAWID_ICT_SUPPORT]
             : [TicketType.PANTAWID_ICT_SUPPORT, TicketType.DESKTOP_SUPPORT, TicketType.IT_SUPPORT];
       let pending: Ticket | null = null;
+      if (isOfficeDayToday) {
+        pending = await this.ticketRepo.createQueryBuilder('t')
+          .where('t.status = :status AND t.assignedToId IS NULL', { status: TicketStatus.OPEN })
+          .andWhere('t.overtime_date < :pickupDate', { pickupDate: today })
+          .andWhere('t.ticketType IN (:...pendingTypes)', { pendingTypes })
+          .andWhere('t.requesterId != :techId', { techId })
+          .orderBy('t.createdAt', 'ASC').getOne();
+      }
       for (const pendingType of pendingTypes) {
+        if (pending) break;
         pending = await this.ticketRepo
           .createQueryBuilder('t')
           .where('t.status = :status', { status: TicketStatus.OPEN })
           .andWhere('t.assignedToId IS NULL')
+          .andWhere('(t.overtime_date IS NULL OR (t.overtime_date < :pickupDate AND :pickupOfficeDay = 1))', { pickupDate: today, pickupOfficeDay: isOfficeDayToday ? 1 : 0 })
           .andWhere('t.ticketType = :type', { type: pendingType })
           .andWhere('t.requesterId != :techId', { techId })
           .orderBy('t.createdAt', 'ASC')
@@ -5397,6 +5535,8 @@ export class TicketService implements OnModuleInit {
       }
 
       if (!pending) return;
+      // OT carryovers are first picked up on an ordinary office day, never on another OT day.
+      if (pending.overtimeDate && (!(await this.attendanceService.isOfficeDay(today)) || await this.attendanceService.isOvertimeDay(today))) return;
 
       pending.assignedToId = techId;
       const hasBreachedTicket = await this.hasBreachedActiveTicket(techId);
@@ -5937,6 +6077,7 @@ export class TicketService implements OnModuleInit {
       qb = qb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
     }
 
+    this.applyOvertimeReadScope(qb, 't', filters.viewerId, filters.viewerRole);
     const tickets = await qb.getMany();
     await this.enrichTicketsWithUsers(tickets);
 
@@ -5949,6 +6090,7 @@ export class TicketService implements OnModuleInit {
       totalQb = totalQb.andWhere('t.assignedToId = :techId', { techId: techIdFilter });
     if (filters.ticketType)
       totalQb = totalQb.andWhere('t.ticketType = :ticketType', { ticketType: filters.ticketType });
+    this.applyOvertimeReadScope(totalQb, 't', filters.viewerId, filters.viewerRole);
     const allTickets = await totalQb.getMany();
     await this.enrichTicketsWithUsers(allTickets);
     const totalTickets = allTickets.length;
@@ -6692,6 +6834,7 @@ export class TicketService implements OnModuleInit {
     resumeAt: Date,
     config: TicketingConfig,
   ): Promise<boolean> {
+    config = this.ticketCalendar(config, ticket);
     if (!ticket.slaPausedAt) return false;
     const pausedAt = new Date(ticket.slaPausedAt);
 
@@ -6792,6 +6935,30 @@ export class TicketService implements OnModuleInit {
       });
     }
     return resumedTickets.length;
+  }
+
+  async processOvertimeSlaSchedule(config: TicketingConfig, now = new Date()): Promise<void> {
+    const today = this.getManilaDateString(now);
+    const time = this.getManilaTimeString(now);
+    const start = config.scheduleMode === 'CWW' ? config.cwwClockinStart : config.officeClockin;
+    const end = config.scheduleMode === 'CWW' ? config.cwwClockoutStart : config.officeClockout;
+    const inWorkingHours = time >= start && time < end && !(time >= '12:00:00' && time < '13:00:00');
+    const tickets = await this.ticketRepo.find({
+      where: { status: TicketStatus.IN_PROGRESS, isSlaWaiting: false }, relations: ['issueTypeConfig'],
+    });
+    const changed: Ticket[] = [];
+    for (const ticket of tickets) {
+      if (ticket.overtimeSlaDate === today && inWorkingHours) {
+        if (await this.applySlaResume(ticket, now, config)) changed.push(ticket);
+      } else if (!ticket.slaPausedAt && ticket.slaStartedAt) {
+        ticket.slaPausedAt = now;
+        changed.push(ticket);
+      }
+    }
+    if (changed.length) {
+      await this.ticketRepo.save(changed);
+      changed.forEach(ticket => this.sseService.emitTicketUpdated(ticket.id));
+    }
   }
 
   async pauseAllActiveTickets(technicianId?: number): Promise<number> {
@@ -7009,13 +7176,17 @@ export class TicketService implements OnModuleInit {
       ticket.slaDeadline = await this.calculateSlaDeadline(
         new Date(ticket.slaStartedAt),
         creditedSlaHours,
-        config,
+        this.ticketCalendar(config, ticket),
       );
     } else {
       ticket.slaDeadline = new Date(
         new Date(ticket.slaStartedAt).getTime() + creditedSlaHours * 60 * 60 * 1000,
       );
     }
+  }
+
+  private ticketCalendar<T extends TicketingConfig | null>(config: T, ticket: { overtimeSlaDate?: string | null }): T {
+    return config && ticket.overtimeSlaDate ? { ...config, overtimeSlaDate: ticket.overtimeSlaDate } : config;
   }
 
   private async calculateTicketSlaDeadline(
@@ -7026,7 +7197,7 @@ export class TicketService implements OnModuleInit {
     if (!slaHours) return null;
 
     const config = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
-    if (config) return this.calculateSlaDeadline(start, slaHours, config);
+    if (config) return this.calculateSlaDeadline(start, slaHours, this.ticketCalendar(config, ticket));
 
     return new Date(start.getTime() + Number(slaHours) * 60 * 60 * 1000);
   }
@@ -7110,7 +7281,7 @@ export class TicketService implements OnModuleInit {
     while (remainingHours > 0) {
       if (++guard > 200000) throw new ServiceUnavailableException('The SLA calendar could not produce a complete deadline.');
       const dateString = getManilaDateString(current);
-      const isOfficeDay = await this.attendanceService.isOfficeDay(dateString);
+      const isOfficeDay = config.overtimeSlaDate === dateString || await this.attendanceService.isOfficeDay(dateString);
 
       if (!isOfficeDay) {
         current = advanceToNextDayStart(current);
@@ -7182,7 +7353,7 @@ export class TicketService implements OnModuleInit {
           ticket.issueTypeConfig.slaHours,
           ticket.accumulatedPauseSeconds,
         ),
-        config,
+        this.ticketCalendar(config, ticket),
       );
       if (
         ticket.slaDeadline &&
@@ -7275,10 +7446,12 @@ export class TicketService implements OnModuleInit {
     while (current < end) {
       if (++guard > maxIterations) throw new ServiceUnavailableException('The SLA calendar did not progress through the complete interval.');
       const dateString = getManilaDateString(current);
-      let isOfficeDay = officeDayCache?.get(dateString);
+      // Do not share an OT-specific result with another ticket's ordinary calendar.
+      const calendarKey = `${config.overtimeSlaDate || 'ordinary'}:${dateString}`;
+      let isOfficeDay = officeDayCache?.get(calendarKey);
       if (isOfficeDay === undefined) {
-        isOfficeDay = await this.attendanceService.isOfficeDay(dateString);
-        officeDayCache?.set(dateString, isOfficeDay);
+        isOfficeDay = config.overtimeSlaDate === dateString || await this.attendanceService.isOfficeDay(dateString);
+        officeDayCache?.set(calendarKey, isOfficeDay);
       }
 
       if (!isOfficeDay) {
@@ -7333,11 +7506,12 @@ export class TicketService implements OnModuleInit {
   }
 
   private async calculateTicketActiveResolutionHours(
-    ticket: Pick<Ticket, 'slaStartedAt' | 'accumulatedPauseSeconds'> & Partial<Pick<Ticket, 'slaPauseLedger' | 'resolutionTimeOverride' | 'resolutionTiming'>>,
+    ticket: Pick<Ticket, 'slaStartedAt' | 'accumulatedPauseSeconds'> & Partial<Pick<Ticket, 'slaPauseLedger' | 'resolutionTimeOverride' | 'resolutionTiming' | 'overtimeSlaDate'>>,
     resolvedAt: Date,
     config: TicketingConfig | null,
     officeDayCache?: Map<string, boolean>,
   ): Promise<number | null> {
+    config = this.ticketCalendar(config, ticket);
     const timing = await resolutionTiming(ticket, resolvedAt, (start, end) => config
       ? this.calculateBusinessSeconds(start, end, config, officeDayCache)
       : Promise.resolve(Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000))));
@@ -7636,6 +7810,7 @@ export class TicketService implements OnModuleInit {
     if (filters.ticketType)
       qb.andWhere('ticket.ticketType = :ticketType', { ticketType: filters.ticketType });
 
+    this.applyOvertimeReadScope(qb, 'ticket', filters.viewerId, filters.viewerRole);
     const [tickets, users, reportConfig] = await Promise.all([
       qb.getMany(),
       this.usersHttpClient.getUsers(),

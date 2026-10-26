@@ -293,6 +293,9 @@ const parseKeywordListField = (rawKeywords: unknown, fallbackKeyword?: unknown):
 };
 
 export interface Ticket {
+  overtimeDate?: string | null;
+  overtimeSlaDate?: string | null;
+  canClaimOvertime?: boolean;
   id: string;
   ticketNumber: string;
   subject: string;
@@ -790,6 +793,7 @@ export interface TechAttendance {
 }
 
 export interface OfficeDay {
+  isOvertime?: boolean;
   id: string;
   date: string;
   isOfficeDay: boolean;
@@ -1078,6 +1082,10 @@ export interface PaginatedTickets {
 
 // Tickets API (IT Help Desk)
 export const ticketsApi = {
+  getOvertimeOpen: async (page = 1): Promise<{ data: Ticket[]; total: number; page: number; totalPages: number }> =>
+    (await apiClient.get('/tickets/overtime-open', { params: { page } })).data,
+  claimOvertime: async (id: string): Promise<Ticket> =>
+    (await apiClient.post(`/tickets/${id}/claim-overtime`)).data,
   getWeeklyPerformance: async (): Promise<WeeklyPerformanceSummary> => {
     const response = await apiClient.get<WeeklyPerformanceSummary>('/tickets/weekly-performance');
     return response.data;
@@ -2009,6 +2017,7 @@ export const attendanceApi = {
   setOfficeDay: async (data: {
     date: string;
     isOfficeDay: boolean;
+    isOvertime?: boolean;
     notes?: string;
   }): Promise<OfficeDay> => {
     const response = await apiClient.post(`/attendance/office-days`, data);

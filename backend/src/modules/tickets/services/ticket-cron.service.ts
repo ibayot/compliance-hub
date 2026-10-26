@@ -162,6 +162,11 @@ export class TicketCronService implements OnModuleInit {
 
   private async processSlaSchedules(config: TicketingConfig) {
     if (config.isFlagCeremonyPaused) return;
+    const overtimeToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    if (await this.attendanceService.isOvertimeDay(overtimeToday)) {
+      await this.ticketService.processOvertimeSlaSchedule(config);
+      return;
+    }
 
     const now = new Date();
     const manilaNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
@@ -334,7 +339,7 @@ export class TicketCronService implements OnModuleInit {
       const pausedBusinessSeconds = await this.ticketService.calculateBusinessSecondsForSla(
         ticket.slaPausedAt,
         now,
-        config,
+        ticket.overtimeSlaDate ? { ...config, overtimeSlaDate: ticket.overtimeSlaDate } : config,
       );
 
       if (pausedBusinessSeconds >= allowableSeconds) {
@@ -456,13 +461,13 @@ export class TicketCronService implements OnModuleInit {
             totalSlaSeconds - await this.ticketService.calculateBusinessSecondsForSla(
               now,
               ticket.slaDeadline,
-              config,
+              ticket.overtimeSlaDate ? { ...config, overtimeSlaDate: ticket.overtimeSlaDate } : config,
             ),
           )
         : totalSlaSeconds + await this.ticketService.calculateBusinessSecondsForSla(
             ticket.slaDeadline,
             now,
-            config,
+            ticket.overtimeSlaDate ? { ...config, overtimeSlaDate: ticket.overtimeSlaDate } : config,
           );
       const percentage = (elapsedSeconds / totalSlaSeconds) * 100;
 

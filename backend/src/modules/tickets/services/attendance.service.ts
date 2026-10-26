@@ -62,6 +62,11 @@ export class SetOfficeDayDto {
   @IsBoolean()
   @ApiProperty()
   isOfficeDay: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  @ApiPropertyOptional()
+  isOvertime?: boolean;
   @IsOptional()
   @IsString()
   @ApiPropertyOptional()
@@ -455,6 +460,7 @@ export class AttendanceService implements OnModuleInit {
    * selected explicitly by an authorized user.
    */
   async getAutoAssignmentTechnicians(ticketType: string, date: string): Promise<User[]> {
+    if (await this.isOvertimeDay(date)) return [];
     // Attendance eligibility alone is not a ticket-handling capability. In
     // particular, the broad fallback must not route tickets to attendance-only staff.
     const groups = await this.getRoleGroups();
@@ -601,19 +607,21 @@ export class AttendanceService implements OnModuleInit {
 
     if (record) {
       record.isOfficeDay = dto.isOfficeDay;
+      if (dto.isOvertime !== undefined) record.isOvertime = dto.isOvertime;
       record.notes = dto.notes ?? record.notes;
       record.setById = setById;
     } else {
       record = this.officeDayRepo.create({
         date: dto.date,
         isOfficeDay: dto.isOfficeDay,
+        isOvertime: dto.isOvertime ?? false,
         notes: dto.notes ?? null,
         setById,
       });
     }
 
     const saved = await this.officeDayRepo.save(record);
-    await this.eventBus.publish('office-day.changed', { date: dto.date, isOfficeDay: dto.isOfficeDay });
+    await this.eventBus.publish('office-day.changed', { date: dto.date, isOfficeDay: dto.isOfficeDay, isOvertime: saved.isOvertime });
     this.sseService.emitAttendanceUpdated();
     return saved;
   }
@@ -622,16 +630,27 @@ export class AttendanceService implements OnModuleInit {
   /** Check if a specific date is an office day. Default: weekdays are office days */
   async isOfficeDay(date: string): Promise<boolean> {
     const record = await this.officeDayRepo.findOne({ where: { date } });
-    if (record) return record.isOfficeDay;
+    // OT is optional staffing, not an extra SLA day for unrelated tickets.
+    if (record) return record.isOfficeDay && !record.isOvertime;
     // Default: Mon-Fri are office days
     const dayOfWeek = new Date(date + 'T00:00:00').getDay();
     return dayOfWeek >= 1 && dayOfWeek <= 5;
+  }
+
+  async isOvertimeDay(date: string): Promise<boolean> {
+    return (await this.officeDayRepo.findOne({ where: { date } }))?.isOvertime === true;
+  }
+
+  async hasOvertimeClockIn(userId: number, date: string): Promise<boolean> {
+    const record = await this.attendanceRepo.findOne({ where: { userId, date, status: AttendanceStatus.PRESENT } });
+    return !!record?.clockInTime;
   }
 
   // ── Non-attendance report (for scheduled cron) ──────────────────────────
 
   /** Get all RICTMS staff who haven't logged in today (for non-attendance consolidation) */
   async getNonAttendantStaff(date: string): Promise<User[]> {
+    if (await this.isOvertimeDay(date)) return [];
     // All active non-user staff
     const staff = await this.userRepo
       .createQueryBuilder('u')
@@ -718,6 +737,7 @@ export class AttendanceService implements OnModuleInit {
   }
 
   async markMissingAttendanceAsAbsent(date: string): Promise<number> {
+    if (await this.isOvertimeDay(date)) return 0;
     if (
       !this.isDtrViewOnline ||
       this.lastSuccessfulDtrSyncDate !== date ||
@@ -818,7 +838,10 @@ export class AttendanceService implements OnModuleInit {
 
       // 5. Upsert the records
       let savedCount = 0;
-      for (const dtr of dtrRecords) {
+      // Verified arrivals must be processed in clock-in order for pending-ticket pickup.
+      const chronologicalDtr = [...dtrRecords].sort((a, b) =>
+        new Date(a.firstClockInTime || 0).getTime() - new Date(b.firstClockInTime || 0).getTime());
+      for (const dtr of chronologicalDtr) {
         if (!dtr.firstClockInTime) {
           continue;
         }
@@ -872,6 +895,7 @@ export class AttendanceService implements OnModuleInit {
         });
         
         // Trigger assignment
+        await this.eventBus.publish('attendance.verified', { userId: tech.id });
       }
       return savedCount > 0;
     } catch (err: any) {

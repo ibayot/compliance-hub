@@ -27,6 +27,7 @@ import {
   DialogActions,
   Button,
   TextField,
+  MenuItem,
 } from '@mui/material';
 import {
   ChevronLeft as PrevIcon,
@@ -106,6 +107,8 @@ export default function AttendancePage() {
 
   // Office days
   const [officeDays, setOfficeDays] = useState<OfficeDay[]>([]);
+  const [officeDaySelection, setOfficeDaySelection] = useState<{ date: string; type: 'office' | 'off' | 'overtime' } | null>(null);
+  const [savingOfficeDay, setSavingOfficeDay] = useState(false);
   const [odLoading, setOdLoading] = useState(false);
 
   const [attendance, setAttendance] = useState<TechAttendance[]>([]);
@@ -255,40 +258,21 @@ export default function AttendancePage() {
   const isOfficeDayForDate = (d: Date): boolean => {
     const key = formatDate(d);
     const od = odMap.get(key);
-    if (od) return od.isOfficeDay;
+    if (od) return od.isOfficeDay || !!od.isOvertime;
     return isWeekday(d);
   };
 
-  const toggleOfficeDay = async (d: Date) => {
+  const toggleOfficeDay = (d: Date) => {
     const dateStr = formatDate(d);
-    const current = isOfficeDayForDate(d);
-    const newValue = !current;
-
-    // Optimistic update — reflect change immediately without showing loading spinner
-    setOfficeDays((prev) => {
-      const idx = prev.findIndex((od) => od.date.slice(0, 10) === dateStr);
-      if (idx !== -1) {
-        const arr = [...prev];
-        arr[idx] = { ...arr[idx], isOfficeDay: newValue };
-        return arr;
-      }
-      // Create a local placeholder so the UI renders instantly
-      return [
-        ...prev,
-        {
-          id: `temp-${dateStr}`,
-          date: dateStr,
-          isOfficeDay: newValue,
-          notes: null,
-          setById: null,
-          createdAt: '',
-        } as any,
-      ];
-    });
-
+    setOfficeDaySelection({ date: dateStr, type: odMap.get(dateStr)?.isOvertime ? 'overtime' : isOfficeDayForDate(d) ? 'office' : 'off' });
+  };
+  const saveOfficeDay = async () => {
+    if (!officeDaySelection || savingOfficeDay) return;
+    const { date: dateStr, type } = officeDaySelection;
+    setSavingOfficeDay(true);
     try {
-      const updated = await attendanceApi.setOfficeDay({ date: dateStr, isOfficeDay: newValue });
-      // Replace the optimistic placeholder with the real server record
+      const updated = await attendanceApi.setOfficeDay({ date: dateStr, isOfficeDay: type !== 'off', isOvertime: type === 'overtime' });
+      // Reflect only the confirmed server result.
       setOfficeDays((prev) => {
         const idx = prev.findIndex((od) => od.date.slice(0, 10) === dateStr);
         if (idx !== -1) {
@@ -296,8 +280,10 @@ export default function AttendancePage() {
           arr[idx] = updated;
           return arr;
         }
-        return prev;
+        return [...prev, updated];
       });
+      setOfficeDaySelection(null);
+      enqueueSnackbar('Office calendar updated.', { variant: 'success' });
       // Silently refresh attendance presence indicators (no loading spinner)
       attendanceApi
         .getAttendance(startDate, endDate)
@@ -306,13 +292,13 @@ export default function AttendancePage() {
     } catch (err: any) {
       // Rollback: re-fetch silently to restore truthful server state
       attendanceApi
-        .getOfficeDays(String(month + 1), String(year))
+        .getOfficeDays(startDate, endDate)
         .then((data) => setOfficeDays(data))
         .catch(() => { });
       enqueueSnackbar(err?.response?.data?.message || 'Failed to update office day', {
         variant: 'error',
       });
-    }
+    } finally { setSavingOfficeDay(false); }
   };
 
   // Attendance records map: userId → (date → TechAttendance)
@@ -470,8 +456,8 @@ export default function AttendancePage() {
             ) : (
               <Box>
                 <Typography variant="body2" color="text.secondary" mb={2}>
-                  Click on today or a future date to toggle it as an office day. Past dates cannot
-                  be changed. Weekdays default to office days.
+                  Select today or a future date to choose Office, Off, or Overtime (OT). OT attendance is optional;
+                  staff without a clock-in are not automatically marked absent. Past dates remain locked.
                 </Typography>
                 <Box display="grid" gridTemplateColumns="repeat(7, 1fr)" gap={0.5}>
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
@@ -488,11 +474,16 @@ export default function AttendancePage() {
                   {days.map((d) => {
                     const isOffice = isOfficeDayForDate(d);
                     const dStr = formatDate(d);
+                    const isOvertime = !!odMap.get(dStr)?.isOvertime;
                     // Past dates are not clickable; today remains editable for emergency declarations.
                     const isPastOrToday = dStr < todayStr;
                     const isToday = dStr === todayStr;
                     return (
                       <Box
+                        component="button"
+                        type="button"
+                        disabled={!canManageOfficeDays || isPastOrToday}
+                        aria-label={`${dStr}: ${isOvertime ? 'Overtime' : isOffice ? 'Office' : 'Off'}`}
                         key={dStr}
                         data-testid={`office-day-${dStr}`}
                         data-office-day={isOffice ? 'true' : 'false'}
@@ -505,19 +496,20 @@ export default function AttendancePage() {
                           textAlign: 'center',
                           py: 1.5,
                           borderRadius: 1,
-                          bgcolor: isOffice ? 'success.light' : 'grey.200',
-                          color: isOffice ? 'success.contrastText' : 'text.disabled',
+                          bgcolor: isOvertime ? 'warning.light' : isOffice ? 'success.light' : 'grey.200',
+                          color: isOvertime ? 'warning.contrastText' : isOffice ? 'success.contrastText' : 'text.disabled',
                           cursor: canManageOfficeDays && !isPastOrToday ? 'pointer' : 'default',
                           opacity: isPastOrToday ? 0.55 : 1,
                           '&:hover': canManageOfficeDays && !isPastOrToday ? { opacity: 0.8 } : {},
                           border: isToday ? '2px solid' : 'none',
                           borderColor: 'primary.main',
+                          '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
                         }}
                       >
                         <Typography variant="body2" fontWeight={600}>
                           {d.getDate()}
                         </Typography>
-                        <Typography variant="caption">{isOffice ? 'Office' : 'Off'}</Typography>
+                        <Typography variant="caption">{isOvertime ? 'OT' : isOffice ? 'Office' : 'Off'}</Typography>
                         {isRICTMSStaff &&
                           isOffice &&
                           (() => {
@@ -815,6 +807,17 @@ export default function AttendancePage() {
         )}
       </Card>
       {/* Time Picker Dialog */}
+      <Dialog open={!!officeDaySelection} onClose={() => !savingOfficeDay && setOfficeDaySelection(null)} fullWidth maxWidth="sm" aria-labelledby="office-day-dialog-title">
+        <DialogTitle id="office-day-dialog-title">Office calendar — {officeDaySelection?.date}</DialogTitle>
+        <DialogContent>
+          <TextField autoFocus select fullWidth label="Day type" value={officeDaySelection?.type || 'off'} disabled={savingOfficeDay}
+            sx={{ mt: 1 }} onChange={event => setOfficeDaySelection(current => current && ({ ...current, type: event.target.value as 'office' | 'off' | 'overtime' }))}>
+            <MenuItem value="office">Office day</MenuItem><MenuItem value="off">Off day</MenuItem><MenuItem value="overtime">Overtime (OT)</MenuItem>
+          </TextField>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>OT uses voluntary clock-ins and manual ticket acquisition. Only requests filed and assigned on OT receive the extra SLA working day. Unclaimed requests enter automatic routing on a normal office day.</Typography>
+        </DialogContent>
+        <DialogActions><Button disabled={savingOfficeDay} onClick={() => setOfficeDaySelection(null)}>Cancel</Button><Button variant="contained" disabled={savingOfficeDay} onClick={() => void saveOfficeDay()}>{savingOfficeDay ? 'Saving…' : 'Save'}</Button></DialogActions>
+      </Dialog>
       <Dialog open={Boolean(timePickerData)} onClose={() => setTimePickerData(null)} maxWidth="sm" fullWidth>
         <DialogTitle>Set Clock-In Time</DialogTitle>
         <DialogContent>

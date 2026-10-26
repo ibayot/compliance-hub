@@ -295,12 +295,15 @@ export class TicketController {
     @Query('month') month?: string,
     @Query('quarter') quarter?: string,
     @Query('semester') semester?: string,
+    @Request() req?: any,
   ) {
     return this.ticketService.getStatistics({
       year: year ? Number(year) : undefined,
       month: month ? Number(month) : undefined,
       quarter: quarter ? Number(quarter) : undefined,
       semester: semester ? Number(semester) : undefined,
+      viewerId: req?.user?.id ?? req?.user?.userId,
+      viewerRole: req?.user?.role,
     });
   }
 
@@ -322,11 +325,13 @@ export class TicketController {
   /** GET /tickets/general-overview-stats?year=&month= */
   @Get('general-overview-stats')
   @RequireCapability('isReportsAccess')
-  async getGeneralOverviewStats(@Query('year') year?: string, @Query('month') month?: string) {
+  async getGeneralOverviewStats(@Query('year') year?: string, @Query('month') month?: string, @Request() req?: any) {
     const now = new Date();
     return this.ticketService.getGeneralOverviewStats(
       year ? Number(year) : now.getFullYear(),
       month ? Number(month) : now.getMonth() + 1,
+      req?.user?.id ?? req?.user?.userId,
+      req?.user?.role,
     );
   }
 
@@ -476,6 +481,17 @@ export class TicketController {
   @RequireCapability(['isTicketFocal', 'isTicketSettingsFocal'])
   async getAttendanceAssignmentAlerts() {
     return this.ticketService.getAttendanceAssignmentAlerts();
+  }
+
+  /** Original-OT-day acquisition pool, scoped by the ticket service. */
+  @Get('overtime-open')
+  async getOvertimeOpen(@Request() req: any, @Query('page') page?: string) {
+    return this.ticketService.getOvertimeOpenTickets(req.user.id ?? req.user.userId, req.user.role, page === undefined ? 1 : Number(page));
+  }
+
+  @Post(':id/claim-overtime')
+  async claimOvertime(@Param('id') id: string, @Request() req: any) {
+    return this.ticketService.claimOvertimeTicket(id, req.user.id ?? req.user.userId, req.user.role);
   }
 
   /** GET /tickets/:id/internal-note-mentions — ticket-specific @mention audience */

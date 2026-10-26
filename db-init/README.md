@@ -14,6 +14,14 @@ ticket-routing reference data, while transactional ticket data is empty.
 
 ## Incremental release updates
 
+For prepared version **1.0.26**, after the 1.0.25 prerequisites:
+
+1. Verify the target database in `20261026-add-overtime-routing-ticketing.sql` and apply it before deploying the updated ticketing service. This repeatable additive migration adds OT calendar and ticket provenance fields; no historical tickets are backfilled or reassigned.
+2. Verify the Users target and apply `20261026-add-application-changelog-v1.0.26-users.sql` for the capability-targeted and separately curated End User release notes. Existing acknowledgments are preserved.
+3. Rebuild the backend/frontend, and rebuild the native bundle separately if distributing the mobile application. These environment-managed SQL files are local-only, not delivered by Git pull. They have not been applied to production.
+
+OT calendar dates remain locked in the past. Retain the additive columns to preserve provenance. Once OT tickets exist, older builds do not enforce their restricted visibility: a rollback requires an OT-compatible access-control fix or blocking access to those records. Do not deploy before applying the migration.
+
 For the prepared application version **1.0.25**, after the normal 1.0.24 prerequisites:
 
 1. Verify the target database in `20261021-add-sla-pause-ledger-ticketing.sql`, then run it against Ticketing **before** starting the updated ticketing service. Fresh installs run it after the base ticket schema. Existing totals are retained without inventing historical intervals.

@@ -145,18 +145,19 @@ export class DutyService {
   }
 
   /** Duty selection follows attendance, office start, and the configured shift end. */
-  private async isAttendanceEligible(userId: number, date: string): Promise<boolean> {
+  private async isAttendanceEligible(userId: number, date: string, allowLate = false): Promise<boolean> {
     const [attendance, config] = await Promise.all([
       this.attendanceRepo.findOne({ where: { userId, date } }),
       this.configRepo.findOne({ where: { id: 1 } }),
     ]);
-    return this.isAttendanceRecordEligible(attendance, config, date);
+    return this.isAttendanceRecordEligible(attendance, config, date, allowLate);
   }
 
   private isAttendanceRecordEligible(
     attendance: TechAttendance | null | undefined,
     config: TicketingConfig | null,
     date: string,
+    allowLate = false,
   ): boolean {
     if (!attendance || attendance.status !== AttendanceStatus.PRESENT) return false;
     if (date !== this.today()) return true;
@@ -180,8 +181,10 @@ export class DutyService {
     }).format(clockIn);
     const clockInMinutes = this.timeToMinutes(clockInText);
     const cwwWindowEnd = this.timeToMinutes(config?.cwwClockinEnd);
-    if (isCww && clockInMinutes > cwwWindowEnd) return false;
-    if (!isCww && clockInMinutes > this.timeToMinutes(config?.officeClockin)) return false;
+    // Management can explicitly select a late but genuinely PRESENT reliever.
+    // Normal automatic rotation still requires an on-time clock-in.
+    if (!allowLate && isCww && clockInMinutes > cwwWindowEnd) return false;
+    if (!allowLate && !isCww && clockInMinutes > this.timeToMinutes(config?.officeClockin)) return false;
 
     if (isCww && clockInMinutes <= cwwWindowEnd) {
       const cwwStart = this.timeToMinutes(config?.cwwClockinStart);
@@ -427,7 +430,7 @@ export class DutyService {
         uniqueUserIds.forEach((userId) => markSelected(userId, dutyPeriod));
         const readiness = uniqueUserIds.map((userId) => ({
           userId,
-          attendanceEligible: isEligible(userId),
+          attendanceEligible: this.isAttendanceRecordEligible(attendanceByUser.get(userId), config, date, true),
           activeTicketCount: ticketCountByUser.get(userId) ?? 0,
         }));
         const unavailableCount = readiness.filter((row) => !row.attendanceEligible).length;
@@ -920,7 +923,7 @@ export class DutyService {
 
     if (reservation.meetingDate === this.today()) {
       for (const userId of selectedUserIds) {
-        if (!(await this.isAttendanceEligible(userId, reservation.meetingDate))) {
+        if (!(await this.isAttendanceEligible(userId, reservation.meetingDate, true))) {
           throw new BadRequestException('Every immediate reliever must have eligible PRESENT attendance today.');
         }
         const activeTickets = await this.ticketRepo.count({

@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.26] - 2026-10-26 - Overtime Requests and Immediate Relievers
+
+### Added
+- Attendance managers can declare today or a future date as Overtime. Clock-ins are voluntary, missing staff are not automatically marked absent, and automatic ticket routing is disabled on OT days.
+- OT requests filed on behalf of others by staff belong to the filer. Personal and regular-user requests remain Open for staff who clocked in on that OT day to acquire. Acquisition has one winner; other staff lose access after acquisition, while the requester, filer and ticket administrators retain access.
+- Unhandled OT requests enter ordinary-office-day routing. Only tickets filed and assigned during OT receive that extra SLA working day, using the configured working hours and pause rules.
+
+### Fixed
+- Immediate Reliever accepts a valid late PRESENT clock-in without changing normal rotation eligibility. Overview displays the management-selected reliever names, reason and readiness.
+
 ## [1.0.25] - 2026-10-21 - Ticket Workflow Improvements
 
 ### Changed

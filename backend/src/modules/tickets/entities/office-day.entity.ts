@@ -21,6 +21,9 @@ export class OfficeDay {
   @Column({ name: 'is_office_day', type: 'boolean', default: true })
   isOfficeDay: boolean;
 
+  @Column({ name: 'is_overtime', type: 'boolean', default: false })
+  isOvertime: boolean;
+
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 

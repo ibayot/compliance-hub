@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSse } from '@/lib/utils/useSse';
 import WeeklyTicketPerformance from '@/components/WeeklyTicketPerformance';
+import OvertimeTicketQueue from '@/components/OvertimeTicketQueue';
 import {
   Box,
   Typography,
@@ -934,6 +935,7 @@ export default function DashboardPage() {
       )}
 
       {/* Independent summary access does not grant report-management permissions. */}
+      {ticketingEnabled && user?.role !== 'user' && <OvertimeTicketQueue key={`ot-${user?.id}`} />}
       {ticketingEnabled && myCap?.isTicketPerformanceAccess && <WeeklyTicketPerformance key={user?.id} />}
       {/* Main Stats — hidden for all technicians */}
       {!isTechnicianAny && complianceEnabled && canViewDocuments && (

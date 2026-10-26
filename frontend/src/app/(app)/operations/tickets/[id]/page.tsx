@@ -263,6 +263,7 @@ export default function TicketDetailPage() {
 
   // Status/resolution update (staff)
   const [editingStatus, setEditingStatus] = useState(false);
+  const [claimingOvertime, setClaimingOvertime] = useState(false);
   const [newStatus, setNewStatus] = useState('');
   const [newPriority, setNewPriority] = useState('');
   const [resolutionNotes, setResolutionNotes] = useState('');
@@ -708,6 +709,7 @@ export default function TicketDetailPage() {
           .catch(() => {});
       }
     } catch (err: any) {
+      if ([403, 404].includes(err.response?.status)) setTicket(null);
       enqueueSnackbar(err.response?.data?.message || 'Failed to fetch ticket', {
         variant: 'error',
       });
@@ -1453,6 +1455,12 @@ export default function TicketDetailPage() {
 
             {/* Keep the main action visible; secondary actions retain the same guards. */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifySelf: { xs: 'start', sm: 'end' } }}>
+              {ticket.canClaimOvertime && <Button variant="contained" size="small" disabled={claimingOvertime} onClick={async () => {
+                setClaimingOvertime(true);
+                try { setTicket(await ticketsApi.claimOvertime(ticket.id)); await fetchTicket(); await fetchEvents(); enqueueSnackbar('Ticket acquired and assigned to you.', { variant: 'success' }); }
+                catch (e: any) { enqueueSnackbar(e.response?.data?.message || 'Unable to acquire ticket.', { variant: 'error' }); if ([403, 409].includes(e.response?.status)) { setTicket(null); router.push('/operations/my-tickets'); } }
+                finally { setClaimingOvertime(false); }
+              }}>{claimingOvertime ? 'Acquiring…' : 'Get Ticket'}</Button>}
               {detailActionKeys.includes('updateStatus') && (
                 <Button variant="contained" size="small" startIcon={<EditIcon />}
                   onClick={detailActions.updateStatus.onClick} sx={{ whiteSpace: 'nowrap' }}>

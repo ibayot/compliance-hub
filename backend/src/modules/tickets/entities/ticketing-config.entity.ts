@@ -2,6 +2,8 @@ import { Entity, PrimaryColumn, Column } from 'typeorm';
 
 @Entity('ticketing_configs')
 export class TicketingConfig {
+  /** Per-ticket calculation context only; not a persisted global setting. */
+  overtimeSlaDate?: string | null;
   @PrimaryColumn('int')
   id: number;
 
