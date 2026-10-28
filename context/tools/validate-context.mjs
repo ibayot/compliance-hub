@@ -11,13 +11,18 @@ const declarations = new Map();
 const documentIds = new Map();
 let externalLinks = 0;
 let localLinks = 0;
+// APP-CH-008: generated, Git-ignored historical audit records are not normative context.
+const excludedEvidenceDirectories = ['audits'];
 
 function walk(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
     const target = path.join(directory, entry.name);
     if (entry.isSymbolicLink()) {
       errors.push('Symlinks are not traversed: ' + relative(target));
-    } else if (entry.isDirectory()) walk(target);
+    } else if (entry.isDirectory()) {
+      if (directory === root && excludedEvidenceDirectories.includes(entry.name)) continue;
+      walk(target);
+    }
     else if (entry.name.endsWith('.md')) markdown.push(target);
   }
 }
@@ -114,6 +119,7 @@ const summary = {
   localLinks,
   externalReferencesNotNetworkChecked: externalLinks,
   reachableFromIndex: reachable.size,
+  excludedEvidenceDirectories: excludedEvidenceDirectories.map(name => name + '/'),
   errors: errors.length,
 };
 console.log(JSON.stringify(summary, null, 2));

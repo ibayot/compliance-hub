@@ -15,9 +15,15 @@ The baseline is prospective guidance adopted for future authorized work. It does
 
 ## Reuse in another application
 
-Copy this folder, replace the profile using [the profile template](templates/application-profile-template.md), conduct [the intake](application/intake.md), and replace the local application overlay and implementation inventory. Retain only relevant packs or leave unused packs inactive. Preserve rule IDs for unchanged shared standards; scope or record changes when a project diverges. Copy the routing paragraph from [AGENTS integration](governance/agents-integration.md) into that application's own guidance.
+Start new projects from the separate neutral `application-development-context` repository and its reviewed adoption/export workflow, rather than copying this active application wholesale. If performing a deliberate manual guidance merge, preserve the destination's own profile, domain/implementation facts, instructions and evidence policy. Conduct [intake](application/intake.md) and [workflow discovery](application/workflow-completeness.md); never invent a managed-installation receipt or claim library-tool checks ran in a project where those tools are absent.
 
 Recheck all source paths, commands, runtime versions, security assumptions, release policy, and domain terminology. Do not copy Compliance Hub database names, roles, workflow states, or deployment assumptions as universal requirements.
+
+## Integration scope
+
+On 2026-10-27 this project received a reviewed guidance-only merge from shared library 0.5.0, including its earlier discovery, debugging, UI-quality, data, dependency and provider improvements plus newly generalized report/runtime lessons. Local MASTER links select the relevant documents. The current application profile, domain overlays, ADRs, implementation inventory, history, read-only validator and no-committed-test/evidence policy are retained.
+
+Pack manifests, machine routing receipts, integrity/export/adoption tools and their library test harness remain in the separate reusable repository. They are not part of this merge. This is not a complete managed library adoption; later updates still require reviewed comparison. Shared context validation is not evidence that the application was rebuilt, its database was migrated, a user signed in successfully, or every UI conforms. Context-only work does not run those application operations.
 
 ## Audit expectations
 

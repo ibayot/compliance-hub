@@ -26,6 +26,8 @@ Task signal -> exact active pack and application overlay. A monorepo profile ide
 
 ## Validation and delivery
 
+Record each applicable environment's actual engine/context and service-selected connection/schema, preparer, authorized migration/configuration applier, verifier, prerequisites and artifact-delivery channel. Keep prepared, delivered, disposable-tested, application-applied and workflow-verified states separate. State whether local runtime updates are delegated and which remote steps remain owner-managed; ignored SQL/configuration is not delivered by a Git pull. No secret values belong in the profile.
+
 Exact commands, known mutating scripts, environment/data prerequisites, release/version policy, changelog audience rules, backup/rollback expectations.
 
 ## Unresolved inputs

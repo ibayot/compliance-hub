@@ -17,6 +17,10 @@ Capability definitions and grants -> backend route checks -> record/unit policie
 
 ## Implementation
 
+- CH-ADMIN-009 MUST accept an authenticated account's unchanged, format-valid Staff ID during profile/password-reset completion without requiring a successful external-list lookup. Resolve that account ID from server authentication, never caller-supplied ownership. Changed nonempty Staff IDs retain approved-list validation and duplicate-account protection; enforce self-update validation at the backend as well as the UI. Do not rewrite saved identity, bypass password policy or infer that a different person's ID belongs to the caller. Directory failures must not invalidate an already established unchanged identity (CH-ADMIN-005).
+
+Update detection under CH-ADMIN-008 uses a public static manifest containing only version/build identity. Check every two minutes only while visible, and on focus/online/visibility return. Omit cookies on manifest requests, bound valid build IDs, preserve the in-flight/reload-loop guards and wait for API readiness before refreshing protected app pages. This is frontend update detection, not session renewal or an account-data endpoint.
+
 [RequireCapability](../../../backend/src/common/decorators/require-capability.decorator.ts) declares coarse requirements; [CapabilityGuard](../../../backend/src/common/guards/capability.guard.ts) evaluates known checkers. Its array requirement currently means any matching capability, not all. Services still need record-level predicates. [Frontend auth types](../../../frontend/src/lib/types/auth.ts) support UI visibility.
 
 ## Validation

@@ -51,10 +51,16 @@ import {
 } from './controllers/rating-invitation.controller';
 import { RatingInvitationService } from './services/rating-invitation.service';
 import { StaffDirectoryStore } from '../../shared/staff-directory/staff-directory.store';
+import { ServerAdminIntegrationController, ServerAdminIntegrationKeyGuard } from './controllers/server-admin-integration.controller';
+import { ServerAdminIntegrationService } from './services/server-admin-integration.service';
+import { TicketReportTemplate } from './entities/ticket-report-template.entity';
+import { TicketReportBuilderService } from './services/ticket-report-builder.service';
+import { TicketReportBuilderController } from './controllers/ticket-report-builder.controller';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
+      TicketReportTemplate,
       Ticket,
       TicketComment,
       TicketCategoryConfig,
@@ -90,6 +96,8 @@ import { StaffDirectoryStore } from '../../shared/staff-directory/staff-director
     RealtimeModule,
   ],
   controllers: [
+    TicketReportBuilderController,
+    ServerAdminIntegrationController,
     AttendanceController,
     TicketController,
     TicketSettingsController,
@@ -101,6 +109,9 @@ import { StaffDirectoryStore } from '../../shared/staff-directory/staff-director
     PublicRatingController,
   ],
   providers: [
+    TicketReportBuilderService,
+    ServerAdminIntegrationKeyGuard,
+    ServerAdminIntegrationService,
     StaffDirectoryStore,
     TicketService,
     TicketSettingsService,

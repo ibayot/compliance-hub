@@ -5,3 +5,5 @@ These patterns describe how to document application-specific business behavior. 
 - [Capability/resource policy](capability-policy-pattern.md)
 - [Notifications](notification-pattern.md)
 - [Reporting/calculations](reporting-pattern.md)
+
+- [Configurable report builder and export](report-builder-pattern.md)

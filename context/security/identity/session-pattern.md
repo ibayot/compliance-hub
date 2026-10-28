@@ -35,6 +35,11 @@ Keep session truth with the selected server or token mechanism. Use secure platf
 - **SEC-SESSION-002** — MUST protect session credentials in transit and avoid URL/query-string transport.
 - **SEC-SESSION-003** — MUST configure browser cookies with appropriate Secure, HttpOnly, SameSite, scope, and CSRF protections when cookies carry authentication.
 
+- **SEC-SESSION-004** — MUST, when recovery is enabled, distinguish temporary transport/service failures from authoritative rejection, keep initial unverified access blocked, and coordinate competing renewals before accepting results; a retained UI state is not fresh authorization.
+- **SEC-SESSION-005** — MUST preserve explicit sign-out, idle-lock and current-account intent across restart/recovery races; stale in-flight work cannot restore a signed-out account or a different account. Define the permitted recovery surfaces rather than silently restoring accounts on public login pages.
+
+Use the [client update pattern](../../api-and-integrations/client-update-pattern.md) when builds trigger refresh. Metadata discovery, readiness and session verification remain separate contracts; recovery does not require every application to adopt automatic renewal.
+
 ## Validation
 
 Test expired sessions, logout followed by credential reuse, permission change, and switching users with cached data. Record any intentionally bounded token-revocation delay.

@@ -225,8 +225,8 @@ export class UsersController {
   }
 
   @Get('validate-staff-id')
-  validateStaffId(@Query('staffId') staffId: string) {
-    return this.usersService.validateStaffId(staffId);
+  validateStaffId(@Query('staffId') staffId: string, @Request() req: any) {
+    return this.usersService.validateStaffId(staffId, Number(req.user.id ?? req.user.userId));
   }
 
   // ── Generic user :id routes — kept AFTER static capability routes ──

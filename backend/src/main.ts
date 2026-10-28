@@ -74,6 +74,8 @@ async function bootstrap() {
       },
       'JWT-auth',
     )
+    .addApiKey({ type: 'apiKey', in: 'header', name: 'X-Server-Admin-Key', description: 'Dedicated SERVER_ADMIN_TICKETS_API_KEY; enter the key without a Bearer prefix.' }, 'server-admin-key')
+    .addTag('server-admin-integration', 'Read-only server administration integration')
     .addTag('Authentication', 'User authentication endpoints')
     .addTag('Documents', 'Document management and versioning')
     .addTag('Issuances', 'Government compliance issuances')

@@ -15,4 +15,6 @@ Inspect [changelog service](../../../backend/src/modules/changelog/changelog.ser
 
 ## Validation
 
+Apply the local application-database readiness requirement in APP-CH-007 from the [active profile](../PROFILE.md). Before handoff, apply reviewed required increments to the verified local Docker database and validate the real local application path. Preparing SQL or testing only a disposable database is insufficient; staging and production execution remains user-managed.
+
 Verify capability-specific visibility, a separate End User view, note categories, repeat application, and preservation of acknowledgment. Keep implementation-only changes out of user-facing notes.

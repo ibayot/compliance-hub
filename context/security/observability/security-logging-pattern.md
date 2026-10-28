@@ -28,6 +28,8 @@ event(name, severity, correlationId, actorRef?, outcome, safeFields); excluded: 
 
 Sanitize untrusted log fields and bound lengths to prevent injection or log amplification. Limit access, retention, and transport. Align clocks and define alert ownership for actionable signals.
 
+Select safe diagnostics before capture, including tool/terminal output. Parse only the needed configuration keys or compare sensitive values in-process and emit safe presence/type/status results. Do not print complete environment files, secret-bearing Compose/source configuration, browser storage or raw command output first and try to redact it in a later message. Synthetic markers may validate redaction without copying real credentials.
+
 ## Rules
 
 - **SEC-LOG-001** — MUST exclude credentials and unnecessarily sensitive payloads from logs and tracing.

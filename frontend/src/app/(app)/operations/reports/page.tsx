@@ -1,5 +1,6 @@
 'use client';
 import ResolutionTimingSummary from '@/components/ResolutionTimingSummary';
+import TicketReportBuilder from '@/components/ticket-reports/TicketReportBuilder';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -176,6 +177,7 @@ export default function TicketReportsPage() {
   }, [canManageReports, year, periodMode, month, quarter, semester, ticketType]);
 
   const fetchReports = useCallback(async (silent = false) => {
+    if (tab === 4) { reportRequestRef.current++; visibleReportRequestInFlight.current = false; setLoading(false); return; }
     if (silent && visibleReportRequestInFlight.current) return;
     const requestId = ++reportRequestRef.current;
     if (!silent) {
@@ -737,7 +739,7 @@ export default function TicketReportsPage() {
         <Typography variant="h5" fontWeight={700}>
           Ticket Reports
         </Typography>
-        <Button
+        {tab !== 4 && <Button
           variant="outlined"
           startIcon={<PrintIcon />}
           onClick={handlePrint}
@@ -745,7 +747,7 @@ export default function TicketReportsPage() {
           size="small"
         >
           Print / Export PDF
-        </Button>
+        </Button>}
       </Box>
       {printError && <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setPrintError('')}>{printError}</Alert>}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
@@ -754,11 +756,13 @@ export default function TicketReportsPage() {
           {canManageReports && <Tab value={1} label="Issues" />}
           {canManageReports && <Tab value={2} label="SLA Insights" />}
           <Tab value={3} label="Performance" />
+          <Tab value={4} label="Report Builder" />
         </Tabs>
       </Box>
 
+      {tab === 4 && <TicketReportBuilder />}
       {/* ── Filters ── */}
-      <Card sx={{ mb: 3, '@media print': { display: 'none' } }}>
+      {tab !== 4 && <Card sx={{ mb: 3, '@media print': { display: 'none' } }}>
         <CardContent>
           <Typography variant="subtitle2" fontWeight={600} gutterBottom>
             Filters
@@ -880,8 +884,7 @@ export default function TicketReportsPage() {
             </Box>
           </Box>
         </CardContent>
-      </Card>
-
+      </Card>}
       {tab === 0 && (
         <Box>
           <Box

@@ -54,6 +54,8 @@ Server queries and returned columns must respect scope; hidden UI columns are no
 
 Test realistic long rows, no rows, failed refresh, pagination, selection across pages, keyboard actions, and narrow mode.
 
+For configurable wide reports, inspect the maximum useful selected fields with populated, long and narrative values. Preserve readable widths/row identity and provide an intentional scroll, detail-card or print alternative rather than squeezing every column into a page. Appearance must preserve the same authorized data, required fields and export totals. See [configurable reports](../../../domain/report-builder-pattern.md).
+
 ## Related Patterns
 
 - [list-loading-pattern ](../../interaction-patterns/list-loading-pattern.md)

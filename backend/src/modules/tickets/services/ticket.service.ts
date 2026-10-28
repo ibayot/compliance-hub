@@ -77,6 +77,7 @@ import { assertTicketCancellationAllowed } from './ticket-cancellation-policy';
 import { formatPersonName } from '../../../shared/utils/person-name';
 import { AssigneePerformanceRow, PerformancePeriod, PerformanceSummary, weeklyPerformancePeriod, reportPerformancePeriod, scoreAssignees } from './ticket-performance';
 import { creditTicketPause, resolutionTiming, ResolutionTiming } from './ticket-sla-pause';
+import { newInterruptionHistory, recordInterruptionTransition } from './ticket-interruptions';
 
 // --- DTOs --------------------------------------------------------------------
 
@@ -1770,6 +1771,7 @@ export class TicketService implements OnModuleInit {
       : null;
 
     const ticket = this.ticketRepo.create({
+      interruptionHistory: newInterruptionHistory(),
       ticketNumber: '', //ticketNumber,
       subject: dto.subject.trim(),
       description: dto.description.trim(),
@@ -2906,7 +2908,9 @@ export class TicketService implements OnModuleInit {
         if (new Date(ticket.updatedAt).getTime() !== expected)
           throw new ConflictException('This ticket changed. Refresh it before cancelling.');
         const cancelledAt = new Date();
+        recordInterruptionTransition(ticket, ticket.status, TicketStatus.CANCELLED, cancelledAt);
         await repo.update(id, {
+          interruptionHistory: ticket.interruptionHistory,
           status: TicketStatus.CANCELLED, cancelledAt, cancelledById: actorId,
           cancellationReason: reason, slaPausedAt: null, isSlaWaiting: false,
           isKbGenerationPending: false,
@@ -3728,6 +3732,7 @@ export class TicketService implements OnModuleInit {
       automaticAssignmentDuringUpdate = null;
     }
 
+    recordInterruptionTransition(ticket, originalStatusForLogging, ticket.status);
     const saved = dto.status === TicketStatus.DUPLICATE
       ? await this.persistDuplicateTicket(ticket, expectedUpdatedAt, actorId, actorRole, dto.statusJustification!.trim())
       : await this.persistTicketUpdate(ticket, expectedUpdatedAt);
@@ -6573,6 +6578,7 @@ export class TicketService implements OnModuleInit {
     if (ticket.status !== TicketStatus.RESOLVED && ticket.status !== TicketStatus.CLOSED) {
       const previousStatus = ticket.status;
       ticket.status = TicketStatus.IN_PROGRESS;
+      recordInterruptionTransition(ticket, previousStatus, ticket.status, acceptedAt);
       if (!ticket.slaStartedAt) {
         ticket.slaStartedAt = acceptedAt;
         ticket.accumulatedPauseSeconds = 0;
@@ -7329,8 +7335,85 @@ export class TicketService implements OnModuleInit {
     start: Date,
     end: Date,
     config: TicketingConfig,
+    officeDayCache?: Map<string, boolean>,
   ): Promise<number> {
-    return this.calculateBusinessSeconds(start, end, config);
+    return this.calculateBusinessSeconds(start, end, config, officeDayCache);
+  }
+
+  async getBuilderScopeName(viewerId: number, viewerRole: string, requestedId: number | null): Promise<string> {
+    if (!viewerId || !this.roleCapSvc.isTicketReportsAccess(viewerRole)) throw new ForbiddenException('Ticket report access is required.');
+    const canManage = this.roleCapSvc.isTicketReportsManage(viewerRole);
+    if (!canManage && requestedId !== null && requestedId !== viewerId) throw new ForbiddenException('You can report only your own assigned tickets.');
+    if (canManage && requestedId === null) return 'All authorized staff';
+    const account = await this.usersHttpClient.getUserById(canManage ? requestedId! : viewerId);
+    if (!account) throw new ServiceUnavailableException('The report staff name could not be loaded. Please retry.');
+    return formatPersonName(account);
+  }
+
+  async enrichBuilderTickets(tickets: Ticket[]) {
+    if (!tickets.length) return;
+    const users = await this.usersHttpClient.getUsers();
+    if (!users.length) throw new ServiceUnavailableException('Staff directory is unavailable. Please retry.');
+    const byId = new Map(users.map(user => [Number(user.id), user]));
+    for (const ticket of tickets) {
+      ticket.requester = byId.get(Number(ticket.requesterId));
+      ticket.assignedTo = byId.get(Number(ticket.assignedToId));
+    }
+  }
+
+  async getBuilderAssignees(viewerId: number, viewerRole: string) {
+    if (!viewerId || !this.roleCapSvc.isTicketReportsAccess(viewerRole) || !this.roleCapSvc.isTicketReportsManage(viewerRole))
+      throw new ForbiddenException('Report-management access is required.');
+    const qb = this.ticketRepo.createQueryBuilder('t').select('t.assignedToId', 'id')
+      .where('t.assignedToId IS NOT NULL').distinct(true).take(2000);
+    this.applyOvertimeReadScope(qb, 't', viewerId, viewerRole);
+    const [ids, users] = await Promise.all([qb.getRawMany(), this.usersHttpClient.getUsers()]);
+    if (!users.length) throw new ServiceUnavailableException('Staff directory is unavailable. Please retry.');
+    const allowed = new Set(ids.map(row => Number(row.id)));
+    return users.filter(user => allowed.has(Number(user.id))).map(user => ({ id: Number(user.id), name: formatPersonName(user, `Staff #${user.id}`) }))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id);
+  }
+
+  /** The builder uses the existing report scope and OT privacy predicate for every measure. */
+  async getMonthlyBuilderTickets(start: Date, cutoff: Date, viewerId: number, viewerRole: string,
+    technicianId: number | null, ticketType: string | null, includeDescription = false): Promise<Ticket[]> {
+    if (!viewerId || !this.roleCapSvc.isTicketReportsAccess(viewerRole)) throw new ForbiddenException('Ticket report access is required.');
+    const canManage = this.roleCapSvc.isTicketReportsManage(viewerRole);
+    if (!canManage && technicianId !== null && technicianId !== viewerId) throw new ForbiddenException('You can report only your own assigned tickets.');
+    const qb = this.ticketRepo.createQueryBuilder('t')
+      .select(['t.id', 't.ticketNumber', 't.subject', 't.ticketType', 't.status', 't.priority', 't.categoryId', 't.issueTypeId',
+        't.requesterId', 't.assignedToId', 't.resolvedAt', 't.resolutionTimeOverride', 't.slaDeadline', 't.slaStartedAt',
+        't.accumulatedPauseSeconds', 't.slaPauseLedger', 't.interruptionHistory', 't.overtimeSlaDate', 't.createdAt', 't.updatedAt', 't.satisfactionRating'])
+      .leftJoin('t.issueTypeConfig', 'builderIssue').addSelect(['builderIssue.id', 'builderIssue.name', 'builderIssue.slaHours'])
+      .leftJoin('t.category', 'builderCategory').addSelect(['builderCategory.id', 'builderCategory.name'])
+      .where('t.createdAt < :cutoff', { cutoff })
+      .andWhere('t.status NOT IN (:...excluded)', { excluded: [TicketStatus.CANCELLED, TicketStatus.DUPLICATE] })
+      .andWhere('t.userClosed = :userClosed', { userClosed: false })
+      .andWhere('(t.status NOT IN (:...completed) OR COALESCE(t.resolutionTimeOverride, t.resolvedAt, t.updatedAt) >= :start)',
+        { completed: [TicketStatus.RESOLVED, TicketStatus.CLOSED], start });
+    const assignee = canManage ? technicianId : viewerId;
+    if (assignee) qb.andWhere('t.assignedToId = :assignee', { assignee });
+    if (ticketType) qb.andWhere('t.ticketType = :ticketType', { ticketType });
+    this.applyOvertimeReadScope(qb, 't', viewerId, viewerRole);
+    if (includeDescription) {
+      const size = await qb.clone().select('COALESCE(SUM(OCTET_LENGTH(t.description)), 0)', 'bytes').addSelect('COUNT(*)', 'count').getRawOne();
+      if (Number(size.count) > 10000) throw new BadRequestException('This report exceeds 10,000 source tickets. Narrow the staff or support-type filter.');
+      if (Number(size.bytes) > 5 * 1024 * 1024) throw new BadRequestException('Selected ticket descriptions exceed the 5 MB report limit. Narrow the staff or support-type filter, or deselect Description.');
+      qb.addSelect('t.description');
+    }
+    const tickets = await qb.orderBy('t.createdAt', 'ASC').addOrderBy('t.id', 'ASC').take(10001).getMany();
+    if (tickets.length > 10000) throw new BadRequestException('This report exceeds 10,000 source tickets. Narrow the staff or support-type filter.');
+    return tickets;
+  }
+
+  async getBuilderSlaResult(ticket: Ticket, end: Date, config: TicketingConfig, cache: Map<string, boolean>) {
+    const timingHours = ticket.slaStartedAt && end >= new Date(ticket.slaStartedAt)
+      ? await this.calculateTicketActiveResolutionHours(ticket, end, config, cache) : null;
+    const validDeadline = ticket.slaDeadline && Number.isFinite(new Date(ticket.slaDeadline).getTime());
+    const allowance = validDeadline ? 0 : Number(ticket.issueTypeConfig?.slaHours || (!ticket.issueTypeId ? 4 : 0));
+    const met = validDeadline || (timingHours !== null && Number.isFinite(allowance) && allowance > 0)
+      ? hasMetResolvedTicketSla(ticket, timingHours ?? 0, allowance) : null;
+    return { met, activeHours: timingHours, estimated: Boolean(ticket.resolutionTiming?.estimated) };
   }
 
   private async recalculateActiveSlaDeadlines(): Promise<void> {
@@ -7684,6 +7767,10 @@ export class TicketService implements OnModuleInit {
     if (!waitingTicket) return false;
 
     const activatedAt = new Date();
+    const previousStatus = waitingTicket.status;
+    const previousHistory = waitingTicket.interruptionHistory == null
+      ? null : JSON.stringify(waitingTicket.interruptionHistory);
+    recordInterruptionTransition(waitingTicket, previousStatus, TicketStatus.IN_PROGRESS, activatedAt);
     waitingTicket.isSlaWaiting = false;
     waitingTicket.status = TicketStatus.IN_PROGRESS;
     waitingTicket.lastAssignedAt = activatedAt;
@@ -7703,9 +7790,12 @@ export class TicketService implements OnModuleInit {
         slaDeadline: waitingTicket.slaDeadline,
         accumulatedPauseSeconds: waitingTicket.accumulatedPauseSeconds,
         slaPausedAt: waitingTicket.slaPausedAt,
+        interruptionHistory: waitingTicket.interruptionHistory,
       })
       .where('id = :id', { id: waitingTicket.id })
       .andWhere('is_sla_waiting = :waiting', { waiting: true })
+      .andWhere('status = :previousStatus AND assigned_to_id = :techId', { previousStatus, techId })
+      .andWhere('interruption_history <=> :previousHistory', { previousHistory })
       .execute();
     if (promotion.affected !== 1) return false;
     this.sseService.emitTicketUpdated(waitingTicket.id);
@@ -7723,7 +7813,7 @@ export class TicketService implements OnModuleInit {
       technicianName,
       source,
       automatic: true,
-      fromStatus: waitingTicket.status,
+      fromStatus: previousStatus,
       toStatus: TicketStatus.IN_PROGRESS,
       note: 'Unstacked from waiting list and set to IN_PROGRESS',
     }).catch(() => {});

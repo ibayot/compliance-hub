@@ -35,6 +35,8 @@ coverage
 
 Inspect effective context root and Dockerfile-specific ignore rules. Do not exclude manifests, runtime templates, migrations, or required assets accidentally. Use build secret mounts rather than copying credentials and deleting them in another layer.
 
+When production begins using files inside a previously preview-only or ignored directory, inspect both the production import graph and the effective build-context allowlist. Re-include only the required production inputs; keep fixtures and private material excluded. Verify the actual target-platform image with its locked installation and native dependencies, then exercise the packaged route/runtime under its intended identity, mounts and resource limits. A host build or a previously built image does not establish that the current packaged artifact works (CTR-CONTEXT-001/002).
+
 ## Rules
 
 - `CTR-CONTEXT-001` MUST exclude credentials and unnecessary private material from build context.

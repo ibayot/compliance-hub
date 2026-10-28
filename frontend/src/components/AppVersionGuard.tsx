@@ -6,7 +6,7 @@ interface AppVersionManifest {
   buildId?: string;
 }
 
-const CHECK_INTERVAL_MS = 30_000;
+const CHECK_INTERVAL_MS = 2 * 60_000;
 const RELOAD_GUARD_KEY = 'compliance-hub:pending-build-reload';
 const RELOAD_GUARD_TTL_MS = 2 * 60_000;
 
@@ -42,11 +42,12 @@ export default function AppVersionGuard() {
     let checking = false;
 
     const checkForNewBuild = async () => {
-      if (disposed || checking || reloadRequested) return;
+      if (disposed || checking || reloadRequested || document.visibilityState !== 'visible') return;
       checking = true;
       try {
         const response = await fetch(`/app-version.json?_=${Date.now()}`, {
           cache: 'no-store',
+          credentials: 'omit',
           headers: { Accept: 'application/json' },
         });
         if (disposed) return;
@@ -55,7 +56,7 @@ export default function AppVersionGuard() {
         }
 
         const manifest = (await response.json()) as AppVersionManifest;
-        const deployedBuildId = String(manifest.buildId || '').trim();
+        const deployedBuildId = typeof manifest.buildId === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(manifest.buildId) ? manifest.buildId : '';
         const loadedBuildId = String(import.meta.env.VITE_APP_BUILD_ID || '').trim();
         if (!deployedBuildId || !loadedBuildId) return;
 

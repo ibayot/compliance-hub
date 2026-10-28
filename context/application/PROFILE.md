@@ -31,6 +31,14 @@ Locate exact pack patterns through [technology](../technology/INDEX.md), [platfo
 - APP-CH-004 MUST verify database target and repeatability for environment-managed SQL.
 - APP-CH-005 MUST preserve the application-specific in-app release-note requirements.
 - APP-CH-006 MUST treat a UI consistency change as presentation work unless workflow/permission changes were explicitly requested.
+- APP-CH-007 MUST apply required reviewed incremental database updates to the verified running local Docker application database as part of implementation, before reporting the feature ready for local use. Disposable-database checks supplement this and do not replace it. Verify the actual local engine, service connection and schema targets, preserve existing records, and validate the affected local application path. Prepare the environment-managed SQL for staging/production, but leave those environment updates to the user unless explicitly authorized.
+- APP-CH-008 MUST keep application test code, generated audits, screenshots, diagnostic runners and result artifacts out of Git under the existing ignore policy. Reusable context rules, operational guidance and application audit functionality remain in scope; perform appropriate checks locally without force-adding disposable evidence.
+
+## Shared guidance integration
+
+Reviewed guidance-only merge from `application-development-context` 0.5.0 on 2026-10-27. Discovery, first-run readiness, targeted testing/debugging, measured UI quality, engine safeguards, provider boundaries and the reporting/update lessons are available through MASTER. The separate library owns its pack/routing/integrity/export/adoption machinery and test harness; those are not installed or claimed verified in this legacy application context, and no `.context-library.json` receipt has been invented.
+
+Preserve this active profile, Compliance Hub overlay, ADR/exception history, canonical implementation bindings and artifact policy when bringing later guidance forward. PostgreSQL and provider reference documents are available but remain inactive unless deliberately selected for an applicable task. MariaDB, the current frontend/backend/native stack, local-update authority and user-managed staging/production responsibility remain unchanged. Context checks do not certify application conformance or authorize runtime changes.
 
 ## Domain routing
 
@@ -38,6 +46,8 @@ Locate exact pack patterns through [technology](../technology/INDEX.md), [platfo
 | --- | --- |
 | Runtime ownership, source truth, gateway routing | [system map](compliance-hub/system-map.md) |
 | Tickets, SLA, escalation, comments, images, duty, attendance | [ticketing](compliance-hub/ticketing.md) |
+| Monthly ticket report builder, saved templates, interruption metrics | [report builder](compliance-hub/ticket-report-builder.md), [ticketing](compliance-hub/ticketing.md) |
+| Account-request API for the server administration integration | [API contract](compliance-hub/server-admin-api.md), [ticketing](compliance-hub/ticketing.md) |
 | Documents, versions, reviews, metrics, KPI, MoV | [compliance](compliance-hub/compliance.md) |
 | Identities, staff directory, units, capabilities, security settings | [administration](compliance-hub/administration.md) |
 | Issuances, incidents, cybersecurity records | [governance records](compliance-hub/governance-records.md) |

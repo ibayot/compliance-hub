@@ -29,7 +29,7 @@ Lifecycle, permissions, storage, navigation, packaging, and recovery depend on w
 
 Determine the real target artifacts and supported OS/browser versions. For a shared feature, evaluate each affected target's differences rather than assuming a successful web test proves mobile/desktop behavior. Backend API/worker packs describe contracts and lifecycles, not a mandate to add services.
 
-For Compliance Hub, desktop-native guidance is inactive. Mobile guidance follows the actual Capacitor/native targets in the profile; Android build scripts do not establish tested iOS distribution.
+Platform guidance is active only for targets selected by the profile and affected task. A planned target is not evidence that its build or deployment exists.
 
 ## Rules
 

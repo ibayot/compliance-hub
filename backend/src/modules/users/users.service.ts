@@ -849,10 +849,17 @@ const previousValue = value;
     };
   }
 
-  async validateStaffId(staffId: string): Promise<{ valid: boolean }> {
+  async validateStaffId(staffId: string, currentUserId?: number): Promise<{ valid: boolean }> {
     const normalized = String(staffId ?? '').trim();
     if (!/^\d{6}$/.test(normalized)) {
       return { valid: false };
+    }
+
+    // An external directory/list must not invalidate an existing account's unchanged identity.
+    // The owner is supplied by authentication, never a caller-selected user ID.
+    if (Number.isSafeInteger(currentUserId) && currentUserId! > 0) {
+      const own = await this.usersRepository.findOne({ where: { id: currentUserId }, select: ['id', 'staffId'] });
+      if (own && own.staffId?.trim() === normalized) return { valid: true };
     }
 
     try {
@@ -1042,6 +1049,10 @@ const previousValue = value;
       user.email = normalizedEmail;
     }
     if (dto.staffId !== undefined) {
+      if (options.actorUserId === user.id && dto.staffId?.trim() && dto.staffId.trim() !== user.staffId?.trim() &&
+        !(await this.validateStaffId(dto.staffId, user.id)).valid) {
+        throw new BadRequestException('The new Staff ID is not in the approved staff list. Keep your existing Staff ID or contact the system administrator.');
+      }
       if (dto.staffId?.trim()) {
         const existing = await this.usersRepository.findOne({ where: { staffId: dto.staffId } });
         if (existing && existing.id !== user.id) {

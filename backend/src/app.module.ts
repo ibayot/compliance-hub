@@ -48,6 +48,7 @@ import { AuditVariableSubscriber } from './shared/audit/audit.subscriber';
         REDIS_HOST: Joi.string().required(),
         REDIS_PORT: Joi.number().default(6379),
         JWT_SECRET: Joi.string().min(16).required(),
+        SERVER_ADMIN_TICKETS_API_KEY: Joi.string().min(32).max(512).allow('').optional(),
         JWT_REFRESH_SECRET: Joi.string().min(16).required(),
         JWT_ISSUER: Joi.string().default('compliance-hub-api'),
         JWT_AUDIENCE: Joi.string().default('compliance-hub-client'),

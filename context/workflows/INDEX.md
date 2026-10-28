@@ -1,5 +1,7 @@
 # Workflows
+- [Application build, first run, and runnable handoff](application-build-workflow.md)
 - [Feature or bug fix](feature-change-workflow.md)
+- [Evidence-led debugging and diagnosis](debugging-workflow.md)
 - [Consistency edit](consistency-edit-workflow.md)
 - [Schema change](schema-change-workflow.md)
 - [Security change](security-change-workflow.md)

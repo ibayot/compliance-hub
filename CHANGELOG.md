@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.30] - 2026-10-27 - Clearer Ticket Reports and Account Verification
+
+### Improved
+- Monthly report ticket lists offer readable detail cards, a wider scrollable table with highlighted headers and ticket numbers, and readable PDF detail layouts when many fields are selected.
+- Description is an optional ticket detail, wrapping at full width in detailed preview and PDF output.
+- Issues include Category to distinguish repeated issue names. Ticket cards use support-type outline colors, labels and a legend in preview and PDF output. The section is named Monthly Summary, and report metadata is bold and italic at its existing size.
+- Individual reports show the selected account name and omit redundant staff breakdowns and assignee columns. Administrators retain all-staff reporting. Section names and SLA labels are shorter; missing pause/freeze history is explained without presenting it as zero.
+- Frontend update checks run every two minutes in visible tabs, without sending cookies to the static version file. Service-readiness checks and session-preserving update refreshes remain in place.
+
+### Fixed
+- Queue handoffs close recorded pause intervals, preventing resumed working time from inflating report pause totals. Permission changes during generation release the preview action and discard stale results.
+- Filtered report headers identify the selected support type in both preview and PDF output.
+- Completing a profile after password reset accepts the authenticated account's unchanged Staff ID even when an older verification list omits it. Changed IDs still require validation, and duplicate-account protections remain in place.
+
+## [1.0.29] - 2026-10-27 - Monthly Ticket Report Builder
+
+### Added
+- Staff with ticket report access can save personal report templates and generate monthly previews with mandatory ticket totals, SLA Met/Missed/compliance, and separate pause/freeze metrics.
+- Choose optional breakdowns and ticket-list details, then print or save the generated preview as PDF. Pause/freeze counts and durations remain required when listing tickets.
+- Monthly calculations honor approved completion corrections, working-time exclusions and applicable OT dates. Incomplete historical interruption records are disclosed, with unavailable values kept separate from zero.
+
+## [1.0.28] - 2026-10-26 - Account Request Integration
+
+### Added
+- Approved integrations can retrieve eligible Assigned/In Progress account requests with employee IDs and create, enable, disable or Others classifications. Accepted escalations qualify after assignment transfers; pending escalations do not grant eligibility.
+- Employee IDs found in ticket text take precedence over the requester's saved ID. Conflicting IDs and unclear enable/disable instructions are flagged for manual review. Ticket records and account actions remain unchanged by these reads.
+
 ## [1.0.27] - 2026-10-26 - Session Recovery and Idle Password Prompt
 
 ### Added

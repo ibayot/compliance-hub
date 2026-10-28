@@ -20,7 +20,7 @@ validated filter -> authorized base scope -> bounded query
 ~~~
 
 ## Implementation
-Apply resource/unit scope before pagination and counts. Use stable tie-breakers. Check query plans and indexes for changed access patterns; adding an index has write/storage cost.
+Apply resource/unit scope before pagination and counts. Use stable tie-breakers. Check query plans and indexes for changed access patterns; adding an index has write/storage cost. Bind representative workload and resource limits through [engine safeguards](engine-safeguards-pattern.md). Apply DATA-ENGINE-004 before a plan/profiling tool that executes the underlying work; do not treat an analysis command as automatically read-only or log restricted bind values to obtain a plan.
 
 ## Rules
 DATA-QUERY-002 MUST use equivalent access/filter predicates for rows and totals.

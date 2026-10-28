@@ -28,6 +28,7 @@ The same implementation task may need a language boundary, a framework lifecycle
 | [PHP](languages/php/INDEX.md) | Profile target `php` |
 | [Dart](languages/dart/INDEX.md) | Profile target `dart` |
 | [SQL](languages/sql/INDEX.md) | Profile target `sql` |
+| [PostgreSQL](databases/postgresql/INDEX.md) | Profile target `postgresql`; specialize the shared engine-neutral contract only for the selected engine |
 | [POSIX Shell](languages/shell/INDEX.md) | Profile target `shell` |
 | [PowerShell](languages/powershell/INDEX.md) | Profile target `powershell` |
 | [Node.js Runtime](frameworks/node/INDEX.md) | Profile target `node` |

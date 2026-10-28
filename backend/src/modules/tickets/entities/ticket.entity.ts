@@ -14,6 +14,7 @@ import { TicketComment } from './ticket-comment.entity';
 import { TicketCategoryConfig } from './ticket-category.entity';
 import { TicketIssueType } from './ticket-issue-type.entity';
 import type { ResolutionTiming, SlaPauseLedger } from '../services/ticket-sla-pause';
+import type { TicketInterruptionHistory } from '../services/ticket-interruptions';
 import { dateTransformer } from './date.transformer';
 
 export enum TicketType {
@@ -168,6 +169,11 @@ export class Ticket {
   /** Nullable for pre-ledger tickets; never fabricate historical pause intervals. */
   @Column({ name: 'sla_pause_ledger', type: 'simple-json', nullable: true })
   slaPauseLedger: SlaPauseLedger | null;
+
+  /** Actual pause/freeze intervals; never substitute the capped SLA-credit ledger. */
+  @Column({ name: 'interruption_history', type: 'simple-json', nullable: true })
+  @Exclude()
+  interruptionHistory: TicketInterruptionHistory | null;
 
   /** Calculated read projection, not a stored column. */
   resolutionTiming?: ResolutionTiming | null;

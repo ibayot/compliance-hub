@@ -20,4 +20,6 @@ INV-COVER-001 MUST record actual enforcement and evidence rather than marking ev
 
 ## Evidence storage
 
+The 2026-10-27 guidance merge adds discovery/field-to-consumer/journey contracts, runtime/database readiness, measured UI quality, engine safeguards, optional report/export design, identity revalidation and client-update policy. The private overlay owns local timings, permissions, SQL targets and provenance. Implementation coverage remains partial and tied to the canonical map; library management tools/receipts are not adopted by this guidance-only merge.
+
 Generated audit reports and test evidence are local-only, not versioned. This map does not certify implementation compliance; obtain current scoped evidence before reporting assurance.
