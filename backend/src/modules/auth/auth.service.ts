@@ -15,6 +15,7 @@ import { SecurityConfigService } from '../users/security-config.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TokenBlacklist } from './entities/token-blacklist.entity';
+import { TicketingHttpClient } from '../../common/http-clients/ticketing.http-client';
 
 export function isTrustedDeviceActive(
   expiresAt: Date | string | null | undefined,
@@ -37,6 +38,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly eventBus: EventBusService,
     private readonly securityConfigService: SecurityConfigService,
+    private readonly ticketingHttpClient: TicketingHttpClient,
     @Optional() private readonly emailService?: EmailService,
   ) {}
 
@@ -146,7 +148,7 @@ export class AuthService {
       user.passwordHash,
     );
 
-    let requiresMfa = this.checkRequiresMfa(user, securityConfig.mfaTestMode);
+    let requiresMfa = await this.checkRequiresMfa(securityConfig.mfaTestMode);
 
     // Check trusted device
     if (requiresMfa && deviceToken) {
@@ -204,14 +206,16 @@ export class AuthService {
         })
         .catch((e: any) => {
           console.error('Failed to publish email.send event for MFA:', e?.code || 'unknown');
+          throw new ServiceUnavailableException('Unable to request your MFA email. Please try signing in again.');
         });
 
       return { mfaRequired: true, tempToken, user: { id: user.id, email: user.email } };
       }
 
-  private checkRequiresMfa(user: User, globalMfaEnabled: boolean): boolean {
+  private async checkRequiresMfa(temporaryMode: boolean): Promise<boolean> {
     if (process.env.VAPT_MODE === 'true') return false;
-    return globalMfaEnabled;
+    if (temporaryMode) return true;
+    return this.ticketingHttpClient.isAuthenticationEmailEnabled();
   }
 
   async getPublicConfig(): Promise<{ googleSignInEnabled: boolean }> {
@@ -276,7 +280,7 @@ export class AuthService {
       user.passwordHash,
     );
 
-    const requiresMfa = this.checkRequiresMfa(user, securityConfig.mfaTestMode);
+    const requiresMfa = await this.checkRequiresMfa(securityConfig.mfaTestMode);
     if (requiresMfa) return this.startMfaChallenge(user, securityConfig);
     const tokens = await this.generateTokens(user);
     return this.buildAuthResponse(

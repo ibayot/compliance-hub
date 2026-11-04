@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.33] - 2026-11-04 - MFA Delivery Modes
+
+### Fixed
+- Turning off Temporary MFA Mode now uses email verification when outbound emails are enabled. Temporary mode displays the code inside the application; disabling both settings skips MFA. Password and Google sign-in follow the same decision, and emailed codes honor Test Override Email.
+- Verification instructions now match the delivery mode, and email mode clears old temporary-code alerts.
+
 ## [1.0.32] - 2026-11-04 - Verification Email Test Override
 
 ### Fixed

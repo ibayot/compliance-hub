@@ -1,5 +1,7 @@
 # Canonical Implementation Starting Points
 
+Login MFA mode selection follows CH-ADMIN-011 in [AuthService](../../backend/src/modules/auth/auth.service.ts): temporary display or enabled outbound email requires a challenge. [Ticketing policy client](../../backend/src/common/http-clients/ticketing.http-client.ts) reads the [protected boolean projection](../../backend/src/modules/tickets/controllers/auth-email-policy.controller.ts), owned by [EmailService](../../backend/src/modules/tickets/services/email.service.ts). The verification page distinguishes displayed and emailed codes; email override/unit behavior remains CH-ADMIN-013.
+
 Source presence reviewed on 2026-10-20. Existing shared code is a starting point for reuse and assessment, not proof that every consumer is standardized or the implementation meets every new baseline.
 
 | Concern | Existing shared implementation | Adoption/evidence status |

@@ -10,6 +10,7 @@ import { AttendanceModule } from '../users/attendance.module';
 import { EventBusModule } from '../../common/events/event-bus.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TokenBlacklist } from './entities/token-blacklist.entity';
+import { TicketingHttpClient } from '../../common/http-clients/ticketing.http-client';
 
 @Module({
   imports: [
@@ -32,7 +33,7 @@ import { TokenBlacklist } from './entities/token-blacklist.entity';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, TicketingHttpClient],
   exports: [AuthService],
 })
 export class AuthModule {}

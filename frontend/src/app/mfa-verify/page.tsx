@@ -15,7 +15,7 @@ import {
   Checkbox,
 } from '@mui/material';
 import { authApi } from '@/lib/api/auth';
-import { enqueueSnackbar } from 'notistack';
+import { enqueueSnackbar, closeSnackbar } from 'notistack';
 import { tokenStore } from '@/lib/api/client';
 import { completeInteractiveSignIn } from '@/lib/auth/session-recovery';
 
@@ -26,6 +26,7 @@ export default function MfaVerifyPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tempToken, setTempToken] = useState<string | null>(null);
+  const [temporaryMode, setTemporaryMode] = useState(false);
 
   useEffect(() => {
     const token = sessionStorage.getItem('mfaTempToken');
@@ -35,12 +36,14 @@ export default function MfaVerifyPage() {
       setTempToken(token);
       
       const testCode = sessionStorage.getItem('mfaTestModeCode');
+      setTemporaryMode(Boolean(testCode));
       if (testCode) {
-        enqueueSnackbar(`Temporary MFA Mode — Your MFA code is: ${testCode}`, {
+        const snackbarId = enqueueSnackbar(`Temporary MFA Mode — Your MFA code is: ${testCode}`, {
           variant: 'info',
           persist: true,
           anchorOrigin: { vertical: 'top', horizontal: 'center' }
         });
+        return () => closeSnackbar(snackbarId);
       }
     }
   }, [navigate]);
@@ -116,7 +119,9 @@ export default function MfaVerifyPage() {
             Security Verification
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3, textAlign: 'center' }}>
-            We've sent a 6-digit verification code to your registered email address.
+            {temporaryMode
+              ? 'Enter the 6-digit code shown in the Temporary MFA Mode alert.'
+              : 'Enter the 6-digit verification code sent to the configured email delivery destination.'}
           </Typography>
           <Alert severity="info" sx={{ mb: 3 }}>
             You have 3 attempts for this login. After 3 failed attempts, you must log in again. After 9 total failed attempts, your account will be locked for 15 minutes.

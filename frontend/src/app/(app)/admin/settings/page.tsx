@@ -452,6 +452,9 @@ function SecuritySettingsCard() {
                 }
                 label="Enable Temporary MFA Mode"
               />
+              <Typography variant="body2" color="text.secondary">
+                When enabled, show the MFA code inside the application. When disabled, use email MFA if outbound emails are enabled in Global Settings. MFA is skipped when both settings are off.
+              </Typography>
             </Grid>
             {vaptSettingsEnabled && (
 <Grid item xs={12} md={4}>

@@ -59,6 +59,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      - TICKETING_SERVICE_URL=http://ticketing-service:4102
       - UMS_STAFF_SYNC_ENABLED=${UMS_STAFF_SYNC_ENABLED:-true}
       # Configure this secret in the project-root .env or directly here, never VITE_*.
       - STAFF_DIRECTORY_API_KEY=${STAFF_DIRECTORY_API_KEY:-}

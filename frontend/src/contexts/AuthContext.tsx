@@ -385,7 +385,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sessionStorage.setItem('mfaTempToken', response.tempToken);
       if (response.testModeCode) {
         sessionStorage.setItem('mfaTestModeCode', response.testModeCode);
-      }
+      } else sessionStorage.removeItem('mfaTestModeCode');
       navigate('/mfa-verify');
       return;
     }

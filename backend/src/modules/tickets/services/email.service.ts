@@ -150,6 +150,11 @@ export class EmailService implements OnModuleInit {
     await this.reloadSmtpConfig();
   }
 
+  public async isAuthenticationEmailEnabled(): Promise<boolean> {
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    return this.emailEnabled && config?.isEmailNotificationsEnabled !== false;
+  }
+
   public async reloadSmtpConfig() {
     try {
       const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });

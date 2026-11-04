@@ -56,6 +56,7 @@ import { ServerAdminIntegrationService } from './services/server-admin-integrati
 import { TicketReportTemplate } from './entities/ticket-report-template.entity';
 import { TicketReportBuilderService } from './services/ticket-report-builder.service';
 import { TicketReportBuilderController } from './controllers/ticket-report-builder.controller';
+import { AuthEmailPolicyController } from './controllers/auth-email-policy.controller';
 
 @Module({
   imports: [
@@ -96,6 +97,7 @@ import { TicketReportBuilderController } from './controllers/ticket-report-build
     RealtimeModule,
   ],
   controllers: [
+    AuthEmailPolicyController,
     TicketReportBuilderController,
     ServerAdminIntegrationController,
     AttendanceController,
