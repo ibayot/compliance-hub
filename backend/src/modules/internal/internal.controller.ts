@@ -1,4 +1,5 @@
-import { Controller, Get, Param, NotFoundException, UseGuards, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Param, NotFoundException, UseGuards, ParseIntPipe, Post, Body, Optional, ServiceUnavailableException } from '@nestjs/common';
+import { OutboundEmailPolicyService, OutboundEmailRecipientDto } from '../users/outbound-email-policy.service';
 import { ApiTags } from '@nestjs/swagger';
 import { UsersService } from '../users/users.service';
 import { UnitsService } from '../units/units.service';
@@ -30,7 +31,14 @@ export class InternalController {
     private readonly usersService: UsersService,
     private readonly unitsService: UnitsService,
     private readonly roleCapabilitiesService: RoleCapabilitiesService,
+    @Optional() private readonly outboundEmailPolicy?: OutboundEmailPolicyService,
   ) {}
+
+  @Post('outbound-email/decision')
+  decideOutboundEmail(@Body() dto: OutboundEmailRecipientDto) {
+    if (!this.outboundEmailPolicy) throw new ServiceUnavailableException('Email policy is unavailable.');
+    return this.outboundEmailPolicy.decide(dto.recipientEmail);
+  }
 
   @Get('users')
   async getUsers() {

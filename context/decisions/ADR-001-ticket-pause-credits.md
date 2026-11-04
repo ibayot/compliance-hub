@@ -33,3 +33,5 @@ The old application can ignore the extra nullable column on rollback. Retain it 
 Unit cases cover credits wholly before, crossing, and wholly after corrected completion; caps; mixed legacy/new credits; retry deduplication; and a reset SLA origin. An isolated local MariaDB migration check applied the script twice, verified one column and unchanged pre-existing pause totals, and removed only its freshly created test database. Full duty/SLA concurrency and physical native-device acceptance are separate runtime checks, not certified here.
 
 Related: CH-TICKET-003/006/007/009, DOMAIN-REPORT-001/003/004, DATA-TXN-001/002, DATA-SCHEMA-004/005.
+
+The later [ADR-002](ADR-002-historical-interruption-reconstruction.md) permits explicitly estimated operational Pause/Freeze report reconstruction. It does not supersede this decision's SLA-credit, correction or saved-deadline rules.

@@ -18,13 +18,13 @@ export const defaultReportConfiguration = (): ReportConfiguration => ({ title: '
   includeTicketList: false, listBasis: 'completed', columns: ['subject', 'status', 'completedAt'],
   sortBy: 'ticketNumber', sortOrder: 'asc', ticketType: null, technicianId: null });
 export interface TicketReportTemplate { id: string; name: string; revision: number; configuration: ReportConfiguration }
-interface InterruptionSummary { tickets: number; occurrences: number; businessMinutes: number; averageFrequency: number | null; averageMinutes: number | null; averageEligibleTickets: number; averageEligibleOccurrences: number }
+interface InterruptionSummary { tickets: number; occurrences: number; businessMinutes: number; averageFrequency: number | null; averageMinutes: number | null; averageEligibleTickets: number; averageEligibleOccurrences: number; averageEstimatedTickets?: number }
 export interface BuiltTicketReport {
   configuration: ReportConfiguration; year: number; month: number; timeZone: string; generatedAt: string;
   startAt: string; endAtExclusive: string; cutoffAt: string; monthToDate: boolean; scope: string; scopeMode: 'individual' | 'all';
   summary: { received: number; completed: number; slaMet: number; slaMissed: number; slaUnavailable: number;
     slaCompliancePercent: number | null; pause: InterruptionSummary; freeze: InterruptionSummary; unknownHistoryTickets: number;
-    estimatedTimingTickets: number; missingCompletionTickets: number };
+    reconstructedHistoryTickets?: number; auditEvidenceUnavailable?: boolean; estimatedTimingTickets: number; missingCompletionTickets: number };
   breakdowns: Partial<Record<keyof typeof REPORT_SECTIONS, Array<{ id?: string; label: string; category?: string; tickets: number; slaMet: number; slaMissed: number }>>>;
   ratings: { ratedTickets: number; average: number | null } | null;
   rows: Array<{ ticketId: string; ticketNumber: string; ticketType: string; pauseCount: number | null; freezeCount: number | null;

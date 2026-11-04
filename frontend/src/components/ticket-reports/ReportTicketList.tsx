@@ -24,7 +24,7 @@ export default function ReportTicketList({ block, start, pageSize, basis }: { bl
         {values.slice(1).map((value, index) => <Box key={block.headers[index + 1]} sx={{ minWidth: 0, ...(block.headers[index + 1] === 'Description' ? { gridColumn: '1 / -1' } : {}) }}>
           <Typography component="dt" variant="caption" color="text.secondary" fontWeight={700}>{block.headers[index + 1]}</Typography>
           <Box component="dd" sx={{ typography: 'body2', m: 0, mt: 0.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-            {block.headers[index + 1] === 'SLA' || block.headers[index + 1] === 'History' ? <Chip size="small" label={value} color={value === 'Met' || value === 'Recorded' ? 'success' : value === 'Missed' ? 'error' : 'default'} variant="outlined" /> : value}
+            {block.headers[index + 1] === 'SLA' || block.headers[index + 1] === 'History' ? <Chip size="small" label={value} color={value === 'Met' || value === 'Recorded' ? 'success' : value === 'Missed' ? 'error' : value.includes('estimate') ? 'warning' : 'default'} variant="outlined" sx={{ maxWidth: '100%', height: 'auto', '& .MuiChip-label': { whiteSpace: 'normal', py: 0.5 } }} /> : value}
           </Box>
         </Box>)}
       </Box>

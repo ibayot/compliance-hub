@@ -58,13 +58,15 @@ import {
   VisibilityOff as VisibilityOffIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
+  LockOpen as UnlockMfaIcon,
+  Sync as SyncIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { useThemeMode } from '@/contexts/ThemeModeContext';
 import { authApi } from '@/lib/api/auth';
 import { ticketSettingsApi } from '@/app/api/references';
-import { usersApi, RoleDefinition, RoleCapabilityRecord } from '@/lib/api/users';
+import { usersApi, RoleDefinition, RoleCapabilityRecord, UnitSyncResult } from '@/lib/api/users';
 import { unitsApi, Unit } from '@/lib/api/units';
 import { isReportorialUnit, unitsForUserRole } from '@/lib/utils/unit-visibility';
 import { formatPersonName } from '@/lib/utils/person-name';
@@ -79,7 +81,7 @@ import {
   saveBiometricCredentials,
 } from '@/lib/auth/biometric';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
-import { SearchableSelect } from '@/components/SearchableSelect';
+import { SearchableSelect, SearchableMultiSelect } from '@/components/SearchableSelect';
 import PendingStaffPanel from '@/components/PendingStaffPanel';
 import { CAPABILITY_CATEGORIES } from '@/lib/capability-categories';
 import { DEFAULT_IDLE_LOCK_MINUTES, MIN_IDLE_LOCK_MINUTES, MAX_IDLE_LOCK_MINUTES, isValidIdleLockMinutes } from '@/lib/utils/session-policy';
@@ -305,6 +307,10 @@ function SecuritySettingsCard() {
   const [googleSignInEnabled, setGoogleSignInEnabled] = useState(true);
   const [allowedEmailDomains, setAllowedEmailDomains] = useState('');
   const [idleLockMinutes, setIdleLockMinutes] = useState(String(DEFAULT_IDLE_LOCK_MINUTES));
+  const [outboundEmailUnitRestrictionEnabled, setOutboundEmailUnitRestrictionEnabled] = useState(false);
+  const [outboundEmailAllowedUnitIds, setOutboundEmailAllowedUnitIds] = useState<number[]>([]);
+  const [emailUnitOptions, setEmailUnitOptions] = useState<Array<{ id: number; name: string; active: boolean }>>([]);
+  const [confirmBlockAllEmails, setConfirmBlockAllEmails] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -317,7 +323,10 @@ function SecuritySettingsCard() {
     setLoading(true);
     setLoadError(false);
     try {
-        const config = await usersApi.getSecurityConfig();
+        const [config, emailUnits] = await Promise.all([usersApi.getSecurityConfig(), usersApi.getEmailUnitOptions()]);
+        setEmailUnitOptions(emailUnits);
+        setOutboundEmailUnitRestrictionEnabled(config.outboundEmailUnitRestrictionEnabled === true);
+        setOutboundEmailAllowedUnitIds(Array.isArray(config.outboundEmailAllowedUnitIds) ? config.outboundEmailAllowedUnitIds : []);
         setDefaultPassword(config.defaultPassword || '');
         setMfaTestMode(Boolean((config as any).mfaTestMode));
         setVaptMode(Boolean((config as any).vaptMode));
@@ -336,7 +345,7 @@ function SecuritySettingsCard() {
 
   const validIdleMinutes = /^\d+$/.test(idleLockMinutes) && isValidIdleLockMinutes(Number(idleLockMinutes));
 
-  const handleSave = async () => {
+  const handleSave = async (confirmedEmptySelection = false) => {
     if (saving || loading || loadError) return;
     if (!validIdleMinutes) {
       enqueueSnackbar('Enter a whole number from 1 to 1440 minutes.', { variant: 'error' });
@@ -344,6 +353,10 @@ function SecuritySettingsCard() {
     }
     if (!defaultPassword) {
       enqueueSnackbar('Default password cannot be empty', { variant: 'error' });
+      return;
+    }
+    if (outboundEmailUnitRestrictionEnabled && outboundEmailAllowedUnitIds.length === 0 && !confirmedEmptySelection) {
+      setConfirmBlockAllEmails(true);
       return;
     }
     setSaving(true);
@@ -363,10 +376,14 @@ function SecuritySettingsCard() {
         googleSignInEnabled,
         allowedEmailDomains: domains,
         idleLockMinutes: Number(idleLockMinutes),
+        outboundEmailUnitRestrictionEnabled,
+        outboundEmailAllowedUnitIds,
       };
       if (vaptSettingsEnabled) payload.vaptMode = vaptMode;
       await usersApi.updateSecurityConfig(payload as any);
+      setConfirmBlockAllEmails(false);
       enqueueSnackbar('Security settings updated successfully', { variant: 'success' });
+      await loadSecurityConfig();
       setTimeout(() => window.location.reload(), 1000);
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to update security settings', { variant: 'error' });
@@ -385,6 +402,14 @@ function SecuritySettingsCard() {
         subheader="Manage application-wide security settings."
       />
       <CardContent>
+        <Dialog open={confirmBlockAllEmails} onClose={() => { if (!saving) setConfirmBlockAllEmails(false); }} fullWidth maxWidth="xs">
+          <DialogTitle>Block all routine emails?</DialogTitle>
+          <DialogContent>No units are selected. Ticket updates, feedback invitations and SMTP tests will be blocked for everyone. OTP and account-recovery emails remain available.</DialogContent>
+          <DialogActions>
+            <Button disabled={saving} onClick={() => setConfirmBlockAllEmails(false)}>Cancel</Button>
+            <Button color="warning" variant="contained" disabled={saving} onClick={() => void handleSave(true)}>{saving ? 'Saving…' : 'Save and Block Routine Emails'}</Button>
+          </DialogActions>
+        </Dialog>
         {loading ? (
           <Typography>Loading...</Typography>
         ) : loadError ? (
@@ -480,9 +505,28 @@ function SecuritySettingsCard() {
               </FormControl>
             </Grid>
             <Grid item xs={12}>
+              <Divider sx={{ mb: 2 }} />
+              <Typography variant="subtitle1" fontWeight={600}>Outbound Email Controls</Typography>
+              <FormControlLabel control={<Switch disabled={saving} checked={outboundEmailUnitRestrictionEnabled} onChange={(_, checked) => setOutboundEmailUnitRestrictionEnabled(checked)} />} label="Restrict routine emails to selected units" />
+              <SearchableMultiSelect<number>
+                label="Units allowed to receive routine emails"
+                value={outboundEmailAllowedUnitIds}
+                onChange={setOutboundEmailAllowedUnitIds}
+                disabled={saving || !outboundEmailUnitRestrictionEnabled}
+                options={[
+                  ...emailUnitOptions.map(unit => ({ value: unit.id, label: `${unit.name}${unit.active ? '' : ' (Inactive)'}`, disabled: !unit.active })),
+                  ...outboundEmailAllowedUnitIds.filter(id => !emailUnitOptions.some(unit => unit.id === id)).map(id => ({ value: id, label: `Unavailable unit #${id}` })),
+                ]}
+                helperText={outboundEmailUnitRestrictionEnabled ? 'Uses each recipient’s current unit. An empty selection blocks all routine emails. Remove unavailable units before saving.' : 'Restriction is off. Existing routine-email sending rules apply; the selected units are retained.'}
+              />
+              <Alert severity={outboundEmailUnitRestrictionEnabled && outboundEmailAllowedUnitIds.length === 0 ? 'warning' : 'info'} sx={{ mt: 2 }}>
+                Applies to ticket emails, feedback invitations and SMTP tests. OTP and account-recovery emails are exempt and go to the intended mailbox. In-app notifications and feedback remain available. The system-wide email disable switch still stops all sending.
+              </Alert>
+            </Grid>
+            <Grid item xs={12}>
               <Button
                 variant="contained"
-                onClick={handleSave}
+                onClick={() => void handleSave()}
                 disabled={saving || !defaultPassword || !validIdleMinutes}
               >
                 {saving ? 'Saving...' : 'Save Settings'}
@@ -1280,9 +1324,19 @@ function FocalUserManagementCard() {
   const [creating, setCreating] = useState(false);
   const [userListLoading, setUserListLoading] = useState(true);
   const [userListError, setUserListError] = useState<string | null>(null);
+  const [unitSyncDialogOpen, setUnitSyncDialogOpen] = useState(false);
+  const [syncingUnits, setSyncingUnits] = useState(false);
+  const unitSyncPending = useRef(false);
+  const [unitSyncError, setUnitSyncError] = useState<string | null>(null);
+  const [unitSyncResult, setUnitSyncResult] = useState<UnitSyncResult | null>(null);
   const [editUser, setEditUser] = useState<any | null>(null);
   const [resetUser, setResetUser] = useState<any | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [mfaRecoveryUser, setMfaRecoveryUser] = useState<any | null>(null);
+  const [mfaRecoveryReason, setMfaRecoveryReason] = useState('');
+  const [mfaIdentityVerified, setMfaIdentityVerified] = useState(false);
+  const [unlockingMfa, setUnlockingMfa] = useState(false);
+  const [mfaRecoveryError, setMfaRecoveryError] = useState<string | null>(null);
   const [defaultPassword, setDefaultPassword] = useState('Changeme123!');
   const [editing, setEditing] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
@@ -1338,6 +1392,34 @@ function FocalUserManagementCard() {
     return true;
   }, [currentUser, isSuperAdmin, isUserManagementAdmin, myCap]);
 
+  const canUnlockMfa = (target: any) => {
+    if (!target.active || Number(target.id) === Number(currentUser?.id)) return false;
+    const elevated = Boolean(myCap?.isUserManagementRolesManage);
+    if (!isUserManagementAdmin && !elevated && !myCap?.isUserManagementView) return false;
+    if (target.role === 'super_admin' && !isSuperAdmin) return false;
+    if (!isUserManagementAdmin && !elevated && target.role !== 'user') return false;
+    if (isUserManagementAdmin && !elevated && (target.isUserManagementAdmin || target.role === 'super_admin')) return false;
+    return Boolean(target.mfaRecoveryRequired && target.mfaRecoveryVersion);
+  };
+
+  const handleUnlockMfa = async () => {
+    if (!mfaRecoveryUser || unlockingMfa || !mfaIdentityVerified || mfaRecoveryReason.trim().length < 10) return;
+    setUnlockingMfa(true);
+    setMfaRecoveryError(null);
+    try {
+      const result = await usersApi.unlockMfa(mfaRecoveryUser.id, {
+        reason: mfaRecoveryReason.trim(), identityVerified: mfaIdentityVerified,
+        expectedRecoveryVersion: mfaRecoveryUser.mfaRecoveryVersion,
+      });
+      enqueueSnackbar(result.changed ? 'MFA unlocked. The account owner must sign in for a fresh code.' : 'This account no longer needs an MFA unlock.', { variant: 'success' });
+      setMfaRecoveryUser(null);
+      await reload();
+    } catch (error: any) {
+      const message = error?.response?.data?.message;
+      setMfaRecoveryError(Array.isArray(message) ? message.join(' ') : message || 'MFA unlock could not be confirmed. Refresh the user list before trying again.');
+    } finally { setUnlockingMfa(false); }
+  };
+
   // Email autocomplete suggestions
   const [emailSuggestions, setEmailSuggestions] = useState<
     { id: number; email: string; firstName?: string; middleName?: string; lastName?: string; suffix?: string }[]
@@ -1389,6 +1471,27 @@ function FocalUserManagementCard() {
     reload();
   }, [reload]);
   useSse(['GLOBAL_SETTINGS_UPDATED', 'USER_DIRECTORY_UPDATED'], reload);
+
+  const handleSyncUnits = async () => {
+    if (!isUserManagementAdmin || unitSyncPending.current) return;
+    unitSyncPending.current = true;
+    setSyncingUnits(true);
+    setUnitSyncError(null);
+    setUnitSyncResult(null);
+    try {
+      const result = await usersApi.syncUnits();
+      setUnitSyncResult(result);
+      setUnitSyncDialogOpen(false);
+      enqueueSnackbar('Unit synchronization completed. See the results below.', { variant: 'success' });
+    } catch (error: any) {
+      const message = error?.response?.data?.message;
+      setUnitSyncError(Array.isArray(message) ? message.join(' ') : message || 'The sync result could not be confirmed. Refresh the user list before trying again; the server may still be processing it.');
+    } finally {
+      unitSyncPending.current = false;
+      setSyncingUnits(false);
+      void reload();
+    }
+  };
 
   const resetForm = () => {
     setForm({
@@ -1518,6 +1621,16 @@ function FocalUserManagementCard() {
         title="User Management"
         subheader="Create and manage user accounts for RICTMS staff and regular users."
         action={
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+          {isUserManagementAdmin && <Button
+            variant="outlined"
+            startIcon={<SyncIcon />}
+            size="small"
+            disabled={syncingUnits}
+            onClick={() => { setUnitSyncError(null); setUnitSyncDialogOpen(true); }}
+          >
+            {syncingUnits ? 'Syncing Units…' : 'Sync Units from UMS'}
+          </Button>}
           <Button
             variant="contained"
             startIcon={<PersonAddIcon />}
@@ -1526,9 +1639,34 @@ function FocalUserManagementCard() {
           >
             Create New User
           </Button>
+          </Stack>
         }
+        sx={{ '& .MuiCardHeader-action': { alignSelf: 'center', m: 0 }, flexWrap: 'wrap', gap: 1 }}
       />
       <CardContent>
+        {unitSyncResult && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setUnitSyncResult(null)}>
+          Units synchronized: {unitSyncResult.updatedUsers} user(s) updated; {unitSyncResult.discoveredUnits} new unit(s).
+          {' '}Manual assignments: {unitSyncResult.retainedOverrides} retained; {unitSyncResult.clearedOverrides} now match UMS.
+          {' '}Skipped: {unitSyncResult.skippedAmbiguousStaff} conflicting staff record(s), {unitSyncResult.skippedRestrictedAssignments} restricted assignment(s).
+        </Alert>}
+        <Dialog open={unitSyncDialogOpen} onClose={() => { if (!syncingUnits) setUnitSyncDialogOpen(false); }} fullWidth maxWidth="sm">
+          <DialogTitle>Sync Units from UMS</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <Typography>Update existing active users' units from their active UMS work history, matched by Staff ID. This applies to all users, regardless of the current tab or search.</Typography>
+              <Typography>Manual unit assignments remain in place unless UMS already matches them. Conflicting records and assignments that do not meet the unit requirements are skipped. New units may be added.</Typography>
+              <Typography color="text.secondary">This updates unit assignments only. It does not create accounts or refresh the pending staff directory.</Typography>
+              {unitSyncError && <Alert severity="error">{unitSyncError}</Alert>}
+              {syncingUnits && <Typography role="status">Synchronizing units. Please wait…</Typography>}
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button disabled={syncingUnits} onClick={() => setUnitSyncDialogOpen(false)}>Cancel</Button>
+            <Button variant="contained" startIcon={<SyncIcon />} disabled={syncingUnits || !isUserManagementAdmin} onClick={handleSyncUnits}>
+              {syncingUnits ? 'Syncing Units…' : 'Sync Units'}
+            </Button>
+          </DialogActions>
+        </Dialog>
         {userListError && (
           <Alert
             severity="error"
@@ -1848,6 +1986,9 @@ function FocalUserManagementCard() {
                           />
                         </TableCell>
                         <TableCell>
+                          {u.mfaRecoveryRequired && <Tooltip title={u.mfaLockExpiresAt ? `Lock expiry: ${new Date(u.mfaLockExpiresAt).toLocaleString()}` : 'OTP failures need account recovery.'}>
+                            <Chip label={u.mfaLockExpiresAt && new Date(u.mfaLockExpiresAt).getTime() > Date.now() ? 'MFA Locked' : 'MFA recovery needed'} size="small" color="warning" variant="outlined" sx={{ mb: 0.5 }} />
+                          </Tooltip>}
                           {u.is_active || u.active ? (
                             <Chip
                               icon={<ActiveIcon />}
@@ -1877,6 +2018,12 @@ function FocalUserManagementCard() {
                               </IconButton>
                             </span>
                           </Tooltip>
+                          {canUnlockMfa(u) && <Tooltip title="Unlock MFA">
+                            <IconButton size="small" color="warning" aria-label={`Unlock MFA for ${formatPersonName(u)}`}
+                              onClick={() => { setMfaRecoveryUser(u); setMfaRecoveryReason(''); setMfaIdentityVerified(false); setMfaRecoveryError(null); }}>
+                              <UnlockMfaIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>}
                           <Tooltip title="Edit user">
                             <span>
                               <IconButton
@@ -2151,6 +2298,27 @@ function FocalUserManagementCard() {
           </DialogActions>
         </Dialog>
 
+        <Dialog open={Boolean(mfaRecoveryUser)} onClose={() => { if (!unlockingMfa) setMfaRecoveryUser(null); }} maxWidth="sm" fullWidth>
+          <DialogTitle>Unlock MFA</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <Typography>Recover MFA access for <strong>{formatPersonName(mfaRecoveryUser)}</strong> ({mfaRecoveryUser?.email}).</Typography>
+              <Alert severity="info">The current OTP, failed-attempt counters and trusted-device MFA exemptions will be cleared. The account owner must sign in again for a fresh code. The password and MFA requirement stay in place.</Alert>
+              <TextField label="Reason for MFA unlock" required multiline minRows={2} value={mfaRecoveryReason}
+                onChange={event => setMfaRecoveryReason(event.target.value)} disabled={unlockingMfa}
+                inputProps={{ maxLength: 500 }} helperText="10–500 characters. Do not enter passwords or OTPs." fullWidth />
+              <FormControlLabel control={<Checkbox checked={mfaIdentityVerified} onChange={event => setMfaIdentityVerified(event.target.checked)} disabled={unlockingMfa} />}
+                label="I verified the account owner's identity." />
+              {mfaRecoveryError && <Alert severity="error">{mfaRecoveryError}</Alert>}
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button disabled={unlockingMfa} onClick={() => setMfaRecoveryUser(null)}>Cancel</Button>
+            <Button color="warning" variant="contained" disabled={unlockingMfa || !mfaIdentityVerified || mfaRecoveryReason.trim().length < 10 || !mfaRecoveryUser || !canUnlockMfa(mfaRecoveryUser)} onClick={handleUnlockMfa}>
+              {unlockingMfa ? 'Unlocking…' : 'Unlock MFA'}
+            </Button>
+          </DialogActions>
+        </Dialog>
         <Dialog open={Boolean(resetUser)} onClose={() => setResetUser(null)} maxWidth="xs" fullWidth>
           <DialogTitle>Quick Reset Password</DialogTitle>
           <DialogContent dividers>

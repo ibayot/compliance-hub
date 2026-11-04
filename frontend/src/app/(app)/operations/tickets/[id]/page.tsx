@@ -1918,7 +1918,7 @@ export default function TicketDetailPage() {
                     Requester Unit
                   </Typography>
                   <Typography variant="body2">
-                    {(ticket as any).requester?.units?.[0]?.name || '—'}
+                    {ticket.requesterUnitSnapshot?.unitName || '—'}
                   </Typography>
                 </Box>
                 <Box>

@@ -77,23 +77,23 @@ class ApiClient {
   refreshAuthentication(): Promise<{ accessToken?: string; refreshToken?: string }> {
     const generation = recoveryGeneration();
     if (this.refreshFlight && this.refreshGeneration === generation) return this.refreshFlight;
+    const controller = new AbortController();
+    this.refreshAbort = controller;
+    // Include time spent waiting for another tab's cookie-rotation lock.
+    const deadline = setTimeout(() => controller.abort(), 30_000);
     const renew = async () => {
-      if (!canRecoverSession() || generation !== recoveryGeneration()) throw new Error('Session recovery cancelled.');
+      if (controller.signal.aborted || !canRecoverSession() || generation !== recoveryGeneration()) throw new Error('Session recovery cancelled.');
       const native = Capacitor.isNativePlatform();
       const refreshToken = tokenStore.get('refreshToken');
       if (native && !refreshToken) {
         throw Object.assign(new Error('No refresh credential.'), { response: { status: 401 } });
       }
-      const controller = new AbortController();
-      this.refreshAbort = controller;
       let response;
-      try {
-        response = await axios.post(
+      response = await axios.post(
           apiUrl('/auth/refresh'), native ? { refreshToken } : {},
           { withCredentials: true, timeout: 15_000, signal: controller.signal, headers: { 'X-Client-Platform': native ? 'mobile' : 'browser' } },
         );
-      } finally { if (this.refreshAbort === controller) this.refreshAbort = null; }
-      if (!canRecoverSession() || generation !== recoveryGeneration()) throw new Error('Session recovery cancelled.');
+      if (controller.signal.aborted || !canRecoverSession() || generation !== recoveryGeneration()) throw new Error('Session recovery cancelled.');
       const tokens = response.data || {};
       if (native && (!tokens.accessToken || !tokens.refreshToken)) throw new Error('Incomplete session renewal response.');
       if (tokens.accessToken) tokenStore.set('accessToken', tokens.accessToken);
@@ -103,12 +103,16 @@ class ApiClient {
       return tokens;
     };
     // Serialize browser-cookie rotation across tabs when Web Locks are supported.
-    const request = !Capacitor.isNativePlatform() && typeof navigator !== 'undefined' && navigator.locks
-      ? navigator.locks.request('compliance-hub:session-refresh', renew) : renew();
+    const request = Promise.resolve().then(() => !Capacitor.isNativePlatform() && typeof navigator !== 'undefined' && navigator.locks
+      ? navigator.locks.request('compliance-hub:session-refresh', { signal: controller.signal }, renew) : renew());
     const flight = request.catch(error => {
       if (generation === recoveryGeneration() && isRejectedSession(error)) this.rejectSession();
       throw error;
-    }).finally(() => { if (this.refreshFlight === flight) this.refreshFlight = null; });
+    }).finally(() => {
+      clearTimeout(deadline);
+      if (this.refreshAbort === controller) this.refreshAbort = null;
+      if (this.refreshFlight === flight) this.refreshFlight = null;
+    });
     this.refreshGeneration = generation;
     this.refreshFlight = flight;
     return flight;

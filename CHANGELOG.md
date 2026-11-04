@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.31] - 2026-11-04 - Reliable Tickets, Account Recovery and Email Controls
+
+### Fixed
+- Application reconnection now recovers from stalled permission and live-update requests, renews stuck live streams, and lets Retry replace a stalled attempt while preserving valid sessions.
+- Authorized account managers can unlock MFA after confirming the account owner's identity and recording a reason. Recovery clears old codes, failure state and trusted-device exemptions, is audited, and still requires a fresh OTP. Expired lockouts start a fresh attempt allowance, active locks apply consistently to sign-in, and Google sign-in completes the required application OTP before opening the account.
+- Ticket searches and post-submission refreshes no longer stay indefinitely loading when live updates overlap. Ticket rows load independently of dashboard counts and escalation history, superseded searches are cancelled, and failed or timed-out reads provide retry while preserving filters.
+
+### Improved
+- Security Settings can limit routine outbound emails and feedback invitations to selected recipient units. OTP and recovery messages remain exempt; blocked invitations are reported as skipped. Empty selection blocks routine email when the restriction is enabled, and existing ticket records and in-app feedback remain available.
+- Account administrators can manually sync existing users' units from UMS in User Management, with confirmation and updated/retained/skipped results. Manual assignments and unit restrictions are preserved.
+- Ticket details retain the requester's recorded unit after a personnel transfer. Existing tickets capture the unit shown at rollout; new tickets capture it when filed.
+- Monthly ticket reports recover older pause/freeze counts and business minutes from available historical status changes and supporting records. Reconstructed values are clearly labelled estimates; incomplete histories show available values while missing values remain unavailable. Preview and PDF share the same values and warnings. Existing SLA results and stored ticket history remain unchanged.
+
 ## [1.0.30] - 2026-10-27 - Clearer Ticket Reports and Account Verification
 
 ### Improved

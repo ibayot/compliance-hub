@@ -28,6 +28,7 @@ API-CLIENT-002 MUST avoid logging tokens and private payloads.
 API-CLIENT-003 MUST bound refresh/retry to prevent infinite loops or duplicate mutations.
 API-CLIENT-004 MUST distinguish cancellation, validation failure, denial, and service outage.
 API-CLIENT-005 MUST revoke/clear relevant state at logout and account/scope change.
+API-CLIENT-006 MUST bound read recovery across the entire promise chain, including authentication interceptors and cross-tab coordination. A transport-only timeout does not bound an interceptor that is still awaiting another operation. Propagate cancellation, reject late obsolete results and preserve safe retry; do not automatically repeat mutations with an unknown outcome.
 
 ## Validation
 Simultaneous expired requests, refresh failure, cancellation, offline, unauthorized, and application-specific native URL behavior.

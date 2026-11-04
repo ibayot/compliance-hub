@@ -4,6 +4,7 @@ import {
   ConflictException,
   BadRequestException,
   ForbiddenException,
+  HttpException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, EntityManager } from 'typeorm';
@@ -23,6 +24,9 @@ import { SecurityConfig } from './entities/security-config.entity';
 import { SecurityConfigService } from './security-config.service';
 import { UserTrustedDevice } from './entities/user-trusted-device.entity';
 import { UserUnitOverride } from './entities/user-unit-override.entity';
+import { auditContext } from '../../shared/audit/audit.context';
+import { UnlockMfaDto } from './dto/unlock-mfa.dto';
+import { assertMfaRecoveryAuthority, matchesMfaRecoveryVersion, mfaRecoveryRequired, mfaRecoveryVersion } from './mfa-recovery-policy';
 
 export type UnitAssignmentSource = 'manual' | 'ums';
 export type UserWithUnitAssignmentSource = User & {
@@ -637,6 +641,9 @@ const previousValue = value;
           isUserManagementAdmin: Boolean(
             capabilityRows.find((row) => row.roleValue === user.role)?.isUserManagementAdmin,
           ),
+          mfaRecoveryRequired: mfaRecoveryRequired(user),
+          mfaLockExpiresAt: user.mfaLockedUntil ? new Date(user.mfaLockedUntil).toISOString() : null,
+          mfaRecoveryVersion: mfaRecoveryRequired(user) ? mfaRecoveryVersion(user) : null,
           unitAssignmentSource: user.units?.length ? (override ? 'manual' : 'ums') : null,
           unitAssignmentUpdatedAt: override?.overriddenAt ?? null,
         }) as UserWithUnitAssignmentSource;
@@ -655,7 +662,7 @@ const previousValue = value;
       }
 
       const users = await this.usersRepository.find();
-      return decorate(users.map((user) => ({ ...user, units: [] }) as User));
+      return decorate(users.map((user) => Object.assign(user, { units: [] })));
     }
   }
 
@@ -773,37 +780,80 @@ const previousValue = value;
   }
 
   async updateMfaCode(userId: number, code: string, expiresAt: Date): Promise<void> {
-    await this.usersRepository.update(userId, {
-      mfaCode: code,
-      mfaExpiresAt: expiresAt,
-      mfaChallengeAttempts: 0,
-    } as any);
+    await this.usersRepository.manager.transaction(async manager => {
+      const repo = manager.getRepository(User);
+      const user = await repo.findOne({ where: { id: userId }, lock: { mode: 'pessimistic_write' } });
+      if (!user?.active) throw new ForbiddenException('Account is unavailable.');
+      const lockedUntil = user.mfaLockedUntil ? new Date(user.mfaLockedUntil).getTime() : null;
+      if (lockedUntil && lockedUntil > Date.now()) throw new HttpException('Your account is locked for 15 minutes after repeated MFA failures.', 429);
+      await repo.update(userId, {
+        mfaCode: code, mfaExpiresAt: expiresAt, mfaChallengeAttempts: 0,
+        ...(lockedUntil ? { mfaAttempts: 0, mfaLockedUntil: null } : {}),
+      } as any);
+    });
   }
 
-  async recordMfaFailure(
-    userId: number,
-    attempts: number,
-    challengeAttempts: number,
-    lockedUntil: Date | null,
-    invalidateCode = false,
-  ): Promise<void> {
-    await this.usersRepository.update(userId, {
-      mfaAttempts: attempts,
-      mfaChallengeAttempts: challengeAttempts,
-      mfaLockedUntil: lockedUntil,
-      ...(invalidateCode ? { mfaCode: null, mfaExpiresAt: null } : {}),
-    } as any);
+  /** Serialize OTP consumption and failure counts with administrator recovery. */
+  async consumeMfaChallenge(userId: number, code: string): Promise<void> {
+    const outcome = await this.usersRepository.manager.transaction(async manager => {
+      const repo = manager.getRepository(User);
+      const user = await repo.findOne({ where: { id: userId }, lock: { mode: 'pessimistic_write' } });
+      if (!user?.active) return { status: 401, message: 'Account is unavailable.' };
+      const lock = user.mfaLockedUntil ? new Date(user.mfaLockedUntil).getTime() : null;
+      if (lock && lock > Date.now()) return { status: 429, message: 'MFA verification is temporarily locked. Request a new code later.' };
+      if (!user.mfaCode || !user.mfaExpiresAt) return { status: 400, message: 'No verification code found. Please log in again to request a new code.' };
+      if (Date.now() > new Date(user.mfaExpiresAt).getTime()) return { status: 400, message: 'Verification code has expired. Please request a new one.' };
+      if (user.mfaCode !== code) {
+        const attempts = (lock ? 0 : Number(user.mfaAttempts || 0)) + 1;
+        const challengeAttempts = (lock ? 0 : Number(user.mfaChallengeAttempts || 0)) + 1;
+        const lockedUntil = attempts >= 9 ? new Date(Date.now() + 15 * 60 * 1000) : null;
+        const expired = Boolean(lockedUntil || challengeAttempts >= 3);
+        await repo.update(userId, {
+          mfaAttempts: attempts, mfaChallengeAttempts: challengeAttempts, mfaLockedUntil: lockedUntil,
+          ...(expired ? { mfaCode: null, mfaExpiresAt: null } : {}),
+        } as any);
+        if (lockedUntil) return { status: 429, message: 'Too many invalid MFA attempts. Your account is locked for 15 minutes.' };
+        if (expired) return { status: 401, message: 'Three MFA attempts failed. Please log in again to request a new code.' };
+        return { status: 400, message: `Invalid verification code. Attempt ${challengeAttempts} of 3 for this login.` };
+      }
+      await repo.update(userId, { mfaCode: null, mfaExpiresAt: null, mfaLastVerifiedAt: new Date(), mfaAttempts: 0, mfaChallengeAttempts: 0, mfaLockedUntil: null } as any);
+      return null;
+    });
+    // Commit failed-attempt accounting before returning the authentication error.
+    if (outcome) throw new HttpException(outcome.message, outcome.status);
   }
 
-  async markMfaVerified(userId: number): Promise<void> {
-    await this.usersRepository.update(userId, {
-        mfaCode: null,
-        mfaExpiresAt: null,
-        mfaLastVerifiedAt: new Date(),
-        mfaAttempts: 0,
-        mfaChallengeAttempts: 0,
-        mfaLockedUntil: null,
-    } as any);
+  async unlockMfa(targetId: number, actorId: number, dto: UnlockMfaDto): Promise<{ success: true; changed: boolean }> {
+    const reason = typeof dto.reason === 'string' ? dto.reason.trim() : '';
+    if (!Number.isSafeInteger(actorId) || actorId <= 0 || !Number.isSafeInteger(targetId) || targetId <= 0) throw new BadRequestException('Invalid account identity.');
+    if (dto.identityVerified !== true || typeof reason !== 'string' || reason.length < 10 || reason.length > 500 || !/^[a-f0-9]{64}$/.test(dto.expectedRecoveryVersion || '')) throw new BadRequestException('Identity confirmation, a valid reason and current recovery state are required.');
+    return this.usersRepository.manager.transaction(async manager => {
+      const repo = manager.getRepository(User);
+      const actor = await repo.findOne({ where: { id: actorId } });
+      const target = await repo.findOne({ where: { id: targetId }, lock: { mode: 'pessimistic_write' } });
+      if (!target) throw new NotFoundException('Account not found.');
+      const capRepo = manager.getRepository(RoleCapability);
+      const actorCap = actor ? await capRepo.findOne({ where: { roleValue: actor.role } }) : null;
+      const targetCap = await capRepo.findOne({ where: { roleValue: target.role } });
+      assertMfaRecoveryAuthority(actor, target, actorCap, targetCap);
+      if (!mfaRecoveryRequired(target)) return { success: true as const, changed: false };
+      if (!matchesMfaRecoveryVersion(target, dto.expectedRecoveryVersion)) throw new ConflictException('The account MFA state changed. Refresh the user list and review it again.');
+      const database = manager.connection.options.database;
+      const auditDatabase = process.env.AUDIT_DB_DATABASE?.trim();
+      if (!auditDatabase || !/^[A-Za-z0-9_]+$/.test(auditDatabase)) throw new Error('Audit database is unavailable.');
+      await repo.update(targetId, { mfaCode: null, mfaExpiresAt: null, mfaLastVerifiedAt: null, mfaAttempts: 0, mfaChallengeAttempts: 0, mfaLockedUntil: null } as any);
+      await manager.getRepository(UserTrustedDevice).delete({ userId: targetId });
+      const context = auditContext.getStore();
+      // Fail closed: the unlock and its explicit, credential-free audit commit together.
+      await manager.query(`INSERT INTO \`${auditDatabase}\`.audit_log
+        (user_email, action, database_name, table_name, operation_type, row_id, description, old_values, new_values, ip_address, session_id)
+        VALUES (?, 'UPDATE', ?, 'users', 'MFA_UNLOCK', ?, ?, ?, ?, ?, ?)`, [
+        actor!.email, database, String(targetId), 'MFA recovery unlocked after account-owner identity verification.',
+        JSON.stringify({ recoveryRequired: true }), JSON.stringify({ recoveryRequired: false, trustedDevicesCleared: true, identityVerified: true, actorUserId: actorId, reason }),
+        context?.ipAddress || 'unknown', context?.sessionId || 'unavailable',
+      ]);
+      return { success: true as const, changed: true };
+    });
   }
 
   async findTrustedDevice(userId: number, deviceToken: string): Promise<UserTrustedDevice | null> {
@@ -816,15 +866,18 @@ const previousValue = value;
     });
   }
 
-  async addTrustedDevice(userId: number, deviceToken: string): Promise<UserTrustedDevice> {
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiration
-
-    const existing = await this.findTrustedDevice(userId, deviceToken);
-    const device = existing
-      ? this.trustedDeviceRepository.merge(existing, { expiresAt })
-      : this.trustedDeviceRepository.create({ userId, deviceToken, expiresAt });
-    return this.trustedDeviceRepository.save(device);
+  async addTrustedDevice(userId: number, deviceToken: string, verifiedAt: Date): Promise<UserTrustedDevice> {
+    return this.usersRepository.manager.transaction(async manager => {
+      const user = await manager.getRepository(User).findOne({ where: { id: userId }, lock: { mode: 'pessimistic_write' } });
+      if (!user?.active || !verifiedAt || !user.mfaLastVerifiedAt || new Date(user.mfaLastVerifiedAt).getTime() !== new Date(verifiedAt).getTime() || mfaRecoveryRequired(user) || user.mfaCode) {
+        throw new ForbiddenException('MFA verification changed. Sign in again for a fresh code.');
+      }
+      const repo = manager.getRepository(UserTrustedDevice);
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const existing = await repo.findOne({ where: { userId, deviceToken } });
+      const device = existing ? repo.merge(existing, { expiresAt }) : repo.create({ userId, deviceToken, expiresAt });
+      return repo.save(device);
+    });
   }
 
   /** Units available for self-service profile selection. This is not the Units administration endpoint. */

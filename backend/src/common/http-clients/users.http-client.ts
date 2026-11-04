@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { OutboundEmailDecision } from '../../modules/users/outbound-email-policy.service';
 
 export interface UserStub {
   id: number;
@@ -234,6 +235,25 @@ export class UsersHttpClient {
    */
   async getUserById(id: number): Promise<UserStub | null> {
     return this.fetchWithRetry<UserStub>(`${this.baseUrl}/api/internal/users/${id}`);
+  }
+
+  /** Read-only policy command: keep mailbox data out of URLs and bound body reads too. */
+  async getOutboundEmailDecision(recipientEmail: string): Promise<OutboundEmailDecision> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch(`${this.baseUrl}/api/internal/outbound-email/decision`, {
+        method: 'POST', headers: this.buildHeaders(), signal: controller.signal,
+        body: JSON.stringify({ recipientEmail }),
+      });
+      if (!response.ok) throw new Error('Email policy is unavailable.');
+      const decision = await response.json() as OutboundEmailDecision;
+      const reasons = ['restriction_disabled', 'unit_allowed', 'no_units_selected', 'recipient_not_eligible', 'unit_not_allowed', 'policy_unavailable'];
+      if (typeof decision?.allowed !== 'boolean' || !reasons.includes(decision.reason) || (decision.allowed && !['restriction_disabled','unit_allowed'].includes(decision.reason))) throw new Error('Invalid email policy response.');
+      return decision;
+    } catch {
+      return { allowed: false, reason: 'policy_unavailable' };
+    } finally { clearTimeout(timer); }
   }
 
   /**

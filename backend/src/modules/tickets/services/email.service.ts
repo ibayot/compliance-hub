@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -6,6 +6,11 @@ import * as nodemailer from 'nodemailer';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { EventBusService } from '../../../common/events/event-bus.service';
 import { auditContext } from '../../../shared/audit/audit.context';
+import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
+import type { OutboundEmailDecision } from '../../users/outbound-email-policy.service';
+
+export interface EmailDeliveryOutcome { sent: boolean; suppressed: boolean; reason?: string; }
+interface EmailDeliveryOptions { bypassGeneralNotificationToggle?: boolean; purpose?: 'routine' | 'security'; }
 
 export interface TicketEmailData {
   ticketId: string;
@@ -92,6 +97,7 @@ export class EmailService implements OnModuleInit {
     @InjectRepository(TicketingConfig)
     private readonly configRepo: Repository<TicketingConfig>,
     private readonly eventBus: EventBusService,
+    @Optional() private readonly usersHttpClient?: UsersHttpClient,
   ) {
     const configuredFrontendUrl =
       this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
@@ -207,9 +213,9 @@ export class EmailService implements OnModuleInit {
 
       this.eventBus.subscribe(
         'email.send',
-        async (payload: { to: string; subject: string; text?: string; html?: string }) => {
+        async (payload: { to: string; subject: string; text?: string; html?: string; purpose?: 'routine' | 'security' }) => {
           try {
-            await this.send(payload.to, payload.subject, payload.html || payload.text || '');
+            await this.send(payload.to, payload.subject, payload.html || payload.text || '', { purpose: payload.purpose === 'security' ? 'security' : 'routine' });
           } catch (error: any) {
             this.logger.error('Failed to send event-triggered email.');
           }
@@ -528,6 +534,8 @@ export class EmailService implements OnModuleInit {
   }
 
   async sendTestEmail(to: string): Promise<{ sent: boolean; message: string }> {
+    const decision = await this.checkRoutineRecipient(to);
+    if (!decision.allowed) return { sent: false, message: this.policySuppressionMessage(decision.reason) };
     const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });
     const isDbEnabled = dbConfig?.isEmailNotificationsEnabled ?? true;
 
@@ -604,7 +612,7 @@ export class EmailService implements OnModuleInit {
     await this.send(to, subject, html);
   }
 
-  public async sendRatingInvitationEmail(data: RatingInvitationEmailData): Promise<boolean> {
+  public async sendRatingInvitationEmail(data: RatingInvitationEmailData): Promise<EmailDeliveryOutcome> {
     const recipientName = this.escapeHtml(data.recipientName);
     const ratingUrl = this.escapeHtml(data.ratingUrl);
     const ticketLabel = data.eligibleTicketCount === 1 ? 'request' : 'requests';
@@ -632,7 +640,7 @@ export class EmailService implements OnModuleInit {
     </div>
   </div>
 </body></html>`;
-    return this.send(data.recipientEmail, subject, html, {
+    return this.deliver(data.recipientEmail, subject, html, {
       bypassGeneralNotificationToggle: true,
     });
   }
@@ -653,34 +661,54 @@ export class EmailService implements OnModuleInit {
 </body></html>`;
     return this.send(data.recipientEmail, subject, html, {
       bypassGeneralNotificationToggle: true,
+      purpose: 'security',
     });
+  }
+
+  public policySuppressionMessage(reason: string): string {
+    return reason === 'policy_unavailable'
+      ? 'Email policy could not be verified. Please retry later.'
+      : 'Routine email is not enabled for this recipient’s current unit.';
+  }
+
+  public async checkRoutineRecipient(to: string): Promise<OutboundEmailDecision> {
+    let decision: OutboundEmailDecision;
+    try { decision = await this.usersHttpClient!.getOutboundEmailDecision(to); }
+    catch { decision = { allowed: false, reason: 'policy_unavailable' }; }
+    if (!decision.allowed) this.logger.log(`[EMAIL-SUPPRESSED] reason=${decision.reason}; recipientUserId=${decision.recipientUserId || 'unresolved'}`);
+    return decision;
   }
 
   private async send(
     to: string,
     subject: string,
     html: string,
-    options: { bypassGeneralNotificationToggle?: boolean } = {},
+    options: EmailDeliveryOptions = {},
   ): Promise<boolean> {
+    return (await this.deliver(to, subject, html, options)).sent;
+  }
+
+  private async deliver(to: string, subject: string, html: string, options: EmailDeliveryOptions = {}): Promise<EmailDeliveryOutcome> {
     if (!this.emailEnabled) {
       this.logger.log('[EMAIL-DISABLED] Suppressed email because outbound email is disabled.');
-      return false;
+      return { sent: false, suppressed: true, reason: 'system_email_disabled' };
     }
-
+    try {
+    const security = options.purpose === 'security';
     const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });
     if (
       dbConfig &&
       dbConfig.isEmailNotificationsEnabled === false &&
-      !options.bypassGeneralNotificationToggle
+      !options.bypassGeneralNotificationToggle && !security
     ) {
       this.logger.log(
         '[EMAIL-DISABLED] Suppressed email because database email notifications are disabled.',
       );
-      return false;
+      return { sent: false, suppressed: true, reason: 'general_notifications_disabled' };
     }
     if (dbConfig?.isEmailNotificationsEnabled === false) {
       this.logger.log(
-        '[EMAIL-CONTROLLED] Sending a manually selected rating email while general outbound notifications are disabled.',
+        '[EMAIL-CONTROLLED] General notifications are disabled; processing an explicit invitation or security message.',
       );
     }
 
@@ -690,7 +718,7 @@ export class EmailService implements OnModuleInit {
     const isControlledManualDelivery =
       options.bypassGeneralNotificationToggle === true &&
       dbConfig?.isEmailNotificationsEnabled === false;
-    const override = isControlledManualDelivery
+    const override = security || isControlledManualDelivery
       ? null
       : dbConfig?.emailTestOverride || this.testOverrideTo;
     const effectiveTo = override ?? to;
@@ -698,13 +726,19 @@ export class EmailService implements OnModuleInit {
       this.logger.log('[EMAIL-OVERRIDE] Email test override is active.');
     }
 
-    if (!this.primaryTransporter && !this.fallbackTransporter) {
-      this.logger.log('[EMAIL-LOG] Email delivery skipped because SMTP is unavailable.');
-      return false;
+    if (!security) {
+      const decision = await this.checkRoutineRecipient(to);
+      if (!decision.allowed) return { sent: false, suppressed: true, reason: decision.reason };
+      if (effectiveTo !== to) {
+        const destination = await this.checkRoutineRecipient(effectiveTo);
+        if (!destination.allowed) return { sent: false, suppressed: true, reason: destination.reason };
+      }
     }
 
-    try {
-      const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });
+    if (!this.primaryTransporter && !this.fallbackTransporter) {
+      this.logger.log('[EMAIL-LOG] Email delivery skipped because SMTP is unavailable.');
+      return { sent: false, suppressed: false, reason: 'smtp_unavailable' };
+    }
       const today = new Date().toISOString().split('T')[0];
       const limit = dbConfig?.primarySmtpDailyLimit || 500;
       let sentToday = dbConfig?.primarySmtpSentToday || 0;
@@ -726,7 +760,7 @@ export class EmailService implements OnModuleInit {
 
       if (!activeTransporter) {
         this.logger.error('No valid SMTP transporter available to send email.');
-        return false;
+        return { sent: false, suppressed: false, reason: 'smtp_unavailable' };
       }
 
       await activeTransporter.sendMail({
@@ -754,10 +788,10 @@ export class EmailService implements OnModuleInit {
             this.logger.warn('Email sent, but the SMTP usage counter could not be updated.');
           });
       }
-      return true;
+      return { sent: true, suppressed: false };
     } catch (err: any) {
       this.logger.error('Email delivery failed.');
-      return false;
+      return { sent: false, suppressed: false, reason: 'delivery_failed' };
     }
   }
 }

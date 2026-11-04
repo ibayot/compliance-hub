@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { captureTicketUnit } from './ticket-unit-snapshot';
 import {
   IsString,
   IsDateString,
@@ -78,6 +79,7 @@ import { formatPersonName } from '../../../shared/utils/person-name';
 import { AssigneePerformanceRow, PerformancePeriod, PerformanceSummary, weeklyPerformancePeriod, reportPerformancePeriod, scoreAssignees } from './ticket-performance';
 import { creditTicketPause, resolutionTiming, ResolutionTiming } from './ticket-sla-pause';
 import { newInterruptionHistory, recordInterruptionTransition } from './ticket-interruptions';
+import { HistoricalInterruptionEvidence } from './ticket-interruption-reconstruction';
 
 // --- DTOs --------------------------------------------------------------------
 
@@ -1441,6 +1443,11 @@ export class TicketService implements OnModuleInit {
         [requesterId],
       );
       requester = rows?.[0] ?? null;
+      if (requester) {
+        const usersDatabase = process.env.USERS_DB_DATABASE;
+        if (!usersDatabase || !/^[A-Za-z0-9_]+$/.test(usersDatabase)) throw new ServiceUnavailableException('Requester unit could not be verified. Please retry.');
+        requester.units = await this.dataSource.query(`SELECT u.id,u.name FROM \`${usersDatabase}\`.user_unit_access a JOIN \`${usersDatabase}\`.units u ON u.id=a.unit_id WHERE a.user_id=? ORDER BY a.unit_id LIMIT 1`, [requesterId]);
+      }
     }
     if (!requester) throw new BadRequestException('Requester not found');
     await this.assertProxyRequesterAllowed(callerId, callerRole, requester);
@@ -1789,6 +1796,7 @@ export class TicketService implements OnModuleInit {
       issueTypeId,
       issueType: issueTypeKey,
       requesterId,
+      requesterUnitSnapshot: captureTicketUnit(requester),
       createdById: callerId,
       assignedToId,
       resolutionNotes: null,
@@ -1835,6 +1843,7 @@ export class TicketService implements OnModuleInit {
           requesterId = Number(requester.id);
           if (assignedToId) this.assertRequesterAssignmentSeparation(ticketType, assignedToId, requesterId, callerId);
           ticket.requesterId = requesterId;
+          ticket.requesterUnitSnapshot = captureTicketUnit(requester);
           return manager.getRepository(Ticket).save(ticket);
         })
       : await this.ticketRepo.save(ticket);
@@ -2386,12 +2395,13 @@ export class TicketService implements OnModuleInit {
           requester = await this.staffDirectory!.complete(manager, dto.pendingStaffId!, dto.requesterEmail!, actorId, 'correct');
           if (Number(locked.requesterId) === Number(requester.id)) throw new BadRequestException('The selected person is already the ticket requester.');
           if (locked.assignedToId) this.assertRequesterAssignmentSeparation(locked.ticketType, locked.assignedToId, requester.id);
-          await manager.getRepository(Ticket).update(locked.id,{requesterId:Number(requester.id)});
+          await manager.getRepository(Ticket).update(locked.id,{requesterId:Number(requester.id),requesterUnitSnapshot:captureTicketUnit(requester,'requester_correction')});
           await manager.getRepository(TicketEvent).save(manager.getRepository(TicketEvent).create({ticketId:locked.id,actorId,eventType:'requester_corrected',meta:JSON.stringify({previousRequesterId,requesterId:requester.id,requesterName:formatPersonName(requester,requester.email)})}));
           return manager.getRepository(Ticket).findOneByOrFail({id:locked.id});
         });
       }
       ticket.requesterId = Number(dto.requesterId);
+      ticket.requesterUnitSnapshot = captureTicketUnit(requester, 'requester_correction');
       const updated = await this.ticketRepo.save(ticket);
       await this.logEvent(updated.id, 'requester_corrected', actorId, {
         previousRequesterId,
@@ -7361,6 +7371,65 @@ export class TicketService implements OnModuleInit {
     }
   }
 
+  /** Internal read-only evidence projection; callers pass only the already-authorized report source. */
+  async getBuilderInterruptionEvidence(tickets: Ticket[], now: Date) {
+    const byTicket = new Map<string, HistoricalInterruptionEvidence[]>();
+    let auditUnavailable = false, total = 0;
+    const auditDatabase = process.env.AUDIT_DB_DATABASE?.trim();
+    const ticketDatabase = this.dataSource.options.database;
+    const safeJson = (column: string) => `IF(JSON_VALID(${column}), ${column}, '{}')`;
+    const field = (column: string, name: string) => `JSON_UNQUOTE(JSON_EXTRACT(${safeJson(column)}, '$.${name}'))`;
+    const ids = [...new Set(tickets.map(ticket => ticket.id))];
+    const allowed = new Set(ids);
+    for (let offset = 0; offset < ids.length; offset += 250) {
+      const batch = ids.slice(offset, offset + 250), placeholders = batch.map(() => '?').join(',');
+      const queries = [
+        this.dataSource.query(`SELECT id, ticket_id AS ticketId, created_at AS at, event_type AS eventType,
+          ${field('meta', 'from')} AS fromStatus, ${field('meta', 'to')} AS toStatus,
+          ${field('meta', 'fromStatus')} AS queueFrom, ${field('meta', 'toStatus')} AS queueTo,
+          ${field('meta', 'status')} AS initialStatus
+          FROM ticket_events WHERE ticket_id IN (${placeholders}) AND created_at <= ?
+          AND event_type IN ('created','status_changed','status_extended','queue_promoted','in_progress','resolved','closed','user_closed','pause','freeze','cancelled','duplicate')
+          ORDER BY ticket_id, created_at, id LIMIT 20001`, [...batch, now]),
+        this.dataSource.query(`SELECT id, ticket_id AS ticketId, created_at AS at, status AS toStatus
+          FROM ticket_status_justifications WHERE ticket_id IN (${placeholders}) AND created_at <= ?
+          AND status IN ('pause','freeze') ORDER BY ticket_id, created_at, id LIMIT 20001`, [...batch, now]),
+      ];
+      if (auditDatabase && /^[A-Za-z0-9_]+$/.test(auditDatabase) && typeof ticketDatabase === 'string') {
+        queries.push(this.dataSource.query(`SELECT CAST(id AS CHAR) AS id, row_id AS ticketId, timestamp AS at, action,
+          ${field('old_values', 'status')} AS fromStatus, ${field('new_values', 'status')} AS toStatus,
+          COALESCE(${field('old_values', 'slaPausedAt')}, ${field('old_values', 'sla_paused_at')}) AS pausedAt
+          FROM \`${auditDatabase}\`.audit_log WHERE database_name = ? AND table_name = 'tickets'
+          AND row_id IN (${placeholders}) AND timestamp <= ? AND action IN ('INSERT','UPDATE')
+          AND ${field('new_values', 'status')} IS NOT NULL
+          ORDER BY row_id, timestamp, id LIMIT 20001`, [ticketDatabase, ...batch, now]));
+      } else { auditUnavailable = true; queries.push(Promise.resolve([])); }
+      const results = await Promise.allSettled(queries);
+      for (const [index, result] of results.entries()) {
+        if (result.status === 'rejected') {
+          if (index === 2 && ['ER_NO_SUCH_TABLE','ER_TABLEACCESS_DENIED_ERROR','ER_DBACCESS_DENIED_ERROR','ER_BAD_DB_ERROR'].includes(result.reason?.code)) {
+            auditUnavailable = true; continue;
+          }
+          throw new ServiceUnavailableException('Historical ticket evidence could not be loaded. Please retry.');
+        }
+        if (result.value.length > 20000 || (total += result.value.length) > 100000)
+          throw new BadRequestException('This report exceeds the historical evidence limit. Narrow the staff or support-type filter.');
+        for (const row of result.value) {
+          if (!allowed.has(row.ticketId)) continue;
+          const source: HistoricalInterruptionEvidence['source'] = index === 0 ? 'event' : index === 1 ? 'justification' : 'audit';
+          const type: HistoricalInterruptionEvidence['type'] = index === 1 ? 'justification' :
+            row.action === 'INSERT' || row.eventType === 'created' ? 'created' : row.eventType === 'status_extended' ? 'extension' : 'transition';
+          const from = row.fromStatus ?? row.queueFrom;
+          const to = type === 'created' ? row.initialStatus ?? row.toStatus : row.toStatus ?? row.queueTo ??
+            (['in_progress','resolved','closed','pause','freeze','cancelled','duplicate'].includes(row.eventType) ? row.eventType : row.eventType === 'user_closed' ? 'closed' : undefined);
+          if (!byTicket.has(row.ticketId)) byTicket.set(row.ticketId, []);
+          byTicket.get(row.ticketId)!.push({ id: String(row.id), source, type, at: row.at, from, to, pausedAt: row.pausedAt });
+        }
+      }
+    }
+    return { byTicket, auditUnavailable };
+  }
+
   async getBuilderAssignees(viewerId: number, viewerRole: string) {
     if (!viewerId || !this.roleCapSvc.isTicketReportsAccess(viewerRole) || !this.roleCapSvc.isTicketReportsManage(viewerRole))
       throw new ForbiddenException('Report-management access is required.');
@@ -7383,7 +7452,7 @@ export class TicketService implements OnModuleInit {
     const qb = this.ticketRepo.createQueryBuilder('t')
       .select(['t.id', 't.ticketNumber', 't.subject', 't.ticketType', 't.status', 't.priority', 't.categoryId', 't.issueTypeId',
         't.requesterId', 't.assignedToId', 't.resolvedAt', 't.resolutionTimeOverride', 't.slaDeadline', 't.slaStartedAt',
-        't.accumulatedPauseSeconds', 't.slaPauseLedger', 't.interruptionHistory', 't.overtimeSlaDate', 't.createdAt', 't.updatedAt', 't.satisfactionRating'])
+        't.accumulatedPauseSeconds', 't.slaPauseLedger', 't.slaPausedAt', 't.isSlaWaiting', 't.interruptionHistory', 't.overtimeSlaDate', 't.createdAt', 't.updatedAt', 't.satisfactionRating'])
       .leftJoin('t.issueTypeConfig', 'builderIssue').addSelect(['builderIssue.id', 'builderIssue.name', 'builderIssue.slaHours'])
       .leftJoin('t.category', 'builderCategory').addSelect(['builderCategory.id', 'builderCategory.name'])
       .where('t.createdAt < :cutoff', { cutoff })

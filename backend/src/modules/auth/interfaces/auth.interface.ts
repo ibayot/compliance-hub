@@ -27,3 +27,10 @@ export interface AuthResponse {
     units: { id: number; name: string; hasReportorialRequirements?: boolean }[];
   };
 }
+
+export interface MfaChallengeResponse {
+  mfaRequired: true;
+  tempToken: string;
+  testModeCode?: string;
+  user: { id: number; email: string };
+}

@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { useAuth, tokenStore } from '@/contexts/AuthContext';
-import { apiClient, apiUrl } from '@/lib/api/client';
+import { apiUrl } from '@/lib/api/client';
+import { boundedGet } from '@/lib/api/bounded-read';
+import { canRecoverSession } from '@/lib/auth/session-recovery';
 
 export type SseEventType =
   | 'TICKET_UPDATED'
@@ -28,6 +30,8 @@ let connectionAbortController: AbortController | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let connectionPromise: Promise<void> | null = null;
 let connectionPromiseAuthKey: string | null = null;
+let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+const SSE_STALE_MS = 75_000; // Server heartbeat is every 20 seconds.
 
 type SseListener = {
   types: SseEventType[];
@@ -36,17 +40,18 @@ type SseListener = {
 const activeListeners = new Set<SseListener>();
 
 function scheduleReconnect(authKey: string, accessToken?: string) {
-  if (activeListeners.size === 0 || reconnectTimer) return;
+  if (activeListeners.size === 0 || reconnectTimer || !canRecoverSession()) return;
 
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    if (activeListeners.size > 0) {
+    if (activeListeners.size > 0 && canRecoverSession()) {
       void connectSse(authKey, accessToken, true).catch(() => undefined);
     }
   }, 5000);
 }
 
 async function connectSse(authKey: string, accessToken?: string, force = false) {
+  if (!activeListeners.size || !canRecoverSession()) return;
   const hasLiveConnection =
     currentAuthKey === authKey &&
     masterEventSource !== null &&
@@ -57,6 +62,8 @@ async function connectSse(authKey: string, accessToken?: string, force = false) 
     currentAuthKey === authKey && !connectionAbortController?.signal.aborted) return connectionPromise;
 
   const generation = ++connectionGeneration;
+  if (heartbeatTimer) clearTimeout(heartbeatTimer);
+  heartbeatTimer = null;
 
   if (masterEventSource) {
     masterEventSource.onmessage = null;
@@ -75,10 +82,10 @@ async function connectSse(authKey: string, accessToken?: string, force = false) 
 
   currentAuthKey = authKey;
   const attempt = (async () => {
-    const ticketResponse = await apiClient.get('/events/token', {
+    const { token: ticket } = await boundedGet<{ token: string }>('/events/token', {
       signal: abortController.signal,
     });
-    const { token: ticket } = ticketResponse.data;
+    if (!ticket || typeof ticket !== 'string') throw new Error('Live update connection unavailable.');
     // The component may have unmounted, logged out, or changed users while the
     // connection ticket was loading. Do not create a listener-less EventSource
     // from that stale async attempt.
@@ -94,8 +101,22 @@ async function connectSse(authKey: string, accessToken?: string, force = false) 
       withCredentials: !Capacitor.isNativePlatform(),
     });
     masterEventSource = source;
+    const armWatchdog = () => {
+      if (heartbeatTimer) clearTimeout(heartbeatTimer);
+      heartbeatTimer = setTimeout(() => {
+        heartbeatTimer = null;
+        if (generation !== connectionGeneration || masterEventSource !== source || !activeListeners.size) return;
+        if (document.visibilityState === 'hidden') { armWatchdog(); return; }
+        void connectSse(authKey, accessToken, true).catch(() => undefined);
+      }, SSE_STALE_MS);
+    };
+    armWatchdog();
 
     source.onopen = () => {
+      if (masterEventSource !== source || generation !== connectionGeneration) return;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+      armWatchdog();
       console.log('[SSE] Connected', new Date().toISOString());
       // Reconcile missed changes after backgrounding or a disconnected interval.
       // Notify each query owner once; it remains responsible for authorized refetch.
@@ -112,9 +133,12 @@ async function connectSse(authKey: string, accessToken?: string, force = false) 
       try {
         data = JSON.parse(event.data);
       } catch (err) {
-        console.error('[SSE] Invalid message:', event.data, err);
+        console.warn('[SSE] Invalid message.');
         return;
       }
+
+      if (!data || typeof data.type !== 'string' || masterEventSource !== source) return;
+      armWatchdog();
 
       if (data.type === 'HEARTBEAT') {
         return;
@@ -140,9 +164,8 @@ async function connectSse(authKey: string, accessToken?: string, force = false) 
         readyState: source.readyState,
       });
 
-      if (source.readyState === EventSource.CLOSED && masterEventSource === source) {
-        masterEventSource = null;
-        currentAuthKey = null;
+      if (masterEventSource === source) {
+        // A fresh connection ticket is needed if EventSource keeps reconnecting.
         scheduleReconnect(authKey, accessToken);
       }
     };
@@ -172,6 +195,8 @@ async function connectSse(authKey: string, accessToken?: string, force = false) 
 function disconnectSse() {
   // Invalidate any in-flight ticket request before closing the current stream.
   connectionGeneration += 1;
+  if (heartbeatTimer) clearTimeout(heartbeatTimer);
+  heartbeatTimer = null;
   // A remount must not reuse a token request that this disconnect aborts.
   connectionPromise = null;
   connectionPromiseAuthKey = null;
@@ -215,9 +240,10 @@ if (typeof window !== 'undefined') {
           true,
         ).catch(() => undefined);
       } else if (!newToken) {
-        // Logout, forced reauthentication, and account lockout all clear the token.
-        // Close the shared stream immediately instead of waiting for EventSource retry.
-        disconnectSse();
+        if (Capacitor.isNativePlatform() || !canRecoverSession()) disconnectSse();
+        // Cookie-only browser renewal clears the obsolete in-memory token too.
+        // It is not a logout; preserve/reconcile the authenticated live stream.
+        else reconnectVisibleSession();
       }
   });
 }

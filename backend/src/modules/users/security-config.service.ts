@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { SecurityConfig } from './entities/security-config.entity';
+import { Unit } from '../units/entities/unit.entity';
+import { UpdateSecurityConfigDto } from './dto/update-security-config.dto';
 
 @Injectable()
 export class SecurityConfigService {
@@ -33,6 +35,8 @@ export class SecurityConfigService {
         defaultPassword: 'Changeme123!@#',
         googleSignInEnabled: true,
         idleLockMinutes: 15,
+        outboundEmailUnitRestrictionEnabled: false,
+        outboundEmailAllowedUnitIds: [],
         allowedEmailDomains: SecurityConfigService.DEFAULT_ALLOWED_EMAIL_DOMAINS,
       });
       await this.configRepository.save(config);
@@ -44,6 +48,10 @@ export class SecurityConfigService {
       config.idleLockMinutes = 15;
     }
     return config;
+  }
+
+  async getEmailUnitOptions(): Promise<Array<Pick<Unit, 'id' | 'name' | 'active'>>> {
+    return this.configRepository.manager.getRepository(Unit).find({ select: { id: true, name: true, active: true }, order: { name: 'ASC' } });
   }
 
   normalizeAllowedEmailDomains(domains: unknown): string[] {
@@ -60,20 +68,21 @@ export class SecurityConfigService {
     return this.normalizeAllowedEmailDomains(config.allowedEmailDomains).includes(domain);
   }
 
-  async updateConfig(dto: {
-    defaultPassword?: string;
-    mfaTestMode?: boolean;
-    vaptMode?: boolean;
-    appMode?: string;
-    googleSignInEnabled?: boolean;
-    allowedEmailDomains?: string[];
-    idleLockMinutes?: number;
-  }): Promise<SecurityConfig> {
+  async updateConfig(dto: UpdateSecurityConfigDto): Promise<SecurityConfig> {
     if (dto.idleLockMinutes !== undefined &&
       (!Number.isInteger(dto.idleLockMinutes) || dto.idleLockMinutes < 1 || dto.idleLockMinutes > 1440)) {
       throw new BadRequestException('Idle password prompt must be a whole number from 1 to 1440 minutes.');
     }
     const config = await this.getConfig();
+    if (dto.outboundEmailUnitRestrictionEnabled !== undefined && typeof dto.outboundEmailUnitRestrictionEnabled !== 'boolean') throw new BadRequestException('The email unit restriction must be true or false.');
+    if (dto.outboundEmailAllowedUnitIds !== undefined) {
+      const ids = dto.outboundEmailAllowedUnitIds;
+      if (!Array.isArray(ids) || ids.length > 1000 || ids.some(id => !Number.isSafeInteger(id) || id < 1) || new Set(ids).size !== ids.length) throw new BadRequestException('Select valid, unique email unit IDs.');
+      const units = ids.length ? await this.configRepository.manager.getRepository(Unit).findBy({ id: In(ids) }) : [];
+      if (units.length !== ids.length || units.some(unit => !unit.active && !config.outboundEmailAllowedUnitIds?.includes(unit.id))) throw new BadRequestException('Some selected email units are unavailable. Reload the unit list and review the selection.');
+      config.outboundEmailAllowedUnitIds = [...ids].sort((a,b) => a-b);
+    }
+    if (dto.outboundEmailUnitRestrictionEnabled !== undefined) config.outboundEmailUnitRestrictionEnabled = dto.outboundEmailUnitRestrictionEnabled;
     if (dto.idleLockMinutes !== undefined) config.idleLockMinutes = dto.idleLockMinutes;
     if (dto.defaultPassword !== undefined) config.defaultPassword = dto.defaultPassword;
     if (dto.mfaTestMode !== undefined) config.mfaTestMode = dto.mfaTestMode;

@@ -57,12 +57,22 @@ export interface LoginCredentials {
 }
 
 export interface AuthResponse {
+  mfaRequired?: false;
   accessToken: string;
   refreshToken: string;
   user: User;
   requiresPasswordChange?: boolean;
   requiresMfa?: boolean;
 }
+
+export interface MfaChallengeResponse {
+  mfaRequired: true;
+  tempToken: string;
+  testModeCode?: string;
+  user: { id: number; email: string };
+}
+
+export type SignInResponse = AuthResponse | MfaChallengeResponse;
 
 export interface ApiError {
   statusCode: number;

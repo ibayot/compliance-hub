@@ -1,5 +1,6 @@
 import { apiClient, cancelSessionRenewal, refreshAuthentication, tokenStore } from './client';
-import { LoginCredentials, AuthResponse, User } from '../types/auth';
+import { boundedGet, ReadOptions } from './bounded-read';
+import { LoginCredentials, AuthResponse, SignInResponse, User } from '../types/auth';
 
 let pendingLogout: Promise<void> | null = null;
 
@@ -14,7 +15,7 @@ export const authApi = {
     return response.data;
   },
 
-  login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
+  login: async (credentials: LoginCredentials): Promise<SignInResponse> => {
     await prepareInteractiveSignIn();
     let deviceToken = localStorage.getItem('deviceToken');
     if (!deviceToken) {
@@ -25,13 +26,13 @@ export const authApi = {
           Math.random().toString(36).substring(2, 15);
       localStorage.setItem('deviceToken', deviceToken);
     }
-    const response = await apiClient.post<AuthResponse>('/auth/login', credentials, {
+    const response = await apiClient.post<SignInResponse>('/auth/login', credentials, {
       headers: { 'x-device-token': deviceToken },
     });
     return response.data;
   },
 
-  loginWithGoogle: async (payload: { idToken: string }): Promise<AuthResponse> => {
+  loginWithGoogle: async (payload: { idToken: string }): Promise<SignInResponse> => {
     await prepareInteractiveSignIn();
     let deviceToken = localStorage.getItem('deviceToken');
     if (!deviceToken) {
@@ -42,7 +43,7 @@ export const authApi = {
           Math.random().toString(36).substring(2, 15);
       localStorage.setItem('deviceToken', deviceToken);
     }
-    const response = await apiClient.post<AuthResponse>('/auth/google-login', payload, {
+    const response = await apiClient.post<SignInResponse>('/auth/google-login', payload, {
       headers: { 'x-device-token': deviceToken },
     });
     return response.data;
@@ -79,13 +80,12 @@ export const authApi = {
     return response.data;
   },
 
-  getProfile: async (): Promise<User> => {
+  getProfile: async (options?: ReadOptions): Promise<User> => {
     // AuthProvider calls this during application bootstrap, including when a
     // browser has no access token but may still have an HttpOnly session
     // cookie. Bound that probe so a stalled API cannot leave every route on a
     // permanent loading spinner.
-    const response = await apiClient.get<User>('/auth/me', { timeout: 15_000 });
-    return response.data;
+    return boundedGet<User>('/auth/me', options);
   },
 
   refresh: async (_refreshToken: string): Promise<{ accessToken?: string; refreshToken?: string }> => {

@@ -15,6 +15,7 @@ import { TicketCategoryConfig } from './ticket-category.entity';
 import { TicketIssueType } from './ticket-issue-type.entity';
 import type { ResolutionTiming, SlaPauseLedger } from '../services/ticket-sla-pause';
 import type { TicketInterruptionHistory } from '../services/ticket-interruptions';
+import type { TicketUnitSnapshot } from '../services/ticket-unit-snapshot';
 import { dateTransformer } from './date.transformer';
 
 export enum TicketType {
@@ -122,6 +123,9 @@ export class Ticket {
   // --- Requester ---
   @Column({ name: 'requester_id', type: 'int' })
   requesterId: number;
+
+  @Column({ name: 'requester_unit_snapshot', type: 'json', nullable: true })
+  requesterUnitSnapshot: TicketUnitSnapshot | null;
 
   requester?: UserRef;
 

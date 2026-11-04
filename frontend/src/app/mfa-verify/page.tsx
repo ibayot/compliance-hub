@@ -72,20 +72,21 @@ export default function MfaVerifyPage() {
       // Clear temp token
       sessionStorage.removeItem('mfaTempToken');
       sessionStorage.removeItem('mfaTestModeCode');
+      sessionStorage.removeItem('isSessionLocked');
       
       // Force reload to let AuthContext pick up the tokens
       window.location.href = '/dashboard';
     } catch (err: any) {
       const message = err.response?.data?.message || 'Verification failed. Invalid or expired code.';
-      const mustReauthenticate = err.response?.status === 401
-        && /three MFA attempts|log in again/i.test(String(message));
+      const mustReauthenticate = [400, 401].includes(err.response?.status)
+        && /three MFA attempts|log in again|no verification code|code has expired|expired temporary token/i.test(String(message));
       const accountLocked = err.response?.status === 429
-        && /locked for 15 minutes/i.test(String(message));
+        && /locked/i.test(String(message));
       if (mustReauthenticate || accountLocked) {
         sessionStorage.removeItem('mfaTempToken');
         sessionStorage.removeItem('mfaTestModeCode');
         setCode('');
-        window.location.replace('/login?reason=mfa_failed');
+        window.location.replace(`/login?reason=${accountLocked ? 'mfa_locked' : 'mfa_restart'}`);
         return;
       }
       setError(message);

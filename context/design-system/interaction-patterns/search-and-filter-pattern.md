@@ -42,6 +42,7 @@ Local state owns unfinished search input; a query/router owner owns committed fi
 - **DS-SEARCHFILTER-003** — Outdated responses MUST NOT replace results for newer committed criteria.
 - **DS-SEARCHFILTER-004** — Clear/reset MUST restore documented defaults and reveal active-filter state.
 - **DS-SEARCHFILTER-005** — Persistence in URL/storage MUST avoid confidential values and must respect supported deep-link behavior.
+- **DS-SEARCHFILTER-006** — Foreground and background refreshes MUST share explicit current-query loading ownership. Superseding a request must not leave a pending indicator behind; background invalidations must not repeatedly cancel the work needed to show results. Independent counts/history must have separate loading/error lifecycles and reads must end in success, cancellation, or a bounded recoverable failure.
 
 ## Accessibility
 
@@ -54,6 +55,7 @@ Server queries must enforce authorized scope and safe query constraints; client 
 ## Validation
 
 Test rapid typing, combined filters, reset, sort ties, back/refresh, no matches, permission changes, and stale responses.
+Overlap a foreground search with a live event and mutation-completion refresh; finish responses in both orders and fail the background request. Confirm the loading indicator ends after all requests settle. Delay secondary counts/history independently, repeat reconnect during initial loading, and verify timeout/retry without duplicate mutations.
 
 ## Related Patterns
 

@@ -32,6 +32,7 @@ import { authApi } from '@/lib/api/auth';
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { usersApi, RoleCapabilityRecord } from '@/lib/api/users';
+import { ReadOptions } from '@/lib/api/bounded-read';
 import ForcePasswordChangeModal from '@/components/ForcePasswordChangeModal';
 import { cancelSessionRenewal, tokenStore } from '@/lib/api/client';
 import { DEFAULT_IDLE_LOCK_MINUTES, isValidIdleLockMinutes } from '@/lib/utils/session-policy';
@@ -109,11 +110,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => { currentUserRef.current = user; }, [user]);
   const retrySession = useCallback(() => retrySessionRef.current(), []);
 
-  const refreshSession = useCallback(async (): Promise<User> => {
+  const refreshSession = useCallback(async (options?: ReadOptions): Promise<User> => {
     const generation = recoveryGeneration();
     await authApi.refresh(tokenStore.get('refreshToken') || '');
-    const profile = await authApi.getProfile();
-    if (!canRecoverSession() || generation !== recoveryGeneration()) throw new Error('Session recovery cancelled.');
+    if (options?.signal?.aborted) throw new Error('Session recovery cancelled.');
+    const profile = await authApi.getProfile(options);
+    if (options?.signal?.aborted || !canRecoverSession() || generation !== recoveryGeneration()) throw new Error('Session recovery cancelled.');
     setUser(profile);
     return profile;
   }, []);
@@ -242,21 +244,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!insideApplication || hasSignedOut()) { setLoading(false); setReconnecting(false); return; }
     let disposed = false;
     let pending = false;
+    let attemptId = 0;
+    let controller: AbortController | null = null;
     let retryDelay = 2000;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     const generation = recoveryGeneration();
     const current = () => !disposed && canRecoverSession() && generation === recoveryGeneration();
     if (!currentUserRef.current) setLoading(true);
     if (sessionStorage.getItem('isSessionLocked') === 'true') setIsSessionLocked(true);
-    const verifySession = async () => {
-      if (pending || !current()) return;
+    const verifySession = async (force = false) => {
+      if (!current() || (pending && !force)) return;
+      controller?.abort();
+      const attempt = ++attemptId;
+      const requestController = new AbortController();
+      controller = requestController;
+      const currentAttempt = () => current() && attempt === attemptId && !requestController.signal.aborted;
       pending = true;
       clearTimeout(retryTimer);
       try {
         const token = tokenStore.get('accessToken');
-        let profile = await authApi.getProfile();
-        const capabilities = await usersApi.getMyCapabilities();
-        if (!current()) return;
+        let profile = await authApi.getProfile({ signal: requestController.signal });
+        if (!currentAttempt()) return;
+        const capabilities = await usersApi.getMyCapabilities({ signal: requestController.signal });
+        if (!currentAttempt()) return;
         const previous = currentUserRef.current;
         let previousRole = previous?.role;
         try {
@@ -271,8 +281,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const oldUnits = (previous.units || []).map(unit => Number(unit.id)).sort((a, b) => a - b).join(',');
           const newUnits = (profile.units || []).map(unit => Number(unit.id)).sort((a, b) => a - b).join(',');
           if (oldUnits !== newUnits) {
-            profile = await refreshSession();
-            if (!current()) return;
+            profile = await refreshSession({ signal: requestController.signal });
+            if (!currentAttempt()) return;
             enqueueSnackbar('Your unit access was updated from the personnel directory.', { variant: 'info' });
           }
         }
@@ -284,21 +294,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setReconnecting(false);
         retryDelay = 2000;
       } catch (error) {
-        if (!current()) return;
+        if (!currentAttempt()) return;
         if (isRejectedSession(error)) { await logout('session_expired'); return; }
         setReconnecting(true);
         retryTimer = setTimeout(() => void verifySession(), retryDelay);
         retryDelay = Math.min(retryDelay * 2, 30_000);
-      } finally { pending = false; }
+      } finally { if (attempt === attemptId) { pending = false; controller = null; } }
     };
-    const retry = () => { void verifySession(); };
+    const retry = () => { void verifySession(true); };
     retrySessionRef.current = retry;
     void verifySession();
-    const heartbeat = setInterval(retry, 60_000);
+    const heartbeat = setInterval(() => void verifySession(), 60_000);
     window.addEventListener('online', retry);
     window.addEventListener('focus', retry);
     return () => {
       disposed = true;
+      ++attemptId;
+      controller?.abort();
       clearTimeout(retryTimer);
       clearInterval(heartbeat);
       window.removeEventListener('online', retry);
@@ -309,7 +321,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (reconnecting && user) {
-      enqueueSnackbar('Connection temporarily unavailable. Reconnecting without signing you out.', {
+      enqueueSnackbar('Connection to Compliance Hub is temporarily unavailable. Reconnecting without signing you out.', {
         key: 'session-reconnecting', variant: 'warning', persist: true,
         action: <Button color="inherit" onClick={retrySession}>Retry</Button>,
       });
@@ -369,10 +381,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem('changelog-prompt-checked');
     const response = await authApi.login({ email, password });
     
-    if ((response as any).mfaRequired) {
-      sessionStorage.setItem('mfaTempToken', (response as any).tempToken);
-      if ((response as any).testModeCode) {
-        sessionStorage.setItem('mfaTestModeCode', (response as any).testModeCode);
+    if (response.mfaRequired) {
+      sessionStorage.setItem('mfaTempToken', response.tempToken);
+      if (response.testModeCode) {
+        sessionStorage.setItem('mfaTestModeCode', response.testModeCode);
       }
       navigate('/mfa-verify');
       return;
@@ -407,6 +419,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithGoogle = async (idToken: string, redirectTo?: string) => {
     sessionStorage.removeItem('changelog-prompt-checked');
     const response = await authApi.loginWithGoogle({ idToken });
+    if (response.mfaRequired) {
+      sessionStorage.setItem('mfaTempToken', response.tempToken);
+      if (response.testModeCode) sessionStorage.setItem('mfaTestModeCode', response.testModeCode);
+      else sessionStorage.removeItem('mfaTestModeCode');
+      navigate('/mfa-verify');
+      return;
+    }
     if (response.accessToken && response.refreshToken) {
       tokenStore.set('accessToken', response.accessToken);
       tokenStore.set('refreshToken', response.refreshToken);
@@ -467,6 +486,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUnlockError(null);
     try {
       const res = await authApi.loginWithGoogle({ idToken });
+
+      if (res.mfaRequired) {
+        if (user && res.user.email !== user.email) throw new Error('You must sign in with the exact same Google account to unlock.');
+        sessionStorage.setItem('mfaTempToken', res.tempToken);
+        if (res.testModeCode) sessionStorage.setItem('mfaTestModeCode', res.testModeCode);
+        else sessionStorage.removeItem('mfaTestModeCode');
+        window.location.assign('/mfa-verify');
+        return;
+      }
 
       if (user && res.user && (res.user as any).email !== user.email) {
         throw new Error('You must sign in with the exact same Google account to unlock.');

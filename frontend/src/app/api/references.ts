@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client';
+import { boundedGet } from '@/lib/api/bounded-read';
 
 export interface Issuance {
   id: string;
@@ -311,6 +312,12 @@ export interface Ticket {
   issueTypeId?: string | null;
   issueType?: TicketIssueType | null;
   requesterId: number;
+  requesterUnitSnapshot?: {
+    unitId: number | null;
+    unitName: string | null;
+    source: 'filing' | 'requester_correction' | 'baseline';
+    capturedAt: string;
+  } | null;
   requester?: {
     id: number;
     email: string;
@@ -1080,6 +1087,16 @@ export interface PaginatedTickets {
   escalatedToMeCount?: number;
 }
 
+export const TICKET_READ_TIMEOUT_MS = 30_000;
+export interface TicketReadOptions {
+  signal?: AbortSignal;
+}
+
+// Bound the whole read, including any wait in the shared authentication interceptor.
+async function readTicketData<T>(url: string, options: TicketReadOptions = {}): Promise<T> {
+  return boundedGet<T>(url, { ...options, timeoutMs: TICKET_READ_TIMEOUT_MS });
+}
+
 // Tickets API (IT Help Desk)
 export const ticketsApi = {
   getOvertimeOpen: async (page = 1): Promise<{ data: Ticket[]; total: number; page: number; totalPages: number }> =>
@@ -1120,7 +1137,7 @@ export const ticketsApi = {
     proxyCreatedByMe?: boolean;
     page?: number;
     limit?: number;
-  }): Promise<PaginatedTickets> => {
+  }, options?: TicketReadOptions): Promise<PaginatedTickets> => {
     const params = new URLSearchParams();
     if (filters?.status) params.set('status', filters.status);
     if (filters?.year) params.set('year', String(filters.year));
@@ -1137,8 +1154,7 @@ export const ticketsApi = {
     if (filters?.page) params.set('page', String(filters.page));
     if (filters?.limit) params.set('limit', String(filters.limit));
     const query = params.toString();
-    const response = await apiClient.get(`/tickets/my-requested${query ? `?${query}` : ''}`);
-    return response.data;
+    return readTicketData<PaginatedTickets>(`/tickets/my-requested${query ? `?${query}` : ''}`, options);
   },
   getMyAssigned: async (filters?: {
     status?: TicketStatus;
@@ -1154,7 +1170,7 @@ export const ticketsApi = {
     proxyCreatedByMe?: boolean;
     page?: number;
     limit?: number;
-  }): Promise<PaginatedTickets> => {
+  }, options?: TicketReadOptions): Promise<PaginatedTickets> => {
     const params = new URLSearchParams();
     if (filters?.status) params.set('status', filters.status);
     if (filters?.year) params.set('year', String(filters.year));
@@ -1170,8 +1186,7 @@ export const ticketsApi = {
     if (filters?.page) params.set('page', String(filters.page));
     if (filters?.limit) params.set('limit', String(filters.limit));
     const query = params.toString();
-    const response = await apiClient.get(`/tickets/my-assigned${query ? `?${query}` : ''}`);
-    return response.data;
+    return readTicketData<PaginatedTickets>(`/tickets/my-assigned${query ? `?${query}` : ''}`, options);
   },
   globalPause: async (): Promise<{ success: boolean; count: number; message: string }> => {
     const res = await apiClient.post('/tickets/global-pause');
@@ -1207,7 +1222,7 @@ export const ticketsApi = {
     slaState?: 'overdue' | 'nearing_sla' | 'on_track';
     page?: number;
     limit?: number;
-  }): Promise<PaginatedTickets> => {
+  }, options?: TicketReadOptions): Promise<PaginatedTickets> => {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
     if (filters?.ticketType) params.append('ticketType', filters.ticketType);
@@ -1228,8 +1243,7 @@ export const ticketsApi = {
     if (filters?.slaState) params.append('slaState', filters.slaState);
     params.append('page', String(filters?.page ?? 1));
     params.append('limit', String(filters?.limit ?? 25));
-    const response = await apiClient.get(`/tickets?${params}`);
-    return response.data;
+    return readTicketData<PaginatedTickets>(`/tickets?${params}`, options);
   },
 
   getAttendanceAssignmentAlerts: async (): Promise<AttendanceAssignmentAlert[]> => {
@@ -1382,9 +1396,8 @@ export const ticketsApi = {
     return response.data;
   },
 
-  getDashboardStats: async (): Promise<TicketDashboardStats> => {
-    const response = await apiClient.get(`/tickets/dashboard`);
-    return response.data;
+  getDashboardStats: async (options?: TicketReadOptions): Promise<TicketDashboardStats> => {
+    return readTicketData<TicketDashboardStats>('/tickets/dashboard', options);
   },
 
   getAssignedStats: async (year: number, month: number): Promise<TechAssignedStats> => {
@@ -1585,14 +1598,12 @@ export const ticketsApi = {
   },
 
   // --- Escalation ---
-  getAllEscalations: async (): Promise<TicketEscalation[]> => {
-    const response = await apiClient.get(`/tickets/escalations/all`);
-    return response.data;
+  getAllEscalations: async (options?: TicketReadOptions): Promise<TicketEscalation[]> => {
+    return readTicketData<TicketEscalation[]>('/tickets/escalations/all', options);
   },
 
-  getEscalations: async (ticketId: string): Promise<TicketEscalation[]> => {
-    const response = await apiClient.get(`/tickets/${ticketId}/escalations`);
-    return response.data;
+  getEscalations: async (ticketId: string, options?: TicketReadOptions): Promise<TicketEscalation[]> => {
+    return readTicketData<TicketEscalation[]>(`/tickets/${ticketId}/escalations`, options);
   },
 
   escalateTicket: async (ticketId: string, data: FormData): Promise<TicketEscalation> => {

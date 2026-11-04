@@ -8,7 +8,7 @@ import { OAuth2Client, TokenPayload as GoogleTokenPayload } from 'google-auth-li
 import { UsersService } from '../users/users.service';
 import { EmailService } from '../tickets/services/email.service';
 import { LoginDto } from './dto/login.dto';
-import { JwtPayload, AuthResponse } from './interfaces/auth.interface';
+import { JwtPayload, AuthResponse, MfaChallengeResponse } from './interfaces/auth.interface';
 import { User, UserRole } from '../users/entities/user.entity';
 import { EventBusService } from '../../common/events/event-bus.service';
 import { SecurityConfigService } from '../users/security-config.service';
@@ -156,7 +156,13 @@ export class AuthService {
       }
     }
 
-    if (requiresMfa) {
+    if (requiresMfa) return this.startMfaChallenge(user, securityConfig);
+
+    const tokens = await this.generateTokens(user);
+    return this.buildAuthResponse(user, tokens, isUsingDefaultPassword, false);
+  }
+
+  private async startMfaChallenge(user: User, securityConfig: { mfaTestMode: boolean }): Promise<MfaChallengeResponse> {
       // Generate temp token
       const tempToken = this.jwtService.sign(
         { sub: user.id, isTemp: true },
@@ -185,11 +191,12 @@ export class AuthService {
       `;
 
       if (securityConfig.mfaTestMode) {
-        return { mfaRequired: true, tempToken, testModeCode: code };
+        return { mfaRequired: true, tempToken, testModeCode: code, user: { id: user.id, email: user.email } };
       }
 
       await this.eventBus
         .publish('email.send', {
+          purpose: 'security',
           to: user.email,
           subject: 'Compliance Hub - Your MFA Code',
           text: `Your verification code is: ${code}. It expires in 15 minutes.`,
@@ -199,12 +206,8 @@ export class AuthService {
           console.error('Failed to publish email.send event for MFA:', e?.code || 'unknown');
         });
 
-      return { mfaRequired: true, tempToken };
-    }
-
-    const tokens = await this.generateTokens(user);
-    return this.buildAuthResponse(user, tokens, isUsingDefaultPassword, false);
-  }
+      return { mfaRequired: true, tempToken, user: { id: user.id, email: user.email } };
+      }
 
   private checkRequiresMfa(user: User, globalMfaEnabled: boolean): boolean {
     if (process.env.VAPT_MODE === 'true') return false;
@@ -216,7 +219,7 @@ export class AuthService {
     return { googleSignInEnabled: config.googleSignInEnabled !== false };
   }
 
-  async googleLogin(idToken: string): Promise<AuthResponse> {
+  async googleLogin(idToken: string): Promise<AuthResponse | MfaChallengeResponse> {
     const securityConfig = await this.securityConfigService.getConfig();
     if (securityConfig.googleSignInEnabled === false) {
       throw new UnauthorizedException('Google sign-in is disabled.');
@@ -258,6 +261,10 @@ export class AuthService {
       throw new UnauthorizedException('Account is deactivated. Please contact the RICTMS for reactivation.');
     }
 
+    if (user.mfaLockedUntil && Date.now() < new Date(user.mfaLockedUntil).getTime()) {
+      throw new HttpException('Your account is locked for 15 minutes after repeated MFA failures.', HttpStatus.TOO_MANY_REQUESTS);
+    }
+
     // Record login timestamp for staff activity tracking
     await this.usersService.recordLogin(user.id);
 
@@ -269,8 +276,9 @@ export class AuthService {
       user.passwordHash,
     );
 
-    const tokens = await this.generateTokens(user);
     const requiresMfa = this.checkRequiresMfa(user, securityConfig.mfaTestMode);
+    if (requiresMfa) return this.startMfaChallenge(user, securityConfig);
+    const tokens = await this.generateTokens(user);
     return this.buildAuthResponse(
       user,
       tokens,
@@ -326,6 +334,7 @@ export class AuthService {
 
     // Send email using EventBus to avoid circular dependency
     await this.eventBus.publish('email.send', {
+      purpose: 'security',
       to: user.email,
       subject: 'Your Compliance Hub Verification Code',
       text: `Your verification code is: ${code}. It expires in 15 minutes.`,
@@ -352,44 +361,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid temporary token payload.');
     }
 
-      const userId = payload.sub;
-      const user = await this.usersService.findOne(userId);
-      if (!user) throw new UnauthorizedException('User not found');
-
-      if (user.mfaLockedUntil && new Date() < new Date(user.mfaLockedUntil)) {
-        throw new HttpException('MFA verification is temporarily locked. Request a new code later.', HttpStatus.TOO_MANY_REQUESTS);
-      }
-
-    if (!user.mfaCode || !user.mfaExpiresAt) {
-      throw new BadRequestException('No verification code found. Please request a new one.');
-    }
-
-      if (new Date() > user.mfaExpiresAt) {
-        throw new BadRequestException('Verification code has expired. Please request a new one.');
-      }
-
-      if (user.mfaCode !== code) {
-        const attempts = Number(user.mfaAttempts || 0) + 1;
-        const challengeAttempts = Number(user.mfaChallengeAttempts || 0) + 1;
-        const lockedUntil = attempts >= 9 ? new Date(Date.now() + 15 * 60 * 1000) : null;
-        const challengeExpired = challengeAttempts >= 3;
-        await this.usersService.recordMfaFailure(
-          userId,
-          attempts,
-          challengeAttempts,
-          lockedUntil,
-          Boolean(lockedUntil || challengeExpired),
-        );
-        if (lockedUntil) {
-          throw new HttpException('Too many invalid MFA attempts. Your account is locked for 15 minutes.', HttpStatus.TOO_MANY_REQUESTS);
-        }
-        if (challengeExpired) {
-          throw new UnauthorizedException('Three MFA attempts failed. Please log in again to request a new code.');
-        }
-        throw new BadRequestException(`Invalid verification code. Attempt ${challengeAttempts} of 3 for this login.`);
-      }
-
-    await this.usersService.markMfaVerified(userId);
+    const userId = payload.sub;
+    await this.usersService.consumeMfaChallenge(userId, code);
+    const user = await this.usersService.findOne(userId);
+    if (!user?.active) throw new UnauthorizedException('Account is unavailable.');
 
     const securityConfig = await this.securityConfigService.getConfig();
     const isUsingDefaultPassword = await bcrypt.compare(
@@ -407,7 +382,7 @@ export class AuthService {
 
     if (rememberDevice) {
       const deviceToken = incomingDeviceToken || crypto.randomUUID();
-      await this.usersService.addTrustedDevice(user.id, deviceToken);
+      await this.usersService.addTrustedDevice(user.id, deviceToken, user.mfaLastVerifiedAt);
       (authResponse as any).deviceToken = deviceToken;
     }
 

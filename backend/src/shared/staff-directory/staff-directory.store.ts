@@ -144,7 +144,7 @@ export class StaffDirectoryStore {
         'Your current account capabilities do not allow this requester operation.',
       );
     const [p] = await manager.query(
-      `SELECT p.*,u.active AS unit_active,u.has_reportorial_requirements AS reportorial
+        `SELECT p.*,u.name AS unit_name,u.active AS unit_active,u.has_reportorial_requirements AS reportorial
       FROM ${s}.ums_staff_directory p LEFT JOIN ${s}.units u ON u.id=p.unit_id WHERE p.staff_id=? ${persist ? 'FOR UPDATE' : ''}`,
       [staffId],
     );
@@ -176,7 +176,7 @@ export class StaffDirectoryStore {
           'This staff member already has an email. Reload the requester list; existing emails cannot be overwritten.',
         );
       const units = await manager.query(
-        `SELECT unit_id AS id FROM ${s}.user_unit_access WHERE user_id=?`,
+        `SELECT u.id,u.name FROM ${s}.user_unit_access a JOIN ${s}.units u ON u.id=a.unit_id WHERE a.user_id=? ORDER BY a.unit_id`,
         [existing.id],
       );
       if (actor.role === 'user') {
@@ -238,7 +238,7 @@ export class StaffDirectoryStore {
       suffix: p.suffix,
       role: 'user',
       active: 1,
-      units: [{ id: p.unit_id }],
+      units: [{ id: p.unit_id, name: p.unit_name }],
     };
     if (!persist) return result;
     const passwordHash = await bcrypt.hash(randomBytes(48).toString('hex'), 10);

@@ -1,5 +1,20 @@
 # Database initialization order
 
+For release **1.0.31** (2026-11-04), assuming the 1.0.30 prerequisites are already applied:
+
+1. Pause ticket writes and personnel-unit changes. Verify both schema references and apply `20261104-add-ticket-requester-unit-snapshot-ticketing.sql` to Ticketing. It captures current units as a rollout baseline and preserves existing ticket fields/timestamps.
+2. Verify the Users target and apply `20261104-add-outbound-email-unit-controls-users.sql`. The restriction remains off until configured; reapply preserves saved choices.
+3. Apply `20261104-add-application-changelog-v1.0.31-users.sql` to Users for capability-scoped staff notes and separately curated End User notes. Reapply preserves publication windows and acknowledgments.
+4. Rebuild/deploy all application services and frontend together so versions, ticket snapshots, MFA behavior and the private email-policy endpoint agree. Preserve JWT/cookie/service credentials and persistent volumes. Resume writes after readiness checks, then configure allowed units in Security Settings when desired. Rebuild the native bundle separately if distributing mobile.
+
+All three scripts have been prepared for the verified local Docker schemas and remain environment-managed/ignored by Git. A pull alone does not deliver them. Staging/production execution remains the operator's responsibility; change the supplied schema names to the actual targets before execution. Retain additive columns on rollback; older senders do not enforce the email policy, so stop outbound email before reverting them while the restriction is active. Already transferred historical units cannot be reconstructed by the ticket baseline.
+
+For the pending manual unit-sync / historical ticket-unit change, apply `20261104-add-ticket-requester-unit-snapshot-ticketing.sql` **before** deploying the updated Ticketing service, Users service and frontend. Verify both the Ticketing `USE` target and the Users schema references; the supplied defaults are the staging-named schemas on the local Docker engine. Pause ticket writes and unit changes during migration/deployment. Fresh installs apply it after the base Users/units/access and Ticketing tables.
+
+The repeatable migration captures current requester units on older tickets as a rollout baseline, in batches of 500, without changing existing ticket fields or update timestamps. Existing snapshots, including no-unit snapshots, survive repeats and subsequent personnel transfers. It does not reconstruct earlier transfers. Local Docker has been updated; staging/production remain operator-managed. The SQL is ignored by Git, so a Git pull will not deliver it. Retain the additive JSON column during rollback.
+
+For the pending outbound-email controls, apply `20261104-add-outbound-email-unit-controls-users.sql` to the verified Users schema before deploying Users, Ticketing and frontend together. Fresh installs apply it after `security_config` exists. This additive repeatable migration defaults the restriction off, initializes empty unit selections and preserves saved values on repeat. Local Docker has been updated; staging/production execution remains operator-managed, and Git pull does not deliver this ignored SQL file. Existing service-to-service authentication must remain configured for the private delivery-decision endpoint. Routine email is suppressed if its policy cannot be verified; OTP/recovery is exempt from unit filtering and routine notification toggles, while `EMAIL_ENABLED` remains the master kill switch. SMTP tests and routine test-override destinations obey the unit restriction. Retain the new fields on rollback; disable outbound email before running older senders if the policy is active, because older code does not enforce it.
+
 Run the dated seed files in this order against the staging database server:
 
 1. `20260827-seed-02_db_stg_compliance_hub_users.sql`

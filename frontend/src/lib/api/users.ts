@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { boundedGet, ReadOptions } from './bounded-read';
 import { UserRole } from '@/lib/types/auth';
 
 export interface UserRecord {
@@ -29,6 +30,18 @@ export interface UserRecord {
   units?: any[];
   unitAssignmentSource?: 'manual' | 'ums' | null;
   unitAssignmentUpdatedAt?: string | null;
+  mfaRecoveryRequired?: boolean;
+  mfaLockExpiresAt?: string | null;
+  mfaRecoveryVersion?: string | null;
+}
+
+export interface UnitSyncResult {
+  discoveredUnits: number;
+  updatedUsers: number;
+  clearedOverrides: number;
+  retainedOverrides: number;
+  skippedAmbiguousStaff: number;
+  skippedRestrictedAssignments: number;
 }
 
 export interface CreateUserPayload {
@@ -230,6 +243,10 @@ export interface PendingStaffRecord {
 }
 
 export const usersApi = {
+  syncUnits: async (): Promise<UnitSyncResult> => {
+    const response = await apiClient.post<UnitSyncResult>('/users/sync-units', {}, { timeout: 120_000 });
+    return response.data;
+  },
   listPendingStaff: async (): Promise<{staff: PendingStaffRecord[]; roles: Array<{value: string; label: string}>}> => {
     const response = await apiClient.get('/users/pending-staff');
     return response.data;
@@ -243,14 +260,17 @@ export const usersApi = {
     return response.data;
   },
 
+  getEmailUnitOptions: async (): Promise<Array<{ id: number; name: string; active: boolean }>> => {
+    return boundedGet('/users/security-config/email-units');
+  },
+
   getAppMode: async () => {
     const response = await apiClient.get('/users/security-config/app-mode');
     return response.data;
   },
 
   getSessionPolicy: async (): Promise<{ idleLockMinutes: number }> => {
-    const response = await apiClient.get('/users/security-config/session-policy');
-    return response.data;
+    return boundedGet('/users/security-config/session-policy');
   },
 
   updateSecurityConfig: async (payload: {
@@ -261,6 +281,8 @@ export const usersApi = {
     googleSignInEnabled?: boolean;
     allowedEmailDomains?: string[];
     idleLockMinutes?: number;
+    outboundEmailUnitRestrictionEnabled?: boolean;
+    outboundEmailAllowedUnitIds?: number[];
   }) => {
     const response = await apiClient.put('/users/security-config', payload);
     return response.data;
@@ -358,10 +380,8 @@ export const usersApi = {
   },
 
   /** Fetch capability row for the current user's role. Any authenticated user. */
-  getMyCapabilities: async (): Promise<RoleCapabilityRecord | null> => {
-    const response = await apiClient.get('/users/role-capabilities/me');
-    return response.data;
-  },
+  getMyCapabilities: (options?: ReadOptions): Promise<RoleCapabilityRecord | null> =>
+    boundedGet('/users/role-capabilities/me', options),
 
   /** Update capability flags for a specific role. Super admin only. */
   updateCapability: async (
@@ -378,5 +398,8 @@ export const usersApi = {
   /** Reset a user's password to default */
   resetPassword: async (id: number): Promise<void> => {
     await apiClient.post(`/users/${id}/reset-password`);
+  },
+  unlockMfa: async (id: number, payload: { reason: string; identityVerified: boolean; expectedRecoveryVersion: string }): Promise<{ success: boolean; changed: boolean }> => {
+    return (await apiClient.post(`/users/${id}/unlock-mfa`, payload)).data;
   },
 };

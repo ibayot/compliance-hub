@@ -5,6 +5,7 @@ import { SecurityConfig } from './entities/security-config.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CapabilityGuard } from '../../common/guards/capability.guard';
 import { RequireCapability } from '../../common/decorators/require-capability.decorator';
+import { UpdateSecurityConfigDto } from './dto/update-security-config.dto';
 
 @ApiTags('users')
 @Controller('users/security-config')
@@ -16,6 +17,12 @@ export class SecurityConfigController {
   @RequireCapability('isSecuritySettingsAccess')
   async getConfig(): Promise<SecurityConfig> {
     return this.securityConfigService.getConfig();
+  }
+
+  @Get('email-units')
+  @RequireCapability('isSecuritySettingsAccess')
+  getEmailUnitOptions() {
+    return this.securityConfigService.getEmailUnitOptions();
   }
 
   @Get('app-mode')
@@ -34,15 +41,7 @@ export class SecurityConfigController {
   @Put()
   @RequireCapability('isSecuritySettingsAccess')
   async updateConfig(
-    @Body() body: {
-      defaultPassword?: string;
-      mfaTestMode?: boolean;
-      vaptMode?: boolean;
-      appMode?: string;
-      googleSignInEnabled?: boolean;
-      allowedEmailDomains?: string[];
-      idleLockMinutes?: number;
-    },
+    @Body() body: UpdateSecurityConfigDto,
   ): Promise<SecurityConfig> {
     return this.securityConfigService.updateConfig(body);
   }

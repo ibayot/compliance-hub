@@ -19,6 +19,7 @@ import { SecurityConfigService } from './security-config.service';
 import { UserTrustedDevice } from './entities/user-trusted-device.entity';
 import { UserUnitOverride } from './entities/user-unit-override.entity';
 import { UnitSyncService } from './unit-sync.service';
+import { OutboundEmailPolicyService } from './outbound-email-policy.service';
 import { StaffDirectoryStore } from '../../shared/staff-directory/staff-directory.store';
 import { StaffDirectorySyncService } from './staff-directory-sync.service';
 import { StaffUnitDirectoryService } from './staff-unit-directory.service';
@@ -45,6 +46,7 @@ import { StaffDirectoryManagementController, StaffDirectoryIntegrationController
   providers: [
     UsersService,
     UnitSyncService,
+    OutboundEmailPolicyService,
     StaffDirectoryStore,
     StaffDirectorySyncService,
     StaffUnitDirectoryService,
@@ -57,6 +59,7 @@ import { StaffDirectoryManagementController, StaffDirectoryIntegrationController
   exports: [
     UsersService,
     UnitSyncService,
+    OutboundEmailPolicyService,
     RoleCapabilitiesService,
     FeedbackService,
     SecurityConfigService,

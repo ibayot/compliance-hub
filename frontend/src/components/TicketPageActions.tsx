@@ -7,7 +7,7 @@ export interface TicketPageActionsProps {
   canInvite: boolean;
   canViewEscalations: boolean;
   showingEscalations: boolean;
-  escalationCount: number;
+  escalationCount?: number;
   onCreate: () => void;
   onInvite: () => void;
   onToggleEscalations: () => void;
@@ -16,7 +16,7 @@ export interface TicketPageActionsProps {
 export default function TicketPageActions(props: TicketPageActionsProps) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const secondary = [
-    ...(props.canViewEscalations ? [{ label: props.showingEscalations ? 'Back to Tickets' : `Escalation History (${props.escalationCount})`, icon: props.showingEscalations ? <ArrowBack /> : <History />, action: props.onToggleEscalations, color: 'warning' as const }] : []),
+    ...(props.canViewEscalations ? [{ label: props.showingEscalations ? 'Back to Tickets' : props.escalationCount == null ? 'Escalation History' : `Escalation History (${props.escalationCount})`, icon: props.showingEscalations ? <ArrowBack /> : <History />, action: props.onToggleEscalations, color: 'warning' as const }] : []),
     ...(props.canInvite ? [{ label: 'Send Rating Invitation', icon: <MailOutline />, action: props.onInvite, color: 'info' as const }] : []),
   ];
   if (!props.canCreate && !secondary.length) return null;

@@ -25,4 +25,10 @@ export class SecurityConfig {
 
   @Column({ name: 'allowed_email_domains', type: 'simple-json', nullable: true })
   allowedEmailDomains: string[] | null;
+
+  @Column({ name: 'outbound_email_unit_restriction_enabled', default: false })
+  outboundEmailUnitRestrictionEnabled: boolean;
+
+  @Column({ name: 'outbound_email_allowed_unit_ids', type: 'simple-json', nullable: true })
+  outboundEmailAllowedUnitIds: number[] | null;
 }

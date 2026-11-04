@@ -221,6 +221,11 @@ export class RatingInvitationService {
       }
 
       const rawToken = randomBytes(32).toString('base64url');
+      const decision = await this.emailService.checkRoutineRecipient(user.email);
+      if (!decision.allowed) {
+        results.push({ requesterId, status: 'skipped', message: this.emailService.policySuppressionMessage(decision.reason) });
+        continue;
+      }
       const now = new Date();
       const expiresAt = new Date(now.getTime() + INVITATION_LIFETIME_MS);
       const invitation = await this.dataSource.transaction(async (manager) => {
@@ -304,7 +309,7 @@ export class RatingInvitationService {
       const secureFrontendUrl = localUrl
         ? frontendUrl
         : frontendUrl.replace(/^http:\/\//i, 'https://');
-      const sent = await this.emailService.sendRatingInvitationEmail({
+      const delivery = await this.emailService.sendRatingInvitationEmail({
         recipientEmail: user.email,
         recipientName: formatPersonName(user, user.email),
         eligibleTicketCount: eligibleTickets.length,
@@ -312,9 +317,10 @@ export class RatingInvitationService {
         ratingUrl: `${secureFrontendUrl}/rate/${rawToken}`,
       });
 
+      const sent = delivery.sent;
       invitation.emailDeliveryStatus = sent
         ? RatingInvitationDeliveryStatus.SENT
-        : RatingInvitationDeliveryStatus.FAILED;
+        : delivery.suppressed ? RatingInvitationDeliveryStatus.SUPPRESSED : RatingInvitationDeliveryStatus.FAILED;
       invitation.emailSentAt = sent ? new Date() : null;
       if (!sent) {
         invitation.status = RatingInvitationStatus.REVOKED;
@@ -323,16 +329,16 @@ export class RatingInvitationService {
       await this.invitationRepo.save(invitation);
       await this.logEvent(
         invitation.id,
-        sent ? 'invitation_sent' : 'invitation_delivery_failed',
+        sent ? 'invitation_sent' : delivery.suppressed ? 'invitation_delivery_suppressed' : 'invitation_delivery_failed',
         {},
         actorId,
         null,
-        { eligibleTicketCount: eligibleTickets.length },
+        { eligibleTicketCount: eligibleTickets.length, ...(delivery.reason ? { reason: delivery.reason } : {}) },
       );
       results.push({
         requesterId,
-        status: sent ? 'sent' : 'failed',
-        message: sent ? 'Invitation sent.' : 'Email delivery failed; the new link was revoked.',
+        status: sent ? 'sent' : delivery.suppressed ? 'skipped' : 'failed',
+        message: sent ? 'Invitation sent.' : delivery.suppressed ? 'Email was suppressed by the current sending controls; the new link was revoked.' : 'Email delivery failed; the new link was revoked.',
       });
     }
 

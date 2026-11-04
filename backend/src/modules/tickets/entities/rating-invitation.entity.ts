@@ -18,6 +18,7 @@ export enum RatingInvitationDeliveryStatus {
   PENDING = 'pending',
   SENT = 'sent',
   FAILED = 'failed',
+  SUPPRESSED = 'suppressed',
 }
 
 @Entity('rating_access_invitations')

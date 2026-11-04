@@ -23,13 +23,15 @@ export function reportMetadata(report: BuiltTicketReport) {
 }
 export function reportWarnings(report: BuiltTicketReport): string[] {
   const s = report.summary, warnings: string[] = [];
-  if (s.unknownHistoryTickets) warnings.push(`${s.unknownHistoryTickets} source ticket(s) have incomplete interruption history: exact pauses/freezes were not fully recorded for this period. “Not recorded” is unknown, not zero. Summary counts show recorded minimums; averages exclude incomplete records. Older unrecorded events may be missing from the interruption list.`);
+  if (s.unknownHistoryTickets) warnings.push(`${s.unknownHistoryTickets} source ticket(s) have incomplete interruption history. Available counts and minutes are shown, with estimates identified; gaps may remain. “Not recorded” is unknown, not zero. Averages exclude incomplete records. Older unrecorded events may be missing from the interruption list.`);
+  if (s.reconstructedHistoryTickets) warnings.push(`${s.reconstructedHistoryTickets} source ticket(s) use reconstructed estimates from historical status changes and supporting records. Counts and business minutes may be approximate. Averages include reconstructed records only when the available sequence covers the period without unresolved gaps.`);
+  if (s.auditEvidenceUnavailable) warnings.push('Audit history was unavailable. Reconstruction uses available ticket events and records; additional historical gaps may remain.');
   if (s.estimatedTimingTickets) warnings.push(`${s.estimatedTimingTickets} completed ticket(s) use estimated historical active-time calculations. Saved-deadline SLA classification remains separate.`);
   if (s.missingCompletionTickets) warnings.push(`${s.missingCompletionTickets} terminal ticket(s) have no usable completion timestamp and cannot be placed in a completed-month total.`);
   return warnings;
 }
-export const REPORT_METHOD = 'Completed totals and SLA use approved effective completion dates. Pause/freeze activity is clipped to the selected month and effective completion. Business durations exclude lunch, outside-office hours and non-office days; applicable ticket-specific OT dates count. Average frequency = recorded occurrences / affected tickets with complete monthly history. Average duration = business minutes / occurrences for those records. SLA compliance = Met / (Met + Missed). No classified tickets means unavailable, not 0%. Cancelled, duplicate and requester-closed records are excluded. Assignment and calendar settings reflect current records; this is a generated view, not an archived report.';
-export const REPORT_HISTORY_HELP = 'Pause/Freeze count is the number of recorded occurrences in the selected month. Minutes count only office working time, excluding lunch and non-office time. 0 means no recorded activity with complete history. Not recorded means exact history is unavailable. Incomplete means recording did not cover the full period; it does not indicate an error with the ticket or its SLA.';
+export const REPORT_METHOD = 'Completed totals and SLA use approved effective completion dates. Pause/freeze activity is clipped to the selected month and effective completion. Business durations exclude lunch, outside-office hours and non-office days; applicable ticket-specific OT dates count. Older intervals are reconstructed from historical status changes and corroborating records when available and are labelled estimates. These estimates never change saved SLA credits or deadlines. Average frequency = eligible occurrences / eligible affected tickets. Average duration = eligible business minutes / eligible occurrences. Coherent reconstructed histories can contribute estimated averages; incomplete records are excluded and eligible denominators are shown. SLA compliance = Met / (Met + Missed). No classified tickets means unavailable, not 0%. Cancelled, duplicate and requester-closed records are excluded. Assignment and calendar settings reflect current records; this is a generated view, not an archived report.';
+export const REPORT_HISTORY_HELP = 'Pause/Freeze count is the number of supported occurrences in the selected month. Minutes count only office working time, excluding lunch and non-office time. Recorded means directly captured intervals. Reconstructed estimate means historical evidence was used and timing may be approximate. Incomplete means gaps remain; available values are partial and missing values stay Not recorded. 0 indicates no observed activity in covered history. History quality does not change the ticket’s SLA.';
 
 export function reportBlocks(report: BuiltTicketReport): ReportBlock[] {
   const s = report.summary;
@@ -39,12 +41,14 @@ export function reportBlocks(report: BuiltTicketReport): ReportBlock[] {
     ['SLA compliance', s.slaCompliancePercent === null ? 'Unavailable' : `${number(s.slaCompliancePercent)}%`],
     ...(['pause', 'freeze'] as const).flatMap(kind => {
       const label = kind === 'pause' ? 'Pause' : 'Freeze', value = s[kind];
-      return [[`${label}: affected tickets${s.unknownHistoryTickets ? ' (recorded minimum)' : ''}`, number(value.tickets)],
-        [`${label}: occurrences${s.unknownHistoryTickets ? ' (recorded minimum)' : ''}`, number(value.occurrences)],
-        [`${label}: business minutes${s.unknownHistoryTickets ? ' (recorded minimum)' : ''}`, number(value.businessMinutes)],
+      const quality = `${s.unknownHistoryTickets ? ' (partial history)' : ''}${s.reconstructedHistoryTickets ? ' (includes estimates)' : ''}`;
+      return [[`${label}: affected tickets${quality}`, number(value.tickets)],
+        [`${label}: occurrences${quality}`, number(value.occurrences)],
+        [`${label}: business minutes${quality}`, number(value.businessMinutes)],
         [`${label}: average occurrences per affected ticket`, number(value.averageFrequency)],
         [`${label}: average business minutes per occurrence`, number(value.averageMinutes)],
-        [`${label}: tickets / occurrences eligible for averages`, `${number(value.averageEligibleTickets)} / ${number(value.averageEligibleOccurrences)}`]];
+        [`${label}: tickets / occurrences eligible for averages`, `${number(value.averageEligibleTickets)} / ${number(value.averageEligibleOccurrences)}`],
+        ...(value.averageEstimatedTickets ? [[`${label}: reconstructed tickets included in averages`, number(value.averageEstimatedTickets)]] : [])];
     }),
   ] }];
   for (const section of report.configuration.sections) {

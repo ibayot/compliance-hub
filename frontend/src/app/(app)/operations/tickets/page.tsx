@@ -83,6 +83,7 @@ import {
   CsatFormData,
   TicketEscalation,
   RatingInvitationRecipient,
+  TicketReadOptions,
 } from '@/app/api/references';
 import TicketImageDropzone from '@/components/TicketImageDropzone';
 import TicketCancelButton from '@/components/TicketCancelButton';
@@ -205,6 +206,20 @@ export default function TicketsPage({
   const [totalTickets, setTotalTickets] = useState(0);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const ticketRequestRef = useRef(0);
+  const ticketAbortRef = useRef<AbortController | null>(null);
+  const ticketListInFlightRef = useRef(false);
+  const ticketRefreshQueuedRef = useRef(false);
+  const ticketBackgroundRefreshRef = useRef<() => void>(() => {});
+  const ticketLiveRefreshRef = useRef<() => void>(() => {});
+  const ticketSummaryRequestRef = useRef(0);
+  const ticketSummaryAbortRef = useRef<AbortController | null>(null);
+  const escalationHistoryRequestRef = useRef(0);
+  const escalationHistoryAbortRef = useRef<AbortController | null>(null);
+  const [ticketLoadError, setTicketLoadError] = useState<string | null>(null);
+  const [ticketSummaryError, setTicketSummaryError] = useState(false);
+  const [requestedCountsError, setRequestedCountsError] = useState(false);
+  const [escalationHistoryLoading, setEscalationHistoryLoading] = useState(false);
+  const [escalationHistoryError, setEscalationHistoryError] = useState(false);
   const ticketSseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const TICKETS_PAGE_SIZE = 25;
   const [newDialogOpen, setNewDialogOpen] = useState(false);
@@ -468,7 +483,8 @@ export default function TicketsPage({
       });
       setSavingResolutionOverride(false);
       closeResolutionOverrideDialog();
-      await silentFetchTickets();
+      await fetchTickets(true);
+      void refreshTicketSummary();
     } catch (error: any) {
       enqueueSnackbar(error?.response?.data?.message || 'Unable to correct the resolution time.', {
         variant: 'error',
@@ -646,7 +662,7 @@ export default function TicketsPage({
   const tabFilteredTickets = frontendFilteredTickets;
 
   const refreshEscalationStates = useCallback(
-    async (rows: Ticket[]) => {
+    async (rows: Ticket[], signal: AbortSignal) => {
       if (!canEscalate) return;
       const candidates = rows
         .filter((t) => !['duplicate', 'closed', 'resolved', 'cancelled'].includes(t.status))
@@ -656,7 +672,7 @@ export default function TicketsPage({
       const entries = await Promise.all(
         candidates.map(async (t) => {
           try {
-            const escalations = await ticketsApi.getEscalations(t.id);
+            const escalations = await ticketsApi.getEscalations(t.id, { signal });
             const latest = escalations[0];
             const state: 'none' | 'returned' | 'active' = !latest
               ? 'none'
@@ -670,7 +686,7 @@ export default function TicketsPage({
         }),
       );
 
-      setEscalationStateByTicket((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
+      if (!signal.aborted) setEscalationStateByTicket((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
     },
     [canEscalate],
   );
@@ -699,7 +715,7 @@ export default function TicketsPage({
   }, [searchDraft]);
 
   const fetchMyRequestedStatusCounts = useCallback(
-    () =>
+    (options?: TicketReadOptions) =>
       ticketsApi.getMyRequested({
         ticketType: (filterType as TicketType) || undefined,
         priority: filterPriority || undefined,
@@ -712,7 +728,7 @@ export default function TicketsPage({
         search: searchQuery,
         page: 1,
         limit: 1,
-      }),
+      }, options),
     [
       filterType,
       filterPriority,
@@ -726,13 +742,84 @@ export default function TicketsPage({
     ],
   );
 
-  const fetchTickets = useCallback(async () => {
+  const refreshTicketSummary = useCallback(async () => {
     if (!filtersHydrated) return;
-    const requestId = ++ticketRequestRef.current;
+    const requestId = ++ticketSummaryRequestRef.current;
+    ticketSummaryAbortRef.current?.abort();
+    const controller = new AbortController();
+    ticketSummaryAbortRef.current = controller;
     try {
+      const stats = await ticketsApi.getDashboardStats({ signal: controller.signal });
+      if (requestId !== ticketSummaryRequestRef.current || controller.signal.aborted) return;
+      setPendingSatCount(stats.pendingSatisfactionTickets?.length ?? 0);
+      setMyTicketsCount(stats.myTicketsCount ?? 0);
+      setEscalatedToMeCount(stats.escalatedToMeCount ?? 0);
+      setTicketSummaryError(false);
+    } catch {
+      if (requestId === ticketSummaryRequestRef.current && !controller.signal.aborted) setTicketSummaryError(true);
+    }
+  }, [filtersHydrated, user?.id, user?.role, canManageAll, canViewEscalatedQueue]);
+
+  const refreshEscalationHistory = useCallback(async () => {
+    if (!filtersHydrated || !canViewEscalatedQueue || !showEscalations) return;
+    const requestId = ++escalationHistoryRequestRef.current;
+    escalationHistoryAbortRef.current?.abort();
+    const controller = new AbortController();
+    escalationHistoryAbortRef.current = controller;
+    setEscalationHistoryLoading(true);
+    setEscalationHistoryError(false);
+    try {
+      const rows = await ticketsApi.getAllEscalations({ signal: controller.signal });
+      if (requestId === escalationHistoryRequestRef.current && !controller.signal.aborted) setAllEscalations(rows);
+    } catch {
+      if (requestId === escalationHistoryRequestRef.current && !controller.signal.aborted) setEscalationHistoryError(true);
+    } finally {
+      if (requestId === escalationHistoryRequestRef.current) setEscalationHistoryLoading(false);
+    }
+  }, [filtersHydrated, canViewEscalatedQueue, showEscalations, user?.id, user?.role]);
+
+  useEffect(() => {
+    void refreshTicketSummary();
+    return () => { ++ticketSummaryRequestRef.current; ticketSummaryAbortRef.current?.abort(); };
+  }, [refreshTicketSummary]);
+
+  useEffect(() => {
+    setAllEscalations([]);
+    void refreshEscalationHistory();
+    return () => { ++escalationHistoryRequestRef.current; escalationHistoryAbortRef.current?.abort(); };
+  }, [refreshEscalationHistory]);
+
+  const fetchTickets = useCallback(async (silent = false) => {
+    if (!filtersHydrated) return;
+    // Queue one reconciliation instead of letting live events steal loading
+    // ownership or repeatedly cancel a slow foreground search.
+    if (silent && ticketListInFlightRef.current) {
+      ticketRefreshQueuedRef.current = true;
+      return;
+    }
+    const requestId = ++ticketRequestRef.current;
+    ticketAbortRef.current?.abort();
+    const controller = new AbortController();
+    ticketAbortRef.current = controller;
+    ticketListInFlightRef.current = true;
+    ticketRefreshQueuedRef.current = false;
+    if (!silent) {
       setLoading(true);
-      const [data, dashboardStats, baseMyRequestedCounts] = await Promise.all([
-        personalRequestedOnly
+      setTicketLoadError(null);
+      setTickets([]);
+    }
+    if (personalRequestedOnly && selectedTab === 'to_rate') {
+      void fetchMyRequestedStatusCounts({ signal: controller.signal }).then(data => {
+        if (requestId === ticketRequestRef.current && !controller.signal.aborted) {
+          setStatusCounts(data.statusCounts ?? {});
+          setRequestedCountsError(false);
+        }
+      }).catch(() => {
+        if (requestId === ticketRequestRef.current && !controller.signal.aborted) setRequestedCountsError(true);
+      });
+    } else setRequestedCountsError(false);
+    try {
+      const data = await (personalRequestedOnly
           ? ticketsApi.getMyRequested({
               status: selectedStatus || (filterStatus as TicketStatus) || undefined,
               ticketType: (filterType as TicketType) || undefined,
@@ -761,7 +848,7 @@ export default function TicketsPage({
               search: searchQuery,
               page,
               limit: TICKETS_PAGE_SIZE,
-            })
+            }, { signal: controller.signal })
           : restrictedAssignedOnly
             ? ticketsApi.getMyAssigned({
                 status: selectedStatus,
@@ -779,7 +866,7 @@ export default function TicketsPage({
                 proxyCreatedByMe: selectedTab === 'proxy',
                 page,
                 limit: TICKETS_PAGE_SIZE,
-              })
+              }, { signal: controller.signal })
             : ticketsApi.getAll({
                 status: selectedStatus || (filterStatus as TicketStatus) || undefined,
                 ticketType: (filterType as TicketType) || undefined,
@@ -811,219 +898,73 @@ export default function TicketsPage({
                 search: searchQuery,
                 page,
                 limit: TICKETS_PAGE_SIZE,
-              }),
-        ticketsApi.getDashboardStats(),
-        personalRequestedOnly && selectedTab === 'to_rate'
-          ? fetchMyRequestedStatusCounts()
-          : Promise.resolve(null),
-      ]);
-      if (requestId !== ticketRequestRef.current) return;
+              }, { signal: controller.signal }));
+      if (requestId !== ticketRequestRef.current || controller.signal.aborted) return;
       setTickets(data.data);
       setTotalPages(data.totalPages);
       setTotalTickets(data.total);
-      setStatusCounts(baseMyRequestedCounts?.statusCounts ?? data.statusCounts ?? {});
-      setPendingSatCount(dashboardStats.pendingSatisfactionTickets?.length ?? 0);
-      setMyTicketsCount(dashboardStats.myTicketsCount ?? 0);
-      setEscalatedToMeCount(dashboardStats.escalatedToMeCount ?? 0);
-
-      if (canViewEscalatedQueue) {
-        const escalations = await ticketsApi.getAllEscalations();
-        if (requestId === ticketRequestRef.current) setAllEscalations(escalations);
+      if (!(personalRequestedOnly && selectedTab === 'to_rate')) setStatusCounts(data.statusCounts ?? {});
+      setTicketLoadError(null);
+    } catch (error: any) {
+      if (requestId !== ticketRequestRef.current || controller.signal.aborted) return;
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        setTickets([]);
+        setTicketLoadError('Ticket access could not be verified. Please check your session and retry.');
+      } else {
+        setTicketLoadError(error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT'
+          ? 'Ticket loading timed out. Please retry.'
+          : 'Tickets could not be refreshed. Please retry.');
       }
-    } catch {
-      if (requestId === ticketRequestRef.current) enqueueSnackbar('Failed to load tickets', { variant: 'error' });
     } finally {
-      if (requestId === ticketRequestRef.current) setLoading(false);
+      if (requestId === ticketRequestRef.current) {
+        ticketListInFlightRef.current = false;
+        setLoading(false);
+        if (ticketRefreshQueuedRef.current) {
+          ticketRefreshQueuedRef.current = false;
+          ticketBackgroundRefreshRef.current();
+        }
+      }
     }
-  }, [
-    filterStatus,
-    selectedTab,
-    selectedStatus,
-    filterType,
-    filterPriority,
-    filterSla,
-    filterYear,
-    filterDate,
-    filterPeriodMode,
-    filterMonth,
-    filterQuarter,
-    filterSemester,
-    searchQuery,
-    page,
-    showMyTickets,
-    showEscalatedToMe,
-    canViewEscalatedQueue,
-    searchQuery,
-    page,
-    isFocalTech,
-    user?.id,
-    canManageAll,
-    restrictedAssignedOnly,
-    personalRequestedOnly,
-    fetchMyRequestedStatusCounts,
-    filtersHydrated,
-  ]);
+  }, [filtersHydrated, personalRequestedOnly, restrictedAssignedOnly, selectedStatus,
+    filterStatus, filterType, filterPriority, filterDate, filterPeriodMode, selectedTab,
+    filterYear, filterMonth, filterQuarter, filterSemester, filterSla, showMyTickets,
+    showEscalatedToMe, canViewEscalatedQueue, canManageAll, isFocalTech, searchQuery, page, user?.id, user?.role,
+    fetchMyRequestedStatusCounts]);
 
   useEffect(() => {
-    fetchTickets();
+    void fetchTickets();
+    return () => {
+      ++ticketRequestRef.current;
+      ticketAbortRef.current?.abort();
+      ticketListInFlightRef.current = false;
+      ticketRefreshQueuedRef.current = false;
+      if (ticketSseTimerRef.current) clearTimeout(ticketSseTimerRef.current);
+      ticketSseTimerRef.current = null;
+    };
   }, [fetchTickets]);
 
   useEffect(() => {
-    refreshEscalationStates(tickets);
+    const controller = new AbortController();
+    void refreshEscalationStates(tickets, controller.signal);
+    return () => controller.abort();
   }, [tickets, refreshEscalationStates]);
-
-  // For non-super admins: load pending satisfaction count and badge counts
-  // useEffect(() => {
-  //   if (!canManageAll) {
-  //     ticketsApi
-  //       .getDashboardStats()
-  //       .then((stats) => {
-  //         setPendingSatCount(stats.pendingSatisfactionTickets?.length ?? 0);
-  //         setMyTicketsCount(stats.myTicketsCount ?? 0);
-  //         setEscalatedToMeCount(stats.escalatedToMeCount ?? 0);
-  //       })
-  //       .catch(() => { });
-  //   }
-  // }, [canManageAll]);
 
   // Check DB escalation_focal_configs to see if the current user's role is a configured focal
   // NOTE: isEscalationFocal is now read from myCap?.isEscalationFocal (AuthContext)
   // The escalation_focal_configs table is still used only for the assign dialog recipient list.
 
   // Silent auto-refresh — no loading spinner to avoid flicker on background polls
-  const silentFetchTickets = useCallback(async () => {
-    if (!filtersHydrated) return;
-    const requestId = ++ticketRequestRef.current;
-    try {
-      const [data, dashboardStats, baseMyRequestedCounts] = await Promise.all([
-        personalRequestedOnly
-          ? ticketsApi.getMyRequested({
-              status: selectedStatus || (filterStatus as TicketStatus) || undefined,
-              ticketType: (filterType as TicketType) || undefined,
-              priority: filterPriority || undefined,
-              date:
-                filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
-              includeCarryover: filterPeriodMode === 'day' && selectedTab !== 'to_rate',
-              year:
-                filterPeriodMode !== 'day' && selectedTab !== 'to_rate'
-                  ? Number(filterYear) || undefined
-                  : undefined,
-              month:
-                filterPeriodMode === 'month' && selectedTab !== 'to_rate'
-                  ? Number(filterMonth) || undefined
-                  : undefined,
-              quarter:
-                filterPeriodMode === 'quarter' && selectedTab !== 'to_rate'
-                  ? Number(filterQuarter) || undefined
-                  : undefined,
-              semester:
-                filterPeriodMode === 'semester' && selectedTab !== 'to_rate'
-                  ? Number(filterSemester) || undefined
-                  : undefined,
-              pendingSatisfaction: selectedTab === 'to_rate',
-              proxyCreatedByMe: selectedTab === 'proxy',
-              search: searchQuery,
-              page,
-              limit: TICKETS_PAGE_SIZE,
-            })
-          : restrictedAssignedOnly
-            ? ticketsApi.getMyAssigned({
-                status: selectedStatus,
-                ticketType: (filterType as TicketType) || undefined,
-                priority: filterPriority || undefined,
-                date: filterPeriodMode === 'day' ? filterDate : undefined,
-                includeCarryover: filterPeriodMode === 'day',
-                year: filterPeriodMode !== 'day' ? Number(filterYear) || undefined : undefined,
-                month: filterPeriodMode === 'month' ? Number(filterMonth) || undefined : undefined,
-                quarter:
-                  filterPeriodMode === 'quarter' ? Number(filterQuarter) || undefined : undefined,
-                semester:
-                  filterPeriodMode === 'semester' ? Number(filterSemester) || undefined : undefined,
-                search: searchQuery,
-                proxyCreatedByMe: selectedTab === 'proxy',
-                page,
-                limit: TICKETS_PAGE_SIZE,
-              })
-            : ticketsApi.getAll({
-                status: selectedStatus || (filterStatus as TicketStatus) || undefined,
-                ticketType: (filterType as TicketType) || undefined,
-                priority: filterPriority || undefined,
-                date:
-                  filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
-                includeCarryover: filterPeriodMode === 'day',
-                year:
-                  filterPeriodMode !== 'day' && selectedTab !== 'to_rate'
-                    ? filterYear || undefined
-                    : undefined,
-                month:
-                  filterPeriodMode === 'month' && selectedTab !== 'to_rate'
-                    ? filterMonth || undefined
-                    : undefined,
-                quarter:
-                  filterPeriodMode === 'quarter' && selectedTab !== 'to_rate'
-                    ? filterQuarter || undefined
-                    : undefined,
-                semester:
-                  filterPeriodMode === 'semester' && selectedTab !== 'to_rate'
-                    ? filterSemester || undefined
-                    : undefined,
-                slaState: filterSla || undefined,
-                assignedToMe: showMyTickets && !showEscalatedToMe,
-                proxyCreatedByMe: selectedTab === 'proxy',
-                pendingSatisfaction: selectedTab === 'to_rate',
-                escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
-                search: searchQuery,
-                page,
-                limit: TICKETS_PAGE_SIZE,
-              }),
-        ticketsApi.getDashboardStats(),
-        personalRequestedOnly && selectedTab === 'to_rate'
-          ? fetchMyRequestedStatusCounts()
-          : Promise.resolve(null),
-      ]);
-      if (requestId !== ticketRequestRef.current) return;
-      setTickets(data.data);
-      setTotalPages(data.totalPages);
-      setTotalTickets(data.total);
-      setStatusCounts(baseMyRequestedCounts?.statusCounts ?? data.statusCounts ?? {});
-      setPendingSatCount(dashboardStats.pendingSatisfactionTickets?.length ?? 0);
-      setMyTicketsCount(dashboardStats.myTicketsCount ?? 0);
-      setEscalatedToMeCount(dashboardStats.escalatedToMeCount ?? 0);
-    } catch {
-      /* silent */
-    }
-  }, [
-    filterStatus,
-    selectedTab,
-    selectedStatus,
-    filterType,
-    filterPriority,
-    filterSla,
-    filterYear,
-    filterDate,
-    filterPeriodMode,
-    filterMonth,
-    filterQuarter,
-    filterSemester,
-    searchQuery,
-    page,
-    showMyTickets,
-    showEscalatedToMe,
-    canViewEscalatedQueue,
-    searchQuery,
-    page,
-    isFocalTech,
-    user?.id,
-    restrictedAssignedOnly,
-    personalRequestedOnly,
-    fetchMyRequestedStatusCounts,
-    filtersHydrated,
-  ]);
+  ticketBackgroundRefreshRef.current = () => { void fetchTickets(true); };
+  ticketLiveRefreshRef.current = () => {
+    ticketBackgroundRefreshRef.current();
+    void refreshTicketSummary();
+    void refreshEscalationHistory();
+  };
   useSse(['TICKET_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
     if (ticketSseTimerRef.current) clearTimeout(ticketSseTimerRef.current);
     ticketSseTimerRef.current = setTimeout(() => {
       ticketSseTimerRef.current = null;
-      void silentFetchTickets();
+      ticketLiveRefreshRef.current();
     }, 750);
   });
 
@@ -1142,6 +1083,12 @@ export default function TicketsPage({
     }
   };
 
+  const refreshAfterTicketChange = () => {
+    void fetchTickets();
+    void refreshTicketSummary();
+    void refreshEscalationHistory();
+  };
+
   const handleSubmitTicket = async (confirmedForSelf = false) => {
     const pendingRequester = allUsers.find((u) => u.id === form.requesterId && u.pendingStaffId);
     if ((form.requesterId ?? 0) < 0 && !pendingRequester) {
@@ -1225,7 +1172,7 @@ export default function TicketsPage({
         reason: '',
       });
       setPendingSatCount(0);
-      fetchTickets();
+      refreshAfterTicketChange();
     } catch (err: any) {
       const rawMessage = err?.response?.data?.message;
       const message = Array.isArray(rawMessage) ? rawMessage.join(' ') : rawMessage;
@@ -1343,7 +1290,8 @@ export default function TicketsPage({
       });
       enqueueSnackbar('Ticket assigned.', { variant: 'success' });
       setAssignDialogOpen(false);
-      await silentFetchTickets();
+      await fetchTickets(true);
+      void refreshTicketSummary();
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to assign', { variant: 'error' });
     }
@@ -1362,7 +1310,7 @@ export default function TicketsPage({
       enqueueSnackbar('Ticket escalated.', { variant: 'success' });
       setEscalationStateByTicket((prev) => ({ ...prev, [assigningTicket.id]: 'active' }));
       setEscalateDialogOpen(false);
-      fetchTickets();
+      refreshAfterTicketChange();
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Failed to escalate ticket', {
         variant: 'error',
@@ -1441,7 +1389,7 @@ export default function TicketsPage({
       await ticketsApi.submitSatisfaction(satTicket.id, { formData: csatForm });
       enqueueSnackbar('Thank you for your feedback!', { variant: 'success' });
       setSatDialogOpen(false);
-      fetchTickets();
+      refreshAfterTicketChange();
     } catch (err: any) {
       const rawMessage = err?.response?.data?.message;
       const message = Array.isArray(rawMessage) ? rawMessage.join(' ') : rawMessage;
@@ -1527,12 +1475,30 @@ export default function TicketsPage({
           canInvite={canSendRatingInvitations && ratingInvitationsAvailable && !showEscalations}
           canViewEscalations={canViewEscalatedQueue}
           showingEscalations={showEscalations}
-          escalationCount={allEscalations.length}
           onCreate={handleOpenNewTicket}
           onInvite={openRatingInvitationDialog}
           onToggleEscalations={() => setShowEscalations(value => !value)}
         />
       </Box>
+
+      {!showEscalations && ticketLoadError && (
+        <Alert severity={tickets.length ? 'warning' : 'error'} sx={{ mb: 2 }}
+          action={<Button color="inherit" size="small" disabled={loading} onClick={() => void fetchTickets()}>Retry</Button>}>
+          {ticketLoadError}{tickets.length > 0 ? ' Previously loaded tickets are shown.' : ''}
+        </Alert>
+      )}
+      {(ticketSummaryError || requestedCountsError) && (
+        <Alert severity="warning" sx={{ mb: 2 }}
+          action={<Button color="inherit" size="small" onClick={() => { void refreshTicketSummary(); if (requestedCountsError) void fetchTickets(); }}>Refresh counts</Button>}>
+          Ticket counts could not be refreshed and may be out of date.
+        </Alert>
+      )}
+      {showEscalations && escalationHistoryError && (
+        <Alert severity="error" sx={{ mb: 2 }}
+          action={<Button color="inherit" size="small" disabled={escalationHistoryLoading} onClick={() => void refreshEscalationHistory()}>Retry</Button>}>
+          Escalation history could not be refreshed.{allEscalations.length > 0 ? ' Previously loaded history is shown.' : ''}
+        </Alert>
+      )}
 
       <Dialog
         open={ratingInvitationOpen}
@@ -2094,13 +2060,13 @@ export default function TicketsPage({
                 inputProps={{ 'aria-label': 'Search escalation history' }}
               />
             </Box>
-            {loading ? (
+            {escalationHistoryLoading ? (
               <Box display="flex" justifyContent="center" p={3}>
                 <CircularProgress size={28} />
               </Box>
             ) : frontendFilteredEscalations.length === 0 ? (
               <Box display="flex" justifyContent="center" p={3}>
-                <Typography color="text.secondary">No escalations found.</Typography>
+                <Typography color="text.secondary">{escalationHistoryError ? 'Escalation history is unavailable.' : 'No escalations found.'}</Typography>
               </Box>
             ) : (
               <TableContainer>
@@ -2177,7 +2143,7 @@ export default function TicketsPage({
             </Box>
           ) : tabFilteredTickets.length === 0 ? (
             <Box display="flex" justifyContent="center" p={3}>
-              <Typography color="text.secondary">No tickets found in this category.</Typography>
+              <Typography color="text.secondary">{ticketLoadError ? 'Tickets are unavailable. Use Retry above.' : 'No tickets found in this category.'}</Typography>
             </Box>
           ) : (
             tabFilteredTickets.map((ticket) => {
@@ -2357,7 +2323,7 @@ export default function TicketsPage({
                         Tap the card to view details
                       </Typography>
                       <Stack direction="row" spacing={0.5}>
-                        <TicketCancelButton ticket={ticket} onCancelled={() => void fetchTickets()} />
+                        <TicketCancelButton ticket={ticket} onCancelled={() => void refreshAfterTicketChange()} />
                         <Tooltip title="View Details">
                           <IconButton
                             size="small"
@@ -2538,7 +2504,7 @@ export default function TicketsPage({
                   <TableRow>
                     <TableCell colSpan={11} align="center">
                       <Typography color="text.secondary" py={3}>
-                        No tickets found in this category.
+                        {ticketLoadError ? 'Tickets are unavailable. Use Retry above.' : 'No tickets found in this category.'}
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -2772,7 +2738,7 @@ export default function TicketsPage({
                           {new Date(ticket.createdAt).toLocaleDateString()}
                         </TableCell>
                         <TableCell align="right">
-                          <TicketActionsMenu ticket={ticket} onCancelled={() => void fetchTickets()}
+                          <TicketActionsMenu ticket={ticket} onCancelled={() => void refreshAfterTicketChange()}
                             actions={(() => {
                               const actions: TicketMenuAction[] = [{
                                 label: 'View Details', icon: <ViewIcon fontSize="small" />,

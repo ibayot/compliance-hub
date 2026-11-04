@@ -1,9 +1,10 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, OnApplicationBootstrap, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createConnection, RowDataPacket } from 'mysql2/promise';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { auditContext } from '../../shared/audit/audit.context';
 import {
   APP_NOTIFICATION_REQUESTED_EVENT,
   EventBusService,
@@ -37,8 +38,6 @@ export class UnitSyncService implements OnApplicationBootstrap {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(Unit)
     private readonly unitsRepository: Repository<Unit>,
-    @InjectRepository(UserUnitOverride)
-    private readonly overridesRepository: Repository<UserUnitOverride>,
     private readonly dataSource: DataSource,
     private readonly configService: ConfigService,
     private readonly eventBus: EventBusService,
@@ -65,7 +64,7 @@ export class UnitSyncService implements OnApplicationBootstrap {
     });
   }
 
-  async synchronize(): Promise<UnitSyncResult> {
+  async synchronize(options: { manual?: boolean } = {}): Promise<UnitSyncResult> {
     const emptyResult: UnitSyncResult = {
       discoveredUnits: 0,
       updatedUsers: 0,
@@ -75,14 +74,18 @@ export class UnitSyncService implements OnApplicationBootstrap {
       skippedRestrictedAssignments: 0,
     };
 
-    if (!this.isEnabled()) return emptyResult;
+    // The enable flag controls automatic runs. An authorized explicit action
+    // uses the same configured source without enabling the automatic schedule.
+    if (!options.manual && !this.isEnabled()) return emptyResult;
     if (this.running) {
+      if (options.manual) throw new ConflictException('Unit synchronization is already running. Wait for it to finish before trying again.');
       this.logger.warn('Skipped overlapping UMS unit synchronization.');
       return emptyResult;
     }
 
     this.running = true;
     try {
+      await this.assertTicketUnitSnapshotsReady();
       const rows = await this.loadActiveWorkHistory();
       const result = { ...emptyResult };
       const sectionsByKey = new Map<string, string>();
@@ -134,11 +137,6 @@ export class UnitSyncService implements OnApplicationBootstrap {
         where: { staffId: In(staffIds), active: true },
         relations: ['units'],
       });
-      const overrides = await this.overridesRepository.find({
-        where: { userId: In(users.map((user) => user.id)) },
-      });
-      const overrideByUserId = new Map(overrides.map((override) => [override.userId, override]));
-
       for (const user of users) {
         const staffSections = sectionsByStaff.get(String(user.staffId).trim());
         if (!staffSections || staffSections.size !== 1) {
@@ -150,35 +148,35 @@ export class UnitSyncService implements OnApplicationBootstrap {
         const targetUnit = unitsByKey.get(sectionKey);
         if (!targetUnit?.active) continue;
 
-        const override = overrideByUserId.get(user.id);
-        if (override) {
-          if (override.unitId === targetUnit.id) {
-            await this.overridesRepository.delete({ userId: user.id });
-            result.clearedOverrides += 1;
-          } else {
-            result.retainedOverrides += 1;
-          }
-          continue;
-        }
-
-        const currentUnitId = user.units?.[0]?.id ?? null;
-        if (currentUnitId === targetUnit.id) continue;
-
-        const requiresReportorialUnit = user.role !== UserRole.USER;
-        if (Boolean(targetUnit.hasReportorialRequirements) !== requiresReportorialUnit) {
-          result.skippedRestrictedAssignments += 1;
-          continue;
-        }
-
-        await this.dataSource.transaction(async (manager) => {
+        const outcome = await this.dataSource.transaction(async (manager) => {
           const managedUser = await manager.getRepository(User).findOne({
             where: { id: user.id, active: true },
             relations: ['units'],
+            lock: { mode: 'pessimistic_write' },
           });
-          if (!managedUser) return;
-          managedUser.units = [targetUnit];
+          if (!managedUser || String(managedUser.staffId).trim() !== String(user.staffId).trim()) return 'unchanged';
+          const currentUnit = await manager.getRepository(Unit).findOne({ where: { id: targetUnit.id, active: true } });
+          if (!currentUnit) return 'unchanged';
+          const overrideRepo = manager.getRepository(UserUnitOverride);
+          const override = await overrideRepo.findOne({ where: { userId: user.id } });
+          const previousUnits = (managedUser.units || []).map(unit => unit.id);
+          if (override) {
+            if (override.unitId !== currentUnit.id || previousUnits.length !== 1 || previousUnits[0] !== currentUnit.id) return 'retained';
+            await overrideRepo.delete({ userId: user.id });
+            await this.auditUnitChange(manager, user.id, previousUnits, currentUnit.id, true);
+            return 'cleared';
+          }
+          if (previousUnits.length === 1 && previousUnits[0] === currentUnit.id) return 'unchanged';
+          if (Boolean(currentUnit.hasReportorialRequirements) !== (managedUser.role !== UserRole.USER)) return 'restricted';
+          managedUser.units = [currentUnit];
           await manager.getRepository(User).save(managedUser);
+          await this.auditUnitChange(manager, user.id, previousUnits, currentUnit.id, false);
+          return 'updated';
         });
+        if (outcome === 'retained') result.retainedOverrides += 1;
+        if (outcome === 'cleared') { result.clearedOverrides += 1; this.emitUserDirectoryUpdated(user.id); }
+        if (outcome === 'restricted') result.skippedRestrictedAssignments += 1;
+        if (outcome !== 'updated') continue;
         result.updatedUsers += 1;
         this.emitUserDirectoryUpdated(user.id);
         void this.eventBus.publish(APP_NOTIFICATION_REQUESTED_EVENT, {
@@ -191,9 +189,33 @@ export class UnitSyncService implements OnApplicationBootstrap {
 
       this.logResult(result);
       return result;
+    } catch (error) {
+      this.logger.error(`UMS unit synchronization failed: ${(error as { code?: string })?.code || 'source or storage unavailable'}`);
+      throw new ServiceUnavailableException('Unit synchronization could not complete. Some earlier changes may have been saved. Refresh the user list and check the UMS connection before trying again.');
     } finally {
       this.running = false;
     }
+  }
+
+  private async assertTicketUnitSnapshotsReady(): Promise<void> {
+    const database = process.env.TICKETING_DB_DATABASE?.trim();
+    if (!database || !/^[A-Za-z0-9_]+$/.test(database)) throw new Error('Ticketing database is unavailable.');
+    const [row] = await this.dataSource.query(`SELECT COUNT(*) AS pending FROM \`${database}\`.tickets WHERE requester_unit_snapshot IS NULL`);
+    if (Number(row?.pending) !== 0) throw new Error('Ticket unit snapshots must be initialized before unit synchronization.');
+  }
+
+  private async auditUnitChange(manager: EntityManager, userId: number, previousUnitIds: number[], unitId: number, clearedOverride: boolean): Promise<void> {
+    const auditDatabase = process.env.AUDIT_DB_DATABASE?.trim();
+    if (!auditDatabase || !/^[A-Za-z0-9_]+$/.test(auditDatabase)) throw new Error('Audit database is unavailable.');
+    const context = auditContext.getStore();
+    await manager.query(`INSERT INTO \`${auditDatabase}\`.audit_log
+      (user_email, action, database_name, table_name, operation_type, row_id, description, old_values, new_values, ip_address, session_id)
+      VALUES (?, 'UPDATE', ?, 'users', 'UMS_UNIT_SYNC', ?, ?, ?, ?, ?, ?)`, [
+      context?.email || 'system_fallback@domain.local', manager.connection.options.database, String(userId),
+      'Synchronized operational unit from UMS active work history.',
+      JSON.stringify({ unitIds: previousUnitIds }), JSON.stringify({ unitIds: [unitId], clearedOverride }),
+      context?.ipAddress || 'unknown', context?.sessionId || 'system-session',
+    ]);
   }
 
   private isEnabled(): boolean {
@@ -221,13 +243,14 @@ export class UnitSyncService implements OnApplicationBootstrap {
     });
 
     try {
-      const [rows] = await connection.query<Array<RowDataPacket & UmsWorkHistoryRow>>(
-        `SELECT CAST(\`staff_id\` AS CHAR) AS \`staffId\`, TRIM(\`section_name\`) AS \`sectionName\`
+      const [rows] = await connection.query<Array<RowDataPacket & UmsWorkHistoryRow>>({
+        sql: `SELECT CAST(\`staff_id\` AS CHAR) AS \`staffId\`, TRIM(\`section_name\`) AS \`sectionName\`
          FROM \`work_history\`
          WHERE \`is_active\` = 1
            AND \`staff_id\` IS NOT NULL
            AND TRIM(COALESCE(\`section_name\`, '')) <> ''`,
-      );
+        timeout: 30_000,
+      });
       return rows.map((row) => ({
         staffId: String(row.staffId),
         sectionName: String(row.sectionName),

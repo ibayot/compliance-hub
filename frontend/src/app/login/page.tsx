@@ -203,6 +203,13 @@ export default function LoginPage() {
               </Alert>
             )}
 
+            {reason === 'mfa_restart' && <Alert severity="warning" sx={{ mb: 2 }}>
+              Please sign in again to request a fresh verification code.
+            </Alert>}
+            {reason === 'mfa_locked' && <Alert severity="warning" sx={{ mb: 2 }}>
+              MFA is temporarily locked. Wait for the lock to expire or contact an authorized account manager.
+            </Alert>}
+
             {reason === 'deactivated' && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 Account is deactivated. Please contact the RICTMS for reactivation.

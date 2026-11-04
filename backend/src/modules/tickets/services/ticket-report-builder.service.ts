@@ -7,13 +7,13 @@ import { TicketStatus } from '../entities/ticket.entity';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { getEffectiveResolvedAt, TicketService } from './ticket.service';
 import { assertKeys, monthlyReportPeriod, ReportConfiguration, reportConfiguration } from './ticket-report-builder.contract';
-import { usableInterruptionHistory } from './ticket-interruptions';
+import { hasRecordedMonthlyHistory, reconstructReportInterruptions, evidenceTime } from './ticket-interruption-reconstruction';
 import { formatPersonName } from '../../../shared/utils/person-name';
 
 interface Actor { id: number; role: string }
-export interface InterruptionTotals { tickets: number; occurrences: number; businessMinutes: number; averageFrequency: number | null; averageMinutes: number | null; averageEligibleTickets: number; averageEligibleOccurrences: number }
+export interface InterruptionTotals { tickets: number; occurrences: number; businessMinutes: number; averageFrequency: number | null; averageMinutes: number | null; averageEligibleTickets: number; averageEligibleOccurrences: number; averageEstimatedTickets: number }
 const round = (n: number) => Math.round(n * 100) / 100;
-const blankTotals = (): InterruptionTotals => ({ tickets: 0, occurrences: 0, businessMinutes: 0, averageFrequency: null, averageMinutes: null, averageEligibleTickets: 0, averageEligibleOccurrences: 0 });
+const blankTotals = (): InterruptionTotals => ({ tickets: 0, occurrences: 0, businessMinutes: 0, averageFrequency: null, averageMinutes: null, averageEligibleTickets: 0, averageEligibleOccurrences: 0, averageEstimatedTickets: 0 });
 
 @Injectable()
 export class TicketReportBuilderService {
@@ -97,10 +97,14 @@ export class TicketReportBuilderService {
     const source = await this.tickets.getMonthlyBuilderTickets(period.start, period.cutoff, actor.id, actor.role,
       configuration.technicianId, configuration.ticketType, configuration.includeTicketList && configuration.columns.includes('description'));
     await this.tickets.enrichBuilderTickets(source);
+    const legacy = source.filter(ticket => !hasRecordedMonthlyHistory(ticket.interruptionHistory, period.start));
+    const evidence = legacy.length ? await this.tickets.getBuilderInterruptionEvidence(legacy, now)
+      : { byTicket: new Map(), auditUnavailable: false };
     const cache = new Map<string, boolean>();
     const summary = { received: 0, completed: 0, slaMet: 0, slaMissed: 0, slaUnavailable: 0,
       slaCompliancePercent: null as number | null, pause: blankTotals(), freeze: blankTotals(),
-      unknownHistoryTickets: 0, estimatedTimingTickets: 0, missingCompletionTickets: 0 };
+      unknownHistoryTickets: 0, reconstructedHistoryTickets: 0, auditEvidenceUnavailable: evidence.auditUnavailable,
+      estimatedTimingTickets: 0, missingCompletionTickets: 0 };
     const groups = new Map<string, Map<string, { id: string; label: string; category?: string; tickets: number; slaMet: number; slaMissed: number }>>();
     const averageInputs = { pause: blankTotals(), freeze: blankTotals() };
     const rows: Array<Record<string, any>> = [];
@@ -116,18 +120,25 @@ export class TicketReportBuilderService {
       if (lifetimeEnd < period.start && !receivedInMonth) continue;
       if (receivedInMonth) summary.received++;
       if (completed && !validEffective) summary.missingCompletionTickets++;
-      const history = usableInterruptionHistory(ticket.interruptionHistory);
-      const known = Boolean(history && (history.complete || new Date(history.capturedFrom) <= period.start));
+      const history = reconstructReportInterruptions(ticket, evidence.byTicket.get(ticket.id) ?? [], period.start, now);
+      const known = history.complete;
       if (!known) summary.unknownHistoryTickets++;
+      if (history.reconstructed) summary.reconstructedHistoryTickets++;
       const counts = { pause: 0, freeze: 0 }, minutes = { pause: 0, freeze: 0 };
-      for (const interval of history?.intervals ?? []) {
+      const paired = { pause: 0, freeze: 0 };
+      for (const interval of history.intervals) {
         const start = new Date(Math.max(Date.parse(interval.startAt), period.start.getTime()));
         const end = new Date(Math.min(interval.endAt === null ? period.cutoff.getTime() : Date.parse(interval.endAt),
           period.cutoff.getTime(), lifetimeEnd.getTime()));
         if (end <= start) continue;
         counts[interval.kind]++;
+        paired[interval.kind]++;
         minutes[interval.kind] += await this.tickets.calculateBusinessSecondsForSla(start, end,
           { ...config, overtimeSlaDate: ticket.overtimeSlaDate || undefined }, cache) / 60;
+      }
+      for (const missing of history.unresolved) {
+        const at = evidenceTime(missing.startAt);
+        if (at >= period.start.getTime() && at < Math.min(period.cutoff.getTime(), lifetimeEnd.getTime())) counts[missing.kind]++;
       }
       for (const kind of ['pause', 'freeze'] as const) {
         if (counts[kind]) summary[kind].tickets++;
@@ -137,6 +148,7 @@ export class TicketReportBuilderService {
           averageInputs[kind].tickets++;
           averageInputs[kind].occurrences += counts[kind];
           averageInputs[kind].businessMinutes += minutes[kind];
+          if (history.reconstructed) averageInputs[kind].averageEstimatedTickets++;
         }
       }
       let sla: 'Met' | 'Missed' | 'Unavailable' | null = null;
@@ -171,9 +183,10 @@ export class TicketReportBuilderService {
           assignee: ticket.assignedTo ? formatPersonName(ticket.assignedTo, '') : 'Unassigned', category: ticket.category?.name ?? 'Unspecified',
           issue: ticket.issueTypeConfig?.name ?? 'Unspecified', status: ticket.status, priority: ticket.priority,
           createdAt: new Date(ticket.createdAt).toISOString(), completedAt: validEffective?.toISOString() ?? null };
-        rows.push({ ticketId: ticket.id, ticketNumber: ticket.ticketNumber, ticketType: ticket.ticketType, pauseCount: known ? counts.pause : null,
-          freezeCount: known ? counts.freeze : null, pauseMinutes: known ? round(minutes.pause) : null,
-          freezeMinutes: known ? round(minutes.freeze) : null, historyQuality: known ? 'Recorded' : 'Incomplete', sla,
+        rows.push({ ticketId: ticket.id, ticketNumber: ticket.ticketNumber, ticketType: ticket.ticketType, pauseCount: known || counts.pause ? counts.pause : null,
+          freezeCount: known || counts.freeze ? counts.freeze : null, pauseMinutes: known || paired.pause ? round(minutes.pause) : null,
+          freezeMinutes: known || paired.freeze ? round(minutes.freeze) : null,
+          historyQuality: history.reconstructed ? known ? 'Reconstructed estimate' : 'Incomplete — reconstructed estimate' : known ? 'Recorded' : 'Incomplete', sla,
           ...Object.fromEntries(configuration.columns.map(column => [column, optional[column]])),
           _sort: configuration.sortBy === 'ticketNumber' ? ticket.ticketNumber : configuration.sortBy === 'createdAt'
             ? new Date(ticket.createdAt).toISOString() : validEffective?.toISOString() ?? '' });
@@ -183,10 +196,11 @@ export class TicketReportBuilderService {
     summary.slaCompliancePercent = classified ? round(summary.slaMet / classified * 100) : null;
     for (const kind of ['pause', 'freeze'] as const) {
       const total = summary[kind];
-      // Incomplete records are excluded from averages; publish known lower bounds with a coverage warning.
+      // Incomplete records are excluded from averages; reconstructed inputs stay visibly estimated.
       const eligible = averageInputs[kind];
       total.averageEligibleTickets = eligible.tickets;
       total.averageEligibleOccurrences = eligible.occurrences;
+      total.averageEstimatedTickets = eligible.averageEstimatedTickets;
       total.averageFrequency = eligible.tickets ? round(eligible.occurrences / eligible.tickets) : null;
       total.averageMinutes = eligible.occurrences ? round(eligible.businessMinutes / eligible.occurrences) : null;
       total.businessMinutes = round(total.businessMinutes);

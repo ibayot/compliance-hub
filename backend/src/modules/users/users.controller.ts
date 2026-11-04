@@ -14,6 +14,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Optional,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
@@ -38,7 +39,9 @@ import {
 } from '../../common/events/event-bus.service';
 import { SSE_EVENT_CHANNEL } from '../../common/events/sse.service';
 import { StaffDirectoryStore } from '../../shared/staff-directory/staff-directory.store';
+import { UnlockMfaDto } from './dto/unlock-mfa.dto';
 import { CompletePendingStaffDto } from './dto/complete-pending-staff.dto';
+import { UnitSyncService } from './unit-sync.service';
 
 @ApiTags('users')
 @Controller('users')
@@ -50,6 +53,7 @@ export class UsersController {
     private readonly roleCapabilitiesService: RoleCapabilitiesService,
     private readonly eventBus: EventBusService,
     @Optional() private readonly staffDirectory?: StaffDirectoryStore,
+    @Optional() private readonly unitSync?: UnitSyncService,
   ) {}
 
   private emitUserDirectoryUpdated(userId: number, action: 'created' | 'updated' | 'disabled') {
@@ -60,6 +64,14 @@ export class UsersController {
         payload: { userId, action },
       },
     });
+  }
+
+  @Post('sync-units')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('isUserManagementAdmin')
+  synchronizeUnits() {
+    if (!this.unitSync) throw new BadRequestException('Unit synchronization is unavailable.');
+    return this.unitSync.synchronize({ manual: true });
   }
 
   @Get('roles')
@@ -297,6 +309,15 @@ export class UsersController {
     }
     this.emitUserDirectoryUpdated(updated.id, updated.active === false ? 'disabled' : 'updated');
     return updated;
+  }
+
+  @Post(':id/unlock-mfa')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability(['isUserManagementView', 'isUserManagementAdmin', 'isUserManagementRolesManage'])
+  async unlockMfa(@Param('id', ParseIntPipe) id: number, @Body() dto: UnlockMfaDto, @Request() req: any) {
+    const result = await this.usersService.unlockMfa(id, Number(req.user.id ?? req.user.userId), dto);
+    if (result.changed) this.emitUserDirectoryUpdated(id, 'updated');
+    return result;
   }
 
   @Post(':id/reset-password')
