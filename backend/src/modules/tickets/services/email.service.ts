@@ -712,13 +712,12 @@ export class EmailService implements OnModuleInit {
       );
     }
 
-    // A controlled rating invitation is an explicit delivery to recipients chosen by an
-    // administrator while automatic outbound email is off. Applying the test override here
-    // would silently send both the invitation and its OTP to the wrong mailbox.
+    // Controlled manual invitations keep their existing recipient selection.
+    // Security codes honor the configured test mailbox even in that mode.
     const isControlledManualDelivery =
       options.bypassGeneralNotificationToggle === true &&
       dbConfig?.isEmailNotificationsEnabled === false;
-    const override = security || isControlledManualDelivery
+    const override = !security && isControlledManualDelivery
       ? null
       : dbConfig?.emailTestOverride || this.testOverrideTo;
     const effectiveTo = override ?? to;

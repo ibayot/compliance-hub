@@ -1,5 +1,7 @@
 # Database initialization order
 
+For hotfix **1.0.32**, retain the 1.0.31 schema prerequisites below and apply `20261104-add-application-changelog-v1.0.32-users.sql` to the verified Users database for the staff and separate End User release notes. No additional schema change is needed. Rebuild/deploy the updated services and frontend together. Authentication/recovery and feedback verification mail now honors Test Override Email, even when its mailbox is outside the routine-email unit selection. Clearing that setting restores normal security-mail destinations. Routine unit filtering and the system-wide email kill switch remain effective. Local Docker is updated; production execution is operator-managed, and the SQL remains ignored by Git.
+
 For release **1.0.31** (2026-11-04), assuming the 1.0.30 prerequisites are already applied:
 
 1. Pause ticket writes and personnel-unit changes. Verify both schema references and apply `20261104-add-ticket-requester-unit-snapshot-ticketing.sql` to Ticketing. It captures current units as a rollout baseline and preserves existing ticket fields/timestamps.

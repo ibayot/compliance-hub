@@ -520,7 +520,7 @@ function SecuritySettingsCard() {
                 helperText={outboundEmailUnitRestrictionEnabled ? 'Uses each recipient’s current unit. An empty selection blocks all routine emails. Remove unavailable units before saving.' : 'Restriction is off. Existing routine-email sending rules apply; the selected units are retained.'}
               />
               <Alert severity={outboundEmailUnitRestrictionEnabled && outboundEmailAllowedUnitIds.length === 0 ? 'warning' : 'info'} sx={{ mt: 2 }}>
-                Applies to ticket emails, feedback invitations and SMTP tests. OTP and account-recovery emails are exempt and go to the intended mailbox. In-app notifications and feedback remain available. The system-wide email disable switch still stops all sending.
+                Applies to ticket emails, feedback invitations and SMTP tests. OTP and account-recovery emails bypass unit restrictions and follow the Test Override Email when configured. Clear the override to send codes to their normal recipients. In-app notifications and feedback remain available. The system-wide email disable switch still stops all sending.
               </Alert>
             </Grid>
             <Grid item xs={12}>
@@ -682,7 +682,7 @@ function GlobalSettingsCard() {
                     <Switch checked={config.isEmailNotificationsEnabled ?? true} onChange={(e) => setConfig((p: any) => ({ ...p, isEmailNotificationsEnabled: e.target.checked }))} />
                   </Box>
                   {config.isEmailNotificationsEnabled && (
-                    <TextField label="Test Override Email" value={config.emailTestOverride || ''} onChange={(e) => setConfig((p: any) => ({ ...p, emailTestOverride: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
+                    <TextField label="Test Override Email" value={config.emailTestOverride || ''} onChange={(e) => setConfig((p: any) => ({ ...p, emailTestOverride: e.target.value }))} inputProps={{ maxLength: 100 }} helperText="Login and feedback verification codes also go to this mailbox when set. Clear it to restore their normal recipients. Routine email unit restrictions still apply." fullWidth />
                   )}
                   <TextField label="SMTP Host" value={config.smtpHost || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpHost: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
                   <TextField label="SMTP Port" type="number" value={config.smtpPort || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpPort: Number(e.target.value) }))} fullWidth />

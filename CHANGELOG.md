@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.32] - 2026-11-04 - Verification Email Test Override
+
+### Fixed
+- Authentication, recovery and feedback verification emails now honor the configured Test Override Email. Clearing it restores delivery to the normal recipient. Security messages remain exempt from unit restrictions and routine-notification toggles; routine email unit checks and the system email disable switch still apply.
+
 ## [1.0.31] - 2026-11-04 - Reliable Tickets, Account Recovery and Email Controls
 
 ### Fixed
