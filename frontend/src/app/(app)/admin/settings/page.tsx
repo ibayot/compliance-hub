@@ -1649,7 +1649,7 @@ function FocalUserManagementCard() {
       <CardContent>
         {unitSyncResult && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setUnitSyncResult(null)}>
           Units synchronized: {unitSyncResult.updatedUsers} user(s) updated; {unitSyncResult.discoveredUnits} new unit(s).
-          {' '}Manual assignments: {unitSyncResult.retainedOverrides} retained; {unitSyncResult.clearedOverrides} now match UMS.
+          {' '}Manual unit selections: {unitSyncResult.clearedOverrides} cleared; {unitSyncResult.retainedOverrides} retained.
           {' '}Skipped: {unitSyncResult.skippedAmbiguousStaff} conflicting staff record(s), {unitSyncResult.skippedRestrictedAssignments} restricted assignment(s).
         </Alert>}
         <Dialog open={unitSyncDialogOpen} onClose={() => { if (!syncingUnits) setUnitSyncDialogOpen(false); }} fullWidth maxWidth="sm">
@@ -1657,8 +1657,9 @@ function FocalUserManagementCard() {
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
               <Typography>Update existing active users' units from their active UMS work history, matched by Staff ID. This applies to all users, regardless of the current tab or search.</Typography>
-              <Typography>Manual unit assignments remain in place unless UMS already matches them. Conflicting records and assignments that do not meet the unit requirements are skipped. New units may be added.</Typography>
-              <Typography color="text.secondary">This updates unit assignments only. It does not create accounts or refresh the pending staff directory.</Typography>
+              <Alert severity="warning">This force sync replaces manual unit selections with the valid UMS unit and clears their manual tags. Automatic sync continues to preserve manual selections.</Alert>
+              <Typography>Conflicting records and assignments that do not meet the existing role and unit requirements are skipped. New units may be added.</Typography>
+              <Typography color="text.secondary">This updates current user units only. Existing tickets and their recorded requester units stay unchanged. It does not create accounts or refresh the pending staff directory.</Typography>
               {unitSyncError && <Alert severity="error">{unitSyncError}</Alert>}
               {syncingUnits && <Typography role="status">Synchronizing units. Please wait…</Typography>}
             </Stack>

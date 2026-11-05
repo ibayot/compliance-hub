@@ -1,9 +1,9 @@
 import { Column, Entity, PrimaryColumn } from 'typeorm';
 
 /**
- * Keeps a manually selected operational unit authoritative until UMS reports
- * the same unit. Both administrator changes and self-service profile changes
- * create the same lightweight override.
+ * Protects a manually selected operational unit during automatic UMS sync.
+ * Explicit administrator force sync clears it after applying the valid UMS unit.
+ * Administrator and self-service profile changes create the same override.
  */
 @Entity('user_unit_overrides')
 export class UserUnitOverride {

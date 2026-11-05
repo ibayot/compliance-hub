@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.36] - 2026-11-05 - Force Unit Sync from UMS
+
+### Changed
+- Sync Units from UMS now replaces manual unit selections with the valid UMS unit and clears their manual tags. Automatic sync keeps manual selections protected, including when they already match UMS.
+- The confirmation explains the replacement, and results distinguish cleared and retained manual selections. Existing ticket records and their recorded requester units remain unchanged.
+
 ## [1.0.35] - 2026-11-05 - MFA Attempt and Lock Messages
 
 ### Fixed

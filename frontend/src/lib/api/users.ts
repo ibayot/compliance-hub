@@ -244,7 +244,7 @@ export interface PendingStaffRecord {
 
 export const usersApi = {
   syncUnits: async (): Promise<UnitSyncResult> => {
-    const response = await apiClient.post<UnitSyncResult>('/users/sync-units', {}, { timeout: 120_000 });
+    const response = await apiClient.post<UnitSyncResult>('/users/sync-units', { force: true }, { timeout: 120_000 });
     return response.data;
   },
   listPendingStaff: async (): Promise<{staff: PendingStaffRecord[]; roles: Array<{value: string; label: string}>}> => {

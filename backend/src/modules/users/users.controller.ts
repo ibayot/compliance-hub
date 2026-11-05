@@ -42,6 +42,7 @@ import { StaffDirectoryStore } from '../../shared/staff-directory/staff-director
 import { UnlockMfaDto } from './dto/unlock-mfa.dto';
 import { CompletePendingStaffDto } from './dto/complete-pending-staff.dto';
 import { UnitSyncService } from './unit-sync.service';
+import { ForceUnitSyncDto } from './dto/force-unit-sync.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -69,7 +70,7 @@ export class UsersController {
   @Post('sync-units')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isUserManagementAdmin')
-  synchronizeUnits() {
+  synchronizeUnits(@Body() _dto: ForceUnitSyncDto) {
     if (!this.unitSync) throw new BadRequestException('Unit synchronization is unavailable.');
     return this.unitSync.synchronize({ manual: true });
   }

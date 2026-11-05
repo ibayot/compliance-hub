@@ -76,6 +76,7 @@ export class UnitSyncService implements OnApplicationBootstrap {
 
     // The enable flag controls automatic runs. An authorized explicit action
     // uses the same configured source without enabling the automatic schedule.
+    // Automatic runs preserve manual tags; the explicit action replaces them.
     if (!options.manual && !this.isEnabled()) return emptyResult;
     if (this.running) {
       if (options.manual) throw new ConflictException('Unit synchronization is already running. Wait for it to finish before trying again.');
@@ -160,23 +161,25 @@ export class UnitSyncService implements OnApplicationBootstrap {
           const overrideRepo = manager.getRepository(UserUnitOverride);
           const override = await overrideRepo.findOne({ where: { userId: user.id } });
           const previousUnits = (managedUser.units || []).map(unit => unit.id);
-          if (override) {
-            if (override.unitId !== currentUnit.id || previousUnits.length !== 1 || previousUnits[0] !== currentUnit.id) return 'retained';
-            await overrideRepo.delete({ userId: user.id });
-            await this.auditUnitChange(manager, user.id, previousUnits, currentUnit.id, true);
-            return 'cleared';
+          if (override && !options.manual) return 'retained';
+          const changed = previousUnits.length !== 1 || previousUnits[0] !== currentUnit.id;
+          if (changed && Boolean(currentUnit.hasReportorialRequirements) !== (managedUser.role !== UserRole.USER)) {
+            return override ? 'restricted_retained' : 'restricted';
           }
-          if (previousUnits.length === 1 && previousUnits[0] === currentUnit.id) return 'unchanged';
-          if (Boolean(currentUnit.hasReportorialRequirements) !== (managedUser.role !== UserRole.USER)) return 'restricted';
-          managedUser.units = [currentUnit];
-          await manager.getRepository(User).save(managedUser);
-          await this.auditUnitChange(manager, user.id, previousUnits, currentUnit.id, false);
-          return 'updated';
+          if (!changed && !override) return 'unchanged';
+          if (changed) {
+            managedUser.units = [currentUnit];
+            await manager.getRepository(User).save(managedUser);
+          }
+          if (override) await overrideRepo.delete({ userId: user.id });
+          await this.auditUnitChange(manager, user.id, previousUnits, currentUnit.id, Boolean(override), options.manual ? 'manual_force' : 'automatic');
+          return changed ? (override ? 'updated_cleared' : 'updated') : 'cleared';
         });
-        if (outcome === 'retained') result.retainedOverrides += 1;
+        if (outcome === 'retained' || outcome === 'restricted_retained') result.retainedOverrides += 1;
         if (outcome === 'cleared') { result.clearedOverrides += 1; this.emitUserDirectoryUpdated(user.id); }
-        if (outcome === 'restricted') result.skippedRestrictedAssignments += 1;
-        if (outcome !== 'updated') continue;
+        if (outcome === 'updated_cleared') result.clearedOverrides += 1;
+        if (outcome === 'restricted' || outcome === 'restricted_retained') result.skippedRestrictedAssignments += 1;
+        if (outcome !== 'updated' && outcome !== 'updated_cleared') continue;
         result.updatedUsers += 1;
         this.emitUserDirectoryUpdated(user.id);
         void this.eventBus.publish(APP_NOTIFICATION_REQUESTED_EVENT, {
@@ -204,7 +207,7 @@ export class UnitSyncService implements OnApplicationBootstrap {
     if (Number(row?.pending) !== 0) throw new Error('Ticket unit snapshots must be initialized before unit synchronization.');
   }
 
-  private async auditUnitChange(manager: EntityManager, userId: number, previousUnitIds: number[], unitId: number, clearedOverride: boolean): Promise<void> {
+  private async auditUnitChange(manager: EntityManager, userId: number, previousUnitIds: number[], unitId: number, clearedOverride: boolean, syncMode: 'manual_force' | 'automatic'): Promise<void> {
     const auditDatabase = process.env.AUDIT_DB_DATABASE?.trim();
     if (!auditDatabase || !/^[A-Za-z0-9_]+$/.test(auditDatabase)) throw new Error('Audit database is unavailable.');
     const context = auditContext.getStore();
@@ -213,7 +216,7 @@ export class UnitSyncService implements OnApplicationBootstrap {
       VALUES (?, 'UPDATE', ?, 'users', 'UMS_UNIT_SYNC', ?, ?, ?, ?, ?, ?)`, [
       context?.email || 'system_fallback@domain.local', manager.connection.options.database, String(userId),
       'Synchronized operational unit from UMS active work history.',
-      JSON.stringify({ unitIds: previousUnitIds }), JSON.stringify({ unitIds: [unitId], clearedOverride }),
+      JSON.stringify({ unitIds: previousUnitIds }), JSON.stringify({ unitIds: [unitId], clearedOverride, syncMode }),
       context?.ipAddress || 'unknown', context?.sessionId || 'system-session',
     ]);
   }
