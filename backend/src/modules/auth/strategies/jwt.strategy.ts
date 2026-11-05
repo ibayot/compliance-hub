@@ -39,6 +39,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
+    if (payload.isTemp) throw new UnauthorizedException('Complete MFA verification before accessing the application.');
     // Check that the user still exists and is active on every request.
     // This ensures that deactivated or deleted accounts are forced out immediately
     // without waiting for the JWT to expire.

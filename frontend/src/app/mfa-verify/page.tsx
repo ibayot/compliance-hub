@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -26,7 +26,13 @@ export default function MfaVerifyPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tempToken, setTempToken] = useState<string | null>(null);
-  const [temporaryMode, setTemporaryMode] = useState(false);
+  const [temporaryCode, setTemporaryCode] = useState('');
+  const temporaryMode = Boolean(temporaryCode);
+  const [resending, setResending] = useState(false);
+  const [resendAvailableAt, setResendAvailableAt] = useState(0);
+  const [resendSeconds, setResendSeconds] = useState(60);
+  const [resendNotice, setResendNotice] = useState('');
+  const pendingOperation = useRef(false);
 
   useEffect(() => {
     const token = sessionStorage.getItem('mfaTempToken');
@@ -36,17 +42,77 @@ export default function MfaVerifyPage() {
       setTempToken(token);
       
       const testCode = sessionStorage.getItem('mfaTestModeCode');
-      setTemporaryMode(Boolean(testCode));
-      if (testCode) {
-        const snackbarId = enqueueSnackbar(`Temporary MFA Mode — Your MFA code is: ${testCode}`, {
-          variant: 'info',
-          persist: true,
-          anchorOrigin: { vertical: 'top', horizontal: 'center' }
-        });
-        return () => closeSnackbar(snackbarId);
-      }
+      setTemporaryCode(testCode || '');
+      const savedDeadline = Number(sessionStorage.getItem('mfaResendAvailableAt'));
+      const deadline = savedDeadline > 0 ? savedDeadline : Date.now() + 60000;
+      sessionStorage.setItem('mfaResendAvailableAt', String(deadline));
+      setResendAvailableAt(deadline);
     }
   }, [navigate]);
+
+  useEffect(() => {
+    if (!temporaryCode) return;
+    const snackbarId = enqueueSnackbar(`Temporary MFA Mode — Your MFA code is: ${temporaryCode}`, {
+      variant: 'info', persist: true, anchorOrigin: { vertical: 'top', horizontal: 'center' },
+    });
+    return () => closeSnackbar(snackbarId);
+  }, [temporaryCode]);
+
+  useEffect(() => {
+    if (!resendAvailableAt) return;
+    const update = () => setResendSeconds(Math.max(0, Math.ceil((resendAvailableAt - Date.now()) / 1000)));
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendAvailableAt]);
+
+  const setCooldown = (seconds: number) => {
+    const deadline = Date.now() + seconds * 1000;
+    sessionStorage.setItem('mfaResendAvailableAt', String(deadline));
+    setResendAvailableAt(deadline);
+  };
+
+  const handleChallengeError = (err: any) => {
+    const message = String(err.response?.data?.message || 'Unable to complete verification. Please try again.');
+    const mustReauthenticate = [400, 401].includes(err.response?.status)
+      && /three MFA attempts|log in again|sign in again|no verification code|code has expired|expired temporary token/i.test(message);
+    const accountLocked = err.response?.status === 429 && /locked/i.test(message);
+    if (mustReauthenticate || accountLocked) {
+      for (const key of ['mfaTempToken', 'mfaTestModeCode', 'mfaResendAvailableAt']) sessionStorage.removeItem(key);
+      setTemporaryCode('');
+      setCode('');
+      window.location.replace(`/login?reason=${accountLocked ? 'mfa_locked' : 'mfa_restart'}`);
+      return;
+    }
+    if (err.response?.status === 429) {
+      const retry = Number(err.response?.data?.retryAfterSeconds);
+      setCooldown(Number.isFinite(retry) && retry > 0 ? Math.min(3600, retry) : 60);
+    }
+    setError(message);
+  };
+
+  const handleResend = async () => {
+    if (!tempToken || pendingOperation.current || resendSeconds > 0) return;
+    pendingOperation.current = true;
+    setResending(true);
+    setError(null);
+    setResendNotice('');
+    try {
+      const response = await authApi.resendMfaCode(tempToken);
+      setCode('');
+      setTemporaryCode(response.testModeCode || '');
+      if (response.testModeCode) sessionStorage.setItem('mfaTestModeCode', response.testModeCode);
+      else sessionStorage.removeItem('mfaTestModeCode');
+      const retry = Number(response.resendAfterSeconds);
+      setCooldown(Number.isFinite(retry) && retry > 0 ? Math.min(3600, retry) : 60);
+      setResendNotice(response.message);
+    } catch (err: any) {
+      handleChallengeError(err);
+    } finally {
+      pendingOperation.current = false;
+      setResending(false);
+    }
+  };
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,8 +120,9 @@ export default function MfaVerifyPage() {
       setError('Please enter a valid 6-digit code.');
       return;
     }
-    if (!tempToken) return;
+    if (!tempToken || pendingOperation.current) return;
 
+    pendingOperation.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -75,25 +142,15 @@ export default function MfaVerifyPage() {
       // Clear temp token
       sessionStorage.removeItem('mfaTempToken');
       sessionStorage.removeItem('mfaTestModeCode');
+      sessionStorage.removeItem('mfaResendAvailableAt');
       sessionStorage.removeItem('isSessionLocked');
       
       // Force reload to let AuthContext pick up the tokens
       window.location.href = '/dashboard';
     } catch (err: any) {
-      const message = err.response?.data?.message || 'Verification failed. Invalid or expired code.';
-      const mustReauthenticate = [400, 401].includes(err.response?.status)
-        && /three MFA attempts|log in again|no verification code|code has expired|expired temporary token/i.test(String(message));
-      const accountLocked = err.response?.status === 429
-        && /locked/i.test(String(message));
-      if (mustReauthenticate || accountLocked) {
-        sessionStorage.removeItem('mfaTempToken');
-        sessionStorage.removeItem('mfaTestModeCode');
-        setCode('');
-        window.location.replace(`/login?reason=${accountLocked ? 'mfa_locked' : 'mfa_restart'}`);
-        return;
-      }
-      setError(message);
+      handleChallengeError(err);
     } finally {
+      pendingOperation.current = false;
       setLoading(false);
     }
   };
@@ -132,6 +189,7 @@ export default function MfaVerifyPage() {
               {error}
             </Alert>
           )}
+          {resendNotice && <Alert severity="success" sx={{ mb: 3 }}>{resendNotice}</Alert>}
 
           <form onSubmit={handleVerify}>
             <TextField
@@ -145,6 +203,8 @@ export default function MfaVerifyPage() {
               autoFocus
               inputProps={{
                 maxLength: 6,
+                inputMode: 'numeric',
+                autoComplete: 'one-time-code',
                 style: { textAlign: 'center', letterSpacing: '8px', fontSize: '1.5rem' },
               }}
             />
@@ -165,12 +225,18 @@ export default function MfaVerifyPage() {
               type="submit"
               variant="contained"
               fullWidth
-              disabled={loading || code.length !== 6}
+              disabled={loading || resending || code.length !== 6}
               sx={{ mb: 2 }}
             >
               {loading ? <CircularProgress size={24} color="inherit" /> : 'Verify Code'}
             </Button>
           </form>
+          <Button type="button" variant="outlined" fullWidth disabled={loading || resending || resendSeconds > 0} onClick={handleResend} sx={{ mb: 1 }}>
+            {resending ? 'Requesting Code...' : resendSeconds > 0 ? `Resend Code in ${resendSeconds}s` : 'Resend Code'}
+          </Button>
+          <Typography variant="caption" color="text.secondary">
+            Use the newest code. Requesting another code does not extend your current sign-in time limit.
+          </Typography>
         </CardContent>
       </Card>
     </Box>

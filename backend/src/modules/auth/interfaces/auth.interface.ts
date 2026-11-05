@@ -5,6 +5,7 @@ export interface JwtPayload {
   units: number[];
   staffId?: string;
   jti?: string;
+  isTemp?: boolean;
 }
 
 export interface AuthResponse {

@@ -15,6 +15,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { GoogleLoginDto } from './dto/google-login.dto';
+import { ResendMfaDto } from './dto/resend-mfa.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
@@ -111,6 +112,11 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async sendMfaCode(@CurrentUser() user: User) {
     return this.authService.sendMfaCode(user.id);
+  }
+
+  @Post('mfa/resend')
+  async resendMfaCode(@Body() dto: ResendMfaDto) {
+    return this.authService.resendMfaCode(dto.tempToken);
   }
 
   @Post('mfa/verify')

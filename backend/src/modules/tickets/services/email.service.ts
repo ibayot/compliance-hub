@@ -91,6 +91,7 @@ export class EmailService implements OnModuleInit {
   private frontendUrl: string;
   private emailEnabled = true;
   private testOverrideTo: string | null = null;
+  private emailSubscriptionRegistered = false;
 
   constructor(
     private readonly configService: ConfigService,
@@ -147,6 +148,19 @@ export class EmailService implements OnModuleInit {
   }
 
   async onModuleInit() {
+    if (!this.emailSubscriptionRegistered) {
+      await this.eventBus.subscribe(
+        'email.send',
+        async (payload: { to: string; subject: string; text?: string; html?: string; purpose?: 'routine' | 'security' }) => {
+          try {
+            await this.send(payload.to, payload.subject, payload.html || payload.text || '', { purpose: payload.purpose === 'security' ? 'security' : 'routine' });
+          } catch {
+            this.logger.error('Failed to send event-triggered email.');
+          }
+        },
+      );
+      this.emailSubscriptionRegistered = true;
+    }
     await this.reloadSmtpConfig();
   }
 
@@ -216,16 +230,6 @@ export class EmailService implements OnModuleInit {
       }
       this.logger.log('SMTP Configurations (Re)loaded.');
 
-      this.eventBus.subscribe(
-        'email.send',
-        async (payload: { to: string; subject: string; text?: string; html?: string; purpose?: 'routine' | 'security' }) => {
-          try {
-            await this.send(payload.to, payload.subject, payload.html || payload.text || '', { purpose: payload.purpose === 'security' ? 'security' : 'routine' });
-          } catch (error: any) {
-            this.logger.error('Failed to send event-triggered email.');
-          }
-        },
-      );
     } catch (err: any) {
       this.logger.error(`Failed to load SMTP config (${err?.code || 'unknown'}).`);
     }

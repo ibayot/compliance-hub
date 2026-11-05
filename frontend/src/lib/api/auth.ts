@@ -63,6 +63,11 @@ export const authApi = {
     return response.data;
   },
 
+  resendMfaCode: async (tempToken: string): Promise<{ message: string; resendAfterSeconds: number; testModeCode?: string }> => {
+    const response = await apiClient.post('/auth/mfa/resend', { tempToken }, { timeout: 15000 });
+    return response.data;
+  },
+
   verifyMfaCode: async (tempToken: string, code: string, rememberDevice: boolean): Promise<any> => {
     await prepareInteractiveSignIn();
     let deviceToken = localStorage.getItem('deviceToken');

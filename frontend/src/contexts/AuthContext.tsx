@@ -383,6 +383,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     if (response.mfaRequired) {
       sessionStorage.setItem('mfaTempToken', response.tempToken);
+      sessionStorage.removeItem('mfaResendAvailableAt');
       if (response.testModeCode) {
         sessionStorage.setItem('mfaTestModeCode', response.testModeCode);
       } else sessionStorage.removeItem('mfaTestModeCode');
@@ -421,6 +422,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await authApi.loginWithGoogle({ idToken });
     if (response.mfaRequired) {
       sessionStorage.setItem('mfaTempToken', response.tempToken);
+      sessionStorage.removeItem('mfaResendAvailableAt');
       if (response.testModeCode) sessionStorage.setItem('mfaTestModeCode', response.testModeCode);
       else sessionStorage.removeItem('mfaTestModeCode');
       navigate('/mfa-verify');
@@ -490,6 +492,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.mfaRequired) {
         if (user && res.user.email !== user.email) throw new Error('You must sign in with the exact same Google account to unlock.');
         sessionStorage.setItem('mfaTempToken', res.tempToken);
+        sessionStorage.removeItem('mfaResendAvailableAt');
         if (res.testModeCode) sessionStorage.setItem('mfaTestModeCode', res.testModeCode);
         else sessionStorage.removeItem('mfaTestModeCode');
         window.location.assign('/mfa-verify');

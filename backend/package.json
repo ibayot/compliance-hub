@@ -1,6 +1,6 @@
 {
   "name": "rictms-backend",
-  "version": "1.0.33",
+  "version": "1.0.34",
   "description": "RICTMS Compliance Hub - Backend API",
   "author": "RICTMS Team",
   "private": true,

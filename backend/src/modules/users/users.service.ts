@@ -26,6 +26,7 @@ import { UserTrustedDevice } from './entities/user-trusted-device.entity';
 import { UserUnitOverride } from './entities/user-unit-override.entity';
 import { auditContext } from '../../shared/audit/audit.context';
 import { UnlockMfaDto } from './dto/unlock-mfa.dto';
+import { MFA_CODE_TTL_MS, MFA_RESEND_INTERVAL_SECONDS } from '../auth/mfa-policy';
 import { assertMfaRecoveryAuthority, matchesMfaRecoveryVersion, mfaRecoveryRequired, mfaRecoveryVersion } from './mfa-recovery-policy';
 
 export type UnitAssignmentSource = 'manual' | 'ums';
@@ -779,15 +780,25 @@ const previousValue = value;
     await this.usersRepository.update(userId, { lastLogin: new Date() } as Partial<User>);
   }
 
-  async updateMfaCode(userId: number, code: string, expiresAt: Date): Promise<void> {
+  async updateMfaCode(userId: number, code: string, expiresAt: Date, options: { resend?: boolean } = {}): Promise<void> {
     await this.usersRepository.manager.transaction(async manager => {
       const repo = manager.getRepository(User);
       const user = await repo.findOne({ where: { id: userId }, lock: { mode: 'pessimistic_write' } });
       if (!user?.active) throw new ForbiddenException('Account is unavailable.');
       const lockedUntil = user.mfaLockedUntil ? new Date(user.mfaLockedUntil).getTime() : null;
       if (lockedUntil && lockedUntil > Date.now()) throw new HttpException('Your account is locked for 15 minutes after repeated MFA failures.', 429);
+      if (options.resend) {
+        const expirationMs = user.mfaExpiresAt ? new Date(user.mfaExpiresAt).getTime() : NaN;
+        if (!user.mfaCode || !Number.isFinite(expirationMs) || expirationMs <= Date.now()) {
+          throw new HttpException('No active verification code. Please sign in again.', 401);
+        }
+        // Every issuance uses the same TTL, so expiry also identifies its issuance time.
+        const retryAfterSeconds = Math.ceil((expirationMs - MFA_CODE_TTL_MS + MFA_RESEND_INTERVAL_SECONDS * 1000 - Date.now()) / 1000);
+        if (retryAfterSeconds > 0) throw new HttpException({ message: 'Please wait before requesting another verification code.', retryAfterSeconds }, 429);
+      }
       await repo.update(userId, {
-        mfaCode: code, mfaExpiresAt: expiresAt, mfaChallengeAttempts: 0,
+        mfaCode: code, mfaExpiresAt: expiresAt,
+        ...(options.resend ? {} : { mfaChallengeAttempts: 0 }),
         ...(lockedUntil ? { mfaAttempts: 0, mfaLockedUntil: null } : {}),
       } as any);
     });

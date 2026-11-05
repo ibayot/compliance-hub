@@ -167,6 +167,13 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Require a live consumer for credential delivery; do not retry an uncertain publication. */
+  async publishRequired<T>(channel: string, payload: T): Promise<void> {
+    if (!this.enabled || !this.pubClient) throw new Error('Event delivery is unavailable.');
+    const receivers = await this.pubClient.publish(channel, JSON.stringify(payload));
+    if (receivers < 1) throw new Error('Event consumer is unavailable.');
+  }
+
   /**
    * Register a handler for a channel.  Internally manages the SUBSCRIBE call —
    * calling this multiple times for the same channel is safe.

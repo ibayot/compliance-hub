@@ -16,6 +16,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TokenBlacklist } from './entities/token-blacklist.entity';
 import { TicketingHttpClient } from '../../common/http-clients/ticketing.http-client';
+import { MFA_CODE_TTL_MS, MFA_RESEND_INTERVAL_SECONDS } from './mfa-policy';
 
 export function isTrustedDeviceActive(
   expiresAt: Date | string | null | undefined,
@@ -164,18 +165,18 @@ export class AuthService {
     return this.buildAuthResponse(user, tokens, isUsingDefaultPassword, false);
   }
 
-  private async startMfaChallenge(user: User, securityConfig: { mfaTestMode: boolean }): Promise<MfaChallengeResponse> {
+  private async startMfaChallenge(user: User, securityConfig: { mfaTestMode: boolean }, options: { resend?: boolean; tempToken?: string } = {}): Promise<MfaChallengeResponse> {
       // Generate temp token
-      const tempToken = this.jwtService.sign(
+      const tempToken = options.tempToken || this.jwtService.sign(
         { sub: user.id, isTemp: true },
         { expiresIn: '15m', issuer: this.jwtIssuer, audience: this.jwtAudience },
       );
 
       // Send MFA Code
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = new Date();
-      expiresAt.setMinutes(expiresAt.getMinutes() + 15);
-      await this.usersService.updateMfaCode(user.id, code, expiresAt);
+      let code: string;
+      do { code = crypto.randomInt(100000, 1000000).toString(); } while (code === user.mfaCode);
+      const expiresAt = new Date(Date.now() + MFA_CODE_TTL_MS);
+      await this.usersService.updateMfaCode(user.id, code, expiresAt, { resend: options.resend });
 
       const htmlTemplate = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
@@ -187,7 +188,7 @@ export class AuthService {
             <h1 style="margin: 0; color: #333333; font-size: 32px; letter-spacing: 4px;">${code}</h1>
           </div>
           <p style="color: #777777; font-size: 14px; text-align: center; margin-top: 20px;">
-            This code will expire in 15 minutes. If you did not request this code, please ignore this email.
+            Complete your current sign-in using the newest code. Earlier codes no longer work. If your sign-in has expired, please sign in again.
           </p>
         </div>
       `;
@@ -197,11 +198,11 @@ export class AuthService {
       }
 
       await this.eventBus
-        .publish('email.send', {
+        .publishRequired('email.send', {
           purpose: 'security',
           to: user.email,
           subject: 'Compliance Hub - Your MFA Code',
-          text: `Your verification code is: ${code}. It expires in 15 minutes.`,
+          text: `Your verification code is: ${code}. Use the newest code to complete your current sign-in. If your sign-in has expired, please sign in again.`,
           html: htmlTemplate,
         })
         .catch((e: any) => {
@@ -216,6 +217,33 @@ export class AuthService {
     if (process.env.VAPT_MODE === 'true') return false;
     if (temporaryMode) return true;
     return this.ticketingHttpClient.isAuthenticationEmailEnabled();
+  }
+
+  private mfaUserIdFromToken(tempToken: string): number {
+    let payload: any;
+    try {
+      payload = this.jwtService.verify(tempToken, { issuer: this.jwtIssuer, audience: this.jwtAudience, algorithms: ['HS256'] });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired temporary token. Please sign in again.');
+    }
+    if (payload?.isTemp !== true || !Number.isSafeInteger(payload.sub) || payload.sub < 1) {
+      throw new UnauthorizedException('Invalid temporary token payload.');
+    }
+    return payload.sub;
+  }
+
+  async resendMfaCode(tempToken: string): Promise<{ message: string; resendAfterSeconds: number; testModeCode?: string }> {
+    const userId = this.mfaUserIdFromToken(tempToken);
+    const user = await this.usersService.findOne(userId);
+    if (!user?.active) throw new UnauthorizedException('Account is unavailable. Please sign in again.');
+    const config = await this.securityConfigService.getConfig();
+    if (!await this.checkRequiresMfa(config.mfaTestMode)) throw new UnauthorizedException('MFA settings changed. Please sign in again.');
+    const response = await this.startMfaChallenge(user, config, { resend: true, tempToken });
+    return {
+      message: config.mfaTestMode ? 'A new temporary verification code is available.' : 'A new verification code was requested. Check your email and use the newest code.',
+      resendAfterSeconds: MFA_RESEND_INTERVAL_SECONDS,
+      ...(response.testModeCode ? { testModeCode: response.testModeCode } : {}),
+    };
   }
 
   async getPublicConfig(): Promise<{ googleSignInEnabled: boolean }> {
@@ -354,18 +382,7 @@ export class AuthService {
     rememberDevice: boolean,
     incomingDeviceToken?: string,
   ): Promise<any> {
-    let payload;
-    try {
-      payload = this.jwtService.verify(tempToken);
-    } catch (e) {
-      throw new UnauthorizedException('Invalid or expired temporary token.');
-    }
-
-    if (!payload.isTemp || !payload.sub) {
-      throw new UnauthorizedException('Invalid temporary token payload.');
-    }
-
-    const userId = payload.sub;
+    const userId = this.mfaUserIdFromToken(tempToken);
     await this.usersService.consumeMfaChallenge(userId, code);
     const user = await this.usersService.findOne(userId);
     if (!user?.active) throw new UnauthorizedException('Account is unavailable.');

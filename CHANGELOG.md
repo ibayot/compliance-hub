@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.34] - 2026-11-05 - MFA Code Resend and Email Delivery
+
+### Added
+- Resend Code on the MFA page requests a new verification code after a 60-second cooldown, with support for email delivery and Temporary MFA Mode. Earlier codes stop working and failed-attempt limits remain in effect.
+
+### Fixed
+- Saving email settings no longer adds another email listener, preventing duplicate delivery through the shared email-event path when an override is changed or cleared.
+- Temporary MFA tokens cannot grant normal application access before successful verification. Unavailable email dispatch returns an error instead of claiming that a code was requested successfully.
+
 ## [1.0.33] - 2026-11-04 - MFA Delivery Modes
 
 ### Fixed
