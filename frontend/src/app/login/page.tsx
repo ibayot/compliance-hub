@@ -197,6 +197,10 @@ export default function LoginPage() {
               </Alert>
             )}
 
+            {reason === 'unit_not_approved' && <Alert severity="warning" sx={{ mb: 2 }}>
+              Application access is not approved for your account. Please contact your administrator.
+            </Alert>}
+
             {reason === 'mfa_failed' && (
               <Alert severity="warning" sx={{ mb: 2 }}>
                 MFA attempts for that login were exhausted. Please sign in again.

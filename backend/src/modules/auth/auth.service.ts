@@ -17,6 +17,7 @@ import { Repository } from 'typeorm';
 import { TokenBlacklist } from './entities/token-blacklist.entity';
 import { TicketingHttpClient } from '../../common/http-clients/ticketing.http-client';
 import { MFA_CODE_TTL_MS, MFA_RESEND_INTERVAL_SECONDS, mfaFailure } from './mfa-policy';
+import { OutboundEmailPolicyService } from '../users/outbound-email-policy.service';
 
 export function isTrustedDeviceActive(
   expiresAt: Date | string | null | undefined,
@@ -40,6 +41,7 @@ export class AuthService {
     private readonly eventBus: EventBusService,
     private readonly securityConfigService: SecurityConfigService,
     private readonly ticketingHttpClient: TicketingHttpClient,
+    private readonly outboundEmailPolicy: OutboundEmailPolicyService,
     @Optional() private readonly emailService?: EmailService,
   ) {}
 
@@ -136,6 +138,8 @@ export class AuthService {
       throw mfaFailure(HttpStatus.TOO_MANY_REQUESTS, 'MFA_ACCOUNT_LOCKED', 'Your account is locked for 15 minutes after repeated MFA failures.');
     }
 
+    await this.outboundEmailPolicy.assertAccountAccess(user.id);
+
     // Record login timestamp for staff activity tracking
     await this.usersService.recordLogin(user.id);
 
@@ -166,6 +170,7 @@ export class AuthService {
   }
 
   private async startMfaChallenge(user: User, securityConfig: { mfaTestMode: boolean }, options: { resend?: boolean; tempToken?: string } = {}): Promise<MfaChallengeResponse> {
+      await this.outboundEmailPolicy.assertAccountAccess(user.id);
       // Generate temp token
       const tempToken = options.tempToken || this.jwtService.sign(
         { sub: user.id, isTemp: true },
@@ -272,8 +277,12 @@ export class AuthService {
     if (!user) {
       const existingByEmail = await this.usersService.findByEmail(normalizedEmail);
       if (existingByEmail) {
+        await this.outboundEmailPolicy.assertAccountAccess(existingByEmail.id);
         user = await this.usersService.linkGoogleIdentity(existingByEmail.id, googleSub);
       } else {
+        if (securityConfig.outboundEmailUnitRestrictionEnabled !== false) {
+          throw new UnauthorizedException('Application access is not approved for your account. Please contact your administrator.');
+        }
         if (!(await this.securityConfigService.isEmailDomainAllowed(normalizedEmail))) {
           throw new UnauthorizedException('Email domain is not allowed by Security Settings.');
         }
@@ -296,6 +305,8 @@ export class AuthService {
     if (user.mfaLockedUntil && Date.now() < new Date(user.mfaLockedUntil).getTime()) {
       throw mfaFailure(HttpStatus.TOO_MANY_REQUESTS, 'MFA_ACCOUNT_LOCKED', 'Your account is locked for 15 minutes after repeated MFA failures.');
     }
+
+    await this.outboundEmailPolicy.assertAccountAccess(user.id);
 
     // Record login timestamp for staff activity tracking
     await this.usersService.recordLogin(user.id);
@@ -338,6 +349,7 @@ export class AuthService {
   async sendMfaCode(userId: number): Promise<{ message: string }> {
     const user = await this.usersService.findOne(userId);
     if (!user) throw new UnauthorizedException('User not found');
+    await this.outboundEmailPolicy.assertAccountAccess(user.id);
     if (user.mfaLockedUntil && new Date() < new Date(user.mfaLockedUntil)) {
       throw mfaFailure(HttpStatus.TOO_MANY_REQUESTS, 'MFA_ACCOUNT_LOCKED', 'Your account is locked for 15 minutes after repeated MFA failures.');
     }
@@ -383,6 +395,7 @@ export class AuthService {
     incomingDeviceToken?: string,
   ): Promise<any> {
     const userId = this.mfaUserIdFromToken(tempToken);
+    await this.outboundEmailPolicy.assertAccountAccess(userId);
     await this.usersService.consumeMfaChallenge(userId, code);
     const user = await this.usersService.findOne(userId);
     if (!user?.active) throw new UnauthorizedException('Account is unavailable.');
@@ -413,6 +426,7 @@ export class AuthService {
   async generateTokens(
     user: User,
   ): Promise<{ accessToken: string; refreshToken: string }> {
+    await this.outboundEmailPolicy.assertAccountAccess(user.id);
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -462,6 +476,8 @@ export class AuthService {
       if (!user.active) {
         throw new UnauthorizedException('Account has been deactivated.');
       }
+
+      await this.outboundEmailPolicy.assertAccountAccess(user.id);
 
       const tokens = await this.generateTokens(user);
       await this.tokenBlacklistRepo.save({

@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { UsersHttpClient } from '../common/http-clients/users.http-client';
 function getCookieValue(cookieHeader: string | undefined, cookieName: string): string | null {
   return cookieHeader
     ?.split(';')
@@ -12,7 +13,7 @@ function getCookieValue(cookieHeader: string | undefined, cookieName: string): s
 
 @Injectable()
 export class ComplianceJwtStrategy extends PassportStrategy(Strategy) {
-  constructor(configService: ConfigService) {
+  constructor(configService: ConfigService, private readonly usersHttpClient: UsersHttpClient) {
     const accessCookieName = configService.get<string>('AUTH_ACCESS_COOKIE_NAME') as string;
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
@@ -28,6 +29,8 @@ export class ComplianceJwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
+    if (payload.isTemp) throw new UnauthorizedException('Complete MFA verification before accessing the application.');
+    await this.usersHttpClient.requireAccountAccess(payload.sub);
     return {
       id: payload.sub,
       email: payload.email,

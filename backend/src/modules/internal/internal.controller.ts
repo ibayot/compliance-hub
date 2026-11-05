@@ -37,7 +37,13 @@ export class InternalController {
   @Post('outbound-email/decision')
   decideOutboundEmail(@Body() dto: OutboundEmailRecipientDto) {
     if (!this.outboundEmailPolicy) throw new ServiceUnavailableException('Email policy is unavailable.');
-    return this.outboundEmailPolicy.decide(dto.recipientEmail);
+    return this.outboundEmailPolicy.decide(dto.recipientEmail, dto.purpose);
+  }
+
+  @Get('account-access/:id')
+  decideAccountAccess(@Param('id', ParseIntPipe) id: number) {
+    if (!this.outboundEmailPolicy) throw new ServiceUnavailableException('Application access policy is unavailable.');
+    return this.outboundEmailPolicy.decideAccountAccess(id);
   }
 
   @Get('users')

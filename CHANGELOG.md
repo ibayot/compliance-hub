@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.37] - 2026-11-05 - Approved Unit Access and Security Emails
+
+### Changed
+- The unit restriction now controls application access and all email types, including OTP and account-recovery messages. Unapproved accounts cannot use existing sessions, temporary codes, trusted devices or Google sign-in to bypass approval.
+- Accounts with Security Settings management access retain application access and security emails regardless of unit selection. Routine-email unit restrictions remain in effect.
+- Security Settings explains approval, the management exception and empty selections. Test Override Email redirects permitted codes without approving blocked accounts.
+
 ## [1.0.36] - 2026-11-05 - Force Unit Sync from UMS
 
 ### Changed

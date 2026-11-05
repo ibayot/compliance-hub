@@ -539,7 +539,7 @@ export class EmailService implements OnModuleInit {
   </div>
 </body>
 </html>`;
-    await this.send(email, subject, html);
+    await this.send(email, subject, html, { purpose: 'security' });
   }
 
   async sendTestEmail(to: string): Promise<{ sent: boolean; message: string }> {
@@ -681,8 +681,12 @@ export class EmailService implements OnModuleInit {
   }
 
   public async checkRoutineRecipient(to: string): Promise<OutboundEmailDecision> {
+    return this.checkRecipient(to, 'routine');
+  }
+
+  private async checkRecipient(to: string, purpose: 'routine' | 'security'): Promise<OutboundEmailDecision> {
     let decision: OutboundEmailDecision;
-    try { decision = await this.usersHttpClient!.getOutboundEmailDecision(to); }
+    try { decision = await this.usersHttpClient!.getOutboundEmailDecision(to, purpose); }
     catch { decision = { allowed: false, reason: 'policy_unavailable' }; }
     if (!decision.allowed) this.logger.log(`[EMAIL-SUPPRESSED] reason=${decision.reason}; recipientUserId=${decision.recipientUserId || 'unresolved'}`);
     return decision;
@@ -734,9 +738,9 @@ export class EmailService implements OnModuleInit {
       this.logger.log('[EMAIL-OVERRIDE] Email test override is active.');
     }
 
+    const decision = await this.checkRecipient(to, security ? 'security' : 'routine');
+    if (!decision.allowed) return { sent: false, suppressed: true, reason: decision.reason };
     if (!security) {
-      const decision = await this.checkRoutineRecipient(to);
-      if (!decision.allowed) return { sent: false, suppressed: true, reason: decision.reason };
       if (effectiveTo !== to) {
         const destination = await this.checkRoutineRecipient(effectiveTo);
         if (!destination.allowed) return { sent: false, suppressed: true, reason: destination.reason };

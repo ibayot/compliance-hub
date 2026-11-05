@@ -93,7 +93,7 @@ export default function MfaVerifyPage() {
       setTempToken(null);
       setTemporaryCode('');
       setCode('');
-      window.location.replace(`/login?reason=${accountLocked ? 'mfa_locked' : attemptsExhausted ? 'mfa_failed' : 'mfa_restart'}`);
+      window.location.replace(`/login?reason=${failureCode === 'UNIT_ACCESS_NOT_APPROVED' ? 'unit_not_approved' : accountLocked ? 'mfa_locked' : attemptsExhausted ? 'mfa_failed' : 'mfa_restart'}`);
       return;
     }
     if (err.response?.status === 429) {

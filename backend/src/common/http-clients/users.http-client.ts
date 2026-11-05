@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import type { OutboundEmailDecision } from '../../modules/users/outbound-email-policy.service';
 
 export interface UserStub {
@@ -238,22 +238,51 @@ export class UsersHttpClient {
   }
 
   /** Read-only policy command: keep mailbox data out of URLs and bound body reads too. */
-  async getOutboundEmailDecision(recipientEmail: string): Promise<OutboundEmailDecision> {
+  async getOutboundEmailDecision(recipientEmail: string, purpose: 'routine' | 'security' = 'routine'): Promise<OutboundEmailDecision> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
     try {
       const response = await fetch(`${this.baseUrl}/api/internal/outbound-email/decision`, {
         method: 'POST', headers: this.buildHeaders(), signal: controller.signal,
-        body: JSON.stringify({ recipientEmail }),
+        body: JSON.stringify({ recipientEmail, purpose }),
       });
       if (!response.ok) throw new Error('Email policy is unavailable.');
       const decision = await response.json() as OutboundEmailDecision;
-      const reasons = ['restriction_disabled', 'unit_allowed', 'no_units_selected', 'recipient_not_eligible', 'unit_not_allowed', 'policy_unavailable'];
-      if (typeof decision?.allowed !== 'boolean' || !reasons.includes(decision.reason) || (decision.allowed && !['restriction_disabled','unit_allowed'].includes(decision.reason))) throw new Error('Invalid email policy response.');
+      const allowedReasons = ['restriction_disabled', 'unit_allowed', ...(purpose === 'security' ? ['security_admin_exempt'] : [])];
+      const reasons = [...allowedReasons, 'no_units_selected', 'recipient_not_eligible', 'unit_not_allowed', 'policy_unavailable'];
+      if (typeof decision?.allowed !== 'boolean' || !reasons.includes(decision.reason) || decision.allowed !== allowedReasons.includes(decision.reason)) throw new Error('Invalid email policy response.');
       return decision;
     } catch {
       return { allowed: false, reason: 'policy_unavailable' };
     } finally { clearTimeout(timer); }
+  }
+
+  /** Current approval is an authorization dependency, never optional cached enrichment. */
+  async requireAccountAccess(userId: number): Promise<void> {
+    if (!Number.isSafeInteger(userId) || userId < 1) throw new UnauthorizedException('Invalid account.');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    let decision: OutboundEmailDecision;
+    try {
+      const response = await fetch(`${this.baseUrl}/api/internal/account-access/${userId}`, {
+        headers: this.buildHeaders(), signal: controller.signal,
+      });
+      if (!response.ok) throw new Error('Policy unavailable.');
+      decision = await response.json() as OutboundEmailDecision;
+      const allowedReasons = ['restriction_disabled', 'unit_allowed', 'security_admin_exempt'];
+      const deniedReasons = ['no_units_selected', 'recipient_not_eligible', 'unit_not_allowed'];
+      if (typeof decision?.allowed !== 'boolean' ||
+        (decision.recipientUserId !== undefined && decision.recipientUserId !== userId) ||
+        (decision.allowed ? decision.recipientUserId !== userId || !allowedReasons.includes(decision.reason) : !deniedReasons.includes(decision.reason))) {
+        throw new Error('Invalid policy response.');
+      }
+    } catch {
+      throw new ServiceUnavailableException('Application access could not be verified. Please try again.');
+    } finally { clearTimeout(timer); }
+    if (!decision.allowed) throw new UnauthorizedException({
+      statusCode: 401, code: 'UNIT_ACCESS_NOT_APPROVED',
+      message: 'Application access is not approved for your account. Please contact your administrator.',
+    });
   }
 
   /**

@@ -7,6 +7,7 @@ import { UsersService } from '../../users/users.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TokenBlacklist } from '../entities/token-blacklist.entity';
+import { OutboundEmailPolicyService } from '../../users/outbound-email-policy.service';
 function getCookieValue(cookieHeader: string | undefined, cookieName: string): string | null {
   return cookieHeader
     ?.split(';')
@@ -22,6 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly usersService: UsersService,
     @InjectRepository(TokenBlacklist)
     private readonly tokenBlacklistRepo: Repository<TokenBlacklist>,
+    private readonly outboundEmailPolicy: OutboundEmailPolicyService,
   ) {
     const accessCookieName = configService.get<string>('AUTH_ACCESS_COOKIE_NAME') as string;
     super({
@@ -58,6 +60,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         throw new UnauthorizedException('Token has been revoked. Please log in again.');
       }
     }
+
+    await this.outboundEmailPolicy.assertAccountAccess(user.id);
 
     return {
       id: user.id,

@@ -368,6 +368,7 @@ export class RatingInvitationService {
       await this.logEvent(invitation.id, 'invitation_expired');
       throw new HttpException('This feedback invitation has expired.', HttpStatus.GONE);
     }
+    await this.usersHttpClient.requireAccountAccess(invitation.requesterId);
     return invitation;
   }
 
@@ -532,6 +533,7 @@ export class RatingInvitationService {
       await this.invitationRepo.save(invitation);
       throw new ForbiddenException('This feedback invitation is no longer available.');
     }
+    await this.usersHttpClient.requireAccountAccess(invitation.requesterId);
     return { invitation, requester: user };
   }
 

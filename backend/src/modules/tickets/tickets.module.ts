@@ -33,6 +33,7 @@ import { TicketSettingsController } from './controllers/ticket-settings.controll
 import { KnowledgeBaseController } from './controllers/knowledge-base.controller';
 import { NotificationController } from './controllers/notification.controller';
 import { SseController } from './controllers/sse.controller';
+import { SseConnectionGuard } from './guards/sse-connection.guard';
 import { RealtimeModule } from '../../common/events/realtime.module';
 import { AttendanceSseInterceptor } from './interceptors/attendance-sse.interceptor';
 import { User, RoleDefinitionEntity, Unit } from '../shared/entities';
@@ -111,6 +112,7 @@ import { AuthEmailPolicyController } from './controllers/auth-email-policy.contr
     PublicRatingController,
   ],
   providers: [
+    SseConnectionGuard,
     TicketReportBuilderService,
     ServerAdminIntegrationKeyGuard,
     ServerAdminIntegrationService,

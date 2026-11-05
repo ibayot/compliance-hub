@@ -403,11 +403,11 @@ function SecuritySettingsCard() {
       />
       <CardContent>
         <Dialog open={confirmBlockAllEmails} onClose={() => { if (!saving) setConfirmBlockAllEmails(false); }} fullWidth maxWidth="xs">
-          <DialogTitle>Block all routine emails?</DialogTitle>
-          <DialogContent>No units are selected. Ticket updates, feedback invitations and SMTP tests will be blocked for everyone. OTP and account-recovery emails remain available.</DialogContent>
+          <DialogTitle>Restrict access without approved units?</DialogTitle>
+          <DialogContent>No units are selected. Application access and all emails, including OTP and account recovery, will be blocked for ordinary accounts. Accounts with Security Settings management access retain application access and security emails. Routine emails remain blocked for everyone.</DialogContent>
           <DialogActions>
             <Button disabled={saving} onClick={() => setConfirmBlockAllEmails(false)}>Cancel</Button>
-            <Button color="warning" variant="contained" disabled={saving} onClick={() => void handleSave(true)}>{saving ? 'Saving…' : 'Save and Block Routine Emails'}</Button>
+            <Button color="warning" variant="contained" disabled={saving} onClick={() => void handleSave(true)}>{saving ? 'Saving…' : 'Save Restrictions'}</Button>
           </DialogActions>
         </Dialog>
         {loading ? (
@@ -509,10 +509,10 @@ function SecuritySettingsCard() {
             </Grid>
             <Grid item xs={12}>
               <Divider sx={{ mb: 2 }} />
-              <Typography variant="subtitle1" fontWeight={600}>Outbound Email Controls</Typography>
-              <FormControlLabel control={<Switch disabled={saving} checked={outboundEmailUnitRestrictionEnabled} onChange={(_, checked) => setOutboundEmailUnitRestrictionEnabled(checked)} />} label="Restrict routine emails to selected units" />
+              <Typography variant="subtitle1" fontWeight={600}>Unit Access and Email Controls</Typography>
+              <FormControlLabel control={<Switch disabled={saving} checked={outboundEmailUnitRestrictionEnabled} onChange={(_, checked) => setOutboundEmailUnitRestrictionEnabled(checked)} />} label="Restrict application access and emails to selected units" />
               <SearchableMultiSelect<number>
-                label="Units allowed to receive routine emails"
+                label="Units approved for application access and emails"
                 value={outboundEmailAllowedUnitIds}
                 onChange={setOutboundEmailAllowedUnitIds}
                 disabled={saving || !outboundEmailUnitRestrictionEnabled}
@@ -520,10 +520,10 @@ function SecuritySettingsCard() {
                   ...emailUnitOptions.map(unit => ({ value: unit.id, label: `${unit.name}${unit.active ? '' : ' (Inactive)'}`, disabled: !unit.active })),
                   ...outboundEmailAllowedUnitIds.filter(id => !emailUnitOptions.some(unit => unit.id === id)).map(id => ({ value: id, label: `Unavailable unit #${id}` })),
                 ]}
-                helperText={outboundEmailUnitRestrictionEnabled ? 'Uses each recipient’s current unit. An empty selection blocks all routine emails. Remove unavailable units before saving.' : 'Restriction is off. Existing routine-email sending rules apply; the selected units are retained.'}
+                helperText={outboundEmailUnitRestrictionEnabled ? 'Uses each account’s current active unit. Removing approval also blocks existing sessions. Security Settings managers retain access and security emails. Remove unavailable units before saving.' : 'Unit restrictions are off. Existing sign-in and email rules apply; the selected units are retained.'}
               />
               <Alert severity={outboundEmailUnitRestrictionEnabled && outboundEmailAllowedUnitIds.length === 0 ? 'warning' : 'info'} sx={{ mt: 2 }}>
-                Applies to ticket emails, feedback invitations and SMTP tests. OTP and account-recovery emails bypass unit restrictions and follow the Test Override Email when configured. Clear the override to send codes to their normal recipients. In-app notifications and feedback remain available. The system-wide email disable switch still stops all sending.
+                Unapproved accounts cannot sign in or receive emails, including OTP and account-recovery messages. Security Settings managers are exempt for application access and security emails. The Test Override Email redirects permitted codes; it does not approve an unselected account. Temporary MFA Mode and trusted devices do not bypass unit approval. The system-wide email disable switch still stops all sending.
               </Alert>
             </Grid>
             <Grid item xs={12}>
@@ -685,7 +685,7 @@ function GlobalSettingsCard() {
                     <Switch checked={config.isEmailNotificationsEnabled ?? true} onChange={(e) => setConfig((p: any) => ({ ...p, isEmailNotificationsEnabled: e.target.checked }))} />
                   </Box>
                   {config.isEmailNotificationsEnabled && (
-                    <TextField label="Test Override Email" value={config.emailTestOverride || ''} onChange={(e) => setConfig((p: any) => ({ ...p, emailTestOverride: e.target.value }))} inputProps={{ maxLength: 100 }} helperText="Login and feedback verification codes also go to this mailbox when set. Clear it to restore their normal recipients. Routine email unit restrictions still apply." fullWidth />
+                    <TextField label="Test Override Email" value={config.emailTestOverride || ''} onChange={(e) => setConfig((p: any) => ({ ...p, emailTestOverride: e.target.value }))} inputProps={{ maxLength: 100 }} helperText="Login and feedback verification codes also go to this mailbox when set. Clear it to restore their normal recipients. Codes require an approved account or Security Settings management access. Routine email unit restrictions still apply." fullWidth />
                   )}
                   <TextField label="SMTP Host" value={config.smtpHost || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpHost: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
                   <TextField label="SMTP Port" type="number" value={config.smtpPort || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpPort: Number(e.target.value) }))} fullWidth />
