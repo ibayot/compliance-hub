@@ -207,7 +207,7 @@ export default function LoginPage() {
               Please sign in again to request a fresh verification code.
             </Alert>}
             {reason === 'mfa_locked' && <Alert severity="warning" sx={{ mb: 2 }}>
-              MFA is temporarily locked. Wait for the lock to expire or contact an authorized account manager.
+              Your account is temporarily locked after repeated MFA failures. Wait for the 15-minute lock to expire or contact an authorized account manager.
             </Alert>}
 
             {reason === 'deactivated' && (

@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, HttpException, HttpStatus, Optional, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, HttpStatus, Optional, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -16,7 +16,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TokenBlacklist } from './entities/token-blacklist.entity';
 import { TicketingHttpClient } from '../../common/http-clients/ticketing.http-client';
-import { MFA_CODE_TTL_MS, MFA_RESEND_INTERVAL_SECONDS } from './mfa-policy';
+import { MFA_CODE_TTL_MS, MFA_RESEND_INTERVAL_SECONDS, mfaFailure } from './mfa-policy';
 
 export function isTrustedDeviceActive(
   expiresAt: Date | string | null | undefined,
@@ -133,7 +133,7 @@ export class AuthService {
     }
 
     if (user.mfaLockedUntil && new Date() < new Date(user.mfaLockedUntil)) {
-      throw new HttpException('Your account is locked for 15 minutes after repeated MFA failures.', HttpStatus.TOO_MANY_REQUESTS);
+      throw mfaFailure(HttpStatus.TOO_MANY_REQUESTS, 'MFA_ACCOUNT_LOCKED', 'Your account is locked for 15 minutes after repeated MFA failures.');
     }
 
     // Record login timestamp for staff activity tracking
@@ -294,7 +294,7 @@ export class AuthService {
     }
 
     if (user.mfaLockedUntil && Date.now() < new Date(user.mfaLockedUntil).getTime()) {
-      throw new HttpException('Your account is locked for 15 minutes after repeated MFA failures.', HttpStatus.TOO_MANY_REQUESTS);
+      throw mfaFailure(HttpStatus.TOO_MANY_REQUESTS, 'MFA_ACCOUNT_LOCKED', 'Your account is locked for 15 minutes after repeated MFA failures.');
     }
 
     // Record login timestamp for staff activity tracking
@@ -339,7 +339,7 @@ export class AuthService {
     const user = await this.usersService.findOne(userId);
     if (!user) throw new UnauthorizedException('User not found');
     if (user.mfaLockedUntil && new Date() < new Date(user.mfaLockedUntil)) {
-      throw new HttpException('Your account is locked for 15 minutes after repeated MFA failures.', HttpStatus.TOO_MANY_REQUESTS);
+      throw mfaFailure(HttpStatus.TOO_MANY_REQUESTS, 'MFA_ACCOUNT_LOCKED', 'Your account is locked for 15 minutes after repeated MFA failures.');
     }
 
     // Generate 6-digit code

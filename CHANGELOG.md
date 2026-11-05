@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.35] - 2026-11-05 - MFA Attempt and Lock Messages
+
+### Fixed
+- Three incorrect MFA codes now close verification and return to sign-in with a clear attempt-limit notice. Further verification submissions are blocked while leaving the page.
+- MFA account locks now show an explicit locked-account message instead of a generic verification error. Existing accumulated-attempt limits and the 15-minute unlock remain unchanged.
+
 ## [1.0.34] - 2026-11-05 - MFA Code Resend and Email Delivery
 
 ### Added

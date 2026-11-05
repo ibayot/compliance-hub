@@ -33,6 +33,7 @@ export default function MfaVerifyPage() {
   const [resendSeconds, setResendSeconds] = useState(60);
   const [resendNotice, setResendNotice] = useState('');
   const pendingOperation = useRef(false);
+  const challengeEnded = useRef(false);
 
   useEffect(() => {
     const token = sessionStorage.getItem('mfaTempToken');
@@ -73,15 +74,26 @@ export default function MfaVerifyPage() {
   };
 
   const handleChallengeError = (err: any) => {
-    const message = String(err.response?.data?.message || 'Unable to complete verification. Please try again.');
-    const mustReauthenticate = [400, 401].includes(err.response?.status)
-      && /three MFA attempts|log in again|sign in again|no verification code|code has expired|expired temporary token/i.test(message);
-    const accountLocked = err.response?.status === 429 && /locked/i.test(message);
+    const data = err.response?.data;
+    const failureCode = typeof data?.code === 'string' ? data.code : '';
+    const rawMessage = typeof data === 'string' ? data : data?.message;
+    const fallback = failureCode === 'MFA_ACCOUNT_LOCKED'
+      ? 'Your account is locked after repeated MFA failures. Wait for the 15-minute lock to expire or contact an authorized account manager.'
+      : 'Unable to complete verification. Please try again.';
+    const message = typeof rawMessage === 'string' && rawMessage.trim() ? rawMessage : fallback;
+    const attemptsExhausted = failureCode === 'MFA_CHALLENGE_EXHAUSTED' || /three MFA attempts/i.test(message);
+    const mustReauthenticate = err.response?.status === 401
+      || ([400, 403].includes(err.response?.status) && (/log in again|sign in again|no verification code|code has expired|expired temporary token/i.test(message)
+        || ['MFA_CHALLENGE_UNAVAILABLE', 'MFA_CHALLENGE_EXPIRED', 'MFA_ACCOUNT_UNAVAILABLE'].includes(failureCode)));
+    const accountLocked = err.response?.status === 429 && (failureCode === 'MFA_ACCOUNT_LOCKED' || /locked/i.test(message));
     if (mustReauthenticate || accountLocked) {
+      challengeEnded.current = true;
+      pendingOperation.current = true;
       for (const key of ['mfaTempToken', 'mfaTestModeCode', 'mfaResendAvailableAt']) sessionStorage.removeItem(key);
+      setTempToken(null);
       setTemporaryCode('');
       setCode('');
-      window.location.replace(`/login?reason=${accountLocked ? 'mfa_locked' : 'mfa_restart'}`);
+      window.location.replace(`/login?reason=${accountLocked ? 'mfa_locked' : attemptsExhausted ? 'mfa_failed' : 'mfa_restart'}`);
       return;
     }
     if (err.response?.status === 429) {
@@ -92,7 +104,7 @@ export default function MfaVerifyPage() {
   };
 
   const handleResend = async () => {
-    if (!tempToken || pendingOperation.current || resendSeconds > 0) return;
+    if (!tempToken || challengeEnded.current || pendingOperation.current || resendSeconds > 0) return;
     pendingOperation.current = true;
     setResending(true);
     setError(null);
@@ -109,7 +121,7 @@ export default function MfaVerifyPage() {
     } catch (err: any) {
       handleChallengeError(err);
     } finally {
-      pendingOperation.current = false;
+      if (!challengeEnded.current) pendingOperation.current = false;
       setResending(false);
     }
   };
@@ -120,7 +132,7 @@ export default function MfaVerifyPage() {
       setError('Please enter a valid 6-digit code.');
       return;
     }
-    if (!tempToken || pendingOperation.current) return;
+    if (!tempToken || challengeEnded.current || pendingOperation.current) return;
 
     pendingOperation.current = true;
     setLoading(true);
@@ -150,7 +162,7 @@ export default function MfaVerifyPage() {
     } catch (err: any) {
       handleChallengeError(err);
     } finally {
-      pendingOperation.current = false;
+      if (!challengeEnded.current) pendingOperation.current = false;
       setLoading(false);
     }
   };

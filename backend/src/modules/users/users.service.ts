@@ -4,7 +4,6 @@ import {
   ConflictException,
   BadRequestException,
   ForbiddenException,
-  HttpException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, EntityManager } from 'typeorm';
@@ -26,7 +25,7 @@ import { UserTrustedDevice } from './entities/user-trusted-device.entity';
 import { UserUnitOverride } from './entities/user-unit-override.entity';
 import { auditContext } from '../../shared/audit/audit.context';
 import { UnlockMfaDto } from './dto/unlock-mfa.dto';
-import { MFA_CODE_TTL_MS, MFA_RESEND_INTERVAL_SECONDS } from '../auth/mfa-policy';
+import { MFA_CODE_TTL_MS, MFA_RESEND_INTERVAL_SECONDS, mfaFailure } from '../auth/mfa-policy';
 import { assertMfaRecoveryAuthority, matchesMfaRecoveryVersion, mfaRecoveryRequired, mfaRecoveryVersion } from './mfa-recovery-policy';
 
 export type UnitAssignmentSource = 'manual' | 'ums';
@@ -784,17 +783,17 @@ const previousValue = value;
     await this.usersRepository.manager.transaction(async manager => {
       const repo = manager.getRepository(User);
       const user = await repo.findOne({ where: { id: userId }, lock: { mode: 'pessimistic_write' } });
-      if (!user?.active) throw new ForbiddenException('Account is unavailable.');
+      if (!user?.active) throw mfaFailure(403, 'MFA_ACCOUNT_UNAVAILABLE', 'Account is unavailable. Please sign in again.');
       const lockedUntil = user.mfaLockedUntil ? new Date(user.mfaLockedUntil).getTime() : null;
-      if (lockedUntil && lockedUntil > Date.now()) throw new HttpException('Your account is locked for 15 minutes after repeated MFA failures.', 429);
+      if (lockedUntil && lockedUntil > Date.now()) throw mfaFailure(429, 'MFA_ACCOUNT_LOCKED', 'Your account is locked for 15 minutes after repeated MFA failures.');
       if (options.resend) {
         const expirationMs = user.mfaExpiresAt ? new Date(user.mfaExpiresAt).getTime() : NaN;
         if (!user.mfaCode || !Number.isFinite(expirationMs) || expirationMs <= Date.now()) {
-          throw new HttpException('No active verification code. Please sign in again.', 401);
+          throw mfaFailure(401, 'MFA_CHALLENGE_UNAVAILABLE', 'No active verification code. Please sign in again.');
         }
         // Every issuance uses the same TTL, so expiry also identifies its issuance time.
         const retryAfterSeconds = Math.ceil((expirationMs - MFA_CODE_TTL_MS + MFA_RESEND_INTERVAL_SECONDS * 1000 - Date.now()) / 1000);
-        if (retryAfterSeconds > 0) throw new HttpException({ message: 'Please wait before requesting another verification code.', retryAfterSeconds }, 429);
+        if (retryAfterSeconds > 0) throw mfaFailure(429, 'MFA_RESEND_COOLDOWN', 'Please wait before requesting another verification code.', { retryAfterSeconds });
       }
       await repo.update(userId, {
         mfaCode: code, mfaExpiresAt: expiresAt,
@@ -809,11 +808,11 @@ const previousValue = value;
     const outcome = await this.usersRepository.manager.transaction(async manager => {
       const repo = manager.getRepository(User);
       const user = await repo.findOne({ where: { id: userId }, lock: { mode: 'pessimistic_write' } });
-      if (!user?.active) return { status: 401, message: 'Account is unavailable.' };
+      if (!user?.active) return { status: 401, code: 'MFA_ACCOUNT_UNAVAILABLE' as const, message: 'Account is unavailable. Please sign in again.' };
       const lock = user.mfaLockedUntil ? new Date(user.mfaLockedUntil).getTime() : null;
-      if (lock && lock > Date.now()) return { status: 429, message: 'MFA verification is temporarily locked. Request a new code later.' };
-      if (!user.mfaCode || !user.mfaExpiresAt) return { status: 400, message: 'No verification code found. Please log in again to request a new code.' };
-      if (Date.now() > new Date(user.mfaExpiresAt).getTime()) return { status: 400, message: 'Verification code has expired. Please request a new one.' };
+      if (lock && lock > Date.now()) return { status: 429, code: 'MFA_ACCOUNT_LOCKED' as const, message: 'Your account is locked for 15 minutes after repeated MFA failures. Wait for the lock to expire or contact an authorized account manager.' };
+      if (!user.mfaCode || !user.mfaExpiresAt) return { status: 400, code: 'MFA_CHALLENGE_UNAVAILABLE' as const, message: 'No verification code found. Please log in again to request a new code.' };
+      if (Date.now() > new Date(user.mfaExpiresAt).getTime()) return { status: 400, code: 'MFA_CHALLENGE_EXPIRED' as const, message: 'Verification code has expired. Please sign in again to request a new one.' };
       if (user.mfaCode !== code) {
         const attempts = (lock ? 0 : Number(user.mfaAttempts || 0)) + 1;
         const challengeAttempts = (lock ? 0 : Number(user.mfaChallengeAttempts || 0)) + 1;
@@ -823,15 +822,15 @@ const previousValue = value;
           mfaAttempts: attempts, mfaChallengeAttempts: challengeAttempts, mfaLockedUntil: lockedUntil,
           ...(expired ? { mfaCode: null, mfaExpiresAt: null } : {}),
         } as any);
-        if (lockedUntil) return { status: 429, message: 'Too many invalid MFA attempts. Your account is locked for 15 minutes.' };
-        if (expired) return { status: 401, message: 'Three MFA attempts failed. Please log in again to request a new code.' };
-        return { status: 400, message: `Invalid verification code. Attempt ${challengeAttempts} of 3 for this login.` };
+        if (lockedUntil) return { status: 429, code: 'MFA_ACCOUNT_LOCKED' as const, message: 'Too many invalid MFA attempts. Your account is locked for 15 minutes.' };
+        if (expired) return { status: 401, code: 'MFA_CHALLENGE_EXHAUSTED' as const, message: 'Three MFA attempts failed. Please log in again to request a new code.' };
+        return { status: 400, code: 'MFA_INVALID_CODE' as const, message: `Invalid verification code. Attempt ${challengeAttempts} of 3 for this login.`, attemptsRemaining: 3 - challengeAttempts };
       }
       await repo.update(userId, { mfaCode: null, mfaExpiresAt: null, mfaLastVerifiedAt: new Date(), mfaAttempts: 0, mfaChallengeAttempts: 0, mfaLockedUntil: null } as any);
       return null;
     });
     // Commit failed-attempt accounting before returning the authentication error.
-    if (outcome) throw new HttpException(outcome.message, outcome.status);
+    if (outcome) throw mfaFailure(outcome.status, outcome.code, outcome.message, typeof outcome.attemptsRemaining === 'number' ? { attemptsRemaining: outcome.attemptsRemaining } : {});
   }
 
   async unlockMfa(targetId: number, actorId: number, dto: UnlockMfaDto): Promise<{ success: true; changed: boolean }> {
